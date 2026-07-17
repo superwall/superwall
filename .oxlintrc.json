@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "no-console": "off",
+    // The session's postMessage speaks the SDK message protocol, not
+    // window.postMessage — the rule misfires on every outgoing message.
+    "unicorn/require-post-message-target-origin": "off",
+    // SDK-facing globals (__sw_runtime_session) and transport-internal
+    // fields use underscore naming as part of the host contract.
+    "no-underscore-dangle": "off"
+  },
+  "ignorePatterns": ["dist", "coverage", "node_modules"]
+}

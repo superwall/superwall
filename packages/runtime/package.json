@@ -1,0 +1,38 @@
+{
+  "name": "@superwall/runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Framework-agnostic runtime for headless Superwall paywalls: bridge, session, products, localization, mock host.",
+  "license": "UNLICENSED",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "superwall-ts": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest",
+    "test:run": "vitest --run",
+    "test:coverage": "vitest --run --coverage",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@superwall/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.2.0",
+    "typescript": "5.8.3",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.0"
+  }
+}
