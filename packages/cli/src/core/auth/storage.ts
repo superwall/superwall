@@ -1,0 +1,49 @@
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { formatJson } from "@/util/json";
+
+export interface Session {
+  authMethod?: "oauth" | "api_key";
+  apiKey?: string;
+  orgId?: string;
+  orgName?: string;
+  orgCount?: number;
+  userEmail?: string;
+  host: string;
+  createdAt: string;
+  accessToken?: string;
+  refreshToken?: string;
+  accessTokenExpiresAt?: number;
+  tokenEndpoint?: string;
+  oauthClientId?: string;
+}
+
+function dir(): string {
+  return join(homedir(), ".superwall");
+}
+function file(): string {
+  return join(dir(), "auth.json");
+}
+
+export function saveSession(session: Session): void {
+  mkdirSync(dir(), { recursive: true, mode: 0o700 });
+  writeFileSync(file(), `${formatJson(session)}\n`, { mode: 0o600 });
+}
+
+export function loadSession(): Session | null {
+  try {
+    if (!existsSync(file())) return null;
+    return JSON.parse(readFileSync(file(), "utf8")) as Session;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSession(): void {
+  try {
+    rmSync(file(), { force: true });
+  } catch {
+    /* ignore */
+  }
+}

@@ -159,3 +159,20 @@ export const productsFromConfig = (config: SuperwallConfig | undefined): Superwa
 
 /** @deprecated Use `SuperwallConfig`. */
 export type SuperwallPaywallConfig<TLocale extends string = string> = SuperwallConfig<TLocale>;
+
+/** The framework's paywall generation — v4 is the visual editor, v5 is code. */
+export const SUPERWALL_GENERATION = 5;
+
+/**
+ * Document semantics as `<html>` data attributes — the snapshot's half of the
+ * two-layer contract. The build stamps these statically (no flash before
+ * hydration) and `SuperwallProvider` reasserts them at runtime (dev has no
+ * build step). The platform's serve-time stylesheet (live.css) owns what they
+ * mean, so their interpretation can evolve fleet-wide without republishing.
+ */
+export const documentAttributes = (
+  config: SuperwallConfig | undefined,
+): Record<string, string> => ({
+  "data-sw-generation": String(SUPERWALL_GENERATION),
+  "data-sw-scroll": String(config?.scrollEnabled ?? true),
+});

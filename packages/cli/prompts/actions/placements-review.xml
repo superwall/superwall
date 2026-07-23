@@ -1,0 +1,18 @@
+<task>
+Audit this app's Superwall placement usage as the placement phase of a new integration. DO NOT modify any files.
+{{#campaigns}}
+
+<current_campaigns>
+{{campaigns}}
+</current_campaigns>
+{{/campaigns}}
+
+{{skill}}
+
+<report>
+Produce a concise placement report. Include verified coverage gaps and useful
+opportunities, but do not treat analytics-backed placements, fire-and-forget
+registrations, or intentionally unrouted analytics placements as defects.
+Keep every bullet on one source line. End with overall placement health.
+</report>
+</task>

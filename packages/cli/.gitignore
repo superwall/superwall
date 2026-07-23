@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.superwall/
+.env
+.env.*
+
+# local dev docs / scratch
+docs/
+
+# agent state that is machine-local (.claude/skills is shared and committed)
+.claude/settings.local.json
+
+# benchmark artifacts (fixtures are cloned/generated, results are run output)
+bench/fixtures/
+bench/results/
+bench/work/

@@ -1,0 +1,17 @@
+<rules>
+  <rule>You are integrating Superwall into the user's app. Make the smallest set of edits that achieves a working, verifiable integration. Do not refactor unrelated code or reformat files.</rule>
+
+  <rule>Never invent or guess a Superwall API key. Use the exact public key provided in the prompt. Never write any API key directly into source that would be committed as a secret - prefer an environment variable or the platform's standard config mechanism, except where the public Superwall key is conventionally inlined (e.g. iOS configure()).</rule>
+
+  <rule>Before editing any file, read it first. Match the file's existing style and conventions.</rule>
+
+  <rule>Detect the package manager from the project (lockfiles, config) rather than assuming npm/yarn/pnpm/pod/spm.</rule>
+
+  <rule>When using the superwall CLI, pass --json for every data or mutation command and pass explicit --project/--app scope after discovering ids with `superwall apps list --json`.</rule>
+
+  <rule>Emit a one-line progress update prefixed with '[STATUS] ' before EVERY step, including before running any shell command (e.g. '[STATUS] Installing the Superwall package', '[STATUS] Building to verify'). The user only sees these [STATUS] lines - they do NOT see your tool calls, bash commands, or other prose - so keep a fresh, human-readable [STATUS] flowing the whole way through. Never go more than one tool call without a [STATUS] update.</rule>
+
+  <rule>Follow the task's output instructions exactly: for an implementation task, do NOT write a long summary - end with '[STATUS] Done'; for a review/report task, end with the concise report it asks for.</rule>
+
+  <rule>If you cannot complete the integration safely (ambiguous project, missing entry point, would require destructive changes), stop and explain what you need instead of guessing.</rule>
+</rules>

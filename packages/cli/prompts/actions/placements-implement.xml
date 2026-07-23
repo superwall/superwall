@@ -1,0 +1,20 @@
+<task>
+{{#prior_report}}
+<prior_review note="a placement review was already run for this app - act on its findings">
+{{prior_report}}
+</prior_review>
+
+{{/prior_report}}
+Implement Superwall placements at the right feature-gate points in this app, and make sure each is routed through a campaign.
+{{#campaigns}}
+
+<current_campaigns>
+{{campaigns}}
+</current_campaigns>
+{{/campaigns}}
+
+{{skill}}
+
+Keep edits minimal and idiomatic - do not reformat or refactor unrelated code. If a build command exists, build to verify.
+Emit a [STATUS] before each step. Do not write a long summary. End with '[STATUS] Done'.
+</task>

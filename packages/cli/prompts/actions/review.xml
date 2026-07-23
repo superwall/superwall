@@ -1,0 +1,18 @@
+<task>
+Review this app's existing Superwall setup end to end. DO NOT modify any files.
+
+{{skill}}
+
+<report>
+Produce a concise markdown report with these sections:
+- Setup health - one evidence-backed line for each review area.
+- Findings - only verified problems, ordered by impact, each with one fix.
+- Opportunities - optional improvements, clearly labeled optional.
+- Not verified - checks blocked by auth, network, runtime, or missing context.
+- Overall - healthy / improvements recommended / needs attention.
+
+Do not emit an exhaustive placement inventory. Keep every bullet on one source
+line and let the terminal wrap it. For code evidence, use
+`[relative/path:line](/absolute/path:line)` so the terminal can link the file.
+</report>
+</task>

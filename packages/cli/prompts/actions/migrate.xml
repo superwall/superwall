@@ -1,0 +1,11 @@
+<task>
+Migrate this app from {{provider}} to Superwall - {{goal}}.
+
+{{skill}}
+
+<report>
+Short-line markdown: the mapping (provider→Superwall), what you created (ids), what code changed, and any manual steps left.
+</report>
+
+Emit a [STATUS] before each step.
+</task>

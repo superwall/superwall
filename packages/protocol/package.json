@@ -3,7 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "description": "The Superwall SDK ↔ paywall message protocol: message schemas, transports, initialization params.",
+  "homepage": "https://github.com/superwall/superwall/tree/main/packages/protocol#readme",
+  "bugs": {
+    "url": "https://github.com/superwall/superwall/issues"
+  },
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/superwall/superwall.git",
+    "directory": "packages/protocol"
+  },
   "files": [
     "dist",
     "src"
@@ -11,11 +20,7 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "superwall-ts": "./src/index.ts",
-      "import": "./dist/index.js"
-    }
+    ".": "./src/index.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -1,0 +1,9 @@
+<context>
+  <platform>{{platform}}</platform>
+  <app_directory>{{app_dir}}</app_directory>
+  <public_api_key purpose="SDK init">{{api_key}}</public_api_key>
+  <sdk_installed>{{sdk_installed}}</sdk_installed>
+  <configure_present>{{configure_present}}</configure_present>
+  <docs>{{docs_url}}</docs>
+  <dashboard note="for the user, not you">{{dashboard_url}}</dashboard>
+</context>

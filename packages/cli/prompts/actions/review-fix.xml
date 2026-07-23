@@ -1,0 +1,18 @@
+<task>
+{{#prior_report}}
+<prior_review note="a setup review was already run for this app - fix its verified findings">
+{{prior_report}}
+</prior_review>
+
+{{/prior_report}}
+Fix verified, actionable problems in this app's existing Superwall setup. If no
+prior review is present, audit first. Do not implement optional opportunities or
+make product, pricing, purchase-provider, or placement-naming decisions for the
+user.
+
+{{skill}}
+
+Keep edits minimal and idiomatic. Do not reformat or refactor unrelated code. If
+a build command exists, build to verify. Emit a [STATUS] before each step. Do not
+write a long summary. End with '[STATUS] Done'.
+</task>

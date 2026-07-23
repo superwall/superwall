@@ -1,0 +1,10 @@
+<task>
+{{skill}}
+
+The target app's public API key is {{app_key}} (also in <context>).
+
+<report>
+Short-line markdown: what already existed, what you created (with campaign/placement/paywall ids),
+and any manual step left for the user (design the paywall, attach products, etc.).
+</report>
+</task>

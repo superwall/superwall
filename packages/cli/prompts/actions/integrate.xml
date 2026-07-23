@@ -1,0 +1,5 @@
+<task>
+{{skill}}
+
+Emit a [STATUS] before each step. Do not write a long summary. End with '[STATUS] Done'.
+</task>

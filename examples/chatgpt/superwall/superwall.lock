@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "paywalls": {
+    "plus-upgrade": {
+      "paywallId": "208540"
+    }
+  },
+  "funnels": {}
+}

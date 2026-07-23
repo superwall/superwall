@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { defineSuperwallConfig, normalizeProductSlot, productsFromConfig } from "../src/config";
+import {
+  defineSuperwallConfig,
+  documentAttributes,
+  normalizeProductSlot,
+  productsFromConfig,
+  SUPERWALL_GENERATION,
+} from "../src/config";
 
 describe("normalizeProductSlot", () => {
   it("expands the string shorthand to a slot", () => {
@@ -39,5 +45,24 @@ describe("productsFromConfig", () => {
   it("returns an empty list without config or products", () => {
     expect(productsFromConfig(undefined)).toEqual([]);
     expect(productsFromConfig({})).toEqual([]);
+  });
+});
+
+describe("documentAttributes", () => {
+  it("stamps the generation and defaults scroll to enabled", () => {
+    expect(documentAttributes(undefined)).toEqual({
+      "data-sw-generation": String(SUPERWALL_GENERATION),
+      "data-sw-scroll": "true",
+    });
+    expect(documentAttributes({})).toMatchObject({ "data-sw-scroll": "true" });
+  });
+
+  it("reflects scrollEnabled from the config", () => {
+    expect(documentAttributes({ scrollEnabled: false })).toMatchObject({
+      "data-sw-scroll": "false",
+    });
+    expect(documentAttributes({ scrollEnabled: true })).toMatchObject({
+      "data-sw-scroll": "true",
+    });
   });
 });
