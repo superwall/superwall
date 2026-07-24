@@ -1,0 +1,65 @@
+{
+  "name": "superwall",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The paywall framework: author paywalls and funnels as mini React apps with file-based routing, run them against a simulated SDK host, ship them through Superwall.",
+  "homepage": "https://github.com/superwall/superwall/tree/main/packages/superwall#readme",
+  "bugs": {
+    "url": "https://github.com/superwall/superwall/issues"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/superwall/superwall.git",
+    "directory": "packages/superwall"
+  },
+  "bin": {
+    "superwall": "./bin/superwall.js",
+    "sw": "./bin/superwall.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./build": "./src/build/index.ts",
+    "./navigation": "./src/navigation/index.tsx",
+    "./preview": "./src/preview/server.ts",
+    "./discover": "./src/discover.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest",
+    "test:run": "vitest --run",
+    "test:coverage": "vitest --run --coverage",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@superwall/cli": "workspace:*",
+    "@superwall/runtime": "workspace:*",
+    "@superwall/studio": "workspace:*",
+    "@vitejs/plugin-react-swc": "^4.0.0",
+    "tsx": "^4.19.0",
+    "vite": "^7.0.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitest/coverage-v8": "^3.2.0",
+    "jsdom": "^26.1.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "typescript": "5.8.3",
+    "vitest": "^3.2.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  }
+}

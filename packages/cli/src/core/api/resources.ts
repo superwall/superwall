@@ -66,7 +66,12 @@ export interface Scope {
 }
 
 export async function listProjects(api: SuperwallApi): Promise<Project[]> {
-  return api.list<Project>("/v2/projects");
+  // Superadmin tokens span organizations, so the API requires an explicit
+  // one; ordinary tokens infer it and ignore the filter.
+  const org = api.org?.id;
+  return api.list<Project>(
+    org ? `/v2/projects?organization_id=${encodeURIComponent(org)}` : "/v2/projects",
+  );
 }
 
 export async function listApplications(api: SuperwallApi): Promise<Application[]> {
@@ -189,4 +194,87 @@ export function rowName(row: Row): string {
     if (typeof v === "number") return String(v);
   }
   return String(row.id ?? " - ");
+}
+
+export interface HeadlessPaywallRef {
+  id: string;
+  identifier?: string;
+  archived: boolean;
+  metadata: Record<string, string>;
+}
+
+export interface PushedVersion {
+  version: number;
+  snapshot_id: string;
+  url: string;
+}
+
+export interface PromotedVersion {
+  version: number;
+  url: string;
+}
+
+/**
+ * Paywalls in an app. `archived: true` returns *only* archived ones — the
+ * API filters rather than includes — which binding uses to explain an
+ * identifier conflict that would otherwise surface as a raw 409.
+ */
+export async function listAppPaywalls(
+  api: SuperwallApi,
+  applicationId: string,
+  options: { archived?: boolean } = {},
+): Promise<HeadlessPaywallRef[]> {
+  const rows = await api.list<Row>(
+    `/v2/paywalls?application_id=${encodeURIComponent(applicationId)}` +
+      (options.archived ? "&archived=true" : ""),
+  );
+  return rows.map((row) => {
+    const metadata: Record<string, string> = {};
+    if (typeof row.metadata === "object" && row.metadata !== null) {
+      for (const [key, value] of Object.entries(row.metadata)) {
+        if (typeof value === "string") metadata[key] = value;
+      }
+    }
+    return {
+      id: String(row.id),
+      identifier: typeof row.identifier === "string" ? row.identifier : undefined,
+      archived: options.archived === true,
+      metadata,
+    };
+  });
+}
+
+export async function createHeadlessPaywall(
+  api: SuperwallApi,
+  opts: { applicationId: string; name: string; identifier: string },
+): Promise<HeadlessPaywallRef> {
+  const row = await api.post<Row>("/v2/paywalls", {
+    application_id: opts.applicationId,
+    name: opts.name,
+    identifier: opts.identifier,
+  });
+  return { id: String(row.id), identifier: opts.identifier, archived: false, metadata: {} };
+}
+
+/** Mints an immutable version from a built snapshot. Production untouched. */
+export function pushPaywallVersion(
+  api: SuperwallApi,
+  paywallId: string,
+  opts: { html: string; surface?: string },
+): Promise<PushedVersion> {
+  return api.post<PushedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/versions`, {
+    html: opts.html,
+    ...(opts.surface ? { surface: opts.surface } : {}),
+  });
+}
+
+/** Points production at a pushed version (the latest by default). */
+export function promotePaywallVersion(
+  api: SuperwallApi,
+  paywallId: string,
+  opts: { version?: number } = {},
+): Promise<PromotedVersion> {
+  return api.post<PromotedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/promote`, {
+    ...(opts.version !== undefined ? { version: opts.version } : {}),
+  });
 }

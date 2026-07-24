@@ -1,0 +1,84 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { applyThemeOverride, readPreviewOverrides } from "../../src/preview/overrides";
+
+describe("readPreviewOverrides", () => {
+  it("parses theme, locale, and device payloads", () => {
+    const overrides = readPreviewOverrides(
+      `?theme=dark&locale=de&sw_device=${encodeURIComponent(
+        JSON.stringify({ platform: "Android", deviceModel: "Pixel 9" }),
+      )}`,
+    );
+    expect(overrides).toEqual({
+      theme: "dark",
+      locale: "de",
+      device: { platform: "Android", deviceModel: "Pixel 9" },
+    });
+  });
+
+  it("ignores invalid values", () => {
+    expect(readPreviewOverrides("?theme=sepia&sw_device=not-json")).toEqual({});
+    expect(readPreviewOverrides("")).toEqual({});
+  });
+});
+
+// jsdom ships no matchMedia; a browser always has one to wrap.
+const baseMatchMedia = (query: string): MediaQueryList =>
+  ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  }) as MediaQueryList;
+
+describe("applyThemeOverride", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  const installBaseMatchMedia = () => {
+    window.matchMedia = baseMatchMedia;
+    return baseMatchMedia;
+  };
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    document.documentElement.style.colorScheme = "";
+  });
+
+  it("does nothing without an override", () => {
+    const base = installBaseMatchMedia();
+    applyThemeOverride(undefined);
+    expect(document.documentElement.style.colorScheme).toBe("");
+    expect(window.matchMedia).toBe(base);
+  });
+
+  it("survives hosts that do not implement matchMedia", () => {
+    // @ts-expect-error — modeling a host without the API at all.
+    window.matchMedia = undefined;
+    expect(() => applyThemeOverride("dark")).not.toThrow();
+    expect(document.documentElement.style.colorScheme).toBe("dark");
+  });
+
+  it("simulates the scheme at both layers a paywall can observe", () => {
+    installBaseMatchMedia();
+    applyThemeOverride("dark");
+
+    // UA-level styling…
+    expect(document.documentElement.style.colorScheme).toBe("dark");
+    // …and JS checks.
+    expect(window.matchMedia("(prefers-color-scheme: dark)").matches).toBe(true);
+    expect(window.matchMedia("(prefers-color-scheme: light)").matches).toBe(false);
+    // Listener plumbing exists so subscribing code doesn't crash.
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    expect(() => query.addEventListener("change", () => {})).not.toThrow();
+    expect(query.dispatchEvent(new Event("change"))).toBe(false);
+  });
+
+  it("leaves unrelated media queries to the browser", () => {
+    installBaseMatchMedia();
+    applyThemeOverride("light");
+    expect(window.matchMedia("(min-width: 100px)").media).toBe("(min-width: 100px)");
+  });
+});

@@ -128,14 +128,16 @@ export async function executeCommand<Auth extends AuthPolicy>(
         duration_ms: Date.now() - startedAt,
       });
   } finally {
-    if (outputMode !== "json") {
-      if (definition.name !== "upgrade") maybeNotifyUpdate(ui);
-      refreshUpdateCheck();
-    }
+    if (outputMode !== "json") refreshUpdateCheck();
     if (outputMode === "rich" && runtime.waitForPaint !== false) {
       await new Promise((done) => setTimeout(done, 50));
     }
     ui.stop();
+    // After the renderer closes: a timeline item here would dangle below the
+    // `└` cap, and every command ends with one.
+    if (outputMode !== "json" && definition.name !== "upgrade") {
+      maybeNotifyUpdate(stdout);
+    }
   }
 }
 

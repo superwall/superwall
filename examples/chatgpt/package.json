@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "superwall dev",
-    "publish": "superwall publish"
+    "push": "superwall push",
+    "promote": "superwall promote",
+    "ship": "superwall publish"
   },
   "dependencies": {
     "react": "19.1.0",

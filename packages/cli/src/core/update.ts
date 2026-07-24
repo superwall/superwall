@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { VERSION } from "@/constants";
 import { getUpdateCheck, setUpdateCheck } from "@/core/state/config";
 
@@ -57,8 +58,9 @@ export async function flushUpdateCheck(capMs = 2000): Promise<void> {
   ]);
 }
 
-export function maybeNotifyUpdate(ui: { info(message: string): void }): void {
+export function maybeNotifyUpdate(stream: Pick<NodeJS.WriteStream, "write">): void {
   const latest = availableUpdate();
   if (!latest) return;
-  ui.info(`Update available \`${VERSION}\` → \`${latest}\` - run \`superwall upgrade\`.`);
+  // The renderer already ends its last frame with a newline.
+  stream.write(`${pc.dim(`Update available ${VERSION} → ${latest} · run \`superwall upgrade\``)}\n`);
 }

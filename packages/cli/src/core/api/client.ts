@@ -13,6 +13,20 @@ export class ApiError extends Error {
   }
 }
 
+export class ApiUnreachableError extends Error {
+  constructor(host: string, cause: unknown) {
+    const local = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(host);
+    super(
+      `Couldn't reach the Superwall API at ${host}.\n` +
+        (local
+          ? "  That's a local address — start the API, or unset SUPERWALL_API_HOST to use production."
+          : "  Check your network or proxy, then try again."),
+    );
+    this.name = "ApiUnreachableError";
+    this.cause = cause;
+  }
+}
+
 export { NotLoggedInError } from "@/core/auth/errors";
 
 export class SuperwallApi {
@@ -29,9 +43,13 @@ export class SuperwallApi {
   }
 
   get org(): { id?: string; name?: string; count: number } {
+    // SUPERWALL_ORG_ID overrides the session, the same way SUPERWALL_API_HOST
+    // does: pointing at a local API means the session's org id (from the
+    // hosted account) names an organization that host has never heard of.
+    const override = process.env.SUPERWALL_ORG_ID;
     return {
-      id: this.session.orgId,
-      name: this.session.orgName,
+      id: override ?? this.session.orgId,
+      name: override ? undefined : this.session.orgName,
       count: this.session.orgCount ?? 1,
     };
   }
@@ -46,13 +64,16 @@ export class SuperwallApi {
   }
 
   private base(): string {
-    return this.session.host || API_HOST;
+    // An explicit env override beats the stored session host — local
+    // platform development points every command at a dev API without
+    // re-logging-in (project .env files are loaded by the superwall bin).
+    return process.env.SUPERWALL_API_HOST ?? this.session.host ?? API_HOST;
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const { token, session } = await resolveAuthToken(this.session);
     this.session = session;
-    const res = await fetch(`${this.base()}${path}`, {
+    const res = await this.fetch(`${this.base()}${path}`, {
       method,
       headers: {
         authorization: `Bearer ${token}`,
@@ -67,6 +88,15 @@ export class SuperwallApi {
     }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
+  }
+
+  private async fetch(url: string, init: RequestInit): Promise<Response> {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      // Node reports every connection failure as a bare "fetch failed".
+      throw new ApiUnreachableError(this.base(), error);
+    }
   }
 
   get<T>(path: string): Promise<T> {
@@ -85,7 +115,7 @@ export class SuperwallApi {
   async postText(path: string, body: string): Promise<string> {
     const { token, session } = await resolveAuthToken(this.session);
     this.session = session;
-    const res = await fetch(`${this.base()}${path}`, {
+    const res = await this.fetch(`${this.base()}${path}`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,

@@ -38,7 +38,7 @@ const RESOURCES = ["orgs", "apps", "products", "campaigns", "paywalls", "entitle
 
 const API_VERBS = ["get", "post", "patch", "delete"] as const;
 
-function printHelp(frameworkRows: ReadonlyArray<readonly [string, string]> = []): void {
+function printHelp(): void {
   const pad = (cmd: string) => `  ${cmd.padEnd(30)}`;
   const row = (cmd: string, desc: string) => `${pad(cmd)}${desc}`;
   const head = (title: string) => pc.bold(`${title}:`);
@@ -49,9 +49,12 @@ function printHelp(frameworkRows: ReadonlyArray<readonly [string, string]> = [])
       pc.bold("Usage:"),
       "  superwall [command]",
       "",
-      ...(frameworkRows.length > 0
-        ? [head("Paywall commands"), ...frameworkRows.map(([cmd, desc]) => row(cmd, desc)), ""]
-        : []),
+      head("Paywall commands"),
+      row("dev [dir]", "Host the studio: browse and preview your paywalls"),
+      row("push [dir]", "Build and push your paywalls as immutable versions"),
+      row("promote [dir]", "Point production at a pushed version"),
+      row("publish [dir]", "Push and promote in one step"),
+      "",
       head("Workflow commands"),
       row("integrate", "Set up Superwall in your app (agent-driven)"),
       row("migrate", "Migrate from RevenueCat / Adapty / Qonversion"),
@@ -97,24 +100,14 @@ function printHelp(frameworkRows: ReadonlyArray<readonly [string, string]> = [])
   );
 }
 
-/** Registers one framework command on the shared yargs instance. */
-export type FrameworkCommand = <T>(cli: Argv<T>) => Argv<T>;
-
-export type RunOptions = {
-  /** Commands registered by the paywall framework's launcher (dev, publish, …). */
-  commands?: ReadonlyArray<FrameworkCommand>;
-  /** Help rows for those commands, rendered in their own section. */
-  helpRows?: ReadonlyArray<readonly [string, string]>;
-};
-
-export async function run(options: RunOptions = {}): Promise<void> {
+export async function run(): Promise<void> {
   const args = hideBin(process.argv);
   if (
     args.length === 0 ||
     args[0] === "help" ||
     ((args[0] === "-h" || args[0] === "--help") && args.length === 1)
   ) {
-    printHelp(options.helpRows);
+    printHelp();
     return;
   }
 
@@ -461,16 +454,78 @@ export async function run(options: RunOptions = {}): Promise<void> {
     );
   }
 
-  for (const registerFrameworkCommand of options.commands ?? []) {
-    cli = registerFrameworkCommand(cli);
-  }
+  cli = cli
+    .command(
+      "dev [dir]",
+      "Host the studio: browse and preview your paywalls and funnels",
+      (y) =>
+        y
+          .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
+          .options({
+            port: {
+              type: "number",
+              default: 6100,
+              describe: "Preferred port (falls back to the next free one)",
+            },
+            host: { type: "string", default: "0.0.0.0", describe: "Host to bind" },
+          }),
+      (argv) => {
+        return import("@/commands/dev").then((m) => m.runDev(argv));
+      },
+    )
+    .command(
+      "push [dir]",
+      "Build and push your paywalls as immutable versions (production untouched)",
+      (y) =>
+        y
+          .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
+          .options({
+            only: { type: "string", describe: "Push one paywall or funnel by name" },
+          }),
+      (argv) => {
+        return import("@/commands/push").then((m) => m.runPush(argv));
+      },
+    )
+    .command(
+      "promote [dir]",
+      "Point production at a pushed version (the latest by default)",
+      (y) =>
+        y
+          // yargs' built-in --version (print CLI version) would swallow the
+          // flag and shift its value into the [dir] positional.
+          .version(false)
+          .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
+          .options({
+            only: { type: "string", describe: "Promote one paywall or funnel by name" },
+            version: {
+              type: "number",
+              describe: "Pushed version number to promote (requires --only)",
+            },
+          }),
+      (argv) => {
+        return import("@/commands/promote").then((m) => m.runPromote(argv));
+      },
+    )
+    .command(
+      "publish [dir]",
+      "Push and promote in one step - build, version, and ship to production",
+      (y) =>
+        y
+          .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
+          .options({
+            only: { type: "string", describe: "Publish one paywall or funnel by name" },
+          }),
+      (argv) => {
+        return import("@/commands/publish").then((m) => m.runPublish(argv));
+      },
+    );
 
   await cli
     .command(
       "$0",
       false,
       (y) => y,
-      () => printHelp(options.helpRows),
+      () => printHelp(),
     )
     .version(VERSION)
     .alias("v", "version")

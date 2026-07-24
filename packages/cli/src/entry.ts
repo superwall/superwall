@@ -1,17 +1,15 @@
-import { run, type RunOptions } from "@/cli";
+import { run } from "@/cli";
 import { flushTelemetry } from "@/core/telemetry";
 import { flushUpdateCheck } from "@/core/update";
 
-export type { RunOptions } from "@/cli";
-
 /**
- * The CLI's programmatic entrypoint: the paywall framework's `superwall` bin
- * calls this, passing its own commands (dev, publish, …) so one shell serves
- * both the management CLI and the framework.
+ * The CLI's programmatic entrypoint: the `superwall` package's bin calls
+ * this after registering tsx (which is what lets the paywall commands load
+ * the project's framework TypeScript at runtime).
  */
-export async function main(options: RunOptions = {}): Promise<void> {
+export async function main(): Promise<void> {
   try {
-    await run(options);
+    await run();
   } finally {
     await Promise.all([flushTelemetry(), flushUpdateCheck()]);
   }

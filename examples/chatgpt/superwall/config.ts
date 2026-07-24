@@ -1,8 +1,6 @@
 import { defineConfig } from "superwall";
 
 export default defineConfig({
-  applicationId: "7",
-
   defaults: {
     presentation: {
       style: "fullscreen",

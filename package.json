@@ -2,18 +2,21 @@
   "name": "superwall",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "examples/*"
   ],
   "type": "module",
   "scripts": {
-    "test": "bun run --filter '@superwall/*' test:run",
-    "test:coverage": "bun run --filter '@superwall/*' test:coverage",
-    "typecheck": "bun run --filter '@superwall/*' typecheck",
+    "dev": "bun run --filter chatgpt dev",
+    "test": "bun run --filter '@superwall/*' --filter superwall test:run",
+    "test:coverage": "bun run --filter '@superwall/*' --filter superwall test:coverage",
+    "typecheck": "bun run --filter '@superwall/*' --filter superwall typecheck",
     "build": "bun run --filter '@superwall/*' build",
     "clean": "bun run --filter '@superwall/*' clean",
     "lint": "oxlint",
     "format": "oxfmt",
-    "format:check": "oxfmt --check"
+    "format:check": "oxfmt --check",
+    "postinstall": "bun run --filter '@superwall/cli' build && bun run --filter '@superwall/studio' build"
   },
   "devDependencies": {
     "oxfmt": "^0.19.0",
