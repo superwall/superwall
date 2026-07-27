@@ -17,19 +17,14 @@ export const importDefault = async <T>(file: string | undefined): Promise<T | un
       const mod = (await import(url)) as { default?: T };
       return mod.default;
     } catch {
-      // A broken config shouldn't take the whole project down: the surface
-      // still lists, and mounting it reports the real error.
       return undefined;
     }
   }
 };
 
 export type LoadedSurfaceConfig = {
-  /** The surface's own `config.ts` default export. */
   definition: PaywallDefinition | undefined;
-  /** The project's `superwall/config.ts` default export. */
   appConfig: SuperwallAppConfig | undefined;
-  /** Definition merged over app defaults — what the runtime session sees. */
   config: SuperwallConfig;
 };
 

@@ -19,8 +19,6 @@ export const runPromote = defineCommand({
     const project = framework.discoverProject(dir);
     const surfaces = selectSurfaces(project, context.argv.only);
 
-    // yargs coerces a non-numeric --version to NaN, which would serialize as
-    // null and silently promote the latest version.
     const requested = context.argv.version;
     if (requested !== undefined && !Number.isInteger(requested)) {
       throw new Error("--version takes a pushed version number, e.g. --version 3.");
@@ -40,8 +38,6 @@ export const runPromote = defineCommand({
           superwallDir: project.superwallDir,
           surface,
           pickApplication: context.interactive ? pickApplicationOption : undefined,
-          // A surface with nothing pushed is a mistake to report, not a
-          // paywall to invent.
           create: false,
         });
 

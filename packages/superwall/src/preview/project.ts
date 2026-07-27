@@ -13,6 +13,7 @@ export type StudioSurfacePayload = {
   locales: string[];
   variables?: PaywallDefinition["variables"];
   paywallId?: string;
+  editedAt?: string;
 };
 
 export type StudioProjectPayload = {

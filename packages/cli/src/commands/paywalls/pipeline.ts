@@ -46,11 +46,6 @@ async function timed<T>(work: () => Promise<T>): Promise<{ value: T; took: strin
   return { value, took: took(at) };
 }
 
-/**
- * Runs one paywall as a single subtree: a live spinner while it works, then
- * its own `◇ <name>` heading with the steps indented beneath — so three
- * paywalls read as three groups, not a flat wall of lines.
- */
 async function group(
   context: CommandContext,
   id: string,
@@ -109,7 +104,7 @@ export async function runPushPipeline(
       const lines: string[] = [];
 
       note("building");
-      const build = await timed(() => framework.buildSurface(project, surface));
+      const build = await timed(() => framework.buildSnapshot(project, surface));
       lines.push(`Built ${pc.dim(`${kb(build.value.bytes)} · ${build.value.snapshotId.slice(0, 8)}`)} ${build.took}`);
 
       note("finding on Superwall");

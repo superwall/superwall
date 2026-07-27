@@ -10,30 +10,14 @@ import type { PaywallDefinition } from "../config/paywall";
 import type { DiscoveredSurface, Project } from "../discover";
 import { renderDocument } from "../document";
 
-/**
- * The build step of `superwall push`: every surface becomes ONE
- * self-contained HTML file —
- * scripts and styles inlined — so a published snapshot is a single immutable
- * object, exactly like the schema runtime's rendered documents. The snapshot
- * ID is the content hash: same input, same snapshot; any change, a new one.
- *
- * The document itself comes from `../document` — the same renderer the
- * preview server uses, so a local preview and a published snapshot are the
- * same HTML.
- */
-
-export type SurfaceBuild = {
+export type BuiltSnapshot = {
   surface: DiscoveredSurface;
-  /** sha256 of the final HTML — the content-addressed snapshot identity. */
   snapshotId: string;
   html: string;
   bytes: number;
   htmlFile: string;
-  /** The surface's config.ts default export, evaluated at build time. */
   definition: PaywallDefinition | undefined;
-  /** The app-level superwall/config.ts default export. */
   appConfig: SuperwallAppConfig | undefined;
-  /** Definition merged over app defaults — what the runtime session sees. */
   config: SuperwallConfig;
 };
 
@@ -42,13 +26,6 @@ const relativeImport = (fromDir: string, file: string): string => {
   return relative.startsWith(".") ? relative : `./${relative}`;
 };
 
-/**
- * The production entry mirrors the preview mount exactly: config
- * merged over app defaults, shared messages layered under local ones, pages
- * in the router, everything inside a SuperwallProvider. The paywall's
- * `preview` overrides ship in the snapshot but only engage when no real SDK
- * host is present — a real webview always wins.
- */
 const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurface): string => {
   const imp = (file: string) => JSON.stringify(relativeImport(entryDir, file));
   const lines: string[] = [
@@ -108,7 +85,6 @@ const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurf
   return lines.join("\n");
 };
 
-/** Inlines the built JS/CSS into index.html so the bundle is one file. */
 const inlineAssets = (outDir: string): string => {
   let html = fs.readFileSync(path.join(outDir, "index.html"), "utf8");
 
@@ -131,10 +107,10 @@ const inlineAssets = (outDir: string): string => {
  * Builds one surface into a self-contained, content-addressed snapshot.
  * `superwall push` calls this through `superwall/build`.
  */
-export const buildSurface = async (
+export const buildSnapshot = async (
   project: Project,
   surface: DiscoveredSurface,
-): Promise<SurfaceBuild> => {
+): Promise<BuiltSnapshot> => {
   const entryDir = path.join(project.root, ".superwall/entries", surface.kind, surface.id);
   const outDir = path.join(project.root, ".superwall/dist", surface.kind, surface.id);
   fs.mkdirSync(entryDir, { recursive: true });
@@ -162,7 +138,6 @@ export const buildSurface = async (
     build: {
       outDir,
       emptyOutDir: true,
-      // One chunk so the bundle inlines into a single HTML file.
       rollupOptions: { output: { inlineDynamicImports: true } },
     },
   });

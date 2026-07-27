@@ -9,7 +9,6 @@ import {
   type SuperwallConfig,
   type SuperwallProduct,
   type SuperwallSession,
-  type SuperwallSessionStartOptions,
 } from "@superwall/runtime";
 
 const SuperwallContext = React.createContext<SuperwallSession | null>(null);
@@ -17,17 +16,25 @@ const SuperwallContext = React.createContext<SuperwallSession | null>(null);
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
+/**
+ * How the provider gets its runtime data. `"auto"` (what the build emits)
+ * uses the real native SDK when one is present and the mock host otherwise —
+ * so a snapshot behaves identically in a webview and in a preview with no
+ * code change. An options object supplies preview data; only `true` forces
+ * the mock even inside a real host.
+ */
 export type SuperwallMockProp = boolean | "auto" | SuperwallMockOptions;
 
-export type SuperwallProviderProps<TProduct extends SuperwallProduct = SuperwallProduct> =
-  React.PropsWithChildren<{
-    session?: SuperwallSession<TProduct>;
-    config?: SuperwallConfig;
-    mock?: SuperwallMockProp;
-    autoStart?: boolean;
-    exposePaywallInterface?: boolean;
-    ping?: SuperwallSessionStartOptions["ping"];
-  }>;
+/**
+ * The framework mounts this — users write hooks, not the provider, and it is
+ * exported only so the generated build entry can import it. `config` and
+ * `mock` are the whole surface; the session always starts, exposes its
+ * native interface, and pings.
+ */
+export type SuperwallProviderProps = React.PropsWithChildren<{
+  config?: SuperwallConfig;
+  mock?: SuperwallMockProp;
+}>;
 
 const resolveMockOptions = (
   mock: SuperwallMockProp | undefined,
@@ -38,34 +45,23 @@ const resolveMockOptions = (
   return mockOptionsFromConfig(config, typeof mock === "object" ? mock : {});
 };
 
-export const SuperwallProvider = <TProduct extends SuperwallProduct = SuperwallProduct>({
-  children,
-  session,
-  config,
-  mock,
-  autoStart = true,
-  exposePaywallInterface = true,
-  ping,
-}: SuperwallProviderProps<TProduct>) => {
-  const ownedSession = React.useRef<SuperwallSession<TProduct> | null>(null);
+export const SuperwallProvider = ({ children, config, mock }: SuperwallProviderProps) => {
+  const ownedSession = React.useRef<SuperwallSession | null>(null);
 
-  if (!session && ownedSession.current === null) {
+  if (ownedSession.current === null) {
     const mockOptions = resolveMockOptions(mock, config);
-
-    ownedSession.current = createSuperwallSession<TProduct>({
+    ownedSession.current = createSuperwallSession({
       config,
       transport: mockOptions ? createMockSuperwallTransport(mockOptions) : undefined,
     });
   }
 
-  const value = session ?? ownedSession.current;
+  const value = ownedSession.current;
 
-  if (!value) {
-    throw new Error("SuperwallProvider could not create a runtime session");
-  }
-
+  // Expose the interface the native SDK calls into to deliver messages
+  // (`window.paywall.accept`), before paint so nothing is dropped.
   useIsomorphicLayoutEffect(() => {
-    if (!exposePaywallInterface || typeof window === "undefined") {
+    if (typeof window === "undefined") {
       return;
     }
 
@@ -101,19 +97,18 @@ export const SuperwallProvider = <TProduct extends SuperwallProduct = SuperwallP
         paywallWindow.__sw_runtime_session = previousRuntimeSession;
       }
     };
-  }, [exposePaywallInterface, value]);
+  }, [value]);
 
-  const pingedSession = React.useRef<SuperwallSession<TProduct> | null>(null);
+  // Begin listening and send the handshake ping, once per session. A single
+  // `start()` call: the session ignores a repeat once it is listening.
+  const pingedSession = React.useRef<SuperwallSession | null>(null);
   React.useEffect(() => {
-    if (!autoStart) {
-      return;
-    }
     const firstStart = pingedSession.current !== value;
-    value.start({ sendPing: firstStart, ping });
+    value.start({ sendPing: firstStart });
     if (firstStart) {
       pingedSession.current = value;
     }
-  }, [autoStart, ping, value]);
+  }, [value]);
 
   React.useEffect(() => {
     if (config) {
@@ -121,6 +116,8 @@ export const SuperwallProvider = <TProduct extends SuperwallProduct = SuperwallP
     }
   }, [config, value]);
 
+  // Document semantics (`data-sw-*`) on <html>; the platform stylesheet reads
+  // them. In dev there is no build step, so the provider reasserts them.
   React.useEffect(() => {
     if (typeof document === "undefined") {
       return;
@@ -130,8 +127,6 @@ export const SuperwallProvider = <TProduct extends SuperwallProduct = SuperwallP
     }
   }, [config]);
 
-  // The session type is covariant in its product generic, so a refined
-  // session stores into the base-typed context directly.
   return React.createElement(SuperwallContext.Provider, { value }, children);
 };
 

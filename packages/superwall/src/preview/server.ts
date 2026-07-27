@@ -102,7 +102,58 @@ const STUDIO_MISSING = `superwall studio is not built.
 Run: bun run --filter '@superwall/studio' build
 (or reinstall — the workspace postinstall builds it)`;
 
-const previewPlugin = (projectRoot: string, platformStylesheet: string): Plugin => ({
+export type StudioActionName = "push" | "promote" | "publish";
+
+export type StudioActionResult =
+  | { ok: true; version: number; live: boolean }
+  | { ok: false; error: string };
+
+export type StudioActionProgress = (step: string, state: "start" | "done") => void;
+
+export type StudioStatus = {
+  paywallId?: string;
+  liveUrl?: string;
+  active?: boolean;
+  updatedAt?: string;
+};
+
+export type StudioActions = {
+  run(
+    action: StudioActionName,
+    surface: DiscoveredSurface,
+    onProgress?: StudioActionProgress,
+  ): Promise<StudioActionResult>;
+  status(surface: DiscoveredSurface): Promise<StudioStatus>;
+};
+
+const ACTION_NAMES: readonly StudioActionName[] = ["push", "promote", "publish"];
+
+const readBody = (req: NodeJS.ReadableStream): Promise<string> =>
+  new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk: Buffer) => {
+      body += chunk.toString();
+    });
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
+
+const json = (
+  res: { setHeader(n: string, v: string): void; end(b: string): void },
+  value: unknown,
+) => {
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", "no-store");
+  res.end(JSON.stringify(value));
+};
+
+const STATUS_ROUTE = /^\/__studio\/status\/(paywall|funnel)\/([a-z0-9-]+)$/;
+
+const previewPlugin = (
+  projectRoot: string,
+  platformStylesheet: string,
+  studio?: StudioActions,
+): Plugin => ({
   name: "superwall:preview",
   resolveId(id) {
     if (id === VIRTUAL_PROJECT_ID) return RESOLVED_VIRTUAL_PROJECT_ID;
@@ -116,7 +167,6 @@ const previewPlugin = (projectRoot: string, platformStylesheet: string): Plugin 
   },
   configureServer(server) {
     const invalidate = (file: string) => {
-      // Surface/page add/remove/rename changes the discovered graph.
       const relative = path.relative(projectRoot, file);
       if (relative.includes("paywalls") || relative.includes("funnels")) {
         const mod = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_PROJECT_ID);
@@ -129,9 +179,6 @@ const previewPlugin = (projectRoot: string, platformStylesheet: string): Plugin 
     server.watcher.on("addDir", invalidate);
     server.watcher.on("unlinkDir", invalidate);
 
-    // After Vite's internal middlewares: the studio (built app) owns `/`,
-    // `/<kind>/<id>`, and `/__studio/*`; bare surface mounts live at
-    // `/preview/<kind>/<id>` inside the project's vite graph.
     return () => {
       server.middlewares.use((req, res, next) => {
         const url = (req.url ?? "/").split("?")[0];
@@ -139,11 +186,57 @@ const previewPlugin = (projectRoot: string, platformStylesheet: string): Plugin 
         if (url === "/__studio/project.json") {
           buildStudioProject(projectRoot)
             .then((payload) => {
-              res.setHeader("Content-Type", "application/json");
-              res.setHeader("Cache-Control", "no-store");
-              res.end(JSON.stringify(payload));
+              json(res, { ...payload, capabilities: { actions: Boolean(studio) } });
             })
             .catch(next);
+          return;
+        }
+
+        if (url === "/__studio/action" && req.method === "POST") {
+          readBody(req)
+            .then(async (body) => {
+              const request = JSON.parse(body) as { action?: string; kind?: string; id?: string };
+              const action = ACTION_NAMES.find((name) => name === request.action);
+              const surface = discoverProject(projectRoot).surfaces.find(
+                (candidate) => candidate.kind === request.kind && candidate.id === request.id,
+              );
+              res.setHeader("Content-Type", "application/x-ndjson");
+              res.setHeader("Cache-Control", "no-store");
+              const line = (value: unknown) => res.write(`${JSON.stringify(value)}\n`);
+
+              if (!action || !surface) {
+                line({ result: { ok: false, error: "Unknown action or paywall." } });
+              } else if (!studio) {
+                line({ result: { ok: false, error: "Actions need `superwall dev`." } });
+              } else {
+                const result = await studio.run(action, surface, (step, state) =>
+                  line({ step, state }),
+                );
+                line({ result });
+              }
+              res.end();
+            })
+            .catch((error: unknown) => {
+              json(res, {
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
+          return;
+        }
+
+        const status = STATUS_ROUTE.exec(url);
+        if (status) {
+          const surface = discoverProject(projectRoot).surfaces.find(
+            (candidate) => candidate.kind === status[1] && candidate.id === status[2],
+          );
+          if (!surface || !studio) {
+            return json(res, {});
+          }
+          studio
+            .status(surface)
+            .then((value) => json(res, value))
+            .catch(() => json(res, {}));
           return;
         }
 
@@ -205,12 +298,8 @@ const previewPlugin = (projectRoot: string, platformStylesheet: string): Plugin 
 export type PreviewServerOptions = {
   port: number;
   host?: string;
-  /**
-   * The platform stylesheet previews are served under. Defaults to the
-   * production live.css, so previews match what Superwall serves without
-   * any configuration.
-   */
   platformStylesheet?: string;
+  studio?: StudioActions;
 };
 
 /**
@@ -229,32 +318,28 @@ export const startPreviewServer = async (
     envFile: false,
     root: project.root,
     appType: "custom",
+    logLevel: "warn",
     plugins: [
       react(),
-      previewPlugin(project.root, options.platformStylesheet ?? PLATFORM_STYLESHEET_URL),
+      previewPlugin(
+        project.root,
+        options.platformStylesheet ?? PLATFORM_STYLESHEET_URL,
+        options.studio,
+      ),
     ],
     resolve: {
-      // Workspace packages resolve to TypeScript sources; one React copy.
       conditions: ["superwall-ts", ...defaultClientConditions],
       dedupe: ["react", "react-dom"],
       alias: {
-        // "@/…" points at the superwall/ directory, Next.js-style.
         "@": project.superwallDir,
       },
     },
     optimizeDeps: {
-      // zod is reached through source-resolved workspace packages (excluded
-      // below), so vite can't see it statically — declaring it prevents a
-      // mid-session re-optimization reload on first load. The `superwall > `
-      // prefix resolves it through the framework package (isolated installs
-      // keep it out of the project's own node_modules).
       include: ["react", "react-dom", "react-dom/client", "superwall > zod"],
       exclude: ["superwall", "@superwall/runtime", "@superwall/protocol", "@superwall/studio"],
     },
     server: {
       port: options.port,
-      // Fall back to the next free port instead of failing — the command
-      // reports the resolved URL.
       strictPort: false,
       host: options.host ?? "0.0.0.0",
     },

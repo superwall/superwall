@@ -47,11 +47,16 @@ describe("applyThemeOverride", () => {
     document.documentElement.style.colorScheme = "";
   });
 
-  it("does nothing without an override", () => {
-    const base = installBaseMatchMedia();
+  it("without an override, restores the host's own matchMedia behavior", () => {
+    installBaseMatchMedia();
+    // Simulate a live theme flip and back — the studio's instant channel.
+    applyThemeOverride("dark");
     applyThemeOverride(undefined);
     expect(document.documentElement.style.colorScheme).toBe("");
-    expect(window.matchMedia).toBe(base);
+    // Delegates to the host stub again (matches: false for everything) —
+    // the dark simulation would have answered true for the dark query.
+    expect(window.matchMedia("(prefers-color-scheme: dark)").matches).toBe(false);
+    expect(window.matchMedia("(prefers-color-scheme: light)").matches).toBe(false);
   });
 
   it("survives hosts that do not implement matchMedia", () => {

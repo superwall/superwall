@@ -1,0 +1,200 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #1a1918;
+  --color-bar: #211f1d;
+  --color-panel: #242220;
+  --color-cream: #fdfef6;
+  --color-accent: #46d7d4;
+  --color-red: #ff7474;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .sw-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    background: transparent;
+    color: var(--color-cream);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 150ms ease;
+  }
+
+  .sw-btn:hover {
+    background: color-mix(in srgb, var(--color-cream) 5%, transparent);
+  }
+
+  .sw-btn--primary {
+    background: var(--color-cream);
+    border-color: var(--color-cream);
+    color: var(--color-ink);
+  }
+
+  .sw-btn--primary:hover {
+    background: color-mix(in srgb, var(--color-cream) 85%, transparent);
+  }
+
+  .sw-btn--icon {
+    width: 30px;
+    padding: 0;
+  }
+
+  .sw-btn svg,
+  .sw-segmented svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .sw-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    color: var(--color-cream);
+    white-space: nowrap;
+  }
+
+  .sw-tool-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--color-cream) 55%, transparent);
+    white-space: nowrap;
+  }
+
+  .sw-tool-label--key {
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    font-size: 11px;
+  }
+
+  .sw-select {
+    appearance: none;
+    height: 28px;
+    padding: 0 24px 0 9px;
+    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    background:
+      linear-gradient(
+          45deg,
+          transparent 50%,
+          color-mix(in srgb, var(--color-cream) 55%, transparent) 50%
+        )
+        calc(100% - 13px) 55% / 4px 4px no-repeat,
+      linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--color-cream) 55%, transparent) 50%,
+          transparent 50%
+        )
+        calc(100% - 9px) 55% / 4px 4px no-repeat;
+    background-color: transparent;
+    color: var(--color-cream);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .sw-select option {
+    background: var(--color-bar);
+  }
+
+  .sw-segmented {
+    display: inline-flex;
+    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    height: 28px;
+  }
+
+  .sw-segmented button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 11px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--color-cream) 55%, transparent);
+    transition:
+      background-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .sw-segmented button + button {
+    border-left: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+  }
+
+  .sw-segmented button[aria-pressed="true"] {
+    background: var(--color-cream);
+    color: var(--color-ink);
+  }
+
+  .sw-input {
+    height: 28px;
+    padding: 0 9px;
+    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    background: transparent;
+    color: var(--color-cream);
+    font: inherit;
+    font-size: 0.8125rem;
+    width: 100%;
+  }
+
+  .sw-switch {
+    position: relative;
+    width: 34px;
+    height: 19px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-cream) 18%, transparent);
+    transition: background-color 150ms ease;
+    flex: none;
+  }
+
+  .sw-switch[aria-checked="true"] {
+    background: var(--color-accent);
+  }
+
+  .sw-switch::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 13px;
+    height: 13px;
+    border-radius: 9999px;
+    background: var(--color-ink);
+    transition: transform 150ms ease;
+  }
+
+  .sw-switch[aria-checked="true"]::after {
+    transform: translateX(15px);
+  }
+}

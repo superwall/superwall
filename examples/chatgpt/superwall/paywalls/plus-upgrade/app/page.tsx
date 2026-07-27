@@ -6,8 +6,6 @@ import { PlanToggle } from "../components/PlanToggle";
 import config from "../config";
 import "./styles.css";
 
-const variables = resolveVariables(config.variables);
-
 type Plan = "go" | "plus";
 
 const FEATURES = [
@@ -20,6 +18,7 @@ const FEATURES = [
 ] as const;
 
 export default function PlusUpgrade() {
+  const variables = resolveVariables(config.variables);
   const { getProduct } = useProducts();
   const { purchase, isPurchasing } = usePurchase();
   const { close, openUrl } = useActions();

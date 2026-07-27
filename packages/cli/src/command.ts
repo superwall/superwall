@@ -133,8 +133,6 @@ export async function executeCommand<Auth extends AuthPolicy>(
       await new Promise((done) => setTimeout(done, 50));
     }
     ui.stop();
-    // After the renderer closes: a timeline item here would dangle below the
-    // `└` cap, and every command ends with one.
     if (outputMode !== "json" && definition.name !== "upgrade") {
       maybeNotifyUpdate(stdout);
     }

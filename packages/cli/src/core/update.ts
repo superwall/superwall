@@ -61,6 +61,5 @@ export async function flushUpdateCheck(capMs = 2000): Promise<void> {
 export function maybeNotifyUpdate(stream: Pick<NodeJS.WriteStream, "write">): void {
   const latest = availableUpdate();
   if (!latest) return;
-  // The renderer already ends its last frame with a newline.
   stream.write(`${pc.dim(`Update available ${VERSION} → ${latest} · run \`superwall upgrade\``)}\n`);
 }

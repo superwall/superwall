@@ -23,7 +23,7 @@ export interface FrameworkProject {
   diagnostics: string[];
 }
 
-export interface SurfaceBuild {
+export interface BuiltSnapshot {
   snapshotId: string;
   html: string;
   bytes: number;
@@ -34,12 +34,36 @@ export interface PreviewServerHandle {
   resolvedUrls?: { local: string[] } | null;
 }
 
+export type StudioActionName = "push" | "promote" | "publish";
+
+export type StudioActionResult =
+  | { ok: true; version: number; live: boolean }
+  | { ok: false; error: string };
+
+export interface StudioStatus {
+  paywallId?: string;
+  liveUrl?: string;
+  active?: boolean;
+  updatedAt?: string;
+}
+
+export type StudioActionProgress = (step: string, state: "start" | "done") => void;
+
+export interface StudioActions {
+  run(
+    action: StudioActionName,
+    surface: FrameworkSurface,
+    onProgress?: StudioActionProgress,
+  ): Promise<StudioActionResult>;
+  status(surface: FrameworkSurface): Promise<StudioStatus>;
+}
+
 export interface Framework {
   discoverProject(root: string): FrameworkProject;
-  buildSurface(project: FrameworkProject, surface: FrameworkSurface): Promise<SurfaceBuild>;
+  buildSnapshot(project: FrameworkProject, surface: FrameworkSurface): Promise<BuiltSnapshot>;
   startPreviewServer(
     root: string,
-    options: { port: number; host?: string; platformStylesheet?: string },
+    options: { port: number; host?: string; platformStylesheet?: string; studio?: StudioActions },
   ): Promise<PreviewServerHandle>;
 }
 
@@ -93,7 +117,7 @@ export async function loadFramework(cwd: string): Promise<Framework> {
 
   return {
     discoverProject: fn(discover, "discoverProject", "superwall/discover"),
-    buildSurface: fn(build, "buildSurface", "superwall/build"),
+    buildSnapshot: fn(build, "buildSnapshot", "superwall/build"),
     startPreviewServer: fn(preview, "startPreviewServer", "superwall/preview"),
   };
 }

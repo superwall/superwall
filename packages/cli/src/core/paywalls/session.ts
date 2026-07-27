@@ -16,14 +16,6 @@ export class LoginRequiredError extends Error {
   }
 }
 
-/**
- * Resolves the API for a paywall command, signing in first when needed.
- *
- * `push` is often the first Superwall command anyone — or any agent — runs,
- * so an absent session is a step in the flow rather than a failure:
- * interactively it starts the browser login and continues; non-interactively
- * it explains both ways to authenticate.
- */
 export async function requireApi(interactive: boolean): Promise<SuperwallApi> {
   const apiKey = apiKeyFromEnv();
   if (apiKey) {

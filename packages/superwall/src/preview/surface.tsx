@@ -54,7 +54,6 @@ const useSurface = (surface: PreviewSurface): Loaded => {
       if (cancelled) return;
 
       const merged = mergeSurfaceConfig(app?.defaults, definition);
-      // Convention-discovered messages layer UNDER anything declared in config.
       const messages: Record<string, SuperwallMessages> = { ...catalogs };
       for (const [locale, catalog] of Object.entries(merged.localization?.messages ?? {})) {
         messages[locale] = mergeMessages(messages[locale], catalog);

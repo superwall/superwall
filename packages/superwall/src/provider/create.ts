@@ -36,7 +36,7 @@ export const createSuperwall = <
   type TVariables = TCustomVariables & SuperwallProductVariables;
 
   return {
-    SuperwallProvider: SuperwallProvider<SuperwallProduct<TVariables>>,
+    SuperwallProvider,
     useProducts: () => useProducts<TVariables>(),
     usePurchase: () => usePurchase<TVariables>(),
     useActions,

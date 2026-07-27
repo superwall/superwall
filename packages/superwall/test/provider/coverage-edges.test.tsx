@@ -80,16 +80,6 @@ describe("createSuperwall typed bundle", () => {
 });
 
 describe("paywall interface exposure", () => {
-  it("stays off the window when exposePaywallInterface is false", async () => {
-    const view = render(<div />, { wrapper: createWrapper({ exposePaywallInterface: false }) });
-    await flush();
-
-    const paywallWindow = window as typeof window & { paywall?: unknown; app?: unknown };
-    expect(paywallWindow.paywall).toBeUndefined();
-    expect(paywallWindow.app).toBeUndefined();
-    view.unmount();
-  });
-
   it("does not clobber globals someone else replaced before unmount", async () => {
     const view = render(<div />, { wrapper: createWrapper() });
     await flush();

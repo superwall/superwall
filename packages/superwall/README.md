@@ -47,9 +47,11 @@ export default definePaywall({
 
 - **`products`** — slots by reference. Product data (price, period, trial…)
   is SDK-owned and arrives at runtime.
-- **`variables`** — experiment knobs, read with `resolveVariables(config.variables)`.
-  The schema is serialized on push; the dashboard renders controls from it, so
-  a variant becomes `{ snapshot, overrides }` — no code change, no rebuild.
+- **`variables`** — experiment knobs, read with `resolveVariables(config.variables)`
+  **inside your component** (it's cheap — reading at module scope bakes the
+  values and the studio's live controls can't reach them). The schema is
+  serialized on push; the dashboard renders controls from it, so a variant
+  becomes `{ snapshot, overrides }` — no code change, no rebuild.
 - **`preview`** — mock-host overrides (real prices, purchase outcomes,
   device variables, trial eligibility). They ship inside the snapshot but
   only engage where no real SDK host exists — inside a webview the native
@@ -163,7 +165,7 @@ default; `SUPERWALL_RUNTIME_URL` in the project `.env` points them at a local
 runtime instead.
 
 Machinery exports for tooling: `superwall/preview` (`startPreviewServer`),
-`superwall/build` (`buildSurface`), and `superwall/discover`
+`superwall/build` (`buildSnapshot`), and `superwall/discover`
 (`discoverProject`). The CLI (`@superwall/cli`) owns every command — dev,
 push, promote, publish live there — and loads this machinery dynamically
 from the project's own install, so commands always run against the framework
