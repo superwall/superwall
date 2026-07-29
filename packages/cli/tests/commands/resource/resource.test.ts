@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { executeCommand } from "@/command";
-import { runResource } from "@/commands/resource";
+import { runResource } from "@/commands/resource/resource";
 import type { SuperwallApi } from "@/core/api/client";
-import { recordingRenderer } from "../helpers/renderer";
+import { recordingRenderer } from "../../helpers/renderer";
 
 afterEach(() => {
   process.exitCode = undefined;

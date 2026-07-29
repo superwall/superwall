@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { executeCommand } from "@/command";
-import { runAsc } from "@/commands/asc";
+import { runAsc } from "@/commands/platform/asc";
 import type { SuperwallApi } from "@/core/api/client";
-import { recordingRenderer } from "../helpers/renderer";
+import { recordingRenderer } from "../../helpers/renderer";
 
 test("asc keys list honors --json without UI contamination", async () => {
   const api = {

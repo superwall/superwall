@@ -143,7 +143,7 @@ and update ALL of:
 
 ## Adding a command - checklist
 
-1. Handler in `src/commands/<name>.ts` using `defineCommand` (lifecycle, renderer,
+1. Handler in `src/commands/<category>/<name>.ts` (categories: `paywalls`, `workflow`, `resource`, `platform`, `account`) using `defineCommand` (lifecycle, renderer,
    error handling come free). Lazy-import it in `cli.ts`.
 2. Register in `cli.ts` with describe + options; respect the naming rules above.
 3. Add to the right `printHelp()` section.

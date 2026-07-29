@@ -146,8 +146,8 @@ export async function run(): Promise<void> {
         }),
       (argv) => {
         if (argv.skill)
-          return import("@/commands/print-skill").then((m) => m.runPrintSkill("integrate")(argv));
-        return import("@/commands/integrate").then((m) => m.runIntegrate(argv));
+          return import("@/commands/workflow/print-skill").then((m) => m.runPrintSkill("integrate")(argv));
+        return import("@/commands/workflow/integrate").then((m) => m.runIntegrate(argv));
       },
     )
     .command(
@@ -166,8 +166,8 @@ export async function run(): Promise<void> {
       (argv) => {
         const id = argv.fix ? "review-fix" : "review";
         if (argv.skill)
-          return import("@/commands/print-skill").then((m) => m.runPrintSkill(id)(argv));
-        return import("@/commands/integrate").then((m) => m.runActionCommand(id)(argv));
+          return import("@/commands/workflow/print-skill").then((m) => m.runPrintSkill(id)(argv));
+        return import("@/commands/workflow/integrate").then((m) => m.runActionCommand(id)(argv));
       },
     )
     .command(
@@ -181,8 +181,8 @@ export async function run(): Promise<void> {
         }),
       (argv) => {
         if (argv.skill)
-          return import("@/commands/print-skill").then((m) => m.runPrintSkill("migrate")(argv));
-        return import("@/commands/migrate").then((m) => m.runMigrate(argv));
+          return import("@/commands/workflow/print-skill").then((m) => m.runPrintSkill("migrate")(argv));
+        return import("@/commands/workflow/migrate").then((m) => m.runMigrate(argv));
       },
     )
     .command(
@@ -206,7 +206,7 @@ export async function run(): Promise<void> {
           },
         }),
       (argv) => {
-        return import("@/commands/auth").then((m) => m.runLogin(argv));
+        return import("@/commands/account/auth").then((m) => m.runLogin(argv));
       },
     )
     .command(
@@ -214,7 +214,7 @@ export async function run(): Promise<void> {
       "Log out of Superwall",
       (y) => y,
       (argv) => {
-        return import("@/commands/auth").then((m) => m.runLogout(argv));
+        return import("@/commands/account/auth").then((m) => m.runLogout(argv));
       },
     )
     .command(
@@ -222,7 +222,7 @@ export async function run(): Promise<void> {
       "Show the logged-in Superwall account",
       (y) => y,
       (argv) => {
-        return import("@/commands/auth").then((m) => m.runWhoami(argv));
+        return import("@/commands/account/auth").then((m) => m.runWhoami(argv));
       },
     )
     .command(
@@ -245,7 +245,7 @@ export async function run(): Promise<void> {
           },
         }),
       (argv) => {
-        return import("@/commands/skills").then((m) => m.runSkills(argv));
+        return import("@/commands/account/skills").then((m) => m.runSkills(argv));
       },
     )
     .command(
@@ -256,7 +256,7 @@ export async function run(): Promise<void> {
           ...installDirOption,
         }),
       (argv) => {
-        return import("@/commands/doctor").then((m) => m.runDoctor(argv));
+        return import("@/commands/account/doctor").then((m) => m.runDoctor(argv));
       },
     )
     .command(
@@ -264,7 +264,7 @@ export async function run(): Promise<void> {
       "Update the CLI to the latest version",
       (y) => y,
       (argv) => {
-        return import("@/commands/upgrade").then((m) => m.runUpgrade(argv));
+        return import("@/commands/account/upgrade").then((m) => m.runUpgrade(argv));
       },
     )
     .command(
@@ -279,7 +279,7 @@ export async function run(): Promise<void> {
           .example('$0 feedback "migrate crashed on Expo"', "Send feedback")
           .example('$0 feedback "..." --json', "For agents / automation"),
       (argv) => {
-        return import("@/commands/feedback").then((m) => m.runFeedback(argv));
+        return import("@/commands/account/feedback").then((m) => m.runFeedback(argv));
       },
     )
     .command(
@@ -297,7 +297,7 @@ export async function run(): Promise<void> {
           .example('$0 query "SHOW TABLES FROM sw"', "Run an inline query")
           .example("$0 query --file report.sql --json", "Run a saved query"),
       (argv) => {
-        return import("@/commands/query").then((m) => m.runQuery(argv));
+        return import("@/commands/platform/query").then((m) => m.runQuery(argv));
       },
     )
     .command(
@@ -344,7 +344,7 @@ export async function run(): Promise<void> {
             "dry-run": { type: "boolean", hidden: true },
           }),
       (argv) => {
-        return import("@/commands/asc").then((m) => m.runAsc(argv));
+        return import("@/commands/platform/asc").then((m) => m.runAsc(argv));
       },
     );
 
@@ -418,7 +418,7 @@ export async function run(): Promise<void> {
             "dry-run": { type: "boolean", describe: "Plan without writing" },
           }),
       (argv) => {
-        return import("@/commands/resource").then((m) => m.runResource(resource)(argv));
+        return import("@/commands/resource/resource").then((m) => m.runResource(resource)(argv));
       },
     );
   }
@@ -428,7 +428,7 @@ export async function run(): Promise<void> {
     "Complete account tree: orgs, projects, apps, campaigns, placements, and products",
     (y) => y,
     (argv) => {
-      return import("@/commands/api").then((m) => m.runBootstrap(argv));
+      return import("@/commands/platform/api").then((m) => m.runBootstrap(argv));
     },
   );
 
@@ -450,7 +450,7 @@ export async function run(): Promise<void> {
             },
           }),
       (argv) => {
-        return import("@/commands/api").then((m) => m.runApi(verb)(argv));
+        return import("@/commands/platform/api").then((m) => m.runApi(verb)(argv));
       },
     );
   }
@@ -472,7 +472,7 @@ export async function run(): Promise<void> {
             host: { type: "string", default: "0.0.0.0", describe: "Host to bind" },
           }),
       (argv) => {
-        return import("@/commands/dev").then((m) => m.runDev(argv));
+        return import("@/commands/paywalls/dev").then((m) => m.runDev(argv));
       },
     )
     .command(
@@ -502,7 +502,7 @@ export async function run(): Promise<void> {
             },
           }),
       (argv) => {
-        return import("@/commands/push").then((m) => m.runPush(argv));
+        return import("@/commands/paywalls/push").then((m) => m.runPush(argv));
       },
     )
     .command(
@@ -525,7 +525,7 @@ export async function run(): Promise<void> {
             },
           }),
       (argv) => {
-        return import("@/commands/promote").then((m) => m.runPromote(argv));
+        return import("@/commands/paywalls/promote").then((m) => m.runPromote(argv));
       },
     )
     .command(
@@ -555,7 +555,7 @@ export async function run(): Promise<void> {
             },
           }),
       (argv) => {
-        return import("@/commands/publish").then((m) => m.runPublish(argv));
+        return import("@/commands/paywalls/publish").then((m) => m.runPublish(argv));
       },
     );
 

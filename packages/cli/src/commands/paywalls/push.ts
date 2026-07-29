@@ -1,6 +1,6 @@
 import { defineCommand } from "@/command";
 import { requireApi } from "@/core/paywalls/project/session";
-import { runPushPipeline } from "./paywalls/pipeline";
+import { runPushPipeline } from "./pipeline";
 
 export const runPush = defineCommand({
   name: "push",

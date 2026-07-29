@@ -1,8 +1,8 @@
 import { defineCommand, type DefinedCommand } from "@/command";
 import type { ResourceName } from "@/core/api/resources";
-import { addCampaignPlacement, writeStoreKit } from "./resource/actions";
-import { create } from "./resource/create";
-import { list, useApp, useOrg } from "./resource/list";
+import { addCampaignPlacement, writeStoreKit } from "./actions";
+import { create } from "./create";
+import { list, useApp, useOrg } from "./list";
 
 export function runResource(resource: ResourceName): DefinedCommand<"required"> {
   return defineCommand({

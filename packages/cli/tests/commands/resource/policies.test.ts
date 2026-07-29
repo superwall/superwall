@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { runApi, runBootstrap } from "@/commands/api";
-import { runAsc } from "@/commands/asc";
-import { runDoctor } from "@/commands/doctor";
-import { runIntegrate, runActionCommand } from "@/commands/integrate";
-import { runMigrate } from "@/commands/migrate";
-import { runQuery } from "@/commands/query";
-import { runResource } from "@/commands/resource";
-import { runSkills } from "@/commands/skills";
-import { runLogin, runLogout, runWhoami } from "@/commands/auth";
+import { runApi, runBootstrap } from "@/commands/platform/api";
+import { runAsc } from "@/commands/platform/asc";
+import { runDoctor } from "@/commands/account/doctor";
+import { runIntegrate, runActionCommand } from "@/commands/workflow/integrate";
+import { runMigrate } from "@/commands/workflow/migrate";
+import { runQuery } from "@/commands/platform/query";
+import { runResource } from "@/commands/resource/resource";
+import { runSkills } from "@/commands/account/skills";
+import { runLogin, runLogout, runWhoami } from "@/commands/account/auth";
 
 test("every data command declares authentication and JSON policies centrally", () => {
   const dataCommands = [

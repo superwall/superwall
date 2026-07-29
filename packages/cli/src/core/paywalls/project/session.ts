@@ -1,4 +1,4 @@
-import { performLoginWithUi } from "@/commands/integrate/app";
+import { performLoginWithUi } from "@/commands/workflow/integrate/app";
 import { API_HOST, ENV_API_KEY } from "@/constants";
 import { SuperwallApi } from "@/core/api/client";
 import { loadSession } from "@/core/auth/storage";

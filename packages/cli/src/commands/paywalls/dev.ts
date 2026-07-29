@@ -4,9 +4,9 @@ import { VERSION } from "@/constants";
 import { writeEnvTypes } from "@/core/paywalls/project/env";
 import { frameworkVersion, loadFramework } from "@/core/paywalls/project/framework";
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
-import { createStudioActions } from "./paywalls/studio-actions";
+import { createStudioActions } from "./studio-actions";
 import { ui } from "@/ui";
-import { LAYOUT_HINT, projectDir, requireProject } from "./paywalls/pipeline";
+import { LAYOUT_HINT, projectDir, requireProject } from "./pipeline";
 
 export const runDev = defineCommand({
   name: "dev",

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CommandContext } from "@/command";
-import { finish } from "@/commands/integrate/agent";
+import { finish } from "@/commands/workflow/integrate/agent";
 import { actionById } from "@/core/agent/actions";
 import { createCommandOutput } from "@/output";
-import { recordingRenderer, type RendererCall } from "../helpers/renderer";
+import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
 
 function callsAfterFinish(action: keyof typeof actionById): RendererCall[] {
   const calls: RendererCall[] = [];

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import type { SuperwallApi } from "@/core/api/client";
 import { executeCommand } from "@/command";
-import { runQuery } from "@/commands/query";
-import { recordingRenderer } from "../helpers/renderer";
+import { runQuery } from "@/commands/platform/query";
+import { recordingRenderer } from "../../helpers/renderer";
 
 afterEach(() => {
   process.exitCode = undefined;

@@ -7,8 +7,8 @@ import { resolveBinding } from "@/core/paywalls/binding/binding";
 import { loadFramework } from "@/core/paywalls/project/framework";
 import { requireApi } from "@/core/paywalls/project/session";
 import { ui } from "@/ui";
-import { pickApplicationOption } from "./paywalls/pick-app";
-import { group, projectDir, selectSurfaces, timed, transition } from "./paywalls/pipeline";
+import { pickApplicationOption } from "./pick-app";
+import { group, projectDir, selectSurfaces, timed, transition } from "./pipeline";
 
 export const runPromote = defineCommand({
   name: "promote",
