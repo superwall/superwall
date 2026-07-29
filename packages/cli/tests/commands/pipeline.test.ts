@@ -6,7 +6,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import type { Arguments } from "yargs";
-import { runPushPipeline, selectSurfaces } from "@/commands/paywalls/pipeline";
+import {
+  needsWork,
+  pendingPromoteWarning,
+  runPushPipeline,
+  selectSurfaces,
+} from "@/commands/paywalls/pipeline";
 import type { CommandContext } from "@/command";
 import { SuperwallApi } from "@/core/api/client";
 import type {
@@ -15,7 +20,7 @@ import type {
   FrameworkSurface,
 } from "@/core/paywalls/project/framework";
 import { readLock, writeApplicationId, writeBinding } from "@/core/paywalls/project/lock";
-import { selectRenderer } from "@/ui";
+import { selectRenderer, ui } from "@/ui";
 
 selectRenderer({ mode: "json" });
 
@@ -225,7 +230,7 @@ test("a paywall with assets syncs them before the version push", async () => {
       }),
   });
 
-  assert.deepEqual(fake.calls, ["assets", "live", "versions", "access", "link"]);
+  assert.deepEqual(fake.calls, ["live", "assets", "versions", "access", "link"]);
   const version: unknown = JSON.parse(fake.bodies.versions ?? "{}");
   assert.deepEqual(Reflect.get(Object(version), "assets"), [
     {
@@ -322,7 +327,7 @@ for (const [label, status] of [
       }),
       new RegExp(String(status)),
     );
-    assert.deepEqual(fake.calls, ["assets"]);
+    assert.deepEqual(fake.calls, ["live", "assets"]);
   });
 }
 
@@ -414,7 +419,7 @@ test("a tree far past the old JSON cap publishes fine over git", async () => {
   assert.match(tracked, /stray\.bin/);
 });
 
-test("the first failing surface stops the run — later surfaces are never touched", async () => {
+test("every surface builds up front, but the first failure stops shipping", async () => {
   const project = scaffold(["alpha", "beta"]);
   const fake = await fakeApi({ versions: { status: 500, body: {} } });
   const steps: string[] = [];
@@ -425,7 +430,11 @@ test("the first failing surface stops the run — later surfaces are never touch
       load: async () => frameworkFor(project, {}, steps),
     }),
   );
-  assert.deepEqual(steps, ["build"]);
+  assert.deepEqual(steps, ["build", "build"]);
+  assert.deepEqual(
+    fake.calls.filter((call) => call !== "live"),
+    ["versions"],
+  );
 });
 
 test("--only narrows the run to one surface", async () => {
@@ -433,7 +442,7 @@ test("--only narrows the run to one surface", async () => {
   const fake = await fakeApi();
   const steps: string[] = [];
 
-  await runPushPipeline(contextFor(fake.api, { only: "beta" }), {
+  await runPushPipeline(contextFor(fake.api, { id: ["beta"] }), {
     promote: false,
     load: async () => frameworkFor(project, {}, steps),
   });
@@ -472,7 +481,16 @@ test("the source bundle is collected once and reused for every surface", async (
     load: async () => frameworkFor(project),
   });
 
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link", "live", "versions", "access", "link"]);
+  assert.deepEqual(fake.calls, [
+    "live",
+    "live",
+    "versions",
+    "access",
+    "link",
+    "versions",
+    "access",
+    "link",
+  ]);
 });
 
 test("an interactive run offers the app picker; a lock hit still never needs it", async () => {
@@ -497,11 +515,12 @@ test("rich output renders through the spinner on success and on failure", async 
   });
   assert.deepEqual(ok.calls, ["live", "versions", "access", "link"]);
 
+  const failing = scaffold();
   const bad = await fakeApi({ versions: { status: 500, body: {} } });
   await assert.rejects(
     runPushPipeline({ ...contextFor(bad.api), outputMode: "rich" }, {
       promote: false,
-      load: async () => frameworkFor(project),
+      load: async () => frameworkFor(failing),
     }),
     /500/,
   );
@@ -547,7 +566,7 @@ test("a megabyte-scale asset is reported in MB, and one asset reads as singular"
     }),
     /Couldn't upload big\.png/,
   );
-  assert.deepEqual(fake.calls, ["assets"]);
+  assert.deepEqual(fake.calls, ["live", "assets"]);
 });
 
 test("-m threads the publish note into the source push verbatim", async () => {
@@ -676,7 +695,228 @@ test("a declared rename carries the live paywall id through the whole push", asy
   });
 
   assert.deepEqual(readLock(project.superwallDir).paywalls, {
-    "pro-upgrade": { paywallId: "2080" },
+    "pro-upgrade": { paywallId: "2080", snapshot: "abcdef0123456789" },
   });
   assert.ok(fake.calls.includes("versions"), "the renamed surface still pushes a version");
+});
+
+test("a surface whose snapshot already matches production is skipped entirely", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({
+    live: { body: { id: "2080", version: 7, paywall_url: `https://r/x/headless/2080/${"a".repeat(64)}.html` } },
+  });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: true,
+    load: async () =>
+      frameworkFor(project, {
+        buildSnapshot: async () => built({ snapshotId: "a".repeat(64) }),
+      }),
+  });
+
+  assert.deepEqual(fake.calls, ["live"]);
+});
+
+test("a changed snapshot still ships when production is on an older one", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({
+    live: { body: { id: "2080", version: 7, paywall_url: `https://r/x/headless/2080/${"b".repeat(64)}.html` } },
+  });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () =>
+      frameworkFor(project, {
+        buildSnapshot: async () => built({ snapshotId: "a".repeat(64) }),
+      }),
+  });
+
+  assert.deepEqual(fake.calls, ["live", "versions", "access", "link"]);
+});
+
+test("--id selects several surfaces, and an unknown id names what the project has", async () => {
+  const project = scaffold(["alpha", "beta", "gamma"]);
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api, { id: ["alpha", "gamma"] }), {
+    promote: false,
+    load: async () => frameworkFor(project),
+  });
+  assert.equal(fake.calls.filter((call) => call === "versions").length, 2);
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api, { id: ["nope"] }), {
+      promote: false,
+      load: async () => frameworkFor(project),
+    }),
+    /No paywall or funnel named "nope".*alpha, beta, gamma/s,
+  );
+});
+
+test("--id accepts a comma-separated list", async () => {
+  const project = scaffold(["alpha", "beta", "gamma"]);
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api, { id: ["alpha,beta"] }), {
+    promote: false,
+    load: async () => frameworkFor(project),
+  });
+
+  assert.equal(fake.calls.filter((call) => call === "versions").length, 2);
+});
+
+test("pushing twice with no edits skips the second run — the version already exists", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({
+    live: { body: { id: "2080", version: 11, paywall_url: `https://r/x/headless/2080/${"c".repeat(64)}.html` } },
+  });
+  const load = async () => frameworkFor(project);
+
+  await runPushPipeline(contextFor(fake.api), { promote: false, load });
+  assert.deepEqual(fake.calls, ["live", "versions", "access", "link"]);
+
+  fake.calls.length = 0;
+  await runPushPipeline(contextFor(fake.api), { promote: false, load });
+  assert.deepEqual(fake.calls, ["live"], "nothing to push: the built snapshot is already a version");
+});
+
+test("needsWork compares against the last pushed snapshot, never the live one", () => {
+  const built = "a".repeat(64);
+  const other = "b".repeat(64);
+
+  assert.equal(needsWork(built, undefined, undefined), true, "never pushed");
+  assert.equal(needsWork(built, other, other), true, "content differs from what was pushed");
+  assert.equal(needsWork(built, built, other), false, "already pushed, even though live is older");
+  assert.equal(needsWork(built, undefined, built), false, "live implies it was pushed");
+  assert.equal(needsWork(built, built, built), false, "pushed and live");
+});
+
+test("publish refuses to re-push an identical version and points at promote instead", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({
+    live: { body: { id: "2080", version: 11, paywall_url: `https://r/x/headless/2080/${"c".repeat(64)}.html` } },
+  });
+  const load = async () => frameworkFor(project);
+
+  await runPushPipeline(contextFor(fake.api), { promote: false, load });
+  fake.calls.length = 0;
+
+  await runPushPipeline(contextFor(fake.api), { promote: true, load });
+
+  assert.deepEqual(fake.calls, ["live"], "no second version push, and no promote of an old push");
+});
+
+test("publish still pushes and promotes when the code actually changed", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+  let snapshot = "a".repeat(64);
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () => frameworkFor(project, { buildSnapshot: async () => built({ snapshotId: snapshot }) }),
+  });
+  fake.calls.length = 0;
+
+  snapshot = "d".repeat(64);
+  await runPushPipeline(contextFor(fake.api), {
+    promote: true,
+    load: async () => frameworkFor(project, { buildSnapshot: async () => built({ snapshotId: snapshot }) }),
+  });
+
+  assert.deepEqual(fake.calls, ["live", "versions", "access", "link", "promote"]);
+});
+
+test("push stays quiet about a pending promote — that hint belongs to publish", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({
+    live: { body: { id: "2080", version: 11, paywall_url: `https://r/x/headless/2080/${"c".repeat(64)}.html` } },
+  });
+  const load = async () => frameworkFor(project);
+  const warnings: string[] = [];
+  const warn = ui.warn;
+  ui.warn = (message: string) => warnings.push(message);
+
+  try {
+    await runPushPipeline(contextFor(fake.api), { promote: false, load });
+    warnings.length = 0;
+    await runPushPipeline(contextFor(fake.api), { promote: false, load });
+    assert.deepEqual(warnings, [], "push says nothing about promoting");
+
+    await runPushPipeline(contextFor(fake.api), { promote: true, load });
+    assert.equal(warnings.length, 1, "publish does");
+    assert.match(warnings[0] ?? "", /is pushed but not live/);
+  } finally {
+    ui.warn = warn;
+  }
+});
+
+test("no promote hint when the built snapshot is what production already serves", async () => {
+  const project = scaffold();
+  const snapshot = "e".repeat(64);
+  const fake = await fakeApi({
+    live: { body: { id: "2080", version: 7, paywall_url: `https://r/x/headless/2080/${snapshot}.html` } },
+  });
+  const warnings: string[] = [];
+  const warn = ui.warn;
+  ui.warn = (message: string) => warnings.push(message);
+
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: true,
+      load: async () =>
+        frameworkFor(project, { buildSnapshot: async () => built({ snapshotId: snapshot }) }),
+    });
+    assert.deepEqual(fake.calls, ["live"], "already live: nothing to push, nothing to promote");
+    assert.deepEqual(warnings, [], "and nothing to warn about");
+  } finally {
+    ui.warn = warn;
+  }
+});
+
+test("several pending paywalls are named in one hint, with a single promote command", async () => {
+  const project = scaffold(["alpha", "beta", "gamma"]);
+  const fake = await fakeApi({
+    live: { body: { id: "2080", version: 11, paywall_url: `https://r/x/headless/2080/${"c".repeat(64)}.html` } },
+  });
+  const load = async () => frameworkFor(project);
+  const warnings: string[] = [];
+  const warn = ui.warn;
+  ui.warn = (message: string) => warnings.push(message);
+
+  try {
+    await runPushPipeline(contextFor(fake.api), { promote: false, load });
+    warnings.length = 0;
+    await runPushPipeline(contextFor(fake.api), { promote: true, load });
+
+    assert.equal(warnings.length, 1, "one hint, not one per paywall");
+    assert.equal(
+      warnings[0],
+      [
+        "These 3 paywalls are pushed but not live:",
+        "  alpha",
+        "  beta",
+        "  gamma",
+        "",
+        "  superwall promote --id alpha,beta,gamma",
+      ].join("\n"),
+    );
+  } finally {
+    ui.warn = warn;
+  }
+});
+
+test("pendingPromoteWarning: silent when empty, a sentence for one, a list for many", () => {
+  assert.equal(pendingPromoteWarning([]), undefined);
+
+  assert.equal(
+    pendingPromoteWarning(["plus-upgrade"]),
+    "plus-upgrade is pushed but not live — run `superwall promote --id plus-upgrade` to publish it.",
+  );
+
+  const many = pendingPromoteWarning(["a", "b"]);
+  assert.equal(many, ["These 2 paywalls are pushed but not live:", "  a", "  b", "", "  superwall promote --id a,b"].join("\n"));
+
+  const lots = pendingPromoteWarning(Array.from({ length: 13 }, (_, i) => `p${i}`));
+  assert.match(lots ?? "", /…and 3 more/, "the list is capped");
+  assert.match(lots ?? "", /--id p0,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12/, "the command is not");
 });

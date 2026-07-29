@@ -2,6 +2,7 @@ export { createSuperwall } from "../provider/create";
 export { useSuperwallSession } from "../provider/context";
 export * from "./useActions";
 export * from "./useDevice";
+export * from "./useHaptics";
 export * from "./useProducts";
 export * from "./usePurchase";
 export * from "./useSuperwallEvent";

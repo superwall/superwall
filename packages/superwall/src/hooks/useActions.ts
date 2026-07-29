@@ -13,13 +13,12 @@ export type UseActionsResult = Pick<
   | "requestPermission"
   | "requestCallback"
   | "requestStoreReview"
-  | "hapticFeedback"
 >;
 
 /**
  * Paywall actions dispatched to the native SDK: `close`, `restore`,
  * `openUrl`/`openExternalUrl`/`openDeepLink`, `customPlacement`,
- * permissions, callbacks, store review, and haptics.
+ * permissions, callbacks, and store review. Haptics live in `useHaptics`.
  *
  * `restore()` is fire-and-forget — the message protocol has no
  * restore-result event; successful restores surface as
@@ -39,7 +38,6 @@ export const useActions = (): UseActionsResult => {
       requestPermission: session.requestPermission.bind(session),
       requestCallback: session.requestCallback.bind(session),
       requestStoreReview: session.requestStoreReview.bind(session),
-      hapticFeedback: session.hapticFeedback.bind(session),
     }),
     [session],
   );

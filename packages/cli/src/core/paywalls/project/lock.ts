@@ -3,6 +3,7 @@ import * as path from "node:path";
 
 export interface SurfaceBinding {
   paywallId: string;
+  snapshot?: string;
 }
 
 const EXPLAINER =
@@ -56,6 +57,20 @@ export function writeBinding(
   const lock = readLock(superwallDir);
   const section = kind === "paywall" ? lock.paywalls : lock.funnels;
   section[surfaceId] = binding;
+  writeLock(superwallDir, lock);
+}
+
+export function writeSnapshot(
+  superwallDir: string,
+  kind: "paywall" | "funnel",
+  surfaceId: string,
+  snapshot: string,
+): void {
+  const lock = readLock(superwallDir);
+  const section = kind === "paywall" ? lock.paywalls : lock.funnels;
+  const binding = section[surfaceId];
+  if (!binding || binding.snapshot === snapshot) return;
+  section[surfaceId] = { ...binding, snapshot };
   writeLock(superwallDir, lock);
 }
 

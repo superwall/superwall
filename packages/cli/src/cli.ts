@@ -466,6 +466,7 @@ export async function run(): Promise<void> {
             port: {
               type: "number",
               default: 6100,
+              alias: "p",
               describe: "Preferred port (falls back to the next free one)",
             },
             host: { type: "string", default: "0.0.0.0", describe: "Host to bind" },
@@ -481,7 +482,11 @@ export async function run(): Promise<void> {
         y
           .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
           .options({
-            only: { type: "string", describe: "Push one paywall or funnel by name" },
+            id: {
+              type: "array",
+              string: true,
+              describe: "Limit to these paywalls or flows by id (repeatable, or comma-separated)",
+            },
             rename: {
               type: "array",
               string: true,
@@ -508,10 +513,15 @@ export async function run(): Promise<void> {
           .version(false)
           .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
           .options({
-            only: { type: "string", describe: "Promote one paywall or funnel by name" },
+            id: {
+              type: "array",
+              string: true,
+              describe: "Limit to these paywalls or flows by id (repeatable, or comma-separated)",
+            },
             version: {
               type: "number",
-              describe: "Pushed version number to promote (requires --only)",
+              alias: "v",
+              describe: "Pushed version number to promote (requires a single --id)",
             },
           }),
       (argv) => {
@@ -525,7 +535,11 @@ export async function run(): Promise<void> {
         y
           .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
           .options({
-            only: { type: "string", describe: "Publish one paywall or funnel by name" },
+            id: {
+              type: "array",
+              string: true,
+              describe: "Limit to these paywalls or flows by id (repeatable, or comma-separated)",
+            },
             rename: {
               type: "array",
               string: true,

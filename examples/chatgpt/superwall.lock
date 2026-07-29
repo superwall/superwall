@@ -3,7 +3,8 @@
   "version": 1,
   "paywalls": {
     "plus-upgrade": {
-      "paywallId": "208540"
+      "paywallId": "208540",
+      "snapshot": "1dcea781e7e326232f0f34d19fc41f4ca9dec06db982d5a5d9105de63207f3c6"
     }
   },
   "funnels": {},

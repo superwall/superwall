@@ -1,4 +1,4 @@
-import { ApiError, SuperwallApi } from "./client";
+import { SuperwallApi } from "./client";
 
 export interface Application {
   id: string | number;
@@ -238,6 +238,7 @@ export interface PaywallDetail extends HeadlessPaywallRef {
   applicationId?: string;
   name?: string;
   version?: number;
+  url?: string;
 }
 
 export async function getPaywall(api: SuperwallApi, paywallId: string): Promise<PaywallDetail> {
@@ -260,17 +261,32 @@ export async function getPaywall(api: SuperwallApi, paywallId: string): Promise<
         ? String(applicationId)
         : undefined,
     version: typeof row.version === "number" ? row.version : undefined,
+    url: typeof row.paywall_url === "string" ? row.paywall_url : undefined,
   };
+}
+
+export interface LivePaywall {
+  version?: number;
+  snapshotId?: string;
+}
+
+const SNAPSHOT_IN_URL = /([a-f0-9]{64})\.html/;
+
+export async function livePaywall(api: SuperwallApi, paywallId: string): Promise<LivePaywall> {
+  return getPaywall(api, paywallId).then(
+    (paywall) => ({
+      version: paywall.version,
+      snapshotId: paywall.url?.match(SNAPSHOT_IN_URL)?.[1],
+    }),
+    () => ({}),
+  );
 }
 
 export async function livePaywallVersion(
   api: SuperwallApi,
   paywallId: string,
 ): Promise<number | undefined> {
-  return getPaywall(api, paywallId).then(
-    (paywall) => paywall.version,
-    () => undefined,
-  );
+  return livePaywall(api, paywallId).then((live) => live.version);
 }
 
 export async function getPaywallApplicationId(
@@ -367,33 +383,14 @@ export interface SourceAccessGrant {
   tokenId: string;
 }
 
-export type SourceScope = "read" | "write";
-
-export class SourceRepoMissingError extends Error {}
-
 export async function mintSourceAccess(
   api: SuperwallApi,
   paywallId: string,
-  scope: SourceScope = "write",
 ): Promise<SourceAccessGrant> {
-  const row = await api
-    .post<Row>(
-      `/v2/paywalls/${encodeURIComponent(paywallId)}/source-access`,
-      scope === "write" ? {} : { scope },
-    )
-    .catch((error: unknown) => {
-      if (error instanceof ApiError && error.detail.code === "source_repo_missing") {
-        throw new SourceRepoMissingError(
-          "Nothing has been pushed for this application yet — run `superwall push` first.",
-        );
-      }
-      throw error;
-    });
-  if (typeof row.scope === "string" && row.scope !== scope) {
-    throw new Error(
-      `Superwall issued a ${row.scope} source token where ${scope} was requested — refusing to continue.`,
-    );
-  }
+  const row = await api.post<Row>(
+    `/v2/paywalls/${encodeURIComponent(paywallId)}/source-access`,
+    {},
+  );
   const text = (key: string): string => {
     const value = row[key];
     if (typeof value !== "string" || value === "") {

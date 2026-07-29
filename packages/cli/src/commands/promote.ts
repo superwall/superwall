@@ -18,7 +18,7 @@ export const runPromote = defineCommand({
     const dir = projectDir(context);
     const framework = await loadFramework(dir);
     const project = framework.discoverProject(dir);
-    const surfaces = selectSurfaces(project, context.argv.only);
+    const surfaces = selectSurfaces(project, context.argv.id);
 
     const requested = context.argv.version;
     if (requested !== undefined && !Number.isInteger(requested)) {
@@ -26,12 +26,15 @@ export const runPromote = defineCommand({
     }
     const version = typeof requested === "number" ? requested : undefined;
     if (requested !== undefined && surfaces.length > 1) {
-      throw new Error("--version targets one surface — combine it with --only <id>.");
+      throw new Error("--version targets one surface — combine it with a single --id <id>.");
     }
 
     ui.intro(`Superwall ${pc.dim(`v${VERSION}`)}`);
 
+    let promoted = 0;
+    let skipped = 0;
     for (const surface of surfaces) {
+      let changed = true;
       await group(context, surface.id, async (note) => {
         note("Finding on Superwall");
         const binding = await resolveBinding({
@@ -53,11 +56,19 @@ export const runPromote = defineCommand({
             throw error;
           }),
         );
+        changed = before !== promo.value.version;
         return [`${transition(before, promo.value.version)} ${promo.took}`];
       });
+      if (changed) promoted += 1;
+      else skipped += 1;
     }
 
-    const noun = surfaces.length === 1 ? "paywall" : "paywalls";
-    ui.outro(pc.green(`${surfaces.length} ${noun} live.`));
+    const noun = (n: number) => (n === 1 ? "paywall" : "paywalls");
+    const unchanged = skipped > 0 ? ` · ${pc.dim(`${skipped} already live`)}` : "";
+    ui.outro(
+      promoted > 0
+        ? `${pc.green(`${promoted} ${noun(promoted)} live`)}${unchanged}.`
+        : `Nothing to do · ${skipped} already live.`,
+    );
   },
 });

@@ -1,14 +1,12 @@
+import { cpus } from "node:os";
 import { resolve } from "node:path";
 import pc from "picocolors";
 import type { CommandContext } from "@/command";
-import {
-  livePaywallVersion,
-  promotePaywallVersion,
-  pushPaywallVersion,
-} from "@/core/api/resources";
+import { livePaywall, promotePaywallVersion, pushPaywallVersion } from "@/core/api/resources";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
 import { resolveBinding, type ResolvedBinding } from "@/core/paywalls/binding/binding";
 import { writeEnvTypes } from "@/core/paywalls/project/env";
+import { readLock, writeSnapshot } from "@/core/paywalls/project/lock";
 import {
   frameworkVersion,
   loadFramework,
@@ -91,22 +89,91 @@ export function requireProject(project: FrameworkProject, dir: string): Framewor
   return project;
 }
 
-export function selectSurfaces(project: FrameworkProject, only: unknown): FrameworkSurface[] {
-  const filter = typeof only === "string" ? only : undefined;
-  const selected = project.surfaces.filter((surface) => !filter || surface.id === filter);
-  if (selected.length === 0) {
-    const known = project.surfaces.map((surface) => surface.id).join(", ");
-    throw new Error(
-      filter
-        ? `No paywall or funnel named "${filter}"` +
-          (known ? ` — this project has: ${known}.` : ` — ${LAYOUT_HINT}.`)
-        : `No paywalls or funnels found — ${LAYOUT_HINT}.`,
-    );
+export function parseIds(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  return raw
+    .flatMap((entry) => (typeof entry === "string" ? entry.split(",") : []))
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+export function selectSurfaces(project: FrameworkProject, ids: unknown): FrameworkSurface[] {
+  const wanted = parseIds(ids);
+  const known = project.surfaces.map((surface) => surface.id).join(", ");
+
+  if (wanted.length === 0) {
+    if (project.surfaces.length === 0) {
+      throw new Error(`No paywalls or funnels found — ${LAYOUT_HINT}.`);
+    }
+    return [...project.surfaces];
+  }
+
+  const selected: FrameworkSurface[] = [];
+  for (const id of wanted) {
+    const matches = project.surfaces.filter((surface) => surface.id === id);
+    if (matches.length === 0) {
+      throw new Error(
+        `No paywall or funnel named "${id}"` +
+          (known ? ` — this project has: ${known}.` : ` — ${LAYOUT_HINT}.`),
+      );
+    }
+    if (matches.length > 1) {
+      const kinds = matches.map((surface) => `${surface.kind}/${surface.id}`).join(" and ");
+      throw new Error(`"${id}" is ambiguous — this project has ${kinds}.`);
+    }
+    const surface = matches[0];
+    if (surface && !selected.includes(surface)) selected.push(surface);
   }
   return selected;
 }
 
+export function needsWork(
+  built: string,
+  pushed: string | undefined,
+  live: string | undefined,
+): boolean {
+  return built !== pushed && built !== live;
+}
+
+async function pooled<T, R>(
+  items: readonly T[],
+  limit: number,
+  work: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      const item = items[index];
+      if (item === undefined) continue;
+      results[index] = await work(item, index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
 const NOTE_LIMIT = 2000;
+
+const PENDING_NAMES = 10;
+
+export function pendingPromoteWarning(ids: readonly string[]): string | undefined {
+  if (ids.length === 0) return undefined;
+  const command = `superwall promote --id ${ids.join(",")}`;
+  if (ids.length === 1) {
+    return `${ids[0]} is pushed but not live — run \`${command}\` to publish it.`;
+  }
+  const shown = ids.slice(0, PENDING_NAMES).map((id) => `  ${id}`);
+  const rest = ids.length - shown.length;
+  return [
+    `These ${ids.length} paywalls are pushed but not live:`,
+    ...shown,
+    ...(rest > 0 ? [`  …and ${rest} more`] : []),
+    "",
+    `  ${command}`,
+  ].join("\n");
+}
 
 function resolveNote(message: unknown): string | undefined {
   if (typeof message !== "string") return undefined;
@@ -152,17 +219,94 @@ interface PushOutcome {
   live: boolean;
 }
 
-function summary(outcomes: PushOutcome[], promoted: boolean): void {
-  if (outcomes.length === 0) return;
+function summary(outcomes: PushOutcome[], skipped: number, promoted: boolean): void {
   const count = outcomes.length;
-  const noun = count === 1 ? "paywall" : "paywalls";
+  const noun = (n: number) => (n === 1 ? "paywall" : "paywalls");
+  const unchanged = skipped > 0 ? ` · ${pc.dim(`${skipped} unchanged`)}` : "";
 
+  if (count === 0) {
+    ui.outro(skipped > 0 ? `Nothing to do · ${skipped} unchanged.` : "Nothing to do.");
+    return;
+  }
   if (promoted) {
-    ui.outro(pc.green(`${count} ${noun} live.`));
-  } else {
-    ui.outro(
-      `${count} ${noun} pushed · run \`superwall promote\` to publish ${count === 1 ? "it" : "them"}.`,
+    ui.outro(`${pc.green(`${count} ${noun(count)} live`)}${unchanged}.`);
+    return;
+  }
+  ui.outro(
+    `${count} ${noun(count)} pushed${unchanged} · run \`superwall promote\` to publish ${count === 1 ? "it" : "them"}.`,
+  );
+}
+
+interface Prepared {
+  surface: FrameworkSurface;
+  bind: ResolvedBinding;
+  build: Awaited<ReturnType<Framework["buildSnapshot"]>>;
+  live?: number;
+  changed: boolean;
+  pending: boolean;
+}
+
+const BUILD_CONCURRENCY = Math.max(2, Math.min(8, cpus().length - 1));
+
+async function prepare(
+  context: CommandContext<"required">,
+  input: {
+    framework: Framework;
+    project: FrameworkProject;
+    surfaces: FrameworkSurface[];
+    interactive: boolean;
+    promote: boolean;
+  },
+): Promise<Prepared[]> {
+  const { framework, project, surfaces } = input;
+  const bindings: ResolvedBinding[] = [];
+  for (const surface of surfaces) {
+    bindings.push(
+      await resolveBinding({
+        api: context.api,
+        superwallDir: project.superwallDir,
+        surface,
+        surfaces: project.surfaces,
+        renamesResolved: true,
+        pickApplication: input.interactive ? pickApplicationOption : undefined,
+      }),
     );
+  }
+
+  const spin = context.outputMode === "rich" ? ui.spinner() : undefined;
+  const label = surfaces.length === 1 ? surfaces[0]?.id : `${surfaces.length} paywalls`;
+  spin?.start(`Building ${label}`);
+  const at = Date.now();
+  try {
+    const prepared = await pooled(surfaces, BUILD_CONCURRENCY, async (surface, index) => {
+      const bind = bindings[index];
+      if (!bind) throw new Error(`Missing binding for ${surface.id}`);
+      const build = await framework.buildSnapshot(project, surface, {
+        assetBaseUrl: assetBaseUrl(bind.applicationId),
+      });
+      requireAssets(build);
+      const live = await livePaywall(context.api, bind.paywallId);
+      const lock = readLock(project.superwallDir);
+      const section = surface.kind === "paywall" ? lock.paywalls : lock.funnels;
+      const pushed = section[surface.id]?.snapshot;
+      return {
+        surface,
+        bind,
+        build,
+        live: live.version,
+        changed: needsWork(build.snapshotId, pushed, live.snapshotId),
+        pending: !needsWork(build.snapshotId, pushed, live.snapshotId)
+          && live.snapshotId !== build.snapshotId,
+      };
+    });
+    const modified = prepared.filter((entry) => entry.changed).length;
+    spin?.stop(
+      `${pc.bold(`Built ${label}`)} ${pc.dim(`${modified} modified · ${prepared.length - modified} unchanged`)} ${took(at)}`,
+    );
+    return prepared;
+  } catch (error) {
+    spin?.stop(pc.red(`Building ${label} failed`));
+    throw error;
   }
 }
 
@@ -180,7 +324,7 @@ export async function runPushPipeline(
     superwallDir: project.superwallDir,
     frameworkVersion: installed,
   });
-  const surfaces = selectSurfaces(project, context.argv.only);
+  const surfaces = selectSurfaces(project, context.argv.id);
   const publishNote = resolveNote(context.argv.message);
 
   ui.intro(`Superwall ${pc.dim(`v${VERSION}`)}`);
@@ -207,45 +351,40 @@ export async function runPushPipeline(
   const outcomes: PushOutcome[] = [];
   const external = new Set<string>();
 
-  for (const surface of surfaces) {
+  const prepared = await prepare(context, {
+    framework,
+    project,
+    surfaces,
+    interactive: context.interactive,
+    promote: options.promote,
+  });
+  for (const entry of prepared) {
+    for (const source of entry.build.externalSources ?? []) external.add(source);
+  }
+  const changed = prepared.filter((entry) => entry.changed);
+  const skipped = prepared.length - changed.length;
+  const pending = options.promote ? prepared.filter((entry) => entry.pending) : [];
+  const pendingHint = pendingPromoteWarning(pending.map((entry) => entry.surface.id));
+  if (pendingHint) ui.warn(pendingHint);
+
+  for (const { surface, bind, build, live: wasLive } of changed) {
     let version = 0;
     let live = false;
 
     await group(context, surface.id, async (note) => {
       const lines: string[] = [];
+      const assets = requireAssets(build);
 
-      note("Finding on Superwall");
-      const bind = await timed(() =>
-        resolveBinding({
-          api: context.api,
-          superwallDir: project.superwallDir,
-          surface,
-          surfaces: project.surfaces,
-          renamesResolved: true,
-          pickApplication: context.interactive ? pickApplicationOption : undefined,
-        }),
-      );
-      lines.push(
-        `${BIND_VERB[bind.value.source]} paywall ${bind.value.paywallId} ${bind.took}`,
-      );
-
-      note("Building");
-      const build = await timed(() =>
-        framework.buildSnapshot(project, surface, {
-          assetBaseUrl: assetBaseUrl(bind.value.applicationId),
-        }),
-      );
-      const assets = requireAssets(build.value);
-      for (const entry of build.value.externalSources ?? []) external.add(entry);
+      lines.push(`${BIND_VERB[bind.source]} paywall ${bind.paywallId}`);
       lines.push(
         assets.length > 0
-          ? `Built ${pc.dim(`${kb(build.value.bytes)} html + ${weight(build.value.assetBytes ?? 0)} assets`)} ${build.took}`
-          : `Built ${pc.dim(`${kb(build.value.bytes)} · ${build.value.snapshotId.slice(0, 8)}`)} ${build.took}`,
+          ? `Built ${pc.dim(`${kb(build.bytes)} html + ${weight(build.assetBytes ?? 0)} assets`)}`
+          : `Built ${pc.dim(`${kb(build.bytes)} · ${build.snapshotId.slice(0, 8)}`)}`,
       );
 
       note("Syncing assets");
       const synced = await timed(() =>
-        syncAssets({ api: context.api, paywallId: bind.value.paywallId, assets }),
+        syncAssets({ api: context.api, paywallId: bind.paywallId, assets }),
       );
       if (assets.length > 0) {
         const noun = assets.length === 1 ? "asset" : "assets";
@@ -257,19 +396,19 @@ export async function runPushPipeline(
       }
 
       note("Pushing");
-      const wasLive = await livePaywallVersion(context.api, bind.value.paywallId);
       const push = await timed(() =>
-        pushPaywallVersion(context.api, bind.value.paywallId, {
-          html: build.value.html,
+        pushPaywallVersion(context.api, bind.paywallId, {
+          html: build.html,
           surface: surface.id,
           assets: synced.value.assets,
         }),
       );
       version = push.value.version;
+      writeSnapshot(project.superwallDir, surface.kind, surface.id, build.snapshotId);
       lines.push(
         `${pushedLine({
           version,
-          snapshotId: push.value.snapshot_id ?? build.value.snapshotId,
+          snapshotId: push.value.snapshot_id ?? build.snapshotId,
           live: wasLive,
           promoting: options.promote,
         })} ${push.took}`,
@@ -280,17 +419,17 @@ export async function runPushPipeline(
         if (!source.ok) throw new Error(source.reason);
         return pushSource({
           api: context.api,
-          paywallId: bind.value.paywallId,
-          applicationId: bind.value.applicationId,
+          paywallId: bind.paywallId,
+          applicationId: bind.applicationId,
           version,
           files: source.files,
           framework: installed,
           surface: surface.id,
           kind: surface.kind,
-          snapshotId: build.value.snapshotId,
+          snapshotId: build.snapshotId,
           cli: VERSION,
           note: publishNote,
-          external: [...(build.value.externalSources ?? [])].sort(),
+          external: [...(build.externalSources ?? [])].sort(),
         });
       });
       const sha = pc.dim(pushed.value.commitSha.slice(0, 7));
@@ -301,7 +440,7 @@ export async function runPushPipeline(
       if (options.promote) {
         note("Promoting");
         const promo = await timed(() =>
-          promotePaywallVersion(context.api, bind.value.paywallId, { version }),
+          promotePaywallVersion(context.api, bind.paywallId, { version }),
         );
         lines.push(`${transition(wasLive, promo.value.version)} ${promo.took}`);
         live = true;
@@ -314,7 +453,7 @@ export async function runPushPipeline(
   }
 
   warnNotPortable(external);
-  summary(outcomes, options.promote);
+  summary(outcomes, skipped, options.promote);
 }
 
 export { group, timed };

@@ -89,7 +89,9 @@ One concern each — there is deliberately no kitchen-sink hook.
   `{ status: "completed" | "abandoned" | "failed" }` (never throws for flow
   outcomes); `isPurchasing` pending state built in.
 - `useActions()` — `close`, `restore`, `openUrl`, `openExternalUrl`,
-  `openDeepLink`, `customPlacement`, `requestPermission`, `hapticFeedback`, …
+  `openDeepLink`, `customPlacement`, `requestPermission`, …
+- `useHaptics()` — `light()`, `medium()`, `heavy()`, `success()`, `warning()`,
+  `error()`, `selection()`
 - `useTranslation()` — `t(key, values)` with `{placeholder}` interpolation,
   device-locale detection, `setLocale` override.
 - `useTrialEligibility()` — the SDK's real intro-offer eligibility signal.
