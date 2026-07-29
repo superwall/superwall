@@ -1,6 +1,6 @@
 import { waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useDevice, useTrialEligibility, useVariables } from "../../src";
+import { useDevice, useTrialEligibility, useVariables } from "../../src/hooks";
 import { flush, renderWithProvider } from "../helpers";
 
 describe("useTrialEligibility", () => {

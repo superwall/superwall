@@ -1,4 +1,4 @@
-import { SuperwallApi } from "./client";
+import { ApiError, SuperwallApi } from "./client";
 
 export interface Application {
   id: string | number;
@@ -66,8 +66,6 @@ export interface Scope {
 }
 
 export async function listProjects(api: SuperwallApi): Promise<Project[]> {
-  // Superadmin tokens span organizations, so the API requires an explicit
-  // one; ordinary tokens infer it and ignore the filter.
   const org = api.org?.id;
   return api.list<Project>(
     org ? `/v2/projects?organization_id=${encodeURIComponent(org)}` : "/v2/projects",
@@ -106,7 +104,6 @@ export type SubscriptionPeriod = "day" | "week" | "month" | "year";
 
 export interface ProductCreateOpts {
   name?: string;
-  /** amount is in the smallest unit (cents). */
   price?: { amount: number; currency: string };
   subscription?: {
     period: SubscriptionPeriod;
@@ -167,8 +164,6 @@ export function createCampaign(
 ): Promise<Row> {
   if (!scope.applicationId)
     throw new Error("This project has no application to create a campaign in.");
-  // The API requires >=1 placement and >=1 audience at creation. Seed a 100%
-  // holdout so nothing presents until a paywall is attached in the dashboard.
   return api.post<Row>("/v2/campaigns", {
     application_id: scope.applicationId,
     description,
@@ -214,11 +209,6 @@ export interface PromotedVersion {
   url: string;
 }
 
-/**
- * Paywalls in an app. `archived: true` returns *only* archived ones — the
- * API filters rather than includes — which binding uses to explain an
- * identifier conflict that would otherwise surface as a raw 409.
- */
 export async function listAppPaywalls(
   api: SuperwallApi,
   applicationId: string,
@@ -244,6 +234,54 @@ export async function listAppPaywalls(
   });
 }
 
+export interface PaywallDetail extends HeadlessPaywallRef {
+  applicationId?: string;
+  name?: string;
+  version?: number;
+}
+
+export async function getPaywall(api: SuperwallApi, paywallId: string): Promise<PaywallDetail> {
+  const row = await api.get<Row>(`/v2/paywalls/${encodeURIComponent(paywallId)}`);
+  const metadata: Record<string, string> = {};
+  if (typeof row.metadata === "object" && row.metadata !== null) {
+    for (const [key, value] of Object.entries(row.metadata)) {
+      if (typeof value === "string") metadata[key] = value;
+    }
+  }
+  const applicationId = row.application_id;
+  return {
+    id: String(row.id ?? paywallId),
+    identifier: typeof row.identifier === "string" ? row.identifier : undefined,
+    name: typeof row.name === "string" ? row.name : undefined,
+    archived: row.archived === true,
+    metadata,
+    applicationId:
+      typeof applicationId === "string" || typeof applicationId === "number"
+        ? String(applicationId)
+        : undefined,
+    version: typeof row.version === "number" ? row.version : undefined,
+  };
+}
+
+export async function livePaywallVersion(
+  api: SuperwallApi,
+  paywallId: string,
+): Promise<number | undefined> {
+  return getPaywall(api, paywallId).then(
+    (paywall) => paywall.version,
+    () => undefined,
+  );
+}
+
+export async function getPaywallApplicationId(
+  api: SuperwallApi,
+  paywallId: string,
+): Promise<string> {
+  const { applicationId } = await getPaywall(api, paywallId);
+  if (applicationId !== undefined) return applicationId;
+  throw new Error(`Superwall returned no application for paywall ${paywallId}.`);
+}
+
 export async function createHeadlessPaywall(
   api: SuperwallApi,
   opts: { applicationId: string; name: string; identifier: string },
@@ -252,23 +290,144 @@ export async function createHeadlessPaywall(
     application_id: opts.applicationId,
     name: opts.name,
     identifier: opts.identifier,
+    headless: true,
   });
   return { id: String(row.id), identifier: opts.identifier, archived: false, metadata: {} };
 }
 
-/** Mints an immutable version from a built snapshot. Production untouched. */
 export function pushPaywallVersion(
   api: SuperwallApi,
   paywallId: string,
-  opts: { html: string; surface?: string },
+  opts: { html: string; surface?: string; assets?: VersionAsset[] },
 ): Promise<PushedVersion> {
   return api.post<PushedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/versions`, {
     html: opts.html,
     ...(opts.surface ? { surface: opts.surface } : {}),
+    ...(opts.assets && opts.assets.length > 0 ? { assets: opts.assets } : {}),
   });
 }
 
-/** Points production at a pushed version (the latest by default). */
+export interface VersionAsset {
+  url: string;
+  mime_type: string;
+}
+
+export interface AssetManifestEntry {
+  sha256: string;
+  bytes: number;
+  mime: string;
+  file_name: string;
+}
+
+export interface ResolvedAsset {
+  sha256: string;
+  url: string;
+  uploadUrl?: string;
+}
+
+export const ASSET_MANIFEST_CHUNK = 100;
+
+export async function pushPaywallAssets(
+  api: SuperwallApi,
+  paywallId: string,
+  assets: readonly AssetManifestEntry[],
+): Promise<ResolvedAsset[]> {
+  const resolved: ResolvedAsset[] = [];
+
+  for (let at = 0; at < assets.length; at += ASSET_MANIFEST_CHUNK) {
+    const body = await api.post<Row>(`/v2/paywalls/${encodeURIComponent(paywallId)}/assets`, {
+      assets: assets.slice(at, at + ASSET_MANIFEST_CHUNK),
+    });
+    const rows = body.assets;
+    if (!Array.isArray(rows)) {
+      throw new Error("The assets endpoint returned no asset list.");
+    }
+    for (const row of rows) {
+      if (typeof row !== "object" || row === null) continue;
+      const sha256 = Reflect.get(row, "sha256");
+      const url = Reflect.get(row, "url");
+      const uploadUrl = Reflect.get(row, "upload_url");
+      if (typeof sha256 !== "string" || typeof url !== "string") continue;
+      resolved.push({
+        sha256,
+        url,
+        ...(typeof uploadUrl === "string" ? { uploadUrl } : {}),
+      });
+    }
+  }
+
+  return resolved;
+}
+
+export interface SourceAccessGrant {
+  repo: string;
+  remote: string;
+  branch: string;
+  token: string;
+  tokenId: string;
+}
+
+export type SourceScope = "read" | "write";
+
+export class SourceRepoMissingError extends Error {}
+
+export async function mintSourceAccess(
+  api: SuperwallApi,
+  paywallId: string,
+  scope: SourceScope = "write",
+): Promise<SourceAccessGrant> {
+  const row = await api
+    .post<Row>(
+      `/v2/paywalls/${encodeURIComponent(paywallId)}/source-access`,
+      scope === "write" ? {} : { scope },
+    )
+    .catch((error: unknown) => {
+      if (error instanceof ApiError && error.detail.code === "source_repo_missing") {
+        throw new SourceRepoMissingError(
+          "Nothing has been pushed for this application yet — run `superwall push` first.",
+        );
+      }
+      throw error;
+    });
+  if (typeof row.scope === "string" && row.scope !== scope) {
+    throw new Error(
+      `Superwall issued a ${row.scope} source token where ${scope} was requested — refusing to continue.`,
+    );
+  }
+  const text = (key: string): string => {
+    const value = row[key];
+    if (typeof value !== "string" || value === "") {
+      throw new Error(`Superwall returned no ${key} for the source repo.`);
+    }
+    return value;
+  };
+  return {
+    repo: text("repo"),
+    remote: text("remote"),
+    branch: text("branch"),
+    token: text("token"),
+    tokenId: text("token_id"),
+  };
+}
+
+export async function linkSourceCommit(
+  api: SuperwallApi,
+  paywallId: string,
+  version: number,
+  opts: { commitSha: string; tokenId?: string },
+): Promise<{ commitSha: string }> {
+  const row = await api.post<Row>(
+    `/v2/paywalls/${encodeURIComponent(paywallId)}/versions/${version}/source-commit`,
+    {
+      commit_sha: opts.commitSha,
+      ...(opts.tokenId ? { token_id: opts.tokenId } : {}),
+    },
+  );
+  return {
+    commitSha: typeof row.commit_sha === "string" ? row.commit_sha : opts.commitSha,
+  };
+}
+
 export function promotePaywallVersion(
   api: SuperwallApi,
   paywallId: string,

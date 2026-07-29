@@ -1,7 +1,7 @@
 import { act } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TOutgoingMessage } from "@superwall/runtime";
-import { useActions } from "../../src";
+import { useActions } from "../../src/hooks";
 import { flush, renderWithProvider } from "../helpers";
 
 describe("useActions", () => {

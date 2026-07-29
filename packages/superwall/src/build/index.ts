@@ -3,12 +3,28 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { SuperwallConfig } from "@superwall/runtime";
 import react from "@vitejs/plugin-react-swc";
-import { build as viteBuild, defaultClientConditions } from "vite";
-import type { SuperwallAppConfig } from "../config";
+import { build as viteBuild, type Plugin } from "vite";
+import { viteSingleFile } from "vite-plugin-singlefile";
+import { externalSources } from "./externality";
 import { loadSurfaceConfig } from "../config/load";
 import type { PaywallDefinition } from "../config/paywall";
 import type { DiscoveredSurface, Project } from "../discover";
 import { renderDocument } from "../document";
+
+export type SnapshotAsset = {
+  fileName: string;
+  sha256: string;
+  bytes: number;
+  mime: string;
+  path: string;
+};
+
+export type RouteAsset = {
+  url: string;
+  as: "image" | "video" | "audio" | "font";
+};
+
+export type RouteAssets = Record<string, RouteAsset[]>;
 
 export type BuiltSnapshot = {
   surface: DiscoveredSurface;
@@ -17,9 +33,85 @@ export type BuiltSnapshot = {
   bytes: number;
   htmlFile: string;
   definition: PaywallDefinition | undefined;
-  appConfig: SuperwallAppConfig | undefined;
   config: SuperwallConfig;
+  assets: SnapshotAsset[];
+  assetBytes: number;
+  externalSources: string[];
 };
+
+export type BuildOptions = {
+  assetBaseUrl?: string;
+};
+
+export const ROUTE_ASSETS_ID = "sw-route-assets";
+
+export const ASSET_INLINE_LIMIT = 32 * 1024;
+
+const ALWAYS_HOSTED = new Set([
+  ".mp4",
+  ".webm",
+  ".mov",
+  ".m4v",
+  ".mp3",
+  ".m4a",
+  ".aac",
+  ".wav",
+  ".ogg",
+  ".lottie",
+  ".riv",
+  ".glb",
+]);
+
+const alwaysHosted = (file: string): boolean => ALWAYS_HOSTED.has(path.extname(file).toLowerCase());
+
+const EXTRA_ASSET_TYPES = ["m4v", "riv", "lottie", "glb"];
+
+const ASSETS_DIR = "assets";
+
+const MIME: Record<string, string> = {
+  ".apng": "image/apng",
+  ".avif": "image/avif",
+  ".gif": "image/gif",
+  ".ico": "image/x-icon",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+  ".aac": "audio/aac",
+  ".m4a": "audio/mp4",
+  ".m4v": "video/x-m4v",
+  ".mp3": "audio/mpeg",
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
+  ".webm": "video/webm",
+  ".otf": "font/otf",
+  ".ttf": "font/ttf",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".lottie": "application/zip",
+  ".riv": "application/octet-stream",
+  ".glb": "model/gltf-binary",
+};
+
+const mimeFor = (fileName: string): string =>
+  MIME[path.extname(fileName).toLowerCase()] ?? "application/octet-stream";
+
+const preloadAs = (mime: string): RouteAsset["as"] | undefined => {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("font/")) return "font";
+  return undefined;
+};
+
+const sha256 = (data: Uint8Array | string): string =>
+  createHash("sha256").update(data).digest("hex");
+
+const bufferOf = (source: Uint8Array | string): Buffer =>
+  typeof source === "string" ? Buffer.from(source, "utf8") : Buffer.from(source);
 
 const relativeImport = (fromDir: string, file: string): string => {
   const relative = path.relative(fromDir, file).split(path.sep).join("/");
@@ -31,7 +123,8 @@ const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurf
   const lines: string[] = [
     `import * as React from "react";`,
     `import { createRoot } from "react-dom/client";`,
-    `import { SuperwallProvider, mergeMessages, mergeSurfaceConfig } from "superwall";`,
+    `import { SuperwallProvider } from "superwall";`,
+    `import { mergeMessages } from "superwall/internal";`,
     `import { PaywallRouter } from "superwall/navigation";`,
   ];
 
@@ -41,8 +134,6 @@ const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurf
   if (surface.layoutFile) lines.push(`import Layout from ${imp(surface.layoutFile)};`);
   if (surface.configFile) lines.push(`import definition from ${imp(surface.configFile)};`);
   else lines.push(`const definition = undefined;`);
-  if (project.appConfigFile) lines.push(`import appConfig from ${imp(project.appConfigFile)};`);
-  else lines.push(`const appConfig = undefined;`);
 
   const catalogs: string[] = [];
   [...project.sharedMessages, ...surface.messages].forEach((entry, index) => {
@@ -56,7 +147,7 @@ const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurf
     `for (const [locale, catalog] of [${catalogs.join(", ")}]) {`,
     `  catalogs[locale] = mergeMessages(catalogs[locale], catalog);`,
     `}`,
-    `const merged = mergeSurfaceConfig(appConfig?.defaults, definition);`,
+    `const merged = definition ?? {};`,
     `for (const [locale, catalog] of Object.entries(merged.localization?.messages ?? {})) {`,
     `  catalogs[locale] = mergeMessages(catalogs[locale], catalog);`,
     `}`,
@@ -85,37 +176,143 @@ const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurf
   return lines.join("\n");
 };
 
-const inlineAssets = (outDir: string): string => {
-  let html = fs.readFileSync(path.join(outDir, "index.html"), "utf8");
-
-  html = html.replace(
-    /<script type="module"[^>]*src="\.\/([^"]+)"[^>]*><\/script>/g,
-    (_match, asset: string) =>
-      `<script type="module">${fs.readFileSync(path.join(outDir, asset), "utf8")}</script>`,
-  );
-  html = html.replace(
-    /<link rel="stylesheet"[^>]*href="\.\/([^"]+)"[^>]*>/g,
-    (_match, asset: string) =>
-      `<style>${fs.readFileSync(path.join(outDir, asset), "utf8")}</style>`,
-  );
-  html = html.replace(/<link rel="modulepreload"[^>]*>\n?/g, "");
-
-  return html;
+type Collected = {
+  assets: SnapshotAsset[];
+  routes: RouteAssets;
+  misplaced?: string;
+  externalSources: string[];
 };
 
-/**
- * Builds one surface into a self-contained, content-addressed snapshot.
- * `superwall push` calls this through `superwall/build`.
- */
+const inside = (parent: string, file: string): boolean => {
+  const relative = path.relative(parent, file);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+};
+
+const misplaced = (
+  assets: readonly SnapshotAsset[],
+  superwallDir: string,
+  surface: DiscoveredSurface,
+): string | undefined => {
+  const strays = assets.filter((asset) => {
+    if (asset.path.split(path.sep).includes("node_modules")) return false;
+    if (!inside(superwallDir, asset.path)) return false;
+    const segments = path.relative(superwallDir, asset.path).split(path.sep);
+    return !segments.slice(0, -1).includes(ASSETS_DIR);
+  });
+  if (strays.length === 0) return undefined;
+
+  const here = path.relative(superwallDir, surface.dir).split(path.sep).join("/");
+  return [
+    `${strays.length === 1 ? "This file is" : "These files are"} hosted as ${
+      strays.length === 1 ? "an asset" : "assets"
+    }, so ${strays.length === 1 ? "it has" : "they have"} to live in an assets/ directory:`,
+    ...strays.map(
+      (asset) => `  ${path.relative(superwallDir, asset.path).split(path.sep).join("/")}`,
+    ),
+    `Move ${strays.length === 1 ? "it" : "them"} to assets/ (shared by every surface) or ${here}/assets/.`,
+  ].join("\n");
+};
+
+const collectAssets = (
+  root: string,
+  superwallDir: string,
+  surface: DiscoveredSurface,
+  assetBaseUrl: string | undefined,
+  onCollected: (collected: Collected) => void,
+): Plugin => ({
+  name: "superwall:route-assets",
+  generateBundle(_options, bundle) {
+    const bySource = new Map<string, SnapshotAsset>();
+    const assets: SnapshotAsset[] = [];
+
+    for (const output of Object.values(bundle)) {
+      if (output.type !== "asset") continue;
+      const originals = (output.originalFileNames ?? []).map((name) => path.resolve(root, name));
+      const bytes = bufferOf(output.source);
+      const asset: SnapshotAsset = {
+        fileName: output.fileName,
+        sha256: sha256(bytes),
+        bytes: bytes.byteLength,
+        mime: mimeFor(output.fileName),
+        path: originals[0] ?? output.fileName,
+      };
+      assets.push(asset);
+      for (const original of originals) bySource.set(original, asset);
+    }
+
+    const reachable = (entry: string): SnapshotAsset[] => {
+      const seen = new Set<string>();
+      const found = new Map<string, SnapshotAsset>();
+      const queue = [entry];
+      while (queue.length > 0) {
+        const id = queue.shift();
+        if (id === undefined || seen.has(id)) continue;
+        seen.add(id);
+        const asset = bySource.get(id.split("?")[0] ?? id);
+        if (asset) found.set(asset.fileName, asset);
+        const info = this.getModuleInfo(id);
+        if (!info) continue;
+        queue.push(...info.importedIds, ...info.dynamicallyImportedIds);
+      }
+      return [...found.values()];
+    };
+
+    const routes: RouteAssets = {};
+    const attributed = new Set<string>();
+
+    const entry = (asset: SnapshotAsset): RouteAsset | undefined => {
+      const as = preloadAs(asset.mime);
+      if (as === undefined || assetBaseUrl === undefined) return undefined;
+      return { url: `${assetBaseUrl}/${asset.fileName}`, as };
+    };
+
+    for (const page of surface.pages) {
+      const list: RouteAsset[] = [];
+      for (const asset of reachable(page.file)) {
+        attributed.add(asset.fileName);
+        const item = entry(asset);
+        if (item) list.push(item);
+      }
+      if (list.length > 0) routes[page.route] = list;
+    }
+
+    const shared: RouteAsset[] = [];
+    for (const asset of assets) {
+      if (attributed.has(asset.fileName)) continue;
+      const item = entry(asset);
+      if (item) shared.push(item);
+    }
+    if (shared.length > 0) routes["*"] = shared;
+
+    onCollected({
+      assets,
+      routes,
+      misplaced: assetBaseUrl === undefined ? undefined : misplaced(assets, superwallDir, surface),
+      externalSources: externalSources(this.getModuleIds(), superwallDir),
+    });
+  },
+});
+
+const injectRouteAssets = (html: string, routes: RouteAssets): string => {
+  if (Object.keys(routes).length === 0) return html;
+  const tag = `<script type="application/json" id="${ROUTE_ASSETS_ID}">${JSON.stringify(
+    routes,
+  ).replace(/</g, "\\u003c")}</script>`;
+  const at = html.lastIndexOf("</body>");
+  return at === -1 ? `${html}${tag}` : `${html.slice(0, at)}    ${tag}\n  ${html.slice(at)}`;
+};
+
 export const buildSnapshot = async (
   project: Project,
   surface: DiscoveredSurface,
+  options: BuildOptions = {},
 ): Promise<BuiltSnapshot> => {
-  const entryDir = path.join(project.root, ".superwall/entries", surface.kind, surface.id);
-  const outDir = path.join(project.root, ".superwall/dist", surface.kind, surface.id);
+  const entryDir = path.join(project.superwallDir, ".superwall/entries", surface.kind, surface.id);
+  const outDir = path.join(project.superwallDir, ".superwall/dist", surface.kind, surface.id);
+  const { assetBaseUrl } = options;
   fs.mkdirSync(entryDir, { recursive: true });
 
-  const { definition, appConfig, config } = await loadSurfaceConfig(project, surface);
+  const { definition, config } = await loadSurfaceConfig(surface);
 
   fs.writeFileSync(path.join(entryDir, "entry.jsx"), entrySource(entryDir, project, surface));
   fs.writeFileSync(
@@ -123,37 +320,75 @@ export const buildSnapshot = async (
     renderDocument({ title: `${surface.id} — superwall`, config, entry: "./entry.jsx" }),
   );
 
+  let collected: Collected = { assets: [], routes: {}, externalSources: [] };
+
   await viteBuild({
     configFile: false,
     envFile: false,
     root: entryDir,
     base: "./",
     logLevel: "warn",
-    plugins: [react()],
+    assetsInclude: EXTRA_ASSET_TYPES.map((extension) => `**/*.${extension}`),
+    plugins: [
+      react(),
+      collectAssets(entryDir, project.superwallDir, surface, assetBaseUrl, (value) => {
+        collected = value;
+      }),
+      viteSingleFile({ useRecommendedBuildConfig: false, removeViteModuleLoader: true }),
+    ],
     resolve: {
-      conditions: ["superwall-ts", ...defaultClientConditions],
       dedupe: ["react", "react-dom"],
       alias: { "@": project.superwallDir },
+    },
+    experimental: {
+      renderBuiltUrl(filename, { type }) {
+        if (type === "asset" && assetBaseUrl !== undefined) {
+          return `${assetBaseUrl}/${filename}`;
+        }
+        return undefined;
+      },
     },
     build: {
       outDir,
       emptyOutDir: true,
-      rollupOptions: { output: { inlineDynamicImports: true } },
+      assetsDir: "",
+      cssCodeSplit: false,
+      assetsInlineLimit:
+        assetBaseUrl === undefined
+          ? Number.MAX_SAFE_INTEGER
+          : (filePath: string, content: Buffer) =>
+              alwaysHosted(filePath) ? false : content.length <= ASSET_INLINE_LIMIT,
+      rollupOptions: {
+        output: {
+          inlineDynamicImports: true,
+          assetFileNames: (info) =>
+            info.source === undefined
+              ? "[hash][extname]"
+              : `${sha256(bufferOf(info.source))}[extname]`,
+        },
+      },
     },
   });
 
-  const html = inlineAssets(outDir);
+  if (collected.misplaced !== undefined) throw new Error(collected.misplaced);
+
+  const html = injectRouteAssets(
+    fs.readFileSync(path.join(outDir, "index.html"), "utf8"),
+    collected.routes,
+  );
   const htmlFile = path.join(outDir, "snapshot.html");
   fs.writeFileSync(htmlFile, html);
 
   return {
     surface,
-    snapshotId: createHash("sha256").update(html).digest("hex"),
+    snapshotId: sha256(html),
     html,
     bytes: Buffer.byteLength(html),
     htmlFile,
     definition,
-    appConfig,
     config,
+    assets: collected.assets,
+    assetBytes: collected.assets.reduce((total, asset) => total + asset.bytes, 0),
+    externalSources: collected.externalSources,
   };
 };

@@ -1,3 +1,5 @@
+export { createSuperwall } from "../provider/create";
+export { useSuperwallSession } from "../provider/context";
 export * from "./useActions";
 export * from "./useDevice";
 export * from "./useProducts";

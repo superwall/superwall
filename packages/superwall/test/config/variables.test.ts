@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveVariables, v } from "../../src";
+import { resolveVariables, v } from "../../src/config";
 
 const schema = {
   plan: v.enum(["go", "plus"], { default: "plus" }),
@@ -36,10 +36,10 @@ describe("resolveVariables", () => {
     setUrl(
       `?sw_vars=${encodeURIComponent(
         JSON.stringify({
-          plan: "enterprise", // not in the enum
-          showWeb: "yes", // wrong type
-          maxFeatures: 99, // out of range
-          unknownKey: "ignored", // not in the schema
+          plan: "enterprise",
+          showWeb: "yes",
+          maxFeatures: 99,
+          unknownKey: "ignored",
         }),
       )}`,
     );

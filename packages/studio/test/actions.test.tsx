@@ -49,7 +49,6 @@ describe("studio actions", () => {
     render(<StudioApp source={source} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Push" }));
-    // the progress panel is the confirmation — no separate header label
     await waitFor(() => expect(screen.getByText("Push complete")).toBeDefined());
     expect(screen.queryByText(/v6 pushed/)).toBeNull();
 
@@ -63,16 +62,42 @@ describe("studio actions", () => {
     });
   });
 
-  it("switches the default action from the menu and surfaces errors", async () => {
-    mockFetch({ action: { ok: false, error: "Run `superwall login` first." } });
+  it("lists the source push between the version and the promote", async () => {
+    mockFetch({ action: { ok: true, version: 6, live: true } });
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
     render(<StudioApp source={source} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
     fireEvent.click(screen.getByText("Publish"));
-    await waitFor(() => expect(screen.getByText("Run `superwall login` first.")).toBeDefined());
-    // the menu remembers the chosen action as the new default
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+
+    await waitFor(() => expect(screen.getByText("Publish complete")).toBeDefined());
+    const list = screen.getByText("Push source").closest("ul");
+    expect([...(list?.querySelectorAll("li") ?? [])].map((item) => item.textContent)).toEqual([
+      "01Find paywall",
+      "02Build snapshot",
+      "03Sync assets",
+      "04Push version",
+      "05Push source",
+      "06Promote to live",
+    ]);
+  });
+
+  it("switches the default action from the menu and surfaces errors", async () => {
+    const fetchMock = mockFetch({ action: { ok: false, error: "Run `superwall login` first." } });
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
+    fireEvent.click(screen.getByText("Publish"));
     expect(screen.getByRole("button", { name: "Publish" })).toBeDefined();
+    const actionCalls = () =>
+      fetchMock.mock.calls.filter(([input]) => String(input).includes("/__studio/action"));
+    expect(actionCalls()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(screen.getByText("Run `superwall login` first.")).toBeDefined());
+    expect(actionCalls()).toHaveLength(1);
   });
 
   it("compare picks the live version from its menu and splits the stage", async () => {
@@ -91,7 +116,6 @@ describe("studio actions", () => {
       expect(live?.getAttribute("src")).toContain("https://runtime.test/v5.html");
     });
 
-    // Off returns to the single preview
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
     fireEvent.click(screen.getByText("Off"));
     expect(screen.queryByText("Local")).toBeNull();
@@ -111,7 +135,6 @@ describe("studio actions", () => {
     render(<StudioApp source={twoSurfaces} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-    // no live option without a platform host — only the other local paywall
     expect(screen.queryByText("Live version")).toBeNull();
     fireEvent.click(screen.getByText("paywall/win-back"));
 
@@ -128,6 +151,54 @@ describe("studio actions", () => {
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
     fireEvent.click(screen.getByText("Live version"));
     expect(screen.getByText(/Nothing live yet/)).toBeDefined();
+  });
+
+  it("the placeholder is exactly the size of the device frame beside it", async () => {
+    mockFetch({ status: {} });
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
+    fireEvent.click(screen.getByText("Live version"));
+
+    const frame = screen.getByTestId("device-frame");
+    const placeholder = screen.getByTestId("device-placeholder");
+
+    expect(placeholder.style.width).toBe(frame.style.width);
+    expect(placeholder.style.height).toBe(frame.style.height);
+    expect(placeholder.style.width).not.toBe("");
+  });
+
+  it("the placeholder follows the device frame when the hardware changes", async () => {
+    mockFetch({ status: {} });
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
+    fireEvent.click(screen.getByText("Live version"));
+
+    const before = screen.getByTestId("device-frame").style.width;
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "ipad-pro-11" } });
+
+    const frame = screen.getByTestId("device-frame");
+    const placeholder = screen.getByTestId("device-placeholder");
+    expect(frame.style.width).not.toBe(before);
+    expect(placeholder.style.width).toBe(frame.style.width);
+    expect(placeholder.style.height).toBe(frame.style.height);
+  });
+
+  it("centers the placeholder copy on both axes", async () => {
+    mockFetch({ status: {} });
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
+    fireEvent.click(screen.getByText("Live version"));
+
+    const placeholder = screen.getByTestId("device-placeholder");
+    for (const token of ["flex", "items-center", "justify-center", "text-center"]) {
+      expect(placeholder.className).toContain(token);
+    }
   });
 
   it("hides ship and compare entirely when nothing can be compared", () => {
@@ -213,5 +284,107 @@ describe("runAction streaming", () => {
 
     expect(steps).toEqual(["build:start", "build:done", "push:start", "push:done"]);
     expect(result).toEqual({ ok: true, version: 7, live: false });
+  });
+});
+
+describe("runAction framing", () => {
+  const streamOf = (...chunks: string[]) =>
+    new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    });
+
+  const withBody = (body: ReadableStream | undefined) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, body }) as unknown as Response),
+    );
+
+  const surface = { kind: "paywall" as const, id: "plus-upgrade", pageRoutes: [], locales: [] };
+
+  it("reassembles events split across chunk boundaries", async () => {
+    withBody(
+      streamOf(
+        '{"step":"link","sta',
+        'te":"start"}\n{"step":"link","state":"done"}\n{"ste',
+        'p":"build","state":"start"}\n',
+        '{"step":"build","state":"done"}\n{"result":{"ok":true,"version":9,"live":true}}',
+      ),
+    );
+
+    const steps: string[] = [];
+    const result = await runAction(surface, "publish", (step, state) =>
+      steps.push(`${step}:${state}`),
+    );
+
+    expect(steps).toEqual(["link:start", "link:done", "build:start", "build:done"]);
+    expect(result).toEqual({ ok: true, version: 9, live: true });
+  });
+
+  it("ignores blank lines and tolerates a stream with no trailing newline", async () => {
+    withBody(
+      streamOf(
+        '\n\n{"step":"push","state":"done"}\n\n{"result":{"ok":true,"version":1,"live":false}}',
+      ),
+    );
+
+    const steps: string[] = [];
+    const result = await runAction(surface, "push", (step, state) =>
+      steps.push(`${step}:${state}`),
+    );
+
+    expect(steps).toEqual(["push:done"]);
+    expect(result).toEqual({ ok: true, version: 1, live: false });
+  });
+
+  it("reports a stream that ends without a result rather than hanging", async () => {
+    withBody(streamOf('{"step":"build","state":"start"}\n'));
+
+    const result = await runAction(surface, "push");
+    expect(result).toEqual({ ok: false, error: "The dev server closed without a result." });
+  });
+
+  it("falls back to a plain JSON body when the server does not stream", async () => {
+    withBody(undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            body: undefined,
+            json: async () => ({ ok: false, error: "Actions need `superwall dev`." }),
+          }) as unknown as Response,
+      ),
+    );
+
+    expect(await runAction(surface, "push")).toEqual({
+      ok: false,
+      error: "Actions need `superwall dev`.",
+    });
+  });
+
+  it("turns a thrown fetch into a result instead of rejecting", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("dev server went away");
+      }),
+    );
+
+    expect(await runAction(surface, "push")).toEqual({
+      ok: false,
+      error: "dev server went away",
+    });
+  });
+
+  it("a malformed line fails the action rather than being silently skipped", async () => {
+    withBody(streamOf("{ not json }\n"));
+
+    const result = await runAction(surface, "push");
+    expect(result.ok).toBe(false);
   });
 });

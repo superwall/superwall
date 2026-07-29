@@ -1,35 +1,15 @@
 import type { SuperwallProduct, SuperwallProductVariables } from "@superwall/runtime";
 import { SuperwallProvider, useSuperwallSession } from "./context";
-import {
-  useActions,
-  useBackButton,
-  useDevice,
-  useGameController,
-  useProducts,
-  usePurchase,
-  useSuperwallEvent,
-  useSuperwallSnapshot,
-  useTranslation,
-  useTrialEligibility,
-  useVariables,
-} from "../hooks";
+import { useActions } from "../hooks/useActions";
+import { useDevice } from "../hooks/useDevice";
+import { useProducts } from "../hooks/useProducts";
+import { usePurchase } from "../hooks/usePurchase";
+import { useBackButton, useGameController, useSuperwallEvent } from "../hooks/useSuperwallEvent";
+import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
+import { useTranslation } from "../hooks/useTranslation";
+import { useTrialEligibility } from "../hooks/useTrialEligibility";
+import { useVariables } from "../hooks/useVariables";
 
-/**
- * Binds the whole surface to one custom-variables type, so paywalls declare
- * their extra product variables once instead of threading a generic through
- * every hook. Custom variables EXTEND the SDK's known product variables
- * (price, period, trialPeriodDays, …) — they never replace them.
- *
- * ```tsx
- * export const { SuperwallProvider, useProducts, usePurchase } = createSuperwall<{
- *   badge?: string
- * }>()
- *
- * const { products } = useProducts()
- * products[0].variables.price // still typed
- * products[0].variables.badge // your custom variable, typed
- * ```
- */
 export const createSuperwall = <
   TCustomVariables extends Record<string, unknown> = Record<string, unknown>,
 >() => {

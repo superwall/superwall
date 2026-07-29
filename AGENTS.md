@@ -16,19 +16,52 @@ Style the name as `superwall`, lowercase, in user-facing copy and docs.
 ## Project conventions (what the framework serves)
 
 Everything Superwall-related in a user's repo lives in a `superwall/`
-directory (or the repo root for dedicated repos):
+directory (or the repo root for dedicated repos). That directory is a real,
+self-describing npm project — clone it, install, `superwall dev`:
 
-- `superwall/config.ts` — app-level defaults (`defineConfig`)
+- `superwall/package.json` + lockfile + `node_modules` — the project owns its
+  own npm world (framework, react, react-dom), so a pure-native iOS/Android
+  repo needs no npm scaffolding at its root. It is also the **marker**: a
+  directory is a superwall project when its `package.json` depends on
+  `superwall`. There is no project-level config file. The CLI scaffolds the
+  `package.json` and a `.gitignore` write-if-absent. The package must never
+  be named `superwall`: Node's self-reference rule would capture every bare
+  `import "superwall"` inside it, and discovery hard-errors on it.
+- **No project-wide defaults.** Each surface's `config.ts` is the whole truth
+  for that surface; nothing is inherited or merged from above. Shared settings
+  are composed explicitly — export a plain object, spread it into
+  `definePaywall`.
 - `superwall/components|messages|assets/` — the shared design system, strings
-  (auto-discovered per locale, inherited by every surface), and assets
+  (auto-discovered per locale, inherited by every surface), and assets. All
+  three also work per-surface, inside `paywalls/<id>/`.
 - `superwall/paywalls/<id>/` and `superwall/funnels/<id>/` — each surface is a
-  mini React app: `config.ts` (`definePaywall`: products, experiment
-  `variables`, dev-only `preview` mock overrides) + `app/page.tsx` file-based
+  mini React app: a **required** `config.ts` (`definePaywall`: products,
+  experiment `variables`, dev-only `preview` mock overrides — a surface without
+  it is invalid) + `app/page.tsx` file-based
   routing (nested folders are routes, `app/layout.tsx` optional) + local
   `components/` and `messages/`
+- `superwall/superwall.lock` — the binding map (surface → paywall ID), and the
+  only metadata file in the tree. Publish-time facts live in commit trailers,
+  not on disk. **It is the binding of record**: a directory rename is detected
+  (a bound id that no longer exists on disk, beside an unbound directory), never
+  guessed — push prompts interactively, hard-errors in CI, and refuses to create
+  a second paywall while an orphaned binding exists. The repeatable
+  `--rename <old>=<new>` flag on push/publish is the non-interactive escape. A
+  binding no rename claims is offered for removal interactively (lock-only —
+  the paywall keeps serving, and restoring the directory re-binds it); a
+  non-interactive run never mutates the lock without consent.
 - Identity is the path. No name fields, no registration, and user projects
   never contain vite configs, index.html, or build tooling — the framework
   owns bundling. `@/…` aliases the `superwall/` directory.
+- **Self-containment is allowed but recorded**: an import resolving outside
+  the project (and outside `node_modules`) still builds, but push warns once
+  naming each offender and stamps `Superwall-Portable: false` +
+  `Superwall-External` on the commit, so the dashboard can grey out remote
+  editing with a reason instead of failing.
+
+Commands resolve the framework from `<cwd>/superwall/` first, then `<cwd>`,
+so they work from the host root and from inside the directory alike; `.env` is
+read from both, the project's own file winning.
 
 ## Repository layout
 
@@ -51,17 +84,25 @@ The stack, bottom to top — each layer depends only on the one below it:
   - `src/config.ts` / `src/products.ts` / `src/mock.ts` — the paywall config
     contract, the product model + SDK merge logic, and the mock SDK host used
     by dev, previews, and tests
-- `packages/superwall` — `superwall`, THE framework (one root import):
-  - `src/config/` — the authoring contract: `defineConfig` (`app.ts`),
-    `definePaywall` (`paywall.ts`), experiment `v`ariables (`variables.ts`),
-    message merging (`messages.ts`)
+- `packages/superwall` — `superwall`, THE framework. The public surface is
+  split by concern, and no subpath entry may import the root barrel:
+  `.` (slim: `SuperwallProvider`, its props, and the runtime types) ·
+  `./config` · `./hooks` · `./navigation` · `./assets` (types only) ·
+  `./internal` (message merging the generated entry needs — not public) ·
+  `./build|./preview|./discover` (the CLI's tooling contract).
+  - `src/config/` — the authoring contract: `definePaywall` (`paywall.ts`),
+    experiment `v`ariables (`variables.ts`), message merging (`messages.ts`,
+    re-exported through `src/internal.ts`)
   - `src/hooks/` — the specialized hooks (`useProducts`, `usePurchase`,
-    `useActions`, `useTranslation`, …), one file each
+    `useActions`, `useTranslation`, …), one file each; the barrel also carries
+    `createSuperwall` and `useSuperwallSession`
   - `src/provider/` — `SuperwallProvider` + session context (`context.ts`)
     and the typed `createSuperwall` factory (`create.ts`)
   - `src/navigation/` — `superwall/navigation`: the in-memory router behind
     file-based pages (`useRouter`, `Link`, `PaywallRouter`)
-  - `src/discover.ts` — filesystem discovery (`superwall/` dir conventions)
+  - `src/discover.ts` — filesystem discovery (`superwall/` dir conventions),
+    including the project `marker`. It never throws — a markerless directory
+    is a valid answer; the CLI's `requireProject` is what fails loudly.
   - `src/lock.ts` — read-only view of `superwall.lock` (the CLI writes it)
   - `src/document.ts` — **the artifact contract**: the HTML a paywall _is_
     (`renderDocument`, `data-sw-*` semantics) and the platform layer the
@@ -89,8 +130,11 @@ The stack, bottom to top — each layer depends only on the one below it:
   at command runtime. This package is **excluded from oxfmt/oxlint**
   (imported codebase, upstream-diffable, own conventions) and is consumed
   **built** (tsdown → `dist/`; root `postinstall` builds it).
-- `examples/chatgpt` — an app-repo-shaped example: `superwall/` directory with
-  the plus-upgrade paywall recreating the ChatGPT Plus screen. `bun dev` from
+- `examples/chatgpt` — the example **is** a superwall project directory (not an
+  app repo with one inside): `package.json` and the
+  plus-upgrade paywall recreating the ChatGPT Plus screen, all at its root.
+  Using it means copying the directory into a real app as `superwall/`. This
+  also keeps bare-repo-root discovery exercised continuously. `bun dev` from
   the repo root serves it.
 
 Each package has a README with its full API. Read it before changing the
@@ -124,9 +168,9 @@ bun run build           # dist output via tsc (publishing only)
 Per package: `cd packages/<name>` then `bun run test` (watch mode),
 `bun run test:run`, `bun run typecheck`.
 
-Day-to-day development has no compile step: package exports list the
-`superwall-ts` condition first, resolving straight to `src/*.ts` — vitest and
-TypeScript are configured for it (`resolve.conditions` / `customConditions`).
+Day-to-day development has no compile step: package exports point straight at
+`src/*.ts`, so vitest, TypeScript, and the dev server all resolve sources with
+no extra resolution configuration.
 
 Tooling is configured at the root and expected to stay green: `.oxlintrc.json`
 (oxlint, zero findings), `.oxfmtrc.json` (oxfmt — run `bun run format` before
@@ -152,11 +196,10 @@ runs identically on a laptop — keep it that way.
 - Run `bun run test:coverage` before handing work back — thresholds are
   gates, not decoration. The only files excluded from unit coverage are
   process-level integrations vitest cannot host (vite dev server + browser
-  shell, `superwall push`'s vite build, yargs CLI orchestration, the studio
-  app bootstrap); each exclusion is justified inline in that package's
-  `vitest.config.ts` and is exercised end-to-end by the real binaries. Adding
-  an exclusion requires the same: a reason in the config and a real execution
-  path that covers it.
+  shell, yargs CLI orchestration, the studio app bootstrap), and each is
+  exercised end-to-end by the real binaries. Adding an exclusion requires the
+  same: a stated reason in the PR description and a real execution path that
+  covers it.
 - Code with I/O at its edges is written with an injectable seam so the logic
   is unit-testable (`buildStudioProject`'s config loader, `resolveBinding`
   over the mocked API client) — follow that pattern instead of widening the
@@ -185,7 +228,9 @@ runs identically on a laptop — keep it that way.
 - `purchase()` never throws for flow outcomes — it resolves
   `{ status: "completed" | "abandoned" | "failed" }`. Keep that contract.
 - Product variables are SDK-owned; the runtime merges, never invents.
-- Comments explain constraints the code can't show, not what the code does.
+- Write no comments in new code. Constraints, workarounds and other rationale go
+  in the PR description, not beside code they will outlive. Leave existing
+  comments alone unless you are changing the code they sit on.
 
 ## Roadmap context (do not build ahead of it)
 

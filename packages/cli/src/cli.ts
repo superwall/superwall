@@ -49,18 +49,21 @@ function printHelp(): void {
       pc.bold("Usage:"),
       "  superwall [command]",
       "",
-      head("Paywall commands"),
-      row("dev [dir]", "Host the studio: browse and preview your paywalls"),
-      row("push [dir]", "Build and push your paywalls as immutable versions"),
-      row("promote [dir]", "Point production at a pushed version"),
-      row("publish [dir]", "Push and promote in one step"),
-      "",
       head("Workflow commands"),
       row("integrate", "Set up Superwall in your app (agent-driven)"),
       row("migrate", "Migrate from RevenueCat / Adapty / Qonversion"),
       row("review [--fix]", "Audit an existing Superwall setup; --fix repairs issues"),
       pc.dim(
         "                                  Each takes --skill to print the playbook instead of running.",
+      ),
+      "",
+      head("Paywalls & flows"),
+      row("dev [dir]", "Host the studio: browse and preview your paywalls and flows"),
+      row("push [dir]", "Build and push your paywalls and flows as immutable versions"),
+      row("promote [dir]", "Point production at a pushed version"),
+      row("publish [dir]", "Push and promote in one step"),
+      pc.dim(
+        "                                  Both take -m <note> to record why, in the source commit.",
       ),
       "",
       head("Resource commands"),
@@ -331,7 +334,6 @@ export async function run(): Promise<void> {
               describe: "Skip request-body schema validation and send as-is (post/patch)",
             },
             quiet: { type: "boolean", hidden: true },
-            // asc secrets set
             "key-id": { type: "string", describe: "ASC key id (keys set)" },
             issuer: { type: "string", describe: "ASC issuer id (keys set)" },
             "key-file": {
@@ -389,7 +391,6 @@ export async function run(): Promise<void> {
               type: "string",
               describe: "Output file (products storekit)",
             },
-            // products create - full product definition (mainly for agents)
             price: {
               type: "number",
               describe: "Price in major units, e.g. 9.99 (products create)",
@@ -481,6 +482,19 @@ export async function run(): Promise<void> {
           .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
           .options({
             only: { type: "string", describe: "Push one paywall or funnel by name" },
+            rename: {
+              type: "array",
+              string: true,
+              describe:
+                "Declare a renamed directory as <old>=<new> (repeatable) - required in CI, where the resolver cannot prompt",
+            },
+
+            message: {
+              type: "string",
+              alias: "m",
+              describe:
+                "Publish note recorded in the source commit (only lands when this publish creates a new source commit — unchanged source reuses the existing commit)",
+            },
           }),
       (argv) => {
         return import("@/commands/push").then((m) => m.runPush(argv));
@@ -491,8 +505,6 @@ export async function run(): Promise<void> {
       "Point production at a pushed version (the latest by default)",
       (y) =>
         y
-          // yargs' built-in --version (print CLI version) would swallow the
-          // flag and shift its value into the [dir] positional.
           .version(false)
           .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
           .options({
@@ -514,6 +526,19 @@ export async function run(): Promise<void> {
           .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
           .options({
             only: { type: "string", describe: "Publish one paywall or funnel by name" },
+            rename: {
+              type: "array",
+              string: true,
+              describe:
+                "Declare a renamed directory as <old>=<new> (repeatable) - required in CI, where the resolver cannot prompt",
+            },
+
+            message: {
+              type: "string",
+              alias: "m",
+              describe:
+                "Publish note recorded in the source commit (only lands when this publish creates a new source commit — unchanged source reuses the existing commit)",
+            },
           }),
       (argv) => {
         return import("@/commands/publish").then((m) => m.runPublish(argv));

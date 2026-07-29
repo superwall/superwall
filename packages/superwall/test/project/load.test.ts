@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { importDefault, loadSurfaceConfig } from "../../src/config/load";
-import type { DiscoveredSurface, Project } from "../../src/discover";
+import type { DiscoveredSurface } from "../../src/discover";
 import { readLock } from "../../src/lock";
 
 const dirs: string[] = [];
@@ -26,7 +26,7 @@ afterEach(() => {
   }
 });
 
-const surface = (dir: string, configFile?: string): DiscoveredSurface => ({
+const surface = (dir: string, configFile = path.join(dir, "missing.json")): DiscoveredSurface => ({
   kind: "paywall",
   id: "plus-upgrade",
   dir,
@@ -35,23 +35,14 @@ const surface = (dir: string, configFile?: string): DiscoveredSurface => ({
   messages: [],
 });
 
-const project = (root: string, appConfigFile?: string): Project => ({
-  root,
-  superwallDir: root,
-  appConfigFile,
-  surfaces: [],
-  sharedMessages: [],
-  diagnostics: [],
-});
-
-/**
- * The real loader needs tsx (project configs are TypeScript), which vitest's
- * pipeline is not — `superwall push` and `superwall dev` exercise it on every
- * run. Its failure contract is testable here; the merge logic below goes
- * through the injectable seam.
- */
-const jsonLoader = async <T>(file: string | undefined): Promise<T | undefined> =>
-  file ? (JSON.parse(fs.readFileSync(file, "utf8")) as T) : undefined;
+const jsonLoader = async <T>(file: string | undefined): Promise<T | undefined> => {
+  if (!file) return undefined;
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")) as T;
+  } catch {
+    return undefined;
+  }
+};
 
 describe("importDefault", () => {
   it("returns undefined without a file and for unreadable modules", async () => {
@@ -62,32 +53,26 @@ describe("importDefault", () => {
 });
 
 describe("loadSurfaceConfig", () => {
-  it("merges the surface definition over app defaults", async () => {
+  it("is the surface definition, with nothing layered under it", async () => {
     const dir = scaffold({
-      "config.json": JSON.stringify({
-        defaults: { featureGating: "gated", scrollEnabled: false },
-      }),
-      "paywall.json": JSON.stringify({ featureGating: "nonGated" }),
+      "paywall.json": JSON.stringify({ featureGating: "nonGated", scrollEnabled: false }),
     });
 
     const loaded = await loadSurfaceConfig(
-      project(dir, path.join(dir, "config.json")),
       surface(dir, path.join(dir, "paywall.json")),
       jsonLoader,
     );
 
-    expect(loaded.appConfig).toMatchObject({ defaults: { featureGating: "gated" } });
-    // Surface wins; untouched defaults survive.
+    expect(loaded.definition).toMatchObject({ featureGating: "nonGated" });
     expect(loaded.config.featureGating).toBe("nonGated");
     expect(loaded.config.scrollEnabled).toBe(false);
   });
 
-  it("yields an empty config when a project declares nothing", async () => {
+  it("yields an empty config when the definition cannot be read", async () => {
     const dir = scaffold({});
-    const loaded = await loadSurfaceConfig(project(dir), surface(dir), jsonLoader);
+    const loaded = await loadSurfaceConfig(surface(dir), jsonLoader);
     expect(loaded.definition).toBeUndefined();
-    expect(loaded.appConfig).toBeUndefined();
-    expect(loaded.config).toMatchObject({ presentation: undefined });
+    expect(loaded.config).toEqual({});
   });
 });
 

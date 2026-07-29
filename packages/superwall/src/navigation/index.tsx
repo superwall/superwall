@@ -1,28 +1,15 @@
 import * as React from "react";
 
-/**
- * superwall/navigation — client-side navigation between a paywall's pages.
- *
- * Every paywall is a mini React app: `app/page.tsx` is its root page and
- * nested folders (`app/offer/page.tsx`) are its routes, Next.js-style. The
- * framework mounts the pages; components navigate with `useRouter()` and
- * `<Link>`. There is no URL bar inside an SDK webview, so navigation is
- * in-memory with a history stack for `back()`.
- */
-
 export type PaywallRoute = {
-  /** "/" for `app/page.tsx`, "/offer" for `app/offer/page.tsx`, … */
   path: string;
   Component: React.ComponentType;
 };
 
 export type Router = {
-  /** The active route path. */
   path: string;
   push: (path: string) => void;
   replace: (path: string) => void;
   back: () => void;
-  /** True when there is a previous page to go back to. */
   canGoBack: boolean;
 };
 
@@ -41,12 +28,56 @@ const normalize = (path: string): string => {
   return trimmed === "" ? "/" : trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 };
 
+type RouteAsset = { url: string; as: "image" | "video" | "audio" | "font" };
+
+const ROUTE_ASSETS_ID = "sw-route-assets";
+
+const isRouteAsset = (value: unknown): value is RouteAsset =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof Reflect.get(value, "url") === "string" &&
+  ["image", "video", "audio", "font"].includes(String(Reflect.get(value, "as")));
+
+const readRouteAssets = (): Record<string, RouteAsset[]> => {
+  if (typeof document === "undefined") return {};
+  const source = document.getElementById(ROUTE_ASSETS_ID)?.textContent;
+  if (!source) return {};
+  try {
+    const parsed: unknown = JSON.parse(source);
+    if (typeof parsed !== "object" || parsed === null) return {};
+    const map: Record<string, RouteAsset[]> = {};
+    for (const route of Object.keys(parsed)) {
+      const value: unknown = Reflect.get(parsed, route);
+      if (Array.isArray(value)) map[route] = value.filter(isRouteAsset);
+    }
+    return map;
+  } catch {
+    return {};
+  }
+};
+
+const warmAssets = (assets: readonly RouteAsset[], warmed: Set<string>): void => {
+  if (typeof document === "undefined") return;
+  for (const asset of assets) {
+    if (warmed.has(asset.url)) continue;
+    warmed.add(asset.url);
+    if (asset.as === "image") {
+      new Image().src = asset.url;
+      continue;
+    }
+    const link = document.createElement("link");
+    link.setAttribute("rel", "preload");
+    link.setAttribute("as", asset.as);
+    link.setAttribute("href", asset.url);
+    if (asset.as === "font") link.setAttribute("crossorigin", "anonymous");
+    document.head.appendChild(link);
+  }
+};
+
 export type PaywallRouterProps = {
   routes: readonly PaywallRoute[];
   initialPath?: string;
-  /** Optional `app/layout.tsx` wrapping every page. */
   Layout?: React.ComponentType<React.PropsWithChildren>;
-  /** Notified on every navigation — the framework reports page views. */
   onNavigate?: (path: string) => void;
 };
 
@@ -60,9 +91,27 @@ export const PaywallRouter = ({
   const path = stack[stack.length - 1];
   const notify = React.useRef(onNavigate);
   notify.current = onNavigate;
+  const known = React.useRef(routes);
+  known.current = routes;
+  const assets = React.useRef<Record<string, RouteAsset[]> | undefined>(undefined);
+  const warmed = React.useRef<Set<string>>(new Set());
+  const mounted = React.useRef(false);
 
   React.useEffect(() => {
     notify.current?.(path);
+
+    const map = (assets.current ??= readRouteAssets());
+    const list = known.current;
+    const at = list.findIndex((candidate) => candidate.path === path);
+    const next = at === -1 ? undefined : list[at + 1];
+
+    const warm: RouteAsset[] = [];
+    if (!mounted.current) {
+      mounted.current = true;
+      warm.push(...(map["*"] ?? []), ...(map[path] ?? []));
+    }
+    if (next) warm.push(...(map[next.path] ?? []));
+    warmAssets(warm, warmed.current);
   }, [path]);
 
   const router = React.useMemo<Router>(

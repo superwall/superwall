@@ -152,7 +152,6 @@ export const ActionMenu = ({
                   onClick={() => {
                     setSelected(action.name);
                     setOpen(false);
-                    onRun(action.name);
                   }}
                 >
                   <span className="text-[0.8125rem] font-medium">

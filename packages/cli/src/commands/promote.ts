@@ -1,13 +1,14 @@
 import pc from "picocolors";
 import { defineCommand } from "@/command";
 import { VERSION } from "@/constants";
-import { promotePaywallVersion } from "@/core/api/resources";
-import { resolveBinding } from "@/core/paywalls/binding";
-import { loadFramework } from "@/core/paywalls/framework";
-import { requireApi } from "@/core/paywalls/session";
+import { ApiError } from "@/core/api/client";
+import { livePaywallVersion, promotePaywallVersion } from "@/core/api/resources";
+import { resolveBinding } from "@/core/paywalls/binding/binding";
+import { loadFramework } from "@/core/paywalls/project/framework";
+import { requireApi } from "@/core/paywalls/project/session";
 import { ui } from "@/ui";
 import { pickApplicationOption } from "./paywalls/pick-app";
-import { group, projectDir, selectSurfaces, timed } from "./paywalls/pipeline";
+import { group, projectDir, selectSurfaces, timed, transition } from "./paywalls/pipeline";
 
 export const runPromote = defineCommand({
   name: "promote",
@@ -32,20 +33,27 @@ export const runPromote = defineCommand({
 
     for (const surface of surfaces) {
       await group(context, surface.id, async (note) => {
-        note("finding on Superwall");
+        note("Finding on Superwall");
         const binding = await resolveBinding({
           api,
           superwallDir: project.superwallDir,
           surface,
+          surfaces: project.surfaces,
           pickApplication: context.interactive ? pickApplicationOption : undefined,
           create: false,
         });
 
-        note("promoting");
+        note("Promoting");
+        const before = await livePaywallVersion(api, binding.paywallId);
         const promo = await timed(() =>
-          promotePaywallVersion(api, binding.paywallId, { version }),
+          promotePaywallVersion(api, binding.paywallId, { version }).catch((error: unknown) => {
+            if (error instanceof ApiError && error.status === 404 && version !== undefined) {
+              error.hint = "Run `superwall promote` without --version to promote the latest.";
+            }
+            throw error;
+          }),
         );
-        return [`Promoted ${pc.green(`version ${promo.value.version}`)} ${promo.took}`];
+        return [`${transition(before, promo.value.version)} ${promo.took}`];
       });
     }
 

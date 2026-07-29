@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import pc from "picocolors";
 import type { Arguments } from "yargs";
 import { ApiError, SuperwallApi } from "@/core/api/client";
 import { NotLoggedInError } from "@/core/auth/errors";
@@ -88,7 +89,6 @@ export async function executeCommand<Auth extends AuthPolicy>(
     return;
   }
 
-  // Dry runs are smoke tests, not usage.
   const tracked = definition.telemetry === "workflow" && !argv.dryRun;
   const startedAt = Date.now();
 
@@ -158,15 +158,25 @@ function reportError(
   stdout: Pick<NodeJS.WriteStream, "write">,
   error: unknown,
 ): void {
-  const normalized = normalizeError(error);
+  const { code, message, status } = normalizeError(error);
   if (mode === "json") {
-    writeJson(stdout, { error: normalized });
+    writeJson(stdout, { error: { code, message, ...(status === undefined ? {} : { status }) } });
     return;
   }
-  ui.error(normalized.message);
+  ui.error([message, ...errorAside(error)].join("\n"));
 }
 
-function normalizeError(error: unknown): {
+export function errorAside(error: unknown): string[] {
+  const aside: string[] = [];
+  if (error instanceof ApiError) {
+    if (error.hint) aside.push(error.hint);
+    if (error.detail.docUrl) aside.push(error.detail.docUrl);
+    if (!error.envelope) aside.push(error.request);
+  }
+  return aside.map((line) => pc.dim(line));
+}
+
+export function normalizeError(error: unknown): {
   code: string;
   message: string;
   status?: number;
@@ -178,11 +188,7 @@ function normalizeError(error: unknown): {
     };
   }
   if (error instanceof ApiError) {
-    return {
-      code: "api_error",
-      message: `${error.message}${error.body ? ` - ${error.body.slice(0, 300)}` : ""}`,
-      status: error.status,
-    };
+    return { code: "api_error", message: error.message, status: error.status };
   }
   return {
     code: "command_error",

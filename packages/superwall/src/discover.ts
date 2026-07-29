@@ -1,32 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-/**
- * Filesystem discovery. Identity is the path — no name fields, no
- * registration.
- *
- * A project keeps everything Superwall-related in a `superwall/` directory at
- * the repo root (or the project root IS that directory — both work):
- *
- * ```
- * superwall/
- * ├── config.ts            app-level defaults (optional)
- * ├── components/          shared design system
- * ├── messages/<locale>.ts shared strings, inherited by every surface
- * ├── assets/              shared images/fonts
- * ├── paywalls/<id>/       each one a mini React app
- * │   ├── config.ts
- * │   ├── app/page.tsx     file-based routing, Next.js-style
- * │   ├── app/<route>/page.tsx
- * │   ├── app/layout.tsx   optional shared chrome
- * │   ├── components/
- * │   └── messages/<locale>.ts
- * └── funnels/<id>/        same shape — onboarding, web2app, win-back flows
- * ```
- */
-
 export type DiscoveredPage = {
-  /** "/" for app/page.tsx, "/offer" for app/offer/page.tsx, … */
   route: string;
   file: string;
 };
@@ -42,17 +17,19 @@ export type DiscoveredSurface = {
   kind: SurfaceKind;
   id: string;
   dir: string;
-  configFile?: string;
+  configFile: string;
   layoutFile?: string;
   pages: DiscoveredPage[];
   messages: DiscoveredMessages[];
 };
 
+export type ProjectMarker = "package.json";
+
 export type Project = {
   root: string;
-  /** The superwall/ directory (may equal root for dedicated repos). */
   superwallDir: string;
-  appConfigFile?: string;
+  marker?: ProjectMarker;
+  packageName?: string;
   sharedMessages: DiscoveredMessages[];
   surfaces: DiscoveredSurface[];
   diagnostics: string[];
@@ -109,26 +86,58 @@ const discoverSurface = (
     diagnostics.push(`${kind}s/${id}: missing app/page.tsx`);
     return undefined;
   }
+  const configFile = fileIfExists(path.join(dir, "config.ts"));
+  if (!configFile) {
+    diagnostics.push(`${kind}s/${id} has no config.ts — every ${kind} needs one (definePaywall)`);
+    return undefined;
+  }
   return {
     kind,
     id,
     dir,
-    configFile: fileIfExists(path.join(dir, "config.ts")),
+    configFile,
     layoutFile: fileIfExists(path.join(dir, "app/layout.tsx")),
     pages,
     messages: discoverMessages(dir),
   };
 };
 
-/**
- * Reads the `superwall/` directory conventions into a project: surfaces,
- * their pages and message catalogs, and any layout diagnostics.
- */
+type ProjectPackage = { name?: string; dependsOnFramework: boolean };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const readProjectPackage = (dir: string): ProjectPackage | undefined => {
+  const file = path.join(dir, "package.json");
+  if (!fs.existsSync(file)) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed)) return undefined;
+  const dependsOnFramework = ["dependencies", "devDependencies", "peerDependencies"].some(
+    (field) => {
+      const group = parsed[field];
+      return isRecord(group) && "superwall" in group;
+    },
+  );
+  return {
+    name: typeof parsed.name === "string" ? parsed.name : undefined,
+    dependsOnFramework,
+  };
+};
+
 export const discoverProject = (root: string): Project => {
   const resolvedRoot = path.resolve(root);
-  // superwall/ at the repo root, or the root itself for dedicated repos.
   const nestedDir = path.join(resolvedRoot, "superwall");
   const superwallDir = fs.existsSync(nestedDir) ? nestedDir : resolvedRoot;
+
+  const projectPackage = readProjectPackage(superwallDir);
+  const marker: ProjectMarker | undefined = projectPackage?.dependsOnFramework
+    ? "package.json"
+    : undefined;
 
   const diagnostics: string[] = [];
   const surfaces: DiscoveredSurface[] = [];
@@ -148,7 +157,8 @@ export const discoverProject = (root: string): Project => {
   return {
     root: resolvedRoot,
     superwallDir,
-    appConfigFile: fileIfExists(path.join(superwallDir, "config.ts")),
+    marker,
+    packageName: projectPackage?.name,
     sharedMessages: discoverMessages(superwallDir),
     surfaces,
     diagnostics,

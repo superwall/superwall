@@ -1,10 +1,12 @@
 import pc from "picocolors";
 import { defineCommand } from "@/command";
 import { VERSION } from "@/constants";
-import { loadFramework } from "@/core/paywalls/framework";
+import { writeEnvTypes } from "@/core/paywalls/project/env";
+import { frameworkVersion, loadFramework } from "@/core/paywalls/project/framework";
+import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import { createStudioActions } from "./paywalls/studio-actions";
 import { ui } from "@/ui";
-import { LAYOUT_HINT, projectDir } from "./paywalls/pipeline";
+import { LAYOUT_HINT, projectDir, requireProject } from "./paywalls/pipeline";
 
 export const runDev = defineCommand({
   name: "dev",
@@ -12,7 +14,13 @@ export const runDev = defineCommand({
   async run(context) {
     const dir = projectDir(context);
     const framework = await loadFramework(dir);
-    const project = framework.discoverProject(dir);
+    const project = requireProject(framework.discoverProject(dir), dir);
+    writeEnvTypes(project.superwallDir);
+    writeProjectScaffold({
+      root: project.root,
+      superwallDir: project.superwallDir,
+      frameworkVersion: frameworkVersion(dir),
+    });
 
     const requestedPort = Number(context.argv.port);
     const host = String(context.argv.host);

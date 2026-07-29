@@ -46,7 +46,6 @@ describe("PaywallRouter", () => {
     expect(screen.getByTestId("can-go-back").textContent).toBe("false");
     expect(onNavigate).toHaveBeenLastCalledWith("/");
 
-    // Link normalizes "offer" → "/offer".
     fireEvent.click(screen.getByText("Go to offer"));
     expect(screen.getByText("offer page")).toBeDefined();
     expect(onNavigate).toHaveBeenLastCalledWith("/offer");
@@ -61,13 +60,10 @@ describe("PaywallRouter", () => {
 
     fireEvent.click(screen.getByText("Replace with terms"));
     expect(screen.getByText("terms page")).toBeDefined();
-    // Replaced "/" — there is nothing to go back to, so back is a no-op and
-    // the terms page stays (it has no back affordance to assert against).
   });
 
   it("falls back to the first route for unknown paths and honors initialPath", () => {
     render(<PaywallRouter routes={routes} initialPath="/offer/" />);
-    // Trailing slash normalizes away.
     expect(screen.getByText("offer page")).toBeDefined();
 
     render(<PaywallRouter routes={routes} initialPath="/nope" />);
@@ -94,5 +90,79 @@ describe("PaywallRouter", () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+});
+
+describe("path normalization and stack edges", () => {
+  const Probe = () => {
+    const { path, canGoBack, push, replace, back } = useRouter();
+    return (
+      <div>
+        <span data-testid="path">{path}</span>
+        <span data-testid="can-go-back">{String(canGoBack)}</span>
+        <button type="button" onClick={() => push("  /offer/  ")}>
+          messy push
+        </button>
+        <button type="button" onClick={() => push("offer")}>
+          bare push
+        </button>
+        <button type="button" onClick={() => replace("")}>
+          replace empty
+        </button>
+        <button type="button" onClick={back}>
+          back
+        </button>
+      </div>
+    );
+  };
+
+  const probeRoutes: PaywallRoute[] = [
+    { path: "/", Component: Probe },
+    { path: "/offer", Component: Probe },
+  ];
+
+  it("trims whitespace, drops trailing slashes, and adds the leading one", () => {
+    render(<PaywallRouter routes={probeRoutes} />);
+
+    fireEvent.click(screen.getByText("messy push"));
+    expect(screen.getByTestId("path").textContent).toBe("/offer");
+  });
+
+  it("treats a bare segment as absolute", () => {
+    render(<PaywallRouter routes={probeRoutes} />);
+
+    fireEvent.click(screen.getByText("bare push"));
+    expect(screen.getByTestId("path").textContent).toBe("/offer");
+  });
+
+  it("normalizes an empty path back to the root", () => {
+    render(<PaywallRouter routes={probeRoutes} />);
+
+    fireEvent.click(screen.getByText("replace empty"));
+    expect(screen.getByTestId("path").textContent).toBe("/");
+  });
+
+  it("back at the root is a no-op, and canGoBack stays false", () => {
+    render(<PaywallRouter routes={probeRoutes} />);
+
+    expect(screen.getByTestId("can-go-back").textContent).toBe("false");
+    fireEvent.click(screen.getByText("back"));
+    expect(screen.getByTestId("path").textContent).toBe("/");
+    expect(screen.getByTestId("can-go-back").textContent).toBe("false");
+  });
+
+  it("honors a messy initialPath the same way", () => {
+    render(<PaywallRouter routes={probeRoutes} initialPath="/offer/" />);
+    expect(screen.getByTestId("path").textContent).toBe("/offer");
+  });
+
+  it("reports every navigation to onNavigate, in order", () => {
+    const seen: string[] = [];
+    render(<PaywallRouter routes={probeRoutes} onNavigate={(path) => seen.push(path)} />);
+
+    fireEvent.click(screen.getByText("bare push"));
+    fireEvent.click(screen.getByText("back"));
+
+    expect(seen).toEqual(["/", "/offer", "/"]);
   });
 });

@@ -1,11 +1,11 @@
 import * as React from "react";
 import type { SuperwallConfig, SuperwallMessages, SuperwallMockOptions } from "@superwall/runtime";
 import type { PreviewMessages, PreviewSurface } from "virtual:superwall/project";
-import { loadAppConfig, sharedMessages } from "virtual:superwall/project";
-import { mergeMessages, mergeSurfaceConfig, type SuperwallAppConfig } from "../config";
+import { sharedMessages } from "virtual:superwall/project";
 import type { PaywallDefinition } from "../config";
+import { mergeMessages } from "../internal";
 import { PaywallRouter, type PaywallRoute } from "../navigation/index";
-import { SuperwallProvider } from "../provider";
+import { SuperwallProvider } from "../provider/context";
 import type { PreviewOverrides } from "./overrides";
 
 const loadCatalogs = async (
@@ -39,8 +39,7 @@ const useSurface = (surface: PreviewSurface): Loaded => {
   React.useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const [app, definition, layout, catalogs, pages] = await Promise.all([
-        loadAppConfig().then((mod) => mod.default as SuperwallAppConfig | undefined),
+      const [definition, layout, catalogs, pages] = await Promise.all([
         surface.loadConfig().then((mod) => mod.default as PaywallDefinition | undefined),
         surface.loadLayout?.().then((mod) => mod.default),
         loadCatalogs(sharedMessages, surface.messages),
@@ -53,7 +52,7 @@ const useSurface = (surface: PreviewSurface): Loaded => {
       ]);
       if (cancelled) return;
 
-      const merged = mergeSurfaceConfig(app?.defaults, definition);
+      const merged: SuperwallConfig = definition ?? {};
       const messages: Record<string, SuperwallMessages> = { ...catalogs };
       for (const [locale, catalog] of Object.entries(merged.localization?.messages ?? {})) {
         messages[locale] = mergeMessages(messages[locale], catalog);

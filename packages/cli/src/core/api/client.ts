@@ -3,13 +3,61 @@ import { loadSession, saveSession, type Session } from "@/core/auth/storage";
 import { resolveAuthToken } from "@/core/auth/token";
 import { NotLoggedInError } from "@/core/auth/errors";
 
+export interface ApiErrorDetail {
+  type?: string;
+  code?: string;
+  param?: string;
+  docUrl?: string;
+  resourceType?: string;
+  resourceId?: string;
+}
+
+const BODY_SNIPPET = 200;
+
+function parseErrorEnvelope(body: string): { message: string; detail: ApiErrorDetail } | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const text = (key: string): string | undefined => {
+    const value = Reflect.get(parsed, key);
+    return typeof value === "string" && value !== "" ? value : undefined;
+  };
+  const message = text("message");
+  if (message === undefined) return undefined;
+  return {
+    message,
+    detail: {
+      type: text("type"),
+      code: text("code"),
+      param: text("param"),
+      docUrl: text("doc_url"),
+      resourceType: text("resource_type"),
+      resourceId: text("resource_id"),
+    },
+  };
+}
+
 export class ApiError extends Error {
+  readonly detail: ApiErrorDetail;
+  readonly request: string;
+  readonly envelope: boolean;
+  hint?: string;
+
   constructor(
-    message: string,
+    request: string,
     readonly status: number,
     readonly body?: string,
   ) {
-    super(message);
+    const envelope = body === undefined ? undefined : parseErrorEnvelope(body);
+    const snippet = body?.trim().slice(0, BODY_SNIPPET);
+    super(envelope?.message ?? (snippet ? `HTTP ${status} — ${snippet}` : `HTTP ${status}`));
+    this.detail = envelope?.detail ?? {};
+    this.request = request;
+    this.envelope = envelope !== undefined;
   }
 }
 
@@ -43,9 +91,6 @@ export class SuperwallApi {
   }
 
   get org(): { id?: string; name?: string; count: number } {
-    // SUPERWALL_ORG_ID overrides the session, the same way SUPERWALL_API_HOST
-    // does: pointing at a local API means the session's org id (from the
-    // hosted account) names an organization that host has never heard of.
     const override = process.env.SUPERWALL_ORG_ID;
     return {
       id: override ?? this.session.orgId,
@@ -57,16 +102,12 @@ export class SuperwallApi {
     return this.session.userEmail;
   }
 
-  /** Persists the org so it's picked at most once per login. */
   setOrg(org: { id: string; name?: string }): void {
     this.session = { ...this.session, orgId: org.id, orgName: org.name };
     saveSession(this.session);
   }
 
   private base(): string {
-    // An explicit env override beats the stored session host — local
-    // platform development points every command at a dev API without
-    // re-logging-in (project .env files are loaded by the superwall bin).
     return process.env.SUPERWALL_API_HOST ?? this.session.host ?? API_HOST;
   }
 
@@ -84,7 +125,7 @@ export class SuperwallApi {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new ApiError(`${method} ${path} → HTTP ${res.status}`, res.status, text);
+      throw new ApiError(`${method} ${path}`, res.status, text);
     }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
@@ -94,7 +135,6 @@ export class SuperwallApi {
     try {
       return await fetch(url, init);
     } catch (error) {
-      // Node reports every connection failure as a bare "fetch failed".
       throw new ApiUnreachableError(this.base(), error);
     }
   }
@@ -126,12 +166,11 @@ export class SuperwallApi {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new ApiError(`POST ${path} → HTTP ${res.status}`, res.status, text);
+      throw new ApiError(`POST ${path}`, res.status, text);
     }
     return res.text();
   }
 
-  // The API caps `limit` at 100.
   async list<T>(path: string): Promise<T[]> {
     const out: T[] = [];
     let after: string | undefined;

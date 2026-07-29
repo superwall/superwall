@@ -1,6 +1,6 @@
 import { act } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { usePurchase } from "../../src";
+import { usePurchase } from "../../src/hooks";
 import { flush, renderWithProvider } from "../helpers";
 
 describe("usePurchase", () => {

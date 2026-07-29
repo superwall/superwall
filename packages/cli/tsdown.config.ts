@@ -7,8 +7,16 @@ export default defineConfig({
   target: "node20",
   clean: true,
   dts: true,
-  // tsdown externalizes package.json dependencies automatically; our own
-  // source (including the "@/" alias) is bundled.
+  noExternal: [
+    "ink",
+    "ink-spinner",
+    "react",
+    "react/jsx-runtime",
+    "react/jsx-dev-runtime",
+    "react-reconciler",
+    "scheduler",
+  ],
+  external: ["react-devtools-core"],
   alias: {
     "@": "src",
   },

@@ -1,6 +1,6 @@
 import { act, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useTranslation } from "../../src";
+import { useTranslation } from "../../src/hooks";
 import { flush, renderWithProvider } from "../helpers";
 
 describe("useTranslation", () => {

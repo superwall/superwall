@@ -17,7 +17,6 @@ declare module "virtual:superwall/project" {
     loadLayout?: PreviewModule<React.ComponentType<React.PropsWithChildren>>;
   };
   export const surfaces: PreviewSurface[];
-  export const loadAppConfig: PreviewModule<unknown>;
   export const sharedMessages: PreviewMessages[];
   export const diagnostics: string[];
 }

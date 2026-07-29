@@ -37,6 +37,29 @@ const useFitScale = (
   return scale;
 };
 
+export const DevicePlaceholder = ({
+  width,
+  height,
+  stageRef,
+  children,
+}: React.PropsWithChildren<{
+  width: number;
+  height: number;
+  stageRef: React.RefObject<HTMLElement | null>;
+}>) => {
+  const scale = useFitScale(stageRef, width, height);
+
+  return (
+    <div
+      className="flex flex-none items-center justify-center overflow-hidden border border-dashed border-cream/20 p-6 text-center text-sm text-cream/55"
+      data-testid="device-placeholder"
+      style={{ width: width * scale, height: height * scale }}
+    >
+      {children}
+    </div>
+  );
+};
+
 type Frame = {
   mountSrc: string;
   currentSrc: string;

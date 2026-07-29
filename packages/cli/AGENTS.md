@@ -119,9 +119,11 @@ and update ALL of:
 
 ## Code style
 
-- **Comments are rare.** Only a non-obvious _why_ (workaround, API quirk, timing
-  gotcha), one line. Never narrate what code does, never leave "coming soon"
-  notes, never comment out code - delete it (git remembers).
+- **Write no comments.** Rationale — the workaround, the API quirk, the timing
+  gotcha — belongs in the PR description, where reviewers read it and it can't
+  rot beside code that moved on. Never narrate what code does, never leave
+  "coming soon" notes, never comment out code - delete it (git remembers).
+  Leave existing comments alone unless you are changing the code they sit on.
 - No dead code, no unused exports, no aliases kept "just in case".
 - `VERSION` comes from `package.json` (single source). Constants live in
   `src/constants.ts` only if used in 2+ places.

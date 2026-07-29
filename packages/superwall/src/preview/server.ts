@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react-swc";
-import { createServer, defaultClientConditions, type Plugin, type ViteDevServer } from "vite";
+import { createServer, searchForWorkspaceRoot, type Plugin, type ViteDevServer } from "vite";
 import { loadSurfaceConfig } from "../config/load";
 import { discoverProject, type DiscoveredSurface, type Project } from "../discover";
 import { injectPlatformLayer, PLATFORM_STYLESHEET_URL, renderDocument } from "../document";
@@ -14,6 +14,7 @@ const VIRTUAL_PROJECT_ID = "virtual:superwall/project";
 const RESOLVED_VIRTUAL_PROJECT_ID = "\0" + VIRTUAL_PROJECT_ID;
 
 const previewMount = fileURLToPath(new URL("./mount.tsx", import.meta.url));
+const frameworkDir = fileURLToPath(new URL("../../", import.meta.url));
 
 const studioDistDir = (): string | undefined => {
   try {
@@ -36,13 +37,14 @@ const STATIC_TYPES: Record<string, string> = {
   ".map": "application/json",
 };
 
-const moduleUrl = (projectRoot: string, file: string): string => {
-  const relative = path.relative(projectRoot, file);
+const moduleUrl = (viteRoot: string, file: string): string => {
+  const relative = path.relative(viteRoot, file);
   return relative.startsWith("..") ? `/@fs/${file}` : `/${relative.split(path.sep).join("/")}`;
 };
 
 const projectModule = (project: Project): string => {
-  const lazy = (file: string) => `() => import(${JSON.stringify(moduleUrl(project.root, file))})`;
+  const lazy = (file: string) =>
+    `() => import(${JSON.stringify(moduleUrl(project.superwallDir, file))})`;
   const messageList = (messages: { locale: string; file: string }[]) =>
     `[${messages
       .map((entry) => `{ locale: ${JSON.stringify(entry.locale)}, load: ${lazy(entry.file)} }`)
@@ -57,9 +59,7 @@ const projectModule = (project: Project): string => {
       `id: ${JSON.stringify(surface.id)}`,
       `pages: [${pages}]`,
       `messages: ${messageList(surface.messages)}`,
-      surface.configFile
-        ? `loadConfig: ${lazy(surface.configFile)}`
-        : `loadConfig: () => Promise.resolve({ default: undefined })`,
+      `loadConfig: ${lazy(surface.configFile)}`,
       surface.layoutFile ? `loadLayout: ${lazy(surface.layoutFile)}` : `loadLayout: undefined`,
     ];
     return `  { ${fields.join(", ")} }`;
@@ -69,22 +69,16 @@ const projectModule = (project: Project): string => {
     `export const surfaces = [`,
     surfaces.join(",\n"),
     `]`,
-    `export const loadAppConfig = ${
-      project.appConfigFile
-        ? lazy(project.appConfigFile)
-        : `() => Promise.resolve({ default: undefined })`
-    }`,
     `export const sharedMessages = ${messageList(project.sharedMessages)}`,
     `export const diagnostics = ${JSON.stringify(project.diagnostics)}`,
   ].join("\n");
 };
 
 const previewDocument = async (
-  project: Project,
   surface: DiscoveredSurface,
   platformStylesheet: string,
 ): Promise<string> => {
-  const { config } = await loadSurfaceConfig(project, surface);
+  const { config } = await loadSurfaceConfig(surface);
   const document = renderDocument({
     title: `${surface.id} — superwall`,
     config,
@@ -251,7 +245,7 @@ const previewPlugin = (
             res.end(`No ${preview[1]} named "${preview[2]}"`);
             return;
           }
-          previewDocument(project, surface, platformStylesheet)
+          previewDocument(surface, platformStylesheet)
             .then((document) => server.transformIndexHtml(url, document))
             .then((html) => {
               res.setHeader("Content-Type", "text/html");
@@ -302,12 +296,6 @@ export type PreviewServerOptions = {
   studio?: StudioActions;
 };
 
-/**
- * Starts the server behind `superwall dev`: the built studio, the project
- * payload it renders from, and the surface previews its device frames
- * iframe — each served the way the runtime serves a published snapshot.
- * Falls back to the next free port.
- */
 export const startPreviewServer = async (
   projectRoot: string,
   options: PreviewServerOptions,
@@ -316,7 +304,7 @@ export const startPreviewServer = async (
   const server = await createServer({
     configFile: false,
     envFile: false,
-    root: project.root,
+    root: project.superwallDir,
     appType: "custom",
     logLevel: "warn",
     plugins: [
@@ -328,20 +316,27 @@ export const startPreviewServer = async (
       ),
     ],
     resolve: {
-      conditions: ["superwall-ts", ...defaultClientConditions],
       dedupe: ["react", "react-dom"],
       alias: {
         "@": project.superwallDir,
       },
     },
     optimizeDeps: {
-      include: ["react", "react-dom", "react-dom/client", "superwall > zod"],
+      include: [
+        "react",
+        "react-dom",
+        "react-dom/client",
+        "superwall > @superwall/runtime > @superwall/protocol > zod",
+      ],
       exclude: ["superwall", "@superwall/runtime", "@superwall/protocol", "@superwall/studio"],
     },
     server: {
       port: options.port,
       strictPort: false,
       host: options.host ?? "0.0.0.0",
+      fs: {
+        allow: [project.root, frameworkDir, searchForWorkspaceRoot(project.superwallDir)],
+      },
     },
   });
   await server.listen();

@@ -1,5 +1,5 @@
 import { defineCommand } from "@/command";
-import { requireApi } from "@/core/paywalls/session";
+import { requireApi } from "@/core/paywalls/project/session";
 import { runPushPipeline } from "./paywalls/pipeline";
 
 export const runPublish = defineCommand({

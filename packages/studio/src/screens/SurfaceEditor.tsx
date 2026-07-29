@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ActionMenu, type ActionProgress } from "../components/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/CompareMenu";
-import { DeviceFrame } from "../components/DeviceFrame";
+import { DeviceFrame, DevicePlaceholder } from "../components/DeviceFrame";
 import { Segmented, Select } from "../components/controls";
 import { ExternalIcon, MoonIcon, RotateIcon, SlidersIcon, SunIcon } from "../components/icons";
 import { SidePanel } from "../components/SidePanel";
@@ -97,9 +97,9 @@ const StagePane = ({
             reloadKey={reloadKey}
           />
         ) : (
-          <div className="max-w-56 border border-dashed border-cream/20 p-6 text-center text-sm text-cream/55">
+          <DevicePlaceholder width={width} height={height} stageRef={paneRef}>
             Nothing live yet — publish to compare against production.
-          </div>
+          </DevicePlaceholder>
         )}
       </div>
     </div>

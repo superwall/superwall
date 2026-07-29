@@ -1,17 +1,29 @@
 # `superwall`
 
-The paywall framework. One root import for everything: the authoring contract
-and the React runtime. File-based navigation lives in `superwall/navigation`.
+The paywall framework: the authoring contract and the React runtime.
 
 ```tsx
-import { definePaywall, useProducts, usePurchase, v } from "superwall";
+import { definePaywall, v } from "superwall/config";
+import { useProducts, usePurchase } from "superwall/hooks";
 ```
+
+| Entry                  | What it holds                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …) |
+| `superwall/config`     | `definePaywall`, `v`, `resolveVariables`                                              |
+| `superwall/hooks`      | every hook, plus `createSuperwall` and `useSuperwallSession`                          |
+| `superwall/navigation` | `useRouter`, `Link`, `PaywallRouter`                                                  |
+| `superwall/assets`     | ambient types for asset imports                                                       |
+
+`superwall/build`, `superwall/preview`, and `superwall/discover` are the CLI's
+tooling contract; `superwall/internal` belongs to the generated entry. Neither
+is a public API.
 
 ## A paywall is a mini React app
 
 ```
 superwall/paywalls/plus-upgrade/
-├── config.ts            the contract: products, variables, preview
+├── config.ts            required — products, variables, preview
 ├── app/
 │   ├── page.tsx         "/" — file-based routing, Next.js-style
 │   ├── offer/page.tsx   "/offer"
@@ -20,14 +32,15 @@ superwall/paywalls/plus-upgrade/
 └── messages/en.ts       paywall-local strings
 ```
 
-Shared `components/`, `messages/`, and `assets/` live one level up in the
-`superwall/` directory and are inherited by every surface (`@/…` aliases it).
-Funnels (`superwall/funnels/<id>/`) have exactly the same shape.
+`components/`, `messages/`, and `assets/` work at both levels: at the
+`superwall/` root they are shared by every surface (`@/…` aliases that
+directory), and inside a surface they are local to it. Funnels
+(`superwall/funnels/<id>/`) have exactly the same shape.
 
-## `definePaywall` — `config.ts`
+## `definePaywall` — `config.ts` (required)
 
 ```ts
-import { definePaywall, v } from "superwall";
+import { definePaywall, v } from "superwall/config";
 
 export default definePaywall({
   products: {
@@ -57,8 +70,9 @@ export default definePaywall({
   only engage where no real SDK host exists — inside a webview the native
   host always wins.
 - Everything else (`presentation`, `featureGating`, `purchaseTimeoutMs`,
-  `notifications`, …) merges over the app-level `defaults` from
-  `superwall/config.ts` (`defineConfig`).
+  `notifications`, …) is set here too. There are no project-wide defaults: a
+  paywall's `config.ts` is the whole truth for that paywall. Share settings by
+  exporting a plain object and spreading it into `definePaywall`.
 
 Messages need no wiring: `messages/<locale>.ts` files are auto-discovered,
 shared catalogs layer under local ones, and `t()` resolves against the device
@@ -119,10 +133,11 @@ apply variant overrides to published snapshots).
 ## Push / promote lifecycle
 
 ```sh
-superwall push               # build → bind → immutable version. Production untouched.
+superwall push               # bind → build → assets → version. Production untouched.
 superwall promote            # point production at a pushed version (latest by default)
 superwall promote --only plus-upgrade --version 6
 superwall publish            # push + promote in one step — ship it now
+superwall publish -m "Q3 pricing test"   # record why, in the source commit
 ```
 
 Git semantics on purpose: **push saves, promote ships.** Every push mints a
@@ -131,6 +146,7 @@ sealed version; nothing users see changes until promote repoints production
 the existing version — an idempotent no-op.
 
 Binding — push updates, never duplicates, and needs no IDs in your code.
+`superwall.lock` is the binding of record.
 Resolution order: `superwall.lock` (written on first push, commit it) → a
 dashboard paywall already stamped with this surface
 (`metadata.headlessSurface`) or whose identifier matches the directory name →
@@ -140,6 +156,145 @@ saved to the lock). Nothing about the dashboard belongs in your config —
 `superwall.lock` holds every binding, and it is meant to be committed.
 Snapshots are content-addressed (sha256), so every change is a new immutable
 version.
+
+Renaming a directory is **resolved, never guessed**. Before anything is pushed,
+push pairs up bound ids whose directory is gone with directories that have no
+binding, and asks about each one:
+
+```
+? `pro-upgrade` is not in superwall.lock. Is it a new paywall, or renamed?
+  › Renamed from plus-upgrade   paywall 208540
+    Create a new paywall
+```
+
+Picking a rename moves the binding — the new directory keeps the live paywall —
+and that candidate is removed from the list, so several renames in one commit
+resolve correctly one after another.
+
+The paywall keeps its original name on Superwall, which is cosmetic: every push
+stamps the surface it came from, so the paywall re-identifies itself with the new
+directory name and a lost `superwall.lock` still rebinds correctly. Rename it in
+the dashboard if you want the names to match.
+
+A binding nobody claims — you chose "Create a new paywall", or the directory is
+simply gone — is offered for removal:
+
+```
+? `pro-upgrade` is bound to paywall 208540 but no longer exists on disk.
+  Removing only forgets it locally — paywall 208540 stays on Superwall, keeps
+  its campaigns, and keeps serving devices.
+  › Remove the binding   restoring the directory re-binds it on the next push
+    Keep it              superwall.lock is left as it is
+```
+
+Removing edits `superwall.lock` and nothing else. It is recoverable: push stamps
+the surface a paywall came from, so restoring the directory re-binds it to the
+same paywall on the next push.
+
+CI never guesses and never prompts. Declare renames instead, and anything left
+unresolved stops the push rather than creating a second paywall:
+
+```sh
+superwall push --rename plus-upgrade=pro-upgrade
+```
+
+`--rename` is repeatable, and it is the only way to resolve a rename without a
+prompt. If a paywall really is gone, remove its entry from `superwall.lock` by
+hand — the lock is the binding of record, and editing it never touches
+Superwall.
+
+Deleting a surface is not a rename: a binding with no directory and nothing new
+beside it never blocks a push. Non-interactive runs never touch the lock without
+consent — they keep the binding and print one notice.
+
+There is deliberately **no `identifier` field in `config.ts`**. Identity stays
+the path: a user-editable id would move this same fork risk somewhere harder to
+see, and two copied directories could claim one paywall.
+
+Source — every push and publish also commits your `superwall/` directory
+alongside the version, so the dashboard can show and diff the code a snapshot
+was built from. The CLI pushes it **straight into your app's source repo over
+git**: a normal commit of your files exactly as they are on disk, and nothing
+else — the per-publish facts (version, snapshot, framework, portability) ride
+the commit's trailers, so identical sources always hash to an identical tree
+and a repeat push dedupes. `package.json` and your lockfile go with it, which
+is what makes a clone installable. Nothing is summarized, substituted or
+capped — a repo full of video is fine, though anything over 50 MB earns a
+warning, since every future clone pays for it.
+
+Portability — an import that resolves outside the project directory builds
+fine locally but cannot be rebuilt from the commit, so the push warns once,
+naming each offender, and records `Superwall-Portable: false`. The dashboard
+greys out remote editing with a reason instead of failing. Keep every import
+inside the project or coming from a package in `package.json` and the push
+records `Superwall-Portable: true`.
+
+`git` is required (`superwall publish requires git for the source step`). The
+write token is repo-scoped, lives for minutes, and is revoked the moment the
+commit is linked; it travels in git's environment, never in a remote URL or a
+command line.
+
+`-m "why"` records a publish note in the commit body. It only lands when the
+publish actually creates a commit — republishing unchanged source reuses the
+existing one and reports `Source unchanged`.
+
+Every version has its sources: the step is blocking and there is no opt-out,
+and a rejected source push fails the surface before promote runs.
+`.superwall/`, `node_modules/`, `.git/`, `.env*`, `.DS_Store` and anything
+your `superwall/.gitignore` lists never leave the machine.
+
+## Assets
+
+A snapshot is one file, but not everything belongs inside it. Anything you
+import — `import hero from "@/assets/hero.jpg"` — under 32 kB is inlined as a
+data URI; anything larger, **and every video at any size**, is uploaded once
+and referenced by absolute URL:
+
+```
+superwall/paywalls/plus-upgrade/assets/promo.mp4
+  → https://user-content.superwalleditor.com/user-content/hl/<app>/<sha256>.mp4
+```
+
+The shell stays self-contained (all JS and CSS inline, no remote code, ever),
+while imagery and video are served from a CDN that speaks Range requests — so
+video streams, which a data URI can never do. That is also why a video is
+never inlined however small it is: a data URI has no Range to serve.
+
+Pretty much any asset type works: images (`png` `jpg` `webp` `avif` `gif`
+`svg` `ico`), video (`mp4` `webm` `mov` `m4v`), audio (`mp3` `m4a` `aac`
+`wav` `ogg`), fonts (`woff2` `woff` `ttf` `otf`), and player payloads —
+`lottie`, `riv`, `glb`. Anything else under `assets/` is hosted as opaque
+bytes rather than rejected. Video, audio and player payloads are never
+inlined at any size: something fetches them by URL at runtime, so a data URI
+only costs a second copy.
+
+**Lottie has two shapes, and they behave differently.** Import the animation
+JSON directly (`import data from "@/assets/spin.json"`) and it is bundled
+into the snapshot — offline-proof, no request, best for small animations.
+Ship a `.lottie` (or a `.riv`) and it is hosted like any other asset, fetched
+by the player at runtime and pre-cached through the SDK's resource manifest
+along with everything else the paywall needs.
+
+**Anything hosted has to live in an `assets/` directory** — `superwall/assets/`
+for files every surface shares, `superwall/paywalls/<id>/assets/` for one
+surface's own. The build fails and names the file otherwise, so a repo never
+drifts into shipping imagery from wherever it happened to land. Small assets
+are exempt (they inline, and never leave the machine), as is anything a
+package in `node_modules` ships.
+
+Assets are content-addressed:
+identical bytes upload once per app, across every paywall and every push, and
+`superwall push` reports `Assets up to date` when there is nothing new. The
+URL is baked in at build time, which is why the push binds the paywall before
+it builds.
+
+Multi-page flows prefetch: the build records which route needs which asset
+and the router warms the next page's imagery while you are still looking at
+the current one, using `new Image()` and `<link rel=preload>` — never `fetch`
+or `rel=prefetch`, which the serve-time CSP blocks. Only types the browser
+can preload meaningfully (images, video, audio, fonts) are warmed this way;
+a `.lottie` or `.riv` still ships in the SDK manifest, so it is pre-cached
+before the paywall opens, just not by the router.
 
 ## The platform layer (two-layer contract)
 

@@ -1,6 +1,6 @@
 import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { createSuperwall, useProducts } from "../../src";
+import { createSuperwall, useProducts } from "../../src/hooks";
 import { createWrapper, flush, renderWithProvider, testConfig } from "../helpers";
 
 describe("window.paywall interface", () => {
@@ -41,7 +41,6 @@ describe("mock auto mode", () => {
     const { result } = renderWithProvider(() => useProducts(), { mock: "auto" });
     await flush();
 
-    // config slots exist, but no mock host delivered variables
     expect(result.current.products).toHaveLength(2);
     expect(result.current.getProduct("primary")?.variables).toEqual({});
   });
@@ -95,7 +94,6 @@ describe("document attributes", () => {
     await flush();
 
     expect(document.documentElement.getAttribute("data-sw-generation")).toBe("5");
-    // testConfig doesn't touch scrollEnabled — scroll defaults to enabled.
     expect(document.documentElement.getAttribute("data-sw-scroll")).toBe("true");
   });
 
