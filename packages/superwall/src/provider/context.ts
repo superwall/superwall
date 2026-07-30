@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useColorScheme } from "../hooks/useColorScheme";
 import {
   createMockSuperwallTransport,
   createSuperwallSession,
@@ -146,7 +147,32 @@ export const SuperwallProvider = ({ children, config, mock }: SuperwallProviderP
     }
   }, [config]);
 
-  return React.createElement(SuperwallContext.Provider, { value }, children);
+  return React.createElement(
+    SuperwallContext.Provider,
+    { value },
+    React.createElement(ColorScheme, null),
+    children,
+  );
+};
+
+/**
+ * Puts the SDK's colour scheme on `<html>` so a paywall can be styled with
+ * plain CSS. A media query cannot do this job: hosts report the device's
+ * setting over the bridge, and the studio simulates it, neither of which
+ * changes what `prefers-color-scheme` evaluates to.
+ */
+const ColorScheme = (): null => {
+  const scheme = useColorScheme();
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    root.classList.toggle("dark", scheme === "dark");
+    root.classList.toggle("light", scheme === "light");
+    root.style.colorScheme = scheme;
+  }, [scheme]);
+
+  return null;
 };
 
 export const useSuperwallSession = <

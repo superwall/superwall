@@ -48,6 +48,49 @@ const shippable: StudioSource = {
 
 const source: StudioSource = { ...shippable, capabilities: undefined };
 
+describe("the overview", () => {
+  const many = {
+    ...source,
+    title: "5 projects",
+    surfaces: [
+      { kind: "paywall" as const, id: "winback", project: "a", routes: [], locales: [] },
+      { kind: "paywall" as const, id: "onboarding", project: "b", routes: [], locales: [] },
+      { kind: "paywall" as const, id: "upsell", project: "c", routes: [], locales: [] },
+    ],
+  };
+
+  it("searches paywalls by name and by the project they came from", () => {
+    window.history.replaceState({}, "", "/");
+    render(<StudioApp source={many} />);
+
+    const search = screen.getByRole("searchbox", { name: "Search paywalls" });
+    fireEvent.change(search, { target: { value: "wink" } });
+    expect(screen.getByText(/Nothing matches/)).toBeDefined();
+
+    fireEvent.change(search, { target: { value: "winback" } });
+    expect(screen.getByText("winback")).toBeDefined();
+    expect(screen.queryByText("onboarding")).toBeNull();
+
+    fireEvent.change(search, { target: { value: "b" } });
+    expect(screen.getByText("onboarding")).toBeDefined();
+  });
+
+  it("offers no search when there is nothing to search through", () => {
+    window.history.replaceState({}, "", "/");
+    render(<StudioApp source={source} />);
+
+    expect(screen.queryByRole("searchbox", { name: "Search paywalls" })).toBeNull();
+  });
+
+  it("names the surface's own project in the editor, not the aggregate title", () => {
+    window.history.replaceState({}, "", "/a/paywall/winback");
+    render(<StudioApp source={many} />);
+
+    expect(screen.getByText("a / winback")).toBeDefined();
+    expect(screen.queryByText("5 projects / winback")).toBeNull();
+  });
+});
+
 describe("StudioApp across projects", () => {
   const twoProjects = {
     title: "2 projects",

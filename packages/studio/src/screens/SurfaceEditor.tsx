@@ -295,7 +295,7 @@ export const SurfaceEditor = ({
         />
       )}
       <TopBar
-        title={`${source.title} / ${surface.id}`}
+        title={`${surface.project ?? source.title} / ${surface.id}`}
         onHome={onBack}
         actions={
           <>

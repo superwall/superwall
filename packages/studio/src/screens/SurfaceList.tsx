@@ -28,18 +28,30 @@ export const SurfaceList = ({
     };
   }, [source]);
 
+  const [queries, setQueries] = React.useState<Record<string, string>>({});
+
   const sections = (
     [
       ["Paywalls", "paywall"],
       ["Funnels", "funnel"],
     ] as const
   )
-    .map(([label, kind]) => ({
-      label,
-      kind,
-      surfaces: source.surfaces.filter((surface) => surface.kind === kind),
-    }))
-    .filter((section) => section.surfaces.length > 0);
+    .map(([label, kind]) => {
+      const all = source.surfaces.filter((surface) => surface.kind === kind);
+      const needle = (queries[kind] ?? "").trim().toLowerCase();
+      return {
+        label,
+        kind,
+        all,
+        needle,
+        surfaces: all.filter(
+          (surface) =>
+            needle === "" ||
+            `${surface.project ?? ""} ${surface.id}`.toLowerCase().includes(needle),
+        ),
+      };
+    })
+    .filter((section) => section.all.length > 0);
 
   return (
     <>
@@ -55,11 +67,23 @@ export const SurfaceList = ({
 
           {sections.map((section) => (
             <section key={section.kind} className="mt-10 first:mt-0">
-              <div className="mb-4 flex items-baseline gap-2">
+              <div className="mb-4 flex items-center gap-2">
                 <span className="text-sm font-medium">{section.label}</span>
                 <span className="text-xs text-cream/55 tabular-nums">
                   {section.surfaces.length}
                 </span>
+                {section.all.length > 1 && (
+                  <input
+                    className="sw-input ml-auto w-48"
+                    type="search"
+                    value={queries[section.kind] ?? ""}
+                    placeholder={`Search ${section.label.toLowerCase()}`}
+                    aria-label={`Search ${section.label.toLowerCase()}`}
+                    onChange={(event) =>
+                      setQueries((current) => ({ ...current, [section.kind]: event.target.value }))
+                    }
+                  />
+                )}
               </div>
               <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-6">
                 {section.surfaces.map((surface) => (
@@ -72,6 +96,11 @@ export const SurfaceList = ({
                   />
                 ))}
               </div>
+              {section.surfaces.length === 0 && (
+                <span className="block text-xs text-cream/35">
+                  {`Nothing matches “${(queries[section.kind] ?? "").trim()}”.`}
+                </span>
+              )}
             </section>
           ))}
 

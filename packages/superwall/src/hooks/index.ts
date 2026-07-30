@@ -1,6 +1,7 @@
 export { createSuperwall } from "../provider/create";
 export { useSuperwallSession } from "../provider/context";
 export * from "./useActions";
+export * from "./useColorScheme";
 export * from "./useDevice";
 export * from "./useHaptics";
 export * from "./useProducts";
