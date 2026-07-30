@@ -68,8 +68,8 @@ export const SurfaceList = ({
           {sections.map((section) => (
             <section key={section.kind} className="mt-10 first:mt-0">
               <div className="mb-4 flex items-center gap-2">
-                <span className="text-sm font-medium">{section.label}</span>
-                <span className="text-xs text-cream/55 tabular-nums">
+                <span className="text-[1.0625rem] font-medium">{section.label}</span>
+                <span className="text-[0.8125rem] text-cream/55 tabular-nums">
                   {section.surfaces.length}
                 </span>
                 {section.all.length > 1 && (
@@ -97,7 +97,7 @@ export const SurfaceList = ({
                 ))}
               </div>
               {section.surfaces.length === 0 && (
-                <span className="block text-xs text-cream/35">
+                <span className="block text-[0.8125rem] text-cream/45">
                   {`Nothing matches “${(queries[section.kind] ?? "").trim()}”.`}
                 </span>
               )}

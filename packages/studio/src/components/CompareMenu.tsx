@@ -107,7 +107,7 @@ export const CompareMenu = ({
 
           <div className="max-h-64 overflow-y-auto">
             {paywalls.length === 0 ? (
-              <span className="block px-3 py-2 text-xs text-cream/35">
+              <span className="block px-3 pt-2 pb-3.5 text-[0.8125rem] text-cream/45">
                 {needle === "" ? "No other paywalls here." : `Nothing matches “${query.trim()}”.`}
               </span>
             ) : (
