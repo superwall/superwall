@@ -119,40 +119,40 @@ to less than full opacity and flash the background through.
 
 `none` is instant.
 
-Motion runs over 500ms on a curve whose speed starts at zero and peaks at 60ms,
-so a page eases into its travel rather than leaving at full tilt: 49.7% of the
-distance by 100ms, 84.7% by 200ms, 96.2% by 300ms, then a long settle. There is
-no overshoot — a page must never slide past and come back.
-`cubic-bezier(0.28, 0.4, 0.08, 1)` stands in where `linear()` is unsupported.
-Tune it with `--sw-transition` (duration), `--sw-ease` (curve), and
-`--sw-stack-dim` (how much the route behind darkens).
+## Your own transitions
 
-Set one for the whole surface, override it per route, and override that at the
-call site:
+A transition is just a name the router stamps onto `data-sw-transition`, plus a
+`data-sw-phase` telling each route which part of the movement it is playing:
 
-```ts
-// config.ts — every route in this paywall
-export default definePaywall({ transition: "slide" });
+| phase    | the route is…                       |
+| -------- | ----------------------------------- |
+| `enter`  | arriving on top                     |
+| `recede` | being covered as you go forward     |
+| `leave`  | dropping off the top as you go back |
+| `return` | coming forward again as you go back |
+
+The attribute is absent while a route is idle, so a rule can never leak outside
+its transition, and a phase you leave out simply does not animate.
+
+This project defines `zoom` at the bottom of `app/styles.css` and uses it as the
+surface default in `config.ts` — a custom name works anywhere a built-in does.
+The covered page grows past the viewport and fades while the arriving one comes
+up from behind it, so the two read as one movement through depth:
+
+```css
+[data-sw-transition="zoom"][data-sw-phase="enter"]  { animation-name: zoom-enter }
+[data-sw-transition="zoom"][data-sw-phase="recede"] { animation-name: zoom-recede }
+[data-sw-transition="zoom"][data-sw-phase="leave"]  { animation-name: zoom-leave }
+[data-sw-transition="zoom"][data-sw-phase="return"] { animation-name: zoom-return }
+
+@keyframes zoom-enter  { from { opacity: 0; transform: scale(0.85) } }
+@keyframes zoom-recede { to   { opacity: 0; transform: scale(1.15) } }
 ```
 
-```tsx
-// app/terms.tsx — just this route
-export const transition = "fade";
-
-// this one navigation
-router.push("terms", { transition: "none" });
-```
-
-The transition belongs to the _navigation_, not to one route: going forward uses
-the incoming route's, going back uses the leaving route's, so a route always
-leaves the way it arrived.
-
-Routes are opaque so a page sliding in never shows the stack through itself, and
-they fill the viewport (`100dvh`) so a short page is never cut off mid-slide.
-Point `--sw-background` at your paywall's background and `--sw-routes-height` at
-something else if a route should not be full-height — this example sets it to
-`auto` because its layout has a header above the routes. Everything respects
-`prefers-reduced-motion`.
+Duration is **read back from your CSS**, so a route stays mounted exactly as long
+as its animation runs — no duration to declare twice. Wrap motion in
+`@media (prefers-reduced-motion: no-preference)` as the built-ins do; with
+reduced motion on the router settles immediately and skips the wait.
 
 ## Reporting
 

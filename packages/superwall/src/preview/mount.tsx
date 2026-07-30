@@ -18,25 +18,27 @@ const surface = match
 applyThemeOverride(readPreviewOverrides(window.location.search).theme);
 
 const PreviewRoot = ({ surfaceEntry }: { surfaceEntry: NonNullable<typeof surface> }) => {
-  const [state, setState] = React.useState(() => ({
-    overrides: readPreviewOverrides(window.location.search),
-    generation: 0,
-  }));
+  const [overrides, setOverrides] = React.useState(() =>
+    readPreviewOverrides(window.location.search),
+  );
 
   React.useEffect(() => {
     window.__swPreviewApply = (search: string) => {
       const query = search.startsWith("?") || search === "" ? search : `?${search}`;
       window.history.replaceState(null, "", `${window.location.pathname}${query}`);
-      const overrides = readPreviewOverrides(query);
-      applyThemeOverride(overrides.theme);
-      setState((current) => ({ overrides, generation: current.generation + 1 }));
+      const next = readPreviewOverrides(query);
+      applyThemeOverride(next.theme);
+      setOverrides(next);
     };
     return () => {
       delete window.__swPreviewApply;
     };
   }, []);
 
-  return <SurfaceHost key={state.generation} surface={surfaceEntry} overrides={state.overrides} />;
+  // Deliberately unkeyed: remounting here would rebuild the router and drop
+  // whichever route you were looking at. The provider swaps the session when
+  // the overrides actually change.
+  return <SurfaceHost surface={surfaceEntry} overrides={overrides} />;
 };
 
 createRoot(document.getElementById("root")!).render(

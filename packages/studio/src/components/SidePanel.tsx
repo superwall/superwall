@@ -19,8 +19,8 @@ export const SidePanel = ({
     inert={!open}
   >
     <div className="bg-bar flex h-full w-72 flex-col border-l border-cream/10">
-      <div className="flex h-11 flex-none items-center justify-between border-b border-cream/10 px-4">
-        <span className="sw-tool-label">{title}</span>
+      <div className="flex h-11 flex-none items-center justify-between border-b border-cream/10 px-3">
+        <span className="text-[0.8125rem] font-medium text-cream">{title}</span>
         <button
           type="button"
           className="sw-btn sw-btn--icon border-transparent"

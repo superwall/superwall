@@ -37,59 +37,42 @@ const animationRules = (source = css): { selector: string; animation: string }[]
 const forTransition = (name: string) =>
   animationRules().filter((rule) => rule.selector.includes(`[data-sw-transition="${name}"]`));
 
-const state = (selector: string): string | undefined =>
-  /\[data-sw-state="([a-z]+)"\]/.exec(selector)?.[1];
+const phase = (selector: string): string | undefined =>
+  /\[data-sw-phase="([a-z]+)"\]/.exec(selector)?.[1];
 
-const direction = (selector: string): string | undefined =>
-  /\[data-sw-direction="([a-z]+)"\]/.exec(selector)?.[1];
+const phasesOf = (name: string): (string | undefined)[] =>
+  forTransition(name).map((rule) => phase(rule.selector));
 
 describe("routes.css keeps each transition's layers coherent", () => {
-  it("animates exactly one layer per direction for fade", () => {
-    // Two half-faded layers composite to less than full opacity, flashing the
-    // container background through. Only the incoming (forward) or the
-    // outgoing (back) may animate — never both.
-    for (const going of ["forward", "back"]) {
-      const moving = forTransition("fade").filter((rule) => direction(rule.selector) === going);
-      expect(moving).toHaveLength(1);
-    }
-
-    expect(
-      forTransition("fade").map((rule) => [direction(rule.selector), state(rule.selector)]),
-    ).toEqual([
-      ["forward", "active"],
-      ["back", "exiting"],
-    ]);
+  it("fades one layer at a time — it names enter and leave, never recede or return", () => {
+    // Two half-faded layers ghost over each other and wash out, since both
+    // sets of content stay partly visible at once. Only the arriving route
+    // (enter) or the departing one (leave) may animate.
+    expect(phasesOf("fade").toSorted()).toEqual(["enter", "leave"]);
   });
 
-  it("qualifies every fade rule by direction, so neither can apply to both", () => {
-    for (const rule of forTransition("fade")) {
-      expect(direction(rule.selector)).toBeDefined();
-    }
-  });
-
-  it("moves both layers together for push and slide, which is what makes them read as one gesture", () => {
+  it("moves both layers for push and slide, which is what makes them read as one gesture", () => {
     for (const name of ["push", "slide"]) {
-      const forward = forTransition(name).filter((rule) => direction(rule.selector) === "forward");
-      const states = forward.map((rule) => state(rule.selector));
-      expect(states).toContain("active");
-      expect(states.some((one) => one === "behind" || one === "exiting")).toBe(true);
+      expect(phasesOf(name).toSorted()).toEqual(["enter", "leave", "recede", "return"]);
     }
   });
 
-  it("never animates a route buried more than one deep", () => {
+  it("names a phase on every animation rule, so none can leak across situations", () => {
     for (const rule of animationRules()) {
-      expect(state(rule.selector)).not.toBe("below");
+      expect(phase(rule.selector)).toBeDefined();
     }
   });
 
-  it("only animates while a transition is in flight", () => {
+  it("uses only the four phases the router emits", () => {
     for (const rule of animationRules()) {
-      expect(rule.selector.replace(/\s+/g, "")).toContain(":not([data-sw-settled])");
+      expect(["enter", "recede", "leave", "return"]).toContain(phase(rule.selector));
     }
   });
 
   it("gives fade its own duration and easing, since opacity has no momentum", () => {
-    expect(css).toMatch(/\[data-sw-transition="fade"\][^{]*\{[^}]*--sw-transition-fade/s);
+    expect(css).toMatch(
+      /\[data-sw-transition="fade"\]\[data-sw-phase\][^{]*\{[^}]*--sw-transition-fade/s,
+    );
     expect(css).toMatch(/--sw-ease-fade/);
   });
 

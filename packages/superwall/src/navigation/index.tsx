@@ -10,7 +10,7 @@ export type RouteName = keyof SuperwallRoutes extends never
   : Extract<keyof SuperwallRoutes, string>;
 
 /** The transitions that ship with the framework. */
-export type BuiltInTransition = "push" | "slide" | "fade" | "none";
+type BuiltInTransition = "push" | "slide" | "fade" | "none";
 
 /**
  * A built-in, or any name you define yourself in CSS. The router only stamps
@@ -146,8 +146,25 @@ export const TRANSITION_MS = 500;
 /** Backstop so a runaway custom animation can never strand the stack. */
 const TRANSITION_CAP = 5000;
 
-const observable = (): boolean =>
-  typeof Element !== "undefined" && typeof Element.prototype.getAnimations === "function";
+const stillness = (): boolean =>
+  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const milliseconds = (value: string): number[] =>
+  value.split(",").map((one) => {
+    const time = Number.parseFloat(one);
+    return Number.isFinite(time) ? (one.includes("ms") ? time : time * 1000) : 0;
+  });
+
+const animationMs = (element: Element): number => {
+  const style = getComputedStyle(element);
+  if (style.animationName === "none" || style.animationName === "") return 0;
+  const durations = milliseconds(style.animationDuration);
+  const delays = milliseconds(style.animationDelay);
+  return style.animationName.split(",").reduce((longest, _name, index) => {
+    const total = (durations[index % durations.length] ?? 0) + (delays[index % delays.length] ?? 0);
+    return Math.max(longest, total);
+  }, 0);
+};
 
 export type PaywallRouterProps = {
   routes: RouteMap;
@@ -267,6 +284,11 @@ export const PaywallRouter = ({
     });
   }, []);
 
+  const transitionOf = (entry: Entry): Transition =>
+    entry.transition ?? routes[entry.name]?.transition ?? fallback;
+
+  const moving = direction === "back" && exiting ? transitionOf(exiting) : transitionOf(top);
+
   const layers = React.useRef<HTMLDivElement>(null);
   const [settled, setSettled] = React.useState(true);
   const animated = React.useRef(INITIAL_KEY);
@@ -284,33 +306,35 @@ export const PaywallRouter = ({
       if (live) setSettled(true);
     };
 
-    if (!observable()) {
-      const timer = setTimeout(done, TRANSITION_MS);
-      return () => {
-        live = false;
-        clearTimeout(timer);
-      };
-    }
-
-    const running = [...(layers.current?.children ?? [])].flatMap((child) =>
-      child.getAnimations(),
-    );
-    if (running.length === 0) {
+    if (moving === "none" || stillness()) {
       done();
       return;
     }
-    Promise.allSettled(running.map((animation) => animation.finished)).then(done);
-    const cap = setTimeout(done, TRANSITION_CAP);
+
+    const measured = [...(layers.current?.children ?? [])].reduce(
+      (longest, child) => Math.max(longest, animationMs(child)),
+      0,
+    );
+    const timer = setTimeout(done, Math.min(measured || TRANSITION_MS, TRANSITION_CAP));
     return () => {
       live = false;
-      clearTimeout(cap);
+      clearTimeout(timer);
     };
-  }, [settled]);
+  }, [settled, moving]);
 
-  const transitionOf = (entry: Entry): Transition =>
-    entry.transition ?? routes[entry.name]?.transition ?? fallback;
-
-  const moving = direction === "back" && exiting ? transitionOf(exiting) : transitionOf(top);
+  /**
+   * Which part of the movement this route is playing. Derived rather than
+   * hand-written so a stylesheet needs one attribute instead of three, and it
+   * disappears the moment the transition is over — nothing to remember to
+   * exclude. `below` and a settled stack have no phase at all.
+   */
+  const phaseOf = (state: "active" | "behind" | "below" | "exiting"): string | undefined => {
+    if (settled) return undefined;
+    if (state === "active") return direction === "back" ? "return" : "enter";
+    if (state === "exiting") return direction === "back" ? "leave" : "recede";
+    if (state === "behind") return direction === "forward" ? "recede" : undefined;
+    return undefined;
+  };
 
   const render = (
     entry: Entry,
@@ -329,6 +353,7 @@ export const PaywallRouter = ({
         data-sw-state={state}
         data-sw-direction={direction}
         data-sw-transition={state === "below" ? "none" : moving}
+        data-sw-phase={phaseOf(state)}
         data-sw-settled={settled ? "" : undefined}
         inert={!focused}
       >
@@ -341,6 +366,7 @@ export const PaywallRouter = ({
 
   const stack = (
     <div
+      ref={layers}
       data-sw-routes=""
       style={{ "--sw-transition": `${TRANSITION_MS}ms` } as React.CSSProperties}
     >

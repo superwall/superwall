@@ -1,7 +1,7 @@
 import { definePaywall, v } from "superwall/config";
 
 export default definePaywall({
-  transition: "fade",
+  transition: "zoom",
 
   products: {
     monthly: "fitness_999_month",

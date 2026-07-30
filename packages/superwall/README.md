@@ -193,6 +193,60 @@ distance by 100ms, 84.7% by 200ms, 96.2% by 300ms. No overshoot.
 
 All motion is disabled under `prefers-reduced-motion`.
 
+### Writing your own
+
+`transition` accepts any name — the router just stamps it onto
+`data-sw-transition` and tells each route which part of the movement it is
+playing via `data-sw-phase`. There is nothing to register.
+
+| phase    | the route is…                       |
+| -------- | ----------------------------------- |
+| `enter`  | arriving on top                     |
+| `recede` | being covered as you go forward     |
+| `leave`  | dropping off the top as you go back |
+| `return` | coming forward again as you go back |
+
+The attribute is absent whenever a route is idle, so a rule can never leak
+outside its transition. Name the phases you want; the ones you leave out simply
+do not animate — which is how `fade` avoids animating both layers at once.
+
+```css
+@media (prefers-reduced-motion: no-preference) {
+  [data-sw-transition="zoom"][data-sw-phase] {
+    animation-duration: 420ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  [data-sw-transition="zoom"][data-sw-phase="enter"]  { animation-name: zoom-enter }
+  [data-sw-transition="zoom"][data-sw-phase="recede"] { animation-name: zoom-recede }
+  [data-sw-transition="zoom"][data-sw-phase="leave"]  { animation-name: zoom-leave }
+  [data-sw-transition="zoom"][data-sw-phase="return"] { animation-name: zoom-return }
+}
+
+/* the arriving page comes up from behind, the covered one grows past and fades */
+@keyframes zoom-enter  { from { opacity: 0; transform: scale(0.85) } }
+@keyframes zoom-recede { to   { opacity: 0; transform: scale(1.15) } }
+@keyframes zoom-leave  { to   { opacity: 0; transform: scale(0.85) } }
+@keyframes zoom-return { from { opacity: 0; transform: scale(1.15) } }
+```
+
+```ts
+export default definePaywall({ transition: "zoom" });   // or per route, or per call
+```
+
+Two things worth knowing:
+
+- **Duration is measured from your CSS**, so a route stays mounted exactly as
+  long as its animation runs. Nothing declares a duration twice, and a five
+  second cap means a runaway animation cannot strand the stack.
+- **Wrap motion in `prefers-reduced-motion`** as above. With reduced motion on,
+  the router settles immediately rather than waiting.
+
+`examples/onboarding` defines `zoom` this way in `app/styles.css`, and
+`data-sw-state` (`active`/`behind`/`exiting`/`below`) and `data-sw-direction`
+remain on each route if you need to key on something the four phases do not
+name.
+
 ## Dev — the studio
 
 `superwall dev` discovers every surface and hosts the **studio**

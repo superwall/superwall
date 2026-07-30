@@ -362,6 +362,42 @@ describe("PaywallRouter", () => {
     settle();
   });
 
+  it("names the phase each route is playing, and drops it once settled", () => {
+    mount();
+    expect(attribute("index", "data-sw-phase")).toBeNull();
+
+    fireEvent.click(screen.getByText("To plans"));
+    expect(attribute("plans", "data-sw-phase")).toBe("enter");
+    expect(attribute("index", "data-sw-phase")).toBe("recede");
+
+    settle();
+    expect(attribute("plans", "data-sw-phase")).toBeNull();
+    expect(attribute("index", "data-sw-phase")).toBeNull();
+  });
+
+  it("names leave and return going back, so a transition can reverse itself", () => {
+    mount();
+    tap("To plans");
+
+    fireEvent.click(screen.getByText("Back"));
+
+    expect(document.querySelector('[data-sw-state="exiting"]')?.getAttribute("data-sw-phase")).toBe(
+      "leave",
+    );
+    expect(attribute("index", "data-sw-phase")).toBe("return");
+    settle();
+  });
+
+  it("gives a buried route no phase at all", () => {
+    mount();
+    tap("To plans");
+    fireEvent.click(screen.getByText("Deeper"));
+
+    expect(attribute("index", "data-sw-state")).toBe("below");
+    expect(attribute("index", "data-sw-phase")).toBeNull();
+    settle();
+  });
+
   it("moves the route directly behind, so push reads as parallax", () => {
     mount();
     tap("To plans");
@@ -436,6 +472,36 @@ describe("PaywallRouter", () => {
     tap("Explicit");
 
     expect(attribute("plans", "data-sw-transition")).toBe("none");
+  });
+
+  it("carries a project's own transition name through untouched", () => {
+    const Wrapper = createWrapper();
+    render(
+      <Wrapper>
+        <PaywallRouter
+          routes={{ index: { default: Index }, plans: { default: Plans, transition: "zoom" } }}
+        />
+      </Wrapper>,
+    );
+
+    fireEvent.click(screen.getByText("To plans"));
+
+    expect(attribute("plans", "data-sw-transition")).toBe("zoom");
+    settle();
+  });
+
+  it("accepts a custom name as the surface default too", () => {
+    const Wrapper = createWrapper();
+    render(
+      <Wrapper>
+        <PaywallRouter
+          routes={{ index: { default: Index }, plans: { default: Plans } }}
+          transition="zoom"
+        />
+      </Wrapper>,
+    );
+
+    expect(attribute("index", "data-sw-transition")).toBe("zoom");
   });
 
   it("defaults to push when nothing declares a transition at all", () => {

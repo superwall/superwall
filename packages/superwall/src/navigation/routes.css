@@ -25,8 +25,18 @@
   display: none;
 }
 
+/*
+ * Everything below keys on data-sw-phase, which the router derives and removes
+ * once a transition ends:
+ *
+ *   enter   arriving on top            return  coming forward again, going back
+ *   recede  being covered, going in    leave   dropping off the top, going back
+ *
+ * A transition of your own only has to name those four; nothing else is
+ * required, and a phase you leave out simply does not animate.
+ */
 @media (prefers-reduced-motion: no-preference) {
-  [data-sw-route]:not([data-sw-transition="none"]):not([data-sw-settled]) {
+  [data-sw-route][data-sw-phase] {
     animation-duration: var(--sw-transition, 500ms);
     animation-timing-function: var(--sw-ease, cubic-bezier(0.28, 0.4, 0.08, 1));
     animation-fill-mode: forwards;
@@ -38,7 +48,7 @@
      tilt: 49.7% covered by 100ms, 84.7% by 200ms, 96.2% by 300ms, then it
      settles. The bezier above stands in where linear() is unsupported. */
   @supports (animation-timing-function: linear(0, 1)) {
-    [data-sw-route]:not([data-sw-transition="none"]):not([data-sw-settled]) {
+    [data-sw-route][data-sw-phase] {
       animation-timing-function: var(
         --sw-ease,
         linear(
@@ -88,91 +98,66 @@
     }
   }
 
-  [data-sw-route][data-sw-transition="push"][data-sw-direction="forward"][data-sw-state="active"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="push"][data-sw-phase="enter"] {
     animation-name: sw-push-enter, sw-edge-shadow;
   }
 
-  [data-sw-route][data-sw-transition="push"][data-sw-direction="forward"][data-sw-state="behind"]:not(
-      [data-sw-settled]
-    ),
-  [data-sw-route][data-sw-transition="push"][data-sw-direction="forward"][data-sw-state="exiting"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="push"][data-sw-phase="recede"] {
     animation-name: sw-push-stack;
   }
 
-  [data-sw-route][data-sw-transition="push"][data-sw-direction="back"][data-sw-state="active"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="push"][data-sw-phase="return"] {
     animation-name: sw-push-unstack;
   }
 
-  [data-sw-route][data-sw-transition="push"][data-sw-direction="back"][data-sw-state="exiting"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="push"][data-sw-phase="leave"] {
     animation-name: sw-push-leave;
   }
 
-  [data-sw-route][data-sw-transition="slide"][data-sw-direction="forward"][data-sw-state="active"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="slide"][data-sw-phase="enter"] {
     animation-name: sw-slide-enter;
   }
 
-  [data-sw-route][data-sw-transition="slide"][data-sw-direction="forward"][data-sw-state="behind"]:not(
-      [data-sw-settled]
-    ),
-  [data-sw-route][data-sw-transition="slide"][data-sw-direction="forward"][data-sw-state="exiting"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="slide"][data-sw-phase="recede"] {
     animation-name: sw-slide-leave-back;
   }
 
-  [data-sw-route][data-sw-transition="slide"][data-sw-direction="back"][data-sw-state="active"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="slide"][data-sw-phase="return"] {
     animation-name: sw-slide-enter-back;
   }
 
-  [data-sw-route][data-sw-transition="slide"][data-sw-direction="back"][data-sw-state="exiting"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="slide"][data-sw-phase="leave"] {
     animation-name: sw-slide-leave;
   }
 
   /*
    * Opacity has no momentum, so fade ignores the movement spring and runs
-   * shorter on a plain ease. Only ever ONE layer fades: going forward the new
-   * route fades in over the old one, going back the old route fades out to
-   * reveal it. Fading both at once would composite to less than full opacity
+   * shorter on a plain ease. It deliberately names only enter and leave: if
+   * both layers faded at once they would composite to less than full opacity
    * and flash the background through.
    */
-  [data-sw-route][data-sw-transition="fade"]:not([data-sw-settled]) {
+  [data-sw-route][data-sw-transition="fade"][data-sw-phase] {
     animation-duration: var(--sw-transition-fade, 350ms);
     animation-timing-function: var(--sw-ease-fade, cubic-bezier(0.4, 0, 0.2, 1));
   }
 
-  [data-sw-route][data-sw-transition="fade"][data-sw-direction="forward"][data-sw-state="active"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="fade"][data-sw-phase="enter"] {
     animation-name: sw-fade-enter;
   }
 
-  [data-sw-route][data-sw-transition="fade"][data-sw-direction="back"][data-sw-state="exiting"]:not(
-      [data-sw-settled]
-    ) {
+  [data-sw-route][data-sw-transition="fade"][data-sw-phase="leave"] {
     animation-name: sw-fade-leave;
   }
 }
 
+/* Silk clamps a stacked page to 300px of travel; 30% alone slides half a wide screen. */
 @keyframes sw-push-enter {
   from {
     transform: translateX(100%);
   }
 }
 
+/* The edge shadow fades as the page lands, so it never sits there once settled. */
 @keyframes sw-edge-shadow {
   from {
     box-shadow: -10px 0 20px -5px rgb(0 0 0 / 20%);

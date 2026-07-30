@@ -165,3 +165,66 @@ body {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/*
+ * A transition this project defines itself. The framework only stamps
+ * data-sw-transition="zoom" and a data-sw-phase; everything below is ours, and
+ * the router reads the duration back off these rules rather than assuming one.
+ *
+ * The old page grows past the viewport and fades out while the new one comes up
+ * from behind it — so the two read as one movement through depth.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  [data-sw-transition="zoom"][data-sw-phase] {
+    animation-duration: 420ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  [data-sw-transition="zoom"][data-sw-phase="enter"] {
+    animation-name: zoom-enter;
+  }
+
+  [data-sw-transition="zoom"][data-sw-phase="recede"] {
+    animation-name: zoom-recede;
+  }
+
+  [data-sw-transition="zoom"][data-sw-phase="leave"] {
+    animation-name: zoom-leave;
+  }
+
+  [data-sw-transition="zoom"][data-sw-phase="return"] {
+    animation-name: zoom-return;
+  }
+}
+
+/* arriving: up from behind */
+@keyframes zoom-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+/* covered: grows past the viewport and fades */
+@keyframes zoom-recede {
+  to {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+/* going back: drops away behind */
+@keyframes zoom-leave {
+  to {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+/* going back: comes down from above */
+@keyframes zoom-return {
+  from {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}

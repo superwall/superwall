@@ -45,10 +45,29 @@ const resolveMockOptions = (
   return mockOptionsFromConfig(config, typeof mock === "object" ? mock : {});
 };
 
+/**
+ * Compared by value, not identity: the studio hands down a freshly built mock
+ * object on every render, and only a real change of simulated device, locale or
+ * products should cost a new session. Functions drop out of the comparison, so
+ * a new callback identity is not a change.
+ */
+const describeMock = (mock: SuperwallMockProp | undefined): string => {
+  if (mock === undefined) return "none";
+  if (typeof mock !== "object") return String(mock);
+  try {
+    return JSON.stringify(mock);
+  } catch {
+    return "unserializable";
+  }
+};
+
 export const SuperwallProvider = ({ children, config, mock }: SuperwallProviderProps) => {
   const ownedSession = React.useRef<SuperwallSession | null>(null);
+  const ownedMock = React.useRef<string | null>(null);
+  const signature = describeMock(mock);
 
-  if (ownedSession.current === null) {
+  if (ownedSession.current === null || ownedMock.current !== signature) {
+    ownedMock.current = signature;
     const mockOptions = resolveMockOptions(mock, config);
     ownedSession.current = createSuperwallSession({
       config,
