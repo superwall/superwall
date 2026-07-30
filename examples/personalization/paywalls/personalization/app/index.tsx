@@ -1,12 +1,7 @@
-import { useHaptics, useProducts, usePurchase, useVariables } from "superwall/hooks";
-
+import { useVariables } from "superwall/hooks";
 export default function Index() {
   const { device, user, params } = useVariables();
-  const { getProduct } = useProducts();
-  const { purchase } = usePurchase();
-  const haptics = useHaptics();
 
-  const annual = getProduct("annual");
   const name = typeof user.firstName === "string" ? user.firstName : undefined;
 
   return (
@@ -41,19 +36,6 @@ export default function Index() {
         Edit any of these in the Variables panel. On device <code>user</code> comes from{" "}
         <code>setUserAttributes</code> and <code>params</code> from the placement.
       </p>
-
-      <div className="actions">
-        <button
-          type="button"
-          className="button button--primary"
-          onClick={() => {
-            haptics.light();
-            purchase("annual");
-          }}
-        >
-          {annual?.variables.price ? `Subscribe · ${annual.variables.price}` : "Subscribe"}
-        </button>
-      </div>
     </main>
   );
 }

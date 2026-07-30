@@ -1,12 +1,4 @@
-import { useHaptics, useProducts, usePurchase } from "superwall/hooks";
-
 export default function Index() {
-  const { getProduct } = useProducts();
-  const { purchase } = usePurchase();
-  const haptics = useHaptics();
-
-  const annual = getProduct("annual");
-
   return (
     <main className="page">
       <div className="lede">
@@ -32,19 +24,6 @@ export default function Index() {
         Drop any font in <code>assets/</code> and point an <code>@font-face</code> at it. The build
         uploads it to our CDN and rewrites the URL for you — nothing to host, nothing to configure.
       </p>
-
-      <div className="actions">
-        <button
-          type="button"
-          className="button button--primary"
-          onClick={() => {
-            haptics.light();
-            purchase("annual");
-          }}
-        >
-          {annual?.variables.price ? `Subscribe · ${annual.variables.price}` : "Subscribe"}
-        </button>
-      </div>
     </main>
   );
 }

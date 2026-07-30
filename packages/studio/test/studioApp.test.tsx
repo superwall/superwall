@@ -75,6 +75,21 @@ describe("the overview", () => {
     expect(screen.getByText("onboarding")).toBeDefined();
   });
 
+  it("comes back to where you were reading, not to the top", () => {
+    window.history.replaceState({}, "", "/");
+    const { unmount } = render(<StudioApp source={many} />);
+
+    const list = document.querySelector(".overflow-y-auto") as HTMLElement;
+    fireEvent.scroll(list, { target: { scrollTop: 420 } });
+
+    // opening a paywall unmounts the list; coming back must restore it
+    unmount();
+    window.history.replaceState({}, "", "/");
+    render(<StudioApp source={many} />);
+
+    expect((document.querySelector(".overflow-y-auto") as HTMLElement).scrollTop).toBe(420);
+  });
+
   it("offers no search when there is nothing to search through", () => {
     window.history.replaceState({}, "", "/");
     render(<StudioApp source={source} />);

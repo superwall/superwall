@@ -7,9 +7,9 @@
 
 declare module "superwall/navigation" {
   interface SuperwallRoutes {
-    features: true;
-    index: true;
-    plans: true;
+    "features": true;
+    "index": true;
+    "plans": true;
   }
 }
 

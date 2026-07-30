@@ -5,6 +5,8 @@ import { fetchStatus } from "../lib/actions";
 import type { StudioSource, StudioStatus, StudioSurface } from "../lib/types";
 import { surfacePath } from "../lib/preview";
 
+let lastScroll = 0;
+
 export const SurfaceList = ({
   source,
   onOpen,
@@ -29,6 +31,21 @@ export const SurfaceList = ({
   }, [source]);
 
   const [queries, setQueries] = React.useState<Record<string, string>>({});
+  const scroller = React.useRef<HTMLDivElement>(null);
+
+  React.useLayoutEffect(() => {
+    const element = scroller.current;
+    if (!element) return undefined;
+    element.scrollTop = lastScroll;
+    const remember = () => {
+      lastScroll = element.scrollTop;
+    };
+    element.addEventListener("scroll", remember, { passive: true });
+    return () => {
+      remember();
+      element.removeEventListener("scroll", remember);
+    };
+  }, []);
 
   const sections = (
     [
@@ -57,7 +74,7 @@ export const SurfaceList = ({
     <>
       <TopBar title={source.title} onHome={() => {}} inset />
 
-      <div className="flex-1 overflow-y-auto px-6 pt-10 pb-16">
+      <div className="flex-1 overflow-y-auto px-6 pt-10 pb-16" ref={scroller}>
         <div className="mx-auto max-w-[1080px]">
           {source.diagnostics && source.diagnostics.length > 0 && (
             <div className="border-red bg-red/10 mb-6 border-l-2 px-4 py-3 text-[0.8125rem] whitespace-pre-wrap">

@@ -30,10 +30,11 @@ mechanism is the thing you read.
 
 ## Navigation
 
-| example                        | teaches                                                        |
-| ------------------------------ | -------------------------------------------------------------- |
-| [`multi-page`](./multi-page)   | `router.push/back`, the route stack, `layout.tsx`              |
-| [`transitions`](./transitions) | a button per transition — the four built-ins plus a custom one |
+| example                                | teaches                                                        |
+| -------------------------------------- | -------------------------------------------------------------- |
+| [`multi-page`](./multi-page)           | `router.push/back`, the route stack, `layout.tsx`              |
+| [`transitions`](./transitions)         | a button per transition — the four built-ins plus a custom one |
+| [`onboarding-quiz`](./onboarding-quiz) | answers decide where you land; the router carries no state     |
 
 ## Purchases
 
@@ -41,18 +42,23 @@ mechanism is the thing you read.
 | ------------------------------------------ | -------------------------------------------------------------------- |
 | [`purchase-states`](./purchase-states)     | what `purchase()` resolves with, and what the SDK reports on its own |
 | [`trial-eligibility`](./trial-eligibility) | two paywalls in one, chosen by the store                             |
+| [`abandonment-offer`](./abandonment-offer) | catch `transaction_abandon` and replace the route                    |
+| [`trial-reminders`](./trial-reminders)     | a local notification scheduled when the trial starts                 |
 
 ## The host
 
-| example                                | teaches                                              |
-| -------------------------------------- | ---------------------------------------------------- |
-| [`personalization`](./personalization) | `useVariables()` — device, user and placement params |
+| example                                | teaches                                                   |
+| -------------------------------------- | --------------------------------------------------------- |
+| [`personalization`](./personalization) | `useVariables()` — device, user and placement params      |
+| [`permissions`](./permissions)         | `requestPermission` / `requestCallback` — the app answers |
 
-## Styling
+## Look and feel
 
-| example                        | teaches                                 |
-| ------------------------------ | --------------------------------------- |
-| [`local-fonts`](./local-fonts) | a font file that ships with the paywall |
+| example                          | teaches                                            |
+| -------------------------------- | -------------------------------------------------- |
+| [`custom-fonts`](./custom-fonts) | a typeface you supply, from a file in your project |
+| [`with-rive`](./with-rive)       | interactive vector animation on a canvas           |
+| [`orientation`](./orientation)   | a layout that answers to the device                |
 
 ## Localization
 
@@ -70,7 +76,7 @@ Every example follows the same shape:
   tsconfig.json       standalone — no monorepo base to extend
   superwall.d.ts      generated: asset modules + typed route names
   paywalls/<id>/
-    config.ts         products, experiment variables, preview data
+    config.ts         name and products
     app/              routes only, plus their .css and one layout.tsx
     components/       everything that is not a route
     messages/         one file per locale
