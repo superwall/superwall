@@ -41,8 +41,11 @@ paywall has, even where the demo does not strictly need them:
   navigation, `selection()` for changing a choice, `success()` when a purchase
   lands. iOS fires nothing of its own on navigation, so if the paywall does not
   ask for it there is no feedback at all.
-- **Disable what is in flight.** A purchase button says so and cannot be tapped
-  twice.
+- **Never put a purchase button in a loading state.** No "One moment…", no
+  disabling it. The store sheet is the feedback, and the SDK owns it — a native
+  paywall does not grey its own button out, and a paywall that does is lying
+  about what it controls. `usePurchase()` exposes `isPurchasing` for the cases
+  that genuinely need it; a buy button is not one of them.
 - **Every control is reachable.** Icon-only buttons carry an `aria-label`; a
   tap target is at least 44px.
 - **Prices come from `useProducts()`**, never from the file.
@@ -118,20 +121,20 @@ stylesheet:
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Roboto+Mono:wght@400..500&display=swap");
 ```
 
-No dependency, no font files, and the whole family is one line.
+No dependency, no font files in the repo, the whole family in one line.
 
 Put it in CSS rather than rendering `<link>` tags from a component. The
 stylesheet is inlined into the snapshot's `<head>` at build time, so the browser
-finds the `@import` while parsing the HTML; React-rendered links cannot appear
-until the JS bundle has executed. Measured in WebKit against the built
-snapshot — time until the font is actually painting:
+finds the `@import` while parsing the HTML, whereas a React-rendered link cannot
+appear until the JS bundle has executed. Measured in WebKit against the built
+snapshot, time until the font is actually painting:
 
-| | | | |
-| --------------- | ------ | ------ | ------ |
-| React `<link>`  | 227 ms | 199 ms | 241 ms |
-| CSS `@import`   | 282 ms | 192 ms | 191 ms |
+| approach       | run 1  | run 2  | run 3  |
+| -------------- | ------ | ------ | ------ |
+| React `<link>` | 227 ms | 199 ms | 241 ms |
+| CSS `@import`  | 282 ms | 192 ms | 191 ms |
 
-Level, and the `@import` needs no `preconnect` to get there.
+Level, and the `@import` gets there without needing `preconnect`.
 
 One family and one mono is the budget.
 

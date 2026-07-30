@@ -37,9 +37,9 @@ mechanism is the thing you read.
 
 ## Localization
 
-| example          | teaches                                                          |
-| ---------------- | ---------------------------------------------------------------- |
-| [`i18n`](./i18n) | multiple locales, shared + surface-local messages, interpolation |
+| example                          | teaches                                                          |
+| -------------------------------- | ---------------------------------------------------------------- |
+| [`localization`](./localization) | multiple locales, shared + surface-local messages, interpolation |
 
 ---
 
