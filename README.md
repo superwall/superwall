@@ -16,7 +16,7 @@ superwall/
 ├── assets/                   shared images and fonts
 ├── paywalls/
 │   └── plus-upgrade/         each paywall is a mini React app
-│       ├── config.ts         required — products, experiment variables, preview
+│       ├── config.ts         required — name, products
 │       ├── app/            routes only — every .tsx here is a route
 │       │   ├── layout.tsx    optional — wraps every route
 │       │   ├── index.tsx     where the flow starts
@@ -60,10 +60,10 @@ export default function PlusUpgrade() {
 }
 ```
 
-`superwall dev` serves every surface against a **simulated SDK host**:
-products get real-looking variables (or exactly the ones you declare in
-`config.ts` → `preview`), purchases resolve, trials start. The same build runs
-unchanged inside a real SDK webview — the mock detects a native host and
+`superwall dev` serves every surface against a **stand-in SDK host**: purchases
+resolve, trials start, and product data is read from Superwall — never invented,
+so a price you see locally is a price a device would see. The same build runs
+unchanged inside a real SDK webview; the stand-in detects a native host and
 stays out of the way.
 
 ## Packages
@@ -75,8 +75,9 @@ stays out of the way.
 | [`@superwall/runtime`](packages/runtime)   | Framework-agnostic runtime: bridge, session, product state, localization, purchase promises, mock SDK host. No React.                                                                                             |
 | [`@superwall/protocol`](packages/protocol) | The SDK ↔ paywall message contract: schemas, transports, initialization params.                                                                                                                                   |
 
-Examples live in [`examples/`](examples) — `examples/chatgpt` recreates the
-ChatGPT Plus upgrade paywall end to end.
+Examples live in [`examples/`](examples) — each one a standalone, copyable
+superwall project, teaching one capability with deliberately plain styling.
+Start with [`minimal`](examples/minimal).
 
 ## Development
 

@@ -4,10 +4,20 @@ import { useDevice, useTrialEligibility, useVariables } from "../../src/hooks";
 import { flush, renderWithProvider } from "../helpers";
 
 describe("useTrialEligibility", () => {
-  it("reports trial eligibility from the mock host", async () => {
-    const { result } = renderWithProvider(() => useTrialEligibility());
+  it("reports trial eligibility from the product data it was given", async () => {
+    const { result } = renderWithProvider(() => useTrialEligibility(), {
+      mock: {
+        products: [{ reference: "primary", productId: "pro", variables: { trialPeriodDays: 7 } }],
+      },
+    });
     await flush();
     await waitFor(() => expect(result.current.eligible).toBe(true));
+  });
+
+  it("reports no trial when nothing says there is one", async () => {
+    const { result } = renderWithProvider(() => useTrialEligibility());
+    await flush();
+    await waitFor(() => expect(result.current.eligible).toBe(false));
   });
 });
 

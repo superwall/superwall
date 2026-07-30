@@ -1,10 +1,29 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { buildPreviewPath } from "../src/lib/preview";
 import { StudioApp } from "../src/StudioApp";
 import type { StudioSource } from "../src/lib/types";
 
-const source: StudioSource = {
+/** Renders with a stubbed dashboard catalogue, the only source of product data. */
+const withCatalogue = async (
+  catalogue: Record<string, Record<string, unknown>> | undefined,
+  ui: React.ReactElement,
+) => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: unknown) =>
+      String(input).includes("samples.json")
+        ? { json: async () => ({ products: catalogue }) }
+        : { json: async () => ({}) },
+    ),
+  );
+  const view = render(ui);
+  await act(async () => {});
+  return view;
+};
+
+const shippable: StudioSource = {
   title: "chatgpt",
   surfaces: [
     {
@@ -12,14 +31,62 @@ const source: StudioSource = {
       id: "plus-upgrade",
       routes: ["/"],
       locales: ["en", "es"],
-      variables: { defaultPlan: { type: "enum", values: ["go", "plus"], default: "plus" } },
+      products: { annual: "pro_5999_year" },
       paywallId: "208540",
     },
     { kind: "funnel", id: "onboarding", routes: ["/", "/step-2"], locales: ["en"] },
   ],
   diagnostics: [],
+  samples: {
+    device: { platform: "iOS" },
+    user: { subscriptionStatus: "INACTIVE" },
+    params: { placementName: "campaign_trigger", isFeatureGatable: false },
+  },
+  capabilities: { actions: true },
   previewUrl: buildPreviewPath,
 };
+
+const source: StudioSource = { ...shippable, capabilities: undefined };
+
+describe("StudioApp across projects", () => {
+  const twoProjects = {
+    title: "2 projects",
+    previewUrl: buildPreviewPath,
+    surfaces: [
+      { kind: "paywall" as const, id: "pro", project: "minimal", routes: ["index"], locales: [] },
+      { kind: "paywall" as const, id: "pro", project: "i18n", routes: ["index"], locales: ["en"] },
+    ],
+  };
+
+  it("addresses identical ids by project, so each card opens its own paywall", () => {
+    // Without the project segment both surfaces resolve to /paywall/pro and
+    // every card renders whichever project happened to be first.
+    const [first, second] = twoProjects.surfaces;
+    expect(buildPreviewPath(first, {})).toBe("/preview/minimal/paywall/pro");
+    expect(buildPreviewPath(second, {})).toBe("/preview/i18n/paywall/pro");
+  });
+
+  it("links each card at its own project-scoped path", () => {
+    window.history.replaceState({}, "", "/");
+    render(<StudioApp source={twoProjects} />);
+
+    const hrefs = screen
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"))
+      .filter((href) => href?.includes("/paywall/pro"));
+    expect(hrefs).toEqual(["/minimal/paywall/pro", "/i18n/paywall/pro"]);
+  });
+
+  it("opens the editor for a project-scoped path", () => {
+    window.history.replaceState({}, "", "/i18n/paywall/pro");
+    render(<StudioApp source={twoProjects} />);
+
+    // the editor, not the list
+    expect(screen.getByRole("combobox", { name: "Device" })).toBeDefined();
+    const frame = screen.getAllByTitle("pro preview").at(-1);
+    expect(frame?.getAttribute("src")).toContain("/preview/i18n/paywall/pro");
+  });
+});
 
 describe("StudioApp", () => {
   it("lists surfaces grouped by kind with live miniatures", () => {
@@ -62,8 +129,6 @@ describe("StudioApp", () => {
     render(<StudioApp source={source} />);
 
     expect(screen.getByRole("combobox", { name: "Device" })).toBeDefined();
-    // no variables declared → no Variables button, no panel
-    expect(screen.queryByRole("button", { name: /Variables/ })).toBeNull();
     // single locale → no locale select
     expect(screen.queryByRole("combobox", { name: "Locale" })).toBeNull();
   });
@@ -91,23 +156,193 @@ describe("StudioApp", () => {
     expect(frame?.getAttribute("src")).not.toContain("sw_device");
   });
 
-  it("edits variables in the side panel and keeps overrides in the preview URL", () => {
+  it("simulates SDK variables from the side panel and carries them in the preview URL", () => {
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
     render(<StudioApp source={source} />);
 
     // controls live in the panel, opened from the toolbar
-    expect(screen.queryByRole("combobox", { name: "defaultPlan" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "user.subscriptionStatus" })).toBeNull();
     const toggle = screen.getByRole("button", { name: /Variables/ });
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
 
-    fireEvent.change(screen.getByRole("combobox", { name: "defaultPlan" }), {
-      target: { value: "go" },
-    });
+    // every group the SDK delivers, and nothing from the v4 template system
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    for (const group of ["User", "Device", "Params", "Products"]) {
+      expect(panel.getByText(group)).toBeDefined();
+    }
+    expect(panel.queryByText("State")).toBeNull();
+    expect(panel.queryByText("Element")).toBeNull();
+
+    // the set is fixed — a variable is named by how a paywall reads it
+    fireEvent.click(panel.getByRole("button", { name: /^User/ }));
+    const field = screen.getByRole("textbox", { name: "user.subscriptionStatus" });
+    expect((field as HTMLInputElement).value).toBe("INACTIVE");
+    fireEvent.change(field, { target: { value: "ACTIVE" } });
+
     const frame = screen.getAllByTitle("plus-upgrade preview").at(-1);
-    expect(frame?.getAttribute("src")).toContain(encodeURIComponent('{"defaultPlan":"go"}'));
+    expect(frame?.getAttribute("src")).toContain(
+      encodeURIComponent('{"subscriptionStatus":"ACTIVE"}'),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Close variables" }));
-    expect(screen.queryByRole("combobox", { name: "defaultPlan" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "user.subscriptionStatus" })).toBeNull();
+  });
+
+  it("offers no way to invent a variable — the SDK decides what exists", () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    fireEvent.click(panel.getByRole("button", { name: /^User/ }));
+    expect(panel.queryByRole("button", { name: "+ Add" })).toBeNull();
+    expect(panel.queryByRole("textbox", { name: /key$/ })).toBeNull();
+  });
+
+  it("opens with every group collapsed — the panel is a menu before it is a form", () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    for (const group of ["User", "Device", "Params", "Products"]) {
+      expect(
+        panel.getByRole("button", { name: new RegExp(`^${group}`) }).getAttribute("aria-expanded"),
+      ).toBe("false");
+    }
+    expect(panel.queryByRole("textbox")).toBeNull();
+
+    // opening one leaves the rest folded
+    fireEvent.click(panel.getByRole("button", { name: /^Device/ }));
+    expect(panel.getByRole("textbox", { name: "device.platform" })).toBeDefined();
+    expect(panel.queryByRole("textbox", { name: "user.subscriptionStatus" })).toBeNull();
+  });
+
+  it("carries trial eligibility into the preview, so trial copy can be seen either way", () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+
+    const frame = () => screen.getAllByTitle("plus-upgrade preview").at(-1)?.getAttribute("src");
+    expect(frame()).not.toContain("sw_trial");
+
+    fireEvent.click(screen.getByRole("switch", { name: "Trial eligibility" }));
+    expect(frame()).toContain("sw_trial=1");
+  });
+
+  it("edits a boolean with a switch, and keeps it a boolean", () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    fireEvent.click(panel.getByRole("button", { name: /^Params/ }));
+
+    const toggle = panel.getByRole("switch", { name: "params.isFeatureGatable" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(panel.queryByRole("textbox", { name: "params.isFeatureGatable" })).toBeNull();
+
+    fireEvent.click(toggle);
+    const frame = screen.getAllByTitle("plus-upgrade preview").at(-1);
+    expect(frame?.getAttribute("src")).toContain(encodeURIComponent('{"isFeatureGatable":true}'));
+  });
+
+  it("shows a variable with no value as empty, never as the word undefined", () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(
+      <StudioApp
+        source={{
+          ...source,
+          samples: { ...source.samples, user: { plan: undefined } } as typeof source.samples,
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    fireEvent.click(panel.getByRole("button", { name: /^User/ }));
+
+    expect((panel.getByRole("textbox", { name: "user.plan" }) as HTMLInputElement).value).toBe("");
+    expect(document.querySelector("aside")?.textContent).not.toContain("undefined");
+  });
+
+  it("says on a collapsed group how many of its variables are simulated", () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    const user = () => panel.getByRole("button", { name: /^User/ });
+    fireEvent.click(user());
+    fireEvent.change(screen.getByRole("textbox", { name: "user.subscriptionStatus" }), {
+      target: { value: "ACTIVE" },
+    });
+    fireEvent.click(user());
+
+    expect(panel.queryByRole("textbox")).toBeNull();
+    expect(user().textContent).toContain("1 set");
+  });
+
+  it("shows only the products this paywall declares, and edits one slot at a time", async () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    await withCatalogue(
+      { pro_5999_year: { price: "$59.99" }, pro_999_month: { price: "$9.99" } },
+      <StudioApp source={shippable} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    fireEvent.click(panel.getByRole("button", { name: /^Products/ }));
+
+    // pro_999_month is in the catalogue but this paywall does not declare it.
+    expect(screen.getByRole("textbox", { name: "products.annual.price" })).toBeDefined();
+    expect(screen.queryByRole("textbox", { name: "products.monthly.price" })).toBeNull();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "products.annual.price" }), {
+      target: { value: "$19.99" },
+    });
+    const frame = screen.getAllByTitle("plus-upgrade preview").at(-1);
+    expect(frame?.getAttribute("src")).toContain(
+      encodeURIComponent('{"annual":{"price":"$19.99"}}'),
+    );
+  });
+});
+
+describe("a product Superwall has no record of", () => {
+  it("says so, and blocks publishing until it exists", async () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    await withCatalogue({ something_else: { price: "$1.00" } }, <StudioApp source={shippable} />);
+
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("pro_5999_year")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Push" })).toHaveProperty("disabled", true);
+  });
+
+  it("still lets you look at the paywall, with the variables simply undefined", async () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    await withCatalogue({}, <StudioApp source={shippable} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "View anyway" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getAllByTitle("plus-upgrade preview").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    fireEvent.click(panel.getByRole("button", { name: /^Products/ }));
+    expect(panel.queryByRole("textbox", { name: /^products\./ })).toBeNull();
+
+    // dismissing is about looking, never about shipping
+    expect(screen.getByRole("button", { name: "Push" })).toHaveProperty("disabled", true);
+  });
+
+  it("does not accuse a paywall before the catalogue has arrived", () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise(() => {})),
+    );
+    render(<StudioApp source={shippable} />);
+
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

@@ -66,9 +66,6 @@ describe("buildStudioProject", () => {
     });
     // Shared + local + config-declared locales, deduped and sorted.
     expect(surface.locales).toEqual(["de", "en", "es"]);
-    expect(surface.variables).toEqual({
-      plan: { type: "enum", values: ["go", "plus"], default: "plus" },
-    });
   });
 
   it("keeps a surface listed when its config.ts is broken", async () => {
@@ -79,6 +76,6 @@ describe("buildStudioProject", () => {
 
     const payload = await buildStudioProject(root);
     expect(payload.surfaces).toHaveLength(1);
-    expect(payload.surfaces[0]).toMatchObject({ id: "broken", variables: undefined });
+    expect(payload.surfaces[0]).toMatchObject({ id: "broken" });
   });
 });

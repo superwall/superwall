@@ -1,27 +1,29 @@
-export type VariableSpec =
-  | { type: "string"; default: string; label?: string }
-  | { type: "boolean"; default: boolean; label?: string }
-  | { type: "number"; default: number; min?: number; max?: number; label?: string }
-  | { type: "enum"; values: readonly string[]; default: string; label?: string };
-
-export type VariablesSchema = Record<string, VariableSpec>;
-
 export type StudioSurfaceKind = "paywall" | "funnel";
 
 export type StudioSurface = {
   kind: StudioSurfaceKind;
   id: string;
+  project?: string;
+  products?: Record<string, string>;
   routes: string[];
   locales: string[];
-  variables?: VariablesSchema;
   paywallId?: string;
+};
+
+export type SampleDefaults = {
+  device: Record<string, unknown>;
+  user: Record<string, unknown>;
+  params: Record<string, unknown>;
 };
 
 export type PreviewOverrides = {
   theme?: "light" | "dark";
   locale?: string;
-  variables?: Record<string, unknown>;
   device?: Record<string, unknown>;
+  user?: Record<string, unknown>;
+  params?: Record<string, unknown>;
+  products?: Record<string, Record<string, unknown>>;
+  trialEligible?: boolean;
 };
 
 export type PreviewUrlBuilder = (surface: StudioSurface, overrides: PreviewOverrides) => string;
@@ -64,6 +66,14 @@ export type StudioSource = {
   title: string;
   surfaces: StudioSurface[];
   diagnostics?: string[];
+  samples?: SampleDefaults;
   previewUrl: PreviewUrlBuilder;
   capabilities?: { actions: boolean };
+};
+
+export type Samples = {
+  device?: Record<string, unknown>;
+  user?: Record<string, unknown>;
+  products?: Record<string, Record<string, unknown>>;
+  live?: { device: boolean; user: boolean };
 };

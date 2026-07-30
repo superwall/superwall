@@ -258,11 +258,11 @@ test("an asset with no source path on disk still names something", () => {
 
 test("a framework too old to report assets fails rather than pushing dangling URLs", () => {
   assert.throws(
-    () => requireAssets({ snapshotId: "x", html: "", bytes: 0, htmlFile: "x" }),
+    () => requireAssets({ name: "X", snapshotId: "x", html: "", bytes: 0, htmlFile: "x" }),
     (error: Error) => error instanceof AssetSyncError && /update the project's superwall/.test(error.message),
   );
   assert.deepEqual(
-    requireAssets({ snapshotId: "x", html: "", bytes: 0, htmlFile: "x", assets: [] }),
+    requireAssets({ name: "X", snapshotId: "x", html: "", bytes: 0, htmlFile: "x", assets: [] }),
     [],
   );
 });

@@ -1,7 +1,7 @@
 import * as React from "react";
 
 export const Toolbar = ({ children }: React.PropsWithChildren) => (
-  <div className="bg-bar z-10 flex min-h-14 flex-none flex-wrap items-center justify-center gap-6 border-t border-cream/10 px-4 py-2.5">
+  <div className="bg-bar z-10 flex min-h-14 flex-none flex-wrap items-center justify-center gap-3 border-t border-cream/10 px-4 py-2.5">
     {children}
   </div>
 );

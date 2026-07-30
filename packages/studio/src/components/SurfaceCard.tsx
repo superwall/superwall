@@ -1,4 +1,5 @@
 import * as React from "react";
+import { surfacePath } from "../lib/preview";
 import { timeAgo } from "../lib/time";
 import type { StudioStatus, StudioSurface } from "../lib/types";
 
@@ -40,7 +41,7 @@ export const SurfaceCard = ({
   return (
     <a
       className="group block"
-      href={`/${surface.kind}/${surface.id}`}
+      href={surfacePath(surface)}
       onClick={(event) => {
         if (event.metaKey || event.ctrlKey) return;
         event.preventDefault();
@@ -54,7 +55,7 @@ export const SurfaceCard = ({
         {scale > 0 && (
           <iframe
             className="pointer-events-none block origin-top-left border-0 bg-white"
-            title={`${surface.id} preview`}
+            title={`${surface.project ? `${surface.project}/` : ""}${surface.id} preview`}
             src={previewSrc}
             loading="lazy"
             tabIndex={-1}
@@ -66,7 +67,10 @@ export const SurfaceCard = ({
       </div>
       <div className="flex items-center justify-between gap-2 pt-2.5">
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium">{surface.id}</span>
+          <span className="text-sm font-medium">
+            {surface.project && <span className="text-cream/45">{surface.project}/</span>}
+            {surface.id}
+          </span>
           {status && (
             <span className="text-xs text-cream/55">
               {status.updatedAt ? `Edited ${timeAgo(status.updatedAt)}` : "Not published"}

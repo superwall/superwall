@@ -37,6 +37,8 @@ export interface BuiltSnapshotAsset {
 }
 
 export interface BuiltSnapshot {
+  name: string;
+  products?: Record<string, string>;
   snapshotId: string;
   html: string;
   bytes: number;
@@ -69,7 +71,15 @@ export interface StudioStatus {
 
 export type StudioActionProgress = (step: string, state: "start" | "done") => void;
 
+export interface Samples {
+  device?: Record<string, unknown>;
+  user?: Record<string, unknown>;
+  products?: Record<string, Record<string, unknown>>;
+  live?: { device: boolean; user: boolean };
+}
+
 export interface StudioActions {
+  samples?(): Promise<Samples>;
   run(
     action: StudioActionName,
     surface: FrameworkSurface,
@@ -86,7 +96,7 @@ export interface Framework {
     options?: BuildOptions,
   ): Promise<BuiltSnapshot>;
   startPreviewServer(
-    root: string,
+    roots: string | readonly string[],
     options: { port: number; host?: string; platformStylesheet?: string; studio?: StudioActions },
   ): Promise<PreviewServerHandle>;
 }

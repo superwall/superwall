@@ -1,7 +1,7 @@
 import * as React from "react";
 
 const Icon = ({ children }: React.PropsWithChildren) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
+  <svg className="sw-icon" viewBox="0 0 24 24" aria-hidden="true">
     {children}
   </svg>
 );
@@ -70,5 +70,62 @@ export const ColumnsIcon = () => (
   <Icon>
     <rect x="3" y="4" width="18" height="16" />
     <path d="M12 4v16" />
+  </Icon>
+);
+
+export const CheckCircleIcon = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m8.5 12 2.5 2.5 4.5-5" />
+  </Icon>
+);
+
+export const AlertTriangleIcon = () => (
+  <Icon>
+    <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+    <path d="M12 9v4" />
+    <path d="M12 17h.01" />
+  </Icon>
+);
+
+export const InfoCircleIcon = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5" />
+    <path d="M12 8h.01" />
+  </Icon>
+);
+
+export const BoltIcon = () => (
+  <Icon>
+    <path d="M13 2 4.5 13H11l-1 9 8.5-11H12l1-9Z" />
+  </Icon>
+);
+
+export const CartIcon = () => (
+  <Icon>
+    <circle cx="9" cy="20" r="1" />
+    <circle cx="18" cy="20" r="1" />
+    <path d="M2 3h2.5l2.2 11.2a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L21 7H5.4" />
+  </Icon>
+);
+
+export const BellIcon = () => (
+  <Icon>
+    <path d="M18 8a6 6 0 1 0-12 0c0 6-2 8-2 8h16s-2-2-2-8" />
+    <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+  </Icon>
+);
+
+export const StarIcon = () => (
+  <Icon>
+    <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3Z" />
+  </Icon>
+);
+
+export const UserIcon = () => (
+  <Icon>
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
   </Icon>
 );

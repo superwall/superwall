@@ -1,12 +1,17 @@
 import * as React from "react";
-import type { SuperwallConfig, SuperwallMessages, SuperwallMockOptions } from "@superwall/runtime";
+import {
+  mockProductsFromConfig,
+  type SuperwallConfig,
+  type SuperwallMessages,
+  type SuperwallMockOptions,
+} from "@superwall/runtime";
 import type { PreviewMessages, PreviewSurface } from "virtual:superwall/project";
-import { sharedMessages } from "virtual:superwall/project";
 import type { PaywallDefinition } from "../config";
 import { mergeMessages } from "../internal";
 import { PaywallRouter, type RouteMap } from "../navigation/index";
 import { SuperwallProvider } from "../provider/context";
 import type { PreviewOverrides } from "./overrides";
+import { studioBridge } from "./studio-bridge";
 
 const loadCatalogs = async (
   shared: PreviewMessages[],
@@ -28,7 +33,6 @@ type Loaded =
   | {
       status: "ready";
       config: SuperwallConfig;
-      preview: PaywallDefinition["preview"];
       routes: RouteMap;
       Layout?: React.ComponentType<React.PropsWithChildren>;
       transition: PaywallDefinition["transition"];
@@ -43,7 +47,7 @@ const useSurface = (surface: PreviewSurface): Loaded => {
       const [definition, layout, catalogs, loadedRoutes] = await Promise.all([
         surface.loadConfig().then((mod) => mod.default as PaywallDefinition | undefined),
         surface.loadLayout?.().then((mod) => mod.default),
-        loadCatalogs(sharedMessages, surface.messages),
+        loadCatalogs(surface.sharedMessages, surface.messages),
         Promise.all(
           surface.routes.map(async (route) => {
             const module = await route.load();
@@ -67,7 +71,6 @@ const useSurface = (surface: PreviewSurface): Loaded => {
             messages,
           },
         },
-        preview: definition?.preview,
         transition: definition?.transition,
         routes: Object.fromEntries(loadedRoutes) as RouteMap,
         Layout: layout,
@@ -85,17 +88,27 @@ const useSurface = (surface: PreviewSurface): Loaded => {
 };
 
 const mockOptions = (
-  preview: PaywallDefinition["preview"],
   overrides: PreviewOverrides,
+  config: SuperwallConfig,
 ): SuperwallMockOptions | "auto" => {
-  const { theme, locale, device } = overrides;
-  if (!preview && !theme && !locale && !device) return "auto";
+  const { theme, locale, device, user, params, products, trialEligible } = overrides;
 
   const languageCode = locale?.split(/[-_]/)[0];
+
+  const priced = products
+    ? mockProductsFromConfig(config).map((product) => {
+        const patch = products[product.reference];
+        return patch ? { ...product, variables: { ...product.variables, ...patch } } : product;
+      })
+    : undefined;
+
   return {
-    ...preview,
+    ...studioBridge(),
+    ...(priced ? { products: priced } : {}),
+    ...(trialEligible === undefined ? {} : { trialEligible }),
+    ...(user ? { user } : {}),
+    ...(params ? { params } : {}),
     device: {
-      ...preview?.device,
       ...device,
       ...(locale ? { locale, languageCode } : {}),
       ...(theme ? { interfaceStyle: theme === "dark" ? "Dark" : "Light" } : {}),
@@ -122,7 +135,7 @@ export const SurfaceHost = ({
   }
 
   return (
-    <SuperwallProvider config={loaded.config} mock={mockOptions(loaded.preview, overrides)}>
+    <SuperwallProvider config={loaded.config} mock={mockOptions(overrides, loaded.config)}>
       <PaywallRouter
         routes={loaded.routes}
         Layout={loaded.Layout}

@@ -99,9 +99,6 @@ export type SuperwallConfig<TLocale extends string = string> = {
   /** Trial eligibility handling. Defaults to "automatic" (SDK decides). */
   introductoryOfferEligibility?: "automatic" | "alwaysEligible" | "alwaysIneligible";
 
-  /** Route hardware back button presses into the paywall (Android). */
-  reRouteBackButton?: boolean;
-
   /** Forward game controller input to the paywall. */
   gameControllerEnabled?: boolean;
 

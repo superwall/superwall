@@ -2,7 +2,8 @@ import { promotePaywallVersion, pushPaywallVersion } from "@/core/api/resources"
 import type { SuperwallApi } from "@/core/api/client";
 import { VERSION } from "@/constants";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
-import { resolveBinding } from "@/core/paywalls/binding/binding";
+import { resolveApplicationId, resolveBinding } from "@/core/paywalls/binding/binding";
+import { fetchProducts, projectForApplication } from "@/core/paywalls/products";
 import { readLock } from "@/core/paywalls/project/lock";
 import { requireApi } from "@/core/paywalls/project/session";
 import {
@@ -16,6 +17,8 @@ import { warnNotPortable } from "@/core/paywalls/source/portability";
 import { collectSourceFiles } from "@/core/paywalls/source/source";
 import { pushSource } from "@/core/paywalls/source/source-push";
 
+type Sample = { properties?: Record<string, unknown>; live?: boolean };
+
 export function createStudioActions(
   framework: Framework,
   project: FrameworkProject,
@@ -24,6 +27,34 @@ export function createStudioActions(
   const ensureApi = async () => (api ??= await requireApi(false));
 
   return {
+    async samples() {
+      try {
+        const client = await ensureApi();
+        const applicationId = await resolveApplicationId({
+          api: client,
+          superwallDir: project.superwallDir,
+        });
+        const query = `?application_id=${encodeURIComponent(applicationId)}`;
+        const [device, user, products] = await Promise.all([
+          client
+            .get<Sample>(`/v2/users/device-properties-sample${query}`)
+            .catch(() => undefined),
+          client.get<Sample>(`/v2/users/properties-sample${query}`).catch(() => undefined),
+          projectForApplication(client, applicationId)
+            .then((projectId) => (projectId ? fetchProducts(client, projectId) : undefined))
+            .catch(() => undefined),
+        ]);
+        return {
+          device: device?.properties,
+          user: user?.properties,
+          products,
+          live: { device: device?.live === true, user: user?.live === true },
+        };
+      } catch {
+        return {};
+      }
+    },
+
     async run(action, surface, onProgress = () => {}) {
       const step = async <T>(name: string, work: () => Promise<T>): Promise<T> => {
         onProgress(name, "start");
@@ -51,19 +82,19 @@ export function createStudioActions(
           return { ok: true, version: promoted.version, live: true };
         }
 
-        const binding = await step("link", () =>
-          resolveBinding({
-            api: client,
-            superwallDir: project.superwallDir,
-            surface,
-            surfaces: project.surfaces,
-          }),
+        const applicationId = await step("link", () =>
+          resolveApplicationId({ api: client, superwallDir: project.superwallDir }),
         );
         const built = await step("build", () =>
-          framework.buildSnapshot(project, surface, {
-            assetBaseUrl: assetBaseUrl(binding.applicationId),
-          }),
+          framework.buildSnapshot(project, surface, { assetBaseUrl: assetBaseUrl(applicationId) }),
         );
+        const binding = await resolveBinding({
+          api: client,
+          superwallDir: project.superwallDir,
+          surface,
+          name: built.name,
+          surfaces: project.surfaces,
+        });
         const assets = requireAssets(built);
         const synced = await step("assets", () =>
           syncAssets({ api: client, paywallId: binding.paywallId, assets }),

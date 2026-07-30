@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { SuperwallConfig } from "@superwall/runtime";
+import { normalizeProductSlot, type SuperwallConfig } from "@superwall/runtime";
 import react from "@vitejs/plugin-react-swc";
 import { build as viteBuild, type Plugin } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
@@ -28,6 +28,8 @@ export type RouteAssets = Record<string, RouteAsset[]>;
 
 export type BuiltSnapshot = {
   surface: DiscoveredSurface;
+  name: string;
+  products: Record<string, string>;
   snapshotId: string;
   html: string;
   bytes: number;
@@ -107,6 +109,13 @@ const preloadAs = (mime: string): RouteAsset["as"] | undefined => {
   return undefined;
 };
 
+const titleCase = (id: string): string =>
+  id
+    .split(/[-_]/)
+    .filter((word) => word.length > 0)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
 const sha256 = (data: Uint8Array | string): string =>
   createHash("sha256").update(data).digest("hex");
 
@@ -164,7 +173,7 @@ const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurf
     ``,
     `createRoot(document.getElementById("root")).render(`,
     `  <React.StrictMode>`,
-    `    <SuperwallProvider config={config} mock={definition?.preview ?? "auto"}>`,
+    `    <SuperwallProvider config={config} mock="auto">`,
     surface.layoutFile
       ? `      <PaywallRouter routes={routes} Layout={Layout} transition={definition?.transition} navigationId={${JSON.stringify(surface.id)}} />`
       : `      <PaywallRouter routes={routes} transition={definition?.transition} navigationId={${JSON.stringify(surface.id)}} />`,
@@ -381,6 +390,13 @@ export const buildSnapshot = async (
 
   return {
     surface,
+    name: definition?.name?.trim() || titleCase(surface.id),
+    products: Object.fromEntries(
+      Object.entries(config.products ?? {}).map(([reference, input]) => [
+        reference,
+        normalizeProductSlot(input).productId ?? reference,
+      ]),
+    ),
     snapshotId: sha256(html),
     html,
     bytes: Buffer.byteLength(html),

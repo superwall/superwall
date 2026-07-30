@@ -26,15 +26,22 @@ const humanize = (surfaceId: string): string =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
-async function resolveApplicationId(input: {
+export async function resolveApplicationId(input: {
   api: SuperwallApi;
   superwallDir: string;
   pickApplication?: (apps: Application[]) => Promise<Application | null>;
 }): Promise<string> {
   const { api, superwallDir, pickApplication } = input;
 
-  const locked = readLock(superwallDir).applicationId;
-  if (locked) return locked;
+  const lock = readLock(superwallDir);
+  if (lock.applicationId) return lock.applicationId;
+
+  const bound = [...Object.values(lock.paywalls), ...Object.values(lock.funnels)][0];
+  if (bound) {
+    const owner = await getPaywallApplicationId(api, bound.paywallId);
+    writeApplicationId(superwallDir, owner);
+    return owner;
+  }
 
   const apps = await listApplications(api);
   if (apps.length === 1) {
@@ -62,6 +69,7 @@ export async function resolveBinding(input: {
   api: SuperwallApi;
   superwallDir: string;
   surface: FrameworkSurface;
+  name?: string;
   surfaces: readonly FrameworkSurface[];
   renamesResolved?: boolean;
   pickApplication?: (apps: Application[]) => Promise<Application | null>;
@@ -129,7 +137,7 @@ export async function resolveBinding(input: {
 
   const created = await createHeadlessPaywall(api, {
     applicationId,
-    name: humanize(surface.id),
+    name: input.name?.trim() || humanize(surface.id),
     identifier: surface.id,
   });
   writeBinding(superwallDir, surface.kind, surface.id, { paywallId: created.id });

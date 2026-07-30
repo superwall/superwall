@@ -3,6 +3,7 @@ import { SurfaceCard } from "../components/SurfaceCard";
 import { TopBar } from "../components/TopBar";
 import { fetchStatus } from "../lib/actions";
 import type { StudioSource, StudioStatus, StudioSurface } from "../lib/types";
+import { surfacePath } from "../lib/preview";
 
 export const SurfaceList = ({
   source,
@@ -19,7 +20,7 @@ export const SurfaceList = ({
     for (const surface of source.surfaces) {
       void fetchStatus(surface).then((status) => {
         if (cancelled) return;
-        setStatuses((current) => ({ ...current, [`${surface.kind}/${surface.id}`]: status }));
+        setStatuses((current) => ({ ...current, [surfacePath(surface)]: status }));
       });
     }
     return () => {
@@ -63,9 +64,9 @@ export const SurfaceList = ({
               <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-6">
                 {section.surfaces.map((surface) => (
                   <SurfaceCard
-                    key={surface.id}
+                    key={surfacePath(surface)}
                     surface={surface}
-                    status={statuses[`${surface.kind}/${surface.id}`]}
+                    status={statuses[surfacePath(surface)]}
                     previewSrc={source.previewUrl(surface, {})}
                     onOpen={() => onOpen(surface)}
                   />

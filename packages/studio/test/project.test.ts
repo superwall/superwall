@@ -13,24 +13,12 @@ describe("parseProjectPayload", () => {
           routes: ["index", "offer"],
           locales: ["en", "es"],
           paywallId: "208540",
-          variables: {
-            plan: { type: "enum", values: ["go", "plus"], default: "plus", label: "Plan" },
-            web: { type: "boolean", default: true },
-            max: { type: "number", default: 5, min: 1, max: 10 },
-            headline: { type: "string", default: "Go" },
-          },
         },
       ],
     });
 
     expect(payload.title).toBe("chatgpt");
     expect(payload.diagnostics).toEqual(["a warning"]);
-    expect(payload.surfaces[0].variables).toEqual({
-      plan: { type: "enum", values: ["go", "plus"], default: "plus", label: "Plan" },
-      web: { type: "boolean", default: true, label: undefined },
-      max: { type: "number", default: 5, min: 1, max: 10, label: undefined },
-      headline: { type: "string", default: "Go", label: undefined },
-    });
   });
 
   it("drops malformed surfaces and variable specs instead of crashing", () => {
@@ -44,12 +32,6 @@ describe("parseProjectPayload", () => {
         {
           kind: "funnel",
           id: "partial-vars",
-          variables: {
-            good: { type: "boolean", default: false },
-            badEnum: { type: "enum", values: [1, 2], default: "x" },
-            badNumber: { type: "number", default: "five" },
-            unknownType: { type: "color", default: "#fff" },
-          },
         },
       ],
     });
@@ -63,12 +45,8 @@ describe("parseProjectPayload", () => {
       id: "ok",
       routes: [],
       locales: [],
-      variables: undefined,
+      products: {},
       paywallId: undefined,
-    });
-    // Only the valid spec survives.
-    expect(payload.surfaces[1].variables).toEqual({
-      good: { type: "boolean", default: false, label: undefined },
     });
   });
 

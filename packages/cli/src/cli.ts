@@ -58,7 +58,7 @@ function printHelp(): void {
       ),
       "",
       head("Paywalls & flows"),
-      row("dev [dir]", "Host the studio: browse and preview your paywalls and flows"),
+      row("dev [dir..]", "Host the studio: browse and preview your paywalls and flows"),
       row("push [dir]", "Build and push your paywalls and flows as immutable versions"),
       row("promote [dir]", "Point production at a pushed version"),
       row("publish [dir]", "Push and promote in one step"),
@@ -457,11 +457,15 @@ export async function run(): Promise<void> {
 
   cli = cli
     .command(
-      "dev [dir]",
+      "dev [dir..]",
       "Host the studio: browse and preview your paywalls and funnels",
       (y) =>
         y
-          .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
+          .positional("dir", {
+            type: "string",
+            array: true,
+            describe: "Project directories to serve (default: cwd)",
+          })
           .options({
             port: {
               type: "number",

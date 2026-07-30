@@ -35,9 +35,9 @@ self-describing npm project — clone it, install, `superwall dev`:
   (auto-discovered per locale, inherited by every surface), and assets. All
   three also work per-surface, inside `paywalls/<id>/`.
 - `superwall/paywalls/<id>/` and `superwall/funnels/<id>/` — each surface is a
-  mini React app: a **required** `config.ts` (`definePaywall`: products,
-  experiment `variables`, dev-only `preview` mock overrides — a surface without
-  it is invalid) + an `app/` route tree (**routes only**: every `.tsx` is a
+  mini React app: a **required** `config.ts` (`definePaywall`: the dashboard
+  `name` and its products — a surface without it is invalid; product data comes
+  from Superwall alone, never from the file) + an `app/` route tree (**routes only**: every `.tsx` is a
   route, directories prefix the name, `index.tsx` is the entry, and `layout.tsx`
   is the one reserved name — anything else in `app/` is a diagnostic telling you
   to move it to `components/`) + local `components/` and `messages/`
@@ -136,7 +136,7 @@ The stack, bottom to top — each layer depends only on the one below it:
   at command runtime. This package is **excluded from oxfmt/oxlint**
   (imported codebase, upstream-diffable, own conventions) and is consumed
   **built** (tsdown → `dist/`; root `postinstall` builds it).
-- `examples/chatgpt` — the example **is** a superwall project directory (not an
+- `examples/*` — each example **is** a superwall project directory (not an
   app repo with one inside): `package.json` and the
   plus-upgrade paywall recreating the ChatGPT Plus screen, all at its root.
   Using it means copying the directory into a real app as `superwall/`. This
@@ -162,7 +162,7 @@ Requires bun ≥ 1.3. From the repo root:
 
 ```sh
 bun install
-bun dev                 # examples/chatgpt on http://localhost:6100
+bun dev                 # examples/minimal on http://localhost:6100
 bun run test            # all package test suites (vitest)
 bun run test:coverage   # with v8 coverage
 bun run typecheck       # tsc --noEmit across packages

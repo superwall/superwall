@@ -12,7 +12,7 @@ const surface: StudioSurface = {
 describe("buildPreviewPath", () => {
   it("returns a clean path without overrides", () => {
     expect(buildPreviewPath(surface, {})).toBe("/preview/paywall/plus-upgrade");
-    expect(buildPreviewPath(surface, { variables: {}, device: {} })).toBe(
+    expect(buildPreviewPath(surface, { user: {}, device: {} })).toBe(
       "/preview/paywall/plus-upgrade",
     );
   });
@@ -22,7 +22,7 @@ describe("buildPreviewPath", () => {
       buildPreviewPath(surface, {
         theme: "dark",
         locale: "de",
-        variables: { defaultPlan: "go", showWebCheckout: false },
+        user: { plan: "go", returning: false },
         device: { platform: "Android", deviceModel: "Pixel 9" },
       }),
       "http://studio.local",
@@ -31,9 +31,9 @@ describe("buildPreviewPath", () => {
     expect(url.pathname).toBe("/preview/paywall/plus-upgrade");
     expect(url.searchParams.get("theme")).toBe("dark");
     expect(url.searchParams.get("locale")).toBe("de");
-    expect(JSON.parse(url.searchParams.get("sw_vars") ?? "{}")).toEqual({
-      defaultPlan: "go",
-      showWebCheckout: false,
+    expect(JSON.parse(url.searchParams.get("sw_user") ?? "{}")).toEqual({
+      plan: "go",
+      returning: false,
     });
     expect(JSON.parse(url.searchParams.get("sw_device") ?? "{}")).toEqual({
       platform: "Android",

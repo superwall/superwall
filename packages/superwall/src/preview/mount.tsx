@@ -10,9 +10,16 @@ declare global {
   }
 }
 
-const match = window.location.pathname.match(/^\/preview\/(paywall|funnel)\/([a-z0-9-]+)\/?$/);
+const match = window.location.pathname.match(
+  /^\/preview\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)\/?$/,
+);
 const surface = match
-  ? surfaces.find((entry) => entry.kind === match[1] && entry.id === match[2])
+  ? surfaces.find(
+      (entry) =>
+        entry.kind === match[2] &&
+        entry.id === match[3] &&
+        (match[1] === undefined || entry.project === match[1]),
+    )
   : undefined;
 
 applyThemeOverride(readPreviewOverrides(window.location.search).theme);

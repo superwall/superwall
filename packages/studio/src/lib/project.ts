@@ -1,58 +1,24 @@
-import type { StudioSurface, StudioSurfaceKind, VariableSpec, VariablesSchema } from "./types";
+import type { SampleDefaults, StudioSurface, StudioSurfaceKind } from "./types";
 
 export type StudioProjectPayload = {
   title: string;
   surfaces: StudioSurface[];
+  samples: SampleDefaults;
   diagnostics: string[];
   capabilities: { actions: boolean };
 };
+
+const isStringRecord = (value: unknown): value is Record<string, string> =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.values(value).every((entry) => typeof entry === "string");
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string");
-
-const parseVariableSpec = (value: unknown): VariableSpec | undefined => {
-  if (!isRecord(value)) return undefined;
-  const label = typeof value.label === "string" ? value.label : undefined;
-  switch (value.type) {
-    case "string":
-      return typeof value.default === "string"
-        ? { type: "string", default: value.default, label }
-        : undefined;
-    case "boolean":
-      return typeof value.default === "boolean"
-        ? { type: "boolean", default: value.default, label }
-        : undefined;
-    case "number":
-      return typeof value.default === "number"
-        ? {
-            type: "number",
-            default: value.default,
-            min: typeof value.min === "number" ? value.min : undefined,
-            max: typeof value.max === "number" ? value.max : undefined,
-            label,
-          }
-        : undefined;
-    case "enum":
-      return isStringArray(value.values) && typeof value.default === "string"
-        ? { type: "enum", values: value.values, default: value.default, label }
-        : undefined;
-    default:
-      return undefined;
-  }
-};
-
-const parseVariables = (value: unknown): VariablesSchema | undefined => {
-  if (!isRecord(value)) return undefined;
-  const schema: VariablesSchema = {};
-  for (const [name, spec] of Object.entries(value)) {
-    const parsed = parseVariableSpec(spec);
-    if (parsed) schema[name] = parsed;
-  }
-  return Object.keys(schema).length > 0 ? schema : undefined;
-};
 
 const parseSurface = (value: unknown): StudioSurface | undefined => {
   if (!isRecord(value)) return undefined;
@@ -62,9 +28,10 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
   return {
     kind,
     id: value.id,
+    ...(typeof value.project === "string" ? { project: value.project } : {}),
     routes: isStringArray(value.routes) ? value.routes : [],
+    products: isStringRecord(value.products) ? value.products : {},
     locales: isStringArray(value.locales) ? value.locales : [],
-    variables: parseVariables(value.variables),
     paywallId: typeof value.paywallId === "string" ? value.paywallId : undefined,
   };
 };
@@ -77,10 +44,18 @@ export const parseProjectPayload = (data: unknown): StudioProjectPayload => {
     ? data.surfaces.map(parseSurface).filter((surface) => surface !== undefined)
     : [];
   const capabilities = isRecord(data.capabilities) ? data.capabilities : {};
+  const samples = isRecord(data.samples) ? data.samples : {};
+  const group = (key: string): Record<string, unknown> =>
+    isRecord(samples[key]) ? (samples[key] as Record<string, unknown>) : {};
   return {
     title: typeof data.title === "string" ? data.title : "superwall",
     surfaces,
     diagnostics: isStringArray(data.diagnostics) ? data.diagnostics : [],
+    samples: {
+      device: group("device"),
+      user: group("user"),
+      params: group("params"),
+    },
     capabilities: { actions: capabilities.actions === true },
   };
 };

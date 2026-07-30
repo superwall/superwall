@@ -1,17 +1,14 @@
-import type { SuperwallConfig, SuperwallMockOptions } from "@superwall/runtime";
+import type { SuperwallConfig } from "@superwall/runtime";
 import type { Transition } from "../navigation/index";
-import type { VariablesSchema } from "./variables";
 
 export type PaywallDefinition = Partial<SuperwallConfig> & {
-  /** Experiment knobs the dashboard can override per variant. */
-  variables?: VariablesSchema;
   /**
-   * Simulation overrides for the mock SDK host: real prices, purchase
-   * outcomes, device variables, trial eligibility. These ship inside the
-   * snapshot but never engage when a real SDK host is present — a webview
-   * always provides its own data.
+   * What this paywall is called on Superwall. Directory names carry the
+   * restrictions of a URL segment, so they make poor labels once a dashboard
+   * holds dozens of them — set a real name here and the directory stays an
+   * identifier. Defaults to the directory name, title-cased.
    */
-  preview?: SuperwallMockOptions;
+  name?: string;
   /**
    * Default transition for every route. A route's own
    * `export const transition` overrides it, and the call site overrides both.
@@ -19,7 +16,6 @@ export type PaywallDefinition = Partial<SuperwallConfig> & {
   transition?: Transition;
 };
 
-/** Declares one paywall's contract — products, experiment variables, preview. */
 export const definePaywall = <TDefinition extends PaywallDefinition>(
   definition: TDefinition,
 ): TDefinition => definition;

@@ -28,6 +28,16 @@
   button {
     cursor: pointer;
   }
+
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
 }
 
 @layer components {
@@ -66,6 +76,7 @@
     padding: 0;
   }
 
+  .sw-icon,
   .sw-btn svg,
   .sw-segmented svg {
     width: 14px;
@@ -102,6 +113,7 @@
 
   .sw-select {
     appearance: none;
+    cursor: pointer;
     height: 28px;
     padding: 0 24px 0 9px;
     border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);

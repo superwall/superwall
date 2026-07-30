@@ -2,12 +2,18 @@ import * as React from "react";
 import { ActionMenu, type ActionProgress } from "../components/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/CompareMenu";
 import { DeviceFrame, DevicePlaceholder } from "../components/DeviceFrame";
-import { Segmented, Select } from "../components/controls";
+import { MissingProducts } from "../components/MissingProducts";
+import { PaywallToasts } from "../components/PaywallToasts";
+import { Segmented, Select, Switch } from "../components/controls";
 import { ExternalIcon, MoonIcon, RotateIcon, SlidersIcon, SunIcon } from "../components/icons";
 import { SidePanel } from "../components/SidePanel";
 import { Toolbar, ToolbarDivider, ToolbarGroup } from "../components/Toolbar";
 import { TopBar } from "../components/TopBar";
-import { VariablesPanel } from "../components/VariablesPanel";
+import {
+  VariablesPanel,
+  type VariableGroups,
+  type VariableRow,
+} from "../components/VariablesPanel";
 import { fetchStatus, runAction } from "../lib/actions";
 import {
   DEFAULT_DEVICE_ID,
@@ -23,6 +29,7 @@ import {
   type PreviewOverrides,
   type StudioActionName,
   type StudioActionStep,
+  type Samples,
   type StudioSource,
   type StudioStatus,
   type StudioStepState,
@@ -109,17 +116,19 @@ const StagePane = ({
 export const SurfaceEditor = ({
   source,
   surface,
+  samples,
   onBack,
 }: {
   source: StudioSource;
   surface: StudioSurface;
+  samples: Samples;
   onBack: () => void;
 }) => {
   const [deviceId, setDeviceId] = React.useState(DEFAULT_DEVICE_ID);
   const [size, setSize] = React.useState(RESPONSIVE_DEFAULT);
   const [theme, setTheme] = React.useState<"light" | "dark">("light");
   const [locale, setLocale] = React.useState<string | undefined>(undefined);
-  const [variables, setVariables] = React.useState<Record<string, unknown>>({});
+  const [edited, setEdited] = React.useState<PreviewOverrides>({});
   const [panelOpen, setPanelOpen] = React.useState(false);
   const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(undefined);
   const [reloadKey, setReloadKey] = React.useState(0);
@@ -197,8 +206,14 @@ export const SurfaceEditor = ({
   const overrides: PreviewOverrides = {
     theme,
     locale,
-    variables,
-    device: responsive ? undefined : device.device,
+    user: edited.user,
+    params: edited.params,
+    products: edited.products,
+    trialEligible: edited.trialEligible,
+    device: {
+      ...(responsive ? {} : device.device),
+      ...edited.device,
+    },
   };
   const previewSrc = source.previewUrl(surface, overrides);
   const liveSrc = status.liveUrl ? withOverrides(status.liveUrl, overrides) : undefined;
@@ -234,11 +249,51 @@ export const SurfaceEditor = ({
           title: `${compareWith.surface.id} preview`,
         });
 
-  const hasVariables = surface.variables && Object.keys(surface.variables).length > 0;
-  const overrideCount = Object.keys(variables).length;
+  const groups = React.useMemo((): VariableGroups => {
+    const rows = (prefix: string, record: Record<string, unknown> | undefined): VariableRow[] =>
+      Object.entries(record ?? {})
+        .map(([key, value]) => ({ path: `${prefix}.${key}`, value }))
+        .toSorted((a, b) => a.path.localeCompare(b.path));
+
+    return {
+      user: rows("user", { ...source.samples?.user, ...samples.user }),
+      device: rows("device", {
+        ...source.samples?.device,
+        ...samples.device,
+        ...(device.device as Record<string, unknown>),
+      }),
+      params: rows("params", source.samples?.params),
+      products: Object.entries(surface.products ?? {}).flatMap(([reference, identifier]) =>
+        rows(`products.${reference}`, samples.products?.[identifier]),
+      ),
+    };
+  }, [source.samples, samples, device.device, surface.products]);
+
+  const missingProducts = React.useMemo(() => {
+    if (!samples.products) return [];
+    return Object.entries(surface.products ?? {})
+      .filter(([, identifier]) => samples.products?.[identifier] === undefined)
+      .map(([reference, identifier]) => ({ reference, identifier }));
+  }, [samples.products, surface.products]);
+
+  const [dismissedProducts, setDismissedProducts] = React.useState(false);
+  React.useEffect(() => setDismissedProducts(false), [surface]);
+  const shippable = missingProducts.length === 0;
+  const overrideCount =
+    Object.keys(edited.user ?? {}).length +
+    Object.keys(edited.params ?? {}).length +
+    Object.keys(edited.device ?? {}).length;
 
   return (
     <>
+      <PaywallToasts surfaceKey={`${surface.project ?? ""}/${surface.id}`} />
+      {missingProducts.length > 0 && !dismissedProducts && (
+        <MissingProducts
+          paywall={surface.id}
+          missing={missingProducts}
+          onDismiss={() => setDismissedProducts(true)}
+        />
+      )}
       <TopBar
         title={`${source.title} / ${surface.id}`}
         onHome={onBack}
@@ -260,7 +315,19 @@ export const SurfaceEditor = ({
             >
               <ExternalIcon />
             </button>
-            {actionsEnabled && <ActionMenu progress={progress} onRun={ship} />}
+            {actionsEnabled && (
+              <ActionMenu
+                progress={progress}
+                blocked={
+                  shippable
+                    ? undefined
+                    : `Superwall has no product for ${missingProducts
+                        .map((entry) => entry.reference)
+                        .join(", ")}`
+                }
+                onRun={ship}
+              />
+            )}
           </>
         }
       />
@@ -287,14 +354,31 @@ export const SurfaceEditor = ({
           />
         </div>
 
-        {hasVariables && surface.variables && (
-          <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
-            <VariablesPanel schema={surface.variables} values={variables} onChange={setVariables} />
-          </SidePanel>
-        )}
+        <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
+          <VariablesPanel overrides={edited} groups={groups} onChange={setEdited} />
+        </SidePanel>
       </div>
 
       <Toolbar>
+        <ToolbarGroup label="Trial">
+          <Switch
+            label="Trial eligibility"
+            checked={edited.trialEligible ?? false}
+            onChange={(checked) => setEdited((current) => ({ ...current, trialEligible: checked }))}
+          />
+        </ToolbarGroup>
+        <ToolbarGroup label="Theme">
+          <Segmented
+            label="Theme"
+            value={theme}
+            options={[
+              { value: "light", label: <SunIcon /> },
+              { value: "dark", label: <MoonIcon /> },
+            ]}
+            onChange={setTheme}
+          />
+        </ToolbarGroup>
+        <ToolbarDivider />
         <ToolbarGroup label="Device">
           <Select
             label="Device"
@@ -321,17 +405,6 @@ export const SurfaceEditor = ({
             </span>
           )}
         </ToolbarGroup>
-        <ToolbarGroup label="Theme">
-          <Segmented
-            label="Theme"
-            value={theme}
-            options={[
-              { value: "light", label: <SunIcon /> },
-              { value: "dark", label: <MoonIcon /> },
-            ]}
-            onChange={setTheme}
-          />
-        </ToolbarGroup>
         {surface.locales.length > 1 && (
           <ToolbarGroup label="Locale">
             <Select
@@ -349,18 +422,16 @@ export const SurfaceEditor = ({
         {compareOptions.length > 0 && (
           <CompareMenu active={compareWith} options={compareOptions} onSelect={setCompareWith} />
         )}
-        {hasVariables && (
-          <button
-            type="button"
-            className="sw-btn"
-            aria-expanded={panelOpen}
-            onClick={() => setPanelOpen((open) => !open)}
-          >
-            <SlidersIcon />
-            Variables
-            {overrideCount > 0 && <span className="text-accent">{overrideCount}</span>}
-          </button>
-        )}
+        <button
+          type="button"
+          className="sw-btn"
+          aria-expanded={panelOpen}
+          onClick={() => setPanelOpen((open) => !open)}
+        >
+          <SlidersIcon />
+          Variables
+          {overrideCount > 0 && <span className="text-accent">{overrideCount}</span>}
+        </button>
       </Toolbar>
     </>
   );

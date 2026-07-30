@@ -246,8 +246,8 @@ describe("withOverrides", () => {
     expect(withOverrides("https://r.test/a.html", { theme: "dark" })).toBe(
       "https://r.test/a.html?theme=dark",
     );
-    expect(withOverrides("https://r.test/a.html?x=1", { variables: { plan: "go" } })).toContain(
-      "&sw_vars=",
+    expect(withOverrides("https://r.test/a.html?x=1", { user: { plan: "go" } })).toContain(
+      "&sw_user=",
     );
     expect(withOverrides("https://r.test/a.html", {})).toBe("https://r.test/a.html");
   });

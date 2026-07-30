@@ -25,6 +25,8 @@ interface FakeRoutes {
   orgId?: string;
 }
 
+const posted: Record<string, unknown>[] = [];
+
 function fakeApi(routes: FakeRoutes, calls: string[] = []): SuperwallApi {
   const fake = {
     org: { id: routes.orgId, name: undefined, count: 1 },
@@ -43,8 +45,9 @@ function fakeApi(routes: FakeRoutes, calls: string[] = []): SuperwallApi {
       if (/^\/v2\/paywalls\/\d+$/.test(apiPath)) return routes.paywall ?? {};
       throw new Error(`unexpected get ${apiPath}`);
     },
-    post: async (apiPath: string) => {
+    post: async (apiPath: string, body?: unknown) => {
       calls.push(`post ${apiPath}`);
+      posted.push(Object(body) as Record<string, unknown>);
       if (apiPath === "/v2/paywalls") return routes.created ?? { id: 9 };
       throw new Error(`unexpected post ${apiPath}`);
     },
@@ -61,6 +64,7 @@ function scaffold(): string {
 }
 
 afterEach(() => {
+  posted.length = 0;
   while (dirs.length > 0) {
     const dir = dirs.pop();
     if (dir) fs.rmSync(dir, { recursive: true, force: true });
@@ -331,4 +335,60 @@ test("a non-headless paywall sharing the identifier is ignored, not hijacked", a
   const resolved = await resolveBinding({ api, superwallDir: dir, surface, surfaces: [surface] });
   assert.equal(resolved.source, "created");
   assert.equal(resolved.paywallId, "2");
+});
+
+test("a created paywall carries the name the config gave it", async () => {
+  const dir = scaffold();
+  writeApplicationId(dir, "7");
+  const api = fakeApi({ paywalls: [], created: { id: 9 } });
+
+  await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface,
+    name: "Winback — Annual, 3-day trial",
+    surfaces: [surface],
+  });
+
+  assert.equal(posted[0]?.name, "Winback — Annual, 3-day trial");
+  assert.equal(posted[0]?.identifier, "plus-upgrade");
+});
+
+test("without a name the directory is title-cased, since a slug reads badly in a dashboard", async () => {
+  const dir = scaffold();
+  writeApplicationId(dir, "7");
+  const api = fakeApi({ paywalls: [], created: { id: 9 } });
+
+  await resolveBinding({ api, superwallDir: dir, surface, surfaces: [surface] });
+
+  assert.equal(posted[0]?.name, "Plus Upgrade");
+});
+
+test("a blank name falls back rather than creating an unnamed paywall", async () => {
+  const dir = scaffold();
+  writeApplicationId(dir, "7");
+  const api = fakeApi({ paywalls: [], created: { id: 9 } });
+
+  await resolveBinding({ api, superwallDir: dir, surface, name: "   ", surfaces: [surface] });
+
+  assert.equal(posted[0]?.name, "Plus Upgrade");
+});
+
+test("the app is recovered from an already-bound paywall when the lock predates applicationId", async () => {
+  const dir = scaffold();
+  const sibling: FrameworkSurface = { ...surface, id: "other-wall" };
+  writeBinding(dir, "paywall", "other-wall", { paywallId: "555" });
+  const calls: string[] = [];
+  const api = fakeApi({ paywall: { application_id: 42 }, paywalls: [], created: { id: 9 } }, calls);
+
+  const resolved = await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface,
+    surfaces: [surface, sibling],
+  });
+
+  assert.equal(resolved.applicationId, "42");
+  assert.equal(readLock(dir).applicationId, "42");
+  assert.ok(!calls.includes("list /v2/projects"));
 });

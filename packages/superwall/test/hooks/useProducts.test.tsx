@@ -4,16 +4,19 @@ import { useProducts } from "../../src/hooks";
 import { flush, renderWithProvider } from "../helpers";
 
 describe("useProducts", () => {
-  it("delivers mock products with synthesized SDK variables", async () => {
+  it("delivers the config's product slots with no invented variables", async () => {
     const { result } = renderWithProvider(() => useProducts());
     await flush();
 
     await waitFor(() => expect(result.current.products).toHaveLength(2));
-    expect(result.current.getProduct("primary")?.variables).toMatchObject({
-      price: "$39.99",
-      period: "year",
-      trialPeriodDays: 7,
-    });
-    expect(result.current.getProduct("primary")?.productId).toBe("pro_3999_year");
+    const primary = result.current.getProduct("primary");
+    expect(primary?.productId).toBe("pro_3999_year");
+
+    // Prices come from Superwall alone. Without a host there is nothing to
+    // report, and a paywall must see undefined rather than a plausible lie.
+    expect(primary?.variables.price).toBeUndefined();
+    expect(primary?.variables.period).toBeUndefined();
+    expect(primary?.variables.trialPeriodDays).toBeUndefined();
+    expect(primary?.variables.identifier).toBe("pro_3999_year");
   });
 });

@@ -4,21 +4,29 @@ const overrideParams = (overrides: PreviewOverrides): URLSearchParams => {
   const params = new URLSearchParams();
   if (overrides.theme) params.set("theme", overrides.theme);
   if (overrides.locale) params.set("locale", overrides.locale);
-  if (overrides.variables && Object.keys(overrides.variables).length > 0) {
-    params.set("sw_vars", JSON.stringify(overrides.variables));
+  for (const [key, group] of [
+    ["sw_device", overrides.device],
+    ["sw_user", overrides.user],
+    ["sw_params", overrides.params],
+    ["sw_products", overrides.products],
+  ] as const) {
+    if (group && Object.keys(group).length > 0) params.set(key, JSON.stringify(group));
   }
-  if (overrides.device && Object.keys(overrides.device).length > 0) {
-    params.set("sw_device", JSON.stringify(overrides.device));
+  if (overrides.trialEligible !== undefined) {
+    params.set("sw_trial", overrides.trialEligible ? "1" : "0");
   }
   return params;
 };
+
+export const surfacePath = (surface: StudioSurface): string =>
+  `${surface.project ? `/${surface.project}` : ""}/${surface.kind}/${surface.id}`;
 
 export const buildPreviewPath: PreviewUrlBuilder = (
   surface: StudioSurface,
   overrides: PreviewOverrides,
 ): string => {
   const query = overrideParams(overrides).toString();
-  return `/preview/${surface.kind}/${surface.id}${query ? `?${query}` : ""}`;
+  return `/preview${surfacePath(surface)}${query ? `?${query}` : ""}`;
 };
 
 export const withOverrides = (url: string, overrides: PreviewOverrides): string => {

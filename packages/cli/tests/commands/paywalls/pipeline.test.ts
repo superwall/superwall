@@ -10,6 +10,8 @@ import {
   needsWork,
   pendingPromoteWarning,
   runPushPipeline,
+  projectDir,
+  projectDirs,
   requireClean,
   selectSurfaces,
 } from "@/commands/paywalls/pipeline";
@@ -74,7 +76,11 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
     req.on("data", (chunk) => (raw += String(chunk)));
     req.on("end", () => {
       const url = req.url ?? "";
-      const kind = url.endsWith("/assets")
+      const kind = url.startsWith("/v2/projects")
+        ? "projects"
+        : url.startsWith("/v2/products")
+          ? "products"
+          : url.endsWith("/assets")
         ? "assets"
         : url.endsWith("/promote")
           ? "promote"
@@ -104,6 +110,13 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
         link: { commit_sha: "linked" },
         promote: { version: 7, url: "u" },
         live: { id: "2080" },
+        projects: { data: [{ id: "9", applications: [{ id: "42" }] }] },
+        products: {
+          data: [
+            { identifier: "pro_999_month", price: { amount: 999, currency: "USD" } },
+            { identifier: "pro_5999_year", price: { amount: 5999, currency: "USD" } },
+          ],
+        },
         other: {},
       };
       res.writeHead(route.status ?? 200, { "content-type": "application/json" });
@@ -126,6 +139,7 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
 }
 
 const built = (over: Record<string, unknown> = {}) => ({
+  name: "Pro",
   snapshotId: "abcdef0123456789",
   html: "<html></html>",
   bytes: 13,
@@ -185,7 +199,41 @@ test("push runs link, build, assets, push and source, and stops before promote",
     load: async () => frameworkFor(project),
   });
 
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link"]);
+});
+
+test("a product Superwall has no record of stops the push before any version exists", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ products: { body: { data: [] } } });
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), {
+      promote: true,
+      load: async () =>
+        frameworkFor(project, {
+          buildSnapshot: async () => built({ products: { annual: "pro_5999_year" } }),
+        }),
+    }),
+    /plus-upgrade: annual → pro_5999_year/,
+  );
+
+  // a published version is immutable, so nothing may reach Superwall
+  assert.deepEqual(fake.calls, ["projects", "products"]);
+});
+
+test("an unreachable catalogue is not treated as an empty one", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ projects: { status: 500, body: {} } });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () =>
+      frameworkFor(project, {
+        buildSnapshot: async () => built({ products: { annual: "pro_5999_year" } }),
+      }),
+  });
+
+  assert.ok(fake.calls.includes("versions"), "the push proceeds rather than blaming products");
 });
 
 test("publish promotes only after the source push lands", async () => {
@@ -197,7 +245,7 @@ test("publish promotes only after the source push lands", async () => {
     load: async () => frameworkFor(project),
   });
 
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link", "promote"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link", "promote"]);
 });
 
 test("a paywall with assets syncs them before the version push", async () => {
@@ -231,7 +279,7 @@ test("a paywall with assets syncs them before the version push", async () => {
       }),
   });
 
-  assert.deepEqual(fake.calls, ["live", "assets", "versions", "access", "link"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "assets", "versions", "access", "link"]);
   const version: unknown = JSON.parse(fake.bodies.versions ?? "{}");
   assert.deepEqual(Reflect.get(Object(version), "assets"), [
     {
@@ -278,7 +326,7 @@ test("a framework too old to report assets fails before the version push", async
     }),
     /update the project's superwall dependency/,
   );
-  assert.deepEqual(fake.calls, []);
+  assert.deepEqual(fake.calls, ["projects", "products"]);
 });
 
 test("a link failure never builds — an unbindable surface has nothing to push to", async () => {
@@ -328,7 +376,7 @@ for (const [label, status] of [
       }),
       new RegExp(String(status)),
     );
-    assert.deepEqual(fake.calls, ["live", "assets"]);
+    assert.deepEqual(fake.calls, ["projects", "products", "live", "assets"]);
   });
 }
 
@@ -343,7 +391,7 @@ test("a version push failure never reaches source or promote", async () => {
     }),
     /500/,
   );
-  assert.deepEqual(fake.calls, ["live", "versions"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions"]);
 });
 
 test("a failed live-version lookup never fails the push — the version is what matters", async () => {
@@ -355,7 +403,7 @@ test("a failed live-version lookup never fails the push — the version is what 
     load: async () => frameworkFor(project),
   });
 
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link", "promote"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link", "promote"]);
 });
 
 test("a source failure blocks promote — production keeps the old version", async () => {
@@ -369,7 +417,7 @@ test("a source failure blocks promote — production keeps the old version", asy
     }),
     /500/,
   );
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link"]);
   assert.ok(!fake.calls.includes("promote"));
 });
 
@@ -384,7 +432,7 @@ test("a source repo that cannot be reached fails the surface before promote", as
     }),
     /503/,
   );
-  assert.deepEqual(fake.calls, ["live", "versions", "access"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access"]);
 });
 
 test("a promote failure surfaces after the version is already safely pushed", async () => {
@@ -398,7 +446,7 @@ test("a promote failure surfaces after the version is already safely pushed", as
     }),
     /500/,
   );
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link", "promote"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link", "promote"]);
 });
 
 test("a tree far past the old JSON cap publishes fine over git", async () => {
@@ -411,7 +459,7 @@ test("a tree far past the old JSON cap publishes fine over git", async () => {
     load: async () => frameworkFor(project),
   });
 
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link", "promote"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link", "promote"]);
   const tracked = execFileSync(
     "git",
     ["--git-dir", fake.bare, "ls-tree", "-r", "--name-only", "main"],
@@ -433,7 +481,7 @@ test("every surface builds up front, but the first failure stops shipping", asyn
   );
   assert.deepEqual(steps, ["build", "build"]);
   assert.deepEqual(
-    fake.calls.filter((call) => call !== "live"),
+    fake.calls.filter((call) => !["live", "projects", "products"].includes(call)),
     ["versions"],
   );
 });
@@ -449,7 +497,7 @@ test("--only narrows the run to one surface", async () => {
   });
 
   assert.deepEqual(steps, ["build"]);
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link"]);
 });
 
 test("requireClean lets a clean selection through", () => {
@@ -484,6 +532,25 @@ test("requireClean ignores surfaces that were not selected — a colleague's WIP
   assert.throws(() => requireClean(selectSurfaces(project, undefined)), /beta is broken/);
 });
 
+test("projectDirs takes every directory dev was pointed at", () => {
+  const at = (dir: unknown) => ({ argv: { dir } }) as unknown as CommandContext;
+
+  assert.deepEqual(projectDirs(at(undefined)), [process.cwd()]);
+  assert.deepEqual(projectDirs(at([])), [process.cwd()]);
+  assert.deepEqual(
+    projectDirs(at(["/tmp/one", "/tmp/two"])),
+    ["/tmp/one", "/tmp/two"],
+  );
+  assert.deepEqual(projectDirs(at("/tmp/only")), ["/tmp/only"]);
+});
+
+test("projectDir stays the first of them, so single-project commands are unchanged", () => {
+  const at = (dir: unknown) => ({ argv: { dir } }) as unknown as CommandContext;
+
+  assert.equal(projectDir(at(["/tmp/one", "/tmp/two"])), "/tmp/one");
+  assert.equal(projectDir(at(undefined)), process.cwd());
+});
+
 test("selectSurfaces explains an unknown name, and an empty project", () => {
   const project: FrameworkProject = {
     root: "/tmp",
@@ -515,6 +582,8 @@ test("the source bundle is collected once and reused for every surface", async (
   });
 
   assert.deepEqual(fake.calls, [
+    "projects",
+    "products",
     "live",
     "live",
     "versions",
@@ -535,7 +604,7 @@ test("an interactive run offers the app picker; a lock hit still never needs it"
     load: async () => frameworkFor(project),
   });
 
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link"]);
 });
 
 test("rich output renders through the spinner on success and on failure", async () => {
@@ -546,7 +615,7 @@ test("rich output renders through the spinner on success and on failure", async 
     promote: false,
     load: async () => frameworkFor(project),
   });
-  assert.deepEqual(ok.calls, ["live", "versions", "access", "link"]);
+  assert.deepEqual(ok.calls, ["projects", "products", "live", "versions", "access", "link"]);
 
   const failing = scaffold();
   const bad = await fakeApi({ versions: { status: 500, body: {} } });
@@ -599,7 +668,7 @@ test("a megabyte-scale asset is reported in MB, and one asset reads as singular"
     }),
     /Couldn't upload big\.png/,
   );
-  assert.deepEqual(fake.calls, ["live", "assets"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "assets"]);
 });
 
 test("-m threads the publish note into the source push verbatim", async () => {
@@ -747,7 +816,7 @@ test("a surface whose snapshot already matches production is skipped entirely", 
       }),
   });
 
-  assert.deepEqual(fake.calls, ["live"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live"]);
 });
 
 test("a changed snapshot still ships when production is on an older one", async () => {
@@ -764,7 +833,7 @@ test("a changed snapshot still ships when production is on an older one", async 
       }),
   });
 
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link"]);
 });
 
 test("--id selects several surfaces, and an unknown id names what the project has", async () => {
@@ -806,11 +875,11 @@ test("pushing twice with no edits skips the second run — the version already e
   const load = async () => frameworkFor(project);
 
   await runPushPipeline(contextFor(fake.api), { promote: false, load });
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link"]);
 
   fake.calls.length = 0;
   await runPushPipeline(contextFor(fake.api), { promote: false, load });
-  assert.deepEqual(fake.calls, ["live"], "nothing to push: the built snapshot is already a version");
+  assert.deepEqual(fake.calls, ["projects", "products", "live"], "nothing to push: the built snapshot is already a version");
 });
 
 test("needsWork compares against the last pushed snapshot, never the live one", () => {
@@ -836,7 +905,7 @@ test("publish refuses to re-push an identical version and points at promote inst
 
   await runPushPipeline(contextFor(fake.api), { promote: true, load });
 
-  assert.deepEqual(fake.calls, ["live"], "no second version push, and no promote of an old push");
+  assert.deepEqual(fake.calls, ["projects", "products", "live"], "no second version push, and no promote of an old push");
 });
 
 test("publish still pushes and promotes when the code actually changed", async () => {
@@ -856,7 +925,7 @@ test("publish still pushes and promotes when the code actually changed", async (
     load: async () => frameworkFor(project, { buildSnapshot: async () => built({ snapshotId: snapshot }) }),
   });
 
-  assert.deepEqual(fake.calls, ["live", "versions", "access", "link", "promote"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link", "promote"]);
 });
 
 test("push stays quiet about a pending promote — that hint belongs to publish", async () => {
@@ -899,7 +968,7 @@ test("no promote hint when the built snapshot is what production already serves"
       load: async () =>
         frameworkFor(project, { buildSnapshot: async () => built({ snapshotId: snapshot }) }),
     });
-    assert.deepEqual(fake.calls, ["live"], "already live: nothing to push, nothing to promote");
+    assert.deepEqual(fake.calls, ["projects", "products", "live"], "already live: nothing to push, nothing to promote");
     assert.deepEqual(warnings, [], "and nothing to warn about");
   } finally {
     ui.warn = warn;

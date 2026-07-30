@@ -87,3 +87,12 @@ describe("applyThemeOverride", () => {
     expect(window.matchMedia("(min-width: 100px)").media).toBe("(min-width: 100px)");
   });
 });
+
+describe("trial eligibility", () => {
+  it("reads an explicit yes or no, and nothing otherwise", () => {
+    expect(readPreviewOverrides("?sw_trial=1").trialEligible).toBe(true);
+    expect(readPreviewOverrides("?sw_trial=0").trialEligible).toBe(false);
+    expect(readPreviewOverrides("").trialEligible).toBeUndefined();
+    expect(readPreviewOverrides("?sw_trial=maybe").trialEligible).toBeUndefined();
+  });
+});

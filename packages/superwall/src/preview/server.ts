@@ -7,7 +7,7 @@ import { createServer, searchForWorkspaceRoot, type Plugin, type ViteDevServer }
 import { loadSurfaceConfig } from "../config/load";
 import { discoverProject, type DiscoveredSurface, type Project } from "../discover";
 import { injectPlatformLayer, PLATFORM_STYLESHEET_URL, renderDocument } from "../document";
-import { buildStudioProject } from "./project";
+import { buildStudioProjects } from "./project";
 import { injectWebviewSimulation } from "./webview";
 
 const VIRTUAL_PROJECT_ID = "virtual:superwall/project";
@@ -42,35 +42,77 @@ const moduleUrl = (viteRoot: string, file: string): string => {
   return relative.startsWith("..") ? `/@fs/${file}` : `/${relative.split(path.sep).join("/")}`;
 };
 
-const projectModule = (project: Project): string => {
-  const lazy = (file: string) =>
-    `() => import(${JSON.stringify(moduleUrl(project.superwallDir, file))})`;
+export type PreviewProject = { slug: string; root: string; project: Project };
+
+const slugFor = (root: string, taken: Set<string>): string => {
+  const base =
+    path
+      .basename(root)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-") || "project";
+  let slug = base;
+  for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
+  taken.add(slug);
+  return slug;
+};
+
+const readProjects = (roots: readonly string[]): PreviewProject[] => {
+  const taken = new Set<string>();
+  return roots.map((root) => ({
+    slug: slugFor(root, taken),
+    root,
+    project: discoverProject(root),
+  }));
+};
+
+const findSurface = (
+  projects: readonly PreviewProject[],
+  slug: string | undefined,
+  kind: string,
+  id: string,
+) => {
+  const scoped = slug ? projects.filter((entry) => entry.slug === slug) : projects;
+  for (const entry of scoped) {
+    const surface = entry.project.surfaces.find(
+      (candidate) => candidate.kind === kind && candidate.id === id,
+    );
+    if (surface) return { entry, surface };
+  }
+  return undefined;
+};
+
+const projectModule = (projects: readonly PreviewProject[], viteRoot: string): string => {
+  const lazy = (file: string) => `() => import(${JSON.stringify(moduleUrl(viteRoot, file))})`;
   const messageList = (messages: { locale: string; file: string }[]) =>
     `[${messages
       .map((entry) => `{ locale: ${JSON.stringify(entry.locale)}, load: ${lazy(entry.file)} }`)
       .join(", ")}]`;
 
-  const surfaces = project.surfaces.map((surface) => {
-    const routes = surface.routes
-      .map((route) => `{ name: ${JSON.stringify(route.name)}, load: ${lazy(route.file)} }`)
-      .join(", ");
-    const fields = [
-      `kind: ${JSON.stringify(surface.kind)}`,
-      `id: ${JSON.stringify(surface.id)}`,
-      `routes: [${routes}]`,
-      `messages: ${messageList(surface.messages)}`,
-      `loadConfig: ${lazy(surface.configFile)}`,
-      surface.layoutFile ? `loadLayout: ${lazy(surface.layoutFile)}` : `loadLayout: undefined`,
-    ];
-    return `  { ${fields.join(", ")} }`;
-  });
+  const surfaces = projects.flatMap(({ slug, project }) =>
+    project.surfaces.map((surface) => {
+      const routes = surface.routes
+        .map((route) => `{ name: ${JSON.stringify(route.name)}, load: ${lazy(route.file)} }`)
+        .join(", ");
+      const fields = [
+        `kind: ${JSON.stringify(surface.kind)}`,
+        `id: ${JSON.stringify(surface.id)}`,
+        `project: ${JSON.stringify(slug)}`,
+        `routes: [${routes}]`,
+        `messages: ${messageList(surface.messages)}`,
+        `sharedMessages: ${messageList(project.sharedMessages)}`,
+        `loadConfig: ${lazy(surface.configFile)}`,
+        surface.layoutFile ? `loadLayout: ${lazy(surface.layoutFile)}` : `loadLayout: undefined`,
+      ];
+      return `  { ${fields.join(", ")} }`;
+    }),
+  );
 
   return [
     `export const surfaces = [`,
     surfaces.join(",\n"),
     `]`,
-    `export const sharedMessages = ${messageList(project.sharedMessages)}`,
-    `export const diagnostics = ${JSON.stringify(project.diagnostics)}`,
+    `export const sharedMessages = ${messageList(projects[0]?.project.sharedMessages ?? [])}`,
+    `export const diagnostics = ${JSON.stringify(projects.flatMap((one) => one.project.diagnostics))}`,
   ].join("\n");
 };
 
@@ -87,8 +129,8 @@ const previewDocument = async (
   return injectWebviewSimulation(injectPlatformLayer(document, platformStylesheet));
 };
 
-const PREVIEW_ROUTE = /^\/preview\/(paywall|funnel)\/([a-z0-9-]+)\/?$/;
-const STUDIO_ROUTE = /^\/(paywall|funnel)\/[a-z0-9-]+\/?$/;
+const PREVIEW_ROUTE = /^\/preview\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)\/?$/;
+const STUDIO_ROUTE = /^\/(?:[a-z0-9-]+\/)?(paywall|funnel)\/[a-z0-9-]+\/?$/;
 const STUDIO_ASSET_PREFIX = "/__studio/";
 
 const STUDIO_MISSING = `superwall studio is not built.
@@ -111,7 +153,15 @@ export type StudioStatus = {
   updatedAt?: string;
 };
 
+export type Samples = {
+  device?: Record<string, unknown>;
+  user?: Record<string, unknown>;
+  products?: Record<string, Record<string, unknown>>;
+  live?: { device: boolean; user: boolean };
+};
+
 export type StudioActions = {
+  samples?(): Promise<Samples>;
   run(
     action: StudioActionName,
     surface: DiscoveredSurface,
@@ -141,10 +191,11 @@ const json = (
   res.end(JSON.stringify(value));
 };
 
-const STATUS_ROUTE = /^\/__studio\/status\/(paywall|funnel)\/([a-z0-9-]+)$/;
+const STATUS_ROUTE = /^\/__studio\/status\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
 
 const previewPlugin = (
-  projectRoot: string,
+  roots: readonly string[],
+  viteRoot: string,
   platformStylesheet: string,
   studio?: StudioActions,
 ): Plugin => ({
@@ -155,14 +206,13 @@ const previewPlugin = (
   },
   load(id) {
     if (id === RESOLVED_VIRTUAL_PROJECT_ID) {
-      return projectModule(discoverProject(projectRoot));
+      return projectModule(readProjects(roots), viteRoot);
     }
     return undefined;
   },
   configureServer(server) {
     const invalidate = (file: string) => {
-      const relative = path.relative(projectRoot, file);
-      if (relative.includes("paywalls") || relative.includes("funnels")) {
+      if (roots.some((root) => path.relative(root, file).includes("paywalls"))) {
         const mod = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_PROJECT_ID);
         if (mod) server.moduleGraph.invalidateModule(mod);
         server.ws.send({ type: "full-reload" });
@@ -178,7 +228,7 @@ const previewPlugin = (
         const url = (req.url ?? "/").split("?")[0];
 
         if (url === "/__studio/project.json") {
-          buildStudioProject(projectRoot)
+          buildStudioProjects(readProjects(roots))
             .then((payload) => {
               json(res, { ...payload, capabilities: { actions: Boolean(studio) } });
             })
@@ -186,14 +236,32 @@ const previewPlugin = (
           return;
         }
 
+        if (url === "/__studio/samples.json") {
+          const sample = studio?.samples?.();
+          if (!sample) {
+            json(res, {});
+            return;
+          }
+          sample.then((value) => json(res, value)).catch(() => json(res, {}));
+          return;
+        }
+
         if (url === "/__studio/action" && req.method === "POST") {
           readBody(req)
             .then(async (body) => {
-              const request = JSON.parse(body) as { action?: string; kind?: string; id?: string };
+              const request = JSON.parse(body) as {
+                action?: string;
+                kind?: string;
+                id?: string;
+                project?: string;
+              };
               const action = ACTION_NAMES.find((name) => name === request.action);
-              const surface = discoverProject(projectRoot).surfaces.find(
-                (candidate) => candidate.kind === request.kind && candidate.id === request.id,
-              );
+              const surface = findSurface(
+                readProjects(roots),
+                request.project,
+                request.kind ?? "",
+                request.id ?? "",
+              )?.surface;
               res.setHeader("Content-Type", "application/x-ndjson");
               res.setHeader("Cache-Control", "no-store");
               const line = (value: unknown) => res.write(`${JSON.stringify(value)}\n`);
@@ -221,9 +289,12 @@ const previewPlugin = (
 
         const status = STATUS_ROUTE.exec(url);
         if (status) {
-          const surface = discoverProject(projectRoot).surfaces.find(
-            (candidate) => candidate.kind === status[1] && candidate.id === status[2],
-          );
+          const surface = findSurface(
+            readProjects(roots),
+            status[1] || undefined,
+            status[2] ?? "",
+            status[3] ?? "",
+          )?.surface;
           if (!surface || !studio) {
             return json(res, {});
           }
@@ -236,13 +307,15 @@ const previewPlugin = (
 
         const preview = PREVIEW_ROUTE.exec(url);
         if (preview) {
-          const project = discoverProject(projectRoot);
-          const surface = project.surfaces.find(
-            (candidate) => candidate.kind === preview[1] && candidate.id === preview[2],
-          );
+          const surface = findSurface(
+            readProjects(roots),
+            preview[1] || undefined,
+            preview[2] ?? "",
+            preview[3] ?? "",
+          )?.surface;
           if (!surface) {
             res.statusCode = 404;
-            res.end(`No ${preview[1]} named "${preview[2]}"`);
+            res.end(`No ${preview[2]} named "${preview[3]}"`);
             return;
           }
           previewDocument(surface, platformStylesheet)
@@ -297,20 +370,29 @@ export type PreviewServerOptions = {
 };
 
 export const startPreviewServer = async (
-  projectRoot: string,
+  projectRoots: string | readonly string[],
   options: PreviewServerOptions,
 ): Promise<ViteDevServer> => {
-  const project = discoverProject(projectRoot);
+  const roots = (typeof projectRoots === "string" ? [projectRoots] : [...projectRoots]).map(
+    (root) => path.resolve(root),
+  );
+  const projects = readProjects(roots);
+  const first = projects[0];
+  if (!first) throw new Error("startPreviewServer needs at least one project directory.");
+
+  const viteRoot = first.project.superwallDir;
+
   const server = await createServer({
     configFile: false,
     envFile: false,
-    root: project.superwallDir,
+    root: viteRoot,
     appType: "custom",
     logLevel: "warn",
     plugins: [
       react(),
       previewPlugin(
-        project.root,
+        projects.map((one) => one.project.root),
+        viteRoot,
         options.platformStylesheet ?? PLATFORM_STYLESHEET_URL,
         options.studio,
       ),
@@ -318,7 +400,7 @@ export const startPreviewServer = async (
     resolve: {
       dedupe: ["react", "react-dom"],
       alias: {
-        "@": project.superwallDir,
+        "@": first.project.superwallDir,
       },
     },
     optimizeDeps: {
@@ -335,7 +417,11 @@ export const startPreviewServer = async (
       strictPort: false,
       host: options.host ?? "0.0.0.0",
       fs: {
-        allow: [project.root, frameworkDir, searchForWorkspaceRoot(project.superwallDir)],
+        allow: [
+          ...projects.map((one) => one.project.root),
+          frameworkDir,
+          searchForWorkspaceRoot(first.project.superwallDir),
+        ],
       },
     },
   });

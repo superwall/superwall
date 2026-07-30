@@ -17,6 +17,4 @@ export type {
   StudioSource,
   StudioSurface,
   StudioSurfaceKind,
-  VariablesSchema,
-  VariableSpec,
 } from "./lib/types";

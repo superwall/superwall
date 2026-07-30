@@ -45,13 +45,14 @@ describe("mock auto mode", () => {
     expect(result.current.getProduct("primary")?.variables).toEqual({});
   });
 
-  it("simulates the SDK in a plain browser", async () => {
+  it("stands in for the SDK in a plain browser, without inventing a catalogue", async () => {
     const { result } = renderWithProvider(() => useProducts(), { mock: "auto" });
     await flush();
 
-    await waitFor(() =>
-      expect(result.current.getProduct("primary")?.variables.price).toBe("$39.99"),
-    );
+    // The references resolve so a paywall can render; the prices do not, because
+    // only Superwall knows them.
+    await waitFor(() => expect(result.current.getProduct("primary")).toBeDefined());
+    expect(result.current.getProduct("primary")?.variables.price).toBeUndefined();
   });
 });
 

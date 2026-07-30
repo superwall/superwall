@@ -93,15 +93,18 @@ const ProgressPanel = ({ progress }: { progress: ActionProgress }) => {
 
 export const ActionMenu = ({
   progress,
+  blocked,
   onRun,
 }: {
   progress: ActionProgress | undefined;
+  blocked?: string;
   onRun: (action: StudioActionName) => void;
 }) => {
   const [selected, setSelected] = React.useState<StudioActionName>("push");
   const [open, setOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
 
+  const stopped = blocked !== undefined;
   const busy =
     progress !== undefined &&
     progress.error === undefined &&
@@ -121,18 +124,20 @@ export const ActionMenu = ({
     <div className="relative flex" ref={menuRef}>
       <button
         type="button"
-        className="sw-btn sw-btn--primary disabled:opacity-60"
-        disabled={busy}
+        className="sw-btn sw-btn--primary disabled:cursor-not-allowed disabled:opacity-40"
+        disabled={busy || stopped}
+        title={blocked}
         onClick={() => onRun(selected)}
       >
         {busy ? runningLabel[progress.action] : labelFor(selected)}
       </button>
       <button
         type="button"
-        className="sw-btn sw-btn--primary -ml-px w-6 !px-0"
+        className="sw-btn sw-btn--primary -ml-px w-6 !px-0 disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="Choose action"
         aria-expanded={open}
-        disabled={busy}
+        title={blocked}
+        disabled={busy || stopped}
         onClick={() => setOpen((value) => !value)}
       >
         <ChevronDownIcon />

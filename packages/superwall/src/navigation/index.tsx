@@ -9,13 +9,12 @@ export type RouteName = keyof SuperwallRoutes extends never
   ? string
   : Extract<keyof SuperwallRoutes, string>;
 
-/** The transitions that ship with the framework. */
 type BuiltInTransition = "push" | "slide" | "fade" | "none";
 
 /**
  * A built-in, or any name you define yourself in CSS. The router only stamps
- * the name onto `data-sw-transition` — what it does is entirely up to the
- * stylesheet, and how long it runs is read back off the running animations.
+ * the name onto `data-sw-transition`; what it does is up to the stylesheet, and
+ * how long it runs is read back off the running animations.
  */
 export type Transition = BuiltInTransition | (string & {});
 
@@ -140,10 +139,8 @@ const whenIdle = (run: () => void): (() => void) => {
   return () => clearTimeout(timer);
 };
 
-/** Only used where animations cannot be observed; otherwise they time themselves. */
 export const TRANSITION_MS = 500;
 
-/** Backstop so a runaway custom animation can never strand the stack. */
 const TRANSITION_CAP = 5000;
 
 const stillness = (): boolean =>
@@ -164,6 +161,29 @@ const animationMs = (element: Element): number => {
     const total = (durations[index % durations.length] ?? 0) + (delays[index % delays.length] ?? 0);
     return Math.max(longest, total);
   }, 0);
+};
+
+const FROZEN = ["--sw-from-transform", "--sw-from-filter", "--sw-from-opacity"] as const;
+
+const freeze = (container: HTMLElement | null): void => {
+  for (const child of container?.children ?? []) {
+    if (!(child instanceof HTMLElement)) continue;
+    if (typeof child.getAnimations !== "function" || child.getAnimations().length === 0) {
+      for (const property of FROZEN) child.style.removeProperty(property);
+      continue;
+    }
+    const style = getComputedStyle(child);
+    child.style.setProperty("--sw-from-transform", style.transform);
+    child.style.setProperty("--sw-from-filter", style.filter);
+    child.style.setProperty("--sw-from-opacity", style.opacity);
+  }
+};
+
+const thaw = (container: HTMLElement | null): void => {
+  for (const child of container?.children ?? []) {
+    if (!(child instanceof HTMLElement)) continue;
+    for (const property of FROZEN) child.style.removeProperty(property);
+  }
 };
 
 export type PaywallRouterProps = {
@@ -193,6 +213,7 @@ export const PaywallRouter = ({
   const notify = React.useRef(onNavigate);
   notify.current = onNavigate;
   const nextKey = React.useRef(1);
+  const layers = React.useRef<HTMLDivElement>(null);
 
   const top = entries[entries.length - 1];
 
@@ -207,6 +228,7 @@ export const PaywallRouter = ({
     const go = (name: string, options: NavigateOptions | undefined, keep: number | undefined) => {
       const target = resolve(name);
       const key = nextKey.current++;
+      freeze(layers.current);
       setNav((current) => {
         const kept = keep === undefined ? current.entries : current.entries.slice(0, keep);
         return {
@@ -220,7 +242,8 @@ export const PaywallRouter = ({
       });
     };
 
-    const popBy = (count: number) =>
+    const popBy = (count: number) => {
+      freeze(layers.current);
       setNav((current) => {
         const removed = Math.min(Math.max(Math.trunc(count), 1), current.entries.length - 1);
         if (removed < 1) return current;
@@ -230,6 +253,7 @@ export const PaywallRouter = ({
           direction: "back",
         };
       });
+    };
 
     return {
       name: top.name as RouteName,
@@ -289,21 +313,25 @@ export const PaywallRouter = ({
 
   const moving = direction === "back" && exiting ? transitionOf(exiting) : transitionOf(top);
 
-  const layers = React.useRef<HTMLDivElement>(null);
+  const [movement, setMovement] = React.useState(0);
   const [settled, setSettled] = React.useState(true);
   const animated = React.useRef(INITIAL_KEY);
 
   React.useLayoutEffect(() => {
     if (animated.current === top.key) return;
     animated.current = top.key;
+    setMovement((count) => count + 1);
     setSettled(false);
   }, [top.key]);
 
   React.useLayoutEffect(() => {
     if (settled) return;
+    const container = layers.current;
     let live = true;
     const done = () => {
-      if (live) setSettled(true);
+      if (!live) return;
+      thaw(container);
+      setSettled(true);
     };
 
     if (moving === "none" || stillness()) {
@@ -311,7 +339,7 @@ export const PaywallRouter = ({
       return;
     }
 
-    const measured = [...(layers.current?.children ?? [])].reduce(
+    const measured = [...(container?.children ?? [])].reduce(
       (longest, child) => Math.max(longest, animationMs(child)),
       0,
     );
@@ -320,14 +348,8 @@ export const PaywallRouter = ({
       live = false;
       clearTimeout(timer);
     };
-  }, [settled, moving]);
+  }, [movement, settled, moving]);
 
-  /**
-   * Which part of the movement this route is playing. Derived rather than
-   * hand-written so a stylesheet needs one attribute instead of three, and it
-   * disappears the moment the transition is over — nothing to remember to
-   * exclude. `below` and a settled stack have no phase at all.
-   */
   const phaseOf = (state: "active" | "behind" | "below" | "exiting"): string | undefined => {
     if (settled) return undefined;
     if (state === "active") return direction === "back" ? "return" : "enter";

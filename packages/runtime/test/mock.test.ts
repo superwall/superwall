@@ -14,10 +14,29 @@ const config = defineSuperwallConfig({
   },
 });
 
+/**
+ * Product variables are never invented — a caller supplies what the store would
+ * report, or the paywall sees nothing. These stand in for Superwall.
+ */
+const priced = [
+  {
+    reference: "primary",
+    productId: "pro_3999_year",
+    variables: { price: "$39.99", period: "year", trialPeriodDays: 7 },
+  },
+  {
+    reference: "secondary",
+    productId: "pro_999_month",
+    variables: { price: "$9.99", period: "month" },
+  },
+];
+
 const createMockedSession = (
   mockOptions: Parameters<typeof createMockSuperwallTransport>[0] = {},
 ) => {
-  const transport = createMockSuperwallTransport(mockOptionsFromConfig(config, mockOptions));
+  const transport = createMockSuperwallTransport(
+    mockOptionsFromConfig(config, { products: priced, ...mockOptions }),
+  );
   const session = createSuperwallSession({ config, transport });
   session.start({ sendPing: true });
   return { session, transport };

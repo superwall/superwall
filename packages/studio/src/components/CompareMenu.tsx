@@ -9,6 +9,33 @@ export type CompareOption = {
   target: CompareTarget;
 };
 
+const Row = ({
+  label,
+  hint,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  hint: string;
+  selected: boolean;
+  onSelect: () => void;
+}) => (
+  <button
+    type="button"
+    className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors hover:bg-cream/5"
+    aria-current={selected || undefined}
+    onClick={onSelect}
+  >
+    <span className="flex max-w-full items-center gap-1.5 text-[0.8125rem] font-medium">
+      <span className="truncate">{label}</span>
+      {selected && (
+        <span className="bg-accent size-[5px] shrink-0 rounded-full" aria-hidden="true" />
+      )}
+    </span>
+    <span className="max-w-full truncate text-xs text-cream/55">{hint}</span>
+  </button>
+);
+
 export const CompareMenu = ({
   active,
   options,
@@ -19,6 +46,7 @@ export const CompareMenu = ({
   onSelect: (target: CompareTarget | undefined) => void;
 }) => {
   const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
   const menuRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -30,9 +58,26 @@ export const CompareMenu = ({
     return () => window.removeEventListener("mousedown", close);
   }, [open]);
 
+  React.useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+
   const activeKey =
     active &&
     (active.type === "live" ? "live" : `surface:${active.surface.kind}/${active.surface.id}`);
+
+  const choose = (target: CompareTarget | undefined) => {
+    setOpen(false);
+    onSelect(target);
+  };
+
+  const needle = query.trim().toLowerCase();
+  const live = options.filter((option) => option.key === "live");
+  const paywalls = options
+    .filter((option) => option.key !== "live")
+    .filter(
+      (option) => needle === "" || `${option.label} ${option.hint}`.toLowerCase().includes(needle),
+    );
 
   return (
     <div className="relative flex" ref={menuRef}>
@@ -48,37 +93,53 @@ export const CompareMenu = ({
       </button>
 
       {open && (
-        <div className="bg-bar absolute bottom-full left-0 z-20 mb-1 w-64 border border-cream/20">
-          {active && (
-            <button
-              type="button"
-              className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors hover:bg-cream/5"
-              onClick={() => {
-                setOpen(false);
-                onSelect(undefined);
-              }}
-            >
-              <span className="text-[0.8125rem] font-medium">Off</span>
-              <span className="text-xs text-cream/55">Back to a single preview</span>
-            </button>
-          )}
-          {options.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors hover:bg-cream/5"
-              onClick={() => {
-                setOpen(false);
-                onSelect(option.target);
-              }}
-            >
-              <span className="text-[0.8125rem] font-medium">
-                {option.label}
-                {option.key === activeKey && <span className="text-accent"> ·</span>}
+        <div className="bg-bar absolute bottom-full left-0 z-20 mb-1 flex w-72 flex-col border border-cream/20">
+          <div className="p-2">
+            <input
+              className="sw-input"
+              type="search"
+              value={query}
+              placeholder="Search paywalls"
+              aria-label="Search paywalls"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+
+          <div className="max-h-64 overflow-y-auto">
+            {paywalls.length === 0 ? (
+              <span className="block px-3 py-2 text-xs text-cream/35">
+                {needle === "" ? "No other paywalls here." : `Nothing matches “${query.trim()}”.`}
               </span>
-              <span className="text-xs text-cream/55">{option.hint}</span>
-            </button>
-          ))}
+            ) : (
+              paywalls.map((option) => (
+                <Row
+                  key={option.key}
+                  label={option.label}
+                  hint={option.hint}
+                  selected={option.key === activeKey}
+                  onSelect={() => choose(option.target)}
+                />
+              ))
+            )}
+          </div>
+
+          <div className="flex flex-col border-t border-cream/10">
+            {live.map((option) => (
+              <Row
+                key={option.key}
+                label={option.label}
+                hint={option.hint}
+                selected={option.key === activeKey}
+                onSelect={() => choose(option.target)}
+              />
+            ))}
+            <Row
+              label="Off"
+              hint="A single preview"
+              selected={active === undefined}
+              onSelect={() => choose(undefined)}
+            />
+          </div>
         </div>
       )}
     </div>

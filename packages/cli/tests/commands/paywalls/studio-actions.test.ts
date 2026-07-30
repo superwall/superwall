@@ -37,6 +37,7 @@ const framework: Framework = {
   buildSnapshot: async (_project, _surface, options) => {
     builds.push(options?.assetBaseUrl);
     return {
+      name: "Pro",
       snapshotId: "abc",
       html: "<html></html>",
       bytes: 13,
@@ -227,6 +228,7 @@ test("hosted assets are synced before the push and travel with the version", asy
   const withAssets: Framework = {
     ...framework,
     buildSnapshot: async () => ({
+      name: "Pro",
       snapshotId: "abc",
       html: "<html></html>",
       bytes: 13,

@@ -1,4 +1,11 @@
-import type { StudioActionName, StudioActionResult, StudioStatus, StudioSurface } from "./types";
+import { surfacePath } from "./preview";
+import type {
+  Samples,
+  StudioActionName,
+  StudioActionResult,
+  StudioStatus,
+  StudioSurface,
+} from "./types";
 
 export const runAction = async (
   surface: StudioSurface,
@@ -9,7 +16,12 @@ export const runAction = async (
     const response = await fetch("/__studio/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, kind: surface.kind, id: surface.id }),
+      body: JSON.stringify({
+        action,
+        kind: surface.kind,
+        id: surface.id,
+        project: surface.project,
+      }),
     });
     if (!response.body) {
       return (await response.json()) as StudioActionResult;
@@ -49,8 +61,18 @@ export const runAction = async (
 
 export const fetchStatus = async (surface: StudioSurface): Promise<StudioStatus> => {
   try {
-    const response = await fetch(`/__studio/status/${surface.kind}/${surface.id}`);
+    const response = await fetch(`/__studio/status${surfacePath(surface)}`);
     return (await response.json()) as StudioStatus;
+  } catch {
+    return {};
+  }
+};
+
+export const fetchSamples = async (): Promise<Samples> => {
+  try {
+    const response = await fetch("/__studio/samples.json");
+    const value: unknown = await response.json();
+    return typeof value === "object" && value !== null ? (value as Samples) : {};
   } catch {
     return {};
   }

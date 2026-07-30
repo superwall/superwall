@@ -3,14 +3,14 @@
 The paywall framework: the authoring contract and the React runtime.
 
 ```tsx
-import { definePaywall, v } from "superwall/config";
+import { definePaywall } from "superwall/config";
 import { useProducts, usePurchase } from "superwall/hooks";
 ```
 
 | Entry                  | What it holds                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------------- |
 | `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …) |
-| `superwall/config`     | `definePaywall`, `v`, `resolveVariables`                                              |
+| `superwall/config`     | `definePaywall`                                                                       |
 | `superwall/hooks`      | every hook, plus `createSuperwall` and `useSuperwallSession`                          |
 | `superwall/navigation` | `useRouter`, `useIsFocused`, `PaywallRouter`                                          |
 | `superwall/assets`     | ambient types for asset imports                                                       |
@@ -23,7 +23,7 @@ is a public API.
 
 ```
 superwall/paywalls/plus-upgrade/
-├── config.ts            required — products, variables, preview
+├── config.ts            required — name, products
 ├── app/                 routes only — every .tsx here is a route
 │   ├── layout.tsx       optional — wraps every route; the one reserved name
 │   ├── styles.css       stylesheets may sit beside their routes
@@ -44,35 +44,26 @@ directory), and inside a surface they are local to it. Funnels
 ## `definePaywall` — `config.ts` (required)
 
 ```ts
-import { definePaywall, v } from "superwall/config";
+import { definePaywall } from "superwall/config";
 
 export default definePaywall({
+  name: "Plus — Annual, 3-day trial",
   products: {
     monthly: "pro_999_month",
     annual: "pro_5999_year",
   },
-  variables: {
-    defaultPlan: v.enum(["go", "plus"], { default: "plus" }),
-    showWebCheckout: v.boolean({ default: true }),
-  },
-  preview: {
-    products: [{ reference: "plus", product: "plus", variables: { price: "$19.99" } }],
-    purchaseOutcome: "abandoned",
-  },
 });
 ```
 
+- **`name`** — what the paywall is called on Superwall. Directory names carry
+  the restrictions of a URL segment, which makes them poor labels once a
+  dashboard holds dozens of them; the directory stays the identifier and this
+  is the label. Defaults to the directory name, title-cased.
 - **`products`** — slots by reference. Product data (price, period, trial…)
   is SDK-owned and arrives at runtime.
-- **`variables`** — experiment knobs, read with `resolveVariables(config.variables)`
-  **inside your component** (it's cheap — reading at module scope bakes the
-  values and the studio's live controls can't reach them). The schema is
-  serialized on push; the dashboard renders controls from it, so a variant
-  becomes `{ snapshot, overrides }` — no code change, no rebuild.
-- **`preview`** — mock-host overrides (real prices, purchase outcomes,
-  device variables, trial eligibility). They ship inside the snapshot but
-  only engage where no real SDK host exists — inside a webview the native
-  host always wins.
+  Product data has no local source and no defaults: `superwall dev` reads it
+  from Superwall, and a reference the dashboard has no product for renders
+  undefined variables and blocks publishing until it exists.
 - Everything else (`presentation`, `featureGating`, `purchaseTimeoutMs`,
   `notifications`, …) is set here too. There are no project-wide defaults: a
   paywall's `config.ts` is the whole truth for that paywall. Share settings by
@@ -99,8 +90,10 @@ One concern each — there is deliberately no kitchen-sink hook.
 - `useTranslation()` — `t(key, values)` with `{placeholder}` interpolation,
   device-locale detection, `setLocale` override.
 - `useTrialEligibility()` — the SDK's real intro-offer eligibility signal.
-- `useDevice()` / `useUser()` / `useVariables()` — SDK variable groups
-  (`useVariables()` also carries the placement `params`).
+- `useDevice()` / `useUser()` / `useVariables()` — what the SDK knows about
+  this presentation. `useVariables()` returns `{ device, user, params }`;
+  `params` stays `Record<string, unknown>` because its shape is decided by the
+  app at the call site.
 - `useSuperwallEvent(name, handler)` — typed protocol events.
 - Escape hatches: `useSuperwallSnapshot()`, `useSuperwallSession()`.
 - `createSuperwall<TCustomVariables>()` — a typed bundle when paywalls declare
@@ -255,7 +248,7 @@ live miniature; `/paywall/<id>` opens the editor — a device-frame preview at
 exact logical size with hardware switching (iPhone SE → iPad Pro → Pixel;
 each switch also flips the mock SDK's platform/model/OS), light/dark
 simulation, locale switching, and live experiment-variable controls rendered
-from the surface's `v.*` schema.
+from the SDK's user, device and placement groups.
 
 Bare mounts live at `/preview/<kind>/<id>` — what the studio's iframes load —
 against the **mock SDK host**: products, purchases, trials, and permissions

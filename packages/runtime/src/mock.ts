@@ -12,7 +12,6 @@ import {
   createSuperwallProduct,
   type SuperwallProduct,
   type SuperwallProductInput,
-  type SuperwallProductVariables,
 } from "./products";
 import type {
   SuperwallDeviceVariables,
@@ -56,7 +55,6 @@ export type SuperwallMockOptions = {
    * any product has trial variables.
    */
   trialEligible?: boolean;
-  /** Outcome of purchase requests. Defaults to "completed". */
   purchaseOutcome?:
     | SuperwallMockPurchaseOutcome
     | ((
@@ -66,7 +64,6 @@ export type SuperwallMockOptions = {
   restoreOutcome?: "completed" | "none";
   /** Permission request responses. Defaults to "granted". */
   permissions?: Partial<Record<TPermissionTypeMessage, TPermissionStatus>>;
-  /** Callback responses by callback name. Defaults to `{ status: "success" }`. */
   callbacks?: Record<
     string,
     | SuperwallMockCallbackResult
@@ -80,49 +77,7 @@ export type SuperwallMockOptions = {
   onOutgoing?: (message: TOutgoingMessage) => void;
 };
 
-const MOCK_VARIABLE_PRESETS: readonly SuperwallProductVariables[] = [
-  {
-    price: "$39.99",
-    rawPrice: 39.99,
-    period: "year",
-    periodly: "yearly",
-    periodYears: 1,
-    monthlyPrice: "$3.33",
-    weeklyPrice: "$0.77",
-    dailyPrice: "$0.11",
-    trialPeriodDays: 7,
-    trialPeriodText: "7-day",
-    currencyCode: "USD",
-    currencySymbol: "$",
-  },
-  {
-    price: "$9.99",
-    rawPrice: 9.99,
-    period: "month",
-    periodly: "monthly",
-    periodMonths: 1,
-    monthlyPrice: "$9.99",
-    weeklyPrice: "$2.31",
-    dailyPrice: "$0.33",
-    trialPeriodDays: 0,
-    currencyCode: "USD",
-    currencySymbol: "$",
-  },
-  {
-    price: "$4.99",
-    rawPrice: 4.99,
-    period: "week",
-    periodly: "weekly",
-    periodWeeks: 1,
-    weeklyPrice: "$4.99",
-    dailyPrice: "$0.71",
-    trialPeriodDays: 0,
-    currencyCode: "USD",
-    currencySymbol: "$",
-  },
-];
-
-const MOCK_DEVICE_VARIABLES: SuperwallDeviceVariables = {
+export const MOCK_DEVICE_VARIABLES: SuperwallDeviceVariables = {
   platform: "iOS",
   deviceModel: "iPhone17,2",
   osVersion: "18.0",
@@ -139,15 +94,10 @@ const MOCK_DEVICE_VARIABLES: SuperwallDeviceVariables = {
   totalPaywallViews: 1,
 };
 
-/**
- * Builds mock products from a paywall config: each product slot gets
- * realistic synthesized variables so paywalls render fully in dev/preview.
- */
 export const mockProductsFromConfig = (config: SuperwallConfig | undefined): SuperwallProduct[] =>
-  Object.entries(config?.products ?? {}).map(([reference, input], index) => {
+  Object.entries(config?.products ?? {}).map(([reference, input]) => {
     const slot = normalizeProductSlot(input);
-    const preset = MOCK_VARIABLE_PRESETS[index % MOCK_VARIABLE_PRESETS.length];
-    const productId = slot.productId ?? `${reference}_mock`;
+    const productId = slot.productId ?? reference;
 
     return {
       reference,
@@ -155,7 +105,7 @@ export const mockProductsFromConfig = (config: SuperwallConfig | undefined): Sup
       id: productId,
       productId,
       productIdentifier: productId,
-      variables: { ...preset, identifier: productId },
+      variables: { identifier: productId },
       source: "placeholder",
     };
   });
@@ -175,16 +125,6 @@ const trialPeriodDaysOf = (product: SuperwallProduct): number => {
   return typeof days === "number" ? days : 0;
 };
 
-/**
- * A paywall-side transport with a simulated native SDK on the other end.
- *
- * The mock host answers `ping` with `paywall_open`, `products`,
- * `template_variables` (products + device + user + params), and trial
- * eligibility; resolves purchase/restore with transactions (including
- * `freeTrial_start` for trial products); grants permissions; and answers
- * callbacks — so a headless paywall is fully interactive in a plain browser
- * (local dev, dashboard preview, tests).
- */
 export class MockSuperwallTransport implements ITransport {
   private handlers: TIncomingHandler[] = [];
   private listening = false;

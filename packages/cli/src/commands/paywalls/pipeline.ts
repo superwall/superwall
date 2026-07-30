@@ -1,10 +1,15 @@
 import { cpus } from "node:os";
+import { globSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import pc from "picocolors";
 import type { CommandContext } from "@/command";
 import { livePaywall, promotePaywallVersion, pushPaywallVersion } from "@/core/api/resources";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
-import { resolveBinding, type ResolvedBinding } from "@/core/paywalls/binding/binding";
+import {
+  resolveApplicationId,
+  resolveBinding,
+  type ResolvedBinding,
+} from "@/core/paywalls/binding/binding";
 import { writeProjectTypes } from "@/core/paywalls/project/types";
 import { readLock, writeSnapshot } from "@/core/paywalls/project/lock";
 import {
@@ -14,6 +19,11 @@ import {
   type FrameworkProject,
   type FrameworkSurface,
 } from "@/core/paywalls/project/framework";
+import {
+  fetchProducts,
+  projectForApplication,
+  requireProducts,
+} from "@/core/paywalls/products";
 import { warnNotPortable } from "@/core/paywalls/source/portability";
 import { parseRenameFlags, resolveRenames } from "@/core/paywalls/binding/renames";
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
@@ -69,7 +79,29 @@ export const LAYOUT_HINT =
   "expected superwall/{paywalls,funnels}/<id>/ with config.ts and app/index.tsx";
 
 export function projectDir(context: CommandContext): string {
-  return typeof context.argv.dir === "string" ? resolve(context.argv.dir) : process.cwd();
+  const [first] = projectDirs(context);
+  return first ?? process.cwd();
+}
+
+export function projectDirs(context: CommandContext): string[] {
+  const raw = context.argv.dir;
+  const list = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter(
+    (entry): entry is string => typeof entry === "string" && entry.length > 0,
+  );
+  if (list.length === 0) return [process.cwd()];
+
+  const expanded = list.flatMap((entry) => (entry.includes("*") ? expandGlob(entry) : [entry]));
+  return [...new Set(expanded.map((entry) => resolve(entry)))];
+}
+
+function expandGlob(pattern: string): string[] {
+  try {
+    return [...globSync(pattern)]
+      .filter((entry) => statSync(entry, { throwIfNoEntry: false })?.isDirectory() ?? false)
+      .sort();
+  } catch {
+    return [pattern];
+  }
 }
 
 export function requireProject(project: FrameworkProject, dir: string): FrameworkProject {
@@ -267,31 +299,52 @@ async function prepare(
   },
 ): Promise<Prepared[]> {
   const { framework, project, surfaces } = input;
-  const bindings: ResolvedBinding[] = [];
-  for (const surface of surfaces) {
-    bindings.push(
-      await resolveBinding({
-        api: context.api,
-        superwallDir: project.superwallDir,
-        surface,
-        surfaces: project.surfaces,
-        renamesResolved: true,
-        pickApplication: input.interactive ? pickApplicationOption : undefined,
-      }),
-    );
-  }
+
+  const applicationId = await resolveApplicationId({
+    api: context.api,
+    superwallDir: project.superwallDir,
+    pickApplication: input.interactive ? pickApplicationOption : undefined,
+  });
 
   const spin = context.outputMode === "rich" ? ui.spinner() : undefined;
   const label = surfaces.length === 1 ? surfaces[0]?.id : `${surfaces.length} paywalls`;
   spin?.start(`Building ${label}`);
   const at = Date.now();
   try {
+    const builds = await pooled(surfaces, BUILD_CONCURRENCY, (surface) =>
+      framework.buildSnapshot(project, surface, { assetBaseUrl: assetBaseUrl(applicationId) }),
+    );
+
+    const projectId = await projectForApplication(context.api, applicationId);
+    if (projectId) {
+      requireProducts(
+        await fetchProducts(context.api, projectId),
+        surfaces.map((surface, index) => ({
+          id: surface.id,
+          products: builds[index]?.products,
+        })),
+      );
+    }
+
+    const bindings: ResolvedBinding[] = [];
+    for (const [index, surface] of surfaces.entries()) {
+      bindings.push(
+        await resolveBinding({
+          api: context.api,
+          superwallDir: project.superwallDir,
+          surface,
+          name: builds[index]?.name,
+          surfaces: project.surfaces,
+          renamesResolved: true,
+          pickApplication: input.interactive ? pickApplicationOption : undefined,
+        }),
+      );
+    }
+
     const prepared = await pooled(surfaces, BUILD_CONCURRENCY, async (surface, index) => {
       const bind = bindings[index];
-      if (!bind) throw new Error(`Missing binding for ${surface.id}`);
-      const build = await framework.buildSnapshot(project, surface, {
-        assetBaseUrl: assetBaseUrl(bind.applicationId),
-      });
+      const build = builds[index];
+      if (!bind || !build) throw new Error(`Missing binding for ${surface.id}`);
       requireAssets(build);
       const live = await livePaywall(context.api, bind.paywallId);
       const lock = readLock(project.superwallDir);

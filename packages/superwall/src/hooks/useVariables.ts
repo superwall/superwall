@@ -22,8 +22,9 @@ export type UseVariablesResult = {
 };
 
 /**
- * All SDK variable groups in one hook. Prefer `useDevice` / `useUser` when
- * you only need one group.
+ * Everything the SDK tells a paywall about who is looking at it. `params` is
+ * whatever the app passed to the placement, so it stays `Record<string,
+ * unknown>` — its shape is decided at the call site, not here.
  *
  * ```tsx
  * const { device, user, params } = useVariables()

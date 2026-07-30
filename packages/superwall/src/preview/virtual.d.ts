@@ -11,8 +11,10 @@ declare module "virtual:superwall/project" {
   export type PreviewSurface = {
     kind: "paywall" | "funnel";
     id: string;
+    project: string;
     routes: PreviewRoute[];
     messages: PreviewMessages[];
+    sharedMessages: PreviewMessages[];
     loadConfig: PreviewModule<unknown>;
     loadLayout?: PreviewModule<React.ComponentType<React.PropsWithChildren>>;
   };

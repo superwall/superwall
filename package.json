@@ -7,10 +7,10 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "bun run --filter chatgpt dev",
+    "dev": "./packages/superwall/bin/superwall.js dev 'examples/*'",
     "test": "bun run --filter '@superwall/*' --filter superwall test:run",
     "test:coverage": "bun run --filter '@superwall/*' --filter superwall test:coverage",
-    "typecheck": "bun run --filter '@superwall/*' --filter superwall --filter chatgpt --filter onboarding typecheck",
+    "typecheck": "bun run --filter '@superwall/*' --filter superwall --filter './examples/*' typecheck",
     "build": "bun run --filter '@superwall/*' build",
     "clean": "bun run --filter '@superwall/*' clean",
     "lint": "oxlint",

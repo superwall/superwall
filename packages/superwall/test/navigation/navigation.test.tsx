@@ -601,3 +601,45 @@ describe("page_view", () => {
     expect(views[1].time_on_previous_page_ms).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe("interrupting a transition", () => {
+  it("gives the interrupting navigation its full time instead of the one it cut off", () => {
+    mount();
+
+    fireEvent.click(screen.getByText("To plans"));
+    act(() => vi.advanceTimersByTime(TRANSITION_MS * 0.4));
+    fireEvent.click(screen.getByText("Deeper"));
+
+    // The first navigation's remaining 60% must not settle the second one.
+    act(() => vi.advanceTimersByTime(TRANSITION_MS * 0.6));
+    expect(attribute("onboarding/goals", "data-sw-settled")).toBeNull();
+
+    act(() => vi.advanceTimersByTime(TRANSITION_MS * 0.4));
+    expect(attribute("onboarding/goals", "data-sw-settled")).toBe("");
+  });
+
+  it("survives a spammed button — every tap lands and the stack is still coherent", () => {
+    mount();
+
+    fireEvent.click(screen.getByText("To plans"));
+    fireEvent.click(screen.getByText("Deeper"));
+    fireEvent.click(screen.getByText("Back"));
+    settle();
+
+    const active = document.querySelector('[data-sw-route][data-sw-state="active"]');
+    expect(active?.getAttribute("data-sw-route")).toBe("plans");
+    expect(active?.querySelector('[data-testid="depth"]')?.textContent).toBe("1");
+    expect(active?.getAttribute("data-sw-settled")).toBe("");
+    expect(document.querySelectorAll("[data-sw-route]")).toHaveLength(2);
+  });
+
+  it("settles a navigation that interrupts an untimed one", () => {
+    mount({ routes: { ...routes, index: { default: TransitionCaller } } });
+
+    fireEvent.click(screen.getByText("Explicit"));
+    fireEvent.click(screen.getByText("Deeper"));
+    settle();
+
+    expect(attribute("onboarding/goals", "data-sw-settled")).toBe("");
+  });
+});

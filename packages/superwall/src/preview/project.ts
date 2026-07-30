@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { importDefault } from "../config/load";
 import type { PaywallDefinition } from "../config";
+import { MOCK_DEVICE_VARIABLES, normalizeProductSlot } from "@superwall/runtime";
 import { discoverProject } from "../discover";
 import { readLock } from "../lock";
 
@@ -9,9 +10,10 @@ export type ConfigLoader = (file: string) => Promise<PaywallDefinition | undefin
 export type StudioSurfacePayload = {
   kind: "paywall" | "funnel";
   id: string;
+  project?: string;
   routes: string[];
   locales: string[];
-  variables?: PaywallDefinition["variables"];
+  products: Record<string, string>;
   paywallId?: string;
   editedAt?: string;
 };
@@ -20,6 +22,22 @@ export type StudioProjectPayload = {
   title: string;
   surfaces: StudioSurfacePayload[];
   diagnostics: string[];
+};
+
+export type SampleDefaults = typeof SAMPLE_DEFAULTS;
+
+export type StudioProjectEntry = { slug: string; title: string };
+
+export const SAMPLE_DEFAULTS = {
+  device: MOCK_DEVICE_VARIABLES as Record<string, unknown>,
+  user: {
+    applicationInstalledAt: "2026-01-01T00:00:00Z",
+    subscriptionStatus: "INACTIVE",
+  } as Record<string, unknown>,
+  params: {
+    placementName: "campaign_trigger",
+    isFeatureGatable: false,
+  } as Record<string, unknown>,
 };
 
 export const buildStudioProject = async (
@@ -49,7 +67,12 @@ export const buildStudioProject = async (
         id: surface.id,
         routes: surface.routes.map((route) => route.name),
         locales: [...locales].toSorted(),
-        variables: definition?.variables,
+        products: Object.fromEntries(
+          Object.entries(definition?.products ?? {}).map(([reference, input]) => [
+            reference,
+            normalizeProductSlot(input).productId ?? reference,
+          ]),
+        ),
         paywallId: binding?.paywallId,
       };
     }),
@@ -59,5 +82,36 @@ export const buildStudioProject = async (
     title: path.basename(project.root),
     surfaces,
     diagnostics: project.diagnostics,
+  };
+};
+
+export const buildStudioProjects = async (
+  entries: readonly { slug: string; root: string }[],
+  loadConfig: ConfigLoader = importDefault,
+): Promise<StudioProjectPayload & { projects: StudioProjectEntry[]; samples: SampleDefaults }> => {
+  const built = await Promise.all(
+    entries.map(async (entry) => ({
+      slug: entry.slug,
+      payload: await buildStudioProject(entry.root, loadConfig),
+    })),
+  );
+
+  const only = built.length === 1 ? built[0] : undefined;
+  if (only) {
+    return {
+      ...only.payload,
+      projects: [{ slug: only.slug, title: only.payload.title }],
+      samples: SAMPLE_DEFAULTS,
+    };
+  }
+
+  return {
+    title: `${built.length} projects`,
+    projects: built.map((one) => ({ slug: one.slug, title: one.payload.title })),
+    samples: SAMPLE_DEFAULTS,
+    surfaces: built.flatMap((one) =>
+      one.payload.surfaces.map((surface) => ({ ...surface, project: one.slug })),
+    ),
+    diagnostics: built.flatMap((one) => one.payload.diagnostics),
   };
 };
