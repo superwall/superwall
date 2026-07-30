@@ -9,7 +9,7 @@ export type ConfigLoader = (file: string) => Promise<PaywallDefinition | undefin
 export type StudioSurfacePayload = {
   kind: "paywall" | "funnel";
   id: string;
-  pageRoutes: string[];
+  routes: string[];
   locales: string[];
   variables?: PaywallDefinition["variables"];
   paywallId?: string;
@@ -47,7 +47,7 @@ export const buildStudioProject = async (
       return {
         kind: surface.kind,
         id: surface.id,
-        pageRoutes: surface.pages.map((page) => page.route),
+        routes: surface.routes.map((route) => route.name),
         locales: [...locales].toSorted(),
         variables: definition?.variables,
         paywallId: binding?.paywallId,

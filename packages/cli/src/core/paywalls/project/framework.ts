@@ -3,8 +3,8 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export interface FrameworkPage {
-  route: string;
+export interface FrameworkRoute {
+  name: string;
   file: string;
 }
 
@@ -13,7 +13,8 @@ export interface FrameworkSurface {
   id: string;
   dir: string;
   configFile: string;
-  pages: FrameworkPage[];
+  routes: FrameworkRoute[];
+  diagnostics?: string[];
 }
 
 export type ProjectMarker = "package.json";

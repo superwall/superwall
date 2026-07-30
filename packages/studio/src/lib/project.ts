@@ -62,7 +62,7 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
   return {
     kind,
     id: value.id,
-    pageRoutes: isStringArray(value.pageRoutes) ? value.pageRoutes : [],
+    routes: isStringArray(value.routes) ? value.routes : [],
     locales: isStringArray(value.locales) ? value.locales : [],
     variables: parseVariables(value.variables),
     paywallId: typeof value.paywallId === "string" ? value.paywallId : undefined,

@@ -5,7 +5,7 @@ import type { CommandContext } from "@/command";
 import { livePaywall, promotePaywallVersion, pushPaywallVersion } from "@/core/api/resources";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
 import { resolveBinding, type ResolvedBinding } from "@/core/paywalls/binding/binding";
-import { writeEnvTypes } from "@/core/paywalls/project/env";
+import { writeProjectTypes } from "@/core/paywalls/project/types";
 import { readLock, writeSnapshot } from "@/core/paywalls/project/lock";
 import {
   frameworkVersion,
@@ -66,7 +66,7 @@ const BIND_VERB: Record<ResolvedBinding["source"], string> = {
 };
 
 export const LAYOUT_HINT =
-  "expected superwall/{paywalls,funnels}/<id>/ with config.ts and app/page.tsx";
+  "expected superwall/{paywalls,funnels}/<id>/ with config.ts and app/index.tsx";
 
 export function projectDir(context: CommandContext): string {
   return typeof context.argv.dir === "string" ? resolve(context.argv.dir) : process.cwd();
@@ -125,6 +125,14 @@ export function selectSurfaces(project: FrameworkProject, ids: unknown): Framewo
     if (surface && !selected.includes(surface)) selected.push(surface);
   }
   return selected;
+}
+
+export function requireClean(surfaces: readonly FrameworkSurface[]): void {
+  const problems = surfaces.flatMap((surface) => surface.diagnostics ?? []);
+  if (problems.length === 0) return;
+  throw new Error(
+    [...problems, "", "Publishing is immutable — fix these first, then push again."].join("\n"),
+  );
 }
 
 export function needsWork(
@@ -318,13 +326,14 @@ export async function runPushPipeline(
   const framework = await (options.load ?? loadFramework)(dir);
   const project = requireProject(framework.discoverProject(dir), dir);
   const installed = frameworkVersion(dir);
-  writeEnvTypes(project.superwallDir);
+  writeProjectTypes(project);
   writeProjectScaffold({
     root: project.root,
     superwallDir: project.superwallDir,
     frameworkVersion: installed,
   });
   const surfaces = selectSurfaces(project, context.argv.id);
+  requireClean(surfaces);
   const publishNote = resolveNote(context.argv.message);
 
   ui.intro(`Superwall ${pc.dim(`v${VERSION}`)}`);

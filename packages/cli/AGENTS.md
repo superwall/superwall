@@ -130,6 +130,16 @@ and update ALL of:
 - Branded UI color is `THEME.primary` cyan; picocolors for dim/bold (auto-safe
   for non-TTY); never raw ANSI in command code.
 
+## Diagnostics vs errors
+
+Project problems the CLI can describe but not fix (a component sitting in
+`app/`, two files claiming one route) are **warnings in `dev` and hard errors in
+`push`/`publish`** - a published version is immutable, so shipping one from a
+project with known problems is not recoverable. `requireClean()` gates the
+pipeline and is scoped to the *selected* surfaces, so an unrelated half-finished
+paywall never blocks someone else's push. Group repeated diagnostics into one
+message that lists the affected files; never emit the same sentence per file.
+
 ## Build / test / verify
 
 - **Rebuild after every change**: `bun run build` (tsdown). The user (and you)

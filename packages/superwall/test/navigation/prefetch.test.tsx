@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { Link, PaywallRouter, type PaywallRoute } from "../../src/navigation/index";
+import { act, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PaywallRouter, type RouteMap } from "../../src/navigation/index";
+import { createWrapper } from "../helpers";
 
 const BASE = "https://user-content.test/user-content/hl/42";
 const hero = `${BASE}/aaaa.png`;
@@ -8,15 +9,22 @@ const clip = `${BASE}/bbbb.mp4`;
 const shared = `${BASE}/cccc.woff2`;
 const terms = `${BASE}/dddd.png`;
 
-const Home = () => <Link href="/offer">Go to offer</Link>;
-const Offer = () => <Link href="/terms">Go to terms</Link>;
-const Terms = () => <span>terms page</span>;
+const Blank = () => null;
 
-const routes: PaywallRoute[] = [
-  { path: "/", Component: Home },
-  { path: "/offer", Component: Offer },
-  { path: "/terms", Component: Terms },
-];
+const routes: RouteMap = {
+  index: { default: Blank },
+  offer: { default: Blank },
+  terms: { default: Blank },
+};
+
+const mount = () => {
+  const Wrapper = createWrapper();
+  return render(
+    <Wrapper>
+      <PaywallRouter routes={routes} />
+    </Wrapper>,
+  );
+};
 
 const withMap = (map: unknown): void => {
   const tag = document.createElement("script");
@@ -28,9 +36,9 @@ const withMap = (map: unknown): void => {
 
 const MAP = {
   "*": [{ url: shared, as: "font" }],
-  "/": [{ url: hero, as: "image" }],
-  "/offer": [{ url: clip, as: "video" }],
-  "/terms": [{ url: terms, as: "image" }],
+  index: [{ url: hero, as: "image" }],
+  offer: [{ url: clip, as: "video" }],
+  terms: [{ url: terms, as: "image" }],
 };
 
 const preloaded = () =>
@@ -52,37 +60,49 @@ const trackImages = () => {
   vi.stubGlobal("Image", TrackedImage);
 };
 
+const idle = () => act(() => vi.advanceTimersByTime(500));
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal("requestIdleCallback", undefined);
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   document.head.querySelectorAll("#sw-route-assets, link[rel=preload]").forEach((n) => n.remove());
 });
 
-describe("route asset prefetching", () => {
-  it("warms the shared bucket, the current route, and the one after it on mount", () => {
+describe("screen asset prefetching", () => {
+  it("warms the shared bucket and the initial screen on mount, the rest on idle", () => {
     trackImages();
     withMap(MAP);
-    render(<PaywallRouter routes={routes} />);
+    mount();
 
     expect(images).toEqual([hero]);
-    expect(preloaded()).toEqual([
-      { href: shared, as: "font", crossOrigin: "anonymous" },
-      { href: clip, as: "video", crossOrigin: null },
-    ]);
+    expect(preloaded()).toEqual([{ href: shared, as: "font", crossOrigin: "anonymous" }]);
+
+    idle();
+
+    expect(images).toEqual([hero, terms]);
+    expect(preloaded().map((link) => link.href)).toEqual([shared, clip]);
   });
 
-  it("warms the next route on navigation, and never the same asset twice", () => {
+  it("never warms the same asset twice", () => {
     trackImages();
-    withMap(MAP);
-    render(<PaywallRouter routes={routes} />);
-    images = [];
+    withMap({
+      ...MAP,
+      offer: [
+        { url: hero, as: "image" },
+        { url: clip, as: "video" },
+      ],
+    });
+    mount();
+    idle();
+    idle();
 
-    fireEvent.click(screen.getByText("Go to offer"));
-
-    expect(images).toEqual([terms]);
-    expect(preloaded().map((link) => link.href)).toEqual([shared, clip]);
-
-    fireEvent.click(screen.getByText("Go to terms"));
-    expect(images).toEqual([terms]);
+    expect(images.filter((url) => url === hero)).toHaveLength(1);
+    expect(preloaded().filter((link) => link.href === clip)).toHaveLength(1);
   });
 
   it("never uses fetch or rel=prefetch — the serve-time CSP and the audit forbid both", () => {
@@ -91,8 +111,8 @@ describe("route asset prefetching", () => {
     trackImages();
     withMap(MAP);
 
-    render(<PaywallRouter routes={routes} />);
-    fireEvent.click(screen.getByText("Go to offer"));
+    mount();
+    idle();
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(document.head.querySelectorAll("link[rel=prefetch]")).toHaveLength(0);
@@ -100,8 +120,8 @@ describe("route asset prefetching", () => {
 
   it("does nothing at all when the snapshot inlined every asset", () => {
     trackImages();
-    render(<PaywallRouter routes={routes} />);
-    fireEvent.click(screen.getByText("Go to offer"));
+    mount();
+    idle();
 
     expect(images).toEqual([]);
     expect(preloaded()).toEqual([]);
@@ -110,24 +130,28 @@ describe("route asset prefetching", () => {
   it("survives a map that is missing, malformed, or full of junk entries", () => {
     trackImages();
     withMap("{ not json");
-    const { unmount } = render(<PaywallRouter routes={routes} />);
+    const { unmount } = mount();
+    idle();
     expect(images).toEqual([]);
     unmount();
 
     document.getElementById("sw-route-assets")?.remove();
-    withMap({ "/": [{ url: hero, as: "script" }, { url: 7, as: "image" }, null, "nope"] });
-    render(<PaywallRouter routes={routes} />);
+    withMap({ index: [{ url: hero, as: "script" }, { url: 7, as: "image" }, null, "nope"] });
+    mount();
+    idle();
 
     expect(images).toEqual([]);
     expect(preloaded()).toEqual([]);
   });
 
-  it("warms nothing extra for a route that is not in the router's list", () => {
+  it("cancels the idle pass when the paywall unmounts first", () => {
     trackImages();
     withMap(MAP);
-    render(<PaywallRouter routes={routes} initialPath="/unknown" />);
+    const { unmount } = mount();
+    unmount();
+    idle();
 
-    expect(images).toEqual([]);
-    expect(preloaded()).toEqual([{ href: shared, as: "font", crossOrigin: "anonymous" }]);
+    expect(images).toEqual([hero]);
+    expect(preloaded().map((link) => link.href)).toEqual([shared]);
   });
 });

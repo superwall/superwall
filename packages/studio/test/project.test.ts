@@ -10,7 +10,7 @@ describe("parseProjectPayload", () => {
         {
           kind: "paywall",
           id: "plus-upgrade",
-          pageRoutes: ["/", "/offer"],
+          routes: ["index", "offer"],
           locales: ["en", "es"],
           paywallId: "208540",
           variables: {
@@ -37,7 +37,7 @@ describe("parseProjectPayload", () => {
     const payload = parseProjectPayload({
       title: 42, // wrong type → default
       surfaces: [
-        { kind: "paywall", id: "ok", pageRoutes: "nope", locales: [7] },
+        { kind: "paywall", id: "ok", routes: "nope", locales: [7] },
         { kind: "banner", id: "wrong-kind" },
         { id: "missing-kind" },
         "garbage",
@@ -61,7 +61,7 @@ describe("parseProjectPayload", () => {
     expect(payload.surfaces[0]).toEqual({
       kind: "paywall",
       id: "ok",
-      pageRoutes: [],
+      routes: [],
       locales: [],
       variables: undefined,
       paywallId: undefined,

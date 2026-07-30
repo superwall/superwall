@@ -51,13 +51,13 @@ const projectModule = (project: Project): string => {
       .join(", ")}]`;
 
   const surfaces = project.surfaces.map((surface) => {
-    const pages = surface.pages
-      .map((page) => `{ route: ${JSON.stringify(page.route)}, load: ${lazy(page.file)} }`)
+    const routes = surface.routes
+      .map((route) => `{ name: ${JSON.stringify(route.name)}, load: ${lazy(route.file)} }`)
       .join(", ");
     const fields = [
       `kind: ${JSON.stringify(surface.kind)}`,
       `id: ${JSON.stringify(surface.id)}`,
-      `pages: [${pages}]`,
+      `routes: [${routes}]`,
       `messages: ${messageList(surface.messages)}`,
       `loadConfig: ${lazy(surface.configFile)}`,
       surface.layoutFile ? `loadLayout: ${lazy(surface.layoutFile)}` : `loadLayout: undefined`,

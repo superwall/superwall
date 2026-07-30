@@ -125,15 +125,15 @@ describe("hosted assets", () => {
     expect(fs.existsSync(built.htmlFile)).toBe(true);
   });
 
-  it("maps each route to the assets that route needs", () => {
+  it("maps each screen to the assets that screen needs", () => {
     const routes = routeAssets(built.html);
     const hero = byName(built.assets, "hero.png");
     const clip = byName(built.assets, "clip.mp4");
     const tiny = byName(built.assets, "tiny.mp4");
     const bg = byName(built.assets, "bg.png");
 
-    expect(routes["/"]).toEqual([{ url: `${BASE}/${hero.fileName}`, as: "image" }]);
-    expect(routes["/offer"]).toEqual([
+    expect(routes["index"]).toEqual([{ url: `${BASE}/${hero.fileName}`, as: "image" }]);
+    expect(routes["offer"]).toEqual([
       { url: `${BASE}/${clip.fileName}`, as: "video" },
       { url: `${BASE}/${tiny.fileName}`, as: "video" },
     ]);

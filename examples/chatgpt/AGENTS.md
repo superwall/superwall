@@ -15,8 +15,9 @@ discovery path exercised, since here the project is the repo.
   may also keep their own
 - `assets/` — shared images and fonts; surfaces may also keep their own
 - `paywalls/<id>/` — each paywall is a mini React app: a required `config.ts`
-  (products, experiment variables, preview overrides) + `app/page.tsx`
-  file-based routing + local `components/`, `messages/`, and `assets/`. The
+  (products, experiment variables, preview overrides) + an `app/` route tree
+  (just `index.tsx` here; see `examples/onboarding` for a multi-route flow with
+  a layout) + local `components/`, `messages/`, and `assets/`. The
   config is the whole truth for that paywall; nothing is inherited from above
 - `funnels/<id>/` — same shape for onboarding/web funnels
 - `superwall.lock` — the binding map (surface → paywall ID). Commit it.

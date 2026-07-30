@@ -82,6 +82,41 @@ describe("SuperwallSession actions", () => {
     });
   });
 
+  it("page views carry the screen as both name and node id", () => {
+    const { session, transport } = createSession();
+
+    session.pageView({ type: "entry", name: "index", navigationId: "get-started", position: 0 });
+    expect(lastOutgoing(transport)).toEqual({
+      event_name: "page_view",
+      type: "entry",
+      page_name: "index",
+      page_node_id: "index",
+      navigation_node_id: "get-started",
+      flow_position: 0,
+      previous_page_node_id: undefined,
+      previous_flow_position: undefined,
+      time_on_previous_page_ms: undefined,
+    });
+
+    session.pageView({
+      type: "forward",
+      name: "goals/experience",
+      navigationId: "get-started",
+      position: 2,
+      previousName: "goals",
+      previousPosition: 1,
+      timeOnPreviousMs: 1200,
+    });
+    expect(lastOutgoing(transport)).toMatchObject({
+      page_name: "goals/experience",
+      page_node_id: "goals/experience",
+      flow_position: 2,
+      previous_page_node_id: "goals",
+      previous_flow_position: 1,
+      time_on_previous_page_ms: 1200,
+    });
+  });
+
   it("manual trial reminders schedule TRIAL_STARTED notifications", () => {
     const { session, transport } = createSession();
 

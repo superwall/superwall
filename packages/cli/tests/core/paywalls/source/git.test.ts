@@ -71,13 +71,13 @@ test("pushes a fresh tree into an empty repo and reports it committed", async ()
 
   const result = await pushSourceTree({
     access: access(repo.remote),
-    files: [file("config.ts", "export default {};\n"), file("paywalls/a/app/page.tsx", "x\n")],
+    files: [file("config.ts", "export default {};\n"), file("paywalls/a/app/index.tsx", "x\n")],
     message,
   });
 
   assert.equal(result.status, "committed");
   assert.match(result.commitSha, /^[a-f0-9]{40}$/);
-  assert.deepEqual(treeFiles(repo.dir), ["config.ts", "paywalls/a/app/page.tsx"]);
+  assert.deepEqual(treeFiles(repo.dir), ["config.ts", "paywalls/a/app/index.tsx"]);
 });
 
 test("the commit carries the platform's message and the Superwall identity", async () => {

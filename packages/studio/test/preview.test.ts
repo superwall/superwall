@@ -5,7 +5,7 @@ import type { StudioSurface } from "../src/lib/types";
 const surface: StudioSurface = {
   kind: "paywall",
   id: "plus-upgrade",
-  pageRoutes: ["/"],
+  routes: ["/"],
   locales: ["en"],
 };
 

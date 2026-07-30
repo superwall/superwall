@@ -1,4 +1,5 @@
 import type { SuperwallConfig, SuperwallMockOptions } from "@superwall/runtime";
+import type { Transition } from "../navigation/index";
 import type { VariablesSchema } from "./variables";
 
 export type PaywallDefinition = Partial<SuperwallConfig> & {
@@ -11,6 +12,11 @@ export type PaywallDefinition = Partial<SuperwallConfig> & {
    * always provides its own data.
    */
   preview?: SuperwallMockOptions;
+  /**
+   * Default transition for every route. A route's own
+   * `export const transition` overrides it, and the call site overrides both.
+   */
+  transition?: Transition;
 };
 
 /** Declares one paywall's contract — products, experiment variables, preview. */

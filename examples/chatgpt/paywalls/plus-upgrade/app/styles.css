@@ -1,3 +1,7 @@
+:root {
+  --sw-background: #fff;
+}
+
 .paywall {
   position: relative;
   display: flex;

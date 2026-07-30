@@ -10,7 +10,7 @@
     "dev": "bun run --filter chatgpt dev",
     "test": "bun run --filter '@superwall/*' --filter superwall test:run",
     "test:coverage": "bun run --filter '@superwall/*' --filter superwall test:coverage",
-    "typecheck": "bun run --filter '@superwall/*' --filter superwall --filter chatgpt typecheck",
+    "typecheck": "bun run --filter '@superwall/*' --filter superwall --filter chatgpt --filter onboarding typecheck",
     "build": "bun run --filter '@superwall/*' build",
     "clean": "bun run --filter '@superwall/*' clean",
     "lint": "oxlint",

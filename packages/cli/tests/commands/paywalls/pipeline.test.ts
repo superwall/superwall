@@ -10,6 +10,7 @@ import {
   needsWork,
   pendingPromoteWarning,
   runPushPipeline,
+  requireClean,
   selectSurfaces,
 } from "@/commands/paywalls/pipeline";
 import type { CommandContext } from "@/command";
@@ -32,7 +33,7 @@ const surfaceOf = (id: string, kind: "paywall" | "funnel" = "paywall"): Framewor
   id,
   dir: `/tmp/${id}`,
   configFile: `/tmp/${id}/config.ts`,
-  pages: [],
+  routes: [],
 });
 
 function scaffold(ids: string[] = ["plus-upgrade"]): FrameworkProject {
@@ -449,6 +450,38 @@ test("--only narrows the run to one surface", async () => {
 
   assert.deepEqual(steps, ["build"]);
   assert.deepEqual(fake.calls, ["live", "versions", "access", "link"]);
+});
+
+test("requireClean lets a clean selection through", () => {
+  assert.doesNotThrow(() => requireClean([surfaceOf("alpha"), surfaceOf("beta")]));
+  assert.doesNotThrow(() => requireClean([{ ...surfaceOf("alpha"), diagnostics: [] }]));
+});
+
+test("requireClean refuses to publish a surface with diagnostics", () => {
+  const dirty = { ...surfaceOf("alpha"), diagnostics: ["paywalls/alpha: app/Card.tsx is not a route"] };
+
+  assert.throws(() => requireClean([dirty]), /app\/Card\.tsx is not a route/);
+  assert.throws(() => requireClean([dirty]), /Publishing is immutable/);
+});
+
+test("requireClean reports every dirty surface at once, not just the first", () => {
+  const one = { ...surfaceOf("alpha"), diagnostics: ["alpha is broken"] };
+  const two = { ...surfaceOf("beta"), diagnostics: ["beta is broken"] };
+
+  assert.throws(() => requireClean([one, two]), /alpha is broken[\s\S]*beta is broken/);
+});
+
+test("requireClean ignores surfaces that were not selected — a colleague's WIP never blocks you", () => {
+  const dirty = { ...surfaceOf("beta"), diagnostics: ["beta is broken"] };
+  const project: FrameworkProject = {
+    root: "/tmp",
+    superwallDir: "/tmp",
+    surfaces: [surfaceOf("alpha"), dirty],
+    diagnostics: ["beta is broken"],
+  };
+
+  assert.doesNotThrow(() => requireClean(selectSurfaces(project, "alpha")));
+  assert.throws(() => requireClean(selectSurfaces(project, undefined)), /beta is broken/);
 });
 
 test("selectSurfaces explains an unknown name, and an empty project", () => {

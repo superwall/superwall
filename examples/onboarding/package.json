@@ -1,0 +1,22 @@
+{
+  "name": "onboarding",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "superwall dev",
+    "push": "superwall push",
+    "promote": "superwall promote",
+    "ship": "superwall publish",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "superwall": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "5.8.3"
+  }
+}

@@ -128,8 +128,8 @@ const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurf
     `import { PaywallRouter } from "superwall/navigation";`,
   ];
 
-  surface.pages.forEach((page, index) => {
-    lines.push(`import Page${index} from ${imp(page.file)};`);
+  surface.routes.forEach((route, index) => {
+    lines.push(`import * as Route${index} from ${imp(route.file)};`);
   });
   if (surface.layoutFile) lines.push(`import Layout from ${imp(surface.layoutFile)};`);
   if (surface.configFile) lines.push(`import definition from ${imp(surface.configFile)};`);
@@ -158,16 +158,16 @@ const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurf
     `    messages: catalogs,`,
     `  },`,
     `};`,
-    `const routes = [${surface.pages
-      .map((page, index) => `{ path: ${JSON.stringify(page.route)}, Component: Page${index} }`)
-      .join(", ")}];`,
+    `const routes = {${surface.routes
+      .map((route, index) => `${JSON.stringify(route.name)}: Route${index}`)
+      .join(", ")}};`,
     ``,
     `createRoot(document.getElementById("root")).render(`,
     `  <React.StrictMode>`,
     `    <SuperwallProvider config={config} mock={definition?.preview ?? "auto"}>`,
     surface.layoutFile
-      ? `      <PaywallRouter routes={routes} Layout={Layout} />`
-      : `      <PaywallRouter routes={routes} />`,
+      ? `      <PaywallRouter routes={routes} Layout={Layout} transition={definition?.transition} navigationId={${JSON.stringify(surface.id)}} />`
+      : `      <PaywallRouter routes={routes} transition={definition?.transition} navigationId={${JSON.stringify(surface.id)}} />`,
     `    </SuperwallProvider>`,
     `  </React.StrictMode>,`,
     `);`,
@@ -266,14 +266,14 @@ const collectAssets = (
       return { url: `${assetBaseUrl}/${asset.fileName}`, as };
     };
 
-    for (const page of surface.pages) {
+    for (const route of surface.routes) {
       const list: RouteAsset[] = [];
-      for (const asset of reachable(page.file)) {
+      for (const asset of reachable(route.file)) {
         attributed.add(asset.fileName);
         const item = entry(asset);
         if (item) list.push(item);
       }
-      if (list.length > 0) routes[page.route] = list;
+      if (list.length > 0) routes[route.name] = list;
     }
 
     const shared: RouteAsset[] = [];

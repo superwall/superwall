@@ -31,8 +31,9 @@ const surface = (dir: string, configFile = path.join(dir, "missing.json")): Disc
   id: "plus-upgrade",
   dir,
   configFile,
-  pages: [],
+  routes: [],
   messages: [],
+  diagnostics: [],
 });
 
 const jsonLoader = async <T>(file: string | undefined): Promise<T | undefined> => {

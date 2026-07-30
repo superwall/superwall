@@ -37,9 +37,10 @@ self-describing npm project — clone it, install, `superwall dev`:
 - `superwall/paywalls/<id>/` and `superwall/funnels/<id>/` — each surface is a
   mini React app: a **required** `config.ts` (`definePaywall`: products,
   experiment `variables`, dev-only `preview` mock overrides — a surface without
-  it is invalid) + `app/page.tsx` file-based
-  routing (nested folders are routes, `app/layout.tsx` optional) + local
-  `components/` and `messages/`
+  it is invalid) + an `app/` route tree (**routes only**: every `.tsx` is a
+  route, directories prefix the name, `index.tsx` is the entry, and `layout.tsx`
+  is the one reserved name — anything else in `app/` is a diagnostic telling you
+  to move it to `components/`) + local `components/` and `messages/`
 - `superwall/superwall.lock` — the binding map (surface → paywall ID), and the
   only metadata file in the tree. Publish-time facts live in commit trailers,
   not on disk. **It is the binding of record**: a directory rename is detected
@@ -98,8 +99,13 @@ The stack, bottom to top — each layer depends only on the one below it:
     `createSuperwall` and `useSuperwallSession`
   - `src/provider/` — `SuperwallProvider` + session context (`context.ts`)
     and the typed `createSuperwall` factory (`create.ts`)
-  - `src/navigation/` — `superwall/navigation`: the in-memory router behind
-    file-based pages (`useRouter`, `Link`, `PaywallRouter`)
+  - `src/navigation/` — `superwall/navigation`: the route stack behind the
+    file-based `app/` tree (`useRouter`, `useIsFocused`, `PaywallRouter`).
+    Routes are names, never paths — one bundle, no network on navigate; the
+    stack stays mounted (and `inert`) so a pop restores state, and each
+    navigation reports `page_view`. Names are typed via the CLI-generated
+    `superwall.d.ts`, which augments the `SuperwallRoutes` interface and
+    carries the asset-module reference
   - `src/discover.ts` — filesystem discovery (`superwall/` dir conventions),
     including the project `marker`. It never throws — a markerless directory
     is a valid answer; the CLI's `requireProject` is what fails loudly.

@@ -25,8 +25,8 @@ const PROJECT = {
   "messages/en.json": '{"title":"Hi"}\n',
   "assets/logo.svg": "<svg/>\n",
   "paywalls/plus-upgrade/config.ts": "export default {}\n",
-  "paywalls/plus-upgrade/app/page.tsx": "export default () => null\n",
-  "funnels/onboarding/app/page.tsx": "export default () => null\n",
+  "paywalls/plus-upgrade/app/index.tsx": "export default () => null\n",
+  "funnels/onboarding/app/index.tsx": "export default () => null\n",
 };
 
 const collect = (dir: string) => collectSourceFiles(dir);

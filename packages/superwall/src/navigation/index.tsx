@@ -1,19 +1,72 @@
 import * as React from "react";
+import { useSuperwallSession } from "../provider/context";
+import "./routes.css";
 
-export type PaywallRoute = {
-  path: string;
-  Component: React.ComponentType;
+// biome-ignore lint/suspicious/noEmptyInterface: augmentation target
+export interface SuperwallRoutes {}
+
+export type RouteName = keyof SuperwallRoutes extends never
+  ? string
+  : Extract<keyof SuperwallRoutes, string>;
+
+/** The transitions that ship with the framework. */
+export type BuiltInTransition = "push" | "slide" | "fade" | "none";
+
+/**
+ * A built-in, or any name you define yourself in CSS. The router only stamps
+ * the name onto `data-sw-transition` — what it does is entirely up to the
+ * stylesheet, and how long it runs is read back off the running animations.
+ */
+export type Transition = BuiltInTransition | (string & {});
+
+export type NavigateOptions = {
+  transition?: Transition;
 };
 
 export type Router = {
-  path: string;
-  push: (path: string) => void;
-  replace: (path: string) => void;
+  /** The route currently on top. */
+  name: RouteName;
+  /** How many routes are stacked underneath this one. */
+  depth: number;
+  push: (route: RouteName, options?: NavigateOptions) => void;
+  replace: (route: RouteName, options?: NavigateOptions) => void;
   back: () => void;
-  canGoBack: boolean;
+  canGoBack: () => boolean;
+  /** Goes back `count` routes, stopping at the first. */
+  dismiss: (count?: number) => void;
+  /** Returns to the first route. */
+  dismissAll: () => void;
+  /** Goes back to `route` if it is in the stack, otherwise replaces the current one. */
+  dismissTo: (route: RouteName, options?: NavigateOptions) => void;
+};
+
+export type RouteModule = {
+  default: React.ComponentType;
+  transition?: Transition;
+};
+
+export type RouteMap = Record<string, RouteModule>;
+
+export const INITIAL_ROUTE = "index";
+
+const INITIAL_KEY = 0;
+
+type Direction = "forward" | "back";
+
+type Entry = {
+  key: number;
+  name: string;
+  transition?: Transition;
+};
+
+type Nav = {
+  entries: Entry[];
+  exiting?: Entry;
+  direction: Direction;
 };
 
 const RouterContext = React.createContext<Router | null>(null);
+const FocusContext = React.createContext<boolean>(true);
 
 export const useRouter = (): Router => {
   const router = React.useContext(RouterContext);
@@ -23,10 +76,7 @@ export const useRouter = (): Router => {
   return router;
 };
 
-const normalize = (path: string): string => {
-  const trimmed = path.trim().replace(/\/+$/, "");
-  return trimmed === "" ? "/" : trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-};
+export const useIsFocused = (): boolean => React.useContext(FocusContext);
 
 type RouteAsset = { url: string; as: "image" | "video" | "audio" | "font" };
 
@@ -46,9 +96,9 @@ const readRouteAssets = (): Record<string, RouteAsset[]> => {
     const parsed: unknown = JSON.parse(source);
     if (typeof parsed !== "object" || parsed === null) return {};
     const map: Record<string, RouteAsset[]> = {};
-    for (const route of Object.keys(parsed)) {
-      const value: unknown = Reflect.get(parsed, route);
-      if (Array.isArray(value)) map[route] = value.filter(isRouteAsset);
+    for (const name of Object.keys(parsed)) {
+      const value: unknown = Reflect.get(parsed, name);
+      if (Array.isArray(value)) map[name] = value.filter(isRouteAsset);
     }
     return map;
   } catch {
@@ -74,87 +124,246 @@ const warmAssets = (assets: readonly RouteAsset[], warmed: Set<string>): void =>
   }
 };
 
+const whenIdle = (run: () => void): (() => void) => {
+  if (typeof window === "undefined") return () => {};
+  const idle = Reflect.get(window, "requestIdleCallback") as
+    | ((callback: () => void) => number)
+    | undefined;
+  if (typeof idle === "function") {
+    const handle = idle(run);
+    const cancel = Reflect.get(window, "cancelIdleCallback") as
+      | ((handle: number) => void)
+      | undefined;
+    return () => cancel?.(handle);
+  }
+  const timer = setTimeout(run, 200);
+  return () => clearTimeout(timer);
+};
+
+/** Only used where animations cannot be observed; otherwise they time themselves. */
+export const TRANSITION_MS = 500;
+
+/** Backstop so a runaway custom animation can never strand the stack. */
+const TRANSITION_CAP = 5000;
+
+const observable = (): boolean =>
+  typeof Element !== "undefined" && typeof Element.prototype.getAnimations === "function";
+
 export type PaywallRouterProps = {
-  routes: readonly PaywallRoute[];
-  initialPath?: string;
+  routes: RouteMap;
   Layout?: React.ComponentType<React.PropsWithChildren>;
-  onNavigate?: (path: string) => void;
+  navigationId?: string;
+  transition?: Transition;
+  onNavigate?: (route: string) => void;
 };
 
 export const PaywallRouter = ({
   routes,
-  initialPath = "/",
   Layout,
+  navigationId = "paywall",
+  transition: fallback = "push",
   onNavigate,
 }: PaywallRouterProps) => {
-  const [stack, setStack] = React.useState<string[]>([normalize(initialPath)]);
-  const path = stack[stack.length - 1];
-  const notify = React.useRef(onNavigate);
-  notify.current = onNavigate;
+  const session = useSuperwallSession();
+  const [nav, setNav] = React.useState<Nav>(() => ({
+    entries: [{ key: INITIAL_KEY, name: INITIAL_ROUTE }],
+    direction: "forward",
+  }));
+  const { entries, exiting, direction } = nav;
+
   const known = React.useRef(routes);
   known.current = routes;
-  const assets = React.useRef<Record<string, RouteAsset[]> | undefined>(undefined);
-  const warmed = React.useRef<Set<string>>(new Set());
-  const mounted = React.useRef(false);
+  const notify = React.useRef(onNavigate);
+  notify.current = onNavigate;
+  const nextKey = React.useRef(1);
+
+  const top = entries[entries.length - 1];
+
+  const router = React.useMemo<Router>(() => {
+    const resolve = (name: string): string => {
+      if (name in known.current) return name;
+      throw new Error(
+        `Unknown route "${name}". Available routes: ${Object.keys(known.current).join(", ")}`,
+      );
+    };
+
+    const go = (name: string, options: NavigateOptions | undefined, keep: number | undefined) => {
+      const target = resolve(name);
+      const key = nextKey.current++;
+      setNav((current) => {
+        const kept = keep === undefined ? current.entries : current.entries.slice(0, keep);
+        return {
+          entries: [...kept, { key, name: target, ...options }],
+          exiting:
+            kept.length === current.entries.length
+              ? undefined
+              : current.entries[current.entries.length - 1],
+          direction: "forward",
+        };
+      });
+    };
+
+    const popBy = (count: number) =>
+      setNav((current) => {
+        const removed = Math.min(Math.max(Math.trunc(count), 1), current.entries.length - 1);
+        if (removed < 1) return current;
+        return {
+          entries: current.entries.slice(0, current.entries.length - removed),
+          exiting: current.entries[current.entries.length - 1],
+          direction: "back",
+        };
+      });
+
+    return {
+      name: top.name as RouteName,
+      depth: entries.length - 1,
+      push: (name, options) => go(name, options, undefined),
+      replace: (name, options) => go(name, options, entries.length - 1),
+      back: () => popBy(1),
+      canGoBack: () => entries.length > 1,
+      dismiss: (count = 1) => popBy(count),
+      dismissAll: () => popBy(Number.MAX_SAFE_INTEGER),
+      dismissTo: (name, options) => {
+        const target = resolve(name);
+        const at = entries.findIndex((entry) => entry.name === target);
+        if (at === entries.length - 1) return;
+        if (at === -1) go(target, options, entries.length - 1);
+        else popBy(entries.length - 1 - at);
+      },
+    };
+  }, [entries, top]);
+
+  const name = router.name;
+  const depth = router.depth;
+  const previous = React.useRef<{ name: string; depth: number; at: number } | undefined>(undefined);
+
+  const reported = React.useRef<number | undefined>(undefined);
 
   React.useEffect(() => {
-    notify.current?.(path);
+    if (reported.current === top.key) return;
+    reported.current = top.key;
+    notify.current?.(name);
 
-    const map = (assets.current ??= readRouteAssets());
-    const list = known.current;
-    const at = list.findIndex((candidate) => candidate.path === path);
-    const next = at === -1 ? undefined : list[at + 1];
+    const before = previous.current;
+    const now = Date.now();
+    session.pageView({
+      type: before ? direction : "entry",
+      name,
+      navigationId,
+      position: depth,
+      previousName: before?.name,
+      previousPosition: before?.depth,
+      timeOnPreviousMs: before ? now - before.at : undefined,
+    });
+    previous.current = { name, depth, at: now };
+  }, [top.key, name, depth, direction, navigationId, session]);
 
-    const warm: RouteAsset[] = [];
-    if (!mounted.current) {
-      mounted.current = true;
-      warm.push(...(map["*"] ?? []), ...(map[path] ?? []));
+  const warmed = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    const map = readRouteAssets();
+    warmAssets([...(map["*"] ?? []), ...(map[INITIAL_ROUTE] ?? [])], warmed.current);
+    return whenIdle(() => {
+      for (const list of Object.values(map)) warmAssets(list, warmed.current);
+    });
+  }, []);
+
+  const layers = React.useRef<HTMLDivElement>(null);
+  const [settled, setSettled] = React.useState(true);
+  const animated = React.useRef(INITIAL_KEY);
+
+  React.useLayoutEffect(() => {
+    if (animated.current === top.key) return;
+    animated.current = top.key;
+    setSettled(false);
+  }, [top.key]);
+
+  React.useLayoutEffect(() => {
+    if (settled) return;
+    let live = true;
+    const done = () => {
+      if (live) setSettled(true);
+    };
+
+    if (!observable()) {
+      const timer = setTimeout(done, TRANSITION_MS);
+      return () => {
+        live = false;
+        clearTimeout(timer);
+      };
     }
-    if (next) warm.push(...(map[next.path] ?? []));
-    warmAssets(warm, warmed.current);
-  }, [path]);
 
-  const router = React.useMemo<Router>(
-    () => ({
-      path,
-      canGoBack: stack.length > 1,
-      push: (target) => setStack((current) => [...current, normalize(target)]),
-      replace: (target) => setStack((current) => [...current.slice(0, -1), normalize(target)]),
-      back: () => setStack((current) => (current.length > 1 ? current.slice(0, -1) : current)),
-    }),
-    [path, stack.length],
+    const running = [...(layers.current?.children ?? [])].flatMap((child) =>
+      child.getAnimations(),
+    );
+    if (running.length === 0) {
+      done();
+      return;
+    }
+    Promise.allSettled(running.map((animation) => animation.finished)).then(done);
+    const cap = setTimeout(done, TRANSITION_CAP);
+    return () => {
+      live = false;
+      clearTimeout(cap);
+    };
+  }, [settled]);
+
+  const transitionOf = (entry: Entry): Transition =>
+    entry.transition ?? routes[entry.name]?.transition ?? fallback;
+
+  const moving = direction === "back" && exiting ? transitionOf(exiting) : transitionOf(top);
+
+  const render = (
+    entry: Entry,
+    state: "active" | "behind" | "below" | "exiting",
+    layer: number,
+  ) => {
+    const module = routes[entry.name];
+    if (!module) return null;
+    const Component = module.default;
+    const focused = state === "active";
+    return (
+      <div
+        key={entry.key}
+        style={{ zIndex: layer }}
+        data-sw-route={entry.name}
+        data-sw-state={state}
+        data-sw-direction={direction}
+        data-sw-transition={state === "below" ? "none" : moving}
+        data-sw-settled={settled ? "" : undefined}
+        inert={!focused}
+      >
+        <FocusContext.Provider value={focused}>
+          <Component />
+        </FocusContext.Provider>
+      </div>
+    );
+  };
+
+  const stack = (
+    <div
+      data-sw-routes=""
+      style={{ "--sw-transition": `${TRANSITION_MS}ms` } as React.CSSProperties}
+    >
+      {entries.map((entry, index) =>
+        render(
+          entry,
+          index === entries.length - 1
+            ? "active"
+            : index === entries.length - 2
+              ? "behind"
+              : "below",
+          index + 1,
+        ),
+      )}
+      {exiting && !settled
+        ? render(exiting, "exiting", direction === "back" ? entries.length + 1 : entries.length - 1)
+        : null}
+    </div>
   );
 
-  const route = routes.find((candidate) => candidate.path === path) ?? routes[0];
-  if (!route) return null;
-
-  const page = <route.Component />;
   return (
     <RouterContext.Provider value={router}>
-      {Layout ? <Layout>{page}</Layout> : page}
+      {Layout ? <Layout>{stack}</Layout> : stack}
     </RouterContext.Provider>
-  );
-};
-
-export type LinkProps = React.PropsWithChildren<{
-  href: string;
-  replace?: boolean;
-  className?: string;
-}>;
-
-export const Link = ({ href, replace = false, className, children }: LinkProps) => {
-  const router = useRouter();
-  return (
-    <a
-      href={href}
-      className={className}
-      onClick={(event) => {
-        event.preventDefault();
-        if (replace) router.replace(href);
-        else router.push(href);
-      }}
-    >
-      {children}
-    </a>
   );
 };

@@ -11,7 +11,7 @@ export type StudioSurfaceKind = "paywall" | "funnel";
 export type StudioSurface = {
   kind: StudioSurfaceKind;
   id: string;
-  pageRoutes: string[];
+  routes: string[];
   locales: string[];
   variables?: VariablesSchema;
   paywallId?: string;

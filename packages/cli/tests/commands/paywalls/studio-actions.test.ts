@@ -25,7 +25,7 @@ const surface: FrameworkSurface = {
   id: "plus-upgrade",
   dir: "/tmp/x",
   configFile: "/tmp/x/config.ts",
-  pages: [],
+  routes: [],
 };
 
 const builds: (string | undefined)[] = [];

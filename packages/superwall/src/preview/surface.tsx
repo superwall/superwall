@@ -4,7 +4,7 @@ import type { PreviewMessages, PreviewSurface } from "virtual:superwall/project"
 import { sharedMessages } from "virtual:superwall/project";
 import type { PaywallDefinition } from "../config";
 import { mergeMessages } from "../internal";
-import { PaywallRouter, type PaywallRoute } from "../navigation/index";
+import { PaywallRouter, type RouteMap } from "../navigation/index";
 import { SuperwallProvider } from "../provider/context";
 import type { PreviewOverrides } from "./overrides";
 
@@ -29,8 +29,9 @@ type Loaded =
       status: "ready";
       config: SuperwallConfig;
       preview: PaywallDefinition["preview"];
-      routes: PaywallRoute[];
+      routes: RouteMap;
       Layout?: React.ComponentType<React.PropsWithChildren>;
+      transition: PaywallDefinition["transition"];
     };
 
 const useSurface = (surface: PreviewSurface): Loaded => {
@@ -39,15 +40,15 @@ const useSurface = (surface: PreviewSurface): Loaded => {
   React.useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const [definition, layout, catalogs, pages] = await Promise.all([
+      const [definition, layout, catalogs, loadedRoutes] = await Promise.all([
         surface.loadConfig().then((mod) => mod.default as PaywallDefinition | undefined),
         surface.loadLayout?.().then((mod) => mod.default),
         loadCatalogs(sharedMessages, surface.messages),
         Promise.all(
-          surface.pages.map(async (page) => ({
-            path: page.route,
-            Component: (await page.load()).default,
-          })),
+          surface.routes.map(async (route) => {
+            const module = await route.load();
+            return [route.name, module] as const;
+          }),
         ),
       ]);
       if (cancelled) return;
@@ -67,7 +68,8 @@ const useSurface = (surface: PreviewSurface): Loaded => {
           },
         },
         preview: definition?.preview,
-        routes: pages,
+        transition: definition?.transition,
+        routes: Object.fromEntries(loadedRoutes) as RouteMap,
         Layout: layout,
       });
     };
@@ -121,7 +123,12 @@ export const SurfaceHost = ({
 
   return (
     <SuperwallProvider config={loaded.config} mock={mockOptions(loaded.preview, overrides)}>
-      <PaywallRouter routes={loaded.routes} Layout={loaded.Layout} />
+      <PaywallRouter
+        routes={loaded.routes}
+        Layout={loaded.Layout}
+        transition={loaded.transition}
+        navigationId={surface.id}
+      />
     </SuperwallProvider>
   );
 };

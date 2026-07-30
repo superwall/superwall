@@ -13,7 +13,7 @@ const surface: FrameworkSurface = {
   id: "plus-upgrade",
   dir: "/tmp/x",
   configFile: "/tmp/x/config.ts",
-  pages: [],
+  routes: [],
 };
 
 interface FakeRoutes {
@@ -304,7 +304,7 @@ test("a funnel binds in its own section, never the paywall one", async () => {
     id: "onboarding",
     dir: "/tmp/x",
     configFile: "/tmp/x/config.ts",
-    pages: [],
+    routes: [],
   };
   const api = fakeApi({ paywalls: [], created: { id: 77 } });
 

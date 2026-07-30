@@ -11,7 +11,7 @@ const source: StudioSource = {
     {
       kind: "paywall",
       id: "plus-upgrade",
-      pageRoutes: ["/"],
+      routes: ["/"],
       locales: ["en"],
       paywallId: "208540",
     },
@@ -129,7 +129,7 @@ describe("studio actions", () => {
       capabilities: { actions: false },
       surfaces: [
         ...source.surfaces,
-        { kind: "paywall", id: "win-back", pageRoutes: ["/"], locales: ["en"] },
+        { kind: "paywall", id: "win-back", routes: ["/"], locales: ["en"] },
       ],
     };
     render(<StudioApp source={twoSurfaces} />);
@@ -277,7 +277,7 @@ describe("runAction streaming", () => {
 
     const steps: string[] = [];
     const result = await runAction(
-      { kind: "paywall", id: "plus-upgrade", pageRoutes: [], locales: [] },
+      { kind: "paywall", id: "plus-upgrade", routes: [], locales: [] },
       "push",
       (step, state) => steps.push(`${step}:${state}`),
     );
@@ -303,7 +303,7 @@ describe("runAction framing", () => {
       vi.fn(async () => ({ ok: true, body }) as unknown as Response),
     );
 
-  const surface = { kind: "paywall" as const, id: "plus-upgrade", pageRoutes: [], locales: [] };
+  const surface = { kind: "paywall" as const, id: "plus-upgrade", routes: [], locales: [] };
 
   it("reassembles events split across chunk boundaries", async () => {
     withBody(

@@ -12,7 +12,7 @@ import { useProducts, usePurchase } from "superwall/hooks";
 | `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …) |
 | `superwall/config`     | `definePaywall`, `v`, `resolveVariables`                                              |
 | `superwall/hooks`      | every hook, plus `createSuperwall` and `useSuperwallSession`                          |
-| `superwall/navigation` | `useRouter`, `Link`, `PaywallRouter`                                                  |
+| `superwall/navigation` | `useRouter`, `useIsFocused`, `PaywallRouter`                                          |
 | `superwall/assets`     | ambient types for asset imports                                                       |
 
 `superwall/build`, `superwall/preview`, and `superwall/discover` are the CLI's
@@ -24,10 +24,14 @@ is a public API.
 ```
 superwall/paywalls/plus-upgrade/
 ├── config.ts            required — products, variables, preview
-├── app/
-│   ├── page.tsx         "/" — file-based routing, Next.js-style
-│   ├── offer/page.tsx   "/offer"
-│   └── layout.tsx       optional chrome around every page
+├── app/                 routes only — every .tsx here is a route
+│   ├── layout.tsx       optional — wraps every route; the one reserved name
+│   ├── styles.css       stylesheets may sit beside their routes
+│   ├── index.tsx        "index" — where every flow starts
+│   ├── plans.tsx        "plans"
+│   └── goals/
+│       ├── index.tsx    "goals"
+│       └── setup.tsx    "goals/setup"
 ├── components/          paywall-local components
 └── messages/en.ts       paywall-local strings
 ```
@@ -104,15 +108,90 @@ One concern each — there is deliberately no kitchen-sink hook.
 
 ## `superwall/navigation`
 
-```tsx
-import { Link, useRouter } from "superwall/navigation";
+`app/` holds routes and nothing else — every `.tsx` in it is a route, a
+directory prefixes the name, and `index.tsx` is the directory's own route. The
+only reserved name is `layout.tsx`, and stylesheets may sit beside their routes.
+Components and hooks live in `components/`; anything else in `app/` is a
+diagnostic — a warning on `dev`, a hard failure on `push`, since a published
+version is immutable. A route is a file that is lowercase-kebab **and**
+default-exports a component, so a component can never become an accidental
+route.
 
-const { push, back, path } = useRouter();
+```tsx
+import { useRouter } from "superwall/navigation";
+
+const router = useRouter();
+
+router.push("goals/setup");
+router.push("plans", { transition: "fade" });
+router.replace("terms");
+router.back();               router.canGoBack();
+router.dismiss(2);           router.dismissAll();
+router.dismissTo("goals");
+
+router.name;  router.depth;
 ```
 
-Pages navigate in memory (an SDK webview has no URL bar) with a history stack
-for `back()`. The framework mounts pages; `PaywallRouter` is its internal
-mounting primitive.
+The API is expo-router's, method for method, so Expo knowledge transfers
+directly. Closing the paywall is not navigation — that is
+`useActions().close()`.
+
+Route names are **type-safe**: the CLI generates `superwall.d.ts` from your
+`app/` directories on every `dev` and `push`, so a typo is a compile error and
+editors autocomplete the real list. The same file declares the asset modules
+that make `import hero from "./assets/hero.jpg"` typecheck. Commit it, don't
+edit it, and don't delete it — without it both stop working.
+
+Routes are names, not paths — an SDK webview has no URL bar, and the whole flow
+ships as one HTML file, so navigation never touches the network. Routes below
+the top stay mounted, so popping back restores one exactly as it was left, and
+they are `inert` so nothing underneath can be focused; `useIsFocused()` lets a
+backgrounded route pause work. Every navigation reports `page_view`.
+
+`app/layout.tsx` is an ordinary component that receives the router's output as
+`children`. It is optional, and it stays mounted for the life of the flow —
+which makes it the right home for shared chrome and, via plain React context,
+for state shared across routes.
+
+```tsx
+export default function Layout({ children }: PropsWithChildren) {
+  return <div className="shell"><Header />{children}</div>;
+}
+```
+
+Transitions are `push` (the default), `slide`, `fade`, and `none`. `push` is the
+iOS navigation push: in from the right with an edge shadow while the route
+behind drifts left and dims, clamped to 300px of travel, reversed on the way
+back. `slide` moves both routes as one, flat. `fade` runs shorter (350ms) on a
+plain ease — opacity has no momentum — and fades only one layer at a time, since
+two half-faded layers composite to less than full opacity. Resolution runs call site → the route's own export → the surface default in
+`config.ts` → `push`.
+
+```ts
+export default definePaywall({ transition: "slide" });   // whole surface
+```
+
+```tsx
+export const transition = "fade";                        // one route
+router.push("terms", { transition: "none" });            // one navigation
+```
+
+The transition belongs to the navigation rather than to a route — forward uses
+the incoming route's, back uses the leaving one's, so a route always leaves the
+way it arrived. Motion runs over 500ms on a curve whose speed
+starts at zero and peaks at 60ms, so pages ease into their travel: 49.7% of the
+distance by 100ms, 84.7% by 200ms, 96.2% by 300ms. No overshoot.
+`cubic-bezier(0.28, 0.4, 0.08, 1)` is the fallback.
+
+| variable             | default  |                                                                  |
+| -------------------- | -------- | ---------------------------------------------------------------- |
+| `--sw-transition`    | `500ms`  | duration                                                         |
+| `--sw-ease`          | spring   | timing function                                                  |
+| `--sw-stack-dim`     | `0.925`  | brightness of the route behind                                   |
+| `--sw-background`    | `Canvas` | route background — routes are opaque so nothing shows through    |
+| `--sw-routes-height` | `100dvh` | route height; set it when a layout puts chrome around the routes |
+
+All motion is disabled under `prefers-reduced-motion`.
 
 ## Dev — the studio
 

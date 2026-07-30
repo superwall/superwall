@@ -17,10 +17,12 @@ superwall/
 ├── paywalls/
 │   └── plus-upgrade/         each paywall is a mini React app
 │       ├── config.ts         required — products, experiment variables, preview
-│       ├── app/
-│       │   ├── page.tsx      file-based routing, Next.js-style
-│       │   ├── offer/page.tsx
-│       │   └── layout.tsx    optional shared chrome
+│       ├── app/            routes only — every .tsx here is a route
+│       │   ├── layout.tsx    optional — wraps every route
+│       │   ├── index.tsx     where the flow starts
+│       │   ├── plans.tsx     one file per route
+│       │   └── goals/        directories prefix route names
+│       │       └── setup.tsx "goals/setup"
 │       ├── components/
 │       └── messages/en.ts
 └── funnels/
@@ -47,7 +49,7 @@ export default definePaywall({ ...shared, products: { plus: "plus_monthly" } });
 ```
 
 ```tsx
-// paywalls/plus-upgrade/app/page.tsx
+// paywalls/plus-upgrade/app/index.tsx
 import { useProducts, usePurchase, useTranslation } from "superwall/hooks";
 
 export default function PlusUpgrade() {
@@ -68,7 +70,7 @@ stays out of the way.
 
 | Package                                    | What it is                                                                                                                                                                                                        |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`superwall`](packages/superwall)          | The framework: authoring API (`definePaywall`, experiment `v`ariables), React hooks + provider, `superwall/navigation` (file-based router), discovery, and the dev server.                                        |
+| [`superwall`](packages/superwall)          | The framework: authoring API (`definePaywall`, experiment `v`ariables), React hooks + provider, `superwall/navigation` (the typed route stack), discovery, and the dev server.                                    |
 | [`@superwall/cli`](packages/cli)           | The full management CLI (integrate, migrate, apps, products, campaigns, query, ASC, auth). The framework's `superwall` bin launches its shell and registers `dev`/`publish` into it — one command for everything. |
 | [`@superwall/runtime`](packages/runtime)   | Framework-agnostic runtime: bridge, session, product state, localization, purchase promises, mock SDK host. No React.                                                                                             |
 | [`@superwall/protocol`](packages/protocol) | The SDK ↔ paywall message contract: schemas, transports, initialization params.                                                                                                                                   |

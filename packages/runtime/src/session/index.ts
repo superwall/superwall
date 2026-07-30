@@ -49,6 +49,16 @@ export * from "./types";
 
 type Listener = () => void;
 
+export type PageViewInput = {
+  type: Extract<TOutgoingMessage, { event_name: "page_view" }>["type"];
+  name: string;
+  navigationId: string;
+  position: number;
+  previousName?: string;
+  previousPosition?: number;
+  timeOnPreviousMs?: number;
+};
+
 type PendingPurchase = {
   product: SuperwallProduct;
   resolve: (result: SuperwallPurchaseResult) => void;
@@ -188,6 +198,7 @@ export interface SuperwallSession<out TProduct extends SuperwallProduct = Superw
     reviewType: Extract<TOutgoingMessage, { event_name: "request_store_review" }>["review_type"],
   ) => void;
   setUserAttributes: (attributes: Record<string, string>) => void;
+  pageView: (input: PageViewInput) => void;
   scheduleTrialReminder: (input: {
     id: string;
     title: string;
@@ -468,6 +479,20 @@ class SuperwallSessionImpl implements SuperwallSession {
         key,
         value,
       })),
+    });
+  }
+
+  public pageView(input: PageViewInput) {
+    this.postMessage({
+      event_name: "page_view",
+      type: input.type,
+      page_name: input.name,
+      page_node_id: input.name,
+      navigation_node_id: input.navigationId,
+      flow_position: input.position,
+      previous_page_node_id: input.previousName,
+      previous_flow_position: input.previousPosition,
+      time_on_previous_page_ms: input.timeOnPreviousMs,
     });
   }
 

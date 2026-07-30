@@ -38,8 +38,9 @@ describe("buildStudioProject", () => {
   it("evaluates configs server-side into the studio payload", async () => {
     const root = scaffold({
       "superwall/messages/en.ts": "export default {}\n",
-      "superwall/paywalls/plus-upgrade/app/page.tsx": "export default () => null\n",
-      "superwall/paywalls/plus-upgrade/app/offer/page.tsx": "export default () => null\n",
+      "superwall/paywalls/plus-upgrade/app/layout.tsx": "export default () => null\n",
+      "superwall/paywalls/plus-upgrade/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/plus-upgrade/app/offer.tsx": "export default () => null\n",
       "superwall/paywalls/plus-upgrade/messages/es.ts": "export default {}\n",
       "superwall/paywalls/plus-upgrade/config.ts": JSON.stringify({
         variables: { plan: { type: "enum", values: ["go", "plus"], default: "plus" } },
@@ -60,7 +61,7 @@ describe("buildStudioProject", () => {
     expect(surface).toMatchObject({
       kind: "paywall",
       id: "plus-upgrade",
-      pageRoutes: ["/", "/offer"],
+      routes: ["index", "offer"],
       paywallId: "208540",
     });
     // Shared + local + config-declared locales, deduped and sorted.
@@ -72,7 +73,7 @@ describe("buildStudioProject", () => {
 
   it("keeps a surface listed when its config.ts is broken", async () => {
     const root = scaffold({
-      "superwall/paywalls/broken/app/page.tsx": "export default () => null\n",
+      "superwall/paywalls/broken/app/index.tsx": "export default () => null\n",
       "superwall/paywalls/broken/config.ts": "this is not typescript {{{\n",
     });
 

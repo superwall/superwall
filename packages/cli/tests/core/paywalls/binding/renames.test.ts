@@ -18,7 +18,7 @@ const surfaceOf = (id: string, kind: "paywall" | "funnel" = "paywall"): Framewor
   id,
   dir: `/tmp/${id}`,
   configFile: `/tmp/${id}/config.ts`,
-  pages: [],
+  routes: [],
 });
 
 const dirs: string[] = [];

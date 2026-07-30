@@ -1,0 +1,250 @@
+[data-sw-routes] {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: var(--sw-routes-height, 100vh);
+  min-height: var(--sw-routes-height, 100dvh);
+  background-color: var(--sw-background, Canvas);
+}
+
+/*
+ * Routes are opaque, so a page sliding in never shows the stack through itself.
+ * Point --sw-background at the paywall's own background, or set it to
+ * transparent if the paywall is meant to show what is behind it.
+ */
+[data-sw-route] {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background-color: var(--sw-background, Canvas);
+}
+
+[data-sw-route][data-sw-state="behind"][data-sw-settled],
+[data-sw-route][data-sw-state="below"] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-sw-route]:not([data-sw-transition="none"]):not([data-sw-settled]) {
+    animation-duration: var(--sw-transition, 500ms);
+    animation-timing-function: var(--sw-ease, cubic-bezier(0.28, 0.4, 0.08, 1));
+    animation-fill-mode: forwards;
+  }
+
+  /* 500ms, sampled into linear() every 2.5% so the anchor times land on a stop
+     rather than being interpolated between neighbours. Speed starts at zero and
+     peaks at 60ms, so the page eases into its travel instead of leaving at full
+     tilt: 49.7% covered by 100ms, 84.7% by 200ms, 96.2% by 300ms, then it
+     settles. The bezier above stands in where linear() is unsupported. */
+  @supports (animation-timing-function: linear(0, 1)) {
+    [data-sw-route]:not([data-sw-transition="none"]):not([data-sw-settled]) {
+      animation-timing-function: var(
+        --sw-ease,
+        linear(
+          0,
+          0.019 2.5%,
+          0.0662 5%,
+          0.1305 7.5%,
+          0.2037 10%,
+          0.2802 12.5%,
+          0.3562 15%,
+          0.4291 17.5%,
+          0.4974 20%,
+          0.5604 22.5%,
+          0.6175 25%,
+          0.6687 27.5%,
+          0.7143 30%,
+          0.7545 32.5%,
+          0.7898 35%,
+          0.8206 37.5%,
+          0.8473 40%,
+          0.8704 42.5%,
+          0.8903 45%,
+          0.9074 47.5%,
+          0.922 50%,
+          0.9344 52.5%,
+          0.9451 55%,
+          0.9541 57.5%,
+          0.9617 60%,
+          0.9682 62.5%,
+          0.9737 65%,
+          0.9783 67.5%,
+          0.9822 70%,
+          0.9855 72.5%,
+          0.9882 75%,
+          0.9905 77.5%,
+          0.9925 80%,
+          0.9941 82.5%,
+          0.9955 85%,
+          0.9966 87.5%,
+          0.9975 90%,
+          0.9983 92.5%,
+          0.999 95%,
+          0.9995 97.5%,
+          1
+        )
+      );
+    }
+  }
+
+  [data-sw-route][data-sw-transition="push"][data-sw-direction="forward"][data-sw-state="active"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-push-enter, sw-edge-shadow;
+  }
+
+  [data-sw-route][data-sw-transition="push"][data-sw-direction="forward"][data-sw-state="behind"]:not(
+      [data-sw-settled]
+    ),
+  [data-sw-route][data-sw-transition="push"][data-sw-direction="forward"][data-sw-state="exiting"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-push-stack;
+  }
+
+  [data-sw-route][data-sw-transition="push"][data-sw-direction="back"][data-sw-state="active"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-push-unstack;
+  }
+
+  [data-sw-route][data-sw-transition="push"][data-sw-direction="back"][data-sw-state="exiting"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-push-leave;
+  }
+
+  [data-sw-route][data-sw-transition="slide"][data-sw-direction="forward"][data-sw-state="active"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-slide-enter;
+  }
+
+  [data-sw-route][data-sw-transition="slide"][data-sw-direction="forward"][data-sw-state="behind"]:not(
+      [data-sw-settled]
+    ),
+  [data-sw-route][data-sw-transition="slide"][data-sw-direction="forward"][data-sw-state="exiting"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-slide-leave-back;
+  }
+
+  [data-sw-route][data-sw-transition="slide"][data-sw-direction="back"][data-sw-state="active"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-slide-enter-back;
+  }
+
+  [data-sw-route][data-sw-transition="slide"][data-sw-direction="back"][data-sw-state="exiting"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-slide-leave;
+  }
+
+  /*
+   * Opacity has no momentum, so fade ignores the movement spring and runs
+   * shorter on a plain ease. Only ever ONE layer fades: going forward the new
+   * route fades in over the old one, going back the old route fades out to
+   * reveal it. Fading both at once would composite to less than full opacity
+   * and flash the background through.
+   */
+  [data-sw-route][data-sw-transition="fade"]:not([data-sw-settled]) {
+    animation-duration: var(--sw-transition-fade, 350ms);
+    animation-timing-function: var(--sw-ease-fade, cubic-bezier(0.4, 0, 0.2, 1));
+  }
+
+  [data-sw-route][data-sw-transition="fade"][data-sw-direction="forward"][data-sw-state="active"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-fade-enter;
+  }
+
+  [data-sw-route][data-sw-transition="fade"][data-sw-direction="back"][data-sw-state="exiting"]:not(
+      [data-sw-settled]
+    ) {
+    animation-name: sw-fade-leave;
+  }
+}
+
+@keyframes sw-push-enter {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sw-edge-shadow {
+  from {
+    box-shadow: -10px 0 20px -5px rgb(0 0 0 / 20%);
+  }
+
+  to {
+    box-shadow: -10px 0 20px -5px rgb(0 0 0 / 2%);
+  }
+}
+
+@keyframes sw-push-stack {
+  from {
+    transform: translateX(0);
+    filter: brightness(1);
+  }
+
+  to {
+    transform: translateX(max(-30%, -300px));
+    filter: brightness(var(--sw-stack-dim, 0.925));
+  }
+}
+
+@keyframes sw-push-unstack {
+  from {
+    transform: translateX(max(-30%, -300px));
+    filter: brightness(var(--sw-stack-dim, 0.925));
+  }
+
+  to {
+    transform: translateX(0);
+    filter: brightness(1);
+  }
+}
+
+@keyframes sw-push-leave {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sw-slide-enter {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sw-slide-leave {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes sw-slide-enter-back {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes sw-slide-leave-back {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes sw-fade-enter {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sw-fade-leave {
+  to {
+    opacity: 0;
+  }
+}

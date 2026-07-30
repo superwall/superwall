@@ -1,7 +1,7 @@
-import clip from "../../assets/clip.mp4";
-import tiny from "../../assets/tiny.mp4";
+import clip from "../assets/clip.mp4";
+import tiny from "../assets/tiny.mp4";
 
-export default function OfferPage() {
+export default function Offer() {
   return (
     <>
       <video src={clip} muted playsInline />
