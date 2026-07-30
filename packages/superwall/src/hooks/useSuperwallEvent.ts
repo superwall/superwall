@@ -34,11 +34,3 @@ export const useGameController = (
 ) => {
   useSuperwallEvent("game_controller_input", handler);
 };
-
-/**
- * Hardware back button presses re-routed into the paywall (Android).
- * Requires `reRouteBackButton: true` in the config.
- */
-export const useBackButton = (handler: (input: SuperwallEventMap["back_button_input"]) => void) => {
-  useSuperwallEvent("back_button_input", handler);
-};

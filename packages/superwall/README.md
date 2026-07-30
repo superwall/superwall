@@ -48,8 +48,8 @@ import { definePaywall, v } from "superwall/config";
 
 export default definePaywall({
   products: {
-    go: "chatgpt_go_499_month",
-    plus: "chatgpt_plus_1999_month",
+    monthly: "pro_999_month",
+    annual: "pro_5999_year",
   },
   variables: {
     defaultPlan: v.enum(["go", "plus"], { default: "plus" }),
@@ -242,7 +242,7 @@ Two things worth knowing:
 - **Wrap motion in `prefers-reduced-motion`** as above. With reduced motion on,
   the router settles immediately rather than waiting.
 
-`examples/onboarding` defines `zoom` this way in `app/styles.css`, and
+`examples/transitions` defines `zoom` this way in `app/styles.css`, and
 `data-sw-state` (`active`/`behind`/`exiting`/`below`) and `data-sw-direction`
 remain on each route if you need to key on something the four phases do not
 name.

@@ -1,6 +1,6 @@
 import { act, render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useBackButton, useGameController, usePurchase, useSuperwallEvent } from "../../src/hooks";
+import { useGameController, usePurchase, useSuperwallEvent } from "../../src/hooks";
 import { createWrapper, flush, renderWithProvider } from "../helpers";
 
 describe("useSuperwallEvent", () => {
@@ -22,17 +22,13 @@ describe("useSuperwallEvent", () => {
   });
 });
 
-describe("useGameController / useBackButton", () => {
-  it("forwards controller and back button input to handlers", async () => {
+describe("useGameController", () => {
+  it("forwards controller input to handlers", async () => {
     const controllerInputs: number[] = [];
-    const backPresses: boolean[] = [];
 
     const Consumer = () => {
       useGameController((input) => {
         if (input.directional) controllerInputs.push(input.x);
-      });
-      useBackButton((input) => {
-        backPresses.push(input.pressed);
       });
       return null;
     };
@@ -53,11 +49,9 @@ describe("useGameController / useBackButton", () => {
           x: 1,
           y: 0,
         },
-        { event_name: "back_button_input", pressed: true },
       ]);
     });
 
     expect(controllerInputs).toEqual([1]);
-    expect(backPresses).toEqual([true]);
   });
 });
