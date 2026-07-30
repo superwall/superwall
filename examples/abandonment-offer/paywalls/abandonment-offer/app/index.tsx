@@ -1,4 +1,4 @@
-import { useHaptics, useProducts, usePurchase, useSuperwallEvent } from "superwall/hooks";
+import { useHaptics, useProducts, usePurchase } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export default function Index() {
@@ -6,14 +6,6 @@ export default function Index() {
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
   const haptics = useHaptics();
-
-  /**
-   * Only the first decline earns a second offer — abandoning the discount too
-   * means they are done, and pushing another sheet would be nagging and is often rejected by Apple.
-   */
-  useSuperwallEvent("transaction_abandon", () => {
-    if (router.name === "index") router.push("offer", { transition: "sheet" });
-  });
 
   const annual = getProduct("annual");
 
@@ -33,9 +25,12 @@ export default function Index() {
         <button
           type="button"
           className="button button--primary"
-          onClick={() => {
+          onClick={async () => {
             haptics.light();
-            purchase("annual");
+            const result = await purchase("annual");
+            if (result.status === "abandoned") {
+              router.push("offer", { transition: "sheet" });
+            }
           }}
         >
           {annual?.variables.price ? `Subscribe · ${annual.variables.price}` : "Subscribe"}

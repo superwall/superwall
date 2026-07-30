@@ -16,13 +16,18 @@ renders undefined, and publishing stays disabled.
 
 ## What this shows
 
-**`transaction_abandon` is the most valuable event on a paywall.** Most people
-who open a store sheet close it:
+**Abandonment is the most valuable outcome on a paywall.** Most people who open
+a store sheet close it, and `purchase()` tells you directly:
 
 ```tsx
-useSuperwallEvent("transaction_abandon", () =>
-  router.push("offer", { transition: "sheet" }));
+const result = await purchase("annual");
+if (result.status === "abandoned") {
+  router.push("offer", { transition: "sheet" });
+}
 ```
+
+No event listener, no flag to work out whether this decline was the first —
+only the paywall that made the offer can react to it.
 
 **Pushed, so dismissing it is a real back** — the sheet slides down the way it
 came rather than animating something new over the top.
