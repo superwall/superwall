@@ -129,3 +129,11 @@ export const UserIcon = () => (
     <circle cx="12" cy="7" r="4" />
   </Icon>
 );
+
+export const RotateDeviceIcon = () => (
+  <Icon>
+    <rect x="4" y="2" width="10" height="16" rx="2" />
+    <path d="M17 12a5 5 0 0 1-5 9H9" />
+    <path d="m11 19-2 2 2 2" />
+  </Icon>
+);

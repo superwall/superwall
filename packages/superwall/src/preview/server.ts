@@ -7,6 +7,7 @@ import { createServer, searchForWorkspaceRoot, type Plugin, type ViteDevServer }
 import { loadSurfaceConfig } from "../config/load";
 import { discoverProject, type DiscoveredSurface, type Project } from "../discover";
 import { injectPlatformLayer, PLATFORM_STYLESHEET_URL, renderDocument } from "../document";
+import { EXTRA_ASSET_TYPES } from "../build";
 import { buildStudioProjects } from "./project";
 import { injectWebviewSimulation } from "./webview";
 
@@ -114,6 +115,25 @@ const projectModule = (projects: readonly PreviewProject[], viteRoot: string): s
     `export const sharedMessages = ${messageList(projects[0]?.project.sharedMessages ?? [])}`,
     `export const diagnostics = ${JSON.stringify(projects.flatMap((one) => one.project.diagnostics))}`,
   ].join("\n");
+};
+
+const projectDependencies = (superwallDir: string): string[] => {
+  try {
+    const parsed: unknown = JSON.parse(
+      fs.readFileSync(path.join(superwallDir, "package.json"), "utf8"),
+    );
+    if (typeof parsed !== "object" || parsed === null) return [];
+    const deps = (parsed as { dependencies?: Record<string, string> }).dependencies ?? {};
+    return Object.keys(deps).filter(
+      (name) =>
+        name !== "react" &&
+        name !== "react-dom" &&
+        !name.startsWith("@superwall/") &&
+        name !== "superwall",
+    );
+  } catch {
+    return [];
+  }
 };
 
 const previewDocument = async (
@@ -388,6 +408,7 @@ export const startPreviewServer = async (
     root: viteRoot,
     appType: "custom",
     logLevel: "warn",
+    assetsInclude: EXTRA_ASSET_TYPES.map((extension) => `**/*.${extension}`),
     plugins: [
       react(),
       previewPlugin(
@@ -409,6 +430,7 @@ export const startPreviewServer = async (
         "react-dom",
         "react-dom/client",
         "superwall > @superwall/runtime > @superwall/protocol > zod",
+        ...projects.flatMap((one) => projectDependencies(one.project.superwallDir)),
       ],
       exclude: ["superwall", "@superwall/runtime", "@superwall/protocol", "@superwall/studio"],
     },

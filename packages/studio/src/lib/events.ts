@@ -8,8 +8,8 @@ export type BridgeMessage =
       channel: typeof STUDIO_CHANNEL;
       type: "ask";
       id: string;
-      kind: "purchase";
-      reference: string;
+      kind: "purchase" | "permission" | "callback";
+      subject: string;
     };
 
 export type EventNotice = {

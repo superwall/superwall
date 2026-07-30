@@ -5,7 +5,14 @@ import { DeviceFrame, DevicePlaceholder } from "../components/DeviceFrame";
 import { MissingProducts } from "../components/MissingProducts";
 import { PaywallToasts } from "../components/PaywallToasts";
 import { Segmented, Select, Switch } from "../components/controls";
-import { ExternalIcon, MoonIcon, RotateIcon, SlidersIcon, SunIcon } from "../components/icons";
+import {
+  ExternalIcon,
+  MoonIcon,
+  RotateDeviceIcon,
+  RotateIcon,
+  SlidersIcon,
+  SunIcon,
+} from "../components/icons";
 import { SidePanel } from "../components/SidePanel";
 import { Toolbar, ToolbarDivider, ToolbarGroup } from "../components/Toolbar";
 import { TopBar } from "../components/TopBar";
@@ -132,6 +139,7 @@ export const SurfaceEditor = ({
   const [panelOpen, setPanelOpen] = React.useState(false);
   const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(undefined);
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [landscape, setLandscape] = React.useState(false);
   const [status, setStatus] = React.useState<StudioStatus>({});
   const [progress, setProgress] = React.useState<ActionProgress | undefined>(undefined);
   const dismissTimer = React.useRef<number | undefined>(undefined);
@@ -201,7 +209,8 @@ export const SurfaceEditor = ({
 
   const responsive = deviceId === RESPONSIVE_ID;
   const device = deviceById(deviceId);
-  const frame = responsive ? size : { width: device.width, height: device.height };
+  const upright = responsive ? size : { width: device.width, height: device.height };
+  const frame = landscape ? { width: upright.height, height: upright.width } : upright;
 
   const overrides: PreviewOverrides = {
     theme,
@@ -377,6 +386,20 @@ export const SurfaceEditor = ({
             ]}
             onChange={setTheme}
           />
+          <button
+            type="button"
+            className="sw-btn sw-btn--icon"
+            aria-label="Rotate device"
+            aria-pressed={landscape}
+            title={landscape ? "Back to portrait" : "Rotate to landscape"}
+            onClick={() => setLandscape((value) => !value)}
+          >
+            <span
+              className={`flex transition-transform duration-200 ${landscape ? "-rotate-90" : ""}`}
+            >
+              <RotateDeviceIcon />
+            </span>
+          </button>
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup label="Device">

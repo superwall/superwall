@@ -70,7 +70,7 @@ const ALWAYS_HOSTED = new Set([
 
 const alwaysHosted = (file: string): boolean => ALWAYS_HOSTED.has(path.extname(file).toLowerCase());
 
-const EXTRA_ASSET_TYPES = ["m4v", "riv", "lottie", "glb"];
+export const EXTRA_ASSET_TYPES = ["m4v", "riv", "lottie", "glb"];
 
 const ASSETS_DIR = "assets";
 

@@ -42,7 +42,7 @@ describe("PaywallToasts", () => {
       type: "ask",
       id: "purchase-1",
       kind: "purchase",
-      reference: "annual",
+      subject: "annual",
     });
 
     expect(await screen.findByText("annual")).toBeDefined();
@@ -62,7 +62,7 @@ describe("PaywallToasts", () => {
       type: "ask",
       id: "purchase-2",
       kind: "purchase",
-      reference: "monthly",
+      subject: "monthly",
     });
     fireEvent.click(await screen.findByRole("button", { name: "Abandon" }));
 
@@ -80,5 +80,62 @@ describe("PaywallToasts", () => {
 
     expect(screen.queryByText("close")).toBeNull();
     expect(sourceWindow.postMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("what the host is asked", () => {
+  it("asks the studio to answer a permission, the way a device would", async () => {
+    render(<PaywallToasts surfaceKey="a/pro" />);
+    await send({
+      channel: STUDIO_CHANNEL,
+      type: "ask",
+      id: "permission-1",
+      kind: "permission",
+      subject: "notification",
+    });
+
+    expect(await screen.findByText("notification")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Grant" }));
+
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      { channel: STUDIO_CHANNEL, type: "answer", id: "permission-1", outcome: "granted" },
+      "*",
+    );
+    expect(await screen.findByText(/granted/)).toBeDefined();
+  });
+
+  it("denies when you say so, so a paywall has to handle a no", async () => {
+    render(<PaywallToasts surfaceKey="a/pro" />);
+    await send({
+      channel: STUDIO_CHANNEL,
+      type: "ask",
+      id: "permission-2",
+      kind: "permission",
+      subject: "camera",
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Deny" }));
+
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      { channel: STUDIO_CHANNEL, type: "answer", id: "permission-2", outcome: "denied" },
+      "*",
+    );
+  });
+
+  it("answers a callback the app would normally resolve", async () => {
+    render(<PaywallToasts surfaceKey="a/pro" />);
+    await send({
+      channel: STUDIO_CHANNEL,
+      type: "ask",
+      id: "callback-1",
+      kind: "callback",
+      subject: "checkAccount",
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Succeed" }));
+
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      { channel: STUDIO_CHANNEL, type: "answer", id: "callback-1", outcome: "success" },
+      "*",
+    );
+    expect(await screen.findByText(/succeeded/)).toBeDefined();
   });
 });

@@ -55,7 +55,7 @@ export const SurfaceList = ({
 
   return (
     <>
-      <TopBar title={source.title} onHome={() => {}} />
+      <TopBar title={source.title} onHome={() => {}} inset />
 
       <div className="flex-1 overflow-y-auto px-6 pt-10 pb-16">
         <div className="mx-auto max-w-[1080px]">

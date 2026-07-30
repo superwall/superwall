@@ -92,44 +92,67 @@ const Notice = ({ notice }: { notice: EventNotice }) => (
   </Toast>
 );
 
-const Outcome = ({ action, reference }: { action: string; reference: string }) => (
-  <Toast
-    action={action === "completed" ? "transaction_complete" : "transaction_abandon"}
-    tone={action === "completed" ? "success" : "warning"}
-  >
-    <Pill>{reference}</Pill>
-    {action === "completed" ? " purchase completed." : " purchase abandoned."}
-  </Toast>
-);
+const OUTCOME: Record<string, { action: string; tone: EventNotice["tone"]; label: string }> = {
+  completed: { action: "transaction_complete", tone: "success", label: "purchase completed." },
+  abandoned: { action: "transaction_abandon", tone: "warning", label: "purchase abandoned." },
+  granted: { action: "request_permission", tone: "success", label: "granted." },
+  denied: { action: "request_permission", tone: "warning", label: "denied." },
+  success: { action: "request_callback", tone: "success", label: "succeeded." },
+  failure: { action: "request_callback", tone: "warning", label: "failed." },
+};
 
-const PurchaseAsk = ({
-  reference,
+const Outcome = ({ outcome, subject }: { outcome: string; subject: string }) => {
+  const spec = OUTCOME[outcome] ?? OUTCOME.completed;
+  return (
+    <Toast action={spec?.action ?? "purchase"} tone={spec?.tone ?? "info"}>
+      <Pill>{subject}</Pill> {spec?.label}
+    </Toast>
+  );
+};
+
+const ASK: Record<string, { action: string; verb: string; no: string; yes: string }> = {
+  purchase: { action: "purchase", verb: "purchase", no: "Abandon", yes: "Complete" },
+  permission: { action: "request_permission", verb: "permission", no: "Deny", yes: "Grant" },
+  callback: { action: "request_callback", verb: "callback", no: "Fail", yes: "Succeed" },
+};
+
+const OUTCOMES: Record<string, readonly [string, string]> = {
+  purchase: ["abandoned", "completed"],
+  permission: ["denied", "granted"],
+  callback: ["failure", "success"],
+};
+
+const Ask = ({
+  kind,
+  subject,
   onAnswer,
 }: {
-  reference: string;
-  onAnswer: (outcome: "completed" | "abandoned") => void;
-}) => (
-  <Toast
-    action="purchase"
-    tone="info"
-    actions={
-      <>
-        <button type="button" className="sw-btn" onClick={() => onAnswer("abandoned")}>
-          Abandon
-        </button>
-        <button
-          type="button"
-          className="sw-btn sw-btn--primary"
-          onClick={() => onAnswer("completed")}
-        >
-          Complete
-        </button>
-      </>
-    }
-  >
-    Tap triggered a <Pill>purchase</Pill> for <Pill>{reference}</Pill>.
-  </Toast>
-);
+  kind: string;
+  subject: string;
+  onAnswer: (outcome: string) => void;
+}) => {
+  const spec = ASK[kind] ?? ASK.purchase;
+  const [no, yes] = OUTCOMES[kind] ?? ["abandoned", "completed"];
+
+  return (
+    <Toast
+      action={spec?.action ?? "purchase"}
+      tone="info"
+      actions={
+        <>
+          <button type="button" className="sw-btn" onClick={() => onAnswer(no)}>
+            {spec?.no}
+          </button>
+          <button type="button" className="sw-btn sw-btn--primary" onClick={() => onAnswer(yes)}>
+            {spec?.yes}
+          </button>
+        </>
+      }
+    >
+      Tap triggered a <Pill>{spec?.verb}</Pill> for <Pill>{subject}</Pill>.
+    </Toast>
+  );
+};
 
 export const PaywallToasts = ({ surfaceKey }: { surfaceKey: string }) => {
   React.useEffect(() => {
@@ -141,16 +164,16 @@ export const PaywallToasts = ({ surfaceKey }: { surfaceKey: string }) => {
       if (!isBridgeMessage(event.data)) return;
 
       if (event.data.type === "ask") {
-        const { id, reference } = event.data;
-        const answer = (outcome: "completed" | "abandoned") => {
+        const { id, kind, subject } = event.data;
+        const answer = (outcome: string) => {
           (event.source as Window | null)?.postMessage(
             { channel: STUDIO_CHANNEL, type: "answer", id, outcome },
             "*",
           );
           toast.dismiss(id);
-          toast.custom(() => <Outcome action={outcome} reference={reference} />);
+          toast.custom(() => <Outcome outcome={outcome} subject={subject} />);
         };
-        toast.custom(() => <PurchaseAsk reference={reference} onAnswer={answer} />, {
+        toast.custom(() => <Ask kind={kind} subject={subject} onAnswer={answer} />, {
           id,
           duration: Number.POSITIVE_INFINITY,
         });

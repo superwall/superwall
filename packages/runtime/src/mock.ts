@@ -64,6 +64,15 @@ export type SuperwallMockOptions = {
   restoreOutcome?: "completed" | "none";
   /** Permission request responses. Defaults to "granted". */
   permissions?: Partial<Record<TPermissionTypeMessage, TPermissionStatus>>;
+  /** Answers a permission request per call, for hosts that decide at runtime. */
+  onPermission?: (
+    permissionType: TPermissionTypeMessage,
+  ) => TPermissionStatus | Promise<TPermissionStatus>;
+  /** Answers a callback request per call, for hosts that decide at runtime. */
+  onCallback?: (
+    name: string,
+    variables?: Record<string, unknown>,
+  ) => SuperwallMockCallbackResult | Promise<SuperwallMockCallbackResult>;
   callbacks?: Record<
     string,
     | SuperwallMockCallbackResult
@@ -258,12 +267,18 @@ export class MockSuperwallTransport implements ITransport {
         break;
       }
       case "request_permission": {
+        const status =
+          this.options.permissions?.[message.permission_type] ??
+          (this.options.onPermission
+            ? await this.options.onPermission(message.permission_type)
+            : "granted");
+
         this.respond([
           {
             event_name: "permission_result",
             permission_type: message.permission_type,
             request_id: message.request_id,
-            status: this.options.permissions?.[message.permission_type] ?? "granted",
+            status,
           },
         ]);
         break;
@@ -273,7 +288,10 @@ export class MockSuperwallTransport implements ITransport {
         const result =
           typeof callback === "function"
             ? await callback(message.variables)
-            : (callback ?? { status: "success" as const });
+            : (callback ??
+              (this.options.onCallback
+                ? await this.options.onCallback(message.name, message.variables)
+                : { status: "success" as const }));
 
         this.respond([
           {

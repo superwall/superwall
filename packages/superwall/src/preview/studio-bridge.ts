@@ -1,8 +1,16 @@
 import type { SuperwallMockOptions, TOutgoingMessage } from "@superwall/runtime";
 
+export type StudioAskKind = "purchase" | "permission" | "callback";
+
 export type StudioBridgeMessage =
   | { channel: "superwall-studio"; type: "event"; message: TOutgoingMessage }
-  | { channel: "superwall-studio"; type: "ask"; id: string; kind: "purchase"; reference: string }
+  | {
+      channel: "superwall-studio";
+      type: "ask";
+      id: string;
+      kind: StudioAskKind;
+      subject: string;
+    }
   | { channel: "superwall-studio"; type: "answer"; id: string; outcome: string };
 
 export const STUDIO_CHANNEL = "superwall-studio";
@@ -30,19 +38,32 @@ export const studioBridge = (): Partial<SuperwallMockOptions> => {
 
   const post = (message: StudioBridgeMessage) => parent.postMessage(message, window.origin);
 
+  const ask = (kind: StudioAskKind, subject: string): Promise<string> =>
+    new Promise((resolve) => {
+      const id = `${kind}-${(asked += 1)}`;
+      const settle = (event: MessageEvent) => {
+        if (!isAnswer(event.data, id)) return;
+        window.removeEventListener("message", settle);
+        resolve(event.data.outcome);
+      };
+      window.addEventListener("message", settle);
+      post({ channel: STUDIO_CHANNEL, type: "ask", id, kind, subject });
+    });
+
   return {
     onOutgoing: (message) => post({ channel: STUDIO_CHANNEL, type: "event", message }),
 
     purchaseOutcome: ({ reference }) =>
-      new Promise((resolve) => {
-        const id = `purchase-${(asked += 1)}`;
-        const settle = (event: MessageEvent) => {
-          if (!isAnswer(event.data, id)) return;
-          window.removeEventListener("message", settle);
-          resolve(event.data.outcome === "abandoned" ? "abandoned" : "completed");
-        };
-        window.addEventListener("message", settle);
-        post({ channel: STUDIO_CHANNEL, type: "ask", id, kind: "purchase", reference });
-      }),
+      ask("purchase", reference).then((outcome) =>
+        outcome === "abandoned" ? "abandoned" : "completed",
+      ),
+
+    onPermission: (type) =>
+      ask("permission", type).then((outcome) => (outcome === "denied" ? "denied" : "granted")),
+
+    onCallback: (name) =>
+      ask("callback", name).then((outcome) =>
+        outcome === "failure" ? { status: "failure" as const } : { status: "success" as const },
+      ),
   };
 };
