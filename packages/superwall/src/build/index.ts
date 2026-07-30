@@ -62,6 +62,10 @@ const ALWAYS_HOSTED = new Set([
   ".lottie",
   ".riv",
   ".glb",
+  ".woff2",
+  ".woff",
+  ".otf",
+  ".ttf",
 ]);
 
 const alwaysHosted = (file: string): boolean => ALWAYS_HOSTED.has(path.extname(file).toLowerCase());

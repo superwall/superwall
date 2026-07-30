@@ -111,21 +111,28 @@ caption `fg/50`, metadata `fg/40`.
 
 ## Fonts
 
-Use `@fontsource-variable/manrope` and `@fontsource-variable/roboto-mono`, and
-import them in the paywall's stylesheet entry:
+Manrope and Roboto Mono from Google Fonts, one `@import` at the top of the
+stylesheet:
 
-```ts
-import "@fontsource-variable/manrope";
+```css
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Roboto+Mono:wght@400..500&display=swap");
 ```
 
-**Do not link Google Fonts from the document.** It works locally and is the
-wrong call for a paywall: it puts a third-party request on the display path, so
-the first frame renders in a fallback face — or, offline, never gets the font
-at all. Fontsource is the same ergonomics (install, import, no font files in
-your repo) with the bytes going through our own asset pipeline, which hashes,
-hosts and preloads them.
+No dependency, no font files, and the whole family is one line.
 
-A variable font subset is the single heaviest thing you can add to a paywall.
+Put it in CSS rather than rendering `<link>` tags from a component. The
+stylesheet is inlined into the snapshot's `<head>` at build time, so the browser
+finds the `@import` while parsing the HTML; React-rendered links cannot appear
+until the JS bundle has executed. Measured in WebKit against the built
+snapshot — time until the font is actually painting:
+
+| | | | |
+| --------------- | ------ | ------ | ------ |
+| React `<link>`  | 227 ms | 199 ms | 241 ms |
+| CSS `@import`   | 282 ms | 192 ms | 191 ms |
+
+Level, and the `@import` needs no `preconnect` to get there.
+
 One family and one mono is the budget.
 
 ## Layout
