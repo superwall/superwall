@@ -38,7 +38,8 @@ declared order — a screen can push anywhere, which is what makes branching
 possible.
 
 **No network between screens.** All three ship in one snapshot, so moving
-between them is instant even offline.
+between them costs nothing — no fetch, no spinner, no chance of a screen that
+never arrives.
 
 ## Next
 

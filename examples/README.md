@@ -35,6 +35,25 @@ mechanism is the thing you read.
 | [`multi-page`](./multi-page)   | `router.push/back`, the route stack, `layout.tsx`              |
 | [`transitions`](./transitions) | a button per transition — the four built-ins plus a custom one |
 
+## Purchases
+
+| example                                    | teaches                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------- |
+| [`purchase-states`](./purchase-states)     | what `purchase()` resolves with, and what the SDK reports on its own |
+| [`trial-eligibility`](./trial-eligibility) | two paywalls in one, chosen by the store                             |
+
+## The host
+
+| example                                | teaches                                              |
+| -------------------------------------- | ---------------------------------------------------- |
+| [`personalization`](./personalization) | `useVariables()` — device, user and placement params |
+
+## Styling
+
+| example                        | teaches                                 |
+| ------------------------------ | --------------------------------------- |
+| [`local-fonts`](./local-fonts) | a font file that ships with the paywall |
+
 ## Localization
 
 | example                          | teaches                                                          |
