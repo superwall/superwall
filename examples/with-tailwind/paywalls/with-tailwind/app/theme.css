@@ -1,0 +1,25 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Roboto+Mono:wght@400..500&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #fdfef6;
+  --color-surface: #f6f7ef;
+  --color-fg: #0c0b0a;
+  --color-accent: #46d7d4;
+  --font-sans: Manrope, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
+}
+
+/* The provider stamps `dark` on <html>; Tailwind's variant follows it. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --sw-background: var(--color-bg);
+  --sw-routes-height: auto;
+}
+
+:root.dark {
+  --color-bg: #1c1b19;
+  --color-surface: #232220;
+  --color-fg: #fdfef6;
+}

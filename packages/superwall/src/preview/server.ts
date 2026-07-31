@@ -136,6 +136,35 @@ const projectDependencies = (superwallDir: string): string[] => {
   }
 };
 
+const POSTCSS_CONFIG_FILES = [
+  "postcss.config.js",
+  "postcss.config.mjs",
+  "postcss.config.cjs",
+  "postcss.config.ts",
+  ".postcssrc",
+  ".postcssrc.json",
+  ".postcssrc.js",
+  ".postcssrc.cjs",
+  ".postcssrc.mjs",
+];
+
+const postcssSearchDir = (projects: readonly PreviewProject[]): string | undefined =>
+  projects
+    .flatMap((one) => [one.project.superwallDir, one.project.root])
+    .find((dir) => POSTCSS_CONFIG_FILES.some((file) => fs.existsSync(path.join(dir, file))));
+
+const resolvableFrom = (dir: string): ((name: string) => boolean) => {
+  const require = createRequire(path.join(dir, "package.json"));
+  return (name) => {
+    try {
+      require.resolve(name);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+};
+
 const previewDocument = async (
   surface: DiscoveredSurface,
   platformStylesheet: string,
@@ -401,6 +430,8 @@ export const startPreviewServer = async (
   if (!first) throw new Error("startPreviewServer needs at least one project directory.");
 
   const viteRoot = first.project.superwallDir;
+  const postcss = postcssSearchDir(projects);
+  const resolvable = resolvableFrom(viteRoot);
 
   const server = await createServer({
     configFile: false,
@@ -408,6 +439,7 @@ export const startPreviewServer = async (
     root: viteRoot,
     appType: "custom",
     logLevel: "warn",
+    ...(postcss === undefined ? {} : { css: { postcss } }),
     assetsInclude: EXTRA_ASSET_TYPES.map((extension) => `**/*.${extension}`),
     plugins: [
       react(),
@@ -430,7 +462,9 @@ export const startPreviewServer = async (
         "react-dom",
         "react-dom/client",
         "superwall > @superwall/runtime > @superwall/protocol > zod",
-        ...projects.flatMap((one) => projectDependencies(one.project.superwallDir)),
+        ...projects
+          .flatMap((one) => projectDependencies(one.project.superwallDir))
+          .filter(resolvable),
       ],
       exclude: ["superwall", "@superwall/runtime", "@superwall/protocol", "@superwall/studio"],
     },

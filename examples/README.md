@@ -42,7 +42,7 @@ mechanism is the thing you read.
 | ------------------------------------------ | -------------------------------------------------------------------- |
 | [`purchase-states`](./purchase-states)     | what `purchase()` resolves with, and what the SDK reports on its own |
 | [`trial-eligibility`](./trial-eligibility) | two paywalls in one, chosen by the store                             |
-| [`abandonment-offer`](./abandonment-offer) | catch `transaction_abandon` and replace the route                    |
+| [`abandonment-offer`](./abandonment-offer) | `purchase()` resolves abandoned — push a last-chance offer           |
 | [`trial-reminders`](./trial-reminders)     | a local notification scheduled when the trial starts                 |
 
 ## The host
@@ -54,11 +54,13 @@ mechanism is the thing you read.
 
 ## Look and feel
 
-| example                          | teaches                                            |
-| -------------------------------- | -------------------------------------------------- |
-| [`custom-fonts`](./custom-fonts) | a typeface you supply, from a file in your project |
-| [`with-rive`](./with-rive)       | interactive vector animation on a canvas           |
-| [`orientation`](./orientation)   | a layout that answers to the device                |
+| example                            | teaches                                            |
+| ---------------------------------- | -------------------------------------------------- |
+| [`custom-fonts`](./custom-fonts)   | a typeface you supply, from a file in your project |
+| [`with-tailwind`](./with-tailwind) | Tailwind v4 with zero framework configuration      |
+| [`with-motion`](./with-motion)     | in-page animation; transitions stay the router's   |
+| [`with-rive`](./with-rive)         | interactive vector animation on a canvas           |
+| [`orientation`](./orientation)     | a layout that answers to the device                |
 
 ## Localization
 
