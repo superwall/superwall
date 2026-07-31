@@ -1,5 +1,7 @@
 import { buildTransport, TransportKind, type ITransport } from "@superwall/protocol";
 
+export { pendingHostMessages } from "@superwall/protocol";
+
 export type RuntimeTransportDetectionOptions = {
   search?: string;
 };

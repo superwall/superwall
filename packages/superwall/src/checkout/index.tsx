@@ -1,0 +1,25 @@
+import { CheckoutProvider } from "./state/CheckoutContext";
+import { CheckoutSheet } from "./components/CheckoutSheet";
+import "./checkout.css";
+
+/**
+ * Takes payment inside the paywall.
+ *
+ * Mounted by the build for paywalls whose config asks for `sheet` or
+ * `applePay`, so a paywall that sells through the store never carries any of
+ * it. It renders nothing until a purchase opens it.
+ *
+ * The sheet looks the same on every Superwall paywall, by design: it takes no
+ * colors, fonts, or spacing from the page around it, and there is no prop to
+ * make it. Payment UI that can be restyled is payment UI a shopper cannot
+ * recognize.
+ */
+export const SuperwallCheckout = () => (
+  <CheckoutProvider>
+    <CheckoutSheet />
+  </CheckoutProvider>
+);
+
+export { CheckoutProvider, useCheckoutState, useCheckoutActions } from "./state/CheckoutContext";
+export { checkoutEvents } from "./services/CheckoutEvents";
+export type { SessionData, CheckoutEventType, CheckoutEventPayload } from "./state/types";

@@ -18,8 +18,18 @@ declare global {
         };
       };
     };
+    app?: {
+      messages?: unknown[];
+      [member: string]: unknown;
+    };
   }
 }
+
+export const pendingHostMessages = (): unknown[] => {
+  if (typeof window === "undefined") return [];
+  const host = (window.app ??= {});
+  return (host.messages ??= []);
+};
 
 export const buildWebKitTransport = (): WebKitTransport => {
   return new WebKitTransport();
@@ -45,7 +55,8 @@ class WebKitTransport implements ITransport {
       return;
     }
 
-    log.warn("Unable to send message - WebKit message handler not available");
+    log.warn("No message handler yet - queueing for the host to drain");
+    pendingHostMessages().push(wrappedOutgoingMessage);
   }
   private _handlers: TIncomingHandler[] = [];
   addListener(handler: TIncomingHandler): void {

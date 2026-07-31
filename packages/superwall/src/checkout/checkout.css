@@ -1,0 +1,374 @@
+/**
+ * Checkout Sheet Styles
+ * Separate from live.css to avoid conflicts and enable code splitting
+ */
+
+/* Reset font to system defaults - isolate from paywall custom fonts */
+.checkout-sheet-wrapper,
+.checkout-sheet-wrapper * {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  font-style: normal;
+  font-variant: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar hiding for checkout sheet */
+.checkout-sheet-scrollable::-webkit-scrollbar {
+  display: none;
+}
+
+.checkout-sheet-scrollable {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* Disable tap highlight for all checkout elements */
+.checkout-sheet-wrapper * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Caret visibility - only show when input is focused */
+.checkout-sheet-wrapper input:not(:focus) {
+  caret-color: transparent;
+}
+
+/* iOS momentum scrolling support */
+@supports (-webkit-touch-callout: none) {
+  .checkout-sheet-scrollable {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Backdrop overlay */
+.checkout-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  z-index: 9998;
+  transition-property: opacity;
+  transition-duration: 500ms;
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  user-select: none;
+}
+
+.checkout-backdrop[data-state="closed"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.checkout-backdrop[data-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Modal container */
+.checkout-sheet-wrapper {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  pointer-events: none;
+}
+
+.checkout-sheet-wrapper[data-state="open"] {
+  pointer-events: none;
+}
+
+.checkout-sheet-wrapper[data-state="open"] .checkout-sheet-outer {
+  pointer-events: auto;
+}
+
+/* Outer container (padding for safe area) */
+.checkout-sheet-outer {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  transition-property: transform, height, max-height;
+  /* transition-duration: 596.06ms; */
+  /* prettier-ignore */
+  /* transition-timing-function: linear(0 0%, 0.004878 1%, 0.018523 2%, 0.039549 3%, 0.066701 4%, 0.098841 5%, 0.134952 6%, 0.17412 7%, 0.215536 8%, 0.258483 9%, 0.302334 10%, 0.346543 11%, 0.390637 12%, 0.434214 13%, 0.476934 14%, 0.518512 15%, 0.558717 16%, 0.597363 17%, 0.634305 18%, 0.669437 19%, 0.702682 20%, 0.733996 21%, 0.763357 22%, 0.790764 23%, 0.816238 24%, 0.839812 25%, 0.861535 26%, 0.881464 27%, 0.899668 28%, 0.91622 29%, 0.931198 30%, 0.944687 31%, 0.95677 32%, 0.967535 33%, 0.977067 34%, 0.985453 35%, 0.992776 36%, 0.99912 37%, 1.004563 38%, 1.009184 39%, 1.013056 40%, 1.016249 41%, 1.018831 42%, 1.020864 43%, 1.022407 44%, 1.023517 45%, 1.024243 46%, 1.024636 47%, 1.024737 48%, 1.024589 49%, 1.024228 50%, 1.023689 51%, 1.023001 52%, 1.022193 53%, 1.02129 54%, 1.020313 55%, 1.019283 56%, 1.018217 57%, 1.017131 58%, 1.016037 59%, 1.014947 60%, 1.013871 61%, 1.012817 62%, 1.011792 63%, 1.010802 64%, 1.009851 65%, 1.008942 66%, 1.008078 67%, 1.007261 68%, 1.006492 69%, 1.005772 70%, 1.005099 71%, 1.004475 72%, 1.003897 73%, 1.003365 74%, 1.002877 75%, 1.002432 76%, 1.002027 77%, 1.001661 78%, 1.001331 79%, 1.001036 80%, 1.000774 81%, 1.000541 82%, 1.000337 83%, 1.000159 84%, 1.000005 85%); */
+  /* transition-duration: 573.63ms; */
+  /* prettier-ignore */
+  /* transition-timing-function: linear(0 0%, 0.004691 1%, 0.01778 2%, 0.037903 3%, 0.063832 4%, 0.094468 5%, 0.128834 6%, 0.166062 7%, 0.205388 8%, 0.246142 9%, 0.287738 10%, 0.329672 11%, 0.37151 12%, 0.412886 13%, 0.453488 14%, 0.493061 15%, 0.531396 16%, 0.568326 17%, 0.603723 18%, 0.63749 19%, 0.66956 20%, 0.699893 21%, 0.728468 22%, 0.755285 23%, 0.780361 24%, 0.803724 25%, 0.825415 26%, 0.845483 27%, 0.863986 28%, 0.880988 29%, 0.896555 30%, 0.910758 31%, 0.92367 32%, 0.935363 33%, 0.945913 34%, 0.955392 35%, 0.963873 36%, 0.971426 37%, 0.978119 38%, 0.98402 39%, 0.989191 40%, 0.993694 41%, 0.997586 42%, 1.000924 43%, 1.003758 44%, 1.006137 45%, 1.008107 46%, 1.009711 47%, 1.010988 48%, 1.011975 49%, 1.012707 50%, 1.013213 51%, 1.013524 52%, 1.013666 53%, 1.013661 54%, 1.013532 55%, 1.013299 56%, 1.012979 57%, 1.012587 58%, 1.012139 59%, 1.011647 60%, 1.01112 61%, 1.010571 62%, 1.010006 63%, 1.009434 64%, 1.00886 65%, 1.008291 66%, 1.00773 67%, 1.007182 68%, 1.006649 69%, 1.006135 70%, 1.005641 71%, 1.005169 72%, 1.004719 73%, 1.004293 74%, 1.003891 75%, 1.003513 76%, 1.003159 77%, 1.002829 78%, 1.002522 79%, 1.002237 80%, 1.001974 81%, 1.001732 82%, 1.001511 83%, 1.001308 84%, 1.001123 85%, 1.000956 86%, 1.000804 87%, 1.000668 88%, 1.000546 89%, 1.000437 90%, 1.00034 91%, 1.000254 92%, 1.000179 93%, 1.000113 94%, 1.000056 95%); */
+  transition-duration: 589.13ms;
+  /* prettier-ignore */
+  transition-timing-function: linear(0 0%, 0.004697 1%, 0.017828 2%, 0.038051 3%, 0.064155 4%, 0.095049 5%, 0.129758 6%, 0.167411 7%, 0.207239 8%, 0.24856 9%, 0.290781 10%, 0.333386 11%, 0.375927 12%, 0.418026 13%, 0.45936 14%, 0.499663 15%, 0.538713 16%, 0.576335 17%, 0.612391 18%, 0.646778 19%, 0.679422 20%, 0.710277 21%, 0.739319 22%, 0.766544 23%, 0.791967 24%, 0.815615 25%, 0.837529 26%, 0.857758 27%, 0.876363 28%, 0.893406 29%, 0.908959 30%, 0.923095 31%, 0.935889 32%, 0.947418 33%, 0.95776 34%, 0.966992 35%, 0.97519 36%, 0.982429 37%, 0.988781 38%, 0.994316 39%, 0.999102 40%, 1.003204 41%, 1.006683 42%, 1.009597 43%, 1.012001 44%, 1.013948 45%, 1.015485 46%, 1.016658 47%, 1.017509 48%, 1.018076 49%, 1.018395 50%, 1.0185 51%, 1.018421 52%, 1.018184 53%, 1.017815 54%, 1.017336 55%, 1.016768 56%, 1.016129 57%, 1.015434 58%, 1.014699 59%, 1.013935 60%, 1.013154 61%, 1.012366 62%, 1.011579 63%, 1.0108 64%, 1.010034 65%, 1.009288 66%, 1.008564 67%, 1.007867 68%, 1.007199 69%, 1.006561 70%, 1.005956 71%, 1.005384 72%, 1.004845 73%, 1.00434 74%, 1.003868 75%, 1.003429 76%, 1.003022 77%, 1.002647 78%, 1.002301 79%, 1.001985 80%, 1.001696 81%, 1.001433 82%, 1.001196 83%, 1.000981 84%, 1.000789 85%, 1.000618 86%, 1.000465 87%, 1.00033 88%, 1.000212 89%, 1.000109 90%, 1.00002 91%);
+}
+
+.checkout-sheet-outer[data-state="closed"] {
+  transform: translateY(100%);
+}
+
+.checkout-sheet-outer[data-state="open"] {
+  transform: translateY(0);
+}
+
+/* Desktop: center aligned */
+.checkout-sheet-wrapper[data-viewport="large"] {
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.checkout-sheet-wrapper[data-viewport="large"] .checkout-sheet-outer {
+  max-width: 650px;
+  height: auto !important;
+  padding-bottom: 6px;
+}
+
+/* Desktop closed: translate from center to below viewport */
+.checkout-sheet-wrapper[data-viewport="large"] .checkout-sheet-outer[data-state="closed"] {
+  transform: translateY(calc(50vh + 50%));
+}
+
+/* Embedded variant: narrower to match Stripe's internal content width */
+.checkout-sheet-wrapper[data-variant="embedded"][data-viewport="large"] .checkout-sheet-outer {
+  max-width: 476px;
+}
+
+/* When form inset enabled: match Stripe's internal form dimensions */
+.checkout-sheet-wrapper[data-variant="embedded"][data-viewport="large"]
+  .checkout-sheet-outer:has(.checkout-sheet-card[data-form-inset="true"]) {
+  max-width: 440px;
+}
+
+.checkout-sheet-wrapper[data-variant="embedded"][data-viewport="large"]
+  .checkout-sheet-card[data-form-inset="true"]
+  .checkout-scroll-container {
+  max-height: 564px;
+}
+
+/* Embedded variant: enable scrolling for Stripe's iframe content */
+.checkout-sheet-wrapper[data-variant="embedded"] .checkout-sheet-card {
+  overflow: auto;
+}
+
+.checkout-sheet-wrapper[data-variant="embedded"] .checkout-scroll-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Embedded variant: clip form inset to remove Stripe's internal padding & borders */
+/* Minimal top inset (just clips border), 13px side/bottom inset */
+.checkout-sheet-wrapper[data-variant="embedded"]
+  .checkout-sheet-card[data-form-inset="true"]
+  .checkout-scroll-container
+  > div {
+  clip-path: inset(0px 13px 13px 13px);
+  margin-left: -13px;
+  margin-right: -13px;
+}
+
+/* Embedded checkout: 24px top/bottom, horizontal padding applied separately */
+.checkout-sheet-wrapper[data-variant="embedded"] .checkout-sheet-card {
+  padding: 1.5rem 0;
+}
+
+/* Embedded checkout: header gets 24px horizontal padding */
+.checkout-sheet-wrapper[data-variant="embedded"] .checkout-header-desktop {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+/* Embedded checkout: form gets 21px horizontal padding (24 - 3px focus space from 13px inset) */
+.checkout-sheet-wrapper[data-variant="embedded"] .checkout-scroll-container {
+  padding-left: 21px;
+  padding-right: 21px;
+}
+
+/* Embedded variant: scroll mask for fade indicators */
+/* scrollFade: 0=disabled, 1=top+bottom, 2=top only, 3=bottom only */
+@supports (animation-timeline: scroll()) {
+  /* scrollFade=1: Top and bottom fades */
+  .checkout-sheet-wrapper[data-variant="embedded"]
+    .checkout-scroll-container[data-scrollable="true"][data-scroll-fade="1"] {
+    --mask-top-size: 0;
+    --mask-bottom-size: 0;
+    mask:
+      linear-gradient(
+          white 0%,
+          rgba(255, 255, 255, 0.9) 20%,
+          rgba(255, 255, 255, 0.6) 50%,
+          rgba(255, 255, 255, 0.2) 80%,
+          transparent 100%
+        )
+        50% 0 / 100% var(--mask-top-size) no-repeat,
+      linear-gradient(white, white) 50% 50% / 100% 100% no-repeat,
+      linear-gradient(
+          transparent 0%,
+          rgba(255, 255, 255, 0.2) 20%,
+          rgba(255, 255, 255, 0.6) 50%,
+          rgba(255, 255, 255, 0.9) 80%,
+          white 100%
+        )
+        50% 100% / 100% var(--mask-bottom-size) no-repeat;
+    mask-composite: exclude;
+    animation:
+      embedded-mask-top both linear,
+      embedded-mask-bottom-in both linear,
+      embedded-mask-bottom-out both linear;
+    animation-timeline: scroll(self);
+    animation-range:
+      0.5rem 2rem,
+      0 1px,
+      calc(100% - 1.5rem) 100%;
+  }
+
+  /* scrollFade=2: Top only fade */
+  .checkout-sheet-wrapper[data-variant="embedded"]
+    .checkout-scroll-container[data-scrollable="true"][data-scroll-fade="2"] {
+    --mask-top-size: 0;
+    mask:
+      linear-gradient(
+          white 0%,
+          rgba(255, 255, 255, 0.9) 20%,
+          rgba(255, 255, 255, 0.6) 50%,
+          rgba(255, 255, 255, 0.2) 80%,
+          transparent 100%
+        )
+        50% 0 / 100% var(--mask-top-size) no-repeat,
+      linear-gradient(white, white) 50% 50% / 100% 100% no-repeat;
+    mask-composite: exclude;
+    animation: embedded-mask-top both linear;
+    animation-timeline: scroll(self);
+    animation-range: 0.5rem 2rem;
+  }
+
+  /* scrollFade=3: Bottom only fade */
+  .checkout-sheet-wrapper[data-variant="embedded"]
+    .checkout-scroll-container[data-scrollable="true"][data-scroll-fade="3"] {
+    --mask-bottom-size: 0;
+    mask:
+      linear-gradient(white, white) 50% 50% / 100% 100% no-repeat,
+      linear-gradient(
+          transparent 0%,
+          rgba(255, 255, 255, 0.2) 20%,
+          rgba(255, 255, 255, 0.6) 50%,
+          rgba(255, 255, 255, 0.9) 80%,
+          white 100%
+        )
+        50% 100% / 100% var(--mask-bottom-size) no-repeat;
+    mask-composite: exclude;
+    animation:
+      embedded-mask-bottom-in both linear,
+      embedded-mask-bottom-out both linear;
+    animation-timeline: scroll(self);
+    animation-range:
+      0 1px,
+      calc(100% - 1.5rem) 100%;
+  }
+
+  @keyframes embedded-mask-top {
+    from {
+      --mask-top-size: 0;
+    }
+    to {
+      --mask-top-size: 40px;
+    }
+  }
+
+  @keyframes embedded-mask-bottom-in {
+    from {
+      --mask-bottom-size: 0;
+    }
+    to {
+      --mask-bottom-size: 40px;
+    }
+  }
+
+  @keyframes embedded-mask-bottom-out {
+    from {
+      --mask-bottom-size: 40px;
+    }
+    to {
+      --mask-bottom-size: 0;
+    }
+  }
+}
+
+/* Mobile: bottom aligned */
+.checkout-sheet-wrapper[data-viewport="small"] {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+.checkout-sheet-wrapper[data-viewport="small"] .checkout-sheet-outer {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 6px);
+}
+
+/* White card */
+.checkout-sheet-card {
+  flex: 1;
+  min-height: 0;
+  max-height: 100dvh;
+  border-radius: var(--border-radius, 44px);
+  background-color: white;
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 4px 6px -4px rgb(0 0 0 / 0.1);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  touch-action: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.checkout-sheet-wrapper[data-fullscreen="true"][data-viewport="small"] .checkout-sheet-card {
+  max-height: calc(100dvh - var(--safe-area-offset, 52px));
+}
+
+/* Close button (desktop) */
+.checkout-close-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #f3f4f6;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 200ms ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  z-index: 1;
+}
+
+.checkout-close-button:hover {
+  opacity: 0.75;
+}
+
+/* Scroll container */
+.checkout-scroll-container {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow-y: visible;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  touch-action: pan-y;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Close button header (desktop) */
+.checkout-header-desktop {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}

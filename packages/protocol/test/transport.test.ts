@@ -78,6 +78,7 @@ describe("buildTransport", () => {
 describe("WebKit transport", () => {
   afterEach(() => {
     delete window.webkit;
+    delete window.app;
   });
 
   it("posts wrapped messages to the paywall message handler", () => {
@@ -97,6 +98,37 @@ describe("WebKit transport", () => {
     expect(() =>
       buildTransport(TransportKind.WebKitPostMessage).postMessage(outgoing),
     ).not.toThrow();
+  });
+
+  it("queues for the host when no handler is listening yet, so the opening ping survives", () => {
+    buildTransport(TransportKind.WebKitPostMessage).postMessage(outgoing);
+
+    expect(window.app?.messages).toHaveLength(1);
+    // Queued in the same wire form the handler would have received, so a host
+    // draining the queue parses it exactly as it parses a live message.
+    expect(parseWrapped(window.app?.messages?.[0] as string)).toMatchObject({
+      direction: MessageDirection.FromPaywall,
+      payload: { events: [outgoing] },
+    });
+  });
+
+  it("keeps queued messages behind ones the host already left there", () => {
+    window.app = { messages: [{ earlier: true }] };
+
+    buildTransport(TransportKind.WebKitPostMessage).postMessage(outgoing);
+
+    expect(window.app.messages).toHaveLength(2);
+    expect(window.app.messages?.[0]).toEqual({ earlier: true });
+  });
+
+  it("stops queueing once a handler is registered", () => {
+    const postMessage = vi.fn();
+    window.webkit = { messageHandlers: { paywallMessageHandler: { postMessage } } };
+
+    buildTransport(TransportKind.WebKitPostMessage).postMessage(outgoing);
+
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(window.app?.messages ?? []).toHaveLength(0);
   });
 
   it("only dispatches accepted messages while listening", () => {

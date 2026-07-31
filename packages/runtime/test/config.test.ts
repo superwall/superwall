@@ -4,6 +4,7 @@ import {
   documentAttributes,
   normalizeProductSlot,
   productsFromConfig,
+  checkoutNeedsPaymentUi,
   SUPERWALL_GENERATION,
 } from "../src/config";
 
@@ -64,5 +65,20 @@ describe("documentAttributes", () => {
     expect(documentAttributes({ scrollEnabled: true })).toMatchObject({
       "data-sw-scroll": "true",
     });
+  });
+});
+
+describe("checkoutNeedsPaymentUi", () => {
+  it("asks for the payment UI only where payment happens in the page", () => {
+    expect(checkoutNeedsPaymentUi("sheet")).toBe(true);
+    expect(checkoutNeedsPaymentUi("applePay")).toBe(true);
+  });
+
+  it("leaves it out for external checkout, which only ever navigates away", () => {
+    expect(checkoutNeedsPaymentUi("external")).toBe(false);
+  });
+
+  it("leaves it out when a paywall says nothing about checkout — the native default", () => {
+    expect(checkoutNeedsPaymentUi(undefined)).toBe(false);
   });
 });

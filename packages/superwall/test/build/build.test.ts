@@ -241,3 +241,43 @@ describe("build artifacts", () => {
     expect(fs.existsSync(path.join(FIXTURE, ".superwall"))).toBe(false);
   }, 120_000);
 });
+
+describe("checkout is bundled only where it is asked for", () => {
+  const stripeIsPresent = (html: string) =>
+    html.includes("js.stripe.com") || html.includes("checkout-sheet-wrapper");
+
+  it("keeps Stripe out of a paywall that never mentions checkout", async () => {
+    const built = await buildSnapshot(project(), surface("tiny"), {});
+
+    expect(stripeIsPresent(built.html)).toBe(false);
+  }, 120_000);
+
+  it("carries the sheet into a paywall configured for it", async () => {
+    const built = await buildSnapshot(project(), surface("paid"), {});
+
+    expect(built.html).toContain("js.stripe.com");
+    expect(built.html).toContain("checkout-sheet-wrapper");
+  }, 120_000);
+
+  it("carries it for applePay too, which falls back to the same sheet", async () => {
+    const built = await buildSnapshot(project(), surface("wallet"), {});
+
+    expect(built.html).toContain("js.stripe.com");
+    expect(built.html).toContain("checkout-sheet-wrapper");
+  }, 120_000);
+
+  it("costs an external-checkout paywall nothing, since it only ever navigates", async () => {
+    // `external` leaves for a hosted page, so the payment UI would be dead
+    // weight. These three paywalls render identical markup and differ only in
+    // the config key, so any difference in bytes is the payment UI itself.
+    const plain = await buildSnapshot(project(), surface("basic"), {});
+    const external = await buildSnapshot(project(), surface("hosted"), {});
+    const sheet = await buildSnapshot(project(), surface("paid"), {});
+
+    expect(stripeIsPresent(external.html)).toBe(false);
+    // Not byte-identical: the config itself rides in the snapshot, so the
+    // word "external" costs a few bytes. What must not appear is payment UI.
+    expect(external.bytes - plain.bytes).toBeLessThan(200);
+    expect(sheet.bytes - external.bytes).toBeGreaterThan(20_000);
+  }, 120_000);
+});

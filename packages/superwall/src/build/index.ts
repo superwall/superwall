@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { normalizeProductSlot, type SuperwallConfig } from "@superwall/runtime";
+import {
+  checkoutNeedsPaymentUi,
+  normalizeProductSlot,
+  type SuperwallConfig,
+} from "@superwall/runtime";
 import react from "@vitejs/plugin-react-swc";
 import { build as viteBuild, type Plugin } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
@@ -131,14 +135,21 @@ const relativeImport = (fromDir: string, file: string): string => {
   return relative.startsWith(".") ? relative : `./${relative}`;
 };
 
-const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurface): string => {
+const entrySource = (
+  entryDir: string,
+  project: Project,
+  surface: DiscoveredSurface,
+  config: SuperwallConfig,
+): string => {
   const imp = (file: string) => JSON.stringify(relativeImport(entryDir, file));
+  const checkout = checkoutNeedsPaymentUi(config.checkout);
   const lines: string[] = [
     `import * as React from "react";`,
     `import { createRoot } from "react-dom/client";`,
     `import { SuperwallProvider } from "superwall";`,
     `import { mergeMessages } from "superwall/internal";`,
     `import { PaywallRouter } from "superwall/navigation";`,
+    ...(checkout ? [`import { SuperwallCheckout } from "superwall/checkout";`] : []),
   ];
 
   surface.routes.forEach((route, index) => {
@@ -181,6 +192,7 @@ const entrySource = (entryDir: string, project: Project, surface: DiscoveredSurf
     surface.layoutFile
       ? `      <PaywallRouter routes={routes} Layout={Layout} transition={definition?.transition} navigationId={${JSON.stringify(surface.id)}} />`
       : `      <PaywallRouter routes={routes} transition={definition?.transition} navigationId={${JSON.stringify(surface.id)}} />`,
+    ...(checkout ? [`      <SuperwallCheckout />`] : []),
     `    </SuperwallProvider>`,
     `  </React.StrictMode>,`,
     `);`,
@@ -327,7 +339,10 @@ export const buildSnapshot = async (
 
   const { definition, config } = await loadSurfaceConfig(surface);
 
-  fs.writeFileSync(path.join(entryDir, "entry.jsx"), entrySource(entryDir, project, surface));
+  fs.writeFileSync(
+    path.join(entryDir, "entry.jsx"),
+    entrySource(entryDir, project, surface, config),
+  );
   fs.writeFileSync(
     path.join(entryDir, "index.html"),
     renderDocument({ title: `${surface.id} — superwall`, config, entry: "./entry.jsx" }),

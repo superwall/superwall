@@ -6,6 +6,7 @@ import {
   detectNativeSuperwallHost,
   documentAttributes,
   mockOptionsFromConfig,
+  pendingHostMessages,
   type SuperwallMockOptions,
   type SuperwallConfig,
   type SuperwallProduct,
@@ -100,6 +101,9 @@ export const SuperwallProvider = ({ children, config, mock }: SuperwallProviderP
     };
     const appInterface = {
       getAllState: () => value.getSnapshot().state,
+      accept: value.accept.bind(value),
+      accept64: value.accept64.bind(value),
+      messages: pendingHostMessages(),
     };
 
     paywallWindow.paywall = paywallInterface;

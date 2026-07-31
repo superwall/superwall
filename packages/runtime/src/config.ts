@@ -86,9 +86,35 @@ export type SuperwallLocalizationConfig<TLocale extends string = string> = {
   messages?: Record<TLocale, SuperwallMessages> & Record<string, SuperwallMessages>;
 };
 
+/**
+ * How a purchase completes on the web. Native hosts ignore it — they always
+ * buy through the store.
+ *
+ * - `external` — leave for Superwall's hosted checkout page and come back.
+ * - `sheet` — take payment in the paywall, in a sheet Superwall renders.
+ * - `applePay` — go straight to Apple Pay, falling back to the sheet where
+ *   Apple Pay is unavailable.
+ *
+ * The sheet's appearance is fixed and takes nothing from the paywall around
+ * it. Payment UI that borrows a paywall's fonts and colors stops looking like
+ * payment UI, which is the one place a shopper is entitled to see something
+ * they recognize.
+ *
+ * `sheet` and `applePay` carry Stripe's payment UI into the bundle; `external`
+ * costs nothing. Read this before shipping either:
+ * https://superwall.com/docs/web-checkout
+ */
+export type SuperwallCheckoutMode = "external" | "sheet" | "applePay";
+
 export type SuperwallConfig<TLocale extends string = string> = {
   /** Product slots this paywall renders, keyed by reference. */
   products?: Record<string, SuperwallProductSlotInput>;
+
+  /**
+   * How a purchase completes on the web. Omit it for native-only paywalls —
+   * nothing about checkout is bundled unless this asks for it.
+   */
+  checkout?: SuperwallCheckoutMode;
 
   /** How and when the native SDK presents the paywall. */
   presentation?: SuperwallPresentationConfig;
@@ -135,6 +161,9 @@ export const defineSuperwallConfig = <TLocale extends string = string>(
 
 export const normalizeProductSlot = (input: SuperwallProductSlotInput): SuperwallProductSlot =>
   typeof input === "string" ? { productId: input } : input;
+
+export const checkoutNeedsPaymentUi = (mode: SuperwallCheckoutMode | undefined): boolean =>
+  mode === "sheet" || mode === "applePay";
 
 /**
  * Materializes the config's product slots as products so references exist

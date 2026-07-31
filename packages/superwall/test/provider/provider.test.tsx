@@ -32,6 +32,37 @@ describe("window.paywall interface", () => {
     expect(paywallWindow.paywall).toBeUndefined();
     expect(paywallWindow.app).toBeUndefined();
   });
+
+  it("takes messages on window.app.accept too — the handle the web host calls", async () => {
+    const view = render(<div />, { wrapper: createWrapper() });
+    await flush();
+
+    const paywallWindow = window as typeof window & {
+      app?: {
+        accept: (messages: unknown[]) => void;
+        getAllState: () => Record<string, unknown>;
+        messages?: unknown[];
+      };
+    };
+
+    expect(typeof paywallWindow.app?.accept).toBe("function");
+    expect(paywallWindow.app?.messages).toBeInstanceOf(Array);
+
+    act(() => {
+      paywallWindow.app?.accept([
+        {
+          event_name: "template_variables",
+          variables: { products: [{ primary: { price: "$2.00" } }] },
+        },
+      ]);
+    });
+
+    expect(paywallWindow.app?.getAllState()).toMatchObject({
+      products: { primary: { price: "$2.00" } },
+    });
+
+    view.unmount();
+  });
 });
 
 describe("mock auto mode", () => {
