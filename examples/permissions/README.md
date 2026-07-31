@@ -3,8 +3,8 @@
 Ask the app, and wait for its answer.
 
 ```bash
-superwall create permissions
-cd permissions && bun install && bun dev
+superwall create --example permissions
+superwall dev
 ```
 
 ## Products

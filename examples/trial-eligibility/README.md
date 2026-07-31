@@ -3,8 +3,8 @@
 Two paywalls in one, chosen by the store.
 
 ```bash
-superwall create trial-eligibility
-cd trial-eligibility && bun install && bun dev
+superwall create --example trial-eligibility
+superwall dev
 ```
 
 ## Products

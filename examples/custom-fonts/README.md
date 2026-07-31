@@ -3,8 +3,8 @@
 Use any typeface, from a file in your own project.
 
 ```bash
-superwall create custom-fonts
-cd custom-fonts && bun install && bun dev
+superwall create --example custom-fonts
+superwall dev
 ```
 
 ## Products

@@ -58,6 +58,7 @@ function printHelp(): void {
       ),
       "",
       head("Paywalls & flows"),
+      row("create [dir]", "Set up paywalls in your app - creates superwall/ inside it"),
       row("dev [dir..]", "Host the studio: browse and preview your paywalls and flows"),
       row("push [dir]", "Build and push your paywalls and flows as immutable versions"),
       row("promote [dir]", "Point production at a pushed version"),
@@ -456,6 +457,42 @@ export async function run(): Promise<void> {
   }
 
   cli = cli
+    .command(
+      "create [dir]",
+      "Set up paywalls in your app - creates a superwall/ directory inside it",
+      (y) =>
+        y
+          .positional("dir", {
+            type: "string",
+            describe: "Your app's root (default: cwd) - paywalls land in superwall/ inside it",
+          })
+          .options({
+            example: {
+              type: "string",
+              describe: "Start from a public example by name, e.g. --example with-rive",
+            },
+            yes: {
+              type: "boolean",
+              alias: "y",
+              describe: "Accept defaults and skip the optional prompts",
+            },
+            install: {
+              type: "boolean",
+              default: true,
+              describe: "Install dependencies after scaffolding (--no-install to skip)",
+            },
+            connect: {
+              type: "boolean",
+              default: true,
+              describe: "Connect a Superwall app when possible (--no-connect to skip)",
+            },
+          })
+          .example("$0 create", "Set up superwall/ in the current app")
+          .example("$0 create --example with-rive", "Start from an example"),
+      (argv) => {
+        return import("@/commands/paywalls/create").then((m) => m.runCreate(argv));
+      },
+    )
     .command(
       "dev [dir..]",
       "Host the studio: browse and preview your paywalls and funnels",

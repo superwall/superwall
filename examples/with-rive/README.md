@@ -3,8 +3,8 @@
 Interactive vector animation, running on a canvas in the paywall.
 
 ```bash
-superwall create with-rive
-cd with-rive && bun install && bun dev
+superwall create --example with-rive
+superwall dev
 ```
 
 ## Products

@@ -3,8 +3,8 @@
 Landscape that actually works, not just survives.
 
 ```bash
-superwall create orientation
-cd orientation && bun install && bun dev
+superwall create --example orientation
+superwall dev
 ```
 
 ## Products

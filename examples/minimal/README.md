@@ -4,8 +4,8 @@ The smallest paywall that is still a real one: a headline, a price, a purchase
 and a restore.
 
 ```bash
-superwall create minimal
-cd minimal && bun install && bun dev
+superwall create --example minimal
+superwall dev
 ```
 
 ## Products

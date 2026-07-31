@@ -3,8 +3,8 @@
 Catch the people who nearly bought.
 
 ```bash
-superwall create abandonment-offer
-cd abandonment-offer && bun install && bun dev
+superwall create --example abandonment-offer
+superwall dev
 ```
 
 ## Products

@@ -4,8 +4,8 @@ In-page animation with [Motion](https://motion.dev) — entrances, a price that
 counts up, a button that responds to touch.
 
 ```bash
-superwall create with-motion
-cd with-motion && bun install && bun dev
+superwall create --example with-motion
+superwall dev
 ```
 
 ## Products

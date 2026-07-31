@@ -3,8 +3,8 @@
 Tailwind CSS v4 styling a paywall, with no framework configuration at all.
 
 ```bash
-superwall create with-tailwind
-cd with-tailwind && bun install && bun dev
+superwall create --example with-tailwind
+superwall dev
 ```
 
 ## Products

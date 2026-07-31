@@ -3,8 +3,8 @@
 Remind them before the trial ends.
 
 ```bash
-superwall create trial-reminders
-cd trial-reminders && bun install && bun dev
+superwall create --example trial-reminders
+superwall dev
 ```
 
 ## Products

@@ -3,8 +3,8 @@
 Three screens in one paywall, with chrome that survives every one of them.
 
 ```bash
-superwall create multi-page
-cd multi-page && bun install && bun dev
+superwall create --example multi-page
+superwall dev
 ```
 
 ## Products

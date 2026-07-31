@@ -47,6 +47,24 @@ Prefer to drive the agent yourself? Add `--skill` to `integrate`, `migrate`,
 or `review` and the CLI prints the full playbook for your project's framework
 instead of running it — paste it into any agent.
 
+## Build paywalls
+
+```bash
+superwall create      # start a paywalls project — minimal, or any public example
+superwall dev         # open the studio and preview everything live
+superwall push        # build and push immutable versions (production untouched)
+superwall promote     # point production at a pushed version
+superwall publish     # push and promote in one step
+```
+
+`create` sets up a `superwall/` directory in your app — always that name,
+always self-contained. It asks for a starting point (`--example with-rive` to
+begin from any example in the public repo), then looks at the app around it:
+if the Superwall SDK is already configured, it finds your app by its API key
+and binds pushes to it; otherwise it can log you in, pick an app, or create
+one on the spot. `--yes` accepts the defaults; `--no-install` and
+`--no-connect` skip those steps.
+
 ## Manage your account
 
 Everything in the dashboard, from the terminal:

@@ -4,8 +4,8 @@ Two plans, one selected, one call to action — the shape almost every real
 paywall has.
 
 ```bash
-superwall create product-selection
-cd product-selection && bun install && bun dev
+superwall create --example product-selection
+superwall dev
 ```
 
 ## Products

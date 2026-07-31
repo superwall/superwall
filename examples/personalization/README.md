@@ -3,8 +3,8 @@
 What the SDK knows about who is looking.
 
 ```bash
-superwall create personalization
-cd personalization && bun install && bun dev
+superwall create --example personalization
+superwall dev
 ```
 
 ## Products

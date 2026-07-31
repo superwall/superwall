@@ -3,8 +3,8 @@
 Get the outcome of a purchase and act on it.
 
 ```bash
-superwall create purchase-states
-cd purchase-states && bun install && bun dev
+superwall create --example purchase-states
+superwall dev
 ```
 
 ## Products

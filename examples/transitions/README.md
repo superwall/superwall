@@ -4,8 +4,8 @@ One button per transition. Press one, watch it arrive; press Back, watch it
 reverse.
 
 ```bash
-superwall create transitions
-cd transitions && bun install && bun dev
+superwall create --example transitions
+superwall dev
 ```
 
 ## Products

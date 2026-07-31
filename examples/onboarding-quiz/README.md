@@ -3,8 +3,8 @@
 Answers that decide where you land.
 
 ```bash
-superwall create onboarding-quiz
-cd onboarding-quiz && bun install && bun dev
+superwall create --example onboarding-quiz
+superwall dev
 ```
 
 ## Products

@@ -4,8 +4,8 @@ Each directory is a complete, standalone superwall project. Nothing is shared
 between them — copy one anywhere and it runs:
 
 ```bash
-superwall create <example>
-cd <example> && bun install && bun dev
+superwall create --example <example>
+superwall dev
 ```
 
 To browse several at once, point `dev` at all of them:

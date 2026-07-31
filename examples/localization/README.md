@@ -3,8 +3,8 @@
 The same paywall in English, Spanish, German and French, chosen by the device.
 
 ```bash
-superwall create localization
-cd localization && bun install && bun dev
+superwall create --example localization
+superwall dev
 ```
 
 Switch locale in the studio's footer to see it change. There is deliberately no
