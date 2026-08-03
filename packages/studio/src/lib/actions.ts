@@ -63,8 +63,8 @@ export const fetchStatus = async (surface: StudioSurface): Promise<StudioStatus>
   try {
     const response = await fetch(`/__studio/status${surfacePath(surface)}`);
     return (await response.json()) as StudioStatus;
-  } catch {
-    return {};
+  } catch (error) {
+    return { unreachable: error instanceof Error ? error.message : String(error) };
   }
 };
 
@@ -73,7 +73,7 @@ export const fetchSamples = async (): Promise<Samples> => {
     const response = await fetch("/__studio/samples.json");
     const value: unknown = await response.json();
     return typeof value === "object" && value !== null ? (value as Samples) : {};
-  } catch {
-    return {};
+  } catch (error) {
+    return { unreachable: error instanceof Error ? error.message : String(error) };
   }
 };

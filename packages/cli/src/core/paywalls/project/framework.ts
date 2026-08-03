@@ -67,6 +67,7 @@ export interface StudioStatus {
   liveUrl?: string;
   active?: boolean;
   updatedAt?: string;
+  unreachable?: string;
 }
 
 export type StudioActionProgress = (step: string, state: "start" | "done") => void;
@@ -76,6 +77,7 @@ export interface Samples {
   user?: Record<string, unknown>;
   products?: Record<string, Record<string, unknown>>;
   live?: { device: boolean; user: boolean };
+  unreachable?: string;
 }
 
 export interface StudioActions {

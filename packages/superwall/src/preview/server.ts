@@ -200,6 +200,7 @@ export type StudioStatus = {
   liveUrl?: string;
   active?: boolean;
   updatedAt?: string;
+  unreachable?: string;
 };
 
 export type Samples = {
@@ -207,6 +208,7 @@ export type Samples = {
   user?: Record<string, unknown>;
   products?: Record<string, Record<string, unknown>>;
   live?: { device: boolean; user: boolean };
+  unreachable?: string;
 };
 
 export type StudioActions = {
@@ -291,7 +293,11 @@ const previewPlugin = (
             json(res, {});
             return;
           }
-          sample.then((value) => json(res, value)).catch(() => json(res, {}));
+          sample
+            .then((value) => json(res, value))
+            .catch((error: unknown) =>
+              json(res, { unreachable: error instanceof Error ? error.message : String(error) }),
+            );
           return;
         }
 
@@ -350,7 +356,9 @@ const previewPlugin = (
           studio
             .status(surface)
             .then((value) => json(res, value))
-            .catch(() => json(res, {}));
+            .catch((error: unknown) =>
+              json(res, { unreachable: error instanceof Error ? error.message : String(error) }),
+            );
           return;
         }
 

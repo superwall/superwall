@@ -1,4 +1,6 @@
 import * as React from "react";
+import { DeviceChrome } from "./DeviceChrome";
+import type { DeviceChromeSpec } from "../lib/devices";
 
 const FRAME_MARGIN = 96;
 
@@ -89,6 +91,9 @@ export const DeviceFrame = ({
   src,
   stageRef,
   reloadKey = 0,
+  chrome,
+  landscape = false,
+  theme = "light",
 }: {
   width: number;
   height: number;
@@ -96,6 +101,9 @@ export const DeviceFrame = ({
   src: string;
   stageRef: React.RefObject<HTMLElement | null>;
   reloadKey?: number;
+  chrome?: DeviceChromeSpec;
+  landscape?: boolean;
+  theme?: "light" | "dark";
 }) => {
   const scale = useFitScale(stageRef, width, height);
 
@@ -153,11 +161,15 @@ export const DeviceFrame = ({
 
   const visible = frames.findLast((frame) => frame.ready);
 
+  const radius = chrome ? chrome.radius * scale : 0;
+
   return (
     <div
-      className="bg-panel relative flex-none overflow-hidden border border-cream/20"
+      className={`bg-panel relative flex-none overflow-hidden ${
+        chrome ? "shadow-[0_0_0_1px] shadow-cream/25" : "border border-cream/20"
+      }`}
       data-testid="device-frame"
-      style={{ width: width * scale, height: height * scale }}
+      style={{ width: width * scale, height: height * scale, borderRadius: radius }}
     >
       {frames.map((frame) => (
         <iframe
@@ -179,6 +191,20 @@ export const DeviceFrame = ({
           }}
         />
       ))}
+      {chrome && (
+        <div
+          className="pointer-events-none absolute inset-0 origin-top-left"
+          style={{ width, height, transform: `scale(${scale})` }}
+        >
+          <DeviceChrome
+            spec={chrome}
+            width={width}
+            height={height}
+            landscape={landscape}
+            theme={theme}
+          />
+        </div>
+      )}
     </div>
   );
 };

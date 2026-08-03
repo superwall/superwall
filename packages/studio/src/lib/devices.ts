@@ -1,3 +1,10 @@
+export type DeviceChromeSpec = {
+  radius: number;
+  cutout?: "island" | "punch";
+  statusBarHeight: number;
+  homeIndicator: boolean;
+};
+
 export type StudioDevice = {
   id: string;
   name: string;
@@ -8,6 +15,14 @@ export type StudioDevice = {
     deviceModel: string;
     osVersion: string;
   };
+  chrome?: DeviceChromeSpec;
+};
+
+const IPHONE_ISLAND: DeviceChromeSpec = {
+  radius: 54,
+  cutout: "island",
+  statusBarHeight: 64,
+  homeIndicator: true,
 };
 
 export const STUDIO_DEVICES: readonly StudioDevice[] = [
@@ -17,6 +32,7 @@ export const STUDIO_DEVICES: readonly StudioDevice[] = [
     width: 375,
     height: 667,
     device: { platform: "iOS", deviceModel: "iPhone14,6", osVersion: "26.0" },
+    chrome: { radius: 0, statusBarHeight: 20, homeIndicator: false },
   },
   {
     id: "iphone-17",
@@ -24,6 +40,7 @@ export const STUDIO_DEVICES: readonly StudioDevice[] = [
     width: 402,
     height: 874,
     device: { platform: "iOS", deviceModel: "iPhone18,3", osVersion: "26.0" },
+    chrome: IPHONE_ISLAND,
   },
   {
     id: "iphone-air",
@@ -31,6 +48,7 @@ export const STUDIO_DEVICES: readonly StudioDevice[] = [
     width: 420,
     height: 912,
     device: { platform: "iOS", deviceModel: "iPhone18,4", osVersion: "26.0" },
+    chrome: IPHONE_ISLAND,
   },
   {
     id: "iphone-17-pro-max",
@@ -38,6 +56,7 @@ export const STUDIO_DEVICES: readonly StudioDevice[] = [
     width: 440,
     height: 956,
     device: { platform: "iOS", deviceModel: "iPhone18,2", osVersion: "26.0" },
+    chrome: IPHONE_ISLAND,
   },
   {
     id: "pixel-10",
@@ -45,6 +64,7 @@ export const STUDIO_DEVICES: readonly StudioDevice[] = [
     width: 412,
     height: 915,
     device: { platform: "Android", deviceModel: "Pixel 10", osVersion: "16" },
+    chrome: { radius: 28, cutout: "punch", statusBarHeight: 48, homeIndicator: true },
   },
   {
     id: "galaxy-s25",
@@ -52,6 +72,7 @@ export const STUDIO_DEVICES: readonly StudioDevice[] = [
     width: 360,
     height: 780,
     device: { platform: "Android", deviceModel: "SM-S931B", osVersion: "15" },
+    chrome: { radius: 26, cutout: "punch", statusBarHeight: 40, homeIndicator: true },
   },
   {
     id: "ipad-mini",
@@ -59,6 +80,7 @@ export const STUDIO_DEVICES: readonly StudioDevice[] = [
     width: 744,
     height: 1133,
     device: { platform: "iOS", deviceModel: "iPad14,1", osVersion: "26.0" },
+    chrome: { radius: 21, statusBarHeight: 24, homeIndicator: true },
   },
   {
     id: "ipad-pro-11",
@@ -66,6 +88,7 @@ export const STUDIO_DEVICES: readonly StudioDevice[] = [
     width: 834,
     height: 1194,
     device: { platform: "iOS", deviceModel: "iPad16,3", osVersion: "26.0" },
+    chrome: { radius: 18, statusBarHeight: 24, homeIndicator: true },
   },
   {
     id: "desktop",

@@ -114,7 +114,7 @@
   .sw-select {
     appearance: none;
     cursor: pointer;
-    height: 28px;
+    height: 30px;
     padding: 0 24px 0 9px;
     border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
     background:
@@ -144,7 +144,7 @@
   .sw-segmented {
     display: inline-flex;
     border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
-    height: 28px;
+    height: 30px;
   }
 
   .sw-segmented button {
@@ -179,7 +179,7 @@
   }
 
   .sw-input {
-    height: 28px;
+    height: 30px;
     padding: 0 9px;
     border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
     background: transparent;
@@ -191,8 +191,8 @@
 
   .sw-switch {
     position: relative;
-    width: 34px;
-    height: 19px;
+    width: 50px;
+    height: 30px;
     border-radius: 9999px;
     background: color-mix(in srgb, var(--color-cream) 18%, transparent);
     transition: background-color 150ms ease;
@@ -208,14 +208,14 @@
     position: absolute;
     top: 3px;
     left: 3px;
-    width: 13px;
-    height: 13px;
+    width: 24px;
+    height: 24px;
     border-radius: 9999px;
     background: var(--color-ink);
     transition: transform 150ms ease;
   }
 
   .sw-switch[aria-checked="true"]::after {
-    transform: translateX(15px);
+    transform: translateX(20px);
   }
 }

@@ -28,6 +28,7 @@ import {
   RESPONSIVE_DEFAULT,
   RESPONSIVE_ID,
   STUDIO_DEVICES,
+  type DeviceChromeSpec,
 } from "../lib/devices";
 import { withOverrides } from "../lib/preview";
 import {
@@ -89,6 +90,9 @@ const StagePane = ({
   src,
   reloadKey,
   empty,
+  chrome,
+  landscape,
+  theme,
 }: {
   label?: string;
   width: number;
@@ -97,6 +101,9 @@ const StagePane = ({
   src?: string;
   reloadKey: number;
   empty?: string;
+  chrome?: DeviceChromeSpec;
+  landscape?: boolean;
+  theme?: "light" | "dark";
 }) => {
   const paneRef = React.useRef<HTMLDivElement>(null);
   return (
@@ -111,6 +118,9 @@ const StagePane = ({
             src={src}
             stageRef={paneRef}
             reloadKey={reloadKey}
+            chrome={chrome}
+            landscape={landscape}
+            theme={theme}
           />
         ) : (
           <DevicePlaceholder width={width} height={height} stageRef={paneRef}>
@@ -226,6 +236,7 @@ export const SurfaceEditor = ({
       ...edited.device,
     },
   };
+  const chrome = responsive ? undefined : device.chrome;
   const previewSrc = source.previewUrl(surface, overrides);
   const liveSrc = status.liveUrl ? withOverrides(status.liveUrl, overrides) : undefined;
 
@@ -305,7 +316,10 @@ export const SurfaceEditor = ({
 
   return (
     <>
-      <PaywallToasts surfaceKey={`${surface.project ?? ""}/${surface.id}`} />
+      <PaywallToasts
+        surfaceKey={`${surface.project ?? ""}/${surface.id}`}
+        raised={Boolean(unverified)}
+      />
       {missingProducts.length > 0 && !dismissedProducts && (
         <MissingProducts
           paywall={surface.id}
@@ -368,6 +382,9 @@ export const SurfaceEditor = ({
               src={comparePane.src}
               reloadKey={reloadKey}
               empty={"empty" in comparePane ? comparePane.empty : undefined}
+              chrome={chrome}
+              landscape={landscape}
+              theme={theme}
             />
           )}
           <StagePane
@@ -377,6 +394,9 @@ export const SurfaceEditor = ({
             title={`${surface.id} preview`}
             src={previewSrc}
             reloadKey={reloadKey}
+            chrome={chrome}
+            landscape={landscape}
+            theme={theme}
           />
         </div>
 

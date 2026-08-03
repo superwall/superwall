@@ -32,10 +32,17 @@ export const createRuntimeTransport = (
 ): ITransport => buildTransport(transportKind);
 
 /**
- * Detects whether a native Superwall host is present: a WKWebView message
- * handler, the Android JS interface, or the query params the native SDKs and
- * editor set. Used by "auto" mock mode to decide whether to simulate the SDK.
+ * Detects the explicit `?sw_preview` opt-in that lets a page simulate the SDK
+ * without a native host present. "auto" mock mode requires it, so a built
+ * snapshot can never downgrade itself to placeholder products by accident.
  */
+export const detectPreviewOptIn = (): boolean => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).has("sw_preview");
+};
+
 export const detectNativeSuperwallHost = (): boolean => {
   if (typeof window === "undefined") {
     return false;

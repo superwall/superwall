@@ -373,7 +373,13 @@ describe("a product Superwall has no record of", () => {
 
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByText("pro_5999_year")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Push" })).toHaveProperty("disabled", true);
+
+    fireEvent.click(screen.getByRole("button", { name: "View anyway" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Push" }));
+    expect(screen.getByRole("dialog")).toBeDefined();
+    const calls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(calls.some((url) => url.includes("/__studio/action"))).toBe(false);
   });
 
   it("still lets you look at the paywall, with the variables simply undefined", async () => {
@@ -390,7 +396,10 @@ describe("a product Superwall has no record of", () => {
     expect(panel.queryByRole("textbox", { name: /^products\./ })).toBeNull();
 
     // dismissing is about looking, never about shipping
-    expect(screen.getByRole("button", { name: "Push" })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "Push" }));
+    expect(screen.getByRole("dialog")).toBeDefined();
+    const calls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(calls.some((url) => url.includes("/__studio/action"))).toBe(false);
   });
 
   it("does not accuse a paywall before the catalogue has arrived", () => {

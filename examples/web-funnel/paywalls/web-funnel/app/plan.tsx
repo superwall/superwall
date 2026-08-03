@@ -51,10 +51,7 @@ export default function Plan() {
               setReference(plan.id);
             }}
           >
-            <span className="plan-label">
-              {plan.label}
-              {"tag" in plan ? <span className="plan-tag">({plan.tag})</span> : null}
-            </span>
+            <span className="plan-label">{plan.label}</span>
             <span className="plan-price">{plan.product?.variables.price ?? "—"}</span>
           </button>
         ))}

@@ -163,7 +163,6 @@ export const ActionMenu = ({
                 >
                   <span className="text-[0.8125rem] font-medium">
                     {action.label}
-                    {action.name === selected && <span className="text-accent"> ·</span>}
                   </span>
                   <span className="text-xs text-cream/55">{action.hint}</span>
                 </button>

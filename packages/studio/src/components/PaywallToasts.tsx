@@ -154,7 +154,13 @@ const Ask = ({
   );
 };
 
-export const PaywallToasts = ({ surfaceKey }: { surfaceKey: string }) => {
+export const PaywallToasts = ({
+  surfaceKey,
+  raised = false,
+}: {
+  surfaceKey: string;
+  raised?: boolean;
+}) => {
   React.useEffect(() => {
     toast.dismiss();
   }, [surfaceKey]);
@@ -192,7 +198,7 @@ export const PaywallToasts = ({ surfaceKey }: { surfaceKey: string }) => {
     <Toaster
       position="top-center"
       swipeDirections={["top"]}
-      offset={52}
+      offset={raised ? 84 : 52}
       gap={8}
       visibleToasts={3}
       style={{ zIndex: 5 }}

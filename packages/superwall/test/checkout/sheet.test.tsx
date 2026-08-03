@@ -47,6 +47,8 @@ globalThis.ResizeObserver = class {
 } as unknown as typeof ResizeObserver;
 
 const { SuperwallCheckout, checkoutEvents } = await import("../../src/checkout");
+const { SuperwallProvider } = await import("../../src");
+const { testConfig } = await import("../helpers");
 
 const session = {
   directive: "embedded" as const,
@@ -57,8 +59,12 @@ const session = {
   referenceName: "annual",
 };
 
-// Mounted exactly as the generated build entry mounts it.
-const mount = () => render(<SuperwallCheckout />);
+const mount = () =>
+  render(
+    <SuperwallProvider config={testConfig} mock>
+      <SuperwallCheckout />
+    </SuperwallProvider>,
+  );
 
 const open = async () => {
   await act(async () => {

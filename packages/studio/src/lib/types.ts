@@ -60,6 +60,8 @@ export type StudioStatus = {
   liveUrl?: string;
   active?: boolean;
   updatedAt?: string;
+  /** Why the live version couldn't be read, when it couldn't. */
+  unreachable?: string;
 };
 
 export type StudioSource = {
@@ -76,4 +78,6 @@ export type Samples = {
   user?: Record<string, unknown>;
   products?: Record<string, Record<string, unknown>>;
   live?: { device: boolean; user: boolean };
+  /** Why samples couldn't be fetched, when they couldn't. */
+  unreachable?: string;
 };

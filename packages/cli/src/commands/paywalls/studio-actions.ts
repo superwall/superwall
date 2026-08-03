@@ -19,6 +19,9 @@ import { pushSource } from "@/core/paywalls/source/source-push";
 
 type Sample = { properties?: Record<string, unknown>; live?: boolean };
 
+const reason = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 export function createStudioActions(
   framework: Framework,
   project: FrameworkProject,
@@ -35,6 +38,7 @@ export function createStudioActions(
           superwallDir: project.superwallDir,
         });
         const query = `?application_id=${encodeURIComponent(applicationId)}`;
+        let unreachable: string | undefined;
         const [device, user, products] = await Promise.all([
           client
             .get<Sample>(`/v2/users/device-properties-sample${query}`)
@@ -42,16 +46,20 @@ export function createStudioActions(
           client.get<Sample>(`/v2/users/properties-sample${query}`).catch(() => undefined),
           projectForApplication(client, applicationId)
             .then((projectId) => (projectId ? fetchProducts(client, projectId) : undefined))
-            .catch(() => undefined),
+            .catch((error: unknown) => {
+              unreachable = reason(error);
+              return undefined;
+            }),
         ]);
         return {
           device: device?.properties,
           user: user?.properties,
           products,
           live: { device: device?.live === true, user: user?.live === true },
+          unreachable,
         };
-      } catch {
-        return {};
+      } catch (error) {
+        return { unreachable: reason(error) };
       }
     },
 
@@ -153,8 +161,8 @@ export function createStudioActions(
           active: paywall.status === "active",
           updatedAt: paywall.updated_at,
         };
-      } catch {
-        return {};
+      } catch (error) {
+        return { unreachable: reason(error) };
       }
     },
   };
