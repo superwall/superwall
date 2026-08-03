@@ -44,6 +44,7 @@ mechanism is the thing you read.
 | [`trial-eligibility`](./trial-eligibility) | two paywalls in one, chosen by the store                             |
 | [`abandonment-offer`](./abandonment-offer) | `purchase()` resolves abandoned — push a last-chance offer           |
 | [`trial-reminders`](./trial-reminders)     | a local notification scheduled when the trial starts                 |
+| [`web-funnel`](./web-funnel)               | selling on the web: steps, then Stripe checkout in the page          |
 
 ## The host
 

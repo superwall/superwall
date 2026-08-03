@@ -2,6 +2,7 @@ import { createContext, useContext, useReducer, useMemo, useEffect, type ReactNo
 import { checkoutReducer, initialCheckoutState, defaultPresentation } from "./CheckoutStore";
 import type { CheckoutState, CheckoutActions, SessionData, PresentationContext } from "./types";
 import { checkoutEvents } from "../services/CheckoutEvents";
+import { useSuperwallEvent } from "../../hooks/useSuperwallEvent";
 
 const CheckoutStateContext = createContext<CheckoutState | null>(null);
 const CheckoutActionsContext = createContext<CheckoutActions | null>(null);
@@ -49,6 +50,19 @@ export function CheckoutProvider({ children, presentation }: CheckoutProviderPro
     }),
     [],
   );
+
+  useSuperwallEvent("checkout_session", (message) => {
+    const session: SessionData = {
+      directive: "embedded",
+      clientSecret: message.client_secret,
+      publishableKey: message.publishable_key,
+      checkoutSessionId: message.client_secret.split("_secret_")[0] ?? null,
+      checkoutContextId: "",
+      referenceName: message.product ?? "",
+    };
+    checkoutEvents.dispatch("SESSION_CREATED", session);
+    checkoutEvents.dispatch("SHEET_OPEN", { session });
+  });
 
   useEffect(() => {
     const unsubscribers = [

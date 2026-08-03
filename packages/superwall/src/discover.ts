@@ -264,3 +264,5 @@ export const discoverProject = (root: string): Project => {
     diagnostics,
   };
 };
+
+export { loadSurfaceConfig } from "./config/load";

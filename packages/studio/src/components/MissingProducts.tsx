@@ -34,9 +34,8 @@ export const MissingProducts = ({
 
       <span className="text-xs text-cream/45">
         Add {missing.length === 1 ? "it" : "them"} in the Superwall dashboard, or point the config
-        at
-        {missing.length === 1 ? " a product" : " products"} that exists. Publishing stays disabled
-        until then.
+        at{missing.length === 1 ? " a product" : " products"} that exists. Pushing is refused until
+        then.
       </span>
 
       <button type="button" className="sw-btn sw-btn--primary self-end" onClick={onDismiss}>

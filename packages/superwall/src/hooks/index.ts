@@ -1,3 +1,9 @@
+export interface SuperwallProducts {}
+
+export type ProductReference = keyof SuperwallProducts extends never
+  ? string
+  : Extract<keyof SuperwallProducts, string>;
+
 export { createSuperwall } from "../provider/create";
 export { useSuperwallSession } from "../provider/context";
 export * from "./useActions";

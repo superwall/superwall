@@ -88,6 +88,7 @@ const StagePane = ({
   title,
   src,
   reloadKey,
+  empty,
 }: {
   label?: string;
   width: number;
@@ -95,6 +96,7 @@ const StagePane = ({
   title: string;
   src?: string;
   reloadKey: number;
+  empty?: string;
 }) => {
   const paneRef = React.useRef<HTMLDivElement>(null);
   return (
@@ -112,7 +114,7 @@ const StagePane = ({
           />
         ) : (
           <DevicePlaceholder width={width} height={height} stageRef={paneRef}>
-            Nothing live yet — publish to compare against production.
+            {empty ?? "Nothing live yet — publish to compare against production."}
           </DevicePlaceholder>
         )}
       </div>
@@ -251,7 +253,14 @@ export const SurfaceEditor = ({
   const comparePane =
     compareWith &&
     (compareWith.type === "live"
-      ? { label: "Live", src: liveSrc, title: `${surface.id} live` }
+      ? {
+          label: "Live",
+          src: liveSrc,
+          title: `${surface.id} live`,
+          empty: status.unreachable
+            ? `Couldn't read the live version — ${status.unreachable}`
+            : undefined,
+        }
       : {
           label: `${compareWith.surface.kind}/${compareWith.surface.id}`,
           src: source.previewUrl(compareWith.surface, overrides),
@@ -287,6 +296,7 @@ export const SurfaceEditor = ({
 
   const [dismissedProducts, setDismissedProducts] = React.useState(false);
   React.useEffect(() => setDismissedProducts(false), [surface]);
+  const unverified = samples.unreachable;
   const shippable = missingProducts.length === 0;
   const overrideCount =
     Object.keys(edited.user ?? {}).length +
@@ -302,6 +312,11 @@ export const SurfaceEditor = ({
           missing={missingProducts}
           onDismiss={() => setDismissedProducts(true)}
         />
+      )}
+      {unverified && (
+        <div className="border-b border-cream/10 bg-red/10 px-4 py-1.5 text-[0.8125rem] text-cream/75">
+          Couldn't check this paywall's products — {unverified}
+        </div>
       )}
       <TopBar
         title={`${surface.project ?? source.title} / ${surface.id}`}
@@ -335,6 +350,7 @@ export const SurfaceEditor = ({
                         .join(", ")}`
                 }
                 onRun={ship}
+                onBlocked={() => setDismissedProducts(false)}
               />
             )}
           </>
@@ -351,6 +367,7 @@ export const SurfaceEditor = ({
               title={comparePane.title}
               src={comparePane.src}
               reloadKey={reloadKey}
+              empty={"empty" in comparePane ? comparePane.empty : undefined}
             />
           )}
           <StagePane

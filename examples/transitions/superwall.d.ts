@@ -7,13 +7,19 @@
 
 declare module "superwall/navigation" {
   interface SuperwallRoutes {
-    fade: true;
-    index: true;
-    none: true;
-    push: true;
-    slide: true;
-    zoom: true;
+    "fade": true;
+    "index": true;
+    "none": true;
+    "push": true;
+    "slide": true;
+    "zoom": true;
   }
 }
 
 export type SuperwallRouteName = keyof import("superwall/navigation").SuperwallRoutes;
+
+declare module "superwall/hooks" {
+  interface SuperwallProducts {
+    "annual": true;
+  }
+}

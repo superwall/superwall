@@ -1,0 +1,12 @@
+{
+  "//": "Commit this file: it binds each paywall to its dashboard entry so every machine and CI push to the same place. Managed by the Superwall CLI.",
+  "version": 1,
+  "paywalls": {
+    "transitions": {
+      "paywallId": "208545",
+      "snapshot": "2d17391fc8563f310727c3dab615235e591b8d80860aeba780ec5b65ddbe8de6"
+    }
+  },
+  "funnels": {},
+  "applicationId": "39532"
+}

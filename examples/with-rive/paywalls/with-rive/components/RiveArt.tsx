@@ -1,5 +1,15 @@
 import * as React from "react";
-import { Fit, Layout, useRive, useStateMachineInput } from "@rive-app/react-canvas";
+import { Fit, Layout, RuntimeLoader, useRive, useStateMachineInput } from "@rive-app/react-canvas";
+import riveWasm from "@rive-app/canvas/rive.wasm?url";
+
+// Rive fetches its WebAssembly engine at runtime and defaults to unpkg, with
+// jsdelivr behind it. A published paywall can reach neither: serve-time CSP
+// lists no CDN, and a paywall that needs the open internet to draw is one that
+// renders blank on a bad connection. Pointing it at the bundled copy makes the
+// engine just another hosted asset, and dropping the fallback keeps a failure
+// loud instead of silently retrying an origin that is also blocked.
+RuntimeLoader.setWasmUrl(riveWasm);
+RuntimeLoader.setWasmFallbackUrl(null);
 
 /**
  * One Rive file, driven by whatever its state machine exposes.

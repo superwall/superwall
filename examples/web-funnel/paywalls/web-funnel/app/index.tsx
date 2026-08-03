@@ -1,0 +1,29 @@
+import { useHaptics } from "superwall/hooks";
+import { useRouter } from "superwall/navigation";
+
+export default function Index() {
+  const router = useRouter();
+  const haptics = useHaptics();
+
+  return (
+    <main className="page">
+      <div className="lede">
+        <h1>Read more, faster</h1>
+        <p>Two questions, then your plan. This whole funnel is one paywall</p>
+      </div>
+
+      <div className="actions">
+        <button
+          type="button"
+          className="button button--primary"
+          onClick={() => {
+            haptics.light();
+            router.push("goal");
+          }}
+        >
+          Get started
+        </button>
+      </div>
+    </main>
+  );
+}

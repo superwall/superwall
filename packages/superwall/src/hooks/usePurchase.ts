@@ -8,13 +8,17 @@ import type {
 } from "@superwall/runtime";
 import { useSuperwallSession } from "../provider/context";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
+import type { ProductReference } from "./index";
 
 export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
   /**
    * Starts a purchase and resolves with the outcome — never throws for flow
    * results: `{ status: "completed" | "abandoned" | "failed" }`.
    */
-  purchase: SuperwallSession<SuperwallProduct<TVariables>>["purchase"];
+  purchase: (
+    input: ProductReference | SuperwallProduct<TVariables>,
+    options?: Parameters<SuperwallSession<SuperwallProduct<TVariables>>["purchase"]>[1],
+  ) => ReturnType<SuperwallSession<SuperwallProduct<TVariables>>["purchase"]>;
   /** True while a purchase is awaiting a transaction result. */
   isPurchasing: boolean;
   /** The product currently being purchased, if any. */

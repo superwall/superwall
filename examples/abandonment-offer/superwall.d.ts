@@ -7,9 +7,16 @@
 
 declare module "superwall/navigation" {
   interface SuperwallRoutes {
-    index: true;
-    offer: true;
+    "index": true;
+    "offer": true;
   }
 }
 
 export type SuperwallRouteName = keyof import("superwall/navigation").SuperwallRoutes;
+
+declare module "superwall/hooks" {
+  interface SuperwallProducts {
+    "annual": true;
+    "discount": true;
+  }
+}

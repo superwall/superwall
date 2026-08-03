@@ -1,10 +1,11 @@
 import * as React from "react";
 import type { SuperwallProduct, SuperwallProductVariables } from "@superwall/runtime";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
+import type { ProductReference } from "./index";
 
 export type UseProductsResult<TVariables extends SuperwallProductVariables> = {
   products: readonly SuperwallProduct<TVariables>[];
-  getProduct: (reference: string) => SuperwallProduct<TVariables> | undefined;
+  getProduct: (reference: ProductReference) => SuperwallProduct<TVariables> | undefined;
 };
 
 /**
@@ -26,7 +27,7 @@ export const useProducts = <
   return React.useMemo(
     () => ({
       products: snapshot.products,
-      getProduct: (reference: string) => snapshot.productsByReference[reference],
+      getProduct: (reference: ProductReference) => snapshot.productsByReference[reference],
     }),
     [snapshot.products, snapshot.productsByReference],
   );

@@ -107,8 +107,12 @@ export class SuperwallApi {
     saveSession(this.session);
   }
 
-  private base(): string {
+  get host(): string {
     return process.env.SUPERWALL_API_HOST ?? this.session.host ?? API_HOST;
+  }
+
+  private base(): string {
+    return this.host;
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {

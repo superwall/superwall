@@ -4,6 +4,7 @@ import {
   createMockSuperwallTransport,
   createSuperwallSession,
   detectNativeSuperwallHost,
+  detectPreviewOptIn,
   documentAttributes,
   mockOptionsFromConfig,
   pendingHostMessages,
@@ -20,10 +21,11 @@ const useIsomorphicLayoutEffect =
 
 /**
  * How the provider gets its runtime data. `"auto"` (what the build emits)
- * uses the real native SDK when one is present and the mock host otherwise —
- * so a snapshot behaves identically in a webview and in a preview with no
- * code change. An options object supplies preview data; only `true` forces
- * the mock even inside a real host.
+ * runs against the real host and simulates *only* when the page opts in with
+ * `?sw_preview` — so a snapshot behaves identically in a webview and in a
+ * preview with no code change, and can never quietly downgrade itself to fake
+ * products when a real host is merely slow to appear. An options object
+ * supplies preview data; only `true` forces the mock even inside a real host.
  */
 export type SuperwallMockProp = boolean | "auto" | SuperwallMockOptions;
 
@@ -43,7 +45,15 @@ const resolveMockOptions = (
   config: SuperwallConfig | undefined,
 ): SuperwallMockOptions | undefined => {
   if (!mock) return undefined;
-  if (mock !== true && detectNativeSuperwallHost()) return undefined;
+  // `true` is an explicit instruction, honoured even inside a real host.
+  if (mock === true) return mockOptionsFromConfig(config, {});
+  // A real host always wins over any non-forced request to simulate.
+  if (detectNativeSuperwallHost()) return undefined;
+  // `"auto"` ships in every built snapshot, so it must never be the reason a
+  // production paywall starts serving placeholder products — it simulates only
+  // when the page explicitly asks. Options objects come from preview surfaces
+  // that have already decided, so they stand on their own.
+  if (mock === "auto" && !detectPreviewOptIn()) return undefined;
   return mockOptionsFromConfig(config, typeof mock === "object" ? mock : {});
 };
 

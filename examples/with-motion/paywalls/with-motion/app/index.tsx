@@ -5,7 +5,7 @@ import { useActions, useHaptics, useProducts, usePurchase } from "superwall/hook
 const FEATURES = ["Unlimited projects", "Advanced stats", "Priority support", "Early features"];
 
 export default function Index() {
-  const { close, restore } = useActions();
+  const { restore } = useActions();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
   const haptics = useHaptics();
@@ -27,10 +27,6 @@ export default function Index() {
 
   return (
     <main className="page">
-      <button type="button" className="close" aria-label="Close" onClick={close}>
-        ✕
-      </button>
-
       <motion.div
         className="lede"
         initial={{ opacity: 0, y: 14 }}

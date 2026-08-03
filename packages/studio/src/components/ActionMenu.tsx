@@ -95,10 +95,12 @@ export const ActionMenu = ({
   progress,
   blocked,
   onRun,
+  onBlocked,
 }: {
   progress: ActionProgress | undefined;
   blocked?: string;
   onRun: (action: StudioActionName) => void;
+  onBlocked?: () => void;
 }) => {
   const [selected, setSelected] = React.useState<StudioActionName>("push");
   const [open, setOpen] = React.useState(false);
@@ -125,9 +127,9 @@ export const ActionMenu = ({
       <button
         type="button"
         className="sw-btn sw-btn--primary disabled:cursor-not-allowed disabled:opacity-40"
-        disabled={busy || stopped}
+        disabled={busy}
         title={blocked}
-        onClick={() => onRun(selected)}
+        onClick={() => (stopped ? onBlocked?.() : onRun(selected))}
       >
         {busy ? runningLabel[progress.action] : labelFor(selected)}
       </button>
@@ -137,7 +139,7 @@ export const ActionMenu = ({
         aria-label="Choose action"
         aria-expanded={open}
         title={blocked}
-        disabled={busy || stopped}
+        disabled={busy}
         onClick={() => setOpen((value) => !value)}
       >
         <ChevronDownIcon />

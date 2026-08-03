@@ -84,6 +84,8 @@ code {
   min-height: 100vh;
   min-height: 100dvh;
   flex-direction: column;
+  padding: calc(40px + env(safe-area-inset-top)) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 .page {
@@ -302,4 +304,39 @@ code {
     transform: scale(0.92);
     opacity: 0;
   }
+}
+
+.topbar {
+  display: flex;
+  width: 100%;
+  max-width: 44rem;
+  justify-content: flex-end;
+  margin: 0 auto;
+  padding: 28px 20px 0;
+}
+
+.close {
+  align-self: flex-end;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover {
+  color: var(--fg);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }

@@ -66,6 +66,7 @@ const ALWAYS_HOSTED = new Set([
   ".lottie",
   ".riv",
   ".glb",
+  ".wasm",
   ".woff2",
   ".woff",
   ".otf",
@@ -104,6 +105,7 @@ const MIME: Record<string, string> = {
   ".lottie": "application/zip",
   ".riv": "application/octet-stream",
   ".glb": "model/gltf-binary",
+  ".wasm": "application/octet-stream",
 };
 
 const mimeFor = (fileName: string): string =>

@@ -90,7 +90,7 @@ const useSurface = (surface: PreviewSurface): Loaded => {
 const mockOptions = (
   overrides: PreviewOverrides,
   config: SuperwallConfig,
-): SuperwallMockOptions | "auto" => {
+): SuperwallMockOptions => {
   const { theme, locale, device, user, params, products, trialEligible } = overrides;
 
   const languageCode = locale?.split(/[-_]/)[0];

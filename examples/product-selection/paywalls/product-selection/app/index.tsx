@@ -5,7 +5,7 @@ import { PlanOption } from "../components/PlanOption";
 const PLANS = ["annual", "monthly"] as const;
 
 export default function Index() {
-  const { close, restore } = useActions();
+  const { restore } = useActions();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
   const haptics = useHaptics();
@@ -15,10 +15,6 @@ export default function Index() {
 
   return (
     <main className="page">
-      <button type="button" className="close" aria-label="Close" onClick={close}>
-        ✕
-      </button>
-
       <div className="lede">
         <h1>Go Pro</h1>
         <p>Pick a plan. Cancel whenever you like.</p>

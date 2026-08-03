@@ -1,4 +1,5 @@
 import { defineCommand } from "@/command";
+import { API_HOST } from "@/constants";
 import { ensureSkillsCurrent } from "@/core/agent/skills";
 import { onboardingHooks } from "@/core/account/onboarding";
 import { track } from "@/core/telemetry";
@@ -122,12 +123,16 @@ export const runWhoami = defineCommand({
         {
           label: s.userEmail ?? "Logged in",
           meta: s.orgName ? `· ${s.orgName}` : undefined,
-          children: [{ label: credential, meta: s.host }],
+          children: [{ label: credential, meta: effectiveHost(s) }],
         },
       ],
     });
   },
 });
+
+function effectiveHost(session: Session): string {
+  return process.env.SUPERWALL_API_HOST ?? session.host ?? API_HOST;
+}
 
 function sessionOutput(session: Session): Record<string, unknown> {
   return {
@@ -141,5 +146,6 @@ function sessionOutput(session: Session): Record<string, unknown> {
     credential: {
       type: session.apiKey ? "api_key" : session.accessToken ? "oauth" : "unknown",
     },
+    host: effectiveHost(session),
   };
 }

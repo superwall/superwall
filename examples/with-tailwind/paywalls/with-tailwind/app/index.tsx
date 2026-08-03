@@ -3,7 +3,7 @@ import { useActions, useHaptics, useProducts, usePurchase } from "superwall/hook
 const FEATURES = ["Unlimited projects", "Advanced stats", "Priority support"];
 
 export default function Index() {
-  const { close, restore } = useActions();
+  const { restore } = useActions();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
   const haptics = useHaptics();
@@ -12,15 +12,6 @@ export default function Index() {
 
   return (
     <main className="mx-auto flex min-h-full w-full max-w-2xl flex-1 flex-col gap-6 px-5 pt-7 pb-6">
-      <button
-        type="button"
-        aria-label="Close"
-        className="flex size-8 cursor-pointer items-center justify-center self-end text-xl text-fg/55 hover:text-fg"
-        onClick={close}
-      >
-        ✕
-      </button>
-
       <div className="flex flex-col gap-2.5">
         <h1 className="text-4xl font-medium tracking-tight">Go Pro</h1>
         <p className="text-fg/70">This paywall is styled with Tailwind</p>
