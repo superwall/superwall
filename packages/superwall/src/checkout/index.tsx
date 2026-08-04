@@ -1,6 +1,13 @@
 import { CheckoutProvider } from "./state/CheckoutContext";
 import { CheckoutSheet } from "./components/CheckoutSheet";
+import { LoadingOverlay } from "./components/LoadingOverlay";
+import { useAutoPrefetch } from "./hooks/useAutoPrefetch";
 import "./checkout.css";
+
+const AutoPrefetch = () => {
+  useAutoPrefetch();
+  return null;
+};
 
 /**
  * Takes payment inside the paywall.
@@ -16,6 +23,8 @@ import "./checkout.css";
  */
 export const SuperwallCheckout = () => (
   <CheckoutProvider>
+    <AutoPrefetch />
+    <LoadingOverlay />
     <CheckoutSheet />
   </CheckoutProvider>
 );

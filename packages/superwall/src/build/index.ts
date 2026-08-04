@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
+  checkoutModeOf,
   checkoutNeedsPaymentUi,
   normalizeProductSlot,
   type SuperwallConfig,
@@ -34,6 +35,7 @@ export type BuiltSnapshot = {
   surface: DiscoveredSurface;
   name: string;
   products: Record<string, string>;
+  checkout: ReturnType<typeof checkoutModeOf>;
   snapshotId: string;
   html: string;
   bytes: number;
@@ -418,6 +420,7 @@ export const buildSnapshot = async (
         normalizeProductSlot(input).productId ?? reference,
       ]),
     ),
+    checkout: checkoutModeOf(config.checkout),
     snapshotId: sha256(html),
     html,
     bytes: Buffer.byteLength(html),

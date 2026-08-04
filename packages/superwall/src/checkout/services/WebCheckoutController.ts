@@ -11,7 +11,7 @@ import type {
 export const WEB_CHECKOUT_ELIGIBLE_STORES = ["stripe"];
 
 export const isStripeProductIdentifier = (identifier: string | undefined): boolean =>
-  typeof identifier === "string" && /^(test|live):price_[^:]+/.test(identifier);
+  typeof identifier === "string" && /^(stripe\|)?(test|live):price_[^:]+/.test(identifier);
 
 type SnapshotSource = () => SuperwallRuntimeSnapshot;
 
@@ -32,6 +32,25 @@ const asString = (value: unknown): string =>
 
 const allowedDirectivesFor = (mode: CheckoutMode): readonly string[] =>
   mode === "external" ? ["redirect"] : ["embedded", "redirect"];
+
+const decodeCheckoutSessionSecret = (checkoutSessionId: string): string | null => {
+  if (!checkoutSessionId.startsWith("sw_checkout_")) return null;
+  try {
+    const decoded: unknown = JSON.parse(atob(checkoutSessionId.slice("sw_checkout_".length)));
+    const secret =
+      typeof decoded === "object" && decoded !== null
+        ? (decoded as { stripeCheckoutSessionId?: unknown }).stripeCheckoutSessionId
+        : undefined;
+    if (typeof secret !== "string" || secret.length === 0) return null;
+    try {
+      return decodeURIComponent(secret);
+    } catch {
+      return secret;
+    }
+  } catch {
+    return null;
+  }
+};
 
 export class WebCheckoutController {
   private inFlight = new Map<string, Promise<CheckoutSessionResult>>();
@@ -110,6 +129,7 @@ export class WebCheckoutController {
     const generation = this.cacheGeneration;
 
     if (!this.isStripeProduct(options.referenceName)) return null;
+    if (!this.getSnapshot().device.publicApiKey) return null;
 
     try {
       const result = await this.beginCheckout({ ...options, silent: true });
@@ -139,10 +159,12 @@ export class WebCheckoutController {
       throw new Error(`No product named "${referenceName}" on this paywall.`);
     }
 
-    const productIdentifier = product.productId ?? product.productIdentifier ?? product.id;
-    if (!productIdentifier) {
+    const rawProductIdentifier = product.productId ?? product.productIdentifier ?? product.id;
+    if (!rawProductIdentifier) {
       throw new Error(`Product "${referenceName}" has no store identifier.`);
     }
+    
+    const productIdentifier = rawProductIdentifier.replace(/^stripe\|/, "");
 
     const device = snapshot.device;
     const user = snapshot.user;
@@ -178,6 +200,8 @@ export class WebCheckoutController {
           presentedBy: "placement",
           presentationSourceType: "register",
           presentedByEventName: asString(snapshot.params.event_name),
+          presentedByEventId: asString(snapshot.params.event_id) || crypto.randomUUID(),
+          presentedByEventTimestamp: new Date().toISOString(),
         },
         placementParams: {
           placementParams: snapshot.params ?? {},
@@ -285,7 +309,10 @@ export class WebCheckoutController {
     if (directive.directive === "embedded") {
       const checkoutSessionId = asString(directive.checkoutSessionId);
       const publishableKey = asString(directive.publishableKey);
-      const clientSecret = asString(directive.clientSecret) || checkoutSessionId;
+      const clientSecret =
+        asString(directive.clientSecret) ||
+        decodeCheckoutSessionSecret(checkoutSessionId) ||
+        checkoutSessionId;
 
       if (!checkoutSessionId || !publishableKey) {
         throw new Error("Missing checkoutSessionId or publishableKey for embedded directive");

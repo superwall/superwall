@@ -8,6 +8,7 @@ import {
   promotePaywallVersion,
   pushPaywallVersion,
   versionProducts,
+  webCheckoutDestination,
 } from "@/core/api/resources";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
 import {
@@ -469,6 +470,7 @@ export async function runPushPipeline(
           surface: surface.id,
           assets: synced.value.assets,
           products: versionProducts(build.products),
+          webCheckoutDestination: webCheckoutDestination(build.checkout),
         }),
       );
       version = push.value.version;

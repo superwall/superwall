@@ -17,17 +17,20 @@ export default definePaywall({
    *
    * https://superwall.com/docs/web-checkout
    */
-  checkout: "sheet",
+  checkout: { mode: "sheet", prefetch: "monthly" },
 
   /**
    * Stripe products, as `reference: "store identifier"`. Web identifiers are
    * `{environment}:{priceId}:{offer}` — the Stripe price is inside the
    * identifier, so nothing here needs a separate mapping.
    *
-   * Replace these with products from your own Superwall app; prices come from
-   * Stripe at runtime, never from this file.
+   * These are placeholders: swap in prices from your own Superwall app
+   * (`superwall products` lists them) before publishing. Prices come from
+   * Stripe at runtime, never from this file — until then the paywall renders
+   * its price fallbacks.
    */
   products: {
-    monthly: "test:price_1SVzqc9XrIjVpXCiS0PfI4wW:no-trial",
+    monthly: "test:price_YOUR_MONTHLY_PRICE:no-trial",
+    pro: "test:price_YOUR_PRO_PRICE:no-trial",
   },
 });

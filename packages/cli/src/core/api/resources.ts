@@ -326,16 +326,34 @@ export const versionProducts = (
     reference_name: reference,
   }));
 
+export const webCheckoutDestination = (checkout: string | undefined): string | undefined =>
+  checkout === "sheet"
+    ? "PAYWALL_EMBEDDED"
+    : checkout === "applePay"
+      ? "PAYWALL_APPLE_PAY"
+      : checkout === "external"
+        ? "EXTERNAL"
+        : undefined;
+
 export function pushPaywallVersion(
   api: SuperwallApi,
   paywallId: string,
-  opts: { html: string; surface?: string; assets?: VersionAsset[]; products?: VersionProduct[] },
+  opts: {
+    html: string;
+    surface?: string;
+    assets?: VersionAsset[];
+    products?: VersionProduct[];
+    webCheckoutDestination?: string;
+  },
 ): Promise<PushedVersion> {
   return api.post<PushedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/versions`, {
     html: opts.html,
     ...(opts.surface ? { surface: opts.surface } : {}),
     ...(opts.assets && opts.assets.length > 0 ? { assets: opts.assets } : {}),
     ...(opts.products && opts.products.length > 0 ? { products: opts.products } : {}),
+    ...(opts.webCheckoutDestination
+      ? { web_checkout_destination: opts.webCheckoutDestination }
+      : {}),
   });
 }
 

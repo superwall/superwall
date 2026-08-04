@@ -39,6 +39,7 @@ export interface BuiltSnapshotAsset {
 export interface BuiltSnapshot {
   name: string;
   products?: Record<string, string>;
+  checkout?: string;
   snapshotId: string;
   html: string;
   bytes: number;

@@ -18,9 +18,11 @@ export type SuperwallRouteName = keyof import("superwall/navigation").SuperwallR
 declare module "superwall/hooks" {
   interface SuperwallProducts {
     "monthly": true;
+    "pro": true;
   }
 
   interface SuperwallStripeProducts {
     "monthly": true;
+    "pro": true;
   }
 }

@@ -1,6 +1,9 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { CommandContext } from "@/command";
 import type { SuperwallApi } from "@/core/api/client";
 import {
+  getPaywallApplicationId,
   listProjects,
   platformLabel,
   type Application,
@@ -63,12 +66,68 @@ export interface PickedScope extends Scope {
   appCount: number;
 }
 
+function lockBoundPaywallId(installDir: string): string | undefined {
+  for (const file of [
+    path.join(installDir, "superwall.lock"),
+    path.join(installDir, "superwall", "superwall.lock"),
+  ]) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as {
+        paywalls?: Record<string, { paywallId?: string }>;
+        funnels?: Record<string, { paywallId?: string }>;
+      };
+      const entry = Object.values({ ...parsed.paywalls, ...parsed.funnels }).find(
+        (binding) => binding?.paywallId,
+      );
+      if (entry?.paywallId) return String(entry.paywallId);
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+async function lockBoundScope(
+  context: CommandContext,
+  api: SuperwallApi,
+  projects: Project[],
+): Promise<{ project: Project; app: Application } | undefined> {
+  if (context.argv.project || context.argv.app) return undefined;
+  const paywallId = lockBoundPaywallId(context.installDir);
+  if (!paywallId) return undefined;
+  const applicationId = await getPaywallApplicationId(api, paywallId).catch(() => undefined);
+  if (!applicationId) return undefined;
+  const project = projects.find((candidate) =>
+    (candidate.applications ?? []).some((app) => String(app.id) === applicationId),
+  );
+  const app = project?.applications?.find(
+    (candidate) => String(candidate.id) === applicationId,
+  );
+  if (!project || !app) return undefined;
+  context.ui.info(`Using \`${app.name ?? applicationId}\` - bound in superwall.lock.`);
+  return { project, app };
+}
+
 export async function pickScope(
   context: CommandContext,
   api: SuperwallApi,
   appScoped: boolean,
 ): Promise<PickedScope> {
   const projects = await apiCall(context, "Loading projects", () => listProjects(api));
+
+  const bound = await lockBoundScope(context, api, projects);
+  if (bound) {
+    return {
+      projectId: String(bound.project.id),
+      applicationId: appScoped ? String(bound.app.id) : undefined,
+      projectName: bound.project.name,
+      appName: appScoped ? bound.app.name : undefined,
+      appPlatform: appScoped ? bound.app.platform : undefined,
+      projectCount: projects.length,
+      appCount: bound.project.applications?.length ?? 0,
+    };
+  }
+
   const project = await pickProject(context, projects);
   const projectId = String(project.id);
   const apps = project.applications ?? [];

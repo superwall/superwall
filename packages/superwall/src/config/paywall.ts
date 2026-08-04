@@ -1,7 +1,17 @@
-import type { SuperwallConfig } from "@superwall/runtime";
+import type { SuperwallCheckoutMode, SuperwallConfig } from "@superwall/runtime";
+import type { StripeProductReference } from "../hooks";
 import type { Transition } from "../navigation/index";
 
-export type PaywallDefinition = Partial<SuperwallConfig> & {
+export type PaywallDefinition = Omit<Partial<SuperwallConfig>, "checkout"> & {
+  /**
+   * How a purchase completes on the web — the mode alone, or the object form
+   * to steer prefetching: `prefetch` names the Stripe product warmed on
+   * paywall open (typed from the generated `superwall.d.ts`, so a store
+   * product or typo fails the build), `false` disables automatic prefetch.
+   */
+  checkout?:
+    | SuperwallCheckoutMode
+    | { mode: SuperwallCheckoutMode; prefetch?: StripeProductReference | false };
   /**
    * What this paywall is called on Superwall. Directory names carry the
    * restrictions of a URL segment, so they make poor labels once a dashboard

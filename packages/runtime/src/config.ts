@@ -106,6 +106,19 @@ export type SuperwallLocalizationConfig<TLocale extends string = string> = {
  */
 export type SuperwallCheckoutMode = "external" | "sheet" | "applePay";
 
+export type SuperwallCheckoutConfig =
+  | SuperwallCheckoutMode
+  | { mode: SuperwallCheckoutMode; prefetch?: string | false };
+
+export const checkoutModeOf = (
+  checkout: SuperwallCheckoutConfig | undefined,
+): SuperwallCheckoutMode | undefined =>
+  typeof checkout === "string" ? checkout : checkout?.mode;
+
+export const checkoutPrefetchOf = (
+  checkout: SuperwallCheckoutConfig | undefined,
+): string | false | undefined => (typeof checkout === "object" ? checkout.prefetch : undefined);
+
 export type SuperwallConfig<TLocale extends string = string> = {
   /** Product slots this paywall renders, keyed by reference. */
   products?: Record<string, SuperwallProductSlotInput>;
@@ -114,7 +127,7 @@ export type SuperwallConfig<TLocale extends string = string> = {
    * How a purchase completes on the web. Omit it for native-only paywalls —
    * nothing about checkout is bundled unless this asks for it.
    */
-  checkout?: SuperwallCheckoutMode;
+  checkout?: SuperwallCheckoutConfig;
 
   /** How and when the native SDK presents the paywall. */
   presentation?: SuperwallPresentationConfig;
@@ -162,8 +175,10 @@ export const defineSuperwallConfig = <TLocale extends string = string>(
 export const normalizeProductSlot = (input: SuperwallProductSlotInput): SuperwallProductSlot =>
   typeof input === "string" ? { productId: input } : input;
 
-export const checkoutNeedsPaymentUi = (mode: SuperwallCheckoutMode | undefined): boolean =>
-  mode === "sheet" || mode === "applePay";
+export const checkoutNeedsPaymentUi = (checkout: SuperwallCheckoutConfig | undefined): boolean => {
+  const mode = checkoutModeOf(checkout);
+  return mode === "sheet" || mode === "applePay";
+};
 
 /**
  * Materializes the config's product slots as products so references exist
