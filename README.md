@@ -1,8 +1,30 @@
-# superwall
+<p align="center">
+  <a href="https://superwall.com/">
+    <img src="https://user-images.githubusercontent.com/3296904/158817914-144c66d0-572d-43a4-9d47-d7d0b711c6d7.png" alt="Superwall" height="100" />
+  </a>
+</p>
 
-The paywall framework. Author paywalls and funnels as mini React apps with
-file-based routing; Superwall provides products, purchases, localization,
-trials, A/B testing, and delivery through the native SDKs.
+<h1 align="center">Superwall</h1>
+
+<p align="center">
+  Paywalls and funnels as code. An open-source framework for building
+  paywalls and web funnels as mini React apps — deployed to Superwall.
+</p>
+
+Author every paywall and funnel as a real React app with file-based routing.
+Everything is your code: your components, your design system, plain React —
+the framework stays headless. Deploy to Superwall and the platform takes it
+from there: products and purchases, localization, trials, experimentation and
+A/B testing, and delivery through the native SDKs (iOS, Android, Flutter,
+React Native) and the web.
+
+```bash
+npx superwall create   # scaffold a superwall/ directory in your app
+superwall dev          # open the studio — every surface, live
+superwall publish      # ship it
+```
+
+## A project is a directory
 
 Everything Superwall-related lives in a `superwall/` directory at the root of
 your app repo (or a dedicated repo):
@@ -17,7 +39,7 @@ superwall/
 ├── paywalls/
 │   └── plus-upgrade/         each paywall is a mini React app
 │       ├── config.ts         required — name, products
-│       ├── app/            routes only — every .tsx here is a route
+│       ├── app/              routes only — every .tsx here is a route
 │       │   ├── layout.tsx    optional — wraps every route
 │       │   ├── index.tsx     where the flow starts
 │       │   ├── plans.tsx     one file per route
@@ -36,8 +58,8 @@ directory is a real npm project, so cloning it, installing, and running
 
 `components/`, `messages/`, and `assets/` work at both levels: at the
 `superwall/` root they are shared by every surface, and inside a surface they
-are local to it. Each paywall's `config.ts` is required and is the whole truth
-for that paywall — there are no project-wide defaults to inherit. To share
+are local to it. Each surface's `config.ts` is required and is the whole truth
+for that surface — there are no project-wide defaults to inherit. To share
 settings, export a plain object and spread it:
 
 ```ts
@@ -66,14 +88,19 @@ so a price you see locally is a price a device would see. The same build runs
 unchanged inside a real SDK webview; the stand-in detects a native host and
 stays out of the way.
 
+Funnels sell on the web too: `definePaywall({ checkout: … })` puts Stripe
+checkout in the page — as an embedded sheet, Apple Pay, or an external step —
+so a web funnel goes from first screen to paid without leaving your code.
+
 ## Packages
 
-| Package                                    | What it is                                                                                                                                                                                                        |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`superwall`](packages/superwall)          | The framework: authoring API (`definePaywall`, experiment `v`ariables), React hooks + provider, `superwall/navigation` (the typed route stack), discovery, and the dev server.                                    |
-| [`@superwall/cli`](packages/cli)           | The full management CLI (integrate, migrate, apps, products, campaigns, query, ASC, auth). The framework's `superwall` bin launches its shell and registers `dev`/`publish` into it — one command for everything. |
-| [`@superwall/runtime`](packages/runtime)   | Framework-agnostic runtime: bridge, session, product state, localization, purchase promises, mock SDK host. No React.                                                                                             |
-| [`@superwall/protocol`](packages/protocol) | The SDK ↔ paywall message contract: schemas, transports, initialization params.                                                                                                                                   |
+| Package                                    | What it is                                                                                                                                                                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`superwall`](packages/superwall)          | The framework: authoring API (`definePaywall`), React hooks + provider, `superwall/navigation` (the typed route stack), web checkout, discovery, and the dev server.                                                                                          |
+| [`@superwall/cli`](packages/cli)           | The full management CLI: integrate, migrate, apps, products, campaigns, query, ASC, auth — plus the paywall commands (`create`, `dev`, `push`, `promote`, `publish`). The framework's `superwall` bin is a thin launcher for it — one command for everything. |
+| [`@superwall/studio`](packages/studio)     | The local studio `superwall dev` opens: every surface as a live card, a device-frame editor with theme, locale, and variable overrides.                                                                                                                       |
+| [`@superwall/runtime`](packages/runtime)   | Framework-agnostic runtime: bridge, session, product state, localization, purchase promises, mock SDK host. No React.                                                                                                                                         |
+| [`@superwall/protocol`](packages/protocol) | The SDK ↔ paywall message contract: schemas, transports, initialization params.                                                                                                                                                                               |
 
 Examples live in [`examples/`](examples) — each one a standalone, copyable
 superwall project, teaching one capability with deliberately plain styling.
@@ -85,7 +112,7 @@ Requires [bun](https://bun.sh) ≥ 1.3.
 
 ```sh
 bun install
-bun dev                # ChatGPT example on http://localhost:6100
+bun dev                # studio over every example on http://localhost:6100
 bun run test           # all package test suites
 bun run typecheck      # tsc across all packages
 bun run lint           # oxlint
@@ -95,3 +122,14 @@ bun run format         # oxfmt
 There is no compile step in day-to-day development — packages point their
 exports straight at their TypeScript sources, so tests, the dev server, and
 consumers resolve `src/` directly.
+
+Contributors and coding agents: read [AGENTS.md](AGENTS.md) before changing
+anything — the conventions in it are decided, not suggested.
+
+## License
+
+The framework, runtime, protocol, and studio are licensed under the
+[Functional Source License](LICENSE.md) (FSL-1.1-ALv2): use it, modify it,
+embed it, ship it — anything except building a competing product with it —
+and every release becomes Apache 2.0 two years after publication. The
+[CLI](packages/cli) and all [examples](examples) are [MIT](packages/cli/LICENSE).

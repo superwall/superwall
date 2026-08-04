@@ -1,7 +1,9 @@
 # Examples
 
 Each directory is a complete, standalone superwall project. Nothing is shared
-between them — copy one anywhere and it runs:
+between them — copy one anywhere and it runs. `superwall create` is the copy:
+it rewrites the `workspace:*` dependency these carry into a real version, so
+the result installs outside this repo.
 
 ```bash
 superwall create --example <example>
@@ -15,8 +17,8 @@ superwall dev examples/minimal examples/multi-page examples/transitions
 ```
 
 The studio groups by project and the routes gain a project segment
-(`/transitions/paywall/pro`). With a single project the URLs are unprefixed, as
-before.
+(`/transitions/paywall/transitions` — the last segment is the surface's
+directory name). With a single project the URLs are unprefixed.
 
 They teach **functionality, not design**. Styling is deliberately plain so the
 mechanism is the thing you read.
@@ -83,7 +85,12 @@ Every example follows the same shape:
     app/              routes only, plus their .css and one layout.tsx
     components/       everything that is not a route
     messages/         one file per locale
+  funnels/<id>/       optional, and exactly the same shape
 ```
+
+A project can hold both. The framework discovers `paywalls/` and `funnels/`
+alike, and the CLI pushes both — the directory a surface sits in is the only
+thing that distinguishes them.
 
 `superwall.d.ts` is written by the CLI on every `dev` and `push`. Commit it —
 it is what makes `import hero from "./assets/hero.jpg"` typecheck and

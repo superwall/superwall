@@ -4,9 +4,6 @@ The message contract between the native Superwall SDKs and a paywall running
 in their webview. Everything above this package (runtime, react, framework)
 is replaceable; this is the wire.
 
-Extracted 1:1 from the `paywall-js` slice of the private schema package —
-see the provenance note in the repo AGENTS.md.
-
 ## What's here
 
 - **`messages/`** — zod schemas for both directions:

@@ -13,6 +13,7 @@ import { useProducts, usePurchase } from "superwall/hooks";
 | `superwall/config`     | `definePaywall`                                                                       |
 | `superwall/hooks`      | every hook, plus `createSuperwall` and `useSuperwallSession`                          |
 | `superwall/navigation` | `useRouter`, `useIsFocused`, `PaywallRouter`                                          |
+| `superwall/checkout`   | web checkout (Stripe) — bundled only when `config.checkout` asks for it               |
 | `superwall/assets`     | ambient types for asset imports                                                       |
 
 `superwall/build`, `superwall/preview`, and `superwall/discover` are the CLI's
@@ -64,6 +65,15 @@ export default definePaywall({
   Product data has no local source and no defaults: `superwall dev` reads it
   from Superwall, and a reference the dashboard has no product for renders
   undefined variables and blocks publishing until it exists.
+- **`checkout`** — selling on the web. `"external"` hands off to Superwall's
+  hosted checkout page; `"sheet"` takes payment in the paywall in a
+  Superwall-rendered sheet; `"applePay"` goes straight to Apple Pay, falling
+  back to the sheet where unavailable. The object form
+  `{ mode: "sheet", prefetch: "monthly" }` also warms a product's checkout
+  session so the sheet opens instantly (`prefetch: false` disables it) —
+  `prefetch` is typed against your Stripe product references, so a typo
+  fails the build. The gate is build-time: a paywall without `sheet` or
+  `applePay` carries zero Stripe code.
 - Everything else (`presentation`, `featureGating`, `purchaseTimeoutMs`,
   `notifications`, …) is set here too. There are no project-wide defaults: a
   paywall's `config.ts` is the whole truth for that paywall. Share settings by
@@ -82,11 +92,14 @@ One concern each — there is deliberately no kitchen-sink hook.
   `period`/`periodly` localize automatically to the device locale.
 - `usePurchase()` — `purchase(ref)` resolving
   `{ status: "completed" | "abandoned" | "failed" }` (never throws for flow
-  outcomes); `isPurchasing` pending state built in.
+  outcomes); `isPurchasing` and `pendingProduct` pending state built in,
+  `transaction`/`failure` for the last outcome, and `prefetch(ref?)` to warm
+  a web checkout session before the tap (a no-op for store products).
 - `useActions()` — `close`, `restore`, `openUrl`, `openExternalUrl`,
   `openDeepLink`, `customPlacement`, `requestPermission`, …
 - `useHaptics()` — `light()`, `medium()`, `heavy()`, `success()`, `warning()`,
   `error()`, `selection()`
+- `useColorScheme()` — `"light" | "dark"`, as the SDK reports it.
 - `useTranslation()` — `t(key, values)` with `{placeholder}` interpolation,
   device-locale detection, `setLocale` override.
 - `useTrialEligibility()` — the SDK's real intro-offer eligibility signal.
@@ -95,6 +108,7 @@ One concern each — there is deliberately no kitchen-sink hook.
   `params` stays `Record<string, unknown>` because its shape is decided by the
   app at the call site.
 - `useSuperwallEvent(name, handler)` — typed protocol events.
+- `useGameController(handler)` — the SDK's game-controller events.
 - Escape hatches: `useSuperwallSnapshot()`, `useSuperwallSession()`.
 - `createSuperwall<TCustomVariables>()` — a typed bundle when paywalls declare
   custom product variables.
@@ -176,13 +190,15 @@ starts at zero and peaks at 60ms, so pages ease into their travel: 49.7% of the
 distance by 100ms, 84.7% by 200ms, 96.2% by 300ms. No overshoot.
 `cubic-bezier(0.28, 0.4, 0.08, 1)` is the fallback.
 
-| variable             | default  |                                                                  |
-| -------------------- | -------- | ---------------------------------------------------------------- |
-| `--sw-transition`    | `500ms`  | duration                                                         |
-| `--sw-ease`          | spring   | timing function                                                  |
-| `--sw-stack-dim`     | `0.925`  | brightness of the route behind                                   |
-| `--sw-background`    | `Canvas` | route background — routes are opaque so nothing shows through    |
-| `--sw-routes-height` | `100dvh` | route height; set it when a layout puts chrome around the routes |
+| variable               | default  |                                                                  |
+| ---------------------- | -------- | ---------------------------------------------------------------- |
+| `--sw-transition`      | `500ms`  | duration                                                         |
+| `--sw-ease`            | spring   | timing function                                                  |
+| `--sw-transition-fade` | `350ms`  | duration for `fade`                                              |
+| `--sw-ease-fade`       | ease     | timing function for `fade`                                       |
+| `--sw-stack-dim`       | `0.925`  | brightness of the route behind                                   |
+| `--sw-background`      | `Canvas` | route background — routes are opaque so nothing shows through    |
+| `--sw-routes-height`   | `100dvh` | route height; set it when a layout puts chrome around the routes |
 
 All motion is disabled under `prefers-reduced-motion`.
 
@@ -235,7 +251,7 @@ Two things worth knowing:
 - **Wrap motion in `prefers-reduced-motion`** as above. With reduced motion on,
   the router settles immediately rather than waiting.
 
-`examples/transitions` defines `zoom` this way in `app/styles.css`, and
+`examples/transitions` defines `zoom` this way in `app/theme.css`, and
 `data-sw-state` (`active`/`behind`/`exiting`/`below`) and `data-sw-direction`
 remain on each route if you need to key on something the four phases do not
 name.
@@ -245,25 +261,28 @@ name.
 `superwall dev` discovers every surface and hosts the **studio**
 (`@superwall/studio`): `/` shows every paywall and funnel as a card with a
 live miniature; `/paywall/<id>` opens the editor — a device-frame preview at
-exact logical size with hardware switching (iPhone SE → iPad Pro → Pixel;
-each switch also flips the mock SDK's platform/model/OS), light/dark
-simulation, locale switching, and live experiment-variable controls rendered
-from the SDK's user, device and placement groups.
+exact logical size with hardware switching (nine devices, iPhone SE to iPad
+Pro to Pixel to Desktop; each switch also flips the mock SDK's
+platform/model/OS), light/dark simulation, locale switching, and live
+variable controls for the User, Device, Params and Products groups the SDK
+reports. The studio ships, too: Push, Publish and Promote run from its
+toolbar, with a Compare view that diffs the preview against what's live.
 
 Bare mounts live at `/preview/<kind>/<id>` — what the studio's iframes load —
-against the **mock SDK host**: products, purchases, trials, and permissions
-behave like a real device; inside a real SDK webview the mock detects the
-native host and disengages — the same build runs everywhere. Preview
-overrides travel as query params (`theme`, `locale`, `sw_device`, and
-`sw_vars` for experiment variables — the same channel the dashboard uses to
-apply variant overrides to published snapshots).
+against the **mock SDK host**: purchases resolve, trials start, and
+permissions answer like a real device, while product data is supplied by the
+dev server from Superwall — the mock invents none of it. Inside a real SDK
+webview the mock detects the native host and disengages — the same build
+runs everywhere. Preview overrides travel as query params — `theme`,
+`locale`, `sw_device`, `sw_user`, `sw_params`, `sw_products`, `sw_trial` —
+the same channel published snapshots accept.
 
 ## Push / promote lifecycle
 
 ```sh
 superwall push               # bind → build → assets → version. Production untouched.
 superwall promote            # point production at a pushed version (latest by default)
-superwall promote --only plus-upgrade --version 6
+superwall promote --id plus-upgrade --version 6
 superwall publish            # push + promote in one step — ship it now
 superwall publish -m "Q3 pricing test"   # record why, in the source commit
 ```

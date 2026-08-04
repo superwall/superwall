@@ -1,10 +1,5 @@
 import * as React from "react";
-import {
-  useHaptics,
-  useProducts,
-  usePurchase,
-  type ProductReference,
-} from "superwall/hooks";
+import { useHaptics, useProducts, usePurchase, type ProductReference } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export default function Plan() {

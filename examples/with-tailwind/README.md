@@ -28,9 +28,10 @@ renders undefined, and publishing stays disabled.
 @custom-variant dark (&:where(.dark, .dark *));
 ```
 
-**One dev dependency, one config file.** `@tailwindcss/postcss` plus a
-two-line `postcss.config.mjs` — the build and dev server pick it up on their
-own, nothing in the framework knows Tailwind is there.
+**Two packages, one config file.** `tailwindcss` and `@tailwindcss/postcss`,
+plus a `postcss.config.mjs` that names the one plugin — the build and dev
+server pick it up on their own, nothing in the framework knows Tailwind is
+there.
 
 **v4 is configured in CSS.** `@theme` turns your palette into utilities
 (`bg-bg`, `text-accent`), so the design tokens live next to the styles that
@@ -43,3 +44,8 @@ could not.
 
 **Only what you use ships.** Tailwind compiles into the snapshot like any
 other CSS; unused utilities never leave your machine.
+
+## Next
+
+- [`with-motion`](../with-motion) — another dependency, added the same way
+- [`custom-fonts`](../custom-fonts) — a typeface of your own behind `--font-sans`

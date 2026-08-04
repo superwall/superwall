@@ -30,3 +30,8 @@ const { device, user, params } = useVariables();
 that assumes `user.firstName` exists breaks for everyone it does not.
 
 Edit any of them in the studio's Variables panel and the paywall re-renders.
+
+## Next
+
+- [`permissions`](../permissions) — asking the host instead of reading it
+- [`localization`](../localization) — the device locale, turned into copy

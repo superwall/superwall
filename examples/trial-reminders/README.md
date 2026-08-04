@@ -29,3 +29,8 @@ long after this page has gone.
 
 **Or compute it** — `trialReminder` also takes a function, given the trial end
 date, the product and `t()` for the active locale.
+
+## Next
+
+- [`web-funnel`](../web-funnel) — the same purchase, taken on the web
+- [`localization`](../localization) — the `t()` the reminder is written against

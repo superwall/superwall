@@ -26,3 +26,8 @@ not control, so show something while it runs.
 
 **Handle a no.** A denied permission is an ordinary outcome, not an error —
 `requestCallback` also carries data back when the app has some.
+
+## Next
+
+- [`with-motion`](../with-motion) — something to show while you are waiting
+- [`custom-fonts`](../custom-fonts) — making the paywall look like your app

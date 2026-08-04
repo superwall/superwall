@@ -2,11 +2,11 @@
 
 Shared runtime core for SDK messaging — framework-agnostic.
 
-This package is the runtime boundary shared by schema-rendered paywalls and
-headless/code-first paywalls. It owns transport selection, message logging,
-base64 message ingestion, product state, localization, SDK action dispatch,
-and purchase promise resolution. It must not import from the visual editor,
-schema node renderer, checkout UI, or React.
+This package is the runtime boundary shared by every paywall Superwall
+serves — built with this framework or with the visual editor. It owns
+transport selection, message logging, base64 message ingestion, product
+state, localization, SDK action dispatch, and purchase promise resolution.
+It must not import React, or anything above it in the stack.
 
 ## Layers
 
@@ -79,21 +79,15 @@ const transport = createMockSuperwallTransport(
 const superwall = createSuperwallSession({ config, transport })
 ```
 
-The mock answers `ping` with `paywall_open`, `products` (realistic synthesized
-variables per slot), `template_variables` (products + device + user + params),
-and trial eligibility; resolves purchase/restore with transactions including
-`freeTrial_start`; grants permissions; answers callbacks.
-`detectNativeSuperwallHost()` reports whether a real host is present — used by
-`@superwall/react`'s `mock="auto"`.
+The mock answers `ping` with `paywall_open`, `products` (one slot per config
+entry, carrying the product identifier and nothing else — real product data
+comes from Superwall, never from the mock), `template_variables` (products +
+device + user + params), and trial eligibility; resolves purchase/restore
+with transactions including `freeTrial_start`; grants permissions; answers
+callbacks. `detectNativeSuperwallHost()` reports whether a real host is
+present — used by `SuperwallProvider`'s `mock="auto"`.
 
 ## Tests
 
-`pnpm --filter @superwall/runtime test:run` — fixture tests drive the session
-through recorded message sequences and assert snapshot state; they are the
-protocol contract.
-
-## Next slices
-
-Move checkout orchestration and runtime-editor-specific purchase side effects
-into this package while keeping the existing runtime controller as a
-compatibility consumer.
+`bun run test:run` — fixture tests drive the session through recorded
+message sequences and assert snapshot state; they are the protocol contract.

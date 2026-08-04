@@ -1,6 +1,7 @@
 {
   "name": "multi-page",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "superwall dev",

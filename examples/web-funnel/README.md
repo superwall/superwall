@@ -22,16 +22,26 @@ no separate mapping to maintain.
 
 ```ts
 export default definePaywall({
-  checkout: "sheet",
-  products: { annual: "live:price_1234:no-trial" },
+  checkout: { mode: "sheet", prefetch: "monthly" },
+  products: {
+    monthly: "test:price_YOUR_MONTHLY_PRICE:no-trial",
+    pro: "test:price_YOUR_PRO_PRICE:no-trial",
+  },
 });
 ```
 
-**One key turns a paywall into a web checkout.** `sheet` takes payment in the
-page: Superwall opens a Stripe checkout session and renders it over this
-funnel, so nobody leaves mid-flow. `external` sends them to Superwall's hosted
-page instead, and `applePay` goes straight to Apple Pay where the device
-offers it.
+**One key turns a paywall into a web checkout.** The three modes are
+`external`, `sheet` and `applePay`. `sheet` takes payment in the page:
+Superwall opens a Stripe checkout session and renders it over this funnel, so
+nobody leaves mid-flow. `external` sends them to Superwall's hosted page
+instead, and `applePay` goes straight to Apple Pay where the device offers it.
+
+**Prefetch decides how fast the sheet opens.** A checkout session takes a round
+trip to create, so `prefetch: "monthly"` warms that product's session up front
+and the sheet opens instantly instead of after a spinner. Where the plan is
+chosen on screen, warm the one in front of the person instead:
+`usePurchase().prefetch(reference)` — `app/plan.tsx` calls it on every
+selection change. `prefetch: false` turns the warming off.
 
 **Only paid modes cost bytes.** `sheet` and `applePay` carry Stripe's payment
 UI into the snapshot; `external` and native paywalls carry none of it. Stripe
@@ -47,3 +57,8 @@ them, nothing to re-fetch, and the whole flow ships as a single snapshot.
 
 **The same source runs natively.** Drop `checkout` and this paywall buys
 through the App Store instead; `purchase()` does not change.
+
+## Next
+
+- [`onboarding-quiz`](../onboarding-quiz) — steps that branch on the answers
+- [`personalization`](../personalization) — what the host knows about who is looking

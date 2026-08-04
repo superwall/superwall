@@ -6,9 +6,6 @@ dist/
 .env
 .env.*
 
-# local dev docs / scratch
-docs/
-
 # agent state that is machine-local (.claude/skills is shared and committed)
 .claude/settings.local.json
 

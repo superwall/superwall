@@ -6,10 +6,6 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-// Benchmark-only transcript sink: when SW_BENCH_TRANSCRIPT points at a file,
-// every raw agent stream-json line is appended there so the harness can capture
-// the full agent conversation (all phases) for the clickable dashboard. Unset in
-// normal use → zero effect.
 const TRANSCRIPT = process.env.SW_BENCH_TRANSCRIPT;
 function sink(line: string): void {
   if (!TRANSCRIPT) return;

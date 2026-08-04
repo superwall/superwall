@@ -24,6 +24,21 @@ renders undefined, and publishing stays disabled.
 **Message catalogs need no wiring.** A file at `messages/<locale>.ts` is
 discovered by its name — that is all `fr.ts` did.
 
+**Catalogs come in two levels.** `messages/` at the project root is shared by
+every surface in the project; `paywalls/<id>/messages/` belongs to one. The
+build layers the shared catalog underneath the surface's and merges them key by
+key, so the surface wins wherever both define something. Strings that read the
+same on every paywall you ship — the close button, restore purchases — go in
+the shared one and get translated once:
+
+```
+messages/fr.ts                        common.close, common.restore
+paywalls/localization/messages/fr.ts  paywall.title, paywall.cta, …
+```
+
+`t("common.close")` and `t("paywall.title")` resolve out of the same merged
+catalog; nothing in the paywall knows which file a string came from.
+
 **`t()` resolves against the device locale**, falling back to
 `localization.defaultLocale` when the device asks for one you do not have.
 

@@ -67,3 +67,8 @@ are — a second sheet would be nagging.
 
 **A second product, not a second design.** The offer route sells `discount`
 while the first sells `annual` — both declared in `config.ts`.
+
+## Next
+
+- [`transitions`](../transitions) — the system the sheet above is written against
+- [`trial-reminders`](../trial-reminders) — reaching them after the paywall closes

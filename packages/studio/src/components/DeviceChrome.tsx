@@ -21,11 +21,7 @@ const BatteryIcon = () => (
       stroke="currentColor"
       strokeOpacity="0.35"
     />
-    <path
-      d="M25 4.5v4a2.17 2.17 0 0 0 0-4Z"
-      fill="currentColor"
-      fillOpacity="0.4"
-    />
+    <path d="M25 4.5v4a2.17 2.17 0 0 0 0-4Z" fill="currentColor" fillOpacity="0.4" />
     <rect x="2" y="2" width="20" height="9" rx="2.5" fill="currentColor" />
   </svg>
 );

@@ -47,7 +47,7 @@ Prefer to drive the agent yourself? Add `--skill` to `integrate`, `migrate`,
 or `review` and the CLI prints the full playbook for your project's framework
 instead of running it — paste it into any agent.
 
-## Build paywalls
+## Build paywalls & funnels
 
 ```bash
 superwall create      # start a paywalls project — minimal, or any public example
@@ -89,7 +89,7 @@ superwall bootstrap                       # the whole account tree at a glance
 Run SQL directly against your organization's ClickHouse analytics data:
 
 ```bash
-superwall query "SELECT count() FROM transactions"
+superwall query "SELECT count() FROM sw.events_rep"
 superwall query --file mrr.sql
 cat query.sql | superwall query
 ```
@@ -182,6 +182,9 @@ bun install
 bun dev               # run from source (bun bin.ts)
 bun run build         # build dist/ with tsdown
 bun run typecheck
-bun test
-bun run link:global   # build + link `superwall` and `sw` globally
+bun run test
 ```
+
+The global `superwall`/`sw` binaries are declared by the framework package:
+`cd ../superwall && bun link` links them. They run this package's built
+`dist/`, so rebuild after every change.

@@ -36,3 +36,8 @@ sight — which is why both paths exist.
 
 **Abandoned is normal.** Most people who open a store sheet close it, so treat
 it as an outcome rather than an error.
+
+## Next
+
+- [`abandonment-offer`](../abandonment-offer) — doing something about abandoned
+- [`trial-eligibility`](../trial-eligibility) — the state before the purchase

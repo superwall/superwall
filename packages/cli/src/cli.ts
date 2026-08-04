@@ -57,14 +57,14 @@ function printHelp(): void {
         "                                  Each takes --skill to print the playbook instead of running.",
       ),
       "",
-      head("Paywalls & flows"),
+      head("Paywalls & funnels"),
       row("create [dir]", "Set up paywalls in your app - creates superwall/ inside it"),
-      row("dev [dir..]", "Host the studio: browse and preview your paywalls and flows"),
-      row("push [dir]", "Build and push your paywalls and flows as immutable versions"),
+      row("dev [dir..]", "Host the studio: browse and preview your paywalls and funnels"),
+      row("push [dir]", "Build and push your paywalls and funnels as immutable versions"),
       row("promote [dir]", "Point production at a pushed version"),
       row("publish [dir]", "Push and promote in one step"),
       pc.dim(
-        "                                  Both take -m <note> to record why, in the source commit.",
+        "                                  push and publish take -m <note> to record why, in the source commit.",
       ),
       "",
       head("Resource commands"),
@@ -526,7 +526,7 @@ export async function run(): Promise<void> {
             id: {
               type: "array",
               string: true,
-              describe: "Limit to these paywalls or flows by id (repeatable, or comma-separated)",
+              describe: "Limit to these paywalls or funnels by id (repeatable, or comma-separated)",
             },
             rename: {
               type: "array",
@@ -557,7 +557,7 @@ export async function run(): Promise<void> {
             id: {
               type: "array",
               string: true,
-              describe: "Limit to these paywalls or flows by id (repeatable, or comma-separated)",
+              describe: "Limit to these paywalls or funnels by id (repeatable, or comma-separated)",
             },
             version: {
               type: "number",
@@ -579,7 +579,7 @@ export async function run(): Promise<void> {
             id: {
               type: "array",
               string: true,
-              describe: "Limit to these paywalls or flows by id (repeatable, or comma-separated)",
+              describe: "Limit to these paywalls or funnels by id (repeatable, or comma-separated)",
             },
             rename: {
               type: "array",

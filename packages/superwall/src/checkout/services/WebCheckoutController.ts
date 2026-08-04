@@ -163,7 +163,7 @@ export class WebCheckoutController {
     if (!rawProductIdentifier) {
       throw new Error(`Product "${referenceName}" has no store identifier.`);
     }
-    
+
     const productIdentifier = rawProductIdentifier.replace(/^stripe\|/, "");
 
     const device = snapshot.device;

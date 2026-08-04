@@ -31,9 +31,7 @@ export default function Index() {
 
   /** The price counts up once the paywall is visible and the store priced it. */
   const price = useMotionValue(0);
-  const shown = useTransform(price, (value) =>
-    raw === undefined ? "" : `$${value.toFixed(2)}`,
-  );
+  const shown = useTransform(price, (value) => (raw === undefined ? "" : `$${value.toFixed(2)}`));
   React.useEffect(() => {
     if (opened && raw !== undefined) {
       const controls = animate(price, raw, { duration: 0.9, ease: "circOut" });

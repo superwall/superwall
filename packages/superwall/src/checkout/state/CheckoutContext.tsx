@@ -50,7 +50,6 @@ export function CheckoutProvider({ children, presentation }: CheckoutProviderPro
     [],
   );
 
-
   useEffect(() => {
     const unsubscribers = [
       checkoutEvents.subscribe("SESSION_CREATED", (session) => {

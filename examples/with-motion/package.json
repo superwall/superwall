@@ -1,6 +1,7 @@
 {
   "name": "with-motion",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "superwall dev",

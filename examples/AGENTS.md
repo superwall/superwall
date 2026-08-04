@@ -152,11 +152,16 @@ examples/<name>/
     │   ├── index.tsx     the doc page
     │   ├── layout.tsx    chrome shared by every route, incl. the footer
     │   └── theme.css     tokens + primitives
-    └── components/       everything that is not a route
+    ├── components/       everything that is not a route
+    └── assets/           fonts, images, .riv — only if the example ships one
 ```
 
 `app/` holds routes and nothing else. A component in there is a build
 diagnostic, not a style preference.
+
+A project may also hold `funnels/<name>/`, and everything above applies to it
+unchanged — same files, same rules. The framework discovers both directories;
+which one a surface sits in is the only difference between them.
 
 ## Built with Superwall
 

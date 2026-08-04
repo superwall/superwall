@@ -15,7 +15,7 @@ export default function Index() {
     <main className="page">
       <header className="bar">
         <span className="locale">{locale}</span>
-        <button type="button" className="close" aria-label={t("paywall.close")} onClick={close}>
+        <button type="button" className="close" aria-label={t("common.close")} onClick={close}>
           <svg
             viewBox="0 0 16 16"
             width="16"
@@ -58,7 +58,7 @@ export default function Index() {
             restore();
           }}
         >
-          {t("paywall.restore")}
+          {t("common.restore")}
         </button>
       </div>
     </main>

@@ -1,6 +1,7 @@
 {
   "name": "trial-eligibility",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "superwall dev",

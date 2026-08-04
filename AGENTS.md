@@ -8,7 +8,7 @@ The superwall framework: paywalls and funnels authored as mini React apps
 with file-based routing, with Superwall providing products, purchases,
 localization, trials, and the bridge to the native SDKs (iOS / Android /
 Flutter / React Native — no native SDK changes required; this speaks the same
-message protocol the schema-rendered paywalls use).
+message protocol as the paywalls built in Superwall's visual editor).
 
 Style the name as `superwall`, lowercase, in user-facing copy and docs.
 "Superwall" (capitalized) refers to the platform/service.
@@ -78,8 +78,7 @@ The stack, bottom to top — each layer depends only on the one below it:
     auto-detection, message log, `accept`/`accept64`), transport/native-host
     detection, base64 message decoding
   - `src/session/` — the runtime model: the covariant `SuperwallSession`
-    interface + implementation, its public types, SDK state building, and
-    variable-group extraction
+    interface + implementation, its public types, and SDK state building
   - `src/localization/` — locale resolution, `t()` translator, and the
     period translation table
   - `src/config.ts` / `src/products.ts` / `src/mock.ts` — the paywall config
@@ -88,12 +87,16 @@ The stack, bottom to top — each layer depends only on the one below it:
 - `packages/superwall` — `superwall`, THE framework. The public surface is
   split by concern, and no subpath entry may import the root barrel:
   `.` (slim: `SuperwallProvider`, its props, and the runtime types) ·
-  `./config` · `./hooks` · `./navigation` · `./assets` (types only) ·
-  `./internal` (message merging the generated entry needs — not public) ·
-  `./build|./preview|./discover` (the CLI's tooling contract).
+  `./config` · `./hooks` · `./navigation` · `./checkout` · `./assets`
+  (types only) · `./internal` (message merging the generated entry needs —
+  not public) · `./build|./preview|./discover` (the CLI's tooling contract).
   - `src/config/` — the authoring contract: `definePaywall` (`paywall.ts`),
-    experiment `v`ariables (`variables.ts`), message merging (`messages.ts`,
+    surface config loading (`load.ts`), message merging (`messages.ts`,
     re-exported through `src/internal.ts`)
+  - `src/checkout/` — `superwall/checkout`: web checkout (Stripe). The build
+    mounts it only when `config.checkout` is `sheet` or `applePay`
+    (`build/index.ts`), so a store-only paywall carries none of it. The
+    sheet's appearance is fixed and takes nothing from the paywall around it.
   - `src/hooks/` — the specialized hooks (`useProducts`, `usePurchase`,
     `useActions`, `useTranslation`, …), one file each; the barrel also carries
     `createSuperwall` and `useSuperwallSession`
@@ -125,36 +128,26 @@ The stack, bottom to top — each layer depends only on the one below it:
 - `packages/cli` — `@superwall/cli`: THE command surface, migrated from the
   standalone `superwall/cli` repo (integrate/migrate/review, apps, products,
   campaigns, query, ASC, auth, telemetry; yargs + ink) **plus the paywall
-  commands** (`dev`, `push`, `promote`, `publish` in `src/commands/`, shared
-  machinery in `src/core/paywalls/`). Paywall commands load the framework
-  dynamically from the project's own install
-  (`core/paywalls/framework.ts`) — the CLI never hard-depends on a framework
-  version, and commands always run against the project's lockfile. It owns
-  **no bin** — it exports `main()`, and the framework's `superwall` bin
-  (prefer-local launcher + tsx + project `.env`) starts it. Dependency
-  direction: framework → cli for the bin, cli → framework only dynamically
-  at command runtime. This package is **excluded from oxfmt/oxlint**
-  (imported codebase, upstream-diffable, own conventions) and is consumed
-  **built** (tsdown → `dist/`; root `postinstall` builds it).
+  commands** (`create`, `dev`, `push`, `promote`, `publish` in
+  `src/commands/paywalls/`, shared machinery in `src/core/paywalls/`).
+  Paywall commands load the framework dynamically from the project's own
+  install (`core/paywalls/project/framework.ts`) — the CLI never
+  hard-depends on a framework version, and commands always run against the
+  project's lockfile. It owns **no bin** — it exports `main()`, and the
+  framework's `superwall` bin (prefer-local launcher + tsx + project `.env`)
+  starts it. Dependency direction: framework → cli for the bin, cli →
+  framework only dynamically at command runtime. This package is **excluded
+  from oxfmt/oxlint** (imported codebase, upstream-diffable, own
+  conventions) and is consumed **built** (tsdown → `dist/`; root
+  `postinstall` builds it).
 - `examples/*` — each example **is** a superwall project directory (not an
-  app repo with one inside): `package.json` and the
-  plus-upgrade paywall recreating the ChatGPT Plus screen, all at its root.
-  Using it means copying the directory into a real app as `superwall/`. This
-  also keeps bare-repo-root discovery exercised continuously. `bun dev` from
-  the repo root serves it.
+  app repo with one inside): `package.json` and its paywall at the root.
+  Using one means copying the directory into a real app as `superwall/`.
+  This also keeps bare-repo-root discovery exercised continuously. `bun dev`
+  from the repo root serves all of them through the studio.
 
 Each package has a README with its full API. Read it before changing the
 package.
-
-### Provenance / sync warning
-
-`packages/protocol/src` was extracted 1:1 from the `paywall-js` slice of
-`@superwall-me/schema` in the private paywall-next monorepo (`pwn`), and
-`packages/runtime` + the framework's `src/react/` were ported from
-`pwn/packages/{runtime,react}` (July 2026). Until pwn consumes these packages,
-the copies can drift — protocol changes must be mirrored in both places. pwn's
-`pjs` parity tests (schema-rendered paywalls sharing the runtime bridge) are
-the cross-check on the other side.
 
 ## Commands
 
@@ -162,8 +155,8 @@ Requires bun ≥ 1.3. From the repo root:
 
 ```sh
 bun install
-bun dev                 # examples/minimal on http://localhost:6100
-bun run test            # all package test suites (vitest)
+bun dev                 # studio over every example on http://localhost:6100
+bun run test            # all package test suites (vitest; the CLI uses node's test runner)
 bun run test:coverage   # with v8 coverage
 bun run typecheck       # tsc --noEmit across packages
 bun run lint            # oxlint
@@ -196,7 +189,7 @@ runs identically on a laptop — keep it that way.
   and assert snapshot state — **they are the protocol contract**. Never
   weaken an existing fixture to make a change pass; add new fixtures.
 - React hooks are tested with @testing-library/react under jsdom
-  (`packages/superwall/test/react/helpers.tsx` has the harness).
+  (`packages/superwall/test/helpers.tsx` has the harness).
 - Protocol schema tests parse representative real messages; when adding a
   message type, add accept AND reject cases.
 - Run `bun run test:coverage` before handing work back — thresholds are
@@ -237,12 +230,5 @@ runs identically on a laptop — keep it that way.
 - Write no comments in new code. Constraints, workarounds and other rationale go
   in the PR description, not beside code they will outlive. Leave existing
   comments alone unless you are changing the code they sit on.
-
-## Roadmap context (do not build ahead of it)
-
-Next on top of what exists: `superwall build` (immutable static bundles +
-content-hashed manifests per surface — the push contract), `superwall push`
-(content-addressed snapshots to Superwall, selectable in campaigns),
-dashboard-driven experiment-variable overrides, and merging the published
-management CLI (`../wizard`) into `packages/cli`. New examples and surfaces
-are added under the maintainer's direction; do not scaffold them unprompted.
+- New examples and surfaces are added under the maintainer's direction; do
+  not scaffold them unprompted.

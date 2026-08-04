@@ -29,3 +29,8 @@ this paywall becomes two columns — copy and action together on the left, the
 list filling the space that appeared. Nothing scrolls, nothing is cut off.
 
 **Rotate the studio** with the button beside the theme toggle to check both.
+
+## Next
+
+- [`localization`](../localization) — copy that changes length under the layout
+- [`with-tailwind`](../with-tailwind) — the same responsiveness in utilities

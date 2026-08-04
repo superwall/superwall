@@ -31,3 +31,8 @@ product.variables.trialPeriodDays;
 **Both states have to be good.** A returning customer sees the second one, and
 it cannot read like a mistake. Toggle Trial in the footer to check them side by
 side.
+
+## Next
+
+- [`trial-reminders`](../trial-reminders) — telling them before the trial ends
+- [`abandonment-offer`](../abandonment-offer) — a second chance when they decline

@@ -36,8 +36,9 @@ export type SuperwallMockOptions = {
   /** Identity sent in `paywall_open`. */
   paywall?: { id?: string; identifier?: string };
   /**
-   * Products the mock SDK delivers. Defaults to the config's product slots
-   * with realistic synthesized variables (price, period, trial…).
+   * Products the mock SDK delivers. Defaults to the config's product slots,
+   * carrying only the product identifier — real product data comes from
+   * Superwall, never from the mock.
    */
   products?: readonly SuperwallProductInput[];
   /** Device variables merged over the mock defaults. */

@@ -30,9 +30,10 @@ monthly?.variables.price; // "$9.99"
 
 Nothing is hardcoded, so a missing product renders nothing rather than a lie.
 
-**`purchase()` reports its own progress.** `isPurchasing` disables the button
-while the store sheet is up, which is the difference between a demo and a
-paywall someone can double-tap.
+**The button never enters a loading state.** The store sheet is the feedback
+and the SDK owns it — a native paywall does not grey its own button out.
+`usePurchase()` exposes `isPurchasing` for the cases that genuinely need it; a
+buy button is not one of them.
 
 **`restore()` is fire-and-forget.** There is no restore-result event; a
 successful restore surfaces as `transaction_complete` or a dismissed paywall.

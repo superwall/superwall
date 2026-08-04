@@ -112,8 +112,7 @@ export type SuperwallCheckoutConfig =
 
 export const checkoutModeOf = (
   checkout: SuperwallCheckoutConfig | undefined,
-): SuperwallCheckoutMode | undefined =>
-  typeof checkout === "string" ? checkout : checkout?.mode;
+): SuperwallCheckoutMode | undefined => (typeof checkout === "string" ? checkout : checkout?.mode);
 
 export const checkoutPrefetchOf = (
   checkout: SuperwallCheckoutConfig | undefined,

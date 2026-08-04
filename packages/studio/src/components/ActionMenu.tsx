@@ -161,9 +161,7 @@ export const ActionMenu = ({
                     setOpen(false);
                   }}
                 >
-                  <span className="text-[0.8125rem] font-medium">
-                    {action.label}
-                  </span>
+                  <span className="text-[0.8125rem] font-medium">{action.label}</span>
                   <span className="text-xs text-cream/55">{action.hint}</span>
                 </button>
               ))}

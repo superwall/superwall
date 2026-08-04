@@ -21,9 +21,15 @@ renders undefined, and publishing stays disabled.
 ```css
 @font-face {
   font-family: "Manrope Custom";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
   src: url("../assets/manrope-latin.woff2") format("woff2-variations");
 }
 ```
+
+`font-weight: 200 800` is the line that makes a variable font vary — declare a
+single weight and every other one is synthesised badly or ignored.
 
 **The build uploads it and rewrites the URL.** Fonts are hosted by content
 hash, never inlined, so the bytes stay out of the HTML and one upload is reused
@@ -41,3 +47,8 @@ every alphabet the family has.
 
 **Ship a woff2.** Anything older is bytes you are paying for and nothing you
 support still needs.
+
+## Next
+
+- [`with-tailwind`](../with-tailwind) — the rest of the styling, in utilities
+- [`with-motion`](../with-motion) — animating what the type sits in

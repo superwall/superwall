@@ -14,7 +14,7 @@ a user's codebase — wrong content ships wrong code to real apps.
 | Kind                          | Home                                                                              | Examples                                                                          |
 | ----------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | Task-specific workflow skills | this repo, `skills/`                                                              | superwall-integrate, superwall-migrate, superwall-placements, superwall-dashboard |
-| Broad toolkit skills          | [superwall/skills](https://github.com/superwall/skills) (local clone `../skills`) | superwall (main/router), superwall-editor, wwdc                                   |
+| Broad toolkit skills          | [superwall/skills](https://github.com/superwall/skills) (your local clone) | superwall (main/router), superwall-editor, wwdc                                   |
 
 The public repo is the source of truth for the toolkit and the default install
 path (`superwall skills` → `npx skills@latest add superwall/skills`). Task skills
@@ -80,7 +80,7 @@ Use `> **Important:**` callouts for critical steps; "Use when:" phrasing;
   many, naming) is written imperatively but introduced as recommended practice,
   not passed off as documentation.
 - Dashboard-side changes always go through the CLI (`superwall entitlements
-create …`, `campaigns placement …`, `--json` everywhere) — never raw curl in
+  create …`, `campaigns placement …`, `--json` everywhere) — never raw curl in
   skill steps when a CLI command exists.
 - Agents following the CLI's headless runner see `[STATUS]` protocol from
   `prompts/`, not from skills — don't put harness protocol in skill content.
@@ -97,10 +97,11 @@ Skills reference CLI commands constantly, and the public repo's `superwall`
 skill documents this CLI's entire surface. On ANY command surface change:
 
 ```bash
-grep -rn "superwall <old>" skills prompts README.md ../skills/skills/superwall
+grep -rn "superwall <old>" skills prompts README.md $SKILLS/skills/superwall
 ```
 
-…and fix every hit, in both repos. Also update:
+(`$SKILLS` is your clone of superwall/skills.) Fix every hit, in both this
+package and the skills repo. Also update:
 
 - `src/core/agent/actions.ts` if action vars / references changed
 - `prompts/actions/*.xml` wrappers if the task shape changed

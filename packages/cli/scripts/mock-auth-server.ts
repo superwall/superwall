@@ -1,7 +1,7 @@
 /**
- * Mock of the pwn backend `/api/cli/login/authorize` endpoint, for exercising
- * the CLI loopback flow locally. Redirects straight back to the loopback with a
- * fake `sk_` token (Option B). Run: `PORT=9876 tsx scripts/mock-auth-server.ts`.
+ * Mock of the `/api/cli/login/authorize` endpoint, for exercising the CLI
+ * loopback flow locally. Redirects straight back to the loopback with a
+ * fake `sk_` token. Run: `PORT=9876 tsx scripts/mock-auth-server.ts`.
  */
 import { createServer } from "node:http";
 

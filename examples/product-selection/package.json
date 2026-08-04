@@ -1,6 +1,7 @@
 {
   "name": "product-selection",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "superwall dev",

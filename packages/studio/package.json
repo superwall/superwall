@@ -7,7 +7,7 @@
   "bugs": {
     "url": "https://github.com/superwall/superwall/issues"
   },
-  "license": "UNLICENSED",
+  "license": "FSL-1.1-ALv2",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/superwall/superwall.git",

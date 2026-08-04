@@ -37,7 +37,9 @@ export const prefetchSession = async (
   }
 };
 
-export const openEmbeddedCheckout = (session: EmbeddedCheckoutSession): Promise<{ status: string }> =>
+export const openEmbeddedCheckout = (
+  session: EmbeddedCheckoutSession,
+): Promise<{ status: string }> =>
   new Promise((resolve) => {
     const sessionData = session as SessionData;
     let opened = false;

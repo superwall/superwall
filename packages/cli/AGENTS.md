@@ -2,11 +2,14 @@
 
 > **This package now lives in the superwall framework monorepo** (migrated
 > from the standalone superwall/cli repo). It owns no bin: the framework
-> package (`packages/superwall`) launches `main()` from `src/entry.ts` and
-> registers its `dev`/`publish` commands through the `RunOptions.commands`
-> seam in `src/cli.ts`. Never import `superwall` (the framework) from this
-> package — the dependency direction is framework → cli only. This package
-> is excluded from the repo's oxfmt/oxlint and keeps its own conventions.
+> package (`packages/superwall`) declares the `superwall`/`sw` binaries, and
+> its `bin/superwall.js` calls `main()` from this package's `src/entry.ts`.
+> The paywall commands (`create`/`dev`/`push`/`promote`/`publish`) are
+> registered in `src/cli.ts` like every other command. Never import
+> `superwall` (the framework) from this package — the dependency direction
+> is framework → cli only (paywall commands load the framework dynamically
+> from the user's project). This package is excluded from the repo's
+> oxfmt/oxlint and keeps its own conventions.
 
 # Superwall CLI - agent & contributor guide
 
@@ -14,7 +17,7 @@ Read this before changing anything. These are decided conventions, not suggestio
 when a change conflicts with them, the change is wrong or the convention needs an
 explicit decision from the owner first.
 
-## What this repo is
+## What this package is
 
 The `superwall` CLI is two thin things around the **skills**, which are the product:
 
@@ -23,11 +26,12 @@ The `superwall` CLI is two thin things around the **skills**, which are the prod
 2. A **router/toolbelt**: authenticated resource + raw API commands agents and
    humans use directly.
 
-All agent-facing expertise lives in `skills/` (this repo: task-specific) and
+All agent-facing expertise lives in `skills/` (this package: task-specific) and
 [superwall/skills](https://github.com/superwall/skills) (public skills repo, source
-of truth, cloned locally at `../skills`). TypeScript never contains domain expertise.
-If you're writing paywall/migration/integration knowledge in a `.ts` file, stop and
-put it in a skill.
+of truth, cloned beside this monorepo — `../skills` from the repo root).
+TypeScript never contains domain expertise. If you're writing
+paywall/migration/integration knowledge in a `.ts` file, stop and put it in a
+skill.
 
 ## Command design
 
@@ -89,9 +93,9 @@ skill. The short version:
   invented. Craft guidance is labeled as recommended practice, not doc-cited.
 - Skill installation is 100% delegated to the vercel-labs `skills` CLI
   (`npx -y skills@latest add …`): it owns locations (`~/.agents/skills` canonical
-  - per-agent symlinks), agent detection, everything. We only _list_ the repo
-    (GitHub API, live) for the picker and pass `--skill` filters. Never hardcode a
-    skill list except as an offline fallback.
+  + per-agent symlinks), agent detection, everything. We only _list_ the repo
+  (GitHub API, live) for the picker and pass `--skill` filters. Never hardcode a
+  skill list except as an offline fallback.
 
 ## prompts/ (harness protocol only)
 
@@ -108,13 +112,15 @@ and update ALL of:
 
 1. `printHelp()` in `src/cli.ts`
 2. `README.md` command examples (user-facing: runnable code blocks, no internal jargon)
-3. This repo's `skills/**/*.md` (bundled skills reference CLI commands constantly)
+3. This package's `skills/**/*.md` (bundled skills reference CLI commands constantly)
 4. `prompts/actions/*.xml` if the harness wrapper mentions commands
-5. **The public repo** `../skills/skills/superwall/` - `SKILL.md` (workflow
-   router table) and `references/api.md` (the CLI reference). It documents this
+5. **The public skills repo** ([superwall/skills](https://github.com/superwall/skills),
+   `skills/superwall/` in your local clone) - `SKILL.md` (workflow router
+   table) and `references/api.md` (the CLI reference). It documents this
    CLI; a rename here without an edit there ships lies to every installed agent.
 
-`grep -rn "superwall <old-name>"` across both repos before calling it done.
+`grep -rn "superwall <old-name>"` across this package and the skills clone
+before calling it done.
 `--json` output shapes are agent contracts - don't change them casually.
 
 ## Code style
@@ -144,17 +150,22 @@ message that lists the affected files; never emit the same sentence per file.
 
 - **Rebuild after every change**: `bun run build` (tsdown). The user (and you)
   test through the globally linked `superwall`/`sw` binaries which run `dist/`.
-  source-only changes are invisible until rebuilt.
-- `bun run typecheck` (tsc) and `bun run test` (`tsx --test 'tests/**/*.test.ts'`)
-  must be green. Tests live in `tests/` mirroring `src/`.
+  source-only changes are invisible until rebuilt. (The repo root's
+  `postinstall` builds this package once on `bun install`; after that,
+  rebuilding is on you.)
+- `bun run typecheck` (tsc) and `bun run test` (node's test runner via
+  `tsx --test`; needs ripgrep on PATH) must be green. Tests live in `tests/`
+  mirroring `src/`. CI runs `bun run test:coverage`, which enforces coverage
+  thresholds — a green `test` alone is not the CI gate.
 - Verify behavior with the real binary against the logged-in dev account
   (`superwall whoami` to confirm), not just types. For workflows, `--dry-run`
   and `--skill` are the cheap smoke paths.
 
 ## Adding a command - checklist
 
-1. Handler in `src/commands/<category>/<name>.ts` (categories: `paywalls`, `workflow`, `resource`, `platform`, `account`) using `defineCommand` (lifecycle, renderer,
-   error handling come free). Lazy-import it in `cli.ts`.
+1. Handler in `src/commands/<category>/<name>.ts` (categories: `paywalls`,
+   `workflow`, `resource`, `platform`, `account`) using `defineCommand`
+   (lifecycle, renderer, error handling come free). Lazy-import it in `cli.ts`.
 2. Register in `cli.ts` with describe + options; respect the naming rules above.
 3. Add to the right `printHelp()` section.
 4. `--json` support if it outputs data.

@@ -191,7 +191,6 @@ code {
   outline-offset: -2px;
 }
 
-
 .close {
   position: fixed;
   top: calc(var(--safe-top) + 4px);

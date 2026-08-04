@@ -41,7 +41,7 @@ the way it arrived.
 
 `app/zoom.tsx` declares `transition = "zoom"`, which the framework knows nothing
 about. It stamps `data-sw-transition="zoom"` on the route plus a
-`data-sw-phase`, and `styles.css` does the rest:
+`data-sw-phase`, and `theme.css` does the rest:
 
 | phase    | the route is…                       |
 | -------- | ----------------------------------- |

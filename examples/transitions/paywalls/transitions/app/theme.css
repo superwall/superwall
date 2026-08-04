@@ -308,7 +308,6 @@ code {
   }
 }
 
-
 .close {
   position: fixed;
   top: calc(var(--safe-top) + 4px);
