@@ -55,7 +55,7 @@ describe("MockSuperwallTransport", () => {
       productId: "pro_3999_year",
       variables: { price: "$39.99", period: "year", trialPeriodDays: 7 },
     });
-    expect(snapshot.device).toMatchObject({ platform: "iOS", locale: "en_US" });
+    expect(snapshot.device).toMatchObject({ platform: "iOS", deviceLocale: "en_US" });
     // primary has trial variables → mock reports eligibility
     expect(snapshot.trial.eligible).toBe(true);
   });
@@ -125,7 +125,7 @@ describe("MockSuperwallTransport", () => {
   it("delivers user, params, experiment, and custom device variables", async () => {
     const transport = createMockSuperwallTransport(
       mockOptionsFromConfig(config, {
-        device: { locale: "de_DE" },
+        device: { deviceLocale: "de_DE" },
         user: { firstName: "Ada" },
         params: { source: "onboarding" },
         experiment: { experimentId: "e1", variantId: "v1", campaignId: "c1" },
@@ -136,7 +136,7 @@ describe("MockSuperwallTransport", () => {
     await flushMicrotasks();
 
     const snapshot = session.getSnapshot();
-    expect(snapshot.device.locale).toBe("de_DE");
+    expect(snapshot.device.deviceLocale).toBe("de_DE");
     expect(snapshot.user).toEqual({ firstName: "Ada" });
     expect(snapshot.params).toEqual({ source: "onboarding" });
     expect(snapshot.experiment).toEqual({

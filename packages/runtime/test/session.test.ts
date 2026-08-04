@@ -145,7 +145,7 @@ describe("SuperwallSession localization", () => {
 
     transport.accept({
       event_name: "template_variables",
-      variables: { device: { locale: "de_DE" } },
+      variables: { device: { deviceLocale: "de_DE" } },
     });
 
     expect(session.locale).toBe("de");
@@ -165,7 +165,7 @@ describe("SuperwallSession product variable localization", () => {
     transport.accept({
       event_name: "template_variables",
       variables: {
-        device: { locale: "es_ES" },
+        device: { deviceLocale: "es_ES" },
         products: [{ primary: { price: "$39.99", period: "year", periodly: "yearly" } }],
       },
     });

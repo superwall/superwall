@@ -22,7 +22,7 @@ describe("useTranslation", () => {
 
   it("auto-detects the locale from mock device variables", async () => {
     const { result } = renderWithProvider(() => useTranslation(), {
-      mock: { device: { locale: "de_DE" } },
+      mock: { device: { deviceLocale: "de_DE" } },
     });
     await flush();
 

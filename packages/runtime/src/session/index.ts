@@ -1011,7 +1011,8 @@ class SuperwallSessionImpl implements SuperwallSession {
         ? this.snapshot.messages
         : [...this.bridge.messages];
 
-    const deviceLocale = nextSnapshot.device.locale ?? nextSnapshot.device.languageCode;
+    const deviceLocale =
+      nextSnapshot.device.deviceLocale ?? nextSnapshot.device.deviceLanguageCode;
     const requestedLocale =
       this.localeOverride ?? (typeof deviceLocale === "string" ? deviceLocale : undefined);
     const locale = resolveLocale(requestedLocale, nextSnapshot.config?.localization);

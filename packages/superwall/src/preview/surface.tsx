@@ -110,7 +110,7 @@ const mockOptions = (
     ...(params ? { params } : {}),
     device: {
       ...device,
-      ...(locale ? { locale, languageCode } : {}),
+      ...(locale ? { deviceLocale: locale, deviceLanguageCode: languageCode } : {}),
       ...(theme ? { interfaceStyle: theme === "dark" ? "Dark" : "Light" } : {}),
     },
   };

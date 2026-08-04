@@ -17,8 +17,8 @@ export default function Index() {
           <span className="kv-value">{device.platform ?? "—"}</span>
         </div>
         <div className="kv">
-          <span className="kv-key">device.locale</span>
-          <span className="kv-value">{device.locale ?? "—"}</span>
+          <span className="kv-key">device.deviceLocale</span>
+          <span className="kv-value">{device.deviceLocale ?? "—"}</span>
         </div>
         <div className="kv">
           <span className="kv-key">user.firstName</span>
