@@ -14,8 +14,10 @@ export const runSkills = defineCommand({
     ui.intro("Superwall agent skills");
 
     let skills = normalizeList(ctx.argv.skill);
-    const { dryRun, interactive } = ctx;
+    const { dryRun } = ctx;
     const force = Boolean(ctx.argv.force);
+    const yes = Boolean(ctx.argv.yes);
+    const interactive = ctx.interactive && !yes;
 
     if (!skills && !dryRun && !force) {
       const stale = await withSpinner("Checking your skills", skillsOutOfDate);

@@ -164,7 +164,8 @@ prompts.
 
 Logging in also installs the [Superwall agent skills](https://github.com/superwall/skills)
 into your coding agent and keeps them updated. `superwall skills` reinstalls
-them (or a subset) manually.
+them (or a subset) manually; `superwall skills -y` installs everything without
+asking.
 
 ## Telemetry
 

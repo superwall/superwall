@@ -239,6 +239,11 @@ export async function run(): Promise<void> {
             type: "boolean",
             describe: "Reinstall even if skills are already up to date",
           },
+          yes: {
+            type: "boolean",
+            alias: "y",
+            describe: "Install all skills without asking",
+          },
           "dry-run": {
             type: "boolean",
             describe: "Print the install command without running it",
