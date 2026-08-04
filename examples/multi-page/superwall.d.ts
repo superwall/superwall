@@ -14,3 +14,12 @@ declare module "superwall/navigation" {
 }
 
 export type SuperwallRouteName = keyof import("superwall/navigation").SuperwallRoutes;
+
+declare module "superwall/hooks" {
+  interface SuperwallProducts {
+    "annual": true;
+  }
+
+  interface SuperwallStripeProducts {
+  }
+}

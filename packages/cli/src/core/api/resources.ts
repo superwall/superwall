@@ -311,15 +311,31 @@ export async function createHeadlessPaywall(
   return { id: String(row.id), identifier: opts.identifier, archived: false, metadata: {} };
 }
 
+export interface VersionProduct {
+  store: "stripe" | "app-store" | "play-store" | "custom";
+  identifier: string;
+  reference_name: string;
+}
+
+export const versionProducts = (
+  products: Record<string, string> | undefined,
+): VersionProduct[] =>
+  Object.entries(products ?? {}).map(([reference, identifier]) => ({
+    store: /^(test|live):price_[^:]+/.test(identifier) ? "stripe" : "app-store",
+    identifier,
+    reference_name: reference,
+  }));
+
 export function pushPaywallVersion(
   api: SuperwallApi,
   paywallId: string,
-  opts: { html: string; surface?: string; assets?: VersionAsset[] },
+  opts: { html: string; surface?: string; assets?: VersionAsset[]; products?: VersionProduct[] },
 ): Promise<PushedVersion> {
   return api.post<PushedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/versions`, {
     html: opts.html,
     ...(opts.surface ? { surface: opts.surface } : {}),
     ...(opts.assets && opts.assets.length > 0 ? { assets: opts.assets } : {}),
+    ...(opts.products && opts.products.length > 0 ? { products: opts.products } : {}),
   });
 }
 

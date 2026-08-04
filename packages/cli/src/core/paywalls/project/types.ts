@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { FrameworkProject } from "./framework";
+import type { Framework, FrameworkProject } from "./framework";
 
 export const TYPES_FILE = "superwall.d.ts";
 
@@ -25,19 +25,65 @@ const routeBlock = (names: readonly string[]): string =>
     'export type SuperwallRouteName = keyof import("superwall/navigation").SuperwallRoutes;',
   ].join("\n");
 
-export function projectTypes(project: FrameworkProject): string {
+
+const isStripeIdentifier = (identifier: string): boolean =>
+  /^(test|live):price_[^:]+/.test(identifier);
+
+const productBlock = (references: readonly string[], stripe: readonly string[]): string =>
+  [
+    'declare module "superwall/hooks" {',
+    "  interface SuperwallProducts {",
+    ...references.map((name) => `    ${JSON.stringify(name)}: true;`),
+    "  }",
+    "",
+    "  interface SuperwallStripeProducts {",
+    ...stripe.map((name) => `    ${JSON.stringify(name)}: true;`),
+    "  }",
+    "}",
+  ].join("\n");
+
+export async function collectProjectProducts(
+  framework: Framework,
+  root: string,
+): Promise<Record<string, string>> {
+  if (!framework.studioProject) return {};
+  try {
+    const payload = await framework.studioProject(root);
+    const merged: Record<string, string> = {};
+    for (const surface of payload.surfaces) Object.assign(merged, surface.products);
+    return merged;
+  } catch {
+    return {};
+  }
+}
+
+export function projectTypes(
+  project: FrameworkProject,
+  products: Record<string, string> = {},
+): string {
   const names = new Set<string>();
   for (const surface of project.surfaces) {
     for (const route of surface.routes) names.add(route.name);
   }
-  const sorted = [...names].sort();
 
-  return sorted.length === 0 ? `${HEADER}\nexport {};\n` : `${HEADER}\n${routeBlock(sorted)}\n`;
+  const sorted = [...names].sort();
+  const sortedProducts = Object.keys(products).sort();
+  const sortedStripe = sortedProducts.filter((name) => isStripeIdentifier(products[name] ?? ""));
+
+  const blocks = [
+    sorted.length > 0 ? routeBlock(sorted) : "",
+    sortedProducts.length > 0 ? productBlock(sortedProducts, sortedStripe) : "",
+  ].filter(Boolean);
+
+  return blocks.length === 0 ? `${HEADER}\nexport {};\n` : `${HEADER}\n${blocks.join("\n\n")}\n`;
 }
 
-export function writeProjectTypes(project: FrameworkProject): void {
+export function writeProjectTypes(
+  project: FrameworkProject,
+  products: Record<string, string> = {},
+): void {
   const file = path.join(project.superwallDir, TYPES_FILE);
-  const next = projectTypes(project);
+  const next = projectTypes(project, products);
   try {
     if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== next) {
       fs.writeFileSync(file, next);

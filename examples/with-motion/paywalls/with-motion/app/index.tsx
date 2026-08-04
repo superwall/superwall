@@ -26,15 +26,16 @@ export default function Index() {
   const opened = useSuperwallSnapshot().paywall !== undefined;
 
   const annual = getProduct("annual");
-  const raw = annual?.variables.rawPrice;
+  const rawPrice = Number(annual?.variables.rawPrice);
+  const raw = Number.isFinite(rawPrice) ? rawPrice : undefined;
 
   /** The price counts up once the paywall is visible and the store priced it. */
   const price = useMotionValue(0);
   const shown = useTransform(price, (value) =>
-    typeof raw === "number" ? `$${value.toFixed(2)}` : "",
+    raw === undefined ? "" : `$${value.toFixed(2)}`,
   );
   React.useEffect(() => {
-    if (opened && typeof raw === "number") {
+    if (opened && raw !== undefined) {
       const controls = animate(price, raw, { duration: 0.9, ease: "circOut" });
       return () => controls.stop();
     }
@@ -71,7 +72,7 @@ export default function Index() {
         ))}
       </ul>
 
-      {typeof raw === "number" && (
+      {raw !== undefined && (
         <div className="price">
           <motion.span>{shown}</motion.span>
           <span className="price-period"> / year</span>

@@ -3,14 +3,19 @@ import { globSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import pc from "picocolors";
 import type { CommandContext } from "@/command";
-import { livePaywall, promotePaywallVersion, pushPaywallVersion } from "@/core/api/resources";
+import {
+  livePaywall,
+  promotePaywallVersion,
+  pushPaywallVersion,
+  versionProducts,
+} from "@/core/api/resources";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
 import {
   resolveApplicationId,
   resolveBinding,
   type ResolvedBinding,
 } from "@/core/paywalls/binding/binding";
-import { writeProjectTypes } from "@/core/paywalls/project/types";
+import { collectProjectProducts, writeProjectTypes } from "@/core/paywalls/project/types";
 import { readLock, writeSnapshot } from "@/core/paywalls/project/lock";
 import {
   frameworkVersion,
@@ -379,7 +384,7 @@ export async function runPushPipeline(
   const framework = await (options.load ?? loadFramework)(dir);
   const project = requireProject(framework.discoverProject(dir), dir);
   const installed = frameworkVersion(dir);
-  writeProjectTypes(project);
+  writeProjectTypes(project, await collectProjectProducts(framework, project.root));
   writeProjectScaffold({
     root: project.root,
     superwallDir: project.superwallDir,
@@ -463,6 +468,7 @@ export async function runPushPipeline(
           html: build.html,
           surface: surface.id,
           assets: synced.value.assets,
+          products: versionProducts(build.products),
         }),
       );
       version = push.value.version;

@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import { defineCommand } from "@/command";
 import { VERSION } from "@/constants";
-import { writeProjectTypes } from "@/core/paywalls/project/types";
+import { collectProjectProducts, writeProjectTypes } from "@/core/paywalls/project/types";
 import { frameworkVersion, loadFramework } from "@/core/paywalls/project/framework";
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import { createStudioActions } from "./studio-actions";
@@ -28,7 +28,7 @@ export const runDev = defineCommand({
       );
     }
     for (const project of projects) {
-      writeProjectTypes(project);
+      writeProjectTypes(project, await collectProjectProducts(framework, project.root));
       writeProjectScaffold({
         root: project.root,
         superwallDir: project.superwallDir,

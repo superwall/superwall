@@ -4,34 +4,42 @@ import type {
   TIncomingMessageTemplateVariables,
 } from "@superwall/protocol";
 
-/**
- * Product variables the SDK templates provide for every store product.
- * All optional — availability depends on platform and product type.
- */
 export type SuperwallKnownProductVariables = {
   identifier?: string;
   price?: string;
-  rawPrice?: number;
+  rawPrice?: string | number;
   period?: string;
+  periodAlt?: string;
+  localizedPeriod?: string;
   periodly?: string;
-  periodDays?: number;
-  periodWeeks?: number;
-  periodMonths?: number;
-  periodYears?: number;
+  periodDays?: string | number;
+  periodWeeks?: string | number;
+  periodMonths?: string | number;
+  periodYears?: string | number;
   dailyPrice?: string;
   weeklyPrice?: string;
   monthlyPrice?: string;
   yearlyPrice?: string;
-  trialPeriodDays?: number;
+  trialPeriodPrice?: string;
+  rawTrialPeriodPrice?: string | number;
+  trialPeriodDailyPrice?: string;
+  trialPeriodWeeklyPrice?: string;
+  trialPeriodMonthlyPrice?: string;
+  trialPeriodYearlyPrice?: string;
+  trialPeriodDays?: string | number;
+  trialPeriodWeeks?: string | number;
+  trialPeriodMonths?: string | number;
+  trialPeriodYears?: string | number;
   trialPeriodText?: string;
   trialPeriodEndDate?: string;
   currencyCode?: string;
   currencySymbol?: string;
   locale?: string;
   languageCode?: string;
+  isSubscribed?: boolean;
 };
 
-export type SuperwallProductVariables = SuperwallKnownProductVariables & Record<string, unknown>;
+export type SuperwallProductVariables = SuperwallKnownProductVariables;
 
 export type SuperwallProductSource = "sdk" | "inline" | "placeholder" | "unknown";
 
@@ -108,10 +116,10 @@ export const productsByReference = <TProduct extends SuperwallProduct>(
 };
 
 /**
- * SDK-delivered variable records are trusted, not validated: the known
- * variable shapes (`price: string`, `trialPeriodDays: number`, …) are the
- * SDK's side of the protocol contract, and unknown keys pass through for
- * custom template variables.
+ * SDK-delivered variable records are trusted, not validated: the declared
+ * shapes are the SDK's side of the protocol contract. Numeric-looking fields
+ * arrive as strings ("59.99", "7"), which is why they are typed
+ * `string | number` — coerce with `Number()` before doing arithmetic.
  */
 const asProductVariables = (record: Record<string, unknown>): SuperwallProductVariables =>
   record as SuperwallProductVariables;

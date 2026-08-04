@@ -35,7 +35,7 @@ export default function Plan() {
       </button>
 
       <div className="lede">
-        <h1>Go Pro ☆</h1>
+        <h1>Go Pro</h1>
         <p>Payment happens right here — the sheet opens over this page.</p>
       </div>
 

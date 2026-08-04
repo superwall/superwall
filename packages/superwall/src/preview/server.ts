@@ -9,6 +9,8 @@ import { discoverProject, type DiscoveredSurface, type Project } from "../discov
 import { injectPlatformLayer, PLATFORM_STYLESHEET_URL, renderDocument } from "../document";
 import { EXTRA_ASSET_TYPES } from "../build";
 import { buildStudioProjects } from "./project";
+
+export { buildStudioProject } from "./project";
 import { injectWebviewSimulation } from "./webview";
 
 const VIRTUAL_PROJECT_ID = "virtual:superwall/project";

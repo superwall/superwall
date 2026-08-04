@@ -37,7 +37,6 @@ export type {
   TIncomingHandler,
   TIncomingMessage,
   TIncomingMessageCallbackResult,
-  TIncomingMessageCheckoutSession,
   TIncomingMessageExperiment,
   TIncomingMessageFreeTrialStart,
   TIncomingMessagePaywallOpen,

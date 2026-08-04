@@ -133,8 +133,10 @@ export const mockOptionsFromConfig = (
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const trialPeriodDaysOf = (product: SuperwallProduct): number => {
-  const days = product.variables.trialPeriodDays;
-  return typeof days === "number" ? days : 0;
+  // The SDK sends period counts as strings ("7"), so a `typeof === "number"`
+  // check silently reports every product as trial-less on a device.
+  const days = Number(product.variables.trialPeriodDays);
+  return Number.isFinite(days) ? days : 0;
 };
 
 export class MockSuperwallTransport implements ITransport {

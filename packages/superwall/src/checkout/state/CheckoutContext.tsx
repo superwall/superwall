@@ -2,7 +2,6 @@ import { createContext, useContext, useReducer, useMemo, useEffect, type ReactNo
 import { checkoutReducer, initialCheckoutState, defaultPresentation } from "./CheckoutStore";
 import type { CheckoutState, CheckoutActions, SessionData, PresentationContext } from "./types";
 import { checkoutEvents } from "../services/CheckoutEvents";
-import { useSuperwallEvent } from "../../hooks/useSuperwallEvent";
 
 const CheckoutStateContext = createContext<CheckoutState | null>(null);
 const CheckoutActionsContext = createContext<CheckoutActions | null>(null);
@@ -51,26 +50,10 @@ export function CheckoutProvider({ children, presentation }: CheckoutProviderPro
     [],
   );
 
-  useSuperwallEvent("checkout_session", (message) => {
-    const session: SessionData = {
-      directive: "embedded",
-      clientSecret: message.client_secret,
-      publishableKey: message.publishable_key,
-      checkoutSessionId: message.client_secret.split("_secret_")[0] ?? null,
-      checkoutContextId: "",
-      referenceName: message.product ?? "",
-    };
-    checkoutEvents.dispatch("SESSION_CREATED", session);
-    checkoutEvents.dispatch("SHEET_OPEN", { session });
-  });
 
   useEffect(() => {
     const unsubscribers = [
       checkoutEvents.subscribe("SESSION_CREATED", (session) => {
-        console.log("[CheckoutContext] Session created event received", {
-          clientSecret: session.clientSecret.substring(0, 20) + "...",
-          directive: session.directive,
-        });
         actions.addOrUpdateSession(session);
         if (state.readyState.get(session.clientSecret)) {
           checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: session.clientSecret });
@@ -78,11 +61,6 @@ export function CheckoutProvider({ children, presentation }: CheckoutProviderPro
       }),
 
       checkoutEvents.subscribe("SHEET_OPEN", ({ session }) => {
-        console.log("[CheckoutContext] Sheet open event received", {
-          clientSecret: session.clientSecret.substring(0, 20) + "...",
-          hasSubscriptionDetails: !!session.subscriptionDetails,
-          deviceModel: session.deviceModel,
-        });
         if (session.deviceModel) {
           dispatch({ type: "SET_DEVICE_MODEL", payload: session.deviceModel });
         }
@@ -92,22 +70,18 @@ export function CheckoutProvider({ children, presentation }: CheckoutProviderPro
       }),
 
       checkoutEvents.subscribe("SHEET_CLOSE", () => {
-        console.log("[CheckoutContext] Sheet close event received");
         actions.closeSheet();
       }),
 
       checkoutEvents.subscribe("EMBEDDED_READY", ({ clientSecret }) => {
-        console.log("[CheckoutContext] Embedded ready event received");
         actions.markSessionReady(clientSecret);
       }),
 
       checkoutEvents.subscribe("PAYMENT_ERROR", ({ error }) => {
-        console.log("[CheckoutContext] Payment error event received");
         actions.setError(error);
       }),
 
-      checkoutEvents.subscribe("SESSION_INVALIDATED", ({ reason }) => {
-        console.log("[CheckoutContext] Session invalidated, clearing pool:", reason ?? "unknown");
+      checkoutEvents.subscribe("SESSION_INVALIDATED", () => {
         dispatch({ type: "CLEAR_ALL_SESSIONS" });
       }),
     ];

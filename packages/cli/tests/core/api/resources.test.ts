@@ -13,6 +13,7 @@ import {
   pushPaywallAssets,
   pushPaywallVersion,
   rowName,
+  versionProducts,
   type Scope,
 } from "@/core/api/resources";
 import type { Session } from "@/core/auth/storage";
@@ -216,4 +217,32 @@ test("pushPaywallAssets drops malformed rows and refuses a response with no list
     ]),
     /returned no asset list/,
   );
+});
+
+test("versionProducts maps stripe composites to the stripe store", () => {
+  assert.deepEqual(
+    versionProducts({
+      monthly: "test:price_1SVzqc9XrIjVpXCiS0PfI4wW:no-trial",
+      annual: "live:price_abc:trial",
+    }),
+    [
+      {
+        store: "stripe",
+        identifier: "test:price_1SVzqc9XrIjVpXCiS0PfI4wW:no-trial",
+        reference_name: "monthly",
+      },
+      { store: "stripe", identifier: "live:price_abc:trial", reference_name: "annual" },
+    ],
+  );
+});
+
+test("versionProducts maps store identifiers to app-store", () => {
+  assert.deepEqual(versionProducts({ monthly: "pro_999_month" }), [
+    { store: "app-store", identifier: "pro_999_month", reference_name: "monthly" },
+  ]);
+});
+
+test("versionProducts returns empty for no products", () => {
+  assert.deepEqual(versionProducts(undefined), []);
+  assert.deepEqual(versionProducts({}), []);
 });

@@ -109,11 +109,20 @@ export type SuperwallDeviceVariables = {
   localResourceIds?: string;
 };
 
-/** User attributes the app set via the SDK (Superwall.shared.setUserAttributes). */
-export type SuperwallUserVariables = Record<string, unknown>;
+export type SuperwallUserVariables = {
+  seed?: number;
+  appUserId?: string;
+  aliasId?: string;
+  applicationInstalledAt?: string;
+} & Record<string, unknown>;
 
-/** Parameters passed to the placement that presented this paywall. */
-export type SuperwallPlacementParams = Record<string, unknown>;
+export type SuperwallPlacementParams = {
+  $event_name?: string;
+  event_name?: string;
+  $is_standard_event?: boolean;
+  $is_feature_gatable?: boolean;
+  $app_session_id?: string;
+} & Record<string, unknown>;
 
 /** Experiment assignment, mirroring the SDK's `experiment` message payload. */
 export type SuperwallExperiment = Omit<TIncomingMessageExperiment, "event_name">;

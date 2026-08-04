@@ -1,4 +1,4 @@
-import { promotePaywallVersion, pushPaywallVersion } from "@/core/api/resources";
+import { promotePaywallVersion, pushPaywallVersion, versionProducts } from "@/core/api/resources";
 import type { SuperwallApi } from "@/core/api/client";
 import { VERSION } from "@/constants";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
@@ -112,6 +112,7 @@ export function createStudioActions(
             html: built.html,
             surface: surface.id,
             assets: synced.assets,
+            products: versionProducts(built.products),
           }),
         );
         await step("source", async () => {

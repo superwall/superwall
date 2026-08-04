@@ -81,12 +81,14 @@ code {
 }
 
 .shell {
+  --safe-top: max(64px, env(safe-area-inset-top));
+  --safe-bottom: max(24px, env(safe-area-inset-bottom));
+
   display: flex;
   min-height: 100vh;
   min-height: 100dvh;
   flex-direction: column;
-  padding: calc(40px + env(safe-area-inset-top)) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
 
 .page {
@@ -97,7 +99,7 @@ code {
   width: 100%;
   max-width: 44rem;
   margin: 0 auto;
-  padding: 28px 20px 24px;
+  padding: calc(var(--safe-top) + 16px) 20px 24px;
 }
 
 .lede {
@@ -210,7 +212,7 @@ code {
   justify-content: center;
   gap: 6px;
   border-top: 1px solid var(--border);
-  padding: 14px 20px;
+  padding: 14px 20px var(--safe-bottom);
   font-size: 0.75rem;
   color: var(--fg-caption);
 }
@@ -253,7 +255,8 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 20px;
+  padding: calc(var(--safe-top) + 4px) calc(20px + env(safe-area-inset-right)) 14px
+    calc(20px + env(safe-area-inset-left));
 }
 
 .step {
@@ -284,7 +287,7 @@ code {
 }
 
 .page--chromed {
-  padding-top: 64px;
+  padding-top: calc(var(--safe-top) + 56px);
 }
 
 .features {

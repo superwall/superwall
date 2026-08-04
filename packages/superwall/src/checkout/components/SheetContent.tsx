@@ -1,19 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useRef,
-  useState,
-  useEffect,
-  useCallback,
-  type ReactNode,
-  type RefObject,
-} from "react";
-
-const SheetCardRefContext = createContext<RefObject<HTMLDivElement | null> | null>(null);
-
-export function useSheetCardRef(): RefObject<HTMLDivElement | null> | null {
-  return useContext(SheetCardRefContext);
-}
+import { useRef, useState, useEffect, useCallback, type ReactNode } from "react";
 
 interface SheetContentProps {
   open: boolean;
@@ -45,7 +30,6 @@ function CloseButton({ onClose }: { onClose: () => void }) {
 }
 
 export function SheetContent({ open, onClose, largeViewport, children }: SheetContentProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isScrollable, setIsScrollable] = useState(false);
 
@@ -75,33 +59,26 @@ export function SheetContent({ open, onClose, largeViewport, children }: SheetCo
   }, [checkScrollable, children]);
 
   return (
-    <SheetCardRefContext.Provider value={cardRef}>
-      <div
-        className="checkout-sheet-outer"
-        data-state={open ? "open" : "closed"}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          ref={cardRef}
-          className="checkout-sheet-card"
-          data-header="button"
-          data-form-inset="true"
-        >
-          <div className="checkout-header-desktop">
-            <CloseButton onClose={onClose} />
-          </div>
+    <div
+      className="checkout-sheet-outer"
+      data-state={open ? "open" : "closed"}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="checkout-sheet-card" data-header="button" data-form-inset="true">
+        <div className="checkout-header-desktop">
+          <CloseButton onClose={onClose} />
+        </div>
 
-          <div
-            ref={scrollRef}
-            className="checkout-scroll-container checkout-sheet-scrollable"
-            data-scrollable={isScrollable}
-            data-scroll-fade="1"
-            style={largeViewport ? { maxHeight: 600 } : undefined}
-          >
-            {children}
-          </div>
+        <div
+          ref={scrollRef}
+          className="checkout-scroll-container checkout-sheet-scrollable"
+          data-scrollable={isScrollable}
+          data-scroll-fade="1"
+          style={largeViewport ? { maxHeight: 600 } : undefined}
+        >
+          {children}
         </div>
       </div>
-    </SheetCardRefContext.Provider>
+    </div>
   );
 }

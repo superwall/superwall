@@ -1,4 +1,34 @@
-export interface AppliedDiscount {
+/** How a purchase completes, as declared by `checkout` in the paywall config. */
+export type CheckoutMode = "sheet" | "external" | "applePay";
+
+/**
+ * Apple Pay warms its own sessions so a sheet purchase and an Apple Pay
+ * purchase never reuse a session created for the other surface.
+ */
+export type CheckoutSessionCacheScope = "default" | "apple-pay";
+
+export type EmbeddedCheckoutSession = {
+  directive: "embedded";
+  checkoutSessionId: string;
+  clientSecret: string;
+  publishableKey: string;
+  checkoutContextId: string;
+  referenceName: string;
+  wasPrefetched?: boolean;
+};
+
+export type RedirectCheckoutSession = {
+  directive: "redirect";
+  checkoutSessionId: string;
+  checkoutUrl: string;
+  checkoutContextId: string;
+  referenceName: string;
+  wasPrefetched?: boolean;
+};
+
+export type CheckoutSessionResult = EmbeddedCheckoutSession | RedirectCheckoutSession;
+
+export type AppliedDiscount = {
   code: string;
   promotionCodeId: string;
   couponId: string;
@@ -9,44 +39,26 @@ export interface AppliedDiscount {
   duration?: "forever" | "once" | "repeating";
   durationInMonths?: number | null;
   firstTimeTransactionOnly?: boolean;
-}
+};
 
-export interface SubscriptionDetails {
-  amount: number;
-  amountDueNow?: number;
+export type DiscountedProductPrice = {
+  productIdentifier: string;
+  applies: boolean;
+  originalAmount: number;
+  discountedAmount: number;
   currency: string;
-  interval: "day" | "week" | "month" | "year";
-  intervalCount: number;
-  trialPeriodDays?: number;
+  interval?: "day" | "week" | "month" | "year";
+  intervalCount?: number;
   productName?: string;
-  discountedAmount?: number;
-  discount?: AppliedDiscount;
-}
+};
 
-export interface ApplicationDetails {
-  iconUrl?: string | null;
-}
+export type DiscountValidationResult =
+  | { valid: true; discount: AppliedDiscount; products: DiscountedProductPrice[] }
+  | { valid: false; reason: string };
 
-export interface SessionData {
-  directive: "embedded";
-  clientSecret: string;
-  publishableKey: string;
-  checkoutContextId: string;
-  checkoutSessionId: string | null;
-  referenceName: string;
-  subscriptionDetails?: SubscriptionDetails;
-  paymentMethodTypes?: string[];
-  intentType?: "SetupIntent" | "PaymentIntent";
-  publicApiKey?: string;
-  application?: ApplicationDetails;
-  email?: string;
+export type SessionData = EmbeddedCheckoutSession & {
   deviceModel?: string;
-  stripeAccountCountryCode?: string;
-  managementUrl?: string;
-  stripeCustomerId?: string;
-  customMetadata?: Record<string, string>;
-  wasPrefetched?: boolean;
-}
+};
 
 export interface PresentationContext {
   isFullscreen: boolean;

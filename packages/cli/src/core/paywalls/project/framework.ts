@@ -101,6 +101,9 @@ export interface Framework {
     roots: string | readonly string[],
     options: { port: number; host?: string; platformStylesheet?: string; studio?: StudioActions },
   ): Promise<PreviewServerHandle>;
+  studioProject?(
+    root: string,
+  ): Promise<{ surfaces: { products: Record<string, string> }[] }>;
 }
 
 export class FrameworkNotFoundError extends Error {
@@ -167,9 +170,17 @@ export async function loadFramework(cwd: string): Promise<Framework> {
     importSubpath(dir, "superwall/preview"),
   ]);
 
+  const studioProject =
+    typeof preview === "object" &&
+    preview !== null &&
+    typeof (preview as Record<string, unknown>).buildStudioProject === "function"
+      ? ((preview as Record<string, unknown>).buildStudioProject as Framework["studioProject"])
+      : undefined;
+
   return {
     discoverProject: fn(discover, "discoverProject", "superwall/discover"),
     buildSnapshot: fn(build, "buildSnapshot", "superwall/build"),
     startPreviewServer: fn(preview, "startPreviewServer", "superwall/preview"),
+    studioProject,
   };
 }
