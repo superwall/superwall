@@ -22,7 +22,5 @@ declare module "superwall/hooks" {
   }
 
   interface SuperwallStripeProducts {
-    "monthly": true;
-    "pro": true;
   }
 }
