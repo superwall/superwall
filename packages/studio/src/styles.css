@@ -191,8 +191,8 @@
 
   .sw-switch {
     position: relative;
-    width: 50px;
-    height: 30px;
+    width: 34px;
+    height: 19px;
     border-radius: 9999px;
     background: color-mix(in srgb, var(--color-cream) 18%, transparent);
     transition: background-color 150ms ease;
@@ -208,14 +208,14 @@
     position: absolute;
     top: 3px;
     left: 3px;
-    width: 24px;
-    height: 24px;
+    width: 13px;
+    height: 13px;
     border-radius: 9999px;
     background: var(--color-ink);
     transition: transform 150ms ease;
   }
 
   .sw-switch[aria-checked="true"]::after {
-    transform: translateX(20px);
+    transform: translateX(15px);
   }
 }
