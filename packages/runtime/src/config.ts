@@ -16,8 +16,6 @@ export type SuperwallProductSlotInput = string | SuperwallProductSlot;
 export type SuperwallPresentationConfig = {
   /** How the native SDK presents the paywall. Defaults to "fullscreen". */
   style?: "fullscreen" | "modal" | "push" | "drawer" | "popup" | "noAnimation";
-  /** When the paywall presents. Defaults to "checkUserSubscription". */
-  condition?: "checkUserSubscription" | "always";
   /** Required when style is "drawer". */
   drawer?: { height: number; cornerRadius: number };
   /** Required when style is "popup". */
