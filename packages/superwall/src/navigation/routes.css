@@ -154,6 +154,30 @@
   [data-sw-route][data-sw-transition="fade"][data-sw-phase="leave"] {
     animation-name: sw-fade-leave;
   }
+
+  /*
+   * The funnel step: the arriving page fades in while it drifts the last 44px
+   * into place, and the page it replaces is simply gone. One layer moves at a
+   * time, so nothing ghosts, and like fade it runs on a plain ease. The page
+   * behind is hidden outside this guard so reduced motion never reveals it.
+   */
+  [data-sw-route][data-sw-transition="shift"][data-sw-phase] {
+    animation-duration: var(--sw-transition-shift, 420ms);
+    animation-timing-function: var(--sw-ease-shift, cubic-bezier(0.2, 0, 0, 1));
+  }
+
+  [data-sw-route][data-sw-transition="shift"][data-sw-phase="enter"] {
+    animation-name: sw-shift-enter;
+  }
+
+  [data-sw-route][data-sw-transition="shift"][data-sw-phase="return"] {
+    animation-name: sw-shift-return;
+  }
+}
+
+[data-sw-route][data-sw-transition="shift"][data-sw-phase="recede"],
+[data-sw-route][data-sw-transition="shift"][data-sw-phase="leave"] {
+  visibility: hidden;
 }
 
 /* Silk clamps a stacked page to 300px of travel; 30% alone slides half a wide screen. */
@@ -253,5 +277,19 @@
 
   to {
     opacity: 0;
+  }
+}
+
+@keyframes sw-shift-enter {
+  from {
+    transform: var(--sw-from-transform, translateX(44px));
+    opacity: var(--sw-from-opacity, 0);
+  }
+}
+
+@keyframes sw-shift-return {
+  from {
+    transform: var(--sw-from-transform, translateX(-44px));
+    opacity: var(--sw-from-opacity, 0);
   }
 }

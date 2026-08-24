@@ -1,6 +1,25 @@
 import * as React from "react";
+import { checkoutModeOf, detectNativeSuperwallHost } from "@superwall/runtime";
 import { useSuperwallSession } from "../provider/context";
+import { createQueryStore, QueryStoreContext, type QueryHistory, type QueryStore } from "./query";
 import "./routes.css";
+
+export {
+  createParser,
+  parseAsArrayOf,
+  parseAsBoolean,
+  parseAsFloat,
+  parseAsInteger,
+  parseAsString,
+  parseAsStringEnum,
+  useQueryState,
+  type Parser,
+  type ParserWithDefault,
+  type QueryHistory,
+  type QueryStateOptions,
+  type QueryUpdate,
+  type SetQueryState,
+} from "./query";
 
 // biome-ignore lint/suspicious/noEmptyInterface: augmentation target
 export interface SuperwallRoutes {}
@@ -9,7 +28,7 @@ export type RouteName = keyof SuperwallRoutes extends never
   ? string
   : Extract<keyof SuperwallRoutes, string>;
 
-type BuiltInTransition = "push" | "slide" | "fade" | "none";
+type BuiltInTransition = "push" | "slide" | "fade" | "shift" | "none";
 
 /**
  * A built-in, or any name you define yourself in CSS. The router only stamps
@@ -48,8 +67,6 @@ export type RouteMap = Record<string, RouteModule>;
 
 export const INITIAL_ROUTE = "index";
 
-const INITIAL_KEY = 0;
-
 type Direction = "forward" | "back";
 
 type Entry = {
@@ -62,7 +79,24 @@ type Nav = {
   entries: Entry[];
   exiting?: Entry;
   direction: Direction;
+  sync: QueryHistory | "skip";
 };
+
+export const NAV_KEY = "sw_nav";
+
+const parseStack = (value: string | null, routes: RouteMap): string[] | undefined => {
+  if (value === null || value === "") return [INITIAL_ROUTE];
+  const names = value.split(",");
+  return names.every((name) => Object.hasOwn(routes, name)) ? names : undefined;
+};
+
+const serializeStack = (entries: readonly Entry[]): string | null =>
+  entries.length === 1 && entries[0].name === INITIAL_ROUTE
+    ? null
+    : entries.map((entry) => entry.name).join(",");
+
+const sameStack = (entries: readonly Entry[], names: readonly string[]): boolean =>
+  entries.length === names.length && entries.every((entry, index) => entry.name === names[index]);
 
 const RouterContext = React.createContext<Router | null>(null);
 const FocusContext = React.createContext<boolean>(true);
@@ -191,6 +225,7 @@ export type PaywallRouterProps = {
   Layout?: React.ComponentType<React.PropsWithChildren>;
   navigationId?: string;
   transition?: Transition;
+  queryState?: boolean;
   onNavigate?: (route: string) => void;
 };
 
@@ -199,12 +234,23 @@ export const PaywallRouter = ({
   Layout,
   navigationId = "paywall",
   transition: fallback = "push",
+  queryState,
   onNavigate,
 }: PaywallRouterProps) => {
   const session = useSuperwallSession();
+  const [store] = React.useState<QueryStore>(() =>
+    createQueryStore(
+      (queryState ?? checkoutModeOf(session.getSnapshot().config?.checkout) !== undefined) &&
+        !detectNativeSuperwallHost(),
+    ),
+  );
   const [nav, setNav] = React.useState<Nav>(() => ({
-    entries: [{ key: INITIAL_KEY, name: INITIAL_ROUTE }],
+    entries: (parseStack(store.get(NAV_KEY), routes) ?? [INITIAL_ROUTE]).map((name, key) => ({
+      key,
+      name,
+    })),
     direction: "forward",
+    sync: "replace",
   }));
   const { entries, exiting, direction } = nav;
 
@@ -212,7 +258,7 @@ export const PaywallRouter = ({
   known.current = routes;
   const notify = React.useRef(onNavigate);
   notify.current = onNavigate;
-  const nextKey = React.useRef(1);
+  const nextKey = React.useRef(entries.length);
   const layers = React.useRef<HTMLDivElement>(null);
 
   const top = entries[entries.length - 1];
@@ -238,6 +284,7 @@ export const PaywallRouter = ({
               ? undefined
               : current.entries[current.entries.length - 1],
           direction: "forward",
+          sync: keep === undefined ? "push" : "replace",
         };
       });
     };
@@ -251,6 +298,7 @@ export const PaywallRouter = ({
           entries: current.entries.slice(0, current.entries.length - removed),
           exiting: current.entries[current.entries.length - 1],
           direction: "back",
+          sync: "replace",
         };
       });
     };
@@ -273,6 +321,38 @@ export const PaywallRouter = ({
       },
     };
   }, [entries, top]);
+
+  React.useEffect(() => {
+    if (nav.sync === "skip") return;
+    store.set({ [NAV_KEY]: serializeStack(nav.entries) }, nav.sync);
+  }, [nav, store]);
+
+  const navParam = React.useSyncExternalStore(
+    store.subscribe,
+    () => store.get(NAV_KEY),
+    () => store.get(NAV_KEY),
+  );
+
+  React.useEffect(() => {
+    const names = parseStack(store.get(NAV_KEY), known.current) ?? [INITIAL_ROUTE];
+    if (sameStack(entries, names)) return;
+    let shared = 0;
+    while (
+      shared < names.length &&
+      shared < entries.length &&
+      names[shared] === entries[shared].name
+    ) {
+      shared++;
+    }
+    const added = names.slice(shared).map((name) => ({ key: nextKey.current++, name }));
+    freeze(layers.current);
+    setNav({
+      entries: [...entries.slice(0, shared), ...added],
+      exiting: shared < entries.length ? entries[entries.length - 1] : undefined,
+      direction: names.length < entries.length ? "back" : "forward",
+      sync: "skip",
+    });
+  }, [navParam, entries, store]);
 
   const name = router.name;
   const depth = router.depth;
@@ -315,7 +395,7 @@ export const PaywallRouter = ({
 
   const [movement, setMovement] = React.useState(0);
   const [settled, setSettled] = React.useState(true);
-  const animated = React.useRef(INITIAL_KEY);
+  const animated = React.useRef(top.key);
 
   React.useLayoutEffect(() => {
     if (animated.current === top.key) return;
@@ -410,8 +490,10 @@ export const PaywallRouter = ({
   );
 
   return (
-    <RouterContext.Provider value={router}>
-      {Layout ? <Layout>{stack}</Layout> : stack}
-    </RouterContext.Provider>
+    <QueryStoreContext.Provider value={store}>
+      <RouterContext.Provider value={router}>
+        {Layout ? <Layout>{stack}</Layout> : stack}
+      </RouterContext.Provider>
+    </QueryStoreContext.Provider>
   );
 };

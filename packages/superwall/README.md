@@ -12,7 +12,7 @@ import { useProducts, usePurchase } from "superwall/hooks";
 | `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …) |
 | `superwall/config`     | `definePaywall`                                                                       |
 | `superwall/hooks`      | every hook, plus `createSuperwall` and `useSuperwallSession`                          |
-| `superwall/navigation` | `useRouter`, `useIsFocused`, `PaywallRouter`                                          |
+| `superwall/navigation` | `useRouter`, `useIsFocused`, `useQueryState` + parsers, `PaywallRouter`               |
 | `superwall/checkout`   | web checkout (Stripe) — bundled only when `config.checkout` asks for it               |
 | `superwall/assets`     | ambient types for asset imports                                                       |
 
@@ -166,13 +166,17 @@ export default function Layout({ children }: PropsWithChildren) {
 }
 ```
 
-Transitions are `push` (the default), `slide`, `fade`, and `none`. `push` is the
-iOS navigation push: in from the right with an edge shadow while the route
-behind drifts left and dims, clamped to 300px of travel, reversed on the way
-back. `slide` moves both routes as one, flat. `fade` runs shorter (350ms) on a
-plain ease — opacity has no momentum — and fades only one layer at a time, since
-two half-faded layers composite to less than full opacity. Resolution runs call site → the route's own export → the surface default in
-`config.ts` → `push`.
+Transitions are `push` (the default), `slide`, `fade`, `shift`, and `none`.
+`push` is the iOS navigation push: in from the right with an edge shadow while
+the route behind drifts left and dims, clamped to 300px of travel, reversed on
+the way back. `slide` moves both routes as one, flat. `fade` runs shorter
+(350ms) on a plain ease — opacity has no momentum — and fades only one layer at
+a time, since two half-faded layers composite to less than full opacity.
+`shift` is the funnel step: the arriving route fades in as it drifts the last
+44px into place (420ms, from the left on the way back) and the route it
+replaces is simply gone — one layer moves at a time, so a twenty-step flow
+never reads as a stack. Resolution runs call site → the route's own export →
+the surface default in `config.ts` → `push`.
 
 ```ts
 export default definePaywall({ transition: "slide" });   // whole surface
@@ -190,15 +194,17 @@ starts at zero and peaks at 60ms, so pages ease into their travel: 49.7% of the
 distance by 100ms, 84.7% by 200ms, 96.2% by 300ms. No overshoot.
 `cubic-bezier(0.28, 0.4, 0.08, 1)` is the fallback.
 
-| variable               | default  |                                                                  |
-| ---------------------- | -------- | ---------------------------------------------------------------- |
-| `--sw-transition`      | `500ms`  | duration                                                         |
-| `--sw-ease`            | spring   | timing function                                                  |
-| `--sw-transition-fade` | `350ms`  | duration for `fade`                                              |
-| `--sw-ease-fade`       | ease     | timing function for `fade`                                       |
-| `--sw-stack-dim`       | `0.925`  | brightness of the route behind                                   |
-| `--sw-background`      | `Canvas` | route background — routes are opaque so nothing shows through    |
-| `--sw-routes-height`   | `100dvh` | route height; set it when a layout puts chrome around the routes |
+| variable                | default  |                                                                  |
+| ----------------------- | -------- | ---------------------------------------------------------------- |
+| `--sw-transition`       | `500ms`  | duration                                                         |
+| `--sw-ease`             | spring   | timing function                                                  |
+| `--sw-transition-fade`  | `350ms`  | duration for `fade`                                              |
+| `--sw-ease-fade`        | ease     | timing function for `fade`                                       |
+| `--sw-transition-shift` | `420ms`  | duration for `shift`                                             |
+| `--sw-ease-shift`       | ease     | timing function for `shift`                                      |
+| `--sw-stack-dim`        | `0.925`  | brightness of the route behind                                   |
+| `--sw-background`       | `Canvas` | route background — routes are opaque so nothing shows through    |
+| `--sw-routes-height`    | `100dvh` | route height; set it when a layout puts chrome around the routes |
 
 All motion is disabled under `prefers-reduced-motion`.
 
@@ -255,6 +261,56 @@ Two things worth knowing:
 `data-sw-state` (`active`/`behind`/`exiting`/`below`) and `data-sw-direction`
 remain on each route if you need to key on something the four phases do not
 name.
+
+### State in the URL
+
+Routes carry no params, and state between them is plain React. For a flow on
+the web that is not enough: an in-app browser hands a link — only the link — to
+the OS browser, hosted checkout returns to a URL, and a reload starts over. So
+a surface with `checkout` keeps its state in the page URL:
+
+- the route stack, as `?sw_nav=index,goal,plan` — `push` adds a browser history
+  entry, everything else rewrites in place, and the browser's back button is
+  `router.back()`. Any URL rebuilds the stack it names (unknown routes start
+  over at `index`), with no animation and one `entry` page view.
+- whatever a page asks to keep, with `useQueryState` — nuqs's API, so the
+  parsers read the same:
+
+```tsx
+import { parseAsStringEnum, parseAsInteger, useQueryState } from "superwall/navigation";
+
+const [goal, setGoal] = useQueryState("goal", parseAsStringEnum(["focus", "habit"]));
+const [step, setStep] = useQueryState("step", parseAsInteger.withDefault(1));
+const [name, setName] = useQueryState("name");               // string | null
+
+setGoal("focus");                                            // ?goal=focus
+setStep((current) => current + 1);
+setGoal(null);                                               // key removed
+setGoal("habit", { history: "push" });                       // a history entry
+```
+
+`parseAsString`, `parseAsInteger`, `parseAsFloat`, `parseAsBoolean`,
+`parseAsStringEnum(values)`, `parseAsArrayOf(parser, separator?)`, and
+`createParser({ parse, serialize, eq? })`. `.withDefault(value)` removes
+`null` from the type and, by default, clears the key when the value equals the
+default (`clearOnDefault: false` keeps it). `.withOptions({ history,
+clearOnDefault })` bakes options into a parser; the setter's second argument
+overrides them per call. A value the URL holds that fails to parse reads as
+the default.
+
+Nothing is persisted unless a page asks — the framework never decides what an
+answer is — and `sw_*`, `platform` and `transport` are reserved (the hook
+throws). Writes are coalesced
+(replaces settle 300ms after the last one; a push lands at once) so a text
+input cannot trip Safari's history rate limit, and anything pending is flushed
+before the page is hidden. Foreign params (`utm_*`, the studio's overrides)
+are left alone.
+
+The same hook on a native host — which has no URL bar — is plain state shared
+across routes, so a paywall reads identically everywhere. `definePaywall({
+queryState: true | false })` overrides the `checkout` default either way.
+Mind the URL budget: about 2 kB is safe across every app and share sheet, so
+keep keys short and values enumerable, and keep anything personal out of it.
 
 ## Dev — the studio
 

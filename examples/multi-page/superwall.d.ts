@@ -7,9 +7,9 @@
 
 declare module "superwall/navigation" {
   interface SuperwallRoutes {
-    features: true;
-    index: true;
-    plans: true;
+    "features": true;
+    "index": true;
+    "plans": true;
   }
 }
 
@@ -17,8 +17,9 @@ export type SuperwallRouteName = keyof import("superwall/navigation").SuperwallR
 
 declare module "superwall/hooks" {
   interface SuperwallProducts {
-    annual: true;
+    "annual": true;
   }
 
-  interface SuperwallStripeProducts {}
+  interface SuperwallStripeProducts {
+  }
 }

@@ -26,6 +26,24 @@ const readRecord = (params: URLSearchParams, key: string): Record<string, unknow
   return undefined;
 };
 
+export const PREVIEW_OVERRIDE_KEYS = [
+  "theme",
+  "locale",
+  "sw_device",
+  "sw_user",
+  "sw_params",
+  "sw_trial",
+  "sw_products",
+] as const;
+
+export const mergePreviewSearch = (current: string, overrides: string): string => {
+  const merged = new URLSearchParams(current);
+  for (const key of PREVIEW_OVERRIDE_KEYS) merged.delete(key);
+  for (const [key, value] of new URLSearchParams(overrides)) merged.set(key, value);
+  const rendered = merged.toString();
+  return rendered === "" ? "" : `?${rendered}`;
+};
+
 export const readPreviewOverrides = (search: string): PreviewOverrides => {
   const params = new URLSearchParams(search);
   const overrides: PreviewOverrides = {};

@@ -15,13 +15,14 @@ exist in your Superwall dashboard — that is the only place product data comes
 from, so until they match, the studio says which are missing, every price
 renders undefined, and publishing stays disabled.
 
-## The four built-ins
+## The five built-ins
 
 | transition | what it does                                                                                                                  |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `push`     | the iOS navigation push — the new route comes in from the right with an edge shadow while the one behind drifts left and dims |
 | `slide`    | both routes move as one, flat: no parallax, no dim, no shadow                                                                 |
 | `fade`     | a crossfade, shorter than the movement transitions and on a plain ease                                                        |
+| `shift`    | the funnel step — the new route fades in as it drifts 44px into place, and the one it replaces is simply gone                 |
 | `none`     | instant                                                                                                                       |
 
 `push` is the default. Set one for a whole surface, override it per route, or

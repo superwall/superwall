@@ -36,6 +36,7 @@ type Loaded =
       routes: RouteMap;
       Layout?: React.ComponentType<React.PropsWithChildren>;
       transition: PaywallDefinition["transition"];
+      queryState: PaywallDefinition["queryState"];
     };
 
 const useSurface = (surface: PreviewSurface): Loaded => {
@@ -72,6 +73,7 @@ const useSurface = (surface: PreviewSurface): Loaded => {
           },
         },
         transition: definition?.transition,
+        queryState: definition?.queryState,
         routes: Object.fromEntries(loadedRoutes) as RouteMap,
         Layout: layout,
       });
@@ -140,6 +142,7 @@ export const SurfaceHost = ({
         routes={loaded.routes}
         Layout={loaded.Layout}
         transition={loaded.transition}
+        queryState={loaded.queryState}
         navigationId={surface.id}
       />
     </SuperwallProvider>

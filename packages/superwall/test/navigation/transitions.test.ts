@@ -57,6 +57,21 @@ describe("routes.css keeps each transition's layers coherent", () => {
     }
   });
 
+  it("moves one layer for shift and hides the other, so a funnel step never ghosts", () => {
+    expect(phasesOf("shift").toSorted()).toEqual(["enter", "return"]);
+    const hidden =
+      /\[data-sw-transition="shift"\]\[data-sw-phase="recede"\],\s*\[data-sw-route\]\[data-sw-transition="shift"\]\[data-sw-phase="leave"\]\s*\{\s*visibility: hidden;/;
+    expect(css).toMatch(hidden);
+    expect(reducedMotionBlock).not.toMatch(hidden);
+  });
+
+  it("gives shift its own duration and easing, since it runs on opacity like fade", () => {
+    expect(css).toMatch(
+      /\[data-sw-transition="shift"\]\[data-sw-phase\][^{]*\{[^}]*--sw-transition-shift/s,
+    );
+    expect(css).toMatch(/--sw-ease-shift/);
+  });
+
   it("names a phase on every animation rule, so none can leak across situations", () => {
     for (const rule of animationRules()) {
       expect(phase(rule.selector)).toBeDefined();

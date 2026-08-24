@@ -194,8 +194,8 @@ const entrySource = (
     `  <React.StrictMode>`,
     `    <SuperwallProvider config={config} mock="auto">`,
     surface.layoutFile
-      ? `      <PaywallRouter routes={routes} Layout={Layout} transition={definition?.transition} navigationId={${JSON.stringify(surface.id)}} />`
-      : `      <PaywallRouter routes={routes} transition={definition?.transition} navigationId={${JSON.stringify(surface.id)}} />`,
+      ? `      <PaywallRouter routes={routes} Layout={Layout} transition={definition?.transition} queryState={definition?.queryState} navigationId={${JSON.stringify(surface.id)}} />`
+      : `      <PaywallRouter routes={routes} transition={definition?.transition} queryState={definition?.queryState} navigationId={${JSON.stringify(surface.id)}} />`,
     ...(checkout ? [`      <SuperwallCheckout />`] : []),
     `    </SuperwallProvider>`,
     `  </React.StrictMode>,`,

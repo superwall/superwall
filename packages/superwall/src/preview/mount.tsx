@@ -2,7 +2,7 @@ import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { surfaces } from "virtual:superwall/project";
 import { SurfaceHost } from "./surface";
-import { applyThemeOverride, readPreviewOverrides } from "./overrides";
+import { applyThemeOverride, mergePreviewSearch, readPreviewOverrides } from "./overrides";
 
 declare global {
   interface Window {
@@ -31,7 +31,7 @@ const PreviewRoot = ({ surfaceEntry }: { surfaceEntry: NonNullable<typeof surfac
 
   React.useEffect(() => {
     window.__swPreviewApply = (search: string) => {
-      const query = search.startsWith("?") || search === "" ? search : `?${search}`;
+      const query = mergePreviewSearch(window.location.search, search);
       window.history.replaceState(null, "", `${window.location.pathname}${query}`);
       const next = readPreviewOverrides(query);
       applyThemeOverride(next.theme);

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { applyThemeOverride, readPreviewOverrides } from "../../src/preview/overrides";
+import {
+  applyThemeOverride,
+  mergePreviewSearch,
+  readPreviewOverrides,
+} from "../../src/preview/overrides";
 
 describe("readPreviewOverrides", () => {
   it("parses theme, locale, and device payloads", () => {
@@ -18,6 +22,24 @@ describe("readPreviewOverrides", () => {
   it("ignores invalid values", () => {
     expect(readPreviewOverrides("?theme=sepia&sw_device=not-json")).toEqual({});
     expect(readPreviewOverrides("")).toEqual({});
+  });
+});
+
+describe("mergePreviewSearch", () => {
+  it("replaces the studio's own keys and keeps everything else", () => {
+    expect(mergePreviewSearch("?theme=light&sw_nav=goal,plan&goal=focus", "?theme=dark")).toBe(
+      "?sw_nav=goal%2Cplan&goal=focus&theme=dark",
+    );
+  });
+
+  it("drops an override the studio no longer sends", () => {
+    expect(mergePreviewSearch("?theme=dark&locale=de&sw_nav=goal", "locale=fr")).toBe(
+      "?sw_nav=goal&locale=fr",
+    );
+  });
+
+  it("renders nothing when nothing is left", () => {
+    expect(mergePreviewSearch("?theme=dark", "")).toBe("");
   });
 });
 

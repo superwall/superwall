@@ -51,6 +51,14 @@ itself is always fetched from Stripe, never bundled.
 appearance on every Superwall paywall, because payment UI that borrows a
 page's fonts and colors stops looking like payment UI.
 
+**The flow resumes from its URL.** With `checkout` set, the route stack and
+every `useQueryState` value live in the page URL — `?sw_nav=index,goal,plan&goal=focus`.
+Reload it, open it in Safari after Instagram's in-app browser, or come back
+from hosted checkout, and the person is on the same step with the same
+answers. `app/goal.tsx` keeps its answer with
+`useQueryState("goal", goalParser)` and `app/plan.tsx` reads it back; nothing
+else is persisted unless a page asks. `queryState: false` in `config.ts` turns it off.
+
 **A funnel is one paywall, not several.** Every step here is a route in the
 same document — `router.push("goal")` — so there is no page load between
 them, nothing to re-fetch, and the whole flow ships as a single snapshot.

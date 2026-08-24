@@ -1,15 +1,11 @@
 import { useHaptics } from "superwall/hooks";
-import { useRouter } from "superwall/navigation";
-
-const GOALS = [
-  { id: "focus", label: "Focus", hint: "Fewer, longer sessions" },
-  { id: "habit", label: "Build a habit", hint: "A little every day" },
-  { id: "catch-up", label: "Catch up", hint: "Work through a backlog" },
-];
+import { useQueryState, useRouter } from "superwall/navigation";
+import { GOALS, goalParser } from "../components/goals";
 
 export default function Goal() {
   const router = useRouter();
   const haptics = useHaptics();
+  const [goal, setGoal] = useQueryState("goal", goalParser);
 
   return (
     <main className="page">
@@ -26,22 +22,24 @@ export default function Goal() {
 
       <div className="lede">
         <h1>What are you after?</h1>
-        <p>Answers stay in the page — the router carries no state.</p>
+        <p>The answer goes in the URL, so it survives a reload or a switch to another browser.</p>
       </div>
 
       <ul className="choices">
-        {GOALS.map((goal) => (
-          <li key={goal.id}>
+        {GOALS.map((entry) => (
+          <li key={entry.id}>
             <button
               type="button"
               className="choice"
+              aria-pressed={goal === entry.id}
               onClick={() => {
                 haptics.light();
+                setGoal(entry.id);
                 router.push("plan");
               }}
             >
-              <span className="choice-label">{goal.label}</span>
-              <span className="choice-hint">{goal.hint}</span>
+              <span className="choice-label">{entry.label}</span>
+              <span className="choice-hint">{entry.hint}</span>
             </button>
           </li>
         ))}

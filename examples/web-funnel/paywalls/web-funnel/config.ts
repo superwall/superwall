@@ -4,6 +4,19 @@ export default definePaywall({
   name: "Web Funnel",
 
   /**
+   * How steps move. `shift` is the funnel transition: the next step fades in
+   * as it drifts into place, and the one it replaces is simply gone.
+   */
+  transition: "shift",
+
+  /**
+   * Because `checkout` is set, the route stack and every `useQueryState`
+   * value live in the page URL — so the flow resumes from any link: after a
+   * reload, in Safari after Instagram's in-app browser, or back from hosted
+   * checkout. Set `queryState: false` to keep the URL clean instead.
+   */
+
+  /**
    * How a purchase completes on the web.
    *
    * `sheet` takes payment in the page: Superwall creates a Stripe checkout

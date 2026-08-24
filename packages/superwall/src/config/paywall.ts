@@ -24,6 +24,13 @@ export type PaywallDefinition = Omit<Partial<SuperwallConfig>, "checkout"> & {
    * `export const transition` overrides it, and the call site overrides both.
    */
   transition?: Transition;
+  /**
+   * Keep the route stack and every `useQueryState` value in the page URL, so
+   * a flow resumes from any link — after a reload, in the OS browser after an
+   * in-app one, or back from hosted checkout. Defaults to on when `checkout`
+   * is set. Only applies to web builds.
+   */
+  queryState?: boolean;
 };
 
 export const definePaywall = <TDefinition extends PaywallDefinition>(

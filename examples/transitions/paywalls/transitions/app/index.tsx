@@ -22,6 +22,13 @@ const TRANSITIONS: {
     name: "Fade",
     blurb: "The new page fades in over the old one.",
   },
+  {
+    route: "shift",
+    transition: "shift",
+    name: "Shift",
+    tag: "Funnels",
+    blurb: "The new page fades in as it drifts into place.",
+  },
   { route: "none", transition: "none", name: "None", blurb: "No animation at all." },
   {
     route: "zoom",
@@ -40,7 +47,7 @@ export default function Index() {
       <div className="lede">
         <h1>Transitions</h1>
         <p>
-          Multi-page paywalls move between pages with a transition. Four are built in, and you can
+          Multi-page paywalls move between pages with a transition. Five are built in, and you can
           define your own in CSS.
         </p>
       </div>

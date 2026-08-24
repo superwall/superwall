@@ -1,12 +1,14 @@
 import * as React from "react";
 import { useHaptics, useProducts, usePurchase, type ProductReference } from "superwall/hooks";
-import { useRouter } from "superwall/navigation";
+import { useQueryState, useRouter } from "superwall/navigation";
+import { goalParser } from "../components/goals";
 
 export default function Plan() {
   const router = useRouter();
   const { getProduct } = useProducts();
   const { purchase, prefetch } = usePurchase();
   const haptics = useHaptics();
+  const [goal] = useQueryState("goal", goalParser);
 
   // Typed against the config: naming a product this paywall does not declare
   // is a compile error, not an undefined price on someone's phone.
@@ -36,7 +38,10 @@ export default function Plan() {
 
       <div className="lede">
         <h1>Go Pro</h1>
-        <p>Payment happens right here — the sheet opens over this page.</p>
+        <p>
+          {goal ? `A plan for ${goal.replace("-", " ")}. ` : ""}
+          Payment happens right here — the sheet opens over this page.
+        </p>
       </div>
 
       <div className="plans">
