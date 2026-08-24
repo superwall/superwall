@@ -235,7 +235,7 @@ function TimelineRow({ item, first }: { item: TimelineItem; first: boolean }): R
       {lines.slice(1).map((l, i) => (
         <Box key={i}>
           <Text dimColor>│ </Text>
-          <Text dimColor>{l}</Text>
+          <Text>{l}</Text>
         </Box>
       ))}
     </Box>

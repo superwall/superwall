@@ -28,11 +28,13 @@ export const SurfaceCard = ({
   status,
   previewSrc,
   onOpen,
+  href,
 }: {
   surface: StudioSurface;
   status?: StudioStatus;
   previewSrc: string;
   onOpen: () => void;
+  href?: string;
 }) => {
   const previewRef = React.useRef<HTMLDivElement>(null);
   const width = useElementWidth(previewRef);
@@ -41,7 +43,7 @@ export const SurfaceCard = ({
   return (
     <a
       className="group block"
-      href={surfacePath(surface)}
+      href={href ?? surfacePath(surface)}
       onClick={(event) => {
         if (event.metaKey || event.ctrlKey) return;
         event.preventDefault();

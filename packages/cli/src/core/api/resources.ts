@@ -6,6 +6,7 @@ export interface Application {
   platform?: string;
   bundle_id?: string;
   public_api_key?: string;
+  apple_url_scheme?: string;
 }
 
 export interface Project {

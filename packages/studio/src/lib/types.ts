@@ -65,6 +65,7 @@ export type StudioStatus = {
 };
 
 export type StudioSource = {
+  scheme?: string;
   title: string;
   surfaces: StudioSurface[];
   diagnostics?: string[];

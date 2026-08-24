@@ -1,18 +1,21 @@
 import * as React from "react";
+import { OpenInApp } from "../components/OpenInApp";
 import { SurfaceCard } from "../components/SurfaceCard";
 import { TopBar } from "../components/TopBar";
 import { fetchStatus } from "../lib/actions";
 import type { StudioSource, StudioStatus, StudioSurface } from "../lib/types";
-import { surfacePath } from "../lib/preview";
+import { devicePreviewPath, surfacePath } from "../lib/preview";
 
 let lastScroll = 0;
 
 export const SurfaceList = ({
   source,
   onOpen,
+  device = false,
 }: {
   source: StudioSource;
   onOpen: (surface: StudioSurface) => void;
+  device?: boolean;
 }) => {
   const [statuses, setStatuses] = React.useState<Record<string, StudioStatus>>({});
 
@@ -53,11 +56,11 @@ export const SurfaceList = ({
       ["Funnels", "funnel"],
     ] as const
   )
-    .map(([label, kind]) => {
+    .map(([sectionLabel, kind]) => {
       const all = source.surfaces.filter((surface) => surface.kind === kind);
       const needle = (queries[kind] ?? "").trim().toLowerCase();
       return {
-        label,
+        label: sectionLabel,
         kind,
         all,
         needle,
@@ -72,9 +75,17 @@ export const SurfaceList = ({
 
   return (
     <>
-      <TopBar title={source.title} onHome={() => {}} inset />
+      <TopBar
+        title={source.title}
+        onHome={() => {}}
+        inset
+        label={device ? "Preview" : undefined}
+        actions={
+          device ? <OpenInApp origin={window.location.origin} scheme={source.scheme} /> : undefined
+        }
+      />
 
-      <div className="flex-1 overflow-y-auto px-6 pt-10 pb-16" ref={scroller}>
+      <div className="flex-1 overflow-y-auto px-3 pt-6 pb-16 sm:px-6 sm:pt-10" ref={scroller}>
         <div className="mx-auto max-w-[1080px]">
           {source.diagnostics && source.diagnostics.length > 0 && (
             <div className="border-red bg-red/10 mb-6 border-l-2 px-4 py-3 text-[0.8125rem] whitespace-pre-wrap">
@@ -102,7 +113,7 @@ export const SurfaceList = ({
                   />
                 )}
               </div>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-6">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] sm:gap-6">
                 {section.surfaces.map((surface) => (
                   <SurfaceCard
                     key={surfacePath(surface)}
@@ -110,6 +121,7 @@ export const SurfaceList = ({
                     status={statuses[surfacePath(surface)]}
                     previewSrc={source.previewUrl(surface, {})}
                     onOpen={() => onOpen(surface)}
+                    href={device ? devicePreviewPath(surface) : undefined}
                   />
                 ))}
               </div>
@@ -133,10 +145,12 @@ export const SurfaceList = ({
         </div>
       </div>
 
-      <footer className="bg-bar flex h-11 flex-none items-center justify-center border-t border-cream/10 text-xs text-cream/55">
-        Previews run against the simulated SDK host. Edit files under superwall/ and they update
-        live.
-      </footer>
+      {!device && (
+        <footer className="bg-bar flex h-11 flex-none items-center justify-center border-t border-cream/10 text-xs text-cream/55">
+          Previews run against the simulated SDK host. Edit files under superwall/ and they update
+          live.
+        </footer>
+      )}
     </>
   );
 };

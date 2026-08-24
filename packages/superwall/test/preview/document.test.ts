@@ -43,10 +43,14 @@ describe("preview parity", () => {
     const served = injectPlatformLayer(doc(), PLATFORM_STYLESHEET_URL);
     const preview = injectWebviewSimulation(served);
 
-    expect(preview.replace(/<style data-superwall-preview="webview">[\s\S]*?<\/style>/, "")).toBe(
-      served,
-    );
+    const withoutSimulation = preview
+      .replace(/<style data-superwall-preview="webview">[\s\S]*?<\/style>/, "")
+      .replace(", maximum-scale=1", "");
+    expect(withoutSimulation).toBe(served);
     // The simulation is scoped to browser chrome, never paywall styling.
     expect(preview).toContain("scrollbar-width: none");
+    // Pinch-zoom is disabled in previews only; the served document keeps its viewport.
+    expect(preview).toContain("maximum-scale=1");
+    expect(served).not.toContain("maximum-scale");
   });
 });

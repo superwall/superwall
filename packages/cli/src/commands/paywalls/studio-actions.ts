@@ -1,4 +1,5 @@
 import {
+  listApplications,
   promotePaywallVersion,
   pushPaywallVersion,
   versionProducts,
@@ -10,6 +11,11 @@ import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets"
 import { resolveApplicationId, resolveBinding } from "@/core/paywalls/binding/binding";
 import { fetchProducts, projectForApplication } from "@/core/paywalls/products";
 import { readLock } from "@/core/paywalls/project/lock";
+import {
+  appScheme,
+  detectAppTransportSecurity,
+  schemeSearchRoots,
+} from "@/core/paywalls/project/scheme";
 import { requireApi } from "@/core/paywalls/project/session";
 import {
   frameworkVersion,
@@ -35,6 +41,23 @@ export function createStudioActions(
   const ensureApi = async () => (api ??= await requireApi(false));
 
   return {
+    async appScheme() {
+      const applicationId = readLock(project.superwallDir).applicationId;
+      const roots = schemeSearchRoots(project);
+      const [resolved, transport] = await Promise.all([
+        appScheme(roots, async () => {
+          if (applicationId === undefined) return undefined;
+          const client = await ensureApi();
+          const applications = await listApplications(client);
+          return applications.find((app) => String(app.id) === applicationId)?.apple_url_scheme;
+        }),
+        detectAppTransportSecurity(roots),
+      ]);
+      return transport === undefined || transport.allowed
+        ? resolved
+        : { ...resolved, blocksLocalNetworking: transport.plist };
+    },
+
     async samples() {
       try {
         const client = await ensureApi();
@@ -161,12 +184,14 @@ export function createStudioActions(
           paywall_url?: string | null;
           status?: string;
           updated_at?: string;
+          identifier?: string;
         }>(`/v2/paywalls/${encodeURIComponent(bound.paywallId)}`);
         return {
           paywallId: bound.paywallId,
           liveUrl: paywall.paywall_url ?? undefined,
           active: paywall.status === "active",
           updatedAt: paywall.updated_at,
+          identifier: paywall.identifier,
         };
       } catch (error) {
         return { unreachable: reason(error) };

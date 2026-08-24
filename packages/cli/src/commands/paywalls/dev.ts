@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { renderUnicodeCompact } from "uqr";
 import { defineCommand } from "@/command";
 import { VERSION } from "@/constants";
 import { collectProjectProducts, writeProjectTypes } from "@/core/paywalls/project/types";
@@ -41,6 +42,7 @@ export const runDev = defineCommand({
     const requestedPort = Number(context.argv.port);
     const host = String(context.argv.host);
     const runtimeUrl = process.env.SUPERWALL_RUNTIME_URL?.replace(/\/+$/, "");
+    const studio = createStudioActions(framework, project);
 
     const server = await framework.startPreviewServer(
       projects.map((one) => one.root),
@@ -48,7 +50,7 @@ export const runDev = defineCommand({
         port: requestedPort,
         host,
         platformStylesheet: runtimeUrl ? `${runtimeUrl}/live.css` : undefined,
-        studio: createStudioActions(framework, project),
+        studio,
       },
     );
     const url = server.resolvedUrls?.local[0] ?? `http://localhost:${requestedPort}/`;
@@ -75,6 +77,29 @@ export const runDev = defineCommand({
       ];
     });
     ui.step([`Studio ${pc.green(url)}`, ...rows].join("\n"));
+
+    const network = server.resolvedUrls?.network[0];
+    if (network) {
+      const deviceUrl = `${network}device`;
+      ui.step(
+        [
+          `Device ${pc.green(deviceUrl)}`,
+          pc.dim("Scan on a phone on the same wifi to preview on device:"),
+          "",
+          ...renderUnicodeCompact(deviceUrl).split("\n"),
+        ].join("\n"),
+      );
+    }
+
+    const scheme = await studio.appScheme?.().catch(() => undefined);
+    if (scheme?.blocksLocalNetworking !== undefined) {
+      ui.warn(
+        "This app can't reach the dev server: App Transport Security blocks plain http.\n" +
+          `Add to ${scheme.blocksLocalNetworking}:\n` +
+          "  NSAppTransportSecurity → NSAllowsLocalNetworking = YES\n" +
+          "                         → NSAllowsArbitraryLoadsInWebContent = YES",
+      );
+    }
 
     for (const diagnostic of projects.flatMap((one) => one.diagnostics)) {
       ui.warn(diagnostic);

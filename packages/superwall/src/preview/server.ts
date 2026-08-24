@@ -8,6 +8,8 @@ import { loadSurfaceConfig } from "../config/load";
 import { discoverProject, type DiscoveredSurface, type Project } from "../discover";
 import { injectPlatformLayer, PLATFORM_STYLESHEET_URL, renderDocument } from "../document";
 import { EXTRA_ASSET_TYPES } from "../build";
+import { readLock } from "../lock";
+import { attachIdentifiers, attachProducts, buildDeviceManifest } from "./device";
 import { buildStudioProjects } from "./project";
 
 export { buildStudioProject } from "./project";
@@ -203,6 +205,7 @@ export type StudioStatus = {
   active?: boolean;
   updatedAt?: string;
   unreachable?: string;
+  identifier?: string;
 };
 
 export type Samples = {
@@ -213,7 +216,14 @@ export type Samples = {
   unreachable?: string;
 };
 
+export type AppScheme = {
+  scheme?: string;
+  source?: "dashboard" | "app";
+  blocksLocalNetworking?: string;
+};
+
 export type StudioActions = {
+  appScheme?(): Promise<AppScheme>;
   samples?(): Promise<Samples>;
   run(
     action: StudioActionName,
@@ -244,13 +254,42 @@ const json = (
   res.end(JSON.stringify(value));
 };
 
+let identifierCache: Record<string, string> = {};
+let identifierRefreshAt = 0;
+let identifierRefresh: Promise<void> | undefined;
+
+const refreshIdentifiers = (
+  entries: readonly PreviewProject[],
+  studio: StudioActions | undefined,
+): void => {
+  if (!studio) return;
+  if (identifierRefresh !== undefined) return;
+  if (Date.now() - identifierRefreshAt < 60_000) return;
+  identifierRefreshAt = Date.now();
+  identifierRefresh = (async () => {
+    const byPaywallId: Record<string, string> = {};
+    for (const entry of entries) {
+      for (const surface of entry.project.surfaces) {
+        const status = await studio.status(surface).catch(() => undefined);
+        if (status?.identifier !== undefined && status.paywallId !== undefined) {
+          byPaywallId[status.paywallId] = status.identifier;
+        }
+      }
+    }
+    identifierCache = byPaywallId;
+  })().finally(() => {
+    identifierRefresh = undefined;
+  });
+};
+
 const STATUS_ROUTE = /^\/__studio\/status\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
 
 const previewPlugin = (
   roots: readonly string[],
   viteRoot: string,
   platformStylesheet: string,
-  studio?: StudioActions,
+  studio: StudioActions | undefined,
+  appScheme: Promise<AppScheme | undefined>,
 ): Plugin => ({
   name: "superwall:preview",
   resolveId(id) {
@@ -281,9 +320,13 @@ const previewPlugin = (
         const url = (req.url ?? "/").split("?")[0];
 
         if (url === "/__studio/project.json") {
-          buildStudioProjects(readProjects(roots))
-            .then((payload) => {
-              json(res, { ...payload, capabilities: { actions: Boolean(studio) } });
+          Promise.all([buildStudioProjects(readProjects(roots)), appScheme])
+            .then(([payload, scheme]) => {
+              json(res, {
+                ...payload,
+                capabilities: { actions: Boolean(studio) },
+                ...(scheme?.scheme === undefined ? {} : { scheme: scheme.scheme }),
+              });
             })
             .catch(next);
           return;
@@ -364,6 +407,30 @@ const previewPlugin = (
           return;
         }
 
+        if (url === "/device/manifest.json") {
+          const entries = readProjects(roots);
+          const manifest = buildDeviceManifest(
+            entries.map((entry) => ({
+              slug: entry.slug,
+              surfaces: entry.project.surfaces,
+              lock: readLock(entry.project.superwallDir),
+            })),
+          );
+          refreshIdentifiers(entries, studio);
+          buildStudioProjects(entries)
+            .then((payload) => {
+              const products = Object.fromEntries(
+                payload.surfaces.map((surface) => [
+                  `${surface.kind}/${surface.id}`,
+                  surface.products,
+                ]),
+              );
+              json(res, attachProducts(attachIdentifiers(manifest, identifierCache), products));
+            })
+            .catch(next);
+          return;
+        }
+
         const preview = PREVIEW_ROUTE.exec(url);
         if (preview) {
           const surface = findSurface(
@@ -387,7 +454,8 @@ const previewPlugin = (
           return;
         }
 
-        const isStudioRoute = url === "/" || STUDIO_ROUTE.test(url);
+        const isStudioRoute =
+          url === "/" || url === "/device" || url === "/device/" || STUDIO_ROUTE.test(url);
         const isStudioAsset = url.startsWith(STUDIO_ASSET_PREFIX);
         if (!isStudioRoute && !isStudioAsset) {
           next();
@@ -439,6 +507,9 @@ export const startPreviewServer = async (
   const first = projects[0];
   if (!first) throw new Error("startPreviewServer needs at least one project directory.");
 
+  const appScheme = Promise.resolve(options.studio?.appScheme?.()).catch(() => undefined);
+  refreshIdentifiers(projects, options.studio);
+
   const viteRoot = first.project.superwallDir;
   const postcss = postcssSearchDir(projects);
   const resolvable = resolvableFrom(viteRoot);
@@ -458,6 +529,7 @@ export const startPreviewServer = async (
         viteRoot,
         options.platformStylesheet ?? PLATFORM_STYLESHEET_URL,
         options.studio,
+        appScheme,
       ),
     ],
     resolve: {

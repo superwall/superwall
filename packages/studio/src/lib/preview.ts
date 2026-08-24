@@ -21,6 +21,9 @@ const overrideParams = (overrides: PreviewOverrides): URLSearchParams => {
 export const surfacePath = (surface: StudioSurface): string =>
   `${surface.project ? `/${surface.project}` : ""}/${surface.kind}/${surface.id}`;
 
+export const devicePreviewPath = (surface: StudioSurface): string =>
+  `/preview${surfacePath(surface)}?sw_preview=1`;
+
 export const buildPreviewPath: PreviewUrlBuilder = (
   surface: StudioSurface,
   overrides: PreviewOverrides,

@@ -344,5 +344,6 @@ test("status reports the live url and active flag straight from the paywall", as
     liveUrl: undefined,
     active: false,
     updatedAt: undefined,
+    identifier: undefined,
   });
 });

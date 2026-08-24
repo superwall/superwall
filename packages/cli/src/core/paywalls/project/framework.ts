@@ -54,7 +54,7 @@ export interface BuildOptions {
 }
 
 export interface PreviewServerHandle {
-  resolvedUrls?: { local: string[] } | null;
+  resolvedUrls?: { local: string[]; network: string[] } | null;
 }
 
 export type StudioActionName = "push" | "promote" | "publish";
@@ -81,7 +81,14 @@ export interface Samples {
   unreachable?: string;
 }
 
+export interface AppScheme {
+  scheme?: string;
+  source?: "dashboard" | "app";
+  blocksLocalNetworking?: string;
+}
+
 export interface StudioActions {
+  appScheme?(): Promise<AppScheme>;
   samples?(): Promise<Samples>;
   run(
     action: StudioActionName,

@@ -2,6 +2,7 @@ import type { SampleDefaults, StudioSurface, StudioSurfaceKind } from "./types";
 
 export type StudioProjectPayload = {
   title: string;
+  scheme?: string;
   surfaces: StudioSurface[];
   samples: SampleDefaults;
   diagnostics: string[];
@@ -49,6 +50,7 @@ export const parseProjectPayload = (data: unknown): StudioProjectPayload => {
     isRecord(samples[key]) ? (samples[key] as Record<string, unknown>) : {};
   return {
     title: typeof data.title === "string" ? data.title : "superwall",
+    scheme: typeof data.scheme === "string" ? data.scheme : undefined,
     surfaces,
     diagnostics: isStringArray(data.diagnostics) ? data.diagnostics : [],
     samples: {

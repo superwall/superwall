@@ -30,11 +30,13 @@ const Failure = ({ error }: { error: unknown }) => (
 
 const root = createRoot(document.getElementById("root")!);
 
+const device = /^\/device\/?$/.test(window.location.pathname);
+
 loadSource()
   .then((source) => {
     root.render(
       <React.StrictMode>
-        <StudioApp source={source} />
+        <StudioApp source={source} device={device} />
       </React.StrictMode>,
     );
   })

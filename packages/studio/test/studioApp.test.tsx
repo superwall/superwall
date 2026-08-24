@@ -413,3 +413,79 @@ describe("a product Superwall has no record of", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
+
+describe("device mode", () => {
+  it("titles the bar Preview and opens cards as standalone previews, never the editor", () => {
+    window.history.replaceState({}, "", "/device");
+    const openPreview = vi.fn();
+    render(<StudioApp source={source} device openPreview={openPreview} />);
+
+    expect(screen.getByText("Preview")).toBeDefined();
+    expect(screen.queryByText("Studio")).toBeNull();
+    expect(screen.queryByText(/simulated SDK host/)).toBeNull();
+
+    const card = screen.getByText("plus-upgrade").closest("a");
+    expect(card?.getAttribute("href")).toBe("/preview/paywall/plus-upgrade?sw_preview=1");
+    fireEvent.click(screen.getByText("plus-upgrade"));
+    expect(openPreview).toHaveBeenCalledWith("/preview/paywall/plus-upgrade?sw_preview=1");
+    expect(window.location.pathname).toBe("/device");
+    expect(screen.queryByRole("combobox", { name: "Device" })).toBeNull();
+  });
+
+  it("asks for the scheme on click when nothing knows it, then remembers it", () => {
+    window.history.replaceState({}, "", "/device");
+    window.localStorage.clear();
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue("exampleapp");
+    const assign = vi.fn();
+    vi.spyOn(window, "location", "get").mockReturnValue({
+      ...window.location,
+      assign,
+    } as unknown as Location);
+    render(<StudioApp source={source} device />);
+
+    expect(screen.queryByLabelText("Edit app URL scheme")).toBeNull();
+    fireEvent.click(screen.getByText("Open In App"));
+
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(assign).toHaveBeenCalledWith(
+      `exampleapp://?superwall_dev=${encodeURIComponent(window.location.origin)}`,
+    );
+    expect(window.localStorage.getItem("superwall-device-scheme")).toBe("exampleapp");
+    // and having answered once, the link is live and editable
+    expect(screen.getByLabelText("Edit app URL scheme")).toBeDefined();
+    vi.restoreAllMocks();
+  });
+
+  it("links straight out when the project payload carries the scheme", () => {
+    window.history.replaceState({}, "", "/device");
+    window.localStorage.clear();
+    render(<StudioApp source={{ ...source, scheme: "detectedapp" }} device />);
+
+    const link = screen.getByText("Open In App").closest("a");
+    expect(link?.getAttribute("href")).toBe(
+      `detectedapp://?superwall_dev=${encodeURIComponent(window.location.origin)}`,
+    );
+    expect(screen.getByLabelText("Edit app URL scheme")).toBeDefined();
+  });
+
+  it("lets a wrong scheme be corrected with the pencil", () => {
+    window.history.replaceState({}, "", "/device");
+    window.localStorage.clear();
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue("rightapp");
+    render(<StudioApp source={{ ...source, scheme: "wrongapp" }} device />);
+
+    fireEvent.click(screen.getByLabelText("Edit app URL scheme"));
+    expect(prompt).toHaveBeenCalledWith(expect.any(String), "wrongapp");
+    expect(screen.getByText("Open In App").closest("a")?.getAttribute("href")).toBe(
+      `rightapp://?superwall_dev=${encodeURIComponent(window.location.origin)}`,
+    );
+    vi.restoreAllMocks();
+  });
+
+  it("never routes into the editor even when the path looks like one", () => {
+    window.history.replaceState({}, "", "/device");
+    render(<StudioApp source={source} device />);
+    expect(screen.getByText("Paywalls")).toBeDefined();
+    expect(screen.queryByRole("group", { name: "Theme" })).toBeNull();
+  });
+});
