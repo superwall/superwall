@@ -100,6 +100,16 @@ Funnels sell on the web too: `definePaywall({ checkout: … })` puts Stripe
 checkout in the page — as an embedded sheet, Apple Pay, or an external step —
 so a web funnel goes from first screen to paid without leaving your code.
 
+## Skills for your agent
+
+The CLI is built to run from inside a coding agent as much as from a terminal.
+`superwall login` installs the Superwall skills from
+[superwall/skills](https://github.com/superwall/skills) into your agent
+(`superwall skills` updates them), and the workflow commands carry their own
+playbooks: `superwall integrate`, `migrate`, and `review` run them through your
+agent, or print them with `--skill` for an agent you drive yourself. The
+bundled playbooks live in [`packages/cli/skills`](packages/cli/skills).
+
 ## Packages
 
 | Package                                    | What it is                                                                                                                                                                                                                                                    |

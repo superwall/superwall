@@ -58,6 +58,9 @@ fetched at runtime, so it costs nothing in the snapshot.
 **Vector, so it scales.** One file is right on every screen, which is the reason
 to reach for it over a video.
 
+The `.riv` files in `assets/` were made for this example and are MIT like the
+rest of it.
+
 ## Next
 
 - [`orientation`](../orientation) — the layout that canvas has to live in

@@ -76,7 +76,7 @@ skill.
 
 ## Skills (the product)
 
-Read `.claude/skills/authoring-skills/SKILL.md` before writing or editing any
+Read [`skills/README.md`](skills/README.md) before writing or editing any
 skill. The short version:
 
 - Layout: lean `SKILL.md` router (≤ ~80 lines) + deep `references/<x>.md` per
@@ -119,8 +119,8 @@ and update ALL of:
    table) and `references/api.md` (the CLI reference). It documents this
    CLI; a rename here without an edit there ships lies to every installed agent.
 
-`grep -rn "superwall <old-name>"` across this package and the skills clone
-before calling it done.
+`grep -rn "superwall <old-name>"` across this package (and the skills repo, if
+you have it checked out) before calling it done.
 `--json` output shapes are agent contracts - don't change them casually.
 
 ## Code style

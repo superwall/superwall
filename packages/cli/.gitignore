@@ -6,8 +6,8 @@ dist/
 .env
 .env.*
 
-# agent state that is machine-local (.claude/skills is shared and committed)
-.claude/settings.local.json
+# machine-local agent state
+.claude/
 
 # benchmark artifacts (fixtures are cloned/generated, results are run output)
 bench/fixtures/

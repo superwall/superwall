@@ -6,4 +6,5 @@ coverage/
 .env
 .superwall
 .playwright-mcp
+.claude/
 examples/*/superwall.lock
