@@ -1,7 +1,7 @@
 # AGENTS.md
 
-> **This package now lives in the superwall framework monorepo** (migrated
-> from the standalone superwall/cli repo). It owns no bin: the framework
+> **This package lives in the superwall framework monorepo.** It owns no
+> bin: the framework
 > package (`packages/superwall`) declares the `superwall`/`sw` binaries, and
 > its `bin/superwall.js` calls `main()` from this package's `src/entry.ts`.
 > The paywall commands (`create`/`dev`/`push`/`promote`/`publish`) are
@@ -27,16 +27,16 @@ The `superwall` CLI is two thin things around the **skills**, which are the prod
    humans use directly.
 
 All agent-facing expertise lives in `skills/` (this package: task-specific) and
-[superwall/skills](https://github.com/superwall/skills) (public skills repo, source
-of truth, cloned beside this monorepo — `../skills` from the repo root).
+[superwall/skills](https://github.com/superwall/skills) (the public skills repo,
+which `superwall skills` installs from).
 TypeScript never contains domain expertise. If you're writing
 paywall/migration/integration knowledge in a `.ts` file, stop and put it in a
 skill.
 
 ## Command design
 
-- **One name per concept. No aliases, no synonyms.** It's `apps`, not projects,
-  users think "my app"; `--project` survives only as a scoping flag). It's
+- **One name per concept. No aliases, no synonyms.** It's `apps`, not projects
+  (users think "my app"; `--project` survives only as a scoping flag). It's
   `asc keys` (not secrets - ASC calls them API keys). A second name for the same
   thing is a bug.
 - **Workflows are verbs users say**: `integrate`, `migrate`, `review [--fix]`.
@@ -48,7 +48,7 @@ skill.
   `asc <verb> /v1/…` for App Store Connect. httpie-style params: `k=v` string,
   `k:=v` typed JSON, `k[sub]` nesting; on get/delete `-d` becomes query params.
 - **Kill commands that don't earn their place.** A command that duplicates
-  another's output (scan vs doctor) or has no user (pull/plan/push) gets deleted,
+  another's output (scan vs doctor) or has no user (pull/plan) gets deleted,
   not deprecated.
 - **Help is hand-written** in `printHelp()` (`src/cli.ts`), Stripe-style grouped
   sections: Workflow / Resource / API / App Store Connect / Other. Every command
@@ -81,9 +81,9 @@ skill. The short version:
 
 - Layout: lean `SKILL.md` router (≤ ~80 lines) + deep `references/<x>.md` per
   framework (`ios`, `expo`, `react-native`, `flutter`) or provider (`revenuecat`,
-  `adapty`, `qonversion`). The CLI composes SKILL.md + exactly ONE reference
-  (`FRAMEWORK_REF` in `src/core/agent/actions.ts`) - an Expo agent must never see
-  Swift docs.
+  `adapty`, `qonversion`). The CLI composes SKILL.md + one framework/provider
+  reference (`FRAMEWORK_REF` in `src/core/agent/actions.ts`; placements also
+  gets `strategy.md`) - an Expo agent must never see Swift docs.
 - Every API name/version verified against live docs before it's written. Docs are
   fetchable as markdown: `curl -sL superwall.com/docs/llms.txt` (index),
   `curl -sL superwall.com/docs/{path}.md` (any page). Every skill carries a
@@ -115,7 +115,7 @@ and update ALL of:
 3. This package's `skills/**/*.md` (bundled skills reference CLI commands constantly)
 4. `prompts/actions/*.xml` if the harness wrapper mentions commands
 5. **The public skills repo** ([superwall/skills](https://github.com/superwall/skills),
-   `skills/superwall/` in your local clone) - `SKILL.md` (workflow router
+   `skills/superwall/` in that repo) - `SKILL.md` (workflow router
    table) and `references/api.md` (the CLI reference). It documents this
    CLI; a rename here without an edit there ships lies to every installed agent.
 
@@ -157,7 +157,7 @@ message that lists the affected files; never emit the same sentence per file.
   `tsx --test`; needs ripgrep on PATH) must be green. Tests live in `tests/`
   mirroring `src/`. CI runs `bun run test:coverage`, which enforces coverage
   thresholds — a green `test` alone is not the CI gate.
-- Verify behavior with the real binary against the logged-in dev account
+- Verify behavior with the real binary against an account you are logged into
   (`superwall whoami` to confirm), not just types. For workflows, `--dry-run`
   and `--skill` are the cheap smoke paths.
 

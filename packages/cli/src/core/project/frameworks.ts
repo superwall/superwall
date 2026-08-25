@@ -14,7 +14,7 @@ export const frameworkByIntegration: Record<Integration, Framework> = {
     name: "Swift (iOS)",
     supported: true,
     sdkPackage: "https://github.com/superwall/Superwall-iOS",
-    docsUrl: "https://superwall.com/docs/installation-via-spm",
+    docsUrl: "https://superwall.com/docs/ios/quickstart/install",
   },
   [Integration.expo]: {
     integration: Integration.expo,

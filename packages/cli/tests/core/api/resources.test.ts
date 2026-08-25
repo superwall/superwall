@@ -246,3 +246,20 @@ test("versionProducts returns empty for no products", () => {
   assert.deepEqual(versionProducts(undefined), []);
   assert.deepEqual(versionProducts({}), []);
 });
+
+
+test("pushPaywallVersion sends background colors as hex fields, dark only when present", async () => {
+  const calls: Array<Record<string, unknown>> = [];
+  const api = { post: async (_path: string, body: Record<string, unknown>) => (calls.push(body), {}) } as unknown as Parameters<typeof pushPaywallVersion>[0];
+
+  await pushPaywallVersion(api, "1", { html: "<html>", background: { light: "#ffffff", dark: "#000000" } });
+  assert.equal(calls[0]?.background_color_hex, "#ffffff");
+  assert.equal(calls[0]?.dark_background_color_hex, "#000000");
+
+  await pushPaywallVersion(api, "1", { html: "<html>", background: { light: "#ffffff" } });
+  assert.equal(calls[1]?.background_color_hex, "#ffffff");
+  assert.ok(!("dark_background_color_hex" in (calls[1] ?? {})));
+
+  await pushPaywallVersion(api, "1", { html: "<html>" });
+  assert.ok(!("background_color_hex" in (calls[2] ?? {})));
+});

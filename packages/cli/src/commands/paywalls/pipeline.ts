@@ -471,6 +471,7 @@ export async function runPushPipeline(
           assets: synced.value.assets,
           products: versionProducts(build.products),
           webCheckoutDestination: webCheckoutDestination(build.checkout),
+          background: build.background,
         }),
       );
       version = push.value.version;

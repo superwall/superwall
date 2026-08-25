@@ -367,12 +367,13 @@ function cleanPath(input: string): string {
 export function runPaywallStage(): void {
   ui.note(
     [
-      "Design your paywall and attach products in the editor:",
+      "Build your paywall as code, or design it in the editor:",
       "",
+      "  superwall create     scaffold a superwall/ directory, then superwall publish",
       `  ${DASHBOARD_URL}`,
       "",
       "Your agent also has the `superwall-editor` skill - ask it to build or edit a",
-      "paywall from the CLI.",
+      "paywall in the editor from the CLI.",
     ].join("\n"),
     "Paywall",
   );

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useColorScheme } from "../hooks/useColorScheme";
 import {
+  backgroundOf,
   createMockSuperwallTransport,
   createSuperwallSession,
   detectNativeSuperwallHost,
@@ -12,6 +13,7 @@ import {
   type SuperwallConfig,
   type SuperwallProduct,
   type SuperwallSession,
+  type ResolvedBackground,
 } from "@superwall/runtime";
 
 const SuperwallContext = React.createContext<SuperwallSession | null>(null);
@@ -164,7 +166,7 @@ export const SuperwallProvider = ({ children, config, mock }: SuperwallProviderP
   return React.createElement(
     SuperwallContext.Provider,
     { value },
-    React.createElement(ColorScheme, null),
+    React.createElement(ColorScheme, { background: backgroundOf(config?.background) }),
     children,
   );
 };
@@ -175,7 +177,7 @@ export const SuperwallProvider = ({ children, config, mock }: SuperwallProviderP
  * setting over the bridge, and the studio simulates it, neither of which
  * changes what `prefers-color-scheme` evaluates to.
  */
-const ColorScheme = (): null => {
+const ColorScheme = ({ background }: { background?: ResolvedBackground }): null => {
   const scheme = useColorScheme();
 
   React.useEffect(() => {
@@ -184,7 +186,11 @@ const ColorScheme = (): null => {
     root.classList.toggle("dark", scheme === "dark");
     root.classList.toggle("light", scheme === "light");
     root.style.colorScheme = scheme;
-  }, [scheme]);
+    if (background) {
+      root.style.backgroundColor =
+        scheme === "dark" ? (background.dark ?? background.light) : background.light;
+    }
+  }, [scheme, background]);
 
   return null;
 };

@@ -1,4 +1,4 @@
-import { documentAttributes, type SuperwallConfig } from "@superwall/runtime";
+import { backgroundOf, documentAttributes, type SuperwallConfig } from "@superwall/runtime";
 
 /**
  * The document contract: the exact HTML a paywall is, and the platform layer
@@ -38,8 +38,11 @@ export const renderDocument = ({ title, config, entry }: DocumentOptions): strin
     .map(([name, value]) => ` ${name}="${value}"`)
     .join("");
 
+  const background = backgroundOf(config.background);
+  const style = background ? ` style="background-color:${background.light}"` : "";
+
   return `<!doctype html>
-<html${attributes}>
+<html${attributes}${style}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

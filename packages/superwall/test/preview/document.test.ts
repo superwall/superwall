@@ -11,6 +11,16 @@ describe("renderDocument", () => {
     expect(doc({ scrollEnabled: false })).toContain('data-sw-scroll="false"');
   });
 
+  it("stamps the light background on <html> only when configured", () => {
+    expect(doc()).not.toContain("background-color");
+    expect(doc({ background: "#000000" })).toContain(
+      '<html data-sw-generation="5" data-sw-scroll="true" style="background-color:#000000">',
+    );
+    expect(doc({ background: { light: "#ffffff", dark: "#0d0f12" } })).toContain(
+      'style="background-color:#ffffff"',
+    );
+  });
+
   it("carries nothing but the paywall — no framework styling", () => {
     const html = doc();
     expect(html).toContain('<script type="module" src="./entry.jsx">');

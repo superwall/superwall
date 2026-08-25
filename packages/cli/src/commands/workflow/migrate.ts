@@ -131,7 +131,7 @@ export const runMigrate = defineCommand({
     }
     ctx.output.render(
       blocks.nextSteps([
-        "Design & attach products to your paywalls in the dashboard.",
+        "Rebuild your paywalls - as code (`superwall create`) or in the dashboard editor - and attach products.",
         "Verify a purchase on device.",
       ]),
       blocks.outro(`Done.  ${DASHBOARD_URL}`),

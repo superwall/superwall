@@ -345,6 +345,7 @@ export function pushPaywallVersion(
     assets?: VersionAsset[];
     products?: VersionProduct[];
     webCheckoutDestination?: string;
+    background?: { light: string; dark?: string };
   },
 ): Promise<PushedVersion> {
   return api.post<PushedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/versions`, {
@@ -355,6 +356,8 @@ export function pushPaywallVersion(
     ...(opts.webCheckoutDestination
       ? { web_checkout_destination: opts.webCheckoutDestination }
       : {}),
+    ...(opts.background ? { background_color_hex: opts.background.light } : {}),
+    ...(opts.background?.dark ? { dark_background_color_hex: opts.background.dark } : {}),
   });
 }
 

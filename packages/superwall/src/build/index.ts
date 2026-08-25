@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
+  backgroundOf,
   checkoutModeOf,
   checkoutNeedsPaymentUi,
   normalizeProductSlot,
@@ -36,6 +37,7 @@ export type BuiltSnapshot = {
   name: string;
   products: Record<string, string>;
   checkout: ReturnType<typeof checkoutModeOf>;
+  background: ReturnType<typeof backgroundOf>;
   snapshotId: string;
   html: string;
   bytes: number;
@@ -421,6 +423,7 @@ export const buildSnapshot = async (
       ]),
     ),
     checkout: checkoutModeOf(config.checkout),
+    background: backgroundOf(config.background),
     snapshotId: sha256(html),
     html,
     bytes: Buffer.byteLength(html),

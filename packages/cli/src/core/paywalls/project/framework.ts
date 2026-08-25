@@ -40,6 +40,7 @@ export interface BuiltSnapshot {
   name: string;
   products?: Record<string, string>;
   checkout?: string;
+  background?: { light: string; dark?: string };
   snapshotId: string;
   html: string;
   bytes: number;

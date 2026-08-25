@@ -142,6 +142,7 @@ export function createStudioActions(
             assets: synced.assets,
             products: versionProducts(built.products),
             webCheckoutDestination: webCheckoutDestination(built.checkout),
+            background: built.background,
           }),
         );
         await step("source", async () => {

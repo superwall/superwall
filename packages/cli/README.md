@@ -7,8 +7,9 @@
 <h1 align="center">Superwall CLI</h1>
 
 <p align="center">
-  Set up the SDK, manage products, campaigns, and paywalls, query your
-  analytics data, and call the API — from your terminal or your coding agent.
+  Build paywalls and funnels as code, set up the SDK, manage products and
+  campaigns, query your analytics data, and call the API — from your terminal
+  or your coding agent.
 </p>
 
 ## Install
@@ -18,8 +19,9 @@ npm install --global superwall
 superwall login
 ```
 
-Or run it without installing: `npx superwall`. The package installs both
-`superwall` and the short `sw` command. Upgrade any time with
+Or run it without installing: `npx superwall`. The CLI ships inside the
+`superwall` package (the framework), which installs both the `superwall` and
+the short `sw` command. Upgrade any time with
 `superwall upgrade` - the CLI also tells you when a new version is out.
 
 `superwall login` opens your browser once and every command shares that
@@ -58,7 +60,9 @@ superwall publish     # push and promote in one step
 ```
 
 `create` sets up a `superwall/` directory in your app — always that name,
-always self-contained. It asks for a starting point (`--example with-rive` to
+always self-contained. `push -m "why"` records a note in the source commit,
+and `promote --version <n>` points production at any pushed version, so a
+rollback is one command. It asks for a starting point (`--example with-rive` to
 begin from any example in the public repo), then looks at the app around it:
 if the Superwall SDK is already configured, it finds your app by its API key
 and binds pushes to it; otherwise it can log you in, pick an app, or create
@@ -75,7 +79,9 @@ superwall products create pro_monthly --price 9.99 --period month
 superwall products storekit               # generate a local .storekit file
 superwall entitlements create pro
 superwall campaigns create "Onboarding upsell" onboarding_complete
+superwall campaigns placement <campaign-id> onboarding_complete
 superwall paywalls list
+superwall whoami
 superwall bootstrap                       # the whole account tree at a glance
 ```
 
@@ -89,7 +95,8 @@ superwall bootstrap                       # the whole account tree at a glance
 Run SQL directly against your organization's ClickHouse analytics data:
 
 ```bash
-superwall query "SELECT count() FROM sw.events_rep"
+superwall query "SHOW TABLES FROM sw"
+superwall query "SELECT count() FROM sw.<table>"
 superwall query --file mrr.sql
 cat query.sql | superwall query
 ```

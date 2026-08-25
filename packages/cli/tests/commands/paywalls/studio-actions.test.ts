@@ -299,14 +299,16 @@ test("status is empty for an unbound surface and never throws", async () => {
   assert.deepEqual(await actions.status(surface), {});
 });
 
-test("status swallows API failures", async () => {
+test("status reports an unreachable API instead of throwing", async () => {
   process.env.SUPERWALL_API_KEY = "sk_test_dead";
   process.env.SUPERWALL_API_HOST = "http://127.0.0.1:1";
 
   const project = scaffold();
   writeBinding(project.superwallDir, "paywall", "plus-upgrade", { paywallId: "208540" });
   const actions = createStudioActions(framework, project);
-  assert.deepEqual(await actions.status(surface), {});
+  const status = await actions.status(surface);
+  assert.deepEqual(Object.keys(status), ["unreachable"]);
+  assert.match(status.unreachable ?? "", /Couldn't reach the Superwall API at http:\/\/127\.0\.0\.1:1/);
 });
 
 test("promote from the studio links without creating and never builds", async () => {

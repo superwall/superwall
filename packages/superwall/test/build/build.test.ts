@@ -242,6 +242,21 @@ describe("build artifacts", () => {
   }, 120_000);
 });
 
+describe("background is carried onto the snapshot", () => {
+  it("returns the resolved light and dark colors and paints the document", async () => {
+    const built = await buildSnapshot(project(), surface("demo"), {});
+    expect(built.background).toEqual({ light: "#ffffff", dark: "#0d0f12" });
+    expect(built.html).toContain('style="background-color:#ffffff"');
+  });
+
+  it("leaves a paywall with no background untouched", async () => {
+    const built = await buildSnapshot(project(), surface("basic"), {});
+    expect(built.background).toBeUndefined();
+    const htmlTag = /<html[^>]*>/.exec(built.html)?.[0] ?? "";
+    expect(htmlTag).not.toContain("style");
+  });
+});
+
 describe("checkout is bundled only where it is asked for", () => {
   const stripeIsPresent = (html: string) =>
     html.includes("js.stripe.com") || html.includes("checkout-sheet-wrapper");
