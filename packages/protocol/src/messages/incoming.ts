@@ -218,7 +218,7 @@ export type TIncomingMessagePaywallOpen = z.infer<typeof IncomingMessagePaywallO
 const IncomingMessageFreeTrialStart = z.object({
   event_name: z.literal("freeTrial_start"),
   product_identifier: z.string().optional(),
-  trial_end_date: z.string().optional(),
+  trial_end_date: z.union([z.string(), z.number()]).optional(),
 });
 
 export type TIncomingMessageFreeTrialStart = z.infer<typeof IncomingMessageFreeTrialStart>;

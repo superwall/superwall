@@ -35,8 +35,10 @@ export const SAMPLE_DEFAULTS = {
     subscriptionStatus: "INACTIVE",
   } as Record<string, unknown>,
   params: {
-    placementName: "campaign_trigger",
-    isFeatureGatable: false,
+    $event_name: "campaign_trigger",
+    event_name: "campaign_trigger",
+    $is_standard_event: false,
+    $is_feature_gatable: false,
   } as Record<string, unknown>,
 };
 

@@ -25,9 +25,9 @@ export default function Index() {
           <span className="kv-value">{name ?? "—"}</span>
         </div>
         <div className="kv">
-          <span className="kv-key">params.placementName</span>
+          <span className="kv-key">params.event_name</span>
           <span className="kv-value">
-            {typeof params.placementName === "string" ? params.placementName : "—"}
+            {typeof params.event_name === "string" ? params.event_name : "—"}
           </span>
         </div>
       </div>

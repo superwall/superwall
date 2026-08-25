@@ -285,6 +285,37 @@ describe("SuperwallSession trial reminder", () => {
     expect(session.getSnapshot().messages.length).toBeGreaterThan(0);
   });
 
+  it("schedules from a numeric trial_end_date, which is what iOS actually sends", () => {
+    const { transport } = createSession({
+      config: defineSuperwallConfig({
+        notifications: {
+          trialReminder: { title: "Trial ending soon", body: "Plain body", beforeTrialEndDays: 1 },
+        },
+      }),
+    });
+
+    transport.accept({
+      event_name: "paywall_open",
+      paywall_id: "pw_1",
+      paywall_identifier: "pw-identifier",
+    });
+
+    // iOS posts an epoch in milliseconds, not an ISO string. Date.parse() of a
+    // number is NaN, which silently skipped every reminder on device.
+    transport.accept({
+      event_name: "freeTrial_start",
+      product_identifier: "pro_3999_year",
+      trial_end_date: Date.parse("2026-07-23T00:00:00Z"),
+    });
+
+    expect(
+      transport.outgoing.find((message) => message.event_name === "schedule_notification"),
+    ).toMatchObject({
+      type: "TRIAL_STARTED",
+      delay: 6 * 24 * 60 * 60 * 1000,
+    });
+  });
+
   it("supports dynamic reminders computed from the trial context", () => {
     const { transport } = createSession({
       config: defineSuperwallConfig({

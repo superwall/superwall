@@ -705,7 +705,10 @@ class SuperwallSessionImpl implements SuperwallSession {
     if (!reminder) return;
     if (!message.trial_end_date) return;
 
-    const trialEndMs = Date.parse(message.trial_end_date);
+    const trialEndMs =
+      typeof message.trial_end_date === "number"
+        ? message.trial_end_date
+        : Date.parse(message.trial_end_date);
     if (Number.isNaN(trialEndMs)) return;
 
     let notification: { title: string; subtitle?: string; body: string; delayMs: number };

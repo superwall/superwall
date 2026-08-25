@@ -40,7 +40,7 @@ const shippable: StudioSource = {
   samples: {
     device: { platform: "iOS" },
     user: { subscriptionStatus: "INACTIVE" },
-    params: { placementName: "campaign_trigger", isFeatureGatable: false },
+    params: { event_name: "campaign_trigger", $is_feature_gatable: false },
   },
   capabilities: { actions: true },
   previewUrl: buildPreviewPath,
@@ -296,13 +296,13 @@ describe("StudioApp", () => {
     const panel = within(document.querySelector("aside") as HTMLElement);
     fireEvent.click(panel.getByRole("button", { name: /^Params/ }));
 
-    const toggle = panel.getByRole("switch", { name: "params.isFeatureGatable" });
+    const toggle = panel.getByRole("switch", { name: "params.$is_feature_gatable" });
     expect(toggle.getAttribute("aria-checked")).toBe("false");
-    expect(panel.queryByRole("textbox", { name: "params.isFeatureGatable" })).toBeNull();
+    expect(panel.queryByRole("textbox", { name: "params.$is_feature_gatable" })).toBeNull();
 
     fireEvent.click(toggle);
     const frame = screen.getAllByTitle("plus-upgrade preview").at(-1);
-    expect(frame?.getAttribute("src")).toContain(encodeURIComponent('{"isFeatureGatable":true}'));
+    expect(frame?.getAttribute("src")).toContain(encodeURIComponent('{"$is_feature_gatable":true}'));
   });
 
   it("shows a variable with no value as empty, never as the word undefined", () => {
