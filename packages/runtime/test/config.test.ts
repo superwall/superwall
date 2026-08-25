@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  backgroundOf,
   defineSuperwallConfig,
   documentAttributes,
   normalizeProductSlot,
@@ -80,5 +81,28 @@ describe("checkoutNeedsPaymentUi", () => {
 
   it("leaves it out when a paywall says nothing about checkout — the native default", () => {
     expect(checkoutNeedsPaymentUi(undefined)).toBe(false);
+  });
+});
+
+describe("backgroundOf", () => {
+  it("expands the string shorthand to a light color", () => {
+    expect(backgroundOf("#000000")).toEqual({ light: "#000000" });
+  });
+
+  it("keeps a dark color when the object form supplies one", () => {
+    expect(backgroundOf({ light: "#ffffff", dark: "#000000" })).toEqual({
+      light: "#ffffff",
+      dark: "#000000",
+    });
+  });
+
+  it("drops an empty dark color rather than carrying a blank", () => {
+    expect(backgroundOf({ light: "#fff", dark: "  " })).toEqual({ light: "#fff" });
+  });
+
+  it("is undefined when there is no usable light color", () => {
+    expect(backgroundOf(undefined)).toBeUndefined();
+    expect(backgroundOf("")).toBeUndefined();
+    expect(backgroundOf({ light: "" })).toBeUndefined();
   });
 });

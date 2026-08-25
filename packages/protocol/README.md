@@ -34,7 +34,7 @@ Therefore:
 
 ## Tests
 
-`bun run test` — schema tests parse representative real messages and assert
+`bun run test:run` — schema tests parse representative real messages and assert
 rejection of malformed ones. The deeper contract coverage lives in
 `@superwall/runtime`'s fixture tests, which drive full recorded message
 sequences through the session.

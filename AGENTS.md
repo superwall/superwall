@@ -4,11 +4,14 @@ Guidance for coding agents (and humans) working in this repository.
 
 ## About this repo
 
-The superwall framework: paywalls and funnels authored as mini React apps
-with file-based routing, with Superwall providing products, purchases,
-localization, trials, and the bridge to the native SDKs (iOS / Android /
-Flutter / React Native — no native SDK changes required; this speaks the same
-message protocol as the paywalls built in Superwall's visual editor).
+Superwall for Agents: the superwall framework, for building paywalls and web
+funnels as mini React apps with file-based routing. Superwall provides
+products, purchases, localization, trials, and the bridge to the native SDKs
+(iOS / Android / Flutter / React Native — no native SDK changes required; this
+speaks the same message protocol as the paywalls built in Superwall's visual
+editor). The framework is designed to be authored by coding agents as much as
+by people: borrow conventions agents already know, invent nothing plain React
+already covers.
 
 Style the name as `superwall`, lowercase, in user-facing copy and docs.
 "Superwall" (capitalized) refers to the platform/service.
@@ -125,10 +128,9 @@ The stack, bottom to top — each layer depends only on the one below it:
     project payload, surface previews), `mount.tsx`/`surface.tsx` (what runs
     inside the iframe), `overrides.ts` (theme/locale/device query params),
     `webview.ts` (the one deliberate local-only difference)
-- `packages/cli` — `@superwall/cli`: THE command surface, migrated from the
-  standalone `superwall/cli` repo (integrate/migrate/review, apps, products,
-  campaigns, query, ASC, auth, telemetry; yargs + ink) **plus the paywall
-  commands** (`create`, `dev`, `push`, `promote`, `publish` in
+- `packages/cli` — `@superwall/cli`: THE command surface (integrate/migrate/
+  review, apps, products, campaigns, query, ASC, auth, telemetry; yargs + ink)
+  **plus the paywall commands** (`create`, `dev`, `push`, `promote`, `publish` in
   `src/commands/paywalls/`, shared machinery in `src/core/paywalls/`).
   Paywall commands load the framework dynamically from the project's own
   install (`core/paywalls/project/framework.ts`) — the CLI never
@@ -137,9 +139,8 @@ The stack, bottom to top — each layer depends only on the one below it:
   framework's `superwall` bin (prefer-local launcher + tsx + project `.env`)
   starts it. Dependency direction: framework → cli for the bin, cli →
   framework only dynamically at command runtime. This package is **excluded
-  from oxfmt/oxlint** (imported codebase, upstream-diffable, own
-  conventions) and is consumed **built** (tsdown → `dist/`; root
-  `postinstall` builds it).
+  from oxfmt/oxlint** (it keeps its own conventions — see its `AGENTS.md`)
+  and is consumed **built** (tsdown → `dist/`; root `postinstall` builds it).
 - `examples/*` — each example **is** a superwall project directory (not an
   app repo with one inside): `package.json` and its paywall at the root.
   Using one means copying the directory into a real app as `superwall/`.
@@ -161,7 +162,7 @@ bun run test:coverage   # with v8 coverage
 bun run typecheck       # tsc --noEmit across packages
 bun run lint            # oxlint
 bun run format          # oxfmt
-bun run build           # dist output via tsc (publishing only)
+bun run build           # built output for the packages that ship it (cli via tsdown, studio via vite)
 ```
 
 Per package: `cd packages/<name>` then `bun run test` (watch mode),

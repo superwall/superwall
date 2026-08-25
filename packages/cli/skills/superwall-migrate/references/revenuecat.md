@@ -26,11 +26,11 @@ This migrates the **SDK integration**, not the whole product. Checklist:
       `pk_` key / bundle id BEFORE any create; wrong account → stop dashboard work loudly (§4)
 - [ ] Build + verify each placement; Restore Purchases as an existing subscriber (§7)
 - [ ] FULL only: remove RC dependency once verified
-- [ ] Hand back to user: **rebuild paywalls in the editor**, attach products, connect ASC/Play
+- [ ] Hand back to user: **rebuild paywalls** (superwall framework or dashboard editor), attach products, connect ASC/Play
 
 > **Important - what does and does NOT migrate:**
 >
-> - **RC paywall designs** cannot be imported - they are **rebuilt** in the Superwall editor.
+> - **RC paywall designs** cannot be imported - they are **rebuilt** - as code with the superwall framework or in the dashboard editor.
 > - **Historical analytics / attribution** stays in RevenueCat.
 > - **Subscriber base:** Superwall provides server-side RevenueCat migration tooling that ports
 >   subscription history and entitlement state - fetch the migration guide (Docs access below)
@@ -53,11 +53,11 @@ curl -sL https://www.revenuecat.com/docs/llms.txt                               
 | RevenueCat                                       | Superwall                                                                                      | Notes                                                                                                                       |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Product (store SKU wrapped in RC dashboard)      | **Product** (re-created)                                                                       | Keep the SAME App Store / Play product identifier. Only the management layer moves.                                         |
-| Package (`$rc_monthly`, inside an Offering)      | (no direct equal)                                                                              | A package is just "product + duration slot." In Superwall you attach the raw products to a paywall in the editor.           |
+| Package (`$rc_monthly`, inside an Offering)      | (no direct equal)                                                                              | A package is just "product + duration slot." In Superwall you attach the raw products to a paywall (in its `config.ts` with the framework, or in the editor).           |
 | Offering (remote set of packages)                | **Paywall** + **Campaign**                                                                     | RC picks products remotely via Offering; Superwall picks the whole paywall (products included) remotely via Campaign rules. |
 | Entitlement (e.g. `pro`)                         | **Entitlement** (re-created)                                                                   | 1:1. Recreate each RC entitlement id as a Superwall entitlement.                                                            |
 | `customerInfo.entitlements.active`               | `Superwall.shared.subscriptionStatus` (`.active(Set<Entitlement>)` / `.inactive` / `.unknown`) | Status is device-derived in FULL mode.                                                                                      |
-| RC Paywalls (RC's paywall UI)                    | **Paywall** (rebuilt in editor), shown by **placement**                                        | Design does NOT import - see below.                                                                                         |
+| RC Paywalls (RC's paywall UI)                    | **Paywall** (rebuilt), shown by **placement**                                        | Design does NOT import - see below.                                                                                         |
 | Manual "should I show a paywall?" gating in code | **register(placement:)** - campaign decides                                                    |                                                                                                                             |
 
 **Mental-model shift.** With RC you check entitlement status, then decide in code whether to
@@ -263,10 +263,10 @@ Verify with the same explicit ids: `superwall entitlements list --project <proje
 ### Side-effects - reroute what lived inside RC callbacks (FULL mode, CRITICAL)
 
 Real apps bury critical work inside `PurchaseController.purchase()` / RC delegate callbacks. A
-mechanical swap deletes it and everything still compiles - then production breaks. Seen verbatim in
-a real migration: the deleted controller's purchase callback was the ONLY caller of a backend
-subscription-sync POST (`syncSubscriptionWithBackend` → server route gating all premium features)
-and the only Singular trial-started tracking call.
+mechanical swap deletes it and everything still compiles - then production breaks. Typical
+casualties: a purchase callback that is the ONLY caller of a backend subscription-sync request
+(the server route gating every premium feature), or the only place an attribution/analytics
+trial-started event is tracked.
 
 Before deleting the controller/delegates, list every statement inside purchase & restore success
 paths and reroute each into a `SuperwallDelegate`:
@@ -340,7 +340,7 @@ Wire it:
 
 ```swift
 let purchaseController = RCPurchaseController()
-Superwall.configure(apiKey: "MY_API_KEY", purchaseController: purchaseController)
+Superwall.configure(apiKey: "pk_YOUR_PUBLIC_KEY", purchaseController: purchaseController)
 purchaseController.syncSubscriptionStatus()
 ```
 
@@ -358,7 +358,7 @@ Set per placement in the paywall editor (**General → Feature Gating**):
 ## 7. Order of operations + safety
 
 1. Re-create entitlements, products, campaign + placements in the dashboard (CLI). Import products from ASC/Play so ids match.
-2. **Rebuild** paywalls in the editor and attach products (hand-back to user - designs do not import).
+2. **Rebuild** paywalls (superwall framework or dashboard editor) and attach products (hand-back to user - designs do not import).
 3. Add Superwall SDK alongside RC (don't rip RC yet). Configure it.
 4. Replace presentation call sites with `register(placement:)`; replace entitlement reads with `subscriptionStatus`.
 5. Build, run, present each placement; **Restore Purchases** as an existing subscriber and confirm `subscriptionStatus.isActive`.

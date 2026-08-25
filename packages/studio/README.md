@@ -1,7 +1,7 @@
 # `@superwall/studio`
 
-The Superwall studio: a standalone vite + React + Tailwind app (the
-old-editor model) that is also a component library. One codebase, two hosts:
+The Superwall studio: a standalone vite + React + Tailwind app that is also
+a component library. One codebase, two hosts:
 
 - **`superwall dev`** serves the BUILT app (`dist/`, assets under
   `/__studio/`) plus the data endpoint and preview mounts — the local studio.

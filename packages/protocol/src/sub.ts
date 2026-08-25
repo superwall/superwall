@@ -125,13 +125,8 @@ const PropertyClickBehavior = z.object({
 export type TPropertyClickBehavior = z.infer<typeof PropertyClickBehavior>;
 
 /**
- * TODO make the purchase button validation dynamic to the
- * number of products a client might have. We currently set
- * the product limit to three but in the future we should
- * allow an unlimited number of products to be used in a paywall.
- *
- * Temporary hack to get form validation to work when setting
- * the click behavior on an element in the paywall editor.
+ * Purchase click behaviors are enumerated per product slot (primary,
+ * secondary, tertiary) so the editor can validate them as a form.
  */
 const ClickBehaviorPurchasePrimary = z.object({
   type: z.literal("purchase-Primary"),

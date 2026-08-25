@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attachProducts, buildDeviceManifest } from "../../src/preview/device";
+import { attachIdentifiers, attachProducts, buildDeviceManifest } from "../../src/preview/device";
 
 const emptyLock = { version: 1 as const, paywalls: {}, funnels: {} };
 
@@ -62,5 +62,23 @@ describe("attachProducts", () => {
     });
     expect(attached.surfaces[0]?.products).toEqual({ monthly: "pro_999_month" });
     expect(attached.surfaces[1]).not.toHaveProperty("products");
+  });
+});
+
+describe("attachIdentifiers", () => {
+  it("names bound surfaces by their dashboard identifier and leaves the rest untouched", () => {
+    const manifest = {
+      surfaces: [
+        { kind: "paywall", id: "pro", url: "/preview/paywall/pro", paywallId: "12345" },
+        { kind: "paywall", id: "max", url: "/preview/paywall/max", paywallId: "999" },
+        { kind: "paywall", id: "draft", url: "/preview/paywall/draft" },
+      ],
+    };
+    const attached = attachIdentifiers(manifest, { "12345": "pro_paywall" });
+    expect(attached.surfaces).toEqual([
+      { ...manifest.surfaces[0], identifier: "pro_paywall" },
+      manifest.surfaces[1],
+      manifest.surfaces[2],
+    ]);
   });
 });

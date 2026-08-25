@@ -121,7 +121,8 @@ stylesheet:
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Roboto+Mono:wght@400..500&display=swap");
 ```
 
-No dependency, no font files in the repo, the whole family in one line.
+No dependency, no font files to ship, the whole family in one line
+(`custom-fonts` is the deliberate exception — shipping a file is what it teaches).
 
 Put it in CSS rather than rendering `<link>` tags from a component. The
 stylesheet is inlined into the snapshot's `<head>` at build time, so the browser

@@ -1,4 +1,4 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["dist", "coverage", "packages/cli"]
+  "ignorePatterns": ["dist", "coverage", "packages/cli", "**/superwall.d.ts"]
 }

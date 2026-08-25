@@ -13,17 +13,17 @@ a user's codebase — wrong content ships wrong code to real apps.
 
 | Kind                          | Home                                                                              | Examples                                                                          |
 | ----------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Task-specific workflow skills | this repo, `skills/`                                                              | superwall-integrate, superwall-migrate, superwall-placements, superwall-dashboard |
-| Broad toolkit skills          | [superwall/skills](https://github.com/superwall/skills) (your local clone) | superwall (main/router), superwall-editor, wwdc                                   |
+| Task-specific workflow skills | this package, `packages/cli/skills/`                                              | superwall-integrate, superwall-migrate, superwall-review, superwall-placements, superwall-dashboard |
+| Broad toolkit skills          | [superwall/skills](https://github.com/superwall/skills)                    | superwall (main/router), superwall-editor, wwdc                                   |
 
-The public repo is the source of truth for the toolkit and the default install
+The public skills repo is the source of truth for the toolkit and the default install
 path (`superwall skills` → `npx skills@latest add superwall/skills`). Task skills
-stay here because they're too narrow for the main repo.
+stay here because they're too narrow for the toolkit repo.
 
 ## Structure
 
 ```
-skills/superwall-<task>/
+packages/cli/skills/superwall-<task>/
   SKILL.md            lean router, ≤ ~80 lines
   references/
     <framework>.md    ios · expo · react-native · flutter   (or provider:
@@ -34,13 +34,13 @@ skills/superwall-<task>/
   when-to-use), principles, the flow, a table routing to references, the CLI
   commands the agent will need, and a Docs access block. No deep content here.
 - **references/** = the depth. One file per framework/provider so composition
-  stays isolated: the CLI inlines SKILL.md + exactly ONE reference
-  (`FRAMEWORK_REF` / provider mapping in `src/core/agent/actions.ts`). An Expo
-  agent must never see `.pbxproj` instructions.
+  stays isolated: the CLI inlines SKILL.md + one framework/provider reference
+  (`FRAMEWORK_REF` / provider mapping in `packages/cli/src/core/agent/actions.ts`; placements
+  also gets `strategy.md`). An Expo agent must never see `.pbxproj` instructions.
 - Reference file names ARE the contract: they must match `Integration` enum
   values (`ios` for swift, `expo`, `react-native`, `flutter`) or provider slugs.
-  Renaming a file breaks `loadBundledSkill(id, reference)` silently (missing
-  references degrade to SKILL.md-only).
+  Renaming a file breaks `loadBundledSkill(id, reference)` - it hard-errors at
+  run time with "Bundled skill asset is missing".
 
 ## Reference file anatomy (in order)
 
@@ -72,10 +72,10 @@ Use `> **Important:**` callouts for critical steps; "Use when:" phrasing;
   official doc — write a clearly-labeled skeleton and point at the authoritative
   page.
 - **Never exaggerate.** Migration skills carry a prominent "What does NOT
-  migrate" callout (paywall designs rebuilt in the editor; analytics history
-  stays; Adapty/Qonversion subscriber state cannot migrate — store-side restore
-  only; RevenueCat subscription migration is _coming soon_, labeled "not shipped
-  yet — do not rely on it").
+  migrate" callout (paywall designs are rebuilt — with the superwall framework
+  or in the editor; analytics history stays; Adapty/Qonversion subscriber state
+  cannot migrate — store-side restore only; RevenueCat has server-side migration
+  tooling — point at the live migration guide instead of promising specifics).
 - **Label craft vs doc-stated.** Strategy guidance (where placements go, how
   many, naming) is written imperatively but introduced as recommended practice,
   not passed off as documentation.
@@ -97,13 +97,13 @@ Skills reference CLI commands constantly, and the public repo's `superwall`
 skill documents this CLI's entire surface. On ANY command surface change:
 
 ```bash
-grep -rn "superwall <old>" skills prompts README.md $SKILLS/skills/superwall
+cd packages/cli && grep -rn "superwall <old>" skills prompts README.md $SKILLS/skills/superwall
 ```
 
-(`$SKILLS` is your clone of superwall/skills.) Fix every hit, in both this
-package and the skills repo. Also update:
+(`$SKILLS` is a clone of superwall/skills, if you have one.) Fix every hit, in
+both this package and the skills repo. Also update:
 
-- `src/core/agent/actions.ts` if action vars / references changed
+- `packages/cli/src/core/agent/actions.ts` if action vars / references changed
 - `prompts/actions/*.xml` wrappers if the task shape changed
 - `superwall <cmd> --skill` smoke test: run it in a fixture project and check
   the composition (right reference, no cross-framework leakage, no unresolved
@@ -117,4 +117,4 @@ package and the skills repo. Also update:
 - [ ] Composition tested: `superwall <workflow> --skill` in a fixture app of
       each affected framework; grep for leakage from other frameworks.
 - [ ] Honesty pass: nothing promises more than the product does.
-- [ ] Sync sweep run across both repos.
+- [ ] Sync sweep run across this package and, if you have it, the skills repo.

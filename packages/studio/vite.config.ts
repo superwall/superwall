@@ -3,8 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "vite";
 
 /**
- * The studio is a standalone vite app (the old-editor model). `superwall
- * dev` serves the BUILT dist — assets under `/__studio/` so they can never
+ * The studio is a standalone vite app. `superwall dev` serves the BUILT dist — assets under `/__studio/` so they can never
  * collide with the project's own vite graph — plus the data endpoint
  * (`/__studio/project.json`) and the `/preview/<kind>/<id>` mounts the
  * studio iframes.

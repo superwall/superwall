@@ -1,6 +1,6 @@
 ---
 name: superwall-placements
-description: Add or audit Superwall placements at meaningful feature gates and route them to campaigns. Use when adding, reviewing, or debugging where paywalls fire in iOS, Expo, React Native, or Flutter apps.
+description: Add or audit Superwall placements at meaningful feature gates and route them to campaigns. Use when adding, reviewing, or debugging where paywalls fire in iOS, Expo, React Native, or Flutter apps. Not for first-time SDK setup (superwall-integrate) or creating campaigns and products (superwall-dashboard).
 ---
 
 # Superwall placements
@@ -8,8 +8,8 @@ description: Add or audit Superwall placements at meaningful feature gates and r
 A **placement** is a named event you fire at a meaningful moment. You register it,
 optionally with a `feature` callback. Superwall evaluates your dashboard campaign
 on-device and decides - remotely - whether to show a paywall and whether the
-feature is gated. Reading subscription state is valid; avoid a separate local gate
-only when it contradicts a feature that is intentionally controlled by Superwall.
+feature is gated. Reading subscription state is fine; only avoid a hand-rolled local
+gate where it would override a gate the campaign is meant to control.
 
 The API is the easy part. The value of this skill is knowing _where_ to place
 placements and _why_. Read the strategy playbook first, then your framework's

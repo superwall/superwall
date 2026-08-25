@@ -49,18 +49,6 @@ export const RiveArt = ({
   const [on, setOn] = React.useState(false);
   const value = useStateMachineInput(rive, stateMachine, input, control === "tap" ? on : 0);
 
-  React.useEffect(() => {
-    if (!rive || control !== "tap") return;
-    const probe = (Reflect.get(globalThis, "__sw") ?? {}) as Record<string, unknown>;
-    Reflect.set(globalThis, "__sw", probe);
-    probe[stateMachine] = {
-      inputs: rive
-        .stateMachineInputs(stateMachine)
-        ?.map((i: { name: string; value: unknown }) => `${i.name}=${String(i.value)}`),
-      playing: rive.isPlaying,
-    };
-  }, [rive, stateMachine, control, on]);
-
   const set = (next: number) => {
     setLevel(next);
     if (value) value.value = next;

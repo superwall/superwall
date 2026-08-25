@@ -44,7 +44,7 @@ There is **no** `products import` subcommand. Two ways to import:
 
    ```bash
    # one-time: upload the ASC API key to Superwall's vault (nothing stored locally)
-   superwall asc keys set --key-id <KEY_ID> --issuer <ISSUER_ID> --key-file ./AuthKey_XXptr.p8 --json
+   superwall asc keys set --key-id <KEY_ID> --issuer <ISSUER_ID> --key-file ./AuthKey_<KEY_ID>.p8 --json
    superwall asc keys list --json                # confirm connected; note the team id
 
    # enumerate real products for the app (by bundle id or ASC app id)
@@ -92,8 +92,10 @@ superwall campaigns placement <campaignId> another_placement --project <id> --ap
 
 ## What the CLI cannot do (leave manual)
 
-- **Design the paywall** and **attach products to it** - done in the Superwall dashboard's paywall
-  editor. `superwall paywalls list --project <id> --app <id> --json` shows what exists; there is no paywall create/design CLI.
+- **Design the paywall** - either as code with the superwall framework (`superwall create` scaffolds
+  a `superwall/` directory in the app; products are declared in the paywall's `config.ts`;
+  `superwall publish` ships it) or in the dashboard's paywall editor.
+  `superwall paywalls list --project <id> --app <id> --json` shows what exists.
 - **Configure audiences / experiment splits** beyond the default - done in the dashboard.
 
 Report these as the remaining manual steps.

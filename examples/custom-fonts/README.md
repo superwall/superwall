@@ -48,6 +48,10 @@ every alphabet the family has.
 **Ship a woff2.** Anything older is bytes you are paying for and nothing you
 support still needs.
 
+The bundled file is [Manrope](https://github.com/sharanda/manrope), licensed
+under the SIL Open Font License 1.1 — the license text sits beside it in
+`assets/OFL.txt`. Redistribute a font only with the notice its license asks for.
+
 ## Next
 
 - [`with-tailwind`](../with-tailwind) — the rest of the styling, in utilities

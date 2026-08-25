@@ -35,7 +35,7 @@ mechanism is the thing you read.
 | example                                | teaches                                                        |
 | -------------------------------------- | -------------------------------------------------------------- |
 | [`multi-page`](./multi-page)           | `router.push/back`, the route stack, `layout.tsx`              |
-| [`transitions`](./transitions)         | a button per transition — the four built-ins plus a custom one |
+| [`transitions`](./transitions)         | a button per transition — the five built-ins plus a custom one |
 | [`onboarding-quiz`](./onboarding-quiz) | answers decide where you land; the router carries no state     |
 
 ## Purchases

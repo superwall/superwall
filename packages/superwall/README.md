@@ -1,6 +1,7 @@
 # `superwall`
 
-The paywall framework: the authoring contract and the React runtime.
+The framework behind Superwall for Agents: the authoring contract and the
+React runtime for paywalls and web funnels written as mini React apps.
 
 ```tsx
 import { definePaywall } from "superwall/config";

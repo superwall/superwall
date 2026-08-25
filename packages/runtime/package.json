@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "description": "Framework-agnostic runtime for headless Superwall paywalls: bridge, session, products, localization, mock host.",
+  "keywords": [
+    "paywall",
+    "runtime",
+    "subscriptions",
+    "superwall"
+  ],
   "homepage": "https://github.com/superwall/superwall/tree/main/packages/runtime#readme",
   "bugs": {
     "url": "https://github.com/superwall/superwall/issues"

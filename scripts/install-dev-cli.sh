@@ -2,7 +2,7 @@
 # One-command dev install of the superwall CLI from this checkout.
 #
 #   ./scripts/install-dev-cli.sh          install only (keeps your current login)
-#   ./scripts/install-dev-cli.sh stg      install + log in against staging
+#   ./scripts/install-dev-cli.sh stg      install + log in against staging (SUPERWALL_STAGING_HOST)
 #   ./scripts/install-dev-cli.sh local    install + log in against a local API (:3001)
 #   ./scripts/install-dev-cli.sh prd      install + log in against production
 #
@@ -18,7 +18,7 @@ TARGET="${1:-}"
 case "$TARGET" in
   "" ) HOST="" ;;
   local ) HOST="http://localhost:3001" ;;
-  stg ) HOST="https://api2.superwall.dev" ;;
+  stg ) HOST="${SUPERWALL_STAGING_HOST:?set SUPERWALL_STAGING_HOST to the staging API host}" ;;
   prd ) HOST="https://api.superwall.com" ;;
   * ) echo "Unknown environment: $TARGET (use local, stg, or prd)"; exit 1 ;;
 esac

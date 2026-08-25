@@ -65,12 +65,8 @@ curl -sL https://superwall.com/docs/flutter/quickstart/install.md
 flutter pub add superwallkit_flutter
 ```
 
-Or in `pubspec.yaml` under `dependencies:` then `flutter pub get`:
-
-```yaml
-dependencies:
-  superwallkit_flutter: ^2.4.12
-```
+Or add `superwallkit_flutter` to `pubspec.yaml` under `dependencies:` (use the
+latest version on pub.dev) then `flutter pub get`.
 
 ### iOS native config
 

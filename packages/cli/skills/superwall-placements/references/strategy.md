@@ -218,5 +218,4 @@ superwall campaigns placement <campaignId> another_placement --project <id> --ap
 
 Rule of thumb: one campaign per distinct paywall surface/decision (onboarding,
 settings upgrade, win-back), routing the placements that belong to it - not one
-campaign per trigger, and no duplicates. Placements can also be added "on the fly":
-registering a name that doesn't exist yet auto-creates it on the campaign.
+campaign per trigger, and no duplicates.

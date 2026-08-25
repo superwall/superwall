@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "description": "The Superwall studio: paywall browsing, device preview, and editing surfaces. Shared between `superwall dev` (local studio) and the hosted dashboard.",
+  "keywords": [
+    "paywall",
+    "preview",
+    "studio",
+    "superwall"
+  ],
   "homepage": "https://github.com/superwall/superwall/tree/main/packages/studio#readme",
   "bugs": {
     "url": "https://github.com/superwall/superwall/issues"

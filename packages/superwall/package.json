@@ -2,7 +2,21 @@
   "name": "superwall",
   "version": "0.0.0",
   "private": true,
-  "description": "The paywall framework: author paywalls and funnels as mini React apps with file-based routing, run them against a simulated SDK host, ship them through Superwall.",
+  "description": "Superwall for Agents — build paywalls and web funnels as mini React apps with file-based routing, preview them against real product data, and ship them through Superwall.",
+  "keywords": [
+    "agents",
+    "android",
+    "flutter",
+    "funnel",
+    "ios",
+    "paywall",
+    "paywalls",
+    "react",
+    "react-native",
+    "subscriptions",
+    "superwall",
+    "web-funnel"
+  ],
   "homepage": "https://github.com/superwall/superwall/tree/main/packages/superwall#readme",
   "bugs": {
     "url": "https://github.com/superwall/superwall/issues"

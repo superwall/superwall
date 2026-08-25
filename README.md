@@ -4,11 +4,12 @@
   </a>
 </p>
 
-<h1 align="center">Superwall</h1>
+<h1 align="center">Superwall for Agents</h1>
 
 <p align="center">
-  Paywalls and funnels as code. An open-source framework for building
-  paywalls and web funnels as mini React apps — deployed to Superwall.
+  Easily build paywalls and web funnels with the <code>superwall</code>
+  framework — an open-source framework for authoring them as mini React apps,
+  deployed to Superwall.
 </p>
 
 Author every paywall and funnel as a real React app with file-based routing.
@@ -17,6 +18,13 @@ the framework stays headless. Deploy to Superwall and the platform takes it
 from there: products and purchases, localization, trials, experimentation and
 A/B testing, and delivery through the native SDKs (iOS, Android, Flutter,
 React Native) and the web.
+
+It is built to be written by coding agents as much as by people. The framework
+borrows conventions agents already know — a plain npm project, file-based
+routes, ordinary React state — instead of inventing its own, so an agent gets
+it right on the first try. The CLI runs from a terminal or from inside an
+agent, and `superwall dev` gives either one a live preview to check its work
+against real product data before anything ships.
 
 ```bash
 npx superwall create   # scaffold a superwall/ directory in your app

@@ -23,10 +23,6 @@ export function checkoutReducer(state: CheckoutState, action: CheckoutAction): C
       const session = action.payload;
 
       if (state.isOpen && state.activeSession?.clientSecret === session.clientSecret) {
-        console.log(
-          "[CheckoutStore] Sheet already open for this session, skipping:",
-          session.clientSecret.substring(0, 20),
-        );
         return state;
       }
 
@@ -52,7 +48,6 @@ export function checkoutReducer(state: CheckoutState, action: CheckoutAction): C
       const clientSecret = action.payload;
       const newReadyState = new Map(state.readyState);
       newReadyState.set(clientSecret, true);
-      console.log("[CheckoutStore] Marked as ready:", clientSecret.substring(0, 20) + "...");
       return {
         ...state,
         readyState: newReadyState,
@@ -70,10 +65,6 @@ export function checkoutReducer(state: CheckoutState, action: CheckoutAction): C
       if (session.directive === "embedded") {
         for (const [existingSecret, existingSession] of newPooledSessions) {
           if (existingSession.directive === "embedded" && existingSecret !== clientSecret) {
-            console.log(
-              "[CheckoutStore] Removing old embedded session:",
-              existingSecret.substring(0, 20) + "...",
-            );
             newPooledSessions.delete(existingSecret);
             newReadyState.delete(existingSecret);
             const idx = newPoolOrder.indexOf(existingSecret);
@@ -99,7 +90,6 @@ export function checkoutReducer(state: CheckoutState, action: CheckoutAction): C
       if (newPoolOrder.length > MAX_POOL_SIZE) {
         const evicted = newPoolOrder.pop();
         if (evicted) {
-          console.log("[CheckoutStore] Evicting LRU session:", evicted.substring(0, 20) + "...");
           newPooledSessions.delete(evicted);
           newReadyState.delete(evicted);
         }
@@ -167,8 +157,6 @@ export function checkoutReducer(state: CheckoutState, action: CheckoutAction): C
 
       newPooledSessions.delete(clientSecret);
       newReadyState.delete(clientSecret);
-
-      console.log("[CheckoutStore] Removed session:", clientSecret.substring(0, 20) + "...");
 
       return {
         ...state,

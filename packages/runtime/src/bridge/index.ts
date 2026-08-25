@@ -69,7 +69,6 @@ export class SuperwallBridge {
       this.accept(decodeIncomingMessages(message));
     } catch (error) {
       this.onDecodeError?.(error);
-      console.log(error);
     }
   }
 }

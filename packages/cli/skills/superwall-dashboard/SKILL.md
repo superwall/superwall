@@ -67,8 +67,9 @@ placement (in code)  →  campaign (routes it)  →  audience (who)  →  paywal
 
 - What already existed (ids).
 - What you created: entitlement, product ids, campaign ids, placements attached.
-- **Left manual:** paywall design (Superwall dashboard editor), attaching products to the paywall,
-  and - if products were created by hand - reconciling identifiers with App Store Connect / Google Play.
+- **Left manual:** paywall design - as code with the superwall framework (`superwall create` →
+  `superwall publish`) or in the dashboard editor - attaching products to the paywall, and - if
+  products were created by hand - reconciling identifiers with App Store Connect / Google Play.
 
 See `references/setup.md` for the App Store Connect import path, `.storekit` generation, and pricing-flag reference.
 
