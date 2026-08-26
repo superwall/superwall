@@ -109,6 +109,9 @@ One concern each — there is deliberately no kitchen-sink hook.
   `openDeepLink`, `customPlacement`, `requestPermission`, …
 - `useHaptics()` — `light()`, `medium()`, `heavy()`, `success()`, `warning()`,
   `error()`, `selection()`
+- `useLocalResource(id, fallback)` — `swlocal://<id>` when the host app
+  registered that local resource, else the bundled/hosted fallback;
+  `useLocalResources()` for the full `{ ids, has, resolve }` record.
 - `useColorScheme()` — `"light" | "dark"`, as the SDK reports it.
 - `useTranslation()` — `t(key, values)` with `{placeholder}` interpolation,
   device-locale detection, `setLocale` override.

@@ -16,6 +16,7 @@ export * from "./useActions";
 export * from "./useColorScheme";
 export * from "./useDevice";
 export * from "./useHaptics";
+export * from "./useLocalResources";
 export * from "./useProducts";
 export * from "./usePurchase";
 export * from "./useSuperwallEvent";
