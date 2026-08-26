@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import type { FrameworkSurface } from "@/core/paywalls/project/framework";
-import { readLock, writeApplicationId, writeBinding } from "@/core/paywalls/project/lock";
+import { readLock, writeApp, writeBinding } from "@/core/paywalls/project/lock";
 import {
   parseRenameFlags,
   RenameError,
@@ -26,7 +26,7 @@ const dirs: string[] = [];
 function scaffold(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-renames-"));
   dirs.push(dir);
-  writeApplicationId(dir, "7");
+  writeApp(dir, "ios", "7");
   return dir;
 }
 
@@ -39,7 +39,7 @@ afterEach(() => {
 
 test("nothing to resolve when every directory is bound", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
 
   const result = await resolveRenames({
     superwallDir: dir,
@@ -55,7 +55,7 @@ test("nothing to resolve when every directory is bound", async () => {
 
 test("a chosen rename keeps the paywall id and drops the stale entry", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
   const renamed = surfaceOf("pro-upgrade");
 
   const result = await resolveRenames({
@@ -65,14 +65,19 @@ test("a chosen rename keeps the paywall id and drops the stale entry", async () 
   });
 
   assert.deepEqual(result.renamed, [
-    { kind: "paywall", from: "plus-upgrade", to: "pro-upgrade", paywallId: "208540" },
+    {
+      kind: "paywall",
+      from: "plus-upgrade",
+      to: "pro-upgrade",
+      bindings: { ios: { paywallId: "208540" } },
+    },
   ]);
-  assert.deepEqual(readLock(dir).paywalls, { "pro-upgrade": { paywallId: "208540" } });
+  assert.deepEqual(readLock(dir).paywalls, { "pro-upgrade": { ios: { paywallId: "208540" } } });
 });
 
 test("choosing create leaves the lock alone and reports the orphan once", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
   const notices: string[] = [];
 
   const result = await resolveRenames({
@@ -92,9 +97,9 @@ test("choosing create leaves the lock alone and reports the orphan once", async 
 
 test("choosing remove drops that entry and leaves every other binding intact", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
-  writeBinding(dir, "paywall", "keeper", { paywallId: "1" });
-  writeBinding(dir, "funnel", "onboarding", { paywallId: "2" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "keeper", "ios", { paywallId: "1" });
+  writeBinding(dir, "funnel", "onboarding", "ios", { paywallId: "2" });
   const asked: RenameOrphan[] = [];
   const notices: string[] = [];
 
@@ -108,18 +113,22 @@ test("choosing remove drops that entry and leaves every other binding intact", a
     notice: (message) => notices.push(message),
   });
 
-  assert.deepEqual(asked, [{ kind: "paywall", id: "plus-upgrade", paywallId: "208540" }]);
-  assert.deepEqual(result.dropped, [{ kind: "paywall", id: "plus-upgrade", paywallId: "208540" }]);
+  assert.deepEqual(asked, [
+    { kind: "paywall", id: "plus-upgrade", bindings: { ios: { paywallId: "208540" } } },
+  ]);
+  assert.deepEqual(result.dropped, [
+    { kind: "paywall", id: "plus-upgrade", bindings: { ios: { paywallId: "208540" } } },
+  ]);
   assert.deepEqual(result.stale, []);
-  assert.deepEqual(readLock(dir).paywalls, { keeper: { paywallId: "1" } });
-  assert.deepEqual(readLock(dir).funnels, { onboarding: { paywallId: "2" } });
-  assert.equal(readLock(dir).applicationId, "7");
+  assert.deepEqual(readLock(dir).paywalls, { keeper: { ios: { paywallId: "1" } } });
+  assert.deepEqual(readLock(dir).funnels, { onboarding: { ios: { paywallId: "2" } } });
+  assert.deepEqual(readLock(dir).apps, { ios: "7" });
   assert.deepEqual(notices, []);
 });
 
 test("choosing keep leaves the lock byte-identical", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
   const lockFile = path.join(dir, "superwall.lock");
   const before = fs.readFileSync(lockFile);
 
@@ -136,7 +145,7 @@ test("choosing keep leaves the lock byte-identical", async () => {
 
 test("a non-interactive run keeps the binding, notices it, and writes nothing", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
   const lockFile = path.join(dir, "superwall.lock");
   const before = fs.readFileSync(lockFile);
   const notices: string[] = [];
@@ -156,7 +165,7 @@ test("a non-interactive run keeps the binding, notices it, and writes nothing", 
 
 test("an orphan claimed by a rename is never offered for removal", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
 
   const result = await resolveRenames({
     superwallDir: dir,
@@ -170,12 +179,12 @@ test("an orphan claimed by a rename is never offered for removal", async () => {
   assert.equal(result.renamed.length, 1);
   assert.deepEqual(result.dropped, []);
   assert.deepEqual(result.stale, []);
-  assert.deepEqual(readLock(dir).paywalls, { "pro-upgrade": { paywallId: "208540" } });
+  assert.deepEqual(readLock(dir).paywalls, { "pro-upgrade": { ios: { paywallId: "208540" } } });
 });
 
 test("declining the rename then removing the orphan clears it in one run", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
 
   const result = await resolveRenames({
     superwallDir: dir,
@@ -185,14 +194,16 @@ test("declining the rename then removing the orphan clears it in one run", async
   });
 
   assert.deepEqual(result.renamed, []);
-  assert.deepEqual(result.dropped, [{ kind: "paywall", id: "plus-upgrade", paywallId: "208540" }]);
+  assert.deepEqual(result.dropped, [
+    { kind: "paywall", id: "plus-upgrade", bindings: { ios: { paywallId: "208540" } } },
+  ]);
   assert.deepEqual(readLock(dir).paywalls, {});
 });
 
 test("multi-rename resolves each pair and never offers a consumed orphan twice", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
-  writeBinding(dir, "paywall", "gold-upgrade", { paywallId: "208541" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "gold-upgrade", "ios", { paywallId: "208541" });
   const offered: string[][] = [];
 
   const choose: RenameChoice = async ({ newcomer, orphans }) => {
@@ -213,15 +224,15 @@ test("multi-rename resolves each pair and never offers a consumed orphan twice",
     ["gold-upgrade"],
   ]);
   assert.deepEqual(readLock(dir).paywalls, {
-    "pro-upgrade": { paywallId: "208540" },
-    "platinum-upgrade": { paywallId: "208541" },
+    "pro-upgrade": { ios: { paywallId: "208540" } },
+    "platinum-upgrade": { ios: { paywallId: "208541" } },
   });
   assert.equal(result.renamed.length, 2);
 });
 
 test("a consumed orphan is gone from the pool even when the second pick is create", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
   const offered: string[][] = [];
 
   await resolveRenames({
@@ -240,7 +251,7 @@ test("a consumed orphan is gone from the pool even when the second pick is creat
 
 test("--rename applies without any prompt", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
 
   const result = await resolveRenames({
     superwallDir: dir,
@@ -249,13 +260,13 @@ test("--rename applies without any prompt", async () => {
   });
 
   assert.equal(result.renamed.length, 1);
-  assert.deepEqual(readLock(dir).paywalls, { "pro-upgrade": { paywallId: "208540" } });
+  assert.deepEqual(readLock(dir).paywalls, { "pro-upgrade": { ios: { paywallId: "208540" } } });
 });
 
 test("--rename resolves some pairs and still refuses the rest in CI", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "a-old", { paywallId: "1" });
-  writeBinding(dir, "paywall", "b-old", { paywallId: "2" });
+  writeBinding(dir, "paywall", "a-old", "ios", { paywallId: "1" });
+  writeBinding(dir, "paywall", "b-old", "ios", { paywallId: "2" });
 
   await assert.rejects(
     resolveRenames({
@@ -266,12 +277,12 @@ test("--rename resolves some pairs and still refuses the rest in CI", async () =
     (error: Error) => error instanceof RenameError && /b-old=b-new/.test(error.message),
   );
 
-  assert.equal(readLock(dir).paywalls["a-new"]?.paywallId, "1");
+  assert.equal(readLock(dir).paywalls["a-new"]?.ios?.paywallId, "1");
 });
 
 test("an unresolved pair in CI fails, naming the only escape", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
 
   const message = await resolveRenames({
     superwallDir: dir,
@@ -289,8 +300,8 @@ test("an unresolved pair in CI fails, naming the only escape", async () => {
 
 test("an orphan with no newcomer never blocks — deletion is legitimate", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
-  writeBinding(dir, "paywall", "keeper", { paywallId: "1" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "keeper", "ios", { paywallId: "1" });
   const notices: string[] = [];
 
   const result = await resolveRenames({
@@ -305,12 +316,12 @@ test("an orphan with no newcomer never blocks — deletion is legitimate", async
     ["plus-upgrade"],
   );
   assert.equal(notices.length, 1);
-  assert.deepEqual(readLock(dir).paywalls["plus-upgrade"], { paywallId: "208540" });
+  assert.deepEqual(readLock(dir).paywalls["plus-upgrade"], { ios: { paywallId: "208540" } });
 });
 
 test("a newcomer with no orphans is never asked about", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "keeper", { paywallId: "1" });
+  writeBinding(dir, "paywall", "keeper", "ios", { paywallId: "1" });
 
   const result = await resolveRenames({
     superwallDir: dir,
@@ -325,7 +336,7 @@ test("a newcomer with no orphans is never asked about", async () => {
 
 test("kinds never cross: a funnel newcomer ignores orphaned paywalls", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
 
   const result = await resolveRenames({
     superwallDir: dir,
@@ -341,7 +352,7 @@ test("kinds never cross: a funnel newcomer ignores orphaned paywalls", async () 
 
 test("a funnel rename rebinds inside the funnels section", async () => {
   const dir = scaffold();
-  writeBinding(dir, "funnel", "onboarding", { paywallId: "900" });
+  writeBinding(dir, "funnel", "onboarding", "ios", { paywallId: "900" });
 
   await resolveRenames({
     superwallDir: dir,
@@ -349,13 +360,13 @@ test("a funnel rename rebinds inside the funnels section", async () => {
     choose: async () => ({ kind: "rename", orphanId: "onboarding" }),
   });
 
-  assert.deepEqual(readLock(dir).funnels, { "onboarding-v2": { paywallId: "900" } });
+  assert.deepEqual(readLock(dir).funnels, { "onboarding-v2": { ios: { paywallId: "900" } } });
   assert.deepEqual(readLock(dir).paywalls, {});
 });
 
 test("a cancelled picker aborts instead of creating", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
 
   await assert.rejects(
     resolveRenames({
@@ -368,12 +379,12 @@ test("a cancelled picker aborts instead of creating", async () => {
     (error: Error) => error instanceof RenameError && /Cancelled/.test(error.message),
   );
 
-  assert.deepEqual(readLock(dir).paywalls, { "plus-upgrade": { paywallId: "208540" } });
+  assert.deepEqual(readLock(dir).paywalls, { "plus-upgrade": { ios: { paywallId: "208540" } } });
 });
 
 test("--rename rejects a target that is not an unbound directory", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
 
   await assert.rejects(
     resolveRenames({
@@ -387,7 +398,7 @@ test("--rename rejects a target that is not an unbound directory", async () => {
 
 test("--rename rejects a source the lock does not hold", async () => {
   const dir = scaffold();
-  writeBinding(dir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
 
   await assert.rejects(
     resolveRenames({
@@ -409,4 +420,40 @@ test("parseRenameFlags reads one, many, and rejects malformed", () => {
   for (const bad of ["", "a", "=b", "a="]) {
     assert.throws(() => parseRenameFlags([bad]), RenameError);
   }
+});
+
+test("a rename carries every app's binding across, not just the first", async () => {
+  const dir = scaffold();
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "1", snapshot: "s1" });
+  writeBinding(dir, "paywall", "plus-upgrade", "android", { paywallId: "2" });
+
+  const result = await resolveRenames({
+    superwallDir: dir,
+    surfaces: [surfaceOf("pro-upgrade")],
+    declared: parseRenameFlags(["plus-upgrade=pro-upgrade"]),
+  });
+
+  assert.deepEqual(result.renamed[0]?.bindings, {
+    ios: { paywallId: "1", snapshot: "s1" },
+    android: { paywallId: "2" },
+  });
+  assert.deepEqual(readLock(dir).paywalls, {
+    "pro-upgrade": { ios: { paywallId: "1", snapshot: "s1" }, android: { paywallId: "2" } },
+  });
+});
+
+test("the CI error and the stale notice name every app's paywall", async () => {
+  const dir = scaffold();
+  writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "1" });
+  writeBinding(dir, "paywall", "plus-upgrade", "android", { paywallId: "2" });
+  const notices: string[] = [];
+
+  const message = await resolveRenames({ superwallDir: dir, surfaces: [surfaceOf("pro-upgrade")] }).then(
+    () => "",
+    (error: Error) => error.message,
+  );
+  assert.match(message, /plus-upgrade → paywalls 1 \(ios\), 2 \(android\)/);
+
+  await resolveRenames({ superwallDir: dir, surfaces: [], notice: (text) => notices.push(text) });
+  assert.match(notices[0] ?? "", /bound to paywalls 1 \(ios\), 2 \(android\)/);
 });

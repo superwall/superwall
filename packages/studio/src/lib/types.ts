@@ -7,6 +7,7 @@ export type StudioSurface = {
   products?: Record<string, string>;
   routes: string[];
   locales: string[];
+  platforms?: string[];
   paywallId?: string;
 };
 

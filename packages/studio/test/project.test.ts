@@ -12,6 +12,7 @@ describe("parseProjectPayload", () => {
           id: "plus-upgrade",
           routes: ["index", "offer"],
           locales: ["en", "es"],
+          platforms: ["ios", "android"],
           paywallId: "208540",
         },
       ],
@@ -19,6 +20,18 @@ describe("parseProjectPayload", () => {
 
     expect(payload.title).toBe("chatgpt");
     expect(payload.diagnostics).toEqual(["a warning"]);
+    expect(payload.surfaces[0]?.platforms).toEqual(["ios", "android"]);
+  });
+
+  it("leaves platforms off a surface that declares none, or declares them badly", () => {
+    const payload = parseProjectPayload({
+      surfaces: [
+        { kind: "paywall", id: "silent", routes: [], locales: [] },
+        { kind: "paywall", id: "odd", routes: [], locales: [], platforms: [1, "ios"] },
+      ],
+    });
+    expect(payload.surfaces[0]).not.toHaveProperty("platforms");
+    expect(payload.surfaces[1]).not.toHaveProperty("platforms");
   });
 
   it("drops malformed surfaces and variable specs instead of crashing", () => {

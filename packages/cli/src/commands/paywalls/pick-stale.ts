@@ -1,4 +1,5 @@
 import { RenameError, type RenameOrphan, type StaleDecision } from "@/core/paywalls/binding/renames";
+import { describeBindings } from "@/core/paywalls/project/lock";
 import { ui } from "@/ui";
 
 const REMOVE = "__remove__";
@@ -7,8 +8,8 @@ const KEEP = "__keep__";
 export async function pickStaleOption(orphan: RenameOrphan): Promise<StaleDecision> {
   const picked = await ui.select({
     message:
-      `\`${orphan.id}\` is bound to paywall ${orphan.paywallId} but no longer exists on disk. ` +
-      `Removing only forgets it locally — paywall ${orphan.paywallId} stays on Superwall, keeps ` +
+      `\`${orphan.id}\` is bound to ${describeBindings(orphan.bindings)} but no longer exists on disk. ` +
+      `Removing only forgets it locally — the paywall stays on Superwall, keeps ` +
       `its campaigns, and keeps serving devices.`,
     options: [
       {

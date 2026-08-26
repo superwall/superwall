@@ -72,6 +72,9 @@ export const SurfaceCard = ({
           <span className="text-sm font-medium">
             {surface.project && <span className="text-cream/45">{surface.project}/</span>}
             {surface.id}
+            {surface.platforms && surface.platforms.length > 0 && (
+              <span className="text-cream/45"> · {surface.platforms.join(" · ")}</span>
+            )}
           </span>
           {status && (
             <span className="text-xs text-cream/55">

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineSuperwallConfig } from "../src/config";
+import { productsFromConfig } from "../src/config";
 import { createSuperwallSession } from "../src/session";
 import { TestTransport } from "./testTransport";
 
@@ -635,5 +636,68 @@ describe("SuperwallSession events", () => {
 
     expect(onPaywallOpen).toHaveBeenCalledTimes(1);
     expect(onAnyMessage).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("purchase identity across platforms", () => {
+  const config = {
+    products: {
+      annual: { ios: "pro_year", android: "pro_year_play" },
+      monthly: "pro_month",
+    },
+  };
+
+  it("a purchase before the SDK speaks sends the id the build resolved for its platform", () => {
+    const transport = new TestTransport();
+    const session = createSuperwallSession({
+      transport,
+      config: { products: { annual: "pro_year_play", monthly: "pro_month" } },
+    });
+    session.purchase("annual");
+    expect(transport.outgoing.at(-1)).toMatchObject({
+      event_name: "purchase",
+      product: "annual",
+      product_identifier: "pro_year_play",
+    });
+  });
+
+  it("an unbaked per-platform config resolves by the platform the session is told", () => {
+    const transport = new TestTransport();
+    const session = createSuperwallSession({
+      transport,
+      config,
+      products: productsFromConfig(config, "android"),
+    });
+    session.purchase("annual");
+    expect(transport.outgoing.at(-1)).toMatchObject({ product_identifier: "pro_year_play" });
+    expect(session.getProduct("monthly")?.productId).toBe("pro_month");
+  });
+
+  it("the SDK's products always win over whatever the config said", () => {
+    const transport = new TestTransport();
+    const session = createSuperwallSession({
+      transport,
+      config: { products: { annual: "pro_year" } },
+    });
+    session.start();
+    transport.accept({
+      event_name: "products",
+      products: [{ product: "annual", productId: "pro_year_play" }],
+    });
+    session.purchase("annual");
+    expect(transport.outgoing.at(-1)).toMatchObject({ product_identifier: "pro_year_play" });
+  });
+
+  it("never sends another platform's id: an ios-resolved session cannot name the play product", () => {
+    const transport = new TestTransport();
+    const session = createSuperwallSession({
+      transport,
+      config,
+      products: productsFromConfig(config, "ios"),
+    });
+    session.purchase("annual");
+    const sent = JSON.stringify(transport.outgoing);
+    expect(sent).toContain("pro_year");
+    expect(sent).not.toContain("pro_year_play");
   });
 });

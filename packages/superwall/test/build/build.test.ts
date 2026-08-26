@@ -4,7 +4,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import { buildSnapshot, type BuiltSnapshot, type SnapshotAsset } from "../../src/build";
+import { parseAst as rollupParse } from "vite";
+import {
+  buildSnapshot,
+  rewriteConfigProducts,
+  type BuiltSnapshot,
+  type SnapshotAsset,
+} from "../../src/build";
 import { discoverProject } from "../../src/discover";
 
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixture");
@@ -295,4 +301,133 @@ describe("checkout is bundled only where it is asked for", () => {
     expect(external.bytes - plain.bytes).toBeLessThan(200);
     expect(sheet.bytes - external.bytes).toBeGreaterThan(20_000);
   }, 120_000);
+});
+
+describe("per-platform product ids", () => {
+  it("resolves each slot for the platform being built", async () => {
+    const ios = await buildSnapshot(project(), surface("stores"), { platform: "ios" });
+    const android = await buildSnapshot(project(), surface("stores"), { platform: "android" });
+
+    expect(ios.products).toEqual({ monthly: "pro_999_month", annual: "pro_5999_year" });
+    expect(android.products).toEqual({ monthly: "pro_999_month", annual: "pro_5999_year_play" });
+  }, 120_000);
+
+  it("refuses a platform a per-platform slot has no id for", async () => {
+    await expect(buildSnapshot(project(), surface("stores"), { platform: "web" })).rejects.toThrow(
+      /paywalls\/stores: `annual` has no product id for web/,
+    );
+  }, 120_000);
+
+  it("falls back to the first id when no platform is given", async () => {
+    const built = await buildSnapshot(project(), surface("stores"), {});
+    expect(built.products.annual).toBe("pro_5999_year");
+  }, 120_000);
+});
+
+describe("the snapshot's own config carries only its platform's ids", () => {
+  const entryFor = (id: string, platform?: string) =>
+    fs.readFileSync(
+      path.join(
+        FIXTURE,
+        "superwall",
+        ".superwall",
+        "entries",
+        "paywall",
+        id,
+        ...(platform === undefined ? [] : [platform]),
+        "entry.jsx",
+      ),
+      "utf8",
+    );
+
+  it("bakes the resolved products into the entry for a platform build, each platform in its own directory", async () => {
+    const android = await buildSnapshot(project(), surface("stores"), { platform: "android" });
+    expect(entryFor("stores", "android")).toContain(
+      'products: {"monthly":"pro_999_month","annual":"pro_5999_year_play"},',
+    );
+    expect(android.html).toContain("pro_5999_year_play");
+    expect(android.htmlFile).toContain(path.join("dist", "paywall", "stores", "android"));
+
+    const ios = await buildSnapshot(project(), surface("stores"), { platform: "ios" });
+    expect(entryFor("stores", "ios")).toContain(
+      'products: {"monthly":"pro_999_month","annual":"pro_5999_year"},',
+    );
+    expect(ios.snapshotId).not.toBe(android.snapshotId);
+  }, 240_000);
+
+  it("builds every platform concurrently without the builds trampling each other", async () => {
+    const [ios, android, web] = await Promise.all([
+      buildSnapshot(project(), surface("stores"), { platform: "ios" }),
+      buildSnapshot(project(), surface("stores"), { platform: "android" }),
+      buildSnapshot(project(), surface("stores"), { platform: "web" }).catch(
+        (error: Error) => error,
+      ),
+    ]);
+
+    expect(ios.html).toContain('annual:"pro_5999_year"');
+    expect(ios.html).not.toContain("pro_5999_year_play");
+    expect(android.html).toContain('annual:"pro_5999_year_play"');
+    expect(android.html).not.toMatch(/pro_5999_year["']/);
+    expect(ios.snapshotId).not.toBe(android.snapshotId);
+    expect(web).toBeInstanceOf(Error);
+  }, 240_000);
+
+  it("leaves the config untouched when no platform is given, so dev resolves by device", async () => {
+    await buildSnapshot(project(), surface("stores"), {});
+    expect(entryFor("stores")).not.toContain("products: {");
+  }, 120_000);
+});
+
+describe("other platforms' product ids never reach the snapshot", () => {
+  it("rewrites the config module itself, so the raw per-platform map is gone from the bundle", async () => {
+    const android = await buildSnapshot(project(), surface("stores"), { platform: "android" });
+    expect(android.html).toContain("pro_5999_year_play");
+    expect(android.html).not.toMatch(/pro_5999_year["']/);
+
+    const ios = await buildSnapshot(project(), surface("stores"), { platform: "ios" });
+    expect(ios.html).toContain('"pro_5999_year"');
+    expect(ios.html).not.toContain("pro_5999_year_play");
+  }, 240_000);
+
+  it("keeps the map in a dev build, where the mock resolves it by device", async () => {
+    const dev = await buildSnapshot(project(), surface("stores"), {});
+    expect(dev.html).toContain("pro_5999_year_play");
+  }, 120_000);
+
+  it("falls back to the entry-level resolution when products come in through a spread", async () => {
+    const android = await buildSnapshot(project(), surface("spread"), { platform: "android" });
+    expect(android.products).toEqual({ annual: "spread_year_play" });
+    expect(android.html).toContain('annual:"spread_year_play"');
+  }, 120_000);
+});
+
+describe("rewriteConfigProducts", () => {
+  const parse = (code: string) => rollupParse(code);
+  const resolved = { annual: "play" };
+
+  it("replaces the products literal inside definePaywall(...) and inside a bare object", () => {
+    const wrapped =
+      'export default definePaywall({ name: "x", products: { annual: { ios: "a", android: "b" } }, checkout: "sheet" });';
+    expect(rewriteConfigProducts(wrapped, parse(wrapped), resolved)).toBe(
+      'export default definePaywall({ name: "x", products: {"annual":"play"}, checkout: "sheet" });',
+    );
+    const bare = 'export default { "products": ["ignored"] };';
+    expect(rewriteConfigProducts(bare, parse(bare), resolved)).toBe(
+      'export default {"annual":"play"};'.replace(
+        '{"annual":"play"}',
+        '{ "products": {"annual":"play"} }',
+      ),
+    );
+  });
+
+  it("leaves shapes it cannot see through alone", () => {
+    for (const code of [
+      "const c = { products: {} }; export default c;",
+      "export default definePaywall({ ...shared });",
+      "export default definePaywall(build());",
+      "export const x = 1;",
+    ]) {
+      expect(rewriteConfigProducts(code, parse(code), resolved)).toBeUndefined();
+    }
+  });
 });

@@ -66,6 +66,9 @@ function printHelp(): void {
       pc.dim(
         "                                  push and publish take -m <note> to record why, in the source commit.",
       ),
+      pc.dim(
+        "                                  All three take --platform <p> when the project pushes to several platforms.",
+      ),
       "",
       head("Resource commands"),
       row("bootstrap", "Complete account tree: projects, apps, campaigns, and products"),
@@ -533,6 +536,12 @@ export async function run(): Promise<void> {
               string: true,
               describe: "Limit to these paywalls or funnels by id (repeatable, or comma-separated)",
             },
+            platform: {
+              type: "array",
+              string: true,
+              describe:
+                "Limit to these platforms (repeatable, or comma-separated) - ios, android, web, flutter, react_native",
+            },
             rename: {
               type: "array",
               string: true,
@@ -564,6 +573,12 @@ export async function run(): Promise<void> {
               string: true,
               describe: "Limit to these paywalls or funnels by id (repeatable, or comma-separated)",
             },
+            platform: {
+              type: "array",
+              string: true,
+              describe:
+                "Limit to these platforms (repeatable, or comma-separated) - ios, android, web, flutter, react_native",
+            },
             version: {
               type: "number",
               alias: "v",
@@ -585,6 +600,12 @@ export async function run(): Promise<void> {
               type: "array",
               string: true,
               describe: "Limit to these paywalls or funnels by id (repeatable, or comma-separated)",
+            },
+            platform: {
+              type: "array",
+              string: true,
+              describe:
+                "Limit to these platforms (repeatable, or comma-separated) - ios, android, web, flutter, react_native",
             },
             rename: {
               type: "array",

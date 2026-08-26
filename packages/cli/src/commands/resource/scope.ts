@@ -73,13 +73,16 @@ function lockBoundPaywallId(installDir: string): string | undefined {
   ]) {
     try {
       const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as {
-        paywalls?: Record<string, { paywallId?: string }>;
-        funnels?: Record<string, { paywallId?: string }>;
+        paywalls?: Record<string, Record<string, unknown>>;
+        funnels?: Record<string, Record<string, unknown>>;
       };
-      const entry = Object.values({ ...parsed.paywalls, ...parsed.funnels }).find(
-        (binding) => binding?.paywallId,
-      );
-      if (entry?.paywallId) return String(entry.paywallId);
+      for (const entry of Object.values({ ...parsed.paywalls, ...parsed.funnels })) {
+        if (typeof entry?.paywallId === "string") return entry.paywallId;
+        for (const binding of Object.values(entry ?? {})) {
+          const paywallId = (binding as { paywallId?: unknown } | null)?.paywallId;
+          if (typeof paywallId === "string") return paywallId;
+        }
+      }
     } catch {
       continue;
     }

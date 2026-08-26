@@ -52,6 +52,7 @@ export interface BuiltSnapshot {
 
 export interface BuildOptions {
   assetBaseUrl?: string;
+  platform?: string;
 }
 
 export interface PreviewServerHandle {
@@ -110,9 +111,15 @@ export interface Framework {
     roots: string | readonly string[],
     options: { port: number; host?: string; platformStylesheet?: string; studio?: StudioActions },
   ): Promise<PreviewServerHandle>;
-  studioProject?(
-    root: string,
-  ): Promise<{ surfaces: { products: Record<string, string> }[] }>;
+  studioProject?(root: string): Promise<{
+    surfaces: {
+      kind?: string;
+      id?: string;
+      products: Record<string, string>;
+      productIds?: Record<string, string[]>;
+      platforms?: string[];
+    }[];
+  }>;
 }
 
 export class FrameworkNotFoundError extends Error {

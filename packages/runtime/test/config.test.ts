@@ -3,7 +3,10 @@ import {
   backgroundOf,
   defineSuperwallConfig,
   documentAttributes,
+  isPlatformProductIds,
+  normalizePlatform,
   normalizeProductSlot,
+  productIdFor,
   productsFromConfig,
   checkoutNeedsPaymentUi,
   SUPERWALL_GENERATION,
@@ -17,6 +20,48 @@ describe("normalizeProductSlot", () => {
   it("passes slot objects through", () => {
     expect(normalizeProductSlot({ productId: "pro" })).toEqual({ productId: "pro" });
     expect(normalizeProductSlot({})).toEqual({});
+  });
+
+  it("resolves a per-platform slot for the platform asked for", () => {
+    const slot = { ios: "pro_year", android: "pro_year_play" };
+    expect(normalizeProductSlot(slot, "android")).toEqual({ productId: "pro_year_play" });
+    expect(normalizeProductSlot(slot, "ios")).toEqual({ productId: "pro_year" });
+  });
+});
+
+describe("productIdFor", () => {
+  const slot = { ios: "pro_year", android: "pro_year_play" };
+
+  it("is the string itself, or the slot's productId, on every platform", () => {
+    expect(productIdFor("pro", "android")).toBe("pro");
+    expect(productIdFor({ productId: "pro" }, "web")).toBe("pro");
+    expect(productIdFor({}, "ios")).toBeUndefined();
+  });
+
+  it("is nothing for a platform the per-platform slot does not name", () => {
+    expect(productIdFor(slot, "web")).toBeUndefined();
+  });
+
+  it("falls back to the first entry when no platform is known", () => {
+    expect(productIdFor(slot)).toBe("pro_year");
+    expect(productIdFor({})).toBeUndefined();
+  });
+
+  it("tells per-platform slots apart from slot objects", () => {
+    expect(isPlatformProductIds(slot)).toBe(true);
+    expect(isPlatformProductIds({ productId: "x" })).toBe(false);
+    expect(isPlatformProductIds("x")).toBe(false);
+  });
+});
+
+describe("normalizePlatform", () => {
+  it("maps what devices and the dashboard report onto ios, android, web", () => {
+    expect(normalizePlatform("iOS")).toBe("ios");
+    expect(normalizePlatform("Android")).toBe("android");
+    expect(normalizePlatform("web")).toBe("web");
+    expect(normalizePlatform("flutter")).toBeUndefined();
+    expect(normalizePlatform("tvOS")).toBeUndefined();
+    expect(normalizePlatform(undefined)).toBeUndefined();
   });
 });
 

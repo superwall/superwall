@@ -11,13 +11,18 @@ import {
   webCheckoutDestination,
 } from "@/core/api/resources";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
+import { resolveApps } from "@/core/paywalls/binding/apps";
+import { resolveBinding, type ResolvedBinding } from "@/core/paywalls/binding/binding";
 import {
-  resolveApplicationId,
-  resolveBinding,
-  type ResolvedBinding,
-} from "@/core/paywalls/binding/binding";
-import { collectProjectProducts, writeProjectTypes } from "@/core/paywalls/project/types";
-import { readLock, writeSnapshot } from "@/core/paywalls/project/lock";
+  parsePlatformFlags,
+  planTargets,
+  targetLabel,
+  wantedPlatforms,
+  type DeclaredPlatforms,
+  type SurfaceTarget,
+} from "@/core/paywalls/binding/targets";
+import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
+import { describeBindings, readLock, writeSnapshot } from "@/core/paywalls/project/lock";
 import {
   frameworkVersion,
   loadFramework,
@@ -204,16 +209,28 @@ const NOTE_LIMIT = 2000;
 
 const PENDING_NAMES = 10;
 
-export function pendingPromoteWarning(ids: readonly string[]): string | undefined {
-  if (ids.length === 0) return undefined;
-  const command = `superwall promote --id ${ids.join(",")}`;
-  if (ids.length === 1) {
-    return `${ids[0]} is pushed but not live — run \`${command}\` to publish it.`;
+export function pendingPromoteWarning(
+  pending: readonly (string | { id: string; platform: string })[],
+  multi = false,
+): string | undefined {
+  if (pending.length === 0) return undefined;
+  const entries: { id: string; platform?: string }[] = pending.map((entry) =>
+    typeof entry === "string" ? { id: entry } : entry,
+  );
+  const ids = [...new Set(entries.map((entry) => entry.id))];
+  const platforms = new Set(entries.flatMap((entry) => (entry.platform ? [entry.platform] : [])));
+  const platformFlag = multi && platforms.size === 1 ? ` --platform ${[...platforms][0]}` : "";
+  const command = `superwall promote --id ${ids.join(",")}${platformFlag}`;
+  const labels = entries.map((entry) =>
+    multi && entry.platform ? `${entry.id} · ${entry.platform}` : entry.id,
+  );
+  if (labels.length === 1) {
+    return `${labels[0]} is pushed but not live — run \`${command}\` to publish it.`;
   }
-  const shown = ids.slice(0, PENDING_NAMES).map((id) => `  ${id}`);
-  const rest = ids.length - shown.length;
+  const shown = labels.slice(0, PENDING_NAMES).map((label) => `  ${label}`);
+  const rest = labels.length - shown.length;
   return [
-    `These ${ids.length} paywalls are pushed but not live:`,
+    `These ${labels.length} paywalls are pushed but not live:`,
     ...shown,
     ...(rest > 0 ? [`  …and ${rest} more`] : []),
     "",
@@ -284,7 +301,7 @@ function summary(outcomes: PushOutcome[], skipped: number, promoted: boolean): v
 }
 
 interface Prepared {
-  surface: FrameworkSurface;
+  target: SurfaceTarget;
   bind: ResolvedBinding;
   build: Awaited<ReturnType<Framework["buildSnapshot"]>>;
   live?: number;
@@ -300,64 +317,92 @@ async function prepare(
     framework: Framework;
     project: FrameworkProject;
     surfaces: FrameworkSurface[];
+    declared: DeclaredPlatforms;
     interactive: boolean;
     promote: boolean;
   },
-): Promise<Prepared[]> {
-  const { framework, project, surfaces } = input;
+): Promise<{ prepared: Prepared[]; multi: boolean }> {
+  const { framework, project, surfaces, declared } = input;
 
-  const applicationId = await resolveApplicationId({
+  const apps = await resolveApps({
     api: context.api,
     superwallDir: project.superwallDir,
+    wanted: wantedPlatforms(surfaces, declared),
     pickApplication: input.interactive ? pickApplicationOption : undefined,
+  });
+  const multi = Object.keys(apps).length > 1;
+  const targets = planTargets({
+    surfaces,
+    declared,
+    apps,
+    only: parsePlatformFlags(context.argv.platform),
   });
 
   const spin = context.outputMode === "rich" ? ui.spinner() : undefined;
-  const label = surfaces.length === 1 ? surfaces[0]?.id : `${surfaces.length} paywalls`;
+  const label =
+    targets.length === 1 && targets[0] !== undefined
+      ? targetLabel(targets[0], multi)
+      : `${targets.length} paywalls`;
   spin?.start(`Building ${label}`);
   const at = Date.now();
   try {
-    const builds = await pooled(surfaces, BUILD_CONCURRENCY, (surface) =>
-      framework.buildSnapshot(project, surface, { assetBaseUrl: assetBaseUrl(applicationId) }),
+    const builds = await pooled(targets, BUILD_CONCURRENCY, (target) =>
+      framework.buildSnapshot(project, target.surface, {
+        assetBaseUrl: assetBaseUrl(target.applicationId),
+        platform: target.platform,
+      }),
     );
 
-    const projectId = await projectForApplication(context.api, applicationId);
-    if (projectId) {
+    const projectIds = new Map<string, string | undefined>();
+    for (const target of targets) {
+      if (projectIds.has(target.applicationId)) continue;
+      projectIds.set(
+        target.applicationId,
+        await projectForApplication(context.api, target.applicationId),
+      );
+    }
+    const catalogues = new Map<string, Record<string, Record<string, unknown>>>();
+    for (const projectId of new Set(projectIds.values())) {
+      if (projectId === undefined) continue;
+      catalogues.set(projectId, await fetchProducts(context.api, projectId));
+    }
+    for (const [projectId, catalogue] of catalogues) {
       requireProducts(
-        await fetchProducts(context.api, projectId),
-        surfaces.map((surface, index) => ({
-          id: surface.id,
-          products: builds[index]?.products,
-        })),
+        catalogue,
+        targets.flatMap((target, index) =>
+          projectIds.get(target.applicationId) === projectId
+            ? [{ id: target.surface.id, products: builds[index]?.products }]
+            : [],
+        ),
       );
     }
 
     const bindings: ResolvedBinding[] = [];
-    for (const [index, surface] of surfaces.entries()) {
+    for (const [index, target] of targets.entries()) {
       bindings.push(
         await resolveBinding({
           api: context.api,
           superwallDir: project.superwallDir,
-          surface,
+          surface: target.surface,
+          app: { platform: target.platform, applicationId: target.applicationId },
           name: builds[index]?.name,
           surfaces: project.surfaces,
           renamesResolved: true,
-          pickApplication: input.interactive ? pickApplicationOption : undefined,
         }),
       );
     }
 
-    const prepared = await pooled(surfaces, BUILD_CONCURRENCY, async (surface, index) => {
+    const prepared = await pooled(targets, BUILD_CONCURRENCY, async (target, index) => {
       const bind = bindings[index];
       const build = builds[index];
-      if (!bind || !build) throw new Error(`Missing binding for ${surface.id}`);
+      if (!bind || !build) throw new Error(`Missing binding for ${target.surface.id}`);
       requireAssets(build);
       const live = await livePaywall(context.api, bind.paywallId);
       const lock = readLock(project.superwallDir);
-      const section = surface.kind === "paywall" ? lock.paywalls : lock.funnels;
-      const pushed = section[surface.id]?.snapshot;
+      const section = target.surface.kind === "paywall" ? lock.paywalls : lock.funnels;
+      const pushed = section[target.surface.id]?.[target.platform]?.snapshot;
       return {
-        surface,
+        target,
         bind,
         build,
         live: live.version,
@@ -370,7 +415,7 @@ async function prepare(
     spin?.stop(
       `${pc.bold(`Built ${label}`)} ${pc.dim(`${modified} modified · ${prepared.length - modified} unchanged`)} ${took(at)}`,
     );
-    return prepared;
+    return { prepared, multi };
   } catch (error) {
     spin?.stop(pc.red(`Building ${label} failed`));
     throw error;
@@ -385,7 +430,8 @@ export async function runPushPipeline(
   const framework = await (options.load ?? loadFramework)(dir);
   const project = requireProject(framework.discoverProject(dir), dir);
   const installed = frameworkVersion(dir);
-  writeProjectTypes(project, await collectProjectProducts(framework, project.root));
+  const declarations = await collectProjectDeclarations(framework, project.root);
+  writeProjectTypes(project, declarations.products);
   writeProjectScaffold({
     root: project.root,
     superwallDir: project.superwallDir,
@@ -406,11 +452,13 @@ export async function runPushPipeline(
     notice: (message) => ui.warn(message),
   });
   for (const pair of renames.renamed) {
-    ui.step(`${pair.kind}/${pair.to} keeps paywall ${pair.paywallId} (renamed from ${pair.from})`);
+    ui.step(
+      `${pair.kind}/${pair.to} keeps ${describeBindings(pair.bindings)} (renamed from ${pair.from})`,
+    );
   }
   for (const orphan of renames.dropped) {
     ui.step(
-      `${orphan.kind}/${orphan.id} removed from superwall.lock · paywall ${orphan.paywallId} is untouched on Superwall`,
+      `${orphan.kind}/${orphan.id} removed from superwall.lock · ${describeBindings(orphan.bindings)} untouched on Superwall`,
     );
   }
 
@@ -419,10 +467,11 @@ export async function runPushPipeline(
   const outcomes: PushOutcome[] = [];
   const external = new Set<string>();
 
-  const prepared = await prepare(context, {
+  const { prepared, multi } = await prepare(context, {
     framework,
     project,
     surfaces,
+    declared: declarations.platforms,
     interactive: context.interactive,
     promote: options.promote,
   });
@@ -432,14 +481,18 @@ export async function runPushPipeline(
   const changed = prepared.filter((entry) => entry.changed);
   const skipped = prepared.length - changed.length;
   const pending = options.promote ? prepared.filter((entry) => entry.pending) : [];
-  const pendingHint = pendingPromoteWarning(pending.map((entry) => entry.surface.id));
+  const pendingHint = pendingPromoteWarning(
+    pending.map((entry) => ({ id: entry.target.surface.id, platform: entry.target.platform })),
+    multi,
+  );
   if (pendingHint) ui.warn(pendingHint);
 
-  for (const { surface, bind, build, live: wasLive } of changed) {
+  for (const { target, bind, build, live: wasLive } of changed) {
+    const { surface } = target;
     let version = 0;
     let live = false;
 
-    await group(context, surface.id, async (note) => {
+    await group(context, targetLabel(target, multi), async (note) => {
       const lines: string[] = [];
       const assets = requireAssets(build);
 
@@ -469,13 +522,19 @@ export async function runPushPipeline(
           html: build.html,
           surface: surface.id,
           assets: synced.value.assets,
-          products: versionProducts(build.products),
+          products: versionProducts(build.products, target.platform),
           webCheckoutDestination: webCheckoutDestination(build.checkout),
           background: build.background,
         }),
       );
       version = push.value.version;
-      writeSnapshot(project.superwallDir, surface.kind, surface.id, build.snapshotId);
+      writeSnapshot(
+        project.superwallDir,
+        surface.kind,
+        surface.id,
+        target.platform,
+        build.snapshotId,
+      );
       lines.push(
         `${pushedLine({
           version,
@@ -520,7 +579,7 @@ export async function runPushPipeline(
       return lines;
     });
 
-    outcomes.push({ id: surface.id, version, live });
+    outcomes.push({ id: targetLabel(target, multi), version, live });
   }
 
   warnNotPortable(external);

@@ -320,9 +320,14 @@ export interface VersionProduct {
 
 export const versionProducts = (
   products: Record<string, string> | undefined,
+  platform?: string,
 ): VersionProduct[] =>
   Object.entries(products ?? {}).map(([reference, identifier]) => ({
-    store: /^(test|live):price_[^:]+/.test(identifier) ? "stripe" : "app-store",
+    store: /^(test|live):price_[^:]+/.test(identifier)
+      ? "stripe"
+      : platform === "android"
+        ? "play-store"
+        : "app-store",
     identifier,
     reference_name: reference,
   }));

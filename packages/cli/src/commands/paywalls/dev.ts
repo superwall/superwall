@@ -2,7 +2,7 @@ import pc from "picocolors";
 import { renderUnicodeCompact } from "uqr";
 import { defineCommand } from "@/command";
 import { VERSION } from "@/constants";
-import { collectProjectProducts, writeProjectTypes } from "@/core/paywalls/project/types";
+import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
 import { frameworkVersion, loadFramework } from "@/core/paywalls/project/framework";
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import { createStudioActions } from "./studio-actions";
@@ -29,7 +29,7 @@ export const runDev = defineCommand({
       );
     }
     for (const project of projects) {
-      writeProjectTypes(project, await collectProjectProducts(framework, project.root));
+      writeProjectTypes(project, (await collectProjectDeclarations(framework, project.root)).products);
       writeProjectScaffold({
         root: project.root,
         superwallDir: project.superwallDir,

@@ -34,7 +34,13 @@ const shippable: StudioSource = {
       products: { annual: "pro_5999_year" },
       paywallId: "208540",
     },
-    { kind: "funnel", id: "onboarding", routes: ["/", "/step-2"], locales: ["en"] },
+    {
+      kind: "funnel",
+      id: "onboarding",
+      routes: ["/", "/step-2"],
+      locales: ["en"],
+      platforms: ["ios", "android"],
+    },
   ],
   diagnostics: [],
   samples: {
@@ -154,6 +160,7 @@ describe("StudioApp", () => {
     expect(screen.getByText("Paywalls")).toBeDefined();
     expect(screen.getByText("Funnels")).toBeDefined();
     expect(screen.getByText("plus-upgrade")).toBeDefined();
+    expect(screen.getByText("· ios · android")).toBeDefined();
     expect(screen.getByText("onboarding")).toBeDefined();
     const card = screen.getByText("plus-upgrade").closest("a");
     expect(card?.getAttribute("href")).toBe("/paywall/plus-upgrade");
@@ -302,7 +309,9 @@ describe("StudioApp", () => {
 
     fireEvent.click(toggle);
     const frame = screen.getAllByTitle("plus-upgrade preview").at(-1);
-    expect(frame?.getAttribute("src")).toContain(encodeURIComponent('{"$is_feature_gatable":true}'));
+    expect(frame?.getAttribute("src")).toContain(
+      encodeURIComponent('{"$is_feature_gatable":true}'),
+    );
   });
 
   it("shows a variable with no value as empty, never as the word undefined", () => {

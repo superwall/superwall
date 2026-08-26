@@ -4,7 +4,11 @@ import { pickStaleOption } from "@/commands/paywalls/pick-stale";
 import { RenameError, type RenameOrphan } from "@/core/paywalls/binding/renames";
 import { ui, type SelectOpts } from "@/ui";
 
-const ORPHAN: RenameOrphan = { kind: "paywall", id: "pro-upgrade", paywallId: "208540" };
+const ORPHAN: RenameOrphan = {
+  kind: "paywall",
+  id: "pro-upgrade",
+  bindings: { ios: { paywallId: "208540" } },
+};
 
 const realSelect = ui.select;
 

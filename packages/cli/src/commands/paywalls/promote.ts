@@ -3,9 +3,17 @@ import { defineCommand } from "@/command";
 import { VERSION } from "@/constants";
 import { ApiError } from "@/core/api/client";
 import { livePaywallVersion, promotePaywallVersion } from "@/core/api/resources";
+import { resolveApps } from "@/core/paywalls/binding/apps";
 import { resolveBinding } from "@/core/paywalls/binding/binding";
+import {
+  parsePlatformFlags,
+  planTargets,
+  targetLabel,
+  wantedPlatforms,
+} from "@/core/paywalls/binding/targets";
 import { loadFramework } from "@/core/paywalls/project/framework";
 import { requireApi } from "@/core/paywalls/project/session";
+import { collectProjectDeclarations } from "@/core/paywalls/project/types";
 import { ui } from "@/ui";
 import { pickApplicationOption } from "./pick-app";
 import { group, projectDir, selectSurfaces, timed, transition } from "./pipeline";
@@ -19,6 +27,7 @@ export const runPromote = defineCommand({
     const framework = await loadFramework(dir);
     const project = framework.discoverProject(dir);
     const surfaces = selectSurfaces(project, context.argv.id);
+    const declared = (await collectProjectDeclarations(framework, project.root)).platforms;
 
     const requested = context.argv.version;
     if (requested !== undefined && !Number.isInteger(requested)) {
@@ -31,18 +40,41 @@ export const runPromote = defineCommand({
 
     ui.intro(`Superwall ${pc.dim(`v${VERSION}`)}`);
 
+    const apps = await resolveApps({
+      api,
+      superwallDir: project.superwallDir,
+      wanted: wantedPlatforms(surfaces, declared),
+      pickApplication: context.interactive ? pickApplicationOption : undefined,
+    });
+    const multi = Object.keys(apps).length > 1;
+    const targets = planTargets({
+      surfaces,
+      declared,
+      apps,
+      only: parsePlatformFlags(context.argv.platform),
+    });
+
+    if (requested !== undefined && targets.length > 1) {
+      throw new Error(
+        `--version targets one paywall — \`${surfaces[0]?.id}\` is pushed to ${targets
+          .map((target) => target.platform)
+          .join(", ")}; add --platform <platform> to pick one.`,
+      );
+    }
+
     let promoted = 0;
     let skipped = 0;
-    for (const surface of surfaces) {
+    
+    for (const target of targets) {
       let changed = true;
-      await group(context, surface.id, async (note) => {
+      await group(context, targetLabel(target, multi), async (note) => {
         note("Finding on Superwall");
         const binding = await resolveBinding({
           api,
           superwallDir: project.superwallDir,
-          surface,
+          surface: target.surface,
+          app: { platform: target.platform, applicationId: target.applicationId },
           surfaces: project.surfaces,
-          pickApplication: context.interactive ? pickApplicationOption : undefined,
           create: false,
         });
 

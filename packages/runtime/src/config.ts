@@ -1,5 +1,14 @@
 import type { SuperwallProduct } from "./products";
 
+export const SUPERWALL_PLATFORMS = ["ios", "android", "web"] as const;
+
+export type SuperwallPlatform = (typeof SUPERWALL_PLATFORMS)[number];
+
+export const normalizePlatform = (value: string | undefined): SuperwallPlatform | undefined => {
+  const normalized = (value ?? "").toLowerCase();
+  return SUPERWALL_PLATFORMS.find((platform) => platform === normalized);
+};
+
 /**
  * A product slot the paywall renders, keyed by reference in
  * `SuperwallConfig["products"]`. Product data (price, period, trial…) is
@@ -10,8 +19,38 @@ export type SuperwallProductSlot = {
   productId?: string;
 };
 
-/** A slot object, or the store product identifier as shorthand. */
-export type SuperwallProductSlotInput = string | SuperwallProductSlot;
+/**
+ * One store identifier per platform the paywall ships to, for a slot whose
+ * underlying product differs by store — the same `purchase("annual")` buys
+ * the App Store product on iOS and the Play product on Android.
+ */
+export type SuperwallPlatformProductIds = Partial<Record<SuperwallPlatform, string>>;
+
+/**
+ * A slot object, the store product identifier as shorthand, or one
+ * identifier per platform.
+ */
+export type SuperwallProductSlotInput = string | SuperwallProductSlot | SuperwallPlatformProductIds;
+
+export const isPlatformProductIds = (
+  input: SuperwallProductSlotInput,
+): input is SuperwallPlatformProductIds =>
+  typeof input === "object" && input !== null && !("productId" in input);
+
+/**
+ * The store identifier a slot resolves to on a platform. A per-platform slot
+ * with no entry for the platform resolves to nothing; with no platform known
+ * at all it falls back to its first entry.
+ */
+export const productIdFor = (
+  input: SuperwallProductSlotInput,
+  platform?: SuperwallPlatform,
+): string | undefined => {
+  if (typeof input === "string") return input;
+  if (!isPlatformProductIds(input)) return input.productId;
+  if (platform !== undefined) return input[platform];
+  return Object.values(input).find((id) => typeof id === "string");
+};
 
 export type SuperwallPresentationConfig = {
   /** How the native SDK presents the paywall. Defaults to "fullscreen". */
@@ -201,8 +240,10 @@ export const defineSuperwallConfig = <TLocale extends string = string>(
   config: SuperwallConfig<TLocale>,
 ) => config;
 
-export const normalizeProductSlot = (input: SuperwallProductSlotInput): SuperwallProductSlot =>
-  typeof input === "string" ? { productId: input } : input;
+export const normalizeProductSlot = (
+  input: SuperwallProductSlotInput,
+  platform?: SuperwallPlatform,
+): SuperwallProductSlot => ({ productId: productIdFor(input, platform) });
 
 export const checkoutNeedsPaymentUi = (checkout: SuperwallCheckoutConfig | undefined): boolean => {
   const mode = checkoutModeOf(checkout);
@@ -213,9 +254,12 @@ export const checkoutNeedsPaymentUi = (checkout: SuperwallCheckoutConfig | undef
  * Materializes the config's product slots as products so references exist
  * before the SDK (or mock host) delivers real product data.
  */
-export const productsFromConfig = (config: SuperwallConfig | undefined): SuperwallProduct[] =>
+export const productsFromConfig = (
+  config: SuperwallConfig | undefined,
+  platform?: SuperwallPlatform,
+): SuperwallProduct[] =>
   Object.entries(config?.products ?? {}).map(([reference, input]) => {
-    const slot = normalizeProductSlot(input);
+    const slot = normalizeProductSlot(input, platform);
     return {
       reference,
       product: reference,

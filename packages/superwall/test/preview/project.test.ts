@@ -48,12 +48,16 @@ describe("buildStudioProject", () => {
       "superwall/paywalls/plus-upgrade/app/offer.tsx": "export default () => null\n",
       "superwall/paywalls/plus-upgrade/messages/es.ts": "export default {}\n",
       "superwall/paywalls/plus-upgrade/config.ts": JSON.stringify({
+        platforms: ["ios", "android"],
         variables: { plan: { type: "enum", values: ["go", "plus"], default: "plus" } },
         localization: { defaultLocale: "en", messages: { de: {} } },
       }),
       "superwall/superwall.lock": JSON.stringify({
         version: 1,
-        paywalls: { "plus-upgrade": { paywallId: "208540" } },
+        apps: { ios: "7", android: "8" },
+        paywalls: {
+          "plus-upgrade": { ios: { paywallId: "208540" }, android: { paywallId: "208541" } },
+        },
         funnels: {},
       }),
     });
@@ -67,6 +71,7 @@ describe("buildStudioProject", () => {
       kind: "paywall",
       id: "plus-upgrade",
       routes: ["index", "offer"],
+      platforms: ["ios", "android"],
       paywallId: "208540",
     });
     // Shared + local + config-declared locales, deduped and sorted.
@@ -165,5 +170,52 @@ describe("buildStudioProjects", () => {
       surfaces: [],
       diagnostics: [],
     });
+  });
+});
+
+describe("per-platform products in the studio payload", () => {
+  it("resolves ids for the surface's first platform and lists every id for typing", async () => {
+    const root = scaffold({
+      "superwall/paywalls/stores/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/stores/config.ts": JSON.stringify({
+        platforms: ["android", "ios"],
+        products: {
+          monthly: "pro_month",
+          annual: { ios: "pro_year", android: "pro_year_play" },
+          web: { web: "live:price_1:trial" },
+        },
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    const surface = payload.surfaces[0];
+    expect(surface?.products).toEqual({
+      monthly: "pro_month",
+      annual: "pro_year_play",
+      web: "live:price_1:trial",
+    });
+    expect(surface?.productIds).toEqual({
+      monthly: ["pro_month"],
+      annual: ["pro_year", "pro_year_play"],
+      web: ["live:price_1:trial"],
+    });
+  });
+
+  it("uses the lock's first platform when the config names none", async () => {
+    const root = scaffold({
+      "superwall/paywalls/stores/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/stores/config.ts": JSON.stringify({
+        products: { annual: { ios: "pro_year", android: "pro_year_play" } },
+      }),
+      "superwall/superwall.lock": JSON.stringify({
+        version: 1,
+        apps: { android: "8" },
+        paywalls: {},
+        funnels: {},
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    expect(payload.surfaces[0]?.products).toEqual({ annual: "pro_year_play" });
   });
 });

@@ -1,8 +1,16 @@
-import type { SuperwallCheckoutMode, SuperwallConfig } from "@superwall/runtime";
+import type { SuperwallCheckoutMode, SuperwallConfig, SuperwallPlatform } from "@superwall/runtime";
 import type { StripeProductReference } from "../hooks";
 import type { Transition } from "../navigation/index";
 
 export type PaywallDefinition = Omit<Partial<SuperwallConfig>, "checkout"> & {
+  /**
+   * The platforms this paywall is pushed to. The project binds one Superwall
+   * app per platform in `superwall.lock`, and one directory becomes one
+   * dashboard paywall per platform listed, each with its own versions.
+   * Required once the project pushes to more than one platform; with a
+   * single one it may be omitted.
+   */
+  platforms?: readonly SuperwallPlatform[];
   /**
    * How a purchase completes on the web — the mode alone, or the object form
    * to steer prefetching: `prefetch` names the Stripe product warmed on

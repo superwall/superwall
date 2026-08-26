@@ -1,4 +1,4 @@
-import type { LockFile } from "../lock";
+import { boundPaywallIds, type LockFile } from "../lock";
 
 export type DeviceSurface = { kind: string; id: string };
 
@@ -15,6 +15,7 @@ export type DeviceManifestSurface = {
   id: string;
   url: string;
   paywallId?: string;
+  paywallIds?: string[];
   identifier?: string;
   products?: Record<string, string>;
 };
@@ -49,15 +50,18 @@ export const buildDeviceManifest = (
   const surfaces = projects.flatMap((project) => {
     const prefix = many ? `${project.slug}/` : "";
     return project.surfaces.map((surface) => {
-      const binding =
+      const paywallIds = boundPaywallIds(
         surface.kind === "funnel"
           ? project.lock.funnels[surface.id]
-          : project.lock.paywalls[surface.id];
+          : project.lock.paywalls[surface.id],
+      );
+      const [paywallId] = paywallIds;
       return {
         kind: surface.kind,
         id: surface.id,
         url: `/preview/${prefix}${surface.kind}/${surface.id}`,
-        ...(binding === undefined ? {} : { paywallId: binding.paywallId }),
+        ...(paywallId === undefined ? {} : { paywallId }),
+        ...(paywallIds.length > 1 ? { paywallIds } : {}),
       };
     });
   });

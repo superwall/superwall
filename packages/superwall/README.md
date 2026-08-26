@@ -61,7 +61,16 @@ export default definePaywall({
   the restrictions of a URL segment, which makes them poor labels once a
   dashboard holds dozens of them; the directory stays the identifier and this
   is the label. Defaults to the directory name, title-cased.
-- **`products`** — slots by reference. Product data (price, period, trial…)
+- **`platforms`** — which platforms this paywall is pushed to, as a typed
+  array of `ios | android | web | flutter | react_native`. The project binds
+  one Superwall app per platform in `superwall.lock`; one directory listing
+  several platforms is one shared codebase with a dashboard paywall and
+  versions per platform. Optional while the project is on one platform;
+  required once it pushes to more — a push never guesses.
+- **`products`** — slots by reference. A slot is a store identifier, or one
+  identifier per platform (`annual: { ios: "…", android: "…" }`) when the
+  store product differs — `purchase("annual")` stays one call, and each
+  platform's build carries its own id. Product data (price, period, trial…)
   is SDK-owned and arrives at runtime.
   Product data has no local source and no defaults: `superwall dev` reads it
   from Superwall, and a reference the dashboard has no product for renders
@@ -354,10 +363,15 @@ Binding — push updates, never duplicates, and needs no IDs in your code.
 Resolution order: `superwall.lock` (written on first push, commit it) → a
 dashboard paywall already stamped with this surface
 (`metadata.headlessSurface`) or whose identifier matches the directory name →
-auto-create. The app resolves automatically too: `superwall.lock` → your
-account (a single app binds itself; several prompt once, and the answer is
-saved to the lock). Nothing about the dashboard belongs in your config —
-`superwall.lock` holds every binding, and it is meant to be committed.
+auto-create — per platform: a surface listing `platforms: ["ios", "android"]`
+is bound, built, versioned and promoted once for each. Apps resolve through the
+lock's `apps` map of platform → app id: a single app in the account binds
+itself under its platform; a platform a config names for the first time binds
+itself when the account has exactly one app of it, and otherwise prompts once
+(in CI, add `"web": "<app id>"` to the map by hand). With several platforms
+bound, a surface that omits `platforms` fails the push instead of being guessed
+at. `--platform <p>` narrows push/promote/publish. Nothing about the dashboard belongs in your
+config — `superwall.lock` holds every binding, and it is meant to be committed.
 Snapshots are content-addressed (sha256), so every change is a new immutable
 version.
 

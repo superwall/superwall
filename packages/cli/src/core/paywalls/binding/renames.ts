@@ -1,19 +1,26 @@
 import type { FrameworkSurface } from "../project/framework";
-import { readLock, removeBinding, writeBinding } from "../project/lock";
+import {
+  describeBindings,
+  readLock,
+  removeBinding,
+  writeBindings,
+  type SurfaceBindings,
+  type SurfaceKind,
+} from "../project/lock";
 
-export type SurfaceKind = "paywall" | "funnel";
+export type { SurfaceKind };
 
 export interface RenameOrphan {
   kind: SurfaceKind;
   id: string;
-  paywallId: string;
+  bindings: SurfaceBindings;
 }
 
 export interface RenamePair {
   kind: SurfaceKind;
   from: string;
   to: string;
-  paywallId: string;
+  bindings: SurfaceBindings;
 }
 
 export interface RenameDeclaration {
@@ -60,7 +67,7 @@ function unresolvedError(
       "Cannot tell whether these are new or renamed, and this run cannot ask.",
       "",
       "Bound in superwall.lock, but no directory on disk:",
-      ...orphans.map((orphan) => `  ${orphan.id} → paywall ${orphan.paywallId}`),
+      ...orphans.map((orphan) => `  ${orphan.id} → ${describeBindings(orphan.bindings)}`),
       "On disk, but not in superwall.lock:",
       ...newcomers.map((newcomer) => `  ${newcomer.id}`),
       "",
@@ -93,8 +100,8 @@ export async function resolveRenames(input: {
     const section = kind === "paywall" ? lock.paywalls : lock.funnels;
     const onDisk = input.surfaces.filter((surface) => surface.kind === kind);
     const ids = new Set(onDisk.map((surface) => surface.id));
-    for (const [id, binding] of Object.entries(section).sort(([a], [b]) => a.localeCompare(b))) {
-      if (!ids.has(id)) orphans.push({ kind, id, paywallId: binding.paywallId });
+    for (const [id, bindings] of Object.entries(section).sort(([a], [b]) => a.localeCompare(b))) {
+      if (!ids.has(id)) orphans.push({ kind, id, bindings });
     }
     for (const surface of onDisk) {
       if (!(surface.id in section)) newcomers.push(surface);
@@ -103,15 +110,13 @@ export async function resolveRenames(input: {
 
   const renamed: RenamePair[] = [];
   const rebind = (orphan: RenameOrphan, newcomer: FrameworkSurface) => {
-    writeBinding(input.superwallDir, newcomer.kind, newcomer.id, {
-      paywallId: orphan.paywallId,
-    });
+    writeBindings(input.superwallDir, newcomer.kind, newcomer.id, orphan.bindings);
     removeBinding(input.superwallDir, orphan.kind, orphan.id);
     renamed.push({
       kind: newcomer.kind,
       from: orphan.id,
       to: newcomer.id,
-      paywallId: orphan.paywallId,
+      bindings: orphan.bindings,
     });
     orphans.splice(orphans.indexOf(orphan), 1);
     newcomers.splice(newcomers.indexOf(newcomer), 1);
@@ -159,7 +164,7 @@ export async function resolveRenames(input: {
   for (const orphan of orphans) {
     if (!input.chooseStale) {
       input.notice?.(
-        `\`${orphan.id}\` is still bound to paywall ${orphan.paywallId} but no longer exists on ` +
+        `\`${orphan.id}\` is still bound to ${describeBindings(orphan.bindings)} but no longer exists on ` +
           `disk — remove it from superwall.lock if that paywall is gone.`,
       );
       kept.push(orphan);

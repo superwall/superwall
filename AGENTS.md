@@ -16,6 +16,20 @@ already covers.
 Style the name as `superwall`, lowercase, in user-facing copy and docs.
 "Superwall" (capitalized) refers to the platform/service.
 
+## Companion repos — docs and skills ship with every change
+
+This repo carries no user documentation of its own. The framework's docs live
+in [superwall/docs](https://github.com/superwall/docs) under
+`content/docs/framework/`, and the agent playbook in
+[superwall/skills](https://github.com/superwall/skills) under
+`skills/superwall-framework/` (`SKILL.md` + `references/`). Both are
+conventionally checked out beside this repository (`../docs`, `../skills`) —
+find them there rather than assuming an absolute path. A change here that
+alters behavior, a command, a flag, a config key, an error message, or a file
+format is not finished until the matching docs page(s) and skill file(s) are
+updated in the same pass; treat the three repos as one deliverable and say in
+the hand-off which pages and references changed.
+
 ## Project conventions (what the framework serves)
 
 Everything Superwall-related in a user's repo lives in a `superwall/`
@@ -44,8 +58,23 @@ self-describing npm project — clone it, install, `superwall dev`:
   route, directories prefix the name, `index.tsx` is the entry, and `layout.tsx`
   is the one reserved name — anything else in `app/` is a diagnostic telling you
   to move it to `components/`) + local `components/` and `messages/`
-- `superwall/superwall.lock` — the binding map (surface → paywall ID), and the
-  only metadata file in the tree. Publish-time facts live in commit trailers,
+- `superwall/superwall.lock` — the binding map, and the only metadata file in
+  the tree: `apps` maps each platform (`ios`, `android`, `web` — one Superwall
+  app per platform) to its app id, and each
+  surface binds to one paywall ID **per platform**. A surface picks its
+  platforms with `platforms: [...]` in `config.ts` (a typed literal union,
+  `SuperwallPlatform`); optional while the project is on one platform,
+  required once it pushes to several — push refuses to guess, and there is
+  no project-wide default. A product slot may carry one store id per
+  platform (`annual: { ios, android, web }`) behind a single reference; a
+  platform build resolves it and rewrites the `products` literal in the
+  config module (`rewriteConfigProducts`, via rollup's AST) so other
+  platforms' ids don't ship; products reached through a spread keep the entry
+  override only. Dev builds keep the map live so the mock resolves by device.
+  A platform the slot doesn't name is refused. Every (surface, platform) pair is its own build
+  (asset host is per app, product ids per platform), version history
+  (`play-store` on android), and source commit. Publish-time
+  facts live in commit trailers,
   not on disk. **It is the binding of record**: a directory rename is detected
   (a bound id that no longer exists on disk, beside an unbound directory), never
   guessed — push prompts interactively, hard-errors in CI, and refuses to create

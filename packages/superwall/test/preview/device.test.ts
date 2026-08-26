@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { attachIdentifiers, attachProducts, buildDeviceManifest } from "../../src/preview/device";
 
-const emptyLock = { version: 1 as const, paywalls: {}, funnels: {} };
+const emptyLock = { version: 1 as const, apps: {}, paywalls: {}, funnels: {} };
 
 describe("buildDeviceManifest", () => {
   it("carries the lock binding for bound surfaces and omits it for unbound ones", () => {
@@ -12,7 +12,7 @@ describe("buildDeviceManifest", () => {
           { kind: "paywall", id: "pro" },
           { kind: "paywall", id: "draft" },
         ],
-        lock: { ...emptyLock, paywalls: { pro: { paywallId: "12345" } } },
+        lock: { ...emptyLock, paywalls: { pro: { ios: { paywallId: "12345" } } } },
       },
     ]);
     expect(manifest.surfaces).toEqual([
@@ -28,12 +28,33 @@ describe("buildDeviceManifest", () => {
         surfaces: [{ kind: "funnel", id: "onboarding" }],
         lock: {
           ...emptyLock,
-          paywalls: { onboarding: { paywallId: "wrong" } },
-          funnels: { onboarding: { paywallId: "77" } },
+          paywalls: { onboarding: { ios: { paywallId: "wrong" } } },
+          funnels: { onboarding: { ios: { paywallId: "77" } } },
         },
       },
     ]);
     expect(manifest.surfaces[0]?.paywallId).toBe("77");
+  });
+
+  it("lists every app's paywall when a surface is bound to several, first one first", () => {
+    const manifest = buildDeviceManifest([
+      {
+        slug: "app",
+        surfaces: [{ kind: "paywall", id: "pro" }],
+        lock: {
+          ...emptyLock,
+          apps: { ios: "1", android: "2" },
+          paywalls: { pro: { ios: { paywallId: "12345" }, android: { paywallId: "678" } } },
+        },
+      },
+    ]);
+    expect(manifest.surfaces[0]).toEqual({
+      kind: "paywall",
+      id: "pro",
+      url: "/preview/paywall/pro",
+      paywallId: "12345",
+      paywallIds: ["12345", "678"],
+    });
   });
 
   it("prefixes urls with the project slug when several projects are served", () => {

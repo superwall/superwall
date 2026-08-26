@@ -1,9 +1,14 @@
 import * as path from "node:path";
 import { importDefault } from "../config/load";
 import type { PaywallDefinition } from "../config";
-import { MOCK_DEVICE_VARIABLES, normalizeProductSlot } from "@superwall/runtime";
+import {
+  MOCK_DEVICE_VARIABLES,
+  isPlatformProductIds,
+  normalizePlatform,
+  productIdFor,
+} from "@superwall/runtime";
 import { discoverProject } from "../discover";
-import { readLock } from "../lock";
+import { firstBinding, readLock } from "../lock";
 
 export type ConfigLoader = (file: string) => Promise<PaywallDefinition | undefined>;
 
@@ -14,9 +19,14 @@ export type StudioSurfacePayload = {
   routes: string[];
   locales: string[];
   products: Record<string, string>;
+  productIds: Record<string, string[]>;
+  platforms?: string[];
   paywallId?: string;
   editedAt?: string;
 };
+
+const declaredPlatforms = (value: unknown): string[] | undefined =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : undefined;
 
 export type StudioProjectPayload = {
   title: string;
@@ -63,6 +73,9 @@ export const buildStudioProject = async (
 
       const binding =
         surface.kind === "paywall" ? lock.paywalls[surface.id] : lock.funnels[surface.id];
+      const platforms = declaredPlatforms(definition?.platforms);
+      const platform = normalizePlatform(platforms?.[0] ?? Object.keys(lock.apps)[0]);
+      const slots = Object.entries(definition?.products ?? {});
 
       return {
         kind: surface.kind,
@@ -70,12 +83,21 @@ export const buildStudioProject = async (
         routes: surface.routes.map((route) => route.name),
         locales: [...locales].toSorted(),
         products: Object.fromEntries(
-          Object.entries(definition?.products ?? {}).map(([reference, input]) => [
+          slots.map(([reference, input]) => [
             reference,
-            normalizeProductSlot(input).productId ?? reference,
+            productIdFor(input, platform) ?? productIdFor(input) ?? reference,
           ]),
         ),
-        paywallId: binding?.paywallId,
+        productIds: Object.fromEntries(
+          slots.map(([reference, input]) => [
+            reference,
+            isPlatformProductIds(input)
+              ? [...new Set(Object.values(input).filter((id) => typeof id === "string"))]
+              : [productIdFor(input) ?? reference],
+          ]),
+        ),
+        ...(platforms === undefined ? {} : { platforms }),
+        paywallId: firstBinding(binding)?.paywallId,
       };
     }),
   );

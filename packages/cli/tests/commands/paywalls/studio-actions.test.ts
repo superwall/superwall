@@ -8,7 +8,7 @@ import { afterEach, test } from "node:test";
 import { createStudioActions } from "@/commands/paywalls/studio-actions";
 import { VERSION } from "@/constants";
 import type { Framework, FrameworkProject, FrameworkSurface } from "@/core/paywalls/project/framework";
-import { writeApplicationId, writeBinding } from "@/core/paywalls/project/lock";
+import { readLock, writeApp, writeBinding } from "@/core/paywalls/project/lock";
 
 const dirs: string[] = [];
 const servers: http.Server[] = [];
@@ -53,6 +53,7 @@ interface FakeApi {
   calls: string[];
   bodies: Record<string, string>;
   bare: string;
+  gate?: (url: string) => { status: number; body: unknown } | undefined;
 }
 
 async function startApi(options: { rejectSource?: boolean } = {}): Promise<FakeApi> {
@@ -71,7 +72,10 @@ async function startApi(options: { rejectSource?: boolean } = {}): Promise<FakeA
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify(value));
       };
-      if (url.endsWith("/source-access")) {
+      const gated = api.gate?.(url);
+      if (gated) {
+        send(gated.status, gated.body);
+      } else if (url.endsWith("/source-access")) {
         send(200, {
           repo: "org1-app42",
           remote: `file://${bare}`,
@@ -92,6 +96,8 @@ async function startApi(options: { rejectSource?: boolean } = {}): Promise<FakeA
           })),
         });
       } else if (req.method === "GET" && url.startsWith("/v2/paywalls?")) {
+        send(200, { data: [], has_more: false });
+      } else if (req.method === "GET" && url.startsWith("/v2/projects")) {
         send(200, { data: [], has_more: false });
       } else if (req.method === "GET" && /\/v2\/paywalls\/\d+$/.test(url)) {
         send(200, { id: 208540, application_id: 42 });
@@ -124,7 +130,8 @@ async function startApi(options: { rejectSource?: boolean } = {}): Promise<FakeA
 
 function boundProject(): FrameworkProject {
   const project = scaffold();
-  writeBinding(project.superwallDir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeApp(project.superwallDir, "ios", "42");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
   return project;
 }
 
@@ -158,7 +165,8 @@ test("run surfaces an unreachable API as a message", async () => {
   process.env.SUPERWALL_API_HOST = "http://127.0.0.1:1";
 
   const project = scaffold();
-  writeBinding(project.superwallDir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeApp(project.superwallDir, "ios", "42");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
   const actions = createStudioActions(framework, project);
   const result = await actions.run("push", surface);
   assert.equal(result.ok, false);
@@ -194,7 +202,6 @@ test("publish pushes the source between the version and the promote", async () =
     "promote:done",
   ]);
   assert.deepEqual(api.calls, [
-    "GET /v2/paywalls/208540",
     "POST /v2/paywalls/208540/versions",
     "POST /v2/paywalls/208540/source-access",
     "POST /v2/paywalls/208540/versions/7/source-commit",
@@ -304,7 +311,8 @@ test("status reports an unreachable API instead of throwing", async () => {
   process.env.SUPERWALL_API_HOST = "http://127.0.0.1:1";
 
   const project = scaffold();
-  writeBinding(project.superwallDir, "paywall", "plus-upgrade", { paywallId: "208540" });
+  writeApp(project.superwallDir, "ios", "42");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
   const actions = createStudioActions(framework, project);
   const status = await actions.status(surface);
   assert.deepEqual(Object.keys(status), ["unreachable"]);
@@ -329,7 +337,7 @@ test("promote from the studio links without creating and never builds", async ()
 test("promoting a surface that was never pushed explains itself instead of creating one", async () => {
   await startApi();
   const project = scaffold();
-  writeApplicationId(project.superwallDir, "42");
+  writeApp(project.superwallDir, "ios", "42");
 
   const result = await createStudioActions(framework, project).run("promote", surface);
 
@@ -348,4 +356,154 @@ test("status reports the live url and active flag straight from the paywall", as
     updatedAt: undefined,
     identifier: undefined,
   });
+});
+
+test("a surface declared for two platforms is built, pushed, and promoted once per app", async () => {
+  const api = await startApi();
+  const project = boundProject();
+  writeApp(project.superwallDir, "android", "43");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "208541" });
+  const declaring: Framework = {
+    ...framework,
+    studioProject: async () => ({
+      surfaces: [{ kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["ios", "android"] }],
+    }),
+  };
+
+  const steps: string[] = [];
+  const result = await createStudioActions(declaring, project).run("publish", surface, (step, state) =>
+    steps.push(`${step}:${state}`),
+  );
+
+  assert.deepEqual(result, { ok: true, version: 7, live: true });
+  assert.deepEqual(builds, [
+    "https://user-content.superwalleditor.com/user-content/hl/42",
+    "https://user-content.superwalleditor.com/user-content/hl/43",
+  ]);
+  assert.equal(steps.filter((step) => step === "push:done").length, 2);
+  assert.ok(api.calls.includes("POST /v2/paywalls/208540/promote"));
+  assert.ok(api.calls.includes("POST /v2/paywalls/208541/promote"));
+  assert.deepEqual(readLock(project.superwallDir).paywalls["plus-upgrade"], {
+    ios: { paywallId: "208540" },
+    android: { paywallId: "208541" },
+  });
+});
+
+test("a surface that names no platform while the project has several fails before building", async () => {
+  await startApi();
+  const project = boundProject();
+  writeApp(project.superwallDir, "android", "43");
+
+  const result = await createStudioActions(framework, project).run("push", surface);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.match(result.error, /doesn't say which platforms it's for/);
+  assert.deepEqual(builds, []);
+});
+
+test("status reads the first app's binding", async () => {
+  await startApi();
+  const project = boundProject();
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "208541" });
+
+  const status = await createStudioActions(framework, project).status(surface);
+  assert.equal(status.paywallId, "208540");
+});
+
+test("samples are fetched for the project's first app, and a missing catalogue is reported, not invented", async () => {
+  await startApi();
+  const project = boundProject();
+
+  const samples = await createStudioActions(framework, project).samples?.();
+
+  assert.deepEqual(samples?.live, { device: false, user: false });
+  assert.equal(samples?.products, undefined);
+  assert.equal(samples?.unreachable, undefined, "a 404 on optional sample endpoints is not an outage");
+});
+
+test("samples explain an unbound project instead of throwing", async () => {
+  await startApi();
+  const project = scaffold();
+
+  const samples = await createStudioActions(framework, project).samples?.();
+
+  assert.match(samples?.unreachable ?? "", /has no apps yet/);
+});
+
+test("appScheme asks the dashboard for the ios app's scheme when the project binds one", async () => {
+  await startApi();
+  const project = boundProject();
+  writeApp(project.superwallDir, "web", "43");
+
+  const scheme = await createStudioActions(framework, project).appScheme?.();
+
+  assert.equal(typeof scheme, "object");
+  assert.equal(scheme?.blocksLocalNetworking, undefined);
+});
+
+test("a two-platform studio push sends each app its own product id and store", async () => {
+  const api = await startApi();
+  const project = boundProject();
+  writeApp(project.superwallDir, "android", "43");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "208541" });
+  const perPlatform: Framework = {
+    ...framework,
+    buildSnapshot: async (_project, _surface, options) => ({
+      name: "Pro",
+      snapshotId: `snap-${options?.platform}`,
+      html: "<html></html>",
+      bytes: 13,
+      htmlFile: "x",
+      assets: [],
+      assetBytes: 0,
+      products: { annual: options?.platform === "android" ? "pro_year_play" : "pro_year" },
+    }),
+    studioProject: async () => ({
+      surfaces: [{ kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["ios", "android"] }],
+    }),
+  };
+
+  const result = await createStudioActions(perPlatform, project).run("push", surface);
+
+  assert.equal(result.ok, true);
+  const ios: unknown = JSON.parse(api.bodies["/v2/paywalls/208540/versions"] ?? "{}");
+  const android: unknown = JSON.parse(api.bodies["/v2/paywalls/208541/versions"] ?? "{}");
+  assert.deepEqual(Reflect.get(Object(ios), "products"), [
+    { store: "app-store", identifier: "pro_year", reference_name: "annual" },
+  ]);
+  assert.deepEqual(Reflect.get(Object(android), "products"), [
+    { store: "play-store", identifier: "pro_year_play", reference_name: "annual" },
+  ]);
+});
+
+test("the studio relays the API's private-beta refusal verbatim", async () => {
+  const api = await startApi();
+  const project = boundProject();
+  writeApp(project.superwallDir, "android", "43");
+  const gated: Framework = {
+    ...framework,
+    studioProject: async () => ({
+      surfaces: [{ kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["android"] }],
+    }),
+  };
+  api.gate = (url) =>
+    url === "/v2/paywalls"
+      ? {
+          status: 400,
+          body: {
+            type: "invalid_request_error",
+            code: "parameter_invalid",
+            message:
+              "Superwall for Agents is in private beta and isn't enabled for this app yet. Contact support@superwall.com to get access.",
+          },
+        }
+      : undefined;
+
+  const result = await createStudioActions(gated, { ...project, surfaces: [surface] }).run(
+    "push",
+    surface,
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.match(result.error, /^Superwall for Agents is in private beta and isn't enabled for this app yet\./);
 });

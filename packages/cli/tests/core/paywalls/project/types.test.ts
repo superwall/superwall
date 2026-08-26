@@ -4,7 +4,13 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import type { FrameworkProject, FrameworkSurface } from "@/core/paywalls/project/framework";
-import { TYPES_FILE, projectTypes, writeProjectTypes } from "@/core/paywalls/project/types";
+import {
+  TYPES_FILE,
+  collectProjectDeclarations,
+  projectTypes,
+  writeProjectTypes,
+} from "@/core/paywalls/project/types";
+import type { Framework } from "@/core/paywalls/project/framework";
 
 const dirs: string[] = [];
 
@@ -135,4 +141,79 @@ test("an unwritable directory is survivable — types are a convenience, not a g
   assert.doesNotThrow(() =>
     writeProjectTypes(project("/nope/does/not/exist", [surface("a", ["index"])])),
   );
+});
+
+test("collectProjectDeclarations keeps products and per-surface platforms from the framework payload", async () => {
+  const framework: Framework = {
+    discoverProject: () => {
+      throw new Error("unused");
+    },
+    buildSnapshot: async () => {
+      throw new Error("unused");
+    },
+    startPreviewServer: async () => ({}),
+    studioProject: async () => {
+      const surfaces: {
+        kind?: string;
+        id?: string;
+        products: Record<string, string>;
+        productIds?: Record<string, string[]>;
+        platforms?: string[];
+      }[] = [
+        {
+          kind: "paywall",
+          id: "a",
+          products: { monthly: "m", annual: "y_ios" },
+          productIds: { monthly: ["m"], annual: ["y_ios", "y_play"] },
+          platforms: ["ios", "android"],
+        },
+        { kind: "funnel", id: "b", products: { annual: "y" } },
+        { products: { stray: "s" } },
+      ];
+      return { surfaces };
+    },
+  };
+
+  const declarations = await collectProjectDeclarations(framework, "/tmp");
+  assert.deepEqual(declarations.products, {
+    monthly: ["m"],
+    annual: ["y_ios", "y_play", "y"],
+    stray: ["s"],
+  });
+  assert.deepEqual(declarations.platforms, { "paywall/a": ["ios", "android"], "funnel/b": undefined });
+});
+
+test("a framework without studioProject, or one that throws, declares nothing", async () => {
+  const bare: Framework = {
+    discoverProject: () => {
+      throw new Error("unused");
+    },
+    buildSnapshot: async () => {
+      throw new Error("unused");
+    },
+    startPreviewServer: async () => ({}),
+  };
+  assert.deepEqual(await collectProjectDeclarations(bare, "/tmp"), { products: {}, platforms: {} });
+  assert.deepEqual(
+    await collectProjectDeclarations(
+      {
+        ...bare,
+        studioProject: async () => {
+          throw new Error("broken config");
+        },
+      },
+      "/tmp",
+    ),
+    { products: {}, platforms: {} },
+  );
+});
+
+test("a reference is Stripe-typed when any platform's id is a Stripe price", () => {
+  const types = projectTypes(project("/tmp", [surface("a", ["index"])]), {
+    annual: ["pro_year", "pro_year_play"],
+    plus: ["pro_plus", "live:price_1:trial"],
+  });
+
+  assert.match(types, /interface SuperwallProducts \{\n    "annual": true;\n    "plus": true;\n  \}/);
+  assert.match(types, /interface SuperwallStripeProducts \{\n    "plus": true;\n  \}/);
 });

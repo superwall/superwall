@@ -1,5 +1,6 @@
 import type { FrameworkSurface } from "@/core/paywalls/project/framework";
 import { RenameError, type RenameDecision, type RenameOrphan } from "@/core/paywalls/binding/renames";
+import { describeBindings } from "@/core/paywalls/project/lock";
 import { ui } from "@/ui";
 
 const CREATE = "__create__";
@@ -14,7 +15,7 @@ export async function pickRenameOption(input: {
       ...input.orphans.map((orphan) => ({
         value: orphan.id,
         label: `Renamed from ${orphan.id}`,
-        hint: `paywall ${orphan.paywallId}`,
+        hint: describeBindings(orphan.bindings),
       })),
       { value: CREATE, label: `Create a new ${input.newcomer.kind}` },
     ],

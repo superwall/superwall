@@ -33,6 +33,7 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
     routes: isStringArray(value.routes) ? value.routes : [],
     products: isStringRecord(value.products) ? value.products : {},
     locales: isStringArray(value.locales) ? value.locales : [],
+    ...(isStringArray(value.platforms) ? { platforms: value.platforms } : {}),
     paywallId: typeof value.paywallId === "string" ? value.paywallId : undefined,
   };
 };

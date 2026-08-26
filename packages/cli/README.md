@@ -62,7 +62,10 @@ superwall publish     # push and promote in one step
 `create` sets up a `superwall/` directory in your app — always that name,
 always self-contained. `push -m "why"` records a note in the source commit,
 and `promote --version <n>` points production at any pushed version, so a
-rollback is one command. It asks for a starting point (`--example with-rive` to
+rollback is one command. A project can push to several platforms: each
+paywall's `config.ts` lists them (`platforms: ["ios", "android"]`; the lock
+binds one app per platform), and `--platform <p>` narrows `push`, `promote`,
+and `publish` to one of them. It asks for a starting point (`--example with-rive` to
 begin from any example in the public repo), then looks at the app around it:
 if the Superwall SDK is already configured, it finds your app by its API key
 and binds pushes to it; otherwise it can log you in, pick an app, or create

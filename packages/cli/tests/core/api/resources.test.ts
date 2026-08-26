@@ -242,6 +242,18 @@ test("versionProducts maps store identifiers to app-store", () => {
   ]);
 });
 
+test("versionProducts sends Play Store for an android build, and never for stripe", () => {
+  assert.deepEqual(
+    versionProducts({ monthly: "pro_999_month", web: "live:price_abc:trial" }, "android"),
+    [
+      { store: "play-store", identifier: "pro_999_month", reference_name: "monthly" },
+      { store: "stripe", identifier: "live:price_abc:trial", reference_name: "web" },
+    ],
+  );
+  assert.equal(versionProducts({ monthly: "pro_999_month" }, "ios")[0]?.store, "app-store");
+  assert.equal(versionProducts({ monthly: "pro_999_month" }, "flutter")[0]?.store, "app-store");
+});
+
 test("versionProducts returns empty for no products", () => {
   assert.deepEqual(versionProducts(undefined), []);
   assert.deepEqual(versionProducts({}), []);

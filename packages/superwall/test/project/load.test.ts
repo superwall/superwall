@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { importDefault, loadSurfaceConfig } from "../../src/config/load";
 import type { DiscoveredSurface } from "../../src/discover";
-import { readLock } from "../../src/lock";
+import { boundPaywallIds, firstBinding, readLock } from "../../src/lock";
 
 const dirs: string[] = [];
 
@@ -78,31 +78,57 @@ describe("loadSurfaceConfig", () => {
 });
 
 describe("readLock", () => {
-  it("reads the CLI-written bindings", () => {
+  it("reads the CLI-written bindings, one entry per app", () => {
     const dir = scaffold({
       "superwall.lock": JSON.stringify({
         version: 1,
-        applicationId: "7",
-        paywalls: { "plus-upgrade": { paywallId: "208540" } },
-        funnels: {},
+        apps: { ios: "7", android: "8" },
+        paywalls: {
+          "plus-upgrade": {
+            ios: { paywallId: "208540", snapshot: "abc" },
+            android: { paywallId: "208541" },
+          },
+        },
+        funnels: { onboarding: { ios: { paywallId: "300" } } },
       }),
     });
     const lock = readLock(dir);
-    expect(lock.applicationId).toBe("7");
-    expect(lock.paywalls["plus-upgrade"]).toEqual({ paywallId: "208540" });
+    expect(lock.apps).toEqual({ ios: "7", android: "8" });
+    expect(lock.paywalls["plus-upgrade"]).toEqual({
+      ios: { paywallId: "208540", snapshot: "abc" },
+      android: { paywallId: "208541" },
+    });
+    expect(lock.funnels.onboarding).toEqual({ ios: { paywallId: "300" } });
+    expect(firstBinding(lock.paywalls["plus-upgrade"])?.paywallId).toBe("208540");
+    expect(boundPaywallIds(lock.paywalls["plus-upgrade"])).toEqual(["208540", "208541"]);
+  });
+
+  it("drops malformed entries instead of failing the whole file", () => {
+    const dir = scaffold({
+      "superwall.lock": JSON.stringify({
+        version: 1,
+        apps: { ios: "7", broken: 3 },
+        paywalls: {
+          good: { ios: { paywallId: "1" }, bad: { paywallId: 2 } },
+          empty: { ios: "nope" },
+          scalar: "x",
+        },
+        funnels: "not an object",
+      }),
+    });
+    const lock = readLock(dir);
+    expect(lock.apps).toEqual({ ios: "7" });
+    expect(lock.paywalls).toEqual({ good: { ios: { paywallId: "1" } } });
+    expect(lock.funnels).toEqual({});
+    expect(firstBinding(undefined)).toBeUndefined();
+    expect(boundPaywallIds(undefined)).toEqual([]);
   });
 
   it("treats a missing, corrupt, or future-version lock as unbound", () => {
-    expect(readLock(scaffold({}))).toEqual({ version: 1, paywalls: {}, funnels: {} });
-    expect(readLock(scaffold({ "superwall.lock": "{{{" }))).toEqual({
-      version: 1,
-      paywalls: {},
-      funnels: {},
-    });
-    expect(readLock(scaffold({ "superwall.lock": '{"version":2}' }))).toEqual({
-      version: 1,
-      paywalls: {},
-      funnels: {},
-    });
+    const empty = { version: 1, apps: {}, paywalls: {}, funnels: {} };
+    expect(readLock(scaffold({}))).toEqual(empty);
+    expect(readLock(scaffold({ "superwall.lock": "{{{" }))).toEqual(empty);
+    expect(readLock(scaffold({ "superwall.lock": '{"version":2}' }))).toEqual(empty);
+    expect(readLock(scaffold({ "superwall.lock": "[]" }))).toEqual(empty);
   });
 });

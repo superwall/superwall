@@ -5,8 +5,11 @@ import {
   backgroundOf,
   checkoutModeOf,
   checkoutNeedsPaymentUi,
-  normalizeProductSlot,
+  isPlatformProductIds,
+  normalizePlatform,
+  productIdFor,
   type SuperwallConfig,
+  type SuperwallPlatform,
 } from "@superwall/runtime";
 import react from "@vitejs/plugin-react-swc";
 import { build as viteBuild, type Plugin } from "vite";
@@ -51,7 +54,97 @@ export type BuiltSnapshot = {
 
 export type BuildOptions = {
   assetBaseUrl?: string;
+  platform?: string;
 };
+
+export const resolveProductIds = (
+  config: SuperwallConfig,
+  surface: DiscoveredSurface,
+  platform: SuperwallPlatform | undefined,
+): Record<string, string> => {
+  const missing: string[] = [];
+  const resolved = Object.entries(config.products ?? {}).map(([reference, input]) => {
+    const id = productIdFor(input, platform);
+    if (id === undefined && platform !== undefined && isPlatformProductIds(input)) {
+      missing.push(reference);
+    }
+    return [reference, id ?? reference] as const;
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `${surface.kind}s/${surface.id}: ${missing.map((reference) => `\`${reference}\``).join(", ")} ` +
+        `${missing.length === 1 ? "has" : "have"} no product id for ${platform} — add one in config.ts, ` +
+        `or drop ${platform} from this ${surface.kind}'s platforms.`,
+    );
+  }
+  return Object.fromEntries(resolved);
+};
+
+const hasRange = (node: object): node is { start: number; end: number } =>
+  "start" in node &&
+  typeof node.start === "number" &&
+  "end" in node &&
+  typeof node.end === "number";
+
+export const rewriteConfigProducts = (
+  code: string,
+  program: { body: readonly { type: string }[] },
+  products: Record<string, string>,
+): string | undefined => {
+  for (const statement of program.body) {
+    if (statement.type !== "ExportDefaultDeclaration" || !("declaration" in statement)) continue;
+    let object: unknown = statement.declaration;
+    if (
+      typeof object === "object" &&
+      object !== null &&
+      "type" in object &&
+      object.type === "CallExpression" &&
+      "arguments" in object &&
+      Array.isArray(object.arguments)
+    ) {
+      object = object.arguments[0];
+    }
+    if (
+      typeof object !== "object" ||
+      object === null ||
+      !("type" in object) ||
+      object.type !== "ObjectExpression" ||
+      !("properties" in object) ||
+      !Array.isArray(object.properties)
+    ) {
+      return undefined;
+    }
+    for (const property of object.properties) {
+      if (typeof property !== "object" || property === null) continue;
+      if (!("type" in property) || property.type !== "Property" || !("key" in property)) continue;
+      const key: unknown = property.key;
+      const name =
+        typeof key === "object" && key !== null && "type" in key
+          ? key.type === "Identifier" && "name" in key
+            ? key.name
+            : key.type === "Literal" && "value" in key
+              ? key.value
+              : undefined
+          : undefined;
+      if (name !== "products" || !("value" in property)) continue;
+      const value: unknown = property.value;
+      if (typeof value !== "object" || value === null || !hasRange(value)) return undefined;
+      return `${code.slice(0, value.start)}${JSON.stringify(products)}${code.slice(value.end)}`;
+    }
+    return undefined;
+  }
+  return undefined;
+};
+
+const resolveConfigProducts = (configFile: string, products: Record<string, string>): Plugin => ({
+  name: "superwall:config-products",
+  enforce: "post",
+  transform(code, id) {
+    if (id.split("?")[0] !== configFile) return null;
+    const rewritten = rewriteConfigProducts(code, this.parse(code), products);
+    return rewritten === undefined ? null : { code: rewritten, map: null };
+  },
+});
 
 export const ROUTE_ASSETS_ID = "sw-route-assets";
 
@@ -146,6 +239,7 @@ const entrySource = (
   project: Project,
   surface: DiscoveredSurface,
   config: SuperwallConfig,
+  products?: Record<string, string>,
 ): string => {
   const imp = (file: string) => JSON.stringify(relativeImport(entryDir, file));
   const checkout = checkoutNeedsPaymentUi(config.checkout);
@@ -183,6 +277,7 @@ const entrySource = (
     `}`,
     `const config = {`,
     `  ...merged,`,
+    ...(products === undefined ? [] : [`  products: ${JSON.stringify(products)},`]),
     `  localization: {`,
     `    defaultLocale: merged.localization?.defaultLocale ?? "en",`,
     `    messages: catalogs,`,
@@ -338,16 +433,31 @@ export const buildSnapshot = async (
   surface: DiscoveredSurface,
   options: BuildOptions = {},
 ): Promise<BuiltSnapshot> => {
-  const entryDir = path.join(project.superwallDir, ".superwall/entries", surface.kind, surface.id);
-  const outDir = path.join(project.superwallDir, ".superwall/dist", surface.kind, surface.id);
   const { assetBaseUrl } = options;
+  const platform = normalizePlatform(options.platform);
+  const variant = platform === undefined ? [] : [platform];
+  const entryDir = path.join(
+    project.superwallDir,
+    ".superwall/entries",
+    surface.kind,
+    surface.id,
+    ...variant,
+  );
+  const outDir = path.join(
+    project.superwallDir,
+    ".superwall/dist",
+    surface.kind,
+    surface.id,
+    ...variant,
+  );
   fs.mkdirSync(entryDir, { recursive: true });
 
   const { definition, config } = await loadSurfaceConfig(surface);
+  const products = resolveProductIds(config, surface, platform);
 
   fs.writeFileSync(
     path.join(entryDir, "entry.jsx"),
-    entrySource(entryDir, project, surface, config),
+    entrySource(entryDir, project, surface, config, platform === undefined ? undefined : products),
   );
   fs.writeFileSync(
     path.join(entryDir, "index.html"),
@@ -365,6 +475,7 @@ export const buildSnapshot = async (
     assetsInclude: EXTRA_ASSET_TYPES.map((extension) => `**/*.${extension}`),
     plugins: [
       react(),
+      ...(platform === undefined ? [] : [resolveConfigProducts(surface.configFile, products)]),
       collectAssets(entryDir, project.superwallDir, surface, assetBaseUrl, (value) => {
         collected = value;
       }),
@@ -416,12 +527,7 @@ export const buildSnapshot = async (
   return {
     surface,
     name: definition?.name?.trim() || titleCase(surface.id),
-    products: Object.fromEntries(
-      Object.entries(config.products ?? {}).map(([reference, input]) => [
-        reference,
-        normalizeProductSlot(input).productId ?? reference,
-      ]),
-    ),
+    products,
     checkout: checkoutModeOf(config.checkout),
     background: backgroundOf(config.background),
     snapshotId: sha256(html),

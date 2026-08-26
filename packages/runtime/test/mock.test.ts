@@ -222,3 +222,48 @@ describe("MockSuperwallTransport", () => {
     expect(onOutgoing).toHaveBeenCalledWith(expect.objectContaining({ event_name: "close" }));
   });
 });
+
+describe("mockOptionsFromConfig", () => {
+  it("resolves per-platform product ids by the mocked device's platform", async () => {
+    const mock = await import("../src/mock");
+    const platformConfig = {
+      products: { annual: { ios: "pro_year", android: "pro_year_play" }, monthly: "pro_month" },
+    };
+    const ids = (products: readonly unknown[] | undefined) =>
+      (products ?? []).map((product) =>
+        typeof product === "object" && product !== null && "productId" in product
+          ? product.productId
+          : product,
+      );
+
+    const android = mock.mockOptionsFromConfig(platformConfig, { device: { platform: "Android" } });
+    expect(ids(android.products)).toEqual(["pro_year_play", "pro_month"]);
+
+    const unknown = mock.mockProductsFromConfig(platformConfig);
+    expect(unknown[0]?.productId).toBe("pro_year");
+  });
+});
+
+describe("mock host product identity by device platform", () => {
+  const platformConfig = defineSuperwallConfig({
+    products: { annual: { ios: "pro_year", android: "pro_year_play" } },
+  });
+
+  it("an Android device in dev purchases the Play product, an iOS device the App Store one", async () => {
+    for (const [platform, expected] of [
+      ["Android", "pro_year_play"],
+      ["iOS", "pro_year"],
+    ] as const) {
+      const transport = createMockSuperwallTransport(
+        mockOptionsFromConfig(platformConfig, { device: { platform } }),
+      );
+      const session = createSuperwallSession({ config: platformConfig, transport });
+      session.start({ sendPing: true });
+      await flushMicrotasks();
+
+      expect(session.getSnapshot().productsByReference.annual?.productId).toBe(expected);
+      void session.purchase("annual");
+      expect(session.getSnapshot().pendingPurchase?.product.productIdentifier).toBe(expected);
+    }
+  });
+});

@@ -42,24 +42,52 @@ const productBlock = (references: readonly string[], stripe: readonly string[]):
     "}",
   ].join("\n");
 
-export async function collectProjectProducts(
+export interface ProjectDeclarations {
+  products: Record<string, string[]>;
+  platforms: Record<string, string[] | undefined>;
+}
+
+const productIdsOf = (surface: {
+  products: Record<string, string>;
+  productIds?: Record<string, string[]>;
+}): Record<string, string[]> =>
+  surface.productIds ??
+  Object.fromEntries(Object.entries(surface.products).map(([reference, id]) => [reference, [id]]));
+
+const declaredPlatforms = (value: unknown): string[] | undefined =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string")
+    ? value
+    : undefined;
+
+export async function collectProjectDeclarations(
   framework: Framework,
   root: string,
-): Promise<Record<string, string>> {
-  if (!framework.studioProject) return {};
+): Promise<ProjectDeclarations> {
+  const declarations: ProjectDeclarations = { products: {}, platforms: {} };
+  if (!framework.studioProject) return declarations;
   try {
     const payload = await framework.studioProject(root);
-    const merged: Record<string, string> = {};
-    for (const surface of payload.surfaces) Object.assign(merged, surface.products);
-    return merged;
+    for (const surface of payload.surfaces) {
+      for (const [reference, ids] of Object.entries(productIdsOf(surface))) {
+        declarations.products[reference] = [
+          ...new Set([...(declarations.products[reference] ?? []), ...ids]),
+        ];
+      }
+      if (typeof surface.kind === "string" && typeof surface.id === "string") {
+        declarations.platforms[`${surface.kind}/${surface.id}`] = declaredPlatforms(
+          surface.platforms,
+        );
+      }
+    }
+    return declarations;
   } catch {
-    return {};
+    return declarations;
   }
 }
 
 export function projectTypes(
   project: FrameworkProject,
-  products: Record<string, string> = {},
+  products: Record<string, readonly string[]> = {},
 ): string {
   const names = new Set<string>();
   for (const surface of project.surfaces) {
@@ -68,7 +96,9 @@ export function projectTypes(
 
   const sorted = [...names].sort();
   const sortedProducts = Object.keys(products).sort();
-  const sortedStripe = sortedProducts.filter((name) => isStripeIdentifier(products[name] ?? ""));
+  const sortedStripe = sortedProducts.filter((name) =>
+    (products[name] ?? []).some((identifier) => isStripeIdentifier(identifier)),
+  );
 
   const blocks = [
     sorted.length > 0 ? routeBlock(sorted) : "",
@@ -80,7 +110,7 @@ export function projectTypes(
 
 export function writeProjectTypes(
   project: FrameworkProject,
-  products: Record<string, string> = {},
+  products: Record<string, readonly string[]> = {},
 ): void {
   const file = path.join(project.superwallDir, TYPES_FILE);
   const next = projectTypes(project, products);

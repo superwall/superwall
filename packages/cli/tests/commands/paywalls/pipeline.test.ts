@@ -22,7 +22,7 @@ import type {
   FrameworkProject,
   FrameworkSurface,
 } from "@/core/paywalls/project/framework";
-import { readLock, writeApplicationId, writeBinding } from "@/core/paywalls/project/lock";
+import { readLock, writeApp, writeBinding } from "@/core/paywalls/project/lock";
 import { selectRenderer, ui } from "@/ui";
 
 selectRenderer({ mode: "json" });
@@ -41,8 +41,10 @@ const surfaceOf = (id: string, kind: "paywall" | "funnel" = "paywall"): Framewor
 function scaffold(ids: string[] = ["plus-upgrade"]): FrameworkProject {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pipeline-"));
   dirs.push(dir);
-  writeApplicationId(dir, "42");
-  for (const id of ids) writeBinding(dir, "paywall", id, { paywallId: `208${ids.indexOf(id)}` });
+  writeApp(dir, "ios", "42");
+  for (const id of ids) {
+    writeBinding(dir, "paywall", id, "ios", { paywallId: `208${ids.indexOf(id)}` });
+  }
   return {
     root: dir,
     superwallDir: dir,
@@ -80,6 +82,10 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
         ? "projects"
         : url.startsWith("/v2/products")
           ? "products"
+          : url.startsWith("/v2/paywalls?")
+            ? "paywalls"
+            : url === "/v2/paywalls" && req.method === "POST"
+              ? "create"
           : url.endsWith("/assets")
         ? "assets"
         : url.endsWith("/promote")
@@ -110,6 +116,8 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
         link: { commit_sha: "linked" },
         promote: { version: 7, url: "u" },
         live: { id: "2080" },
+        paywalls: { data: [] },
+        create: { id: 9 },
         projects: { data: [{ id: "9", applications: [{ id: "42" }] }] },
         products: {
           data: [
@@ -781,7 +789,7 @@ test("an unresolved rename stops the push before anything is created or uploaded
 
   assert.deepEqual(fake.calls, [], "no version, no source push, and above all no create");
   assert.deepEqual(readLock(project.superwallDir).paywalls, {
-    "plus-upgrade": { paywallId: "2080" },
+    "plus-upgrade": { ios: { paywallId: "2080" } },
   });
 });
 
@@ -797,7 +805,7 @@ test("a declared rename carries the live paywall id through the whole push", asy
   });
 
   assert.deepEqual(readLock(project.superwallDir).paywalls, {
-    "pro-upgrade": { paywallId: "2080", snapshot: "abcdef0123456789" },
+    "pro-upgrade": { ios: { paywallId: "2080", snapshot: "abcdef0123456789" } },
   });
   assert.ok(fake.calls.includes("versions"), "the renamed surface still pushes a version");
 });
@@ -1021,4 +1029,179 @@ test("pendingPromoteWarning: silent when empty, a sentence for one, a list for m
   const lots = pendingPromoteWarning(Array.from({ length: 13 }, (_, i) => `p${i}`));
   assert.match(lots ?? "", /…and 3 more/, "the list is capped");
   assert.match(lots ?? "", /--id p0,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12/, "the command is not");
+});
+
+const declaring = (
+  project: FrameworkProject,
+  platforms: Record<string, string[] | undefined>,
+  over: Partial<Framework> = {},
+  steps: string[] = [],
+): Framework => ({
+  ...frameworkFor(project, over, steps),
+  studioProject: async () => ({
+    surfaces: project.surfaces.map((surface) => ({
+      kind: surface.kind,
+      id: surface.id,
+      products: {},
+      platforms: platforms[surface.id],
+    })),
+  }),
+});
+
+test("a surface declared for two platforms pushes one version per app, each built against its own asset host", async () => {
+  const project = scaffold();
+  writeApp(project.superwallDir, "android", "43");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "3080" });
+  const fake = await fakeApi();
+  const hosts: (string | undefined)[] = [];
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: true,
+    load: async () =>
+      declaring(project, { "plus-upgrade": ["ios", "android"] }, {
+        buildSnapshot: async (_project, _surface, options) => {
+          hosts.push(options?.assetBaseUrl);
+          return built();
+        },
+      }),
+  });
+
+  assert.deepEqual(hosts, [
+    "https://user-content.superwalleditor.com/user-content/hl/42",
+    "https://user-content.superwalleditor.com/user-content/hl/43",
+  ]);
+  assert.equal(fake.calls.filter((call) => call === "versions").length, 2);
+  assert.equal(fake.calls.filter((call) => call === "promote").length, 2);
+  assert.deepEqual(readLock(project.superwallDir).paywalls["plus-upgrade"], {
+    ios: { paywallId: "2080", snapshot: "abcdef0123456789" },
+    android: { paywallId: "3080", snapshot: "abcdef0123456789" },
+  });
+});
+
+test("--platform narrows a multi-platform push to one app", async () => {
+  const project = scaffold();
+  writeApp(project.superwallDir, "android", "43");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "3080" });
+  const fake = await fakeApi();
+  const steps: string[] = [];
+
+  await runPushPipeline(contextFor(fake.api, { platform: ["android"] }), {
+    promote: false,
+    load: async () => declaring(project, { "plus-upgrade": ["ios", "android"] }, {}, steps),
+  });
+
+  assert.deepEqual(steps, ["build"]);
+  assert.equal(fake.calls.filter((call) => call === "versions").length, 1);
+  const lock = readLock(project.superwallDir).paywalls["plus-upgrade"];
+  assert.equal(lock?.android?.snapshot, "abcdef0123456789");
+  assert.equal(lock?.ios?.snapshot, undefined);
+});
+
+test("a second platform named in config.ts binds its app on the fly when the account has exactly one", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({
+    projects: {
+      body: {
+        data: [
+          {
+            id: "9",
+            applications: [
+              { id: "42", platform: "ios" },
+              { id: "43", platform: "android" },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () => declaring(project, { "plus-upgrade": ["ios", "android"] }),
+  });
+
+  const lock = readLock(project.superwallDir);
+  assert.deepEqual(lock.apps, { ios: "42", android: "43" });
+  assert.equal(lock.paywalls["plus-upgrade"]?.android?.paywallId, "9", "created on the android app");
+  assert.equal(fake.calls.filter((call) => call === "versions").length, 2);
+});
+
+test("a surface that names no platform while the project has several stops before anything is built", async () => {
+  const project = scaffold(["plus-upgrade", "quiet"]);
+  writeApp(project.superwallDir, "android", "43");
+  const fake = await fakeApi();
+  const steps: string[] = [];
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      load: async () => declaring(project, { "plus-upgrade": ["ios"] }, {}, steps),
+    }),
+    /`quiet` doesn't say which platforms it's for[\s\S]*ios, android/,
+  );
+  assert.deepEqual(steps, []);
+  assert.deepEqual(fake.calls, [], "both apps are already in the lock, so nothing is even looked up");
+});
+
+test("pending hints name the platform when the project has several, and pass --platform when they share one", () => {
+  assert.equal(
+    pendingPromoteWarning([{ id: "plus-upgrade", platform: "ios" }], true),
+    "plus-upgrade · ios is pushed but not live — run `superwall promote --id plus-upgrade --platform ios` to publish it.",
+  );
+  assert.equal(
+    pendingPromoteWarning(
+      [
+        { id: "plus-upgrade", platform: "ios" },
+        { id: "plus-upgrade", platform: "android" },
+      ],
+      true,
+    ),
+    [
+      "These 2 paywalls are pushed but not live:",
+      "  plus-upgrade · ios",
+      "  plus-upgrade · android",
+      "",
+      "  superwall promote --id plus-upgrade",
+    ].join("\n"),
+  );
+  assert.equal(
+    pendingPromoteWarning([{ id: "plus-upgrade", platform: "ios" }], false),
+    "plus-upgrade is pushed but not live — run `superwall promote --id plus-upgrade` to publish it.",
+  );
+});
+
+test("each platform's version carries its own product ids and store", async () => {
+  const project = scaffold();
+  writeApp(project.superwallDir, "android", "43");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "3080" });
+  const fake = await fakeApi({
+    products: {
+      body: {
+        data: [
+          { identifier: "pro_5999_year", price: { amount: 5999, currency: "USD" } },
+          { identifier: "pro_5999_year_play", price: { amount: 5999, currency: "USD" } },
+        ],
+      },
+    },
+  });
+  const bodies: string[] = [];
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () =>
+      declaring(project, { "plus-upgrade": ["ios", "android"] }, {
+        buildSnapshot: async (_project, _surface, options) =>
+          built({
+            products: {
+              annual: options?.platform === "android" ? "pro_5999_year_play" : "pro_5999_year",
+            },
+          }),
+      }),
+  });
+
+  bodies.push(fake.bodies.versions ?? "");
+  const last: unknown = JSON.parse(bodies[0] ?? "{}");
+  assert.deepEqual(Reflect.get(Object(last), "products"), [
+    { store: "play-store", identifier: "pro_5999_year_play", reference_name: "annual" },
+  ]);
 });

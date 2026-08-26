@@ -7,7 +7,7 @@ import type {
   TPermissionStatus,
   TPermissionTypeMessage,
 } from "@superwall/protocol";
-import { normalizeProductSlot, type SuperwallConfig } from "./config";
+import { normalizePlatform, normalizeProductSlot, type SuperwallConfig } from "./config";
 import {
   createSuperwallProduct,
   type SuperwallProduct,
@@ -107,9 +107,12 @@ export const MOCK_DEVICE_VARIABLES: SuperwallDeviceVariables = {
   totalPaywallViews: 1,
 };
 
-export const mockProductsFromConfig = (config: SuperwallConfig | undefined): SuperwallProduct[] =>
+export const mockProductsFromConfig = (
+  config: SuperwallConfig | undefined,
+  devicePlatform?: string,
+): SuperwallProduct[] =>
   Object.entries(config?.products ?? {}).map(([reference, input]) => {
-    const slot = normalizeProductSlot(input);
+    const slot = normalizeProductSlot(input, normalizePlatform(devicePlatform));
     const productId = slot.productId ?? reference;
 
     return {
@@ -128,7 +131,12 @@ export const mockOptionsFromConfig = (
   options: SuperwallMockOptions = {},
 ): SuperwallMockOptions => ({
   ...options,
-  products: options.products ?? mockProductsFromConfig(config),
+  products:
+    options.products ??
+    mockProductsFromConfig(
+      config,
+      typeof options.device?.platform === "string" ? options.device.platform : undefined,
+    ),
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -20,7 +20,8 @@ import {
   ExampleError,
   listExamples,
 } from "@/core/paywalls/project/examples";
-import { writeApplicationId } from "@/core/paywalls/project/lock";
+import { requirePlatform } from "@/core/paywalls/binding/apps";
+import { writeApp } from "@/core/paywalls/project/lock";
 import { projectPackageName } from "@/core/paywalls/project/scaffold";
 import { LoginRequiredError, requireApi } from "@/core/paywalls/project/session";
 import { writeTemplate } from "@/core/paywalls/project/template";
@@ -204,7 +205,11 @@ async function connectApp(
   if (detected?.existing.apiKey) {
     const scope = await resolveScopeFromKey(api, detected.existing.apiKey).catch(() => null);
     if (scope) {
-      writeApplicationId(target, scope.applicationId);
+      const known = await listApplications(api).catch((): Application[] => []);
+      const app = known.find((candidate) => String(candidate.id) === scope.applicationId) ?? {
+        id: scope.applicationId,
+      };
+      writeApp(target, requirePlatform(app), scope.applicationId);
       ui.success(
         `\`${detected.app.name}\` is already on Superwall as \`${scope.appName ?? scope.applicationId}\` — pushes go there. Saved in superwall.lock; commit that file.`,
       );
@@ -249,7 +254,7 @@ async function connectApp(
   }
 
   if (app === null) return;
-  writeApplicationId(target, String(app.id));
+  writeApp(target, requirePlatform(app), String(app.id));
   ui.success(
     `Pushes go to \`${app.name ?? app.id}\` — saved in superwall.lock, so commit that file.`,
   );
