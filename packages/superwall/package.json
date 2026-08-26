@@ -1,7 +1,6 @@
 {
   "name": "superwall",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.1.0",
   "description": "Superwall for Agents — build paywalls and web funnels as mini React apps with file-based routing, preview them against real product data, and ship them through Superwall.",
   "keywords": [
     "agents",
@@ -53,6 +52,9 @@
     "./preview": "./src/preview/server.ts",
     "./discover": "./src/discover.ts",
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

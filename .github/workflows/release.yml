@@ -1,0 +1,153 @@
+name: Release
+
+# Publishing a GitHub Release tagged vX.Y.Z publishes every package at that
+# version, in dependency order, then commits the version stamp back to main.
+# A prerelease tag (vX.Y.Z-beta.1) goes to the `next` dist-tag.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (X.Y.Z or X.Y.Z-beta.1)"
+        required: true
+      dry_run:
+        description: "Run everything but publish with --dry-run and commit nothing"
+        type: boolean
+        default: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    if: github.repository == 'superwall/superwall'
+    runs-on: ubuntu-latest
+    env:
+      PACKAGES: protocol runtime studio cli superwall
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG='${{ github.event.release.tag_name }}'
+          else
+            TAG='${{ inputs.version }}'
+          fi
+          VERSION="${TAG#v}"
+          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$TAG' is not a semver version (expected vX.Y.Z or vX.Y.Z-beta.1)"
+            exit 1
+          fi
+          DIST_TAG=latest
+          [[ "$VERSION" == *-* ]] && DIST_TAG=next
+          DRY=false
+          [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ] && DRY=true
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$DRY" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      # Every package already at this version (a release published by hand)
+      # is a no-op; some but not all is a half-finished release and fails.
+      - name: Check npm for this version
+        id: npm
+        run: |
+          published=0; total=0
+          for name in $PACKAGES; do
+            total=$((total + 1))
+            pkg=$(node -p "require('./packages/$name/package.json').name")
+            if npm view "$pkg@${{ steps.ver.outputs.version }}" version >/dev/null 2>&1; then
+              echo "$pkg@${{ steps.ver.outputs.version }} is already on npm"
+              published=$((published + 1))
+            fi
+          done
+          if [ "$published" = "$total" ]; then
+            echo "::notice::${{ steps.ver.outputs.version }} is already fully published — nothing to do"
+            echo "done=true" >> "$GITHUB_OUTPUT"
+          elif [ "$published" != "0" ]; then
+            echo "::error::$published of $total packages are already published at ${{ steps.ver.outputs.version }} — finish or fix that release by hand"
+            exit 1
+          else
+            echo "done=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.npm.outputs.done != 'true'
+        with:
+          bun-version: 1.3.14
+
+      - name: Install
+        if: steps.npm.outputs.done != 'true'
+        run: bun install --frozen-lockfile
+
+      - name: Gates
+        if: steps.npm.outputs.done != 'true'
+        run: |
+          bun run lint
+          bun run format:check
+          bun run typecheck
+          bun run test:coverage
+
+      - name: Stamp version
+        if: steps.npm.outputs.done != 'true'
+        run: node scripts/stamp-version.mjs "${{ steps.ver.outputs.version }}"
+
+      - name: Build
+        if: steps.npm.outputs.done != 'true'
+        run: bun run build
+
+      # npm pack, with workspace:* rewritten to the stamped version — bun pm pack
+      # copies sibling versions from bun.lock, which bun install never refreshes.
+      - name: Pack
+        if: steps.npm.outputs.done != 'true'
+        run: |
+          rm -rf .release
+          node scripts/pack.mjs .release
+          ls -la .release
+
+      # NPM_TOKEN is only needed until every package exists on npm and has a
+      # trusted publisher configured; with it unset, npm uses OIDC.
+      - name: Publish (dependency order)
+        if: steps.npm.outputs.done != 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          [ -n "$NPM_TOKEN" ] && export NODE_AUTH_TOKEN="$NPM_TOKEN"
+          DRY=""
+          [ "${{ steps.ver.outputs.dry_run }}" = "true" ] && DRY="--dry-run"
+          for name in $PACKAGES; do
+            pkg=$(node -p "require('./packages/$name/package.json').name")
+            file=$(ls .release/$(echo "$pkg" | tr -d '@' | tr '/' '-')-${{ steps.ver.outputs.version }}.tgz)
+            echo "::group::npm publish $pkg@${{ steps.ver.outputs.version }} ($file)"
+            npm publish "$file" --access public --tag "${{ steps.ver.outputs.dist_tag }}" --ignore-scripts $DRY
+            echo "::endgroup::"
+          done
+
+      - name: Commit version stamp to main
+        if: steps.npm.outputs.done != 'true' && steps.ver.outputs.dry_run == 'false'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/*/package.json
+          git diff --cached --quiet || git commit -m "chore: release ${{ steps.ver.outputs.version }} [skip ci]"
+          git push origin main

@@ -206,8 +206,9 @@ Tooling is configured at the root and expected to stay green: `.oxlintrc.json`
 handing work back; `format:check` must pass), `.editorconfig`,
 `.gitattributes`. Coverage thresholds are enforced in each package's
 `vitest.config.ts` (`test:coverage` fails below them). CI lives at
-`.github/workflows/ci.yml`: install (postinstall builds cli + studio) →
-lint → format:check → typecheck → test:coverage. Every gate that runs in CI
+`.github/workflows/checks.yml`: install (postinstall builds cli + studio) →
+lint → format:check → typecheck → test:coverage; publishing is
+`.github/workflows/release.yml` (see Releasing). Every gate that runs in CI
 runs identically on a laptop — keep it that way.
 
 ## Testing rules

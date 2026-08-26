@@ -1,4 +1,4 @@
-name: CI
+name: Checks
 
 on:
   push:
@@ -6,11 +6,11 @@ on:
   pull_request:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: checks-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  ci:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

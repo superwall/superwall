@@ -1,7 +1,6 @@
 {
   "name": "@superwall/runtime",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.1.0",
   "description": "Framework-agnostic runtime for headless Superwall paywalls: bridge, session, products, localization, mock host.",
   "keywords": [
     "paywall",
@@ -27,6 +26,9 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

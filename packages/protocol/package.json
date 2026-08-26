@@ -1,7 +1,6 @@
 {
   "name": "@superwall/protocol",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.1.0",
   "description": "The Superwall SDK ↔ paywall message protocol: message schemas, transports, initialization params.",
   "keywords": [
     "paywall",
@@ -27,6 +26,9 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
