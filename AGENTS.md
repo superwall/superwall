@@ -53,8 +53,15 @@ self-describing npm project — clone it, install, `superwall dev`:
   three also work per-surface, inside `paywalls/<id>/`.
 - `superwall/paywalls/<id>/` and `superwall/funnels/<id>/` — each surface is a
   mini React app: a **required** `config.ts` (`definePaywall`: the dashboard
-  `name` and its products — a surface without it is invalid; product data comes
-  from Superwall alone, never from the file) + an `app/` route tree (**routes only**: every `.tsx` is a
+  `name`, its products, and every paywall setting — presentation style,
+  feature gating, on-device cache, scrolling, game controller, intro-offer
+  eligibility. A headless paywall has no dashboard
+  editor, so `config.ts` is the only source: `paywallSettingsOf` (runtime)
+  resolves them — together with the web checkout destination and
+  background — at build, the version push carries them, promote stamps them
+  onto the paywall columns SDKs read, and an omitted key resets to its
+  default. Products are the one per-platform field and travel separately. A surface without `config.ts` is invalid; product data comes from
+  Superwall alone, never from the file) + an `app/` route tree (**routes only**: every `.tsx` is a
   route, directories prefix the name, `index.tsx` is the entry, and `layout.tsx`
   is the one reserved name — anything else in `app/` is a diagnostic telling you
   to move it to `components/`) + local `components/` and `messages/`
@@ -210,6 +217,28 @@ handing work back; `format:check` must pass), `.editorconfig`,
 lint → format:check → typecheck → test:coverage; publishing is
 `.github/workflows/release.yml` (see Releasing). Every gate that runs in CI
 runs identically on a laptop — keep it that way.
+
+## Verifying device-visible changes — the static config is the truth
+
+Unit tests prove the plumbing; only the SDK's own config proves a push landed.
+Point `SUPERWALL_API_HOST` at the environment under test, publish a scratch
+paywall, and read it back the way an SDK does: `GET <that environment's v1 API
+host>/api/v1/static_config?pk=<the app's public_api_key>` with
+`Authorization: Bearer <pk>`, `X-Platform: iOS`, `X-Platform-Environment: SDK`.
+Do not verify through `GET /v2/paywalls/:id` — that is the dashboard's view and
+omits several stamped columns.
+
+A paywall only appears in `paywall_responses` once a campaign references it, so
+a scratch check is: publish → create a campaign with one placement and one
+100% treatment variant pointing at the paywall (`superwall post /v2/campaigns
+…`) → read the entry → remove the placement (`superwall delete
+/v2/campaigns/<id>/placements/<placementId>`), archive the campaign, archive
+the paywall. Fields to read: `url`, `products_v2[].store_product`,
+`background_color_hex`, `web_checkout_destination`, `presentation_style_v3`,
+`feature_gating`, `on_device_cache`, `is_scroll_enabled`,
+`game_controller_support`, `introductory_offer_eligibility`. Never leave a
+config key "accepted by the type but inert": it either reaches the device or
+it does not exist.
 
 ## Testing rules
 

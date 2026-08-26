@@ -84,8 +84,15 @@ export default definePaywall({
   `prefetch` is typed against your Stripe product references, so a typo
   fails the build. The gate is build-time: a paywall without `sheet` or
   `applePay` carries zero Stripe code.
-- Everything else (`presentation`, `featureGating`, `purchaseTimeoutMs`,
-  `notifications`, …) is set here too. There are no project-wide defaults: a
+- **Paywall settings** — `presentation` (style plus drawer/popup geometry),
+  `featureGating`, `onDeviceCacheEnabled`, `scrollEnabled`,
+  `gameControllerEnabled`, `introductoryOfferEligibility`, plus the
+  `checkout` destination and `background`, which ride the same way.
+  A headless paywall has no dashboard editor, so these are read from
+  `config.ts` at build time, stored on the pushed version, and stamped onto
+  the paywall on promote; an omitted key resets to its default. Everything
+  else (`purchaseTimeoutMs`, `dismissOnPurchase`, `notifications`, …) is set
+  here too and consumed by the runtime. There are no project-wide defaults: a
   paywall's `config.ts` is the whole truth for that paywall. Share settings by
   exporting a plain object and spreading it into `definePaywall`.
 

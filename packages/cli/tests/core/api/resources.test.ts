@@ -254,24 +254,79 @@ test("versionProducts sends Play Store for an android build, and never for strip
   assert.equal(versionProducts({ monthly: "pro_999_month" }, "flutter")[0]?.store, "app-store");
 });
 
+test("pushPaywallVersion spreads the paywall settings into the version body", async () => {
+  const posted: { path: string; body: unknown }[] = [];
+  const fake = {
+    post: async (path: string, body: unknown) => {
+      posted.push({ path, body });
+      return { version: 1, snapshot_id: "s", url: "u" };
+    },
+  } as unknown as SuperwallApi;
+
+  await pushPaywallVersion(fake, "1", {
+    html: "<html></html>",
+    settings: {
+      presentation_style: { type: "DRAWER", height: 70, corner_radius: 15 },
+      feature_gating: "gated",
+      on_device_cache: false,
+      scroll_enabled: true,
+      game_controller_enabled: false,
+      introductory_offer_eligibility: "automatic",
+    },
+  });
+
+  assert.deepEqual(posted[0]?.body, {
+    html: "<html></html>",
+    presentation_style: { type: "DRAWER", height: 70, corner_radius: 15 },
+    feature_gating: "gated",
+    on_device_cache: false,
+    scroll_enabled: true,
+    game_controller_enabled: false,
+    introductory_offer_eligibility: "automatic",
+  });
+
+  await pushPaywallVersion(fake, "1", { html: "<html></html>" });
+  assert.deepEqual(posted[1]?.body, { html: "<html></html>" });
+});
+
 test("versionProducts returns empty for no products", () => {
   assert.deepEqual(versionProducts(undefined), []);
   assert.deepEqual(versionProducts({}), []);
 });
 
 
-test("pushPaywallVersion sends background colors as hex fields, dark only when present", async () => {
-  const calls: Array<Record<string, unknown>> = [];
-  const api = { post: async (_path: string, body: Record<string, unknown>) => (calls.push(body), {}) } as unknown as Parameters<typeof pushPaywallVersion>[0];
+test("pushPaywallVersion spreads background and checkout destination from the settings block, only when present", async () => {
+  const calls: Record<string, unknown>[] = [];
+  const api = {
+    post: async (_path: string, body: Record<string, unknown>) => {
+      calls.push(body);
+      return { version: 1, snapshot_id: "s", url: "u" };
+    },
+  } as unknown as SuperwallApi;
+  const base = {
+    presentation_style: { type: "FULLSCREEN" as const },
+    feature_gating: "non_gated" as const,
+    on_device_cache: true,
+    scroll_enabled: true,
+    game_controller_enabled: false,
+    introductory_offer_eligibility: "automatic" as const,
+  };
 
-  await pushPaywallVersion(api, "1", { html: "<html>", background: { light: "#ffffff", dark: "#000000" } });
+  await pushPaywallVersion(api, "1", {
+    html: "<html>",
+    settings: {
+      ...base,
+      background_color_hex: "#ffffff",
+      dark_background_color_hex: "#000000",
+      web_checkout_destination: "PAYWALL_EMBEDDED",
+    },
+  });
   assert.equal(calls[0]?.background_color_hex, "#ffffff");
   assert.equal(calls[0]?.dark_background_color_hex, "#000000");
+  assert.equal(calls[0]?.web_checkout_destination, "PAYWALL_EMBEDDED");
 
-  await pushPaywallVersion(api, "1", { html: "<html>", background: { light: "#ffffff" } });
-  assert.equal(calls[1]?.background_color_hex, "#ffffff");
+  await pushPaywallVersion(api, "1", { html: "<html>", settings: base });
+  assert.ok(!("background_color_hex" in (calls[1] ?? {})));
   assert.ok(!("dark_background_color_hex" in (calls[1] ?? {})));
-
-  await pushPaywallVersion(api, "1", { html: "<html>" });
-  assert.ok(!("background_color_hex" in (calls[2] ?? {})));
+  assert.ok(!("web_checkout_destination" in (calls[1] ?? {})));
 });

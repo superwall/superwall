@@ -7,7 +7,9 @@ import {
   checkoutNeedsPaymentUi,
   isPlatformProductIds,
   normalizePlatform,
+  paywallSettingsOf,
   productIdFor,
+  type PaywallSettings,
   type SuperwallConfig,
   type SuperwallPlatform,
 } from "@superwall/runtime";
@@ -41,6 +43,7 @@ export type BuiltSnapshot = {
   products: Record<string, string>;
   checkout: ReturnType<typeof checkoutModeOf>;
   background: ReturnType<typeof backgroundOf>;
+  settings: PaywallSettings;
   snapshotId: string;
   html: string;
   bytes: number;
@@ -454,6 +457,7 @@ export const buildSnapshot = async (
 
   const { definition, config } = await loadSurfaceConfig(surface);
   const products = resolveProductIds(config, surface, platform);
+  const settings = paywallSettingsOf(config);
 
   fs.writeFileSync(
     path.join(entryDir, "entry.jsx"),
@@ -530,6 +534,7 @@ export const buildSnapshot = async (
     products,
     checkout: checkoutModeOf(config.checkout),
     background: backgroundOf(config.background),
+    settings,
     snapshotId: sha256(html),
     html,
     bytes: Buffer.byteLength(html),

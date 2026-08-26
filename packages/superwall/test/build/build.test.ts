@@ -431,3 +431,42 @@ describe("rewriteConfigProducts", () => {
     }
   });
 });
+
+describe("paywall settings ride on the snapshot", () => {
+  it("resolves every setting from config.ts so push can stamp them", async () => {
+    const built = await buildSnapshot(project(), surface("drawer"), {});
+    expect(built.settings).toEqual({
+      presentation_style: { type: "DRAWER", height: 60, corner_radius: 15 },
+      feature_gating: "gated",
+      on_device_cache: false,
+      scroll_enabled: true,
+      game_controller_enabled: true,
+      introductory_offer_eligibility: "always_ineligible",
+    });
+  }, 120_000);
+
+  it("a paywall that says nothing gets the editor defaults", async () => {
+    const built = await buildSnapshot(project(), surface("tiny"), {});
+    expect(built.settings).toEqual({
+      presentation_style: { type: "FULLSCREEN" },
+      feature_gating: "non_gated",
+      on_device_cache: true,
+      scroll_enabled: true,
+      game_controller_enabled: false,
+      introductory_offer_eligibility: "automatic",
+    });
+  }, 120_000);
+});
+
+describe("checkout and background ride the settings block", () => {
+  it("a sheet paywall's settings carry PAYWALL_EMBEDDED", async () => {
+    const built = await buildSnapshot(project(), surface("paid"), {});
+    expect(built.settings.web_checkout_destination).toBe("PAYWALL_EMBEDDED");
+    expect(built.checkout).toBe("sheet");
+  }, 120_000);
+
+  it("a native-only paywall's settings carry no destination", async () => {
+    const built = await buildSnapshot(project(), surface("tiny"), {});
+    expect(built.settings).not.toHaveProperty("web_checkout_destination");
+  }, 120_000);
+});

@@ -3,7 +3,6 @@ import {
   promotePaywallVersion,
   pushPaywallVersion,
   versionProducts,
-  webCheckoutDestination,
 } from "@/core/api/resources";
 import type { SuperwallApi } from "@/core/api/client";
 import { VERSION } from "@/constants";
@@ -173,8 +172,7 @@ export function createStudioActions(
               surface: surface.id,
               assets: synced.assets,
               products: versionProducts(built.products, target.platform),
-              webCheckoutDestination: webCheckoutDestination(built.checkout),
-              background: built.background,
+              settings: built.settings,
             }),
           );
           await step("source", async () => {

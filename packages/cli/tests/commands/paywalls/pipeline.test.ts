@@ -1205,3 +1205,26 @@ test("each platform's version carries its own product ids and store", async () =
     { store: "play-store", identifier: "pro_5999_year_play", reference_name: "annual" },
   ]);
 });
+
+test("the settings a build resolves from config.ts travel with the version", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+  const settings = {
+    presentation_style: { type: "POPUP" as const, width: 80, height: 60, corner_radius: 15 },
+    feature_gating: "gated" as const,
+    on_device_cache: true,
+    scroll_enabled: false,
+    game_controller_enabled: false,
+    introductory_offer_eligibility: "always_eligible" as const,
+  };
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () => frameworkFor(project, { buildSnapshot: async () => built({ settings }) }),
+  });
+
+  const version: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  for (const [key, value] of Object.entries(settings)) {
+    assert.deepEqual(Reflect.get(Object(version), key), value, key);
+  }
+});

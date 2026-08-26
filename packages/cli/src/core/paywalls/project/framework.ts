@@ -36,11 +36,29 @@ export interface BuiltSnapshotAsset {
   path: string;
 }
 
+export type PaywallPresentationStyle =
+  | { type: "FULLSCREEN" | "MODAL" | "PUSH" | "NO_ANIMATION" }
+  | { type: "DRAWER"; height: number; corner_radius: number }
+  | { type: "POPUP"; width: number; height: number; corner_radius: number };
+
+export interface PaywallSettings {
+  presentation_style: PaywallPresentationStyle;
+  feature_gating: "gated" | "non_gated";
+  on_device_cache: boolean;
+  scroll_enabled: boolean;
+  game_controller_enabled: boolean;
+  introductory_offer_eligibility: "automatic" | "always_eligible" | "always_ineligible";
+  web_checkout_destination?: "EXTERNAL" | "PAYWALL_EMBEDDED" | "PAYWALL_APPLE_PAY";
+  background_color_hex?: string;
+  dark_background_color_hex?: string;
+}
+
 export interface BuiltSnapshot {
   name: string;
   products?: Record<string, string>;
   checkout?: string;
   background?: { light: string; dark?: string };
+  settings?: PaywallSettings;
   snapshotId: string;
   html: string;
   bytes: number;

@@ -1,4 +1,5 @@
 import { SuperwallApi } from "./client";
+import type { PaywallSettings } from "@/core/paywalls/project/framework";
 
 export interface Application {
   id: string | number;
@@ -332,15 +333,6 @@ export const versionProducts = (
     reference_name: reference,
   }));
 
-export const webCheckoutDestination = (checkout: string | undefined): string | undefined =>
-  checkout === "sheet"
-    ? "PAYWALL_EMBEDDED"
-    : checkout === "applePay"
-      ? "PAYWALL_APPLE_PAY"
-      : checkout === "external"
-        ? "EXTERNAL"
-        : undefined;
-
 export function pushPaywallVersion(
   api: SuperwallApi,
   paywallId: string,
@@ -349,8 +341,7 @@ export function pushPaywallVersion(
     surface?: string;
     assets?: VersionAsset[];
     products?: VersionProduct[];
-    webCheckoutDestination?: string;
-    background?: { light: string; dark?: string };
+    settings?: PaywallSettings;
   },
 ): Promise<PushedVersion> {
   return api.post<PushedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/versions`, {
@@ -358,11 +349,7 @@ export function pushPaywallVersion(
     ...(opts.surface ? { surface: opts.surface } : {}),
     ...(opts.assets && opts.assets.length > 0 ? { assets: opts.assets } : {}),
     ...(opts.products && opts.products.length > 0 ? { products: opts.products } : {}),
-    ...(opts.webCheckoutDestination
-      ? { web_checkout_destination: opts.webCheckoutDestination }
-      : {}),
-    ...(opts.background ? { background_color_hex: opts.background.light } : {}),
-    ...(opts.background?.dark ? { dark_background_color_hex: opts.background.dark } : {}),
+    ...(opts.settings ?? {}),
   });
 }
 
