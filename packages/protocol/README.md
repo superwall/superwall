@@ -1,8 +1,28 @@
-# `@superwall/protocol`
+<p align="center">
+  <a href="https://superwall.com/">
+    <img src="https://user-images.githubusercontent.com/3296904/158817914-144c66d0-572d-43a4-9d47-d7d0b711c6d7.png" alt="Superwall" height="100" />
+  </a>
+</p>
 
-The message contract between the native Superwall SDKs and a paywall running
-in their webview. Everything above this package (runtime, react, framework)
-is replaceable; this is the wire.
+<h1 align="center">@superwall/protocol</h1>
+
+<p align="center">
+  The message contract between the native Superwall SDKs and a paywall
+  running in their webview. Everything above this package is replaceable;
+  this is the wire.
+</p>
+
+## Install
+
+```bash
+npm install @superwall/protocol
+```
+
+You will not usually install this directly:
+[`@superwall/runtime`](https://www.npmjs.com/package/@superwall/runtime) and
+the [`superwall`](https://www.npmjs.com/package/superwall) framework depend
+on it. Reach for it alone to validate or replay SDK messages, or to build a
+transport of your own.
 
 ## What's here
 
@@ -32,9 +52,26 @@ Therefore:
 - Never make an optional field required.
 - Every new message type ships with accept and reject test cases.
 
-## Tests
+## Develop
 
-`bun run test:run` — schema tests parse representative real messages and assert
-rejection of malformed ones. The deeper contract coverage lives in
-`@superwall/runtime`'s fixture tests, which drive full recorded message
-sequences through the session.
+This package lives in the [`superwall/superwall`](https://github.com/superwall/superwall)
+monorepo. **Read [AGENTS.md](https://github.com/superwall/superwall/blob/main/AGENTS.md)
+first** - the conventions in it are decided, not suggested.
+
+```bash
+bun install
+bun run test          # schema tests parse real messages and reject malformed
+                      # ones; the deeper coverage is @superwall/runtime's
+                      # fixture tests, which replay whole recorded sessions
+bun run typecheck
+```
+
+There is no compile step in day-to-day development — `exports` point straight
+at `src/`, so tests and consumers resolve the sources directly.
+
+## License
+
+[Functional Source License](https://github.com/superwall/superwall/blob/main/packages/superwall/LICENSE)
+(FSL-1.1-ALv2): use it, modify it, embed it, ship it — anything except
+building a competing product with it — and every release becomes Apache 2.0
+two years after publication.

@@ -1,14 +1,34 @@
-# `@superwall/studio`
+<p align="center">
+  <a href="https://superwall.com/">
+    <img src="https://user-images.githubusercontent.com/3296904/158817914-144c66d0-572d-43a4-9d47-d7d0b711c6d7.png" alt="Superwall" height="100" />
+  </a>
+</p>
 
-The Superwall studio: a standalone vite + React + Tailwind app that is also
-a component library. One codebase, two hosts:
+<h1 align="center">@superwall/studio</h1>
+
+<p align="center">
+  The studio <code>superwall dev</code> opens: every paywall and funnel as a
+  live card, and a device-frame editor with theme, locale, and variable
+  overrides.
+</p>
+
+## Install
+
+```bash
+npm install @superwall/studio
+```
+
+You will not usually install this directly: the
+[`superwall`](https://www.npmjs.com/package/superwall) framework depends on
+it and `superwall dev` serves it. It is a standalone vite + React + Tailwind
+app that is also a component library — one codebase, two hosts:
 
 - **`superwall dev`** serves the BUILT app (`dist/`, assets under
   `/__studio/`) plus the data endpoint and preview mounts — the local studio.
 - **The hosted dashboard** either embeds the built app (the way it embeds the
   editor) or imports the components directly over platform data.
 
-## App structure
+## Package layout
 
 ```
 packages/studio/
@@ -28,10 +48,6 @@ packages/studio/
 │   └── styles.css        tailwind @theme tokens + stateful primitives
 └── dist/                 built by the workspace postinstall
 ```
-
-Working on the studio: `bun dev` here (port 6200) proxies `/preview` and
-`/__studio/project.json` to a running `superwall dev` (port 6100) in any
-project — edit studio code with HMR against real paywalls.
 
 ## Data seam
 
@@ -76,3 +92,29 @@ components, and only stateful primitives (`.sw-btn`, `.sw-chip`,
 `.sw-select`, `.sw-segmented`, `.sw-switch`, `.sw-input`) as component
 classes. Runtime dependencies are React (a peer) and `sonner` for toasts —
 icons are inlined Lucide-geometry SVGs.
+
+## Develop
+
+This package lives in the [`superwall/superwall`](https://github.com/superwall/superwall)
+monorepo. **Read [AGENTS.md](https://github.com/superwall/superwall/blob/main/AGENTS.md)
+first** - the conventions in it are decided, not suggested.
+
+```bash
+bun install
+bun dev               # the studio alone on port 6200, proxied to a running
+                      # `superwall dev` (port 6100) in any project — HMR against
+                      # real paywalls
+bun run build         # dist/, what `superwall dev` serves
+bun run test
+bun run typecheck
+```
+
+The workspace `postinstall` builds `dist/`, so a fresh clone of the monorepo
+has a studio to serve from the first `superwall dev`.
+
+## License
+
+[Functional Source License](https://github.com/superwall/superwall/blob/main/packages/superwall/LICENSE)
+(FSL-1.1-ALv2): use it, modify it, embed it, ship it — anything except
+building a competing product with it — and every release becomes Apache 2.0
+two years after publication.

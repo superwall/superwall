@@ -225,6 +225,8 @@ Point `SUPERWALL_API_HOST` at the environment under test, publish a scratch
 paywall, and read it back the way an SDK does: `GET <that environment's v1 API
 host>/api/v1/static_config?pk=<the app's public_api_key>` with
 `Authorization: Bearer <pk>`, `X-Platform: iOS`, `X-Platform-Environment: SDK`.
+Use `curl` with a `User-Agent`: a bare client with no UA is refused with a 403
+at the edge.
 Do not verify through `GET /v2/paywalls/:id` — that is the dashboard's view and
 omits several stamped columns.
 
