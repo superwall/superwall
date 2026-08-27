@@ -125,21 +125,28 @@ jobs:
           ls -la .release
 
       # NPM_TOKEN is only needed until every package exists on npm and has a
-      # trusted publisher configured; with it unset, npm uses OIDC.
+      # trusted publisher configured; with it unset, npm uses OIDC. Provenance
+      # is attested only while the repository is public — npm rejects a
+      # provenance bundle from a private source with a 422.
       - name: Publish (dependency order)
         if: steps.npm.outputs.done != 'true'
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
+          GH_TOKEN: ${{ github.token }}
         run: |
           [ -n "$NPM_TOKEN" ] && export NODE_AUTH_TOKEN="$NPM_TOKEN"
           DRY=""
           [ "${{ steps.ver.outputs.dry_run }}" = "true" ] && DRY="--dry-run"
+          PROVENANCE="--provenance"
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq .visibility)" != "public" ]; then
+            PROVENANCE=""
+            echo "::warning::$GITHUB_REPOSITORY is not public — publishing without provenance"
+          fi
           for name in $PACKAGES; do
             pkg=$(node -p "require('./packages/$name/package.json').name")
             file=$(ls .release/$(echo "$pkg" | tr -d '@' | tr '/' '-')-${{ steps.ver.outputs.version }}.tgz)
             echo "::group::npm publish $pkg@${{ steps.ver.outputs.version }} ($file)"
-            npm publish "$file" --access public --tag "${{ steps.ver.outputs.dist_tag }}" --ignore-scripts $DRY
+            npm publish "$file" --access public --tag "${{ steps.ver.outputs.dist_tag }}" --ignore-scripts $PROVENANCE $DRY
             echo "::endgroup::"
           done
 
