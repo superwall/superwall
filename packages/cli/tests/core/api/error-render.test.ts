@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { stripVTControlCharacters } from "node:util";
 import { errorAside, normalizeError } from "@/command";
 import { ApiError } from "@/core/api/client";
 import { NotLoggedInError } from "@/core/auth/errors";
 
-const plain = (text: string): string => text.replace(/\[[0-9;]*m/g, "");
+const plain = (text: string): string => stripVTControlCharacters(text);
 
 const envelope = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
