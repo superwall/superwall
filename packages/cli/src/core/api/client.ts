@@ -77,6 +77,10 @@ export class ApiUnreachableError extends Error {
 
 export { NotLoggedInError } from "@/core/auth/errors";
 
+export interface RequestOptions {
+  headers?: Record<string, string>;
+}
+
 export class SuperwallApi {
   private constructor(private session: Session) {}
 
@@ -115,17 +119,23 @@ export class SuperwallApi {
     return this.host;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    options: RequestOptions = {},
+  ): Promise<T> {
     const { token, session } = await resolveAuthToken(this.session);
     this.session = session;
     const res = await this.fetch(`${this.base()}${path}`, {
       method,
       headers: {
+        ...options.headers,
         authorization: `Bearer ${token}`,
         accept: "application/json",
-        ...(body ? { "content-type": "application/json" } : {}),
+        ...(body !== undefined ? { "content-type": "application/json" } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -143,17 +153,20 @@ export class SuperwallApi {
     }
   }
 
-  get<T>(path: string): Promise<T> {
-    return this.request<T>("GET", path);
+  get<T>(path: string, options?: RequestOptions): Promise<T> {
+    return this.request<T>("GET", path, undefined, options);
   }
-  post<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>("POST", path, body);
+  post<T>(path: string, body: unknown, options?: RequestOptions): Promise<T> {
+    return this.request<T>("POST", path, body, options);
   }
-  patch<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>("PATCH", path, body);
+  put<T>(path: string, body: unknown, options?: RequestOptions): Promise<T> {
+    return this.request<T>("PUT", path, body, options);
   }
-  del<T>(path: string): Promise<T> {
-    return this.request<T>("DELETE", path);
+  patch<T>(path: string, body: unknown, options?: RequestOptions): Promise<T> {
+    return this.request<T>("PATCH", path, body, options);
+  }
+  del<T>(path: string, options?: RequestOptions): Promise<T> {
+    return this.request<T>("DELETE", path, undefined, options);
   }
 
   async postText(path: string, body: string): Promise<string> {

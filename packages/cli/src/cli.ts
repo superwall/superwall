@@ -88,6 +88,11 @@ function printHelp(): void {
       row("asc docs", "Exact ASC request schema, from Apple's spec (path or search)"),
       row("asc keys", "Manage App Store Connect API keys (list, set, rm)"),
       "",
+      head("Apple Search Ads commands"),
+      row("asa", "The Apple Ads API via Superwall's proxy (campaigns, keywords, reports, ...)"),
+      row("asa docs", "Every endpoint, with Apple's own schema (group, group action, or search)"),
+      row("asa keys", "Which apps have Apple Search Ads connected"),
+      "",
       head("Other commands"),
       row("login, logout, whoami", "Authenticate the CLI"),
       row("skills", "Install or update the Superwall agent skills"),
@@ -354,6 +359,84 @@ export async function run(): Promise<void> {
           }),
       (argv) => {
         return import("@/commands/platform/asc").then((m) => m.runAsc(argv));
+      },
+    )
+    .command(
+      "asa <target> [action] [value]",
+      "Call the Apple Search Ads API through Superwall's proxy (no key or token handling)",
+      (y) =>
+        y
+          .positional("target", {
+            type: "string",
+            describe:
+              "A resource (campaigns, adgroups, keywords, negative-keywords, ads, creatives, product-pages, ad-rejections, reports, impression-share, apps, geo, budget-orders, acls, me), get|post|put|delete, a raw path (/campaigns), docs, or keys",
+          })
+          .positional("action", {
+            type: "string",
+            describe: "list | get | find | create | update | delete | ... (see asa docs <resource>), or the path for a verb",
+          })
+          .positional("value", {
+            type: "string",
+            describe: "Id (comma-separated for bulk), search query, or App Store app id",
+          })
+          .options({
+            app: { type: "string", describe: "Superwall app id or name (if several have Apple Search Ads connected)" },
+            "org-id": { type: "string", describe: "Apple Search Ads org id (X-AP-Context), if the API user spans several" },
+            campaign: { type: "string", describe: "Campaign id" },
+            adgroup: { type: "string", describe: "Ad group id" },
+            "adam-id": { type: "string", describe: "App Store app id (adamId)" },
+            d: {
+              type: "array",
+              describe:
+                "Body field, Stripe-style: -d key=value (string) or key:=value (number/bool/json); nesting via key[sub]. Query params on get/delete",
+            },
+            body: { type: "string", describe: "Request body as JSON: inline, @file, or @- for stdin" },
+            selector: { type: "string", describe: "Apple selector as JSON (find, reports): inline, @file, or @-" },
+            field: { type: "string", describe: "Selector shorthand: field name (with --op and --values)" },
+            op: { type: "string", describe: "Selector shorthand: EQUALS, IN, CONTAINS, STARTSWITH, ..." },
+            values: { type: "string", describe: "Selector shorthand: comma-separated values" },
+            "order-by": { type: "string", describe: "Selector sort: field[:asc|desc]" },
+            fields: { type: "string", describe: "Comma-separated fields to return (partial fetch)" },
+            limit: { type: "number", describe: "Page size" },
+            offset: { type: "number", describe: "Page offset" },
+            all: { type: "boolean", describe: "Walk every page" },
+            currency: { type: "string", describe: "Currency for money flags (defaults to the account's)" },
+            name: { type: "string" },
+            status: { type: "string", describe: "ENABLED, PAUSED (keywords: ACTIVE, PAUSED)" },
+            countries: { type: "string", describe: "Comma-separated country codes" },
+            budget: { type: "string", describe: "Lifetime budget amount" },
+            "daily-budget": { type: "string", describe: "Daily budget amount" },
+            "supply-sources": { type: "string", describe: "Comma-separated supply sources" },
+            "ad-channel-type": { type: "string", describe: "SEARCH or DISPLAY" },
+            "billing-event": { type: "string", describe: "TAPS or IMPRESSIONS" },
+            "default-bid": { type: "string", describe: "Ad group default bid" },
+            "cpa-goal": { type: "string", describe: "Ad group CPA goal" },
+            "search-match": { type: "boolean", describe: "Ad group Search Match" },
+            text: { type: "string", describe: "Keyword text" },
+            "match-type": { type: "string", describe: "BROAD or EXACT" },
+            bid: { type: "string", describe: "Keyword bid amount" },
+            "creative-id": { type: "string" },
+            type: { type: "string", describe: "Creative type" },
+            "product-page-id": { type: "string" },
+            start: { type: "string", describe: "Start date (YYYY-MM-DD)" },
+            end: { type: "string", describe: "End date (YYYY-MM-DD)" },
+            granularity: { type: "string", describe: "HOURLY, DAILY, WEEKLY, or MONTHLY" },
+            "group-by": { type: "string", describe: "Report dimension (e.g. countryOrRegion)" },
+            "time-zone": { type: "string", describe: "Report time zone: UTC or ORTZ" },
+            dimensions: { type: "string", describe: "Impression share dimensions" },
+            metrics: { type: "string", describe: "Impression share metrics" },
+            owned: { type: "boolean", describe: "apps search: only apps this org owns" },
+            country: { type: "string", describe: "geo search: country code" },
+            entity: { type: "string", describe: "geo: Country, AdminArea, or Locality" },
+            "adgroup-level": { type: "boolean", describe: "negative-keywords find: search ad group negatives" },
+            states: { type: "string", describe: "product-pages list: comma-separated states" },
+            "device-classes": { type: "string" },
+            "language-codes": { type: "string" },
+            expand: { type: "boolean" },
+            "include-deleted-assets": { type: "boolean" },
+          }),
+      (argv) => {
+        return import("@/commands/platform/asa").then((m) => m.runAsa(argv));
       },
     );
 

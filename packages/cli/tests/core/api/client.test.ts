@@ -199,3 +199,27 @@ test("postText() includes the raw ClickHouse error in ApiError", async () => {
       e instanceof ApiError && e.status === 403 && e.body === "data:read scope required",
   );
 });
+
+test("put() sends a JSON body and per-request headers ride along", async () => {
+  const calls = mockFetch(() => ({ body: { ok: true } }));
+  const api = SuperwallApi.of(SESSION);
+  await api.put("/v2/thing/1", { name: "x" }, { headers: { "x-ap-context": "orgId=1" } });
+  assert.equal(calls[0]!.init.method, "PUT");
+  assert.equal(calls[0]!.init.body, JSON.stringify({ name: "x" }));
+  const headers = calls[0]!.init.headers as Record<string, string>;
+  assert.equal(headers["x-ap-context"], "orgId=1");
+  assert.equal(headers["content-type"], "application/json");
+  assert.equal(headers.authorization, "Bearer sk_test123");
+
+  await api.del("/v2/thing/1", { headers: { "x-ap-context": "orgId=2" } });
+  assert.equal(calls[1]!.init.method, "DELETE");
+  assert.equal((calls[1]!.init.headers as Record<string, string>)["x-ap-context"], "orgId=2");
+  assert.equal(calls[1]!.init.body, undefined);
+});
+
+test("custom headers can't override the session's authorization", async () => {
+  const calls = mockFetch(() => ({ body: {} }));
+  const api = SuperwallApi.of(SESSION);
+  await api.get("/v2/thing", { headers: { authorization: "Bearer stolen" } });
+  assert.equal((calls[0]!.init.headers as Record<string, string>).authorization, "Bearer sk_test123");
+});

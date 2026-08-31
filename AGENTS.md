@@ -165,7 +165,7 @@ The stack, bottom to top — each layer depends only on the one below it:
     inside the iframe), `overrides.ts` (theme/locale/device query params),
     `webview.ts` (the one deliberate local-only difference)
 - `packages/cli` — `@superwall/cli`: THE command surface (integrate/migrate/
-  review, apps, products, campaigns, query, ASC, auth, telemetry; yargs + ink)
+  review, apps, products, campaigns, query, ASC, ASA, auth, telemetry; yargs + ink)
   **plus the paywall commands** (`create`, `dev`, `push`, `promote`, `publish` in
   `src/commands/paywalls/`, shared machinery in `src/core/paywalls/`).
   Paywall commands load the framework dynamically from the project's own

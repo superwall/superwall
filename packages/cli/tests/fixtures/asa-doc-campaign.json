@@ -1,0 +1,269 @@
+{
+  "abstract": [
+    {
+      "text": "The response to a request to create and fetch campaigns.",
+      "type": "text"
+    }
+  ],
+  "metadata": {
+    "title": "Campaign"
+  },
+  "primaryContentSections": [
+    {
+      "items": [
+        {
+          "attributes": [],
+          "content": [
+            {
+              "inlineContent": [
+                {
+                  "text": "Your unique App Store app identifier. You can obtain your app ",
+                  "type": "text"
+                },
+                {
+                  "code": "adamId",
+                  "type": "codeVoice"
+                },
+                {
+                  "text": " through ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/Search-for-iOS-apps",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": ", ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/Get-a-Campaign",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": ", or ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/Get-all-Campaigns",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": ".",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            },
+            {
+              "inlineContent": [
+                {
+                  "text": "You can use the ",
+                  "type": "text"
+                },
+                {
+                  "code": "EQUALS",
+                  "type": "codeVoice"
+                },
+                {
+                  "text": " and ",
+                  "type": "text"
+                },
+                {
+                  "code": "IN",
+                  "type": "codeVoice"
+                },
+                {
+                  "text": " selector ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/Condition",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": " operators with ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/Find-Campaigns",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": ".",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "name": "adamId",
+          "required": true,
+          "type": [
+            {
+              "kind": "text",
+              "text": "int64"
+            }
+          ]
+        },
+        {
+          "attributes": [
+            {
+              "kind": "allowedValues",
+              "values": [
+                "SEARCH, DISPLAY"
+              ]
+            }
+          ],
+          "content": [
+            {
+              "inlineContent": [
+                {
+                  "text": "The channel type of an ad in a campaign.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            },
+            {
+              "inlineContent": [
+                {
+                  "text": "See ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/AdChannelType",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": " for value descriptions.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            },
+            {
+              "inlineContent": [
+                {
+                  "text": "You can use the ",
+                  "type": "text"
+                },
+                {
+                  "code": "EQUALS",
+                  "type": "codeVoice"
+                },
+                {
+                  "text": " selector ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/Condition",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": " operator with ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/Find-Campaigns",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": " and ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/Get-Campaign-Level-Reports",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": ".",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "name": "adChannelType",
+          "required": true,
+          "type": [
+            {
+              "kind": "text",
+              "text": "string"
+            }
+          ]
+        },
+        {
+          "attributes": [
+            {
+              "kind": "allowedValues",
+              "values": [
+                "IMPRESSIONS",
+                "TAPS"
+              ]
+            }
+          ],
+          "content": [
+            {
+              "inlineContent": [
+                {
+                  "text": "The type of billing event for a campaign.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            },
+            {
+              "inlineContent": [
+                {
+                  "text": "See ",
+                  "type": "text"
+                },
+                {
+                  "identifier": "doc://com.apple.appleads/documentation/apple_ads/BillingEventType",
+                  "isActive": true,
+                  "type": "reference"
+                },
+                {
+                  "text": " for value descriptions.",
+                  "type": "text"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "name": "billingEvent",
+          "required": true,
+          "type": [
+            {
+              "kind": "text",
+              "text": "string"
+            }
+          ]
+        }
+      ],
+      "kind": "properties",
+      "title": "Properties"
+    }
+  ],
+  "references": {
+    "doc://com.apple.appleads/documentation/apple_ads/Get-a-Campaign": {
+      "title": "Get a Campaign"
+    },
+    "doc://com.apple.appleads/documentation/apple_ads/Get-all-Campaigns": {
+      "title": "Get all Campaigns"
+    },
+    "doc://com.apple.appleads/documentation/apple_ads/Find-Campaigns": {
+      "title": "Find Campaigns"
+    }
+  }
+}

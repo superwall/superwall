@@ -8,6 +8,7 @@ export interface Application {
   bundle_id?: string;
   public_api_key?: string;
   apple_url_scheme?: string;
+  apple_search_ads_configured?: boolean;
 }
 
 export interface Project {

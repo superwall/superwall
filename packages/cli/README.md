@@ -292,6 +292,37 @@ and the validation, an agent can build and manage your whole ASC catalog —
 groups, subscriptions, prices, introductory offers — without ever memorizing the
 API or eating a silent rejection.
 
+## Apple Search Ads
+
+The **entire** Apple Ads Campaign Management API (v5), proxied by Superwall —
+no client secret, OAuth token, or org id to manage locally. It uses the
+credentials you connect in the dashboard (app → Integrations → Apple Search
+Ads → Advanced); the CLI finds the connected app on its own, or takes
+`--app <id>`.
+
+```bash
+superwall asa campaigns list
+superwall asa campaigns find --field status --op EQUALS --values ENABLED --all
+superwall asa keywords create --campaign 123 --adgroup 456 \
+  --text "grammar checker" --match-type EXACT --bid 1.25
+superwall asa reports campaigns --start 2025-01-01 --end 2025-01-31 --group-by countryOrRegion
+```
+
+Every resource follows the same shape — `asa <resource> <action> [id]`, scoped
+with `--campaign` / `--adgroup` / `--adam-id` — and the catalog is the
+documentation:
+
+```bash
+superwall asa docs                          # every endpoint, grouped
+superwall asa docs keywords                 # one resource: usage, flags, Apple links
+superwall asa docs campaigns create         # Apple's own page: fields, enums, examples
+```
+
+Writes take typed flags (money flags pick up the account's currency),
+`-d key=value` for any other field, or `--body` for the whole payload. Anything
+not covered is `asa get|post|put|delete /path`, sent straight to Apple with
+your access token and org context attached.
+
 ## For agents and scripts
 
 Pass `--json` to any command: stable output shape, structured errors, never
