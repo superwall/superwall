@@ -18,6 +18,9 @@
 npm install @superwall/studio
 ```
 
+Released to npm and mirrored to GitHub Packages (`npm.pkg.github.com`), so a
+repository whose `.npmrc` scopes `@superwall` there resolves it as well.
+
 You will not usually install this directly: the
 [`superwall`](https://www.npmjs.com/package/superwall) framework depends on
 it and `superwall dev` serves it. It is a standalone vite + React + Tailwind
@@ -25,8 +28,10 @@ app that is also a component library — one codebase, two hosts:
 
 - **`superwall dev`** serves the BUILT app (`dist/`, assets under
   `/__studio/`) plus the data endpoint and preview mounts — the local studio.
-- **The hosted dashboard** either embeds the built app (the way it embeds the
-  editor) or imports the components directly over platform data.
+- **The hosted studio** in the dashboard's editor imports the component
+  library (`dist/lib/`, the package's `.` export, plus the compiled
+  `@superwall/studio/studio.css`) and renders `SurfaceEditor` over published
+  snapshots and platform data. See [Hosting](#hosting).
 
 ## Package layout
 
@@ -34,19 +39,22 @@ app that is also a component library — one codebase, two hosts:
 packages/studio/
 ├── index.html            the app shell (fonts, favicon)
 ├── vite.config.ts        vite + react + tailwind; /__studio/ base for builds
+├── vite.lib.config.ts    the library build: dist/lib/index.js + studio.css
+├── tsconfig.lib.json     declarations for the library build
 ├── src/
 │   ├── main.tsx          entry: fetch /__studio/project.json → <StudioApp/>
 │   ├── index.ts          the component-library barrel a hosted studio imports
 │   ├── StudioApp.tsx     URL-driven router (list ⇄ editor)
 │   ├── screens/          SurfaceList, SurfaceEditor
-│   ├── components/       TopBar, Toolbar, DeviceFrame, VariablesPanel,
+│   ├── components/       StudioShell, TopBar, Toolbar, DeviceFrame, VariablesPanel,
 │   │                     ActionMenu, CompareMenu, SidePanel, controls, icons, …
 │   ├── lib/              project.ts (wire-format parser, untrusted JSON,
 │   │                     cast-free), preview.ts (preview URL builder),
 │   │                     devices.ts (viewport + mock-device catalog),
 │   │                     actions.ts, events.ts, time.ts, types.ts
 │   └── styles.css        tailwind @theme tokens + stateful primitives
-└── dist/                 built by the workspace postinstall
+└── dist/                 built by the workspace postinstall: the app, and
+                          the library under dist/lib/
 ```
 
 ## Data seam
@@ -59,8 +67,36 @@ swaps the fetch, nothing else. `previewUrl(surface, overrides)` decides what
 the preview iframes load: `/preview/<kind>/<id>` mounts locally, published
 snapshot URLs in the dashboard. Overrides travel as query params (`theme`,
 `locale`, `sw_device`, `sw_user`, `sw_params`, `sw_products`, `sw_trial`) —
-the same channel published snapshots accept, so preview behavior is
-identical in both hosts.
+the same channel published snapshots accept once opted in with
+`?sw_preview=1`, so preview behavior is identical in both hosts.
+
+## Hosting
+
+The dashboard's editor opens a code-first paywall in this studio instead of
+the visual editor. What the library gives a host:
+
+- `snapshotPreviewUrl(urlOf)` — a `previewUrl` that resolves each surface to
+  its published snapshot URL, opts it into simulation (`sw_preview=1`), and
+  appends the overrides. Every built snapshot boots through the framework's
+  `PreviewHost`, which reads that channel, exposes `__swPreviewApply` for
+  instant re-application (same origin only — cross-origin frames reload), and
+  drives the studio bridge: paywall events and purchase/permission/callback
+  prompts reach the host's toasts, and a `hello` message carries the
+  paywall's locales, so `SurfaceEditor` fills its locale switcher when the
+  host passes `locales: []`.
+- One `StudioSurface` per version, told apart by `label` (`"v12 · live"`);
+  `StudioSource.compareHint` names what the compare menu offers, and
+  `SurfaceEditor`'s `actions` slot takes the host's own controls (a version
+  switcher, say). With no `capabilities`, there is no push/promote UI.
+- `StudioShell` (`position="absolute"` when the host owns the viewport) is
+  the ink stage every screen expects, and it carries the `sw-studio` class
+  the stylesheet scopes its base rules to.
+- `@superwall/studio/studio.css` is compiled Tailwind v4 output including a
+  preflight. Mount it in a shadow root (or an iframe) rather than beside
+  another design system — the editor does exactly that, and re-registers the
+  sheet's `@property` rules at document level, where browsers expect them.
+  `@superwall/studio/styles.css` is the Tailwind source for hosts that run
+  their own v4 pipeline.
 
 ## Screens
 
@@ -104,7 +140,7 @@ bun install
 bun dev               # the studio alone on port 6200, proxied to a running
                       # `superwall dev` (port 6100) in any project — HMR against
                       # real paywalls
-bun run build         # dist/, what `superwall dev` serves
+bun run build         # dist/ (what `superwall dev` serves) and dist/lib/ (the library)
 bun run test
 bun run typecheck
 ```

@@ -4,6 +4,7 @@ export type StudioSurface = {
   kind: StudioSurfaceKind;
   id: string;
   project?: string;
+  label?: string;
   products?: Record<string, string>;
   routes: string[];
   locales: string[];
@@ -73,6 +74,7 @@ export type StudioSource = {
   samples?: SampleDefaults;
   previewUrl: PreviewUrlBuilder;
   capabilities?: { actions: boolean };
+  compareHint?: string;
 };
 
 export type Samples = {

@@ -139,7 +139,7 @@ describe("studio actions", () => {
     fireEvent.click(screen.getByText("paywall/win-back"));
 
     expect(screen.getByText("Local")).toBeDefined();
-    const pane = screen.getAllByTitle("win-back preview").at(-1);
+    const pane = screen.getAllByTitle("paywall/win-back preview").at(-1);
     expect(pane?.getAttribute("src")).toContain("/preview/paywall/win-back");
   });
 

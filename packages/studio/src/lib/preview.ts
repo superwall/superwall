@@ -37,3 +37,13 @@ export const withOverrides = (url: string, overrides: PreviewOverrides): string 
   if (!query) return url;
   return `${url}${url.includes("?") ? "&" : "?"}${query}`;
 };
+
+export const withPreviewOptIn = (url: string): string => {
+  if (/[?&]sw_preview=/.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}sw_preview=1`;
+};
+
+export const snapshotPreviewUrl =
+  (urlOf: (surface: StudioSurface) => string): PreviewUrlBuilder =>
+  (surface, overrides) =>
+    withOverrides(withPreviewOptIn(urlOf(surface)), overrides);

@@ -249,8 +249,7 @@ const entrySource = (
   const lines: string[] = [
     `import * as React from "react";`,
     `import { createRoot } from "react-dom/client";`,
-    `import { SuperwallProvider } from "superwall";`,
-    `import { mergeMessages } from "superwall/internal";`,
+    `import { mergeMessages, PreviewHost } from "superwall/internal";`,
     `import { PaywallRouter } from "superwall/navigation";`,
     ...(checkout ? [`import { SuperwallCheckout } from "superwall/checkout";`] : []),
   ];
@@ -292,12 +291,12 @@ const entrySource = (
     ``,
     `createRoot(document.getElementById("root")).render(`,
     `  <React.StrictMode>`,
-    `    <SuperwallProvider config={config} mock="auto">`,
+    `    <PreviewHost config={config}>`,
     surface.layoutFile
       ? `      <PaywallRouter routes={routes} Layout={Layout} transition={definition?.transition} queryState={definition?.queryState} navigationId={${JSON.stringify(surface.id)}} />`
       : `      <PaywallRouter routes={routes} transition={definition?.transition} queryState={definition?.queryState} navigationId={${JSON.stringify(surface.id)}} />`,
     ...(checkout ? [`      <SuperwallCheckout />`] : []),
-    `    </SuperwallProvider>`,
+    `    </PreviewHost>`,
     `  </React.StrictMode>,`,
     `);`,
   );

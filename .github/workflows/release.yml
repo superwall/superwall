@@ -2,7 +2,10 @@ name: Release
 
 # Publishing a GitHub Release tagged vX.Y.Z publishes every package at that
 # version, in dependency order, then commits the version stamp back to main.
-# A prerelease tag (vX.Y.Z-beta.1) goes to the `next` dist-tag.
+# A prerelease tag (vX.Y.Z-beta.1) goes to the `next` dist-tag. The same
+# tarballs also go to GitHub Packages, so repositories whose `.npmrc` pins
+# the @superwall scope there can resolve them without a registry
+# exception.
 
 on:
   release:
@@ -24,6 +27,7 @@ concurrency:
 permissions:
   contents: write
   id-token: write
+  packages: write
 
 jobs:
   publish:
@@ -147,6 +151,28 @@ jobs:
             file=$(ls .release/$(echo "$pkg" | tr -d '@' | tr '/' '-')-${{ steps.ver.outputs.version }}.tgz)
             echo "::group::npm publish $pkg@${{ steps.ver.outputs.version }} ($file)"
             npm publish "$file" --access public --tag "${{ steps.ver.outputs.dist_tag }}" --ignore-scripts $PROVENANCE $DRY
+            echo "::endgroup::"
+          done
+
+      # Mirrors what npm just accepted; a version already there is a no-op so a
+      # re-run after a partial failure never trips on the ones that made it.
+      - name: Publish to GitHub Packages
+        if: steps.npm.outputs.done != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          REGISTRY: https://npm.pkg.github.com
+        run: |
+          DRY=""
+          [ "${{ steps.ver.outputs.dry_run }}" = "true" ] && DRY="--dry-run"
+          for name in $PACKAGES; do
+            pkg=$(node -p "require('./packages/$name/package.json').name")
+            file=$(ls .release/$(echo "$pkg" | tr -d '@' | tr '/' '-')-${{ steps.ver.outputs.version }}.tgz)
+            if npm view "$pkg@${{ steps.ver.outputs.version }}" version --registry "$REGISTRY" >/dev/null 2>&1; then
+              echo "$pkg@${{ steps.ver.outputs.version }} already on GitHub Packages"
+              continue
+            fi
+            echo "::group::npm publish $pkg@${{ steps.ver.outputs.version }} → GitHub Packages"
+            npm publish "$file" --registry "$REGISTRY" --tag "${{ steps.ver.outputs.dist_tag }}" --ignore-scripts $DRY
             echo "::endgroup::"
           done
 

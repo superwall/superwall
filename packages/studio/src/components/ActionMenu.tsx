@@ -116,7 +116,7 @@ export const ActionMenu = ({
   React.useEffect(() => {
     if (!open) return undefined;
     const close = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+      if (menuRef.current && !event.composedPath().includes(menuRef.current)) setOpen(false);
     };
     window.addEventListener("mousedown", close);
     return () => window.removeEventListener("mousedown", close);

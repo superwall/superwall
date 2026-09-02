@@ -163,7 +163,11 @@ The stack, bottom to top — each layer depends only on the one below it:
     the runtime serves published snapshots — `server.ts` (vite; studio dist,
     project payload, surface previews), `mount.tsx`/`surface.tsx` (what runs
     inside the iframe), `overrides.ts` (theme/locale/device query params),
-    `webview.ts` (the one deliberate local-only difference)
+    `webview.ts` (the one deliberate local-only difference), `host.tsx`
+    (`PreviewHost`: what every built entry mounts — real host by default,
+    simulated from the studio's query params behind `?sw_preview=1` — plus
+    the override hook and mock-option mapping the local mount shares), and
+    `studio-bridge.ts` (the `postMessage` channel to an embedding studio)
 - `packages/cli` — `@superwall/cli`: THE command surface (integrate/migrate/
   review, apps, products, campaigns, query, ASC, ASA, auth, telemetry; yargs + ink)
   **plus the paywall commands** (`create`, `dev`, `push`, `promote`, `publish` in
@@ -215,7 +219,9 @@ handing work back; `format:check` must pass), `.editorconfig`,
 `vitest.config.ts` (`test:coverage` fails below them). CI lives at
 `.github/workflows/checks.yml`: install (postinstall builds cli + studio) →
 lint → format:check → typecheck → test:coverage; publishing is
-`.github/workflows/release.yml` (see Releasing). Every gate that runs in CI
+`.github/workflows/release.yml` (see Releasing): every package goes to npm
+and is mirrored to GitHub Packages, which is where the dashboard's `.npmrc`
+resolves the `@superwall` scope. Every gate that runs in CI
 runs identically on a laptop — keep it that way.
 
 ## Verifying device-visible changes — the static config is the truth

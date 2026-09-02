@@ -1,17 +1,12 @@
 import * as React from "react";
-import {
-  mockProductsFromConfig,
-  type SuperwallConfig,
-  type SuperwallMessages,
-  type SuperwallMockOptions,
-} from "@superwall/runtime";
+import type { SuperwallConfig, SuperwallMessages } from "@superwall/runtime";
 import type { PreviewMessages, PreviewSurface } from "virtual:superwall/project";
 import type { PaywallDefinition } from "../config";
 import { mergeMessages } from "../internal";
 import { PaywallRouter, type RouteMap } from "../navigation/index";
 import { SuperwallProvider } from "../provider/context";
+import { previewMockOptions, useStudioAnnouncement } from "./host";
 import type { PreviewOverrides } from "./overrides";
-import { studioBridge } from "./studio-bridge";
 
 const loadCatalogs = async (
   shared: PreviewMessages[],
@@ -89,33 +84,9 @@ const useSurface = (surface: PreviewSurface): Loaded => {
   return loaded;
 };
 
-const mockOptions = (
-  overrides: PreviewOverrides,
-  config: SuperwallConfig,
-): SuperwallMockOptions => {
-  const { theme, locale, device, user, params, products, trialEligible } = overrides;
-
-  const languageCode = locale?.split(/[-_]/)[0];
-
-  const priced = products
-    ? mockProductsFromConfig(config).map((product) => {
-        const patch = products[product.reference];
-        return patch ? { ...product, variables: { ...product.variables, ...patch } } : product;
-      })
-    : undefined;
-
-  return {
-    ...studioBridge(),
-    ...(priced ? { products: priced } : {}),
-    ...(trialEligible === undefined ? {} : { trialEligible }),
-    ...(user ? { user } : {}),
-    ...(params ? { params } : {}),
-    device: {
-      ...device,
-      ...(locale ? { deviceLocale: locale, deviceLanguageCode: languageCode } : {}),
-      ...(theme ? { interfaceStyle: theme === "dark" ? "Dark" : "Light" } : {}),
-    },
-  };
+const Announce = ({ config }: { config: SuperwallConfig }): null => {
+  useStudioAnnouncement(config);
+  return null;
 };
 
 export const SurfaceHost = ({
@@ -137,7 +108,8 @@ export const SurfaceHost = ({
   }
 
   return (
-    <SuperwallProvider config={loaded.config} mock={mockOptions(overrides, loaded.config)}>
+    <SuperwallProvider config={loaded.config} mock={previewMockOptions(overrides, loaded.config)}>
+      <Announce config={loaded.config} />
       <PaywallRouter
         routes={loaded.routes}
         Layout={loaded.Layout}

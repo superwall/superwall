@@ -1,4 +1,5 @@
 import * as React from "react";
+import { StudioShell } from "./components/StudioShell";
 import { SurfaceEditor } from "./screens/SurfaceEditor";
 import { SurfaceList } from "./screens/SurfaceList";
 import { devicePreviewPath, surfacePath } from "./lib/preview";
@@ -56,7 +57,7 @@ export const StudioApp = ({
   const active = device ? undefined : surfaceFromPath(source.surfaces, pathname);
 
   return (
-    <div className="bg-ink text-cream fixed inset-0 flex flex-col font-sans text-[0.9375rem] tracking-[-0.01em] antialiased">
+    <StudioShell>
       {active ? (
         <SurfaceEditor
           source={source}
@@ -73,6 +74,6 @@ export const StudioApp = ({
           }
         />
       )}
-    </div>
+    </StudioShell>
   );
 };

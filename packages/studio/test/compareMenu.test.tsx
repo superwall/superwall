@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { createRoot } from "react-dom/client";
 import type * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CompareMenu, type CompareOption } from "../src/components/CompareMenu";
@@ -109,5 +110,43 @@ describe("CompareMenu", () => {
       (screen.getByRole("searchbox", { name: "Search paywalls" }) as HTMLInputElement).value,
     ).toBe("");
     expect(screen.getByText("paywall/paywall-0")).toBeDefined();
+  });
+});
+
+describe("inside a shadow root", () => {
+  it("stays open on a mousedown within the menu, even though the host retargets it", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const onSelect = vi.fn();
+    const root = createRoot(shadow);
+    await act(async () => {
+      root.render(<CompareMenu active={undefined} options={options(1)} onSelect={onSelect} />);
+    });
+
+    const toggle = shadow.querySelector("button");
+    if (!toggle) throw new Error("no compare toggle");
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    const option = [...shadow.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("paywall/paywall-0"),
+    );
+    if (!option) throw new Error("menu did not open");
+
+    await act(async () => {
+      fireEvent.mouseDown(option);
+    });
+    expect(shadow.textContent).toContain("paywall/paywall-0");
+
+    await act(async () => {
+      fireEvent.click(option);
+    });
+    expect(onSelect).toHaveBeenCalledWith({ type: "surface", surface: surface("paywall-0") });
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
   });
 });

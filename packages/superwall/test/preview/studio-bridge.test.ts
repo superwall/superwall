@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { STUDIO_CHANNEL, studioBridge } from "../../src/preview/studio-bridge";
+import { announceToStudio, STUDIO_CHANNEL, studioBridge } from "../../src/preview/studio-bridge";
 
 const parentDescriptor = Object.getOwnPropertyDescriptor(window, "parent");
 
@@ -40,8 +40,23 @@ describe("studioBridge", () => {
 
     expect(postMessage).toHaveBeenCalledWith(
       { channel: STUDIO_CHANNEL, type: "event", message: { event_name: "close" } },
-      window.origin,
+      "*",
     );
+  });
+
+  it("introduces the paywall to the studio with its locales", () => {
+    const postMessage = embedInStudio();
+
+    announceToStudio({ locales: ["en", "de"] });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      { channel: STUDIO_CHANNEL, type: "hello", locales: ["en", "de"] },
+      "*",
+    );
+  });
+
+  it("has nobody to introduce itself to when not embedded", () => {
+    expect(() => announceToStudio({ locales: ["en"] })).not.toThrow();
   });
 
   it("asks the studio for a purchase outcome and settles from the matching answer", async () => {

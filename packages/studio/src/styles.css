@@ -12,28 +12,30 @@
 }
 
 @layer base {
-  :root {
+  .sw-studio {
     color-scheme: dark;
   }
 
-  ::selection {
+  .sw-studio ::selection {
     background: color-mix(in srgb, var(--color-accent) 50%, transparent);
   }
 
-  :focus-visible {
+  .sw-studio :focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: -2px;
   }
 
-  button {
+  .sw-studio button {
     cursor: pointer;
   }
 
-  * {
+  .sw-studio,
+  .sw-studio * {
     scrollbar-width: none;
   }
 
-  *::-webkit-scrollbar {
+  .sw-studio::-webkit-scrollbar,
+  .sw-studio *::-webkit-scrollbar {
     width: 0;
     height: 0;
     display: none;

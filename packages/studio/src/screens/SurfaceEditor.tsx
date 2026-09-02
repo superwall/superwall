@@ -22,6 +22,7 @@ import {
   type VariableRow,
 } from "../components/VariablesPanel";
 import { fetchStatus, runAction } from "../lib/actions";
+import { localesAnnounced } from "../lib/events";
 import {
   DEFAULT_DEVICE_ID,
   deviceById,
@@ -132,16 +133,20 @@ const StagePane = ({
   );
 };
 
+const nameOf = (surface: StudioSurface): string => surface.label ?? `${surface.kind}/${surface.id}`;
+
 export const SurfaceEditor = ({
   source,
   surface,
   samples,
   onBack,
+  actions,
 }: {
   source: StudioSource;
   surface: StudioSurface;
   samples: Samples;
   onBack: () => void;
+  actions?: React.ReactNode;
 }) => {
   const [deviceId, setDeviceId] = React.useState(DEFAULT_DEVICE_ID);
   const [size, setSize] = React.useState(RESPONSIVE_DEFAULT);
@@ -158,6 +163,17 @@ export const SurfaceEditor = ({
   React.useEffect(() => () => window.clearTimeout(dismissTimer.current), []);
 
   const actionsEnabled = source.capabilities?.actions === true;
+
+  const [announced, setAnnounced] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const locales = localesAnnounced(event.data);
+      if (locales) setAnnounced(locales);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+  const locales = surface.locales.length > 0 ? surface.locales : announced;
 
   React.useEffect(() => {
     if (!actionsEnabled) return;
@@ -252,13 +268,13 @@ export const SurfaceEditor = ({
         ]
       : []),
     ...source.surfaces
-      .filter((candidate) => candidate !== surface)
-      .map((candidate) => ({
-        key: `surface:${candidate.kind}/${candidate.id}`,
-        label: `${candidate.kind}/${candidate.id}`,
-        hint: "Local preview",
+      .map((candidate, index) => ({
+        key: `surface:${index}`,
+        label: nameOf(candidate),
+        hint: source.compareHint ?? "Local preview",
         target: { type: "surface", surface: candidate } as const,
-      })),
+      }))
+      .filter((option) => option.target.surface !== surface),
   ];
 
   const comparePane =
@@ -273,9 +289,9 @@ export const SurfaceEditor = ({
             : undefined,
         }
       : {
-          label: `${compareWith.surface.kind}/${compareWith.surface.id}`,
+          label: nameOf(compareWith.surface),
           src: source.previewUrl(compareWith.surface, overrides),
-          title: `${compareWith.surface.id} preview`,
+          title: `${nameOf(compareWith.surface)} preview`,
         });
 
   const groups = React.useMemo((): VariableGroups => {
@@ -333,10 +349,13 @@ export const SurfaceEditor = ({
         </div>
       )}
       <TopBar
-        title={`${surface.project ?? source.title} / ${surface.id}`}
+        title={`${surface.project ?? source.title} / ${surface.id}${
+          surface.label ? ` · ${surface.label}` : ""
+        }`}
         onHome={onBack}
         actions={
           <>
+            {actions}
             <button
               type="button"
               className="sw-btn sw-btn--icon"
@@ -388,7 +407,7 @@ export const SurfaceEditor = ({
             />
           )}
           <StagePane
-            label={comparePane ? "Local" : undefined}
+            label={comparePane ? (surface.label ?? "Local") : undefined}
             width={frame.width}
             height={frame.height}
             title={`${surface.id} preview`}
@@ -465,14 +484,14 @@ export const SurfaceEditor = ({
             </span>
           )}
         </ToolbarGroup>
-        {surface.locales.length > 1 && (
+        {locales.length > 1 && (
           <ToolbarGroup label="Locale">
             <Select
               label="Locale"
               value={locale ?? "default"}
               options={[
                 { value: "default", label: "Device" },
-                ...surface.locales.map((entry) => ({ value: entry, label: entry })),
+                ...locales.map((entry) => ({ value: entry, label: entry })),
               ]}
               onChange={(value) => setLocale(value === "default" ? undefined : value)}
             />

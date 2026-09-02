@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBridgeMessage, noticeFor, STUDIO_CHANNEL } from "../src/lib/events";
+import { isBridgeMessage, localesAnnounced, noticeFor, STUDIO_CHANNEL } from "../src/lib/events";
 
 describe("noticeFor", () => {
   it("names the action the paywall asked for, and how it reads", () => {
@@ -61,5 +61,25 @@ describe("isBridgeMessage", () => {
     expect(isBridgeMessage({ type: "event" })).toBe(false);
     expect(isBridgeMessage("hello")).toBe(false);
     expect(isBridgeMessage(null)).toBe(false);
+  });
+});
+
+describe("localesAnnounced", () => {
+  it("reads the locales a paywall introduces itself with", () => {
+    expect(
+      localesAnnounced({ channel: STUDIO_CHANNEL, type: "hello", locales: ["en", "de"] }),
+    ).toEqual(["en", "de"]);
+    expect(isBridgeMessage({ channel: STUDIO_CHANNEL, type: "hello", locales: [] })).toBe(true);
+  });
+
+  it("ignores every other message, and a hello with no usable locales", () => {
+    expect(localesAnnounced({ channel: STUDIO_CHANNEL, type: "event", message: {} })).toBe(
+      undefined,
+    );
+    expect(localesAnnounced({ channel: STUDIO_CHANNEL, type: "hello", locales: "en" })).toBe(
+      undefined,
+    );
+    expect(localesAnnounced({ channel: "other", type: "hello", locales: ["en"] })).toBe(undefined);
+    expect(localesAnnounced(null)).toBe(undefined);
   });
 });

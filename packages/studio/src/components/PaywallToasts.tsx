@@ -186,6 +186,7 @@ export const PaywallToasts = ({
         return;
       }
 
+      if (event.data.type !== "event") return;
       const notice = noticeFor(event.data.message);
       if (notice) toast.custom(() => <Notice notice={notice} />);
     };

@@ -321,7 +321,12 @@ Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1`.
 The `superwall` and `sw` binaries launch [`@superwall/cli`](https://github.com/superwall/superwall/tree/main/packages/cli),
 which owns every command. `superwall/build`, `superwall/preview`, and
 `superwall/discover` are the CLI's tooling contract and `superwall/internal`
-belongs to the generated entry — none of them is a public API. The React-free
+belongs to the generated entry — none of them is a public API. That entry
+mounts `PreviewHost`: against a real SDK a snapshot behaves exactly as
+before, and opened with `?sw_preview=1` it simulates the SDK from the
+studio's query params (`theme`, `locale`, `sw_device`, `sw_user`,
+`sw_params`, `sw_products`, `sw_trial`) and talks to an embedding studio over
+`postMessage` — which is how the dashboard previews a published paywall. The React-free
 core lives in [`@superwall/runtime`](https://github.com/superwall/superwall/tree/main/packages/runtime),
 the SDK message contract in [`@superwall/protocol`](https://github.com/superwall/superwall/tree/main/packages/protocol),
 and the studio in [`@superwall/studio`](https://github.com/superwall/superwall/tree/main/packages/studio).

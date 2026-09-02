@@ -23,8 +23,15 @@
     "src"
   ],
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "exports": {
-    ".": "./src/index.ts",
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "default": "./dist/lib/index.js"
+    },
+    "./studio.css": "./dist/lib/studio.css",
     "./styles.css": "./src/styles.css",
     "./package.json": "./package.json"
   },
@@ -33,9 +40,9 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && vite build -c vite.lib.config.ts && tsc -p tsconfig.lib.json",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.lib.json --noEmit",
     "test": "vitest",
     "test:run": "vitest --run",
     "test:coverage": "vitest --run --coverage",

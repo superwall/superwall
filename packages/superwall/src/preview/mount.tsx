@@ -1,14 +1,8 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { surfaces } from "virtual:superwall/project";
+import { usePreviewOverrides } from "./host";
 import { SurfaceHost } from "./surface";
-import { applyThemeOverride, mergePreviewSearch, readPreviewOverrides } from "./overrides";
-
-declare global {
-  interface Window {
-    __swPreviewApply?: (search: string) => void;
-  }
-}
 
 const match = window.location.pathname.match(
   /^\/preview\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)\/?$/,
@@ -22,25 +16,8 @@ const surface = match
     )
   : undefined;
 
-applyThemeOverride(readPreviewOverrides(window.location.search).theme);
-
 const PreviewRoot = ({ surfaceEntry }: { surfaceEntry: NonNullable<typeof surface> }) => {
-  const [overrides, setOverrides] = React.useState(() =>
-    readPreviewOverrides(window.location.search),
-  );
-
-  React.useEffect(() => {
-    window.__swPreviewApply = (search: string) => {
-      const query = mergePreviewSearch(window.location.search, search);
-      window.history.replaceState(null, "", `${window.location.pathname}${query}`);
-      const next = readPreviewOverrides(query);
-      applyThemeOverride(next.theme);
-      setOverrides(next);
-    };
-    return () => {
-      delete window.__swPreviewApply;
-    };
-  }, []);
+  const overrides = usePreviewOverrides();
 
   // Deliberately unkeyed: remounting here would rebuild the router and drop
   // whichever route you were looking at. The provider swaps the session when

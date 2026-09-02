@@ -3,6 +3,7 @@ export const STUDIO_CHANNEL = "superwall-studio";
 export type PaywallEvent = { event_name: string } & Record<string, unknown>;
 
 export type BridgeMessage =
+  | { channel: typeof STUDIO_CHANNEL; type: "hello"; locales: string[] }
   | { channel: typeof STUDIO_CHANNEL; type: "event"; message: PaywallEvent }
   | {
       channel: typeof STUDIO_CHANNEL;
@@ -74,4 +75,12 @@ export const isBridgeMessage = (data: unknown): data is BridgeMessage =>
   typeof data === "object" &&
   data !== null &&
   Reflect.get(data, "channel") === STUDIO_CHANNEL &&
-  (Reflect.get(data, "type") === "event" || Reflect.get(data, "type") === "ask");
+  ["hello", "event", "ask"].includes(String(Reflect.get(data, "type")));
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
+
+export const localesAnnounced = (data: unknown): string[] | undefined =>
+  isBridgeMessage(data) && data.type === "hello" && isStringArray(data.locales)
+    ? data.locales
+    : undefined;

@@ -6,7 +6,7 @@ export default defineConfig({
     setupFiles: ["./test/setup.ts"],
     coverage: {
       reporter: ["text"],
-      exclude: ["src/main.tsx", "src/index.ts", "**/*.config.ts", "test/**"],
+      exclude: ["dist/**", "src/main.tsx", "src/index.ts", "**/*.config.ts", "test/**"],
       thresholds: { statements: 88, branches: 85, functions: 80, lines: 88 },
     },
   },

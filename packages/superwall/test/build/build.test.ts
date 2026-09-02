@@ -76,6 +76,18 @@ describe("hosted assets", () => {
     expect(built.assetBytes).toBe(built.assets.reduce((total, asset) => total + asset.bytes, 0));
   });
 
+  it("boots through the preview host, so a snapshot opened with ?sw_preview simulates the SDK from the studio's query", () => {
+    const entry = fs.readFileSync(
+      path.join(FIXTURE, "superwall", ".superwall", "entries", "paywall", "demo", "entry.jsx"),
+      "utf8",
+    );
+    expect(entry).toContain('import { mergeMessages, PreviewHost } from "superwall/internal";');
+    expect(entry).toContain("<PreviewHost config={config}>");
+    expect(entry).not.toContain("SuperwallProvider");
+    expect(built.html).toContain("__swPreviewApply");
+    expect(built.html).toContain("sw_preview");
+  });
+
   it("carries the mime type each asset will be served with", () => {
     expect(byName(built.assets, "hero.png").mime).toBe("image/png");
     expect(byName(built.assets, "clip.mp4").mime).toBe("video/mp4");

@@ -3,6 +3,7 @@ import type { SuperwallMockOptions, TOutgoingMessage } from "@superwall/runtime"
 export type StudioAskKind = "purchase" | "permission" | "callback";
 
 export type StudioBridgeMessage =
+  | { channel: "superwall-studio"; type: "hello"; locales: string[] }
   | { channel: "superwall-studio"; type: "event"; message: TOutgoingMessage }
   | {
       channel: "superwall-studio";
@@ -32,11 +33,15 @@ const isAnswer = (
 
 let asked = 0;
 
+export const announceToStudio = (details: { locales: string[] }): void => {
+  embedded()?.postMessage({ channel: STUDIO_CHANNEL, type: "hello", ...details }, "*");
+};
+
 export const studioBridge = (): Partial<SuperwallMockOptions> => {
   const parent = embedded();
   if (!parent) return {};
 
-  const post = (message: StudioBridgeMessage) => parent.postMessage(message, window.origin);
+  const post = (message: StudioBridgeMessage) => parent.postMessage(message, "*");
 
   const ask = (kind: StudioAskKind, subject: string): Promise<string> =>
     new Promise((resolve) => {
