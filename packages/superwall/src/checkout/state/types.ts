@@ -26,7 +26,47 @@ export type RedirectCheckoutSession = {
   wasPrefetched?: boolean;
 };
 
-export type CheckoutSessionResult = EmbeddedCheckoutSession | RedirectCheckoutSession;
+/**
+ * The recurring price Stripe will bill, in minor units, as quoted by the
+ * subscriptions API. `amountDueNow` is what the first charge takes today: zero
+ * on a free trial, the intro price on a paid intro offer, the discounted
+ * first invoice with a promotion code, and otherwise `amount`.
+ */
+export type SubscriptionDetails = {
+  amount: number;
+  amountDueNow?: number;
+  currency: string;
+  interval: "day" | "week" | "month" | "year";
+  intervalCount: number;
+  trialPeriodDays?: number;
+  productName?: string;
+  discountedAmount?: number;
+  discount?: AppliedDiscount;
+};
+
+/**
+ * A quote for the Apple Pay sheet. Deferred quotes carry no Stripe intent
+ * (`checkoutSessionId` is null): the subscription is created when the wallet
+ * authorizes, by `checkout/session/confirm`. A non-deferred one carries the
+ * intent's client secret inside `checkoutSessionId`.
+ */
+export type ElementsCheckoutSession = {
+  directive: "elements";
+  checkoutSessionId: string | null;
+  publishableKey: string;
+  checkoutContextId: string;
+  referenceName: string;
+  subscriptionDetails: SubscriptionDetails;
+  intentType?: "SetupIntent" | "PaymentIntent";
+  stripeAccountCountryCode?: string;
+  managementUrl?: string;
+  wasPrefetched?: boolean;
+};
+
+export type CheckoutSessionResult =
+  | EmbeddedCheckoutSession
+  | RedirectCheckoutSession
+  | ElementsCheckoutSession;
 
 export type AppliedDiscount = {
   code: string;
@@ -59,6 +99,20 @@ export type DiscountValidationResult =
 export type SessionData = EmbeddedCheckoutSession & {
   deviceModel?: string;
 };
+
+/**
+ * What an Apple Pay purchase reports on the checkout event bus. It never
+ * enters the sheet's session pool — the wallet owns the UI — so it carries
+ * no client secret; `checkoutSessionId` is set once the backend confirms.
+ */
+export type ApplePaySessionData = {
+  directive: "applePay";
+  referenceName: string;
+  checkoutContextId: string;
+  checkoutSessionId: string | null;
+};
+
+export type CheckoutSessionData = SessionData | ApplePaySessionData;
 
 export interface PresentationContext {
   isFullscreen: boolean;
@@ -114,8 +168,8 @@ export interface CheckoutEventPayload {
   SHEET_OPEN: { session: SessionData };
   SHEET_CLOSE: void;
   EMBEDDED_READY: { clientSecret: string };
-  CHECKOUT_SUBMITTED: { session: SessionData };
-  PAYMENT_SUCCESS: { session: SessionData };
-  PAYMENT_ERROR: { error: Error; session: SessionData };
+  CHECKOUT_SUBMITTED: { session: CheckoutSessionData };
+  PAYMENT_SUCCESS: { session: CheckoutSessionData };
+  PAYMENT_ERROR: { error: Error; session: CheckoutSessionData };
   SESSION_INVALIDATED: { reason?: string };
 }

@@ -14,31 +14,18 @@ import {
   controllerFor,
   openEmbeddedCheckout,
   prefetchSession,
+  purchaseWithApplePay,
 } from "../checkout/services/registry";
 
 export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
-  /**
-   * Starts a purchase and resolves with the outcome — never throws for flow
-   * results: `{ status: "completed" | "abandoned" | "failed" }`.
-   */
   purchase: (
     input: ProductReference | SuperwallProduct<TVariables>,
     options?: Parameters<SuperwallSession<SuperwallProduct<TVariables>>["purchase"]>[1],
   ) => ReturnType<SuperwallSession<SuperwallProduct<TVariables>>["purchase"]>;
-  /** True while a purchase is awaiting a transaction result. */
   isPurchasing: boolean;
-  /** The product currently being purchased, if any. */
   pendingProduct?: SuperwallProduct<TVariables>;
-  /** The most recent completed or abandoned transaction. */
   transaction?: SuperwallTransaction<SuperwallProduct<TVariables>>;
-  /** The most recent purchase failure (timeout/superseded), cleared on the next attempt. */
   failure?: SuperwallPurchaseFailure<SuperwallProduct<TVariables>>;
-  /**
-   * Warms a web checkout for a Stripe product ahead of the tap: fetches the
-   * session and pre-mounts Stripe's sheet hidden, so `purchase` opens it
-   * instantly. A no-op for store products or paywalls without web checkout.
-   * Without an argument, prefetches the paywall's first product.
-   */
   prefetch: (input?: ProductReference | SuperwallProduct<TVariables>) => void;
 };
 
@@ -51,6 +38,11 @@ export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
  * const result = await purchase("primary")
  * if (result.status === "abandoned") showAbandonmentOffer()
  * ```
+ *
+ * With `checkout: "applePay"`, a Stripe product opens the native Apple Pay
+ * sheet where the device offers it and falls back to Stripe's embedded
+ * sheet everywhere else; `checkout: "sheet"` always opens the embedded
+ * sheet. Store products go to the native SDK either way.
  */
 export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
@@ -67,13 +59,23 @@ export const usePurchase = <
         const controller = controllerFor(session);
         if (controller.isStripeProduct(reference)) {
           try {
-            const result = await controller.beginCheckout({
-              referenceName: reference,
-              mode,
-              cacheScope: mode === "applePay" ? "apple-pay" : "default",
-            });
+            if (mode === "applePay") {
+              const outcome = await purchaseWithApplePay(session, reference);
+              if (outcome.status !== "unavailable") return outcome;
+            }
+
+            const warmed =
+              mode === "applePay" ? controller.getCachedSession(reference, "apple-pay") : null;
+            const result =
+              warmed?.directive === "embedded"
+                ? warmed
+                : await controller.beginCheckout({
+                    referenceName: reference,
+                    mode: "sheet",
+                    cacheScope: "default",
+                  });
             if (result.directive === "embedded") {
-              return await openEmbeddedCheckout(result);
+              return await openEmbeddedCheckout(result, { session, referenceName: reference });
             }
             if (result.directive === "redirect" && typeof window !== "undefined") {
               window.location.assign(result.checkoutUrl);
@@ -102,9 +104,8 @@ export const usePurchase = <
             ? input
             : input.reference;
       if (!reference) return;
-      const controller = controllerFor(session);
-      if (!controller.isStripeProduct(reference)) return;
-      void prefetchSession(controller, reference, mode);
+      if (!controllerFor(session).isStripeProduct(reference)) return;
+      void prefetchSession(session, reference, mode);
     },
     [session, mode, products],
   );

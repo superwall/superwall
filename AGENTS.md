@@ -136,9 +136,33 @@ The stack, bottom to top — each layer depends only on the one below it:
     mounts it only when `config.checkout` is `sheet` or `applePay`
     (`build/index.ts`), so a store-only paywall carries none of it. The
     sheet's appearance is fixed and takes nothing from the paywall around it.
+    - `sheet` opens Stripe's Embedded Checkout in `CheckoutSheet`. `applePay`
+      opens the native Apple Pay sheet through Stripe's PaymentRequest
+      (`services/ApplePayCheckoutController.ts`) and falls back to the
+      embedded sheet where the device cannot pay. The wallet is built from
+      the backend's deferred `elements` quote (no Stripe object until the
+      wallet authorizes; `checkout/session/confirm` creates the subscription),
+      so `WebCheckoutController` requests `elements` with
+      `deferElementsIntentCreation` only in `applePay` mode. Trials and intro
+      offers are quoted as Apple's `recurringPaymentRequest` with a
+      `trialBilling` line (`utils/applePay.ts`) — that is what makes the sheet
+      say "Free Trial" — and an applied promotion code shows as line items.
+    - `services/registry.ts` owns the per-session controllers and the
+      orchestration (`prefetchSession`, `purchaseWithApplePay`,
+      `openEmbeddedCheckout`, `invalidateSessions`, `reprefetch`). Both sheets
+      report the same lifecycle to the native SDK through
+      `services/hostEvents.ts` (`initiate_web_checkout`, `stripe_checkout_*`),
+      which is how the SDK tracks, dismisses, and grants access for a web
+      purchase; keep them in step.
+    - Promotion codes live on `WebCheckoutController` (`redeemDiscount`,
+      `clearDiscount`, `subscribeDiscount`, `subscribeDiscountDropped`) and are
+      forwarded only on sessions for the products the backend said they apply
+      to — a paywall can mix Stripe environments, and a refused session that
+      carried the code drops it paywall-wide. `useDiscount` is the public
+      surface.
   - `src/hooks/` — the specialized hooks (`useProducts`, `usePurchase`,
-    `useActions`, `useTranslation`, …), one file each; the barrel also carries
-    `createSuperwall` and `useSuperwallSession`
+    `useDiscount`, `useActions`, `useTranslation`, …), one file each; the
+    barrel also carries `createSuperwall` and `useSuperwallSession`
   - `src/provider/` — `SuperwallProvider` + session context (`context.ts`)
     and the typed `createSuperwall` factory (`create.ts`)
   - `src/navigation/` — `superwall/navigation`: the route stack behind the

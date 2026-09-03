@@ -31,4 +31,15 @@ export const SuperwallCheckout = () => (
 
 export { CheckoutProvider, useCheckoutState, useCheckoutActions } from "./state/CheckoutContext";
 export { checkoutEvents } from "./services/CheckoutEvents";
-export type { SessionData, CheckoutEventType, CheckoutEventPayload } from "./state/types";
+export type {
+  AppliedDiscount,
+  ApplePaySessionData,
+  CheckoutEventPayload,
+  CheckoutEventType,
+  CheckoutSessionData,
+  DiscountedProductPrice,
+  ElementsCheckoutSession,
+  SessionData,
+  SubscriptionDetails,
+} from "./state/types";
+export type { ApplePayOutcome } from "./services/ApplePayCheckoutController";

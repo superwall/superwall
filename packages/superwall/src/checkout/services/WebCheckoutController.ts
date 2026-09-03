@@ -1,17 +1,25 @@
 import type { SuperwallRuntimeSnapshot } from "@superwall/runtime";
 import { fetchWithRetry, subscriptionsApiUrl } from "./api";
 import { sessionCache } from "./SessionCache";
+import { decodeCheckoutSessionId } from "../utils/checkoutSessionId";
 import type {
+  AppliedDiscount,
   CheckoutMode,
   CheckoutSessionCacheScope,
   CheckoutSessionResult,
+  DiscountedProductPrice,
   DiscountValidationResult,
+  SubscriptionDetails,
 } from "../state/types";
 
 export const WEB_CHECKOUT_ELIGIBLE_STORES = ["stripe"];
 
 export const isStripeProductIdentifier = (identifier: string | undefined): boolean =>
   typeof identifier === "string" && /^(stripe\|)?(test|live):price_[^:]+/.test(identifier);
+
+/** A product identifier without its `stripe|` store prefix. */
+export const bareProductIdentifier = (identifier: string): string =>
+  identifier.replace(/^stripe\|/, "");
 
 type SnapshotSource = () => SuperwallRuntimeSnapshot;
 
@@ -22,6 +30,13 @@ type BeginOptions = {
   silent?: boolean;
 };
 
+/** A promotion code the backend validated, and what it does to each product. */
+export type AppliedDiscountState = {
+  code: string;
+  discount: AppliedDiscount;
+  products: DiscountedProductPrice[];
+};
+
 const asNumber = (value: unknown): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -30,25 +45,14 @@ const asNumber = (value: unknown): number => {
 const asString = (value: unknown): string =>
   typeof value === "string" ? value : value === undefined || value === null ? "" : String(value);
 
-const allowedDirectivesFor = (mode: CheckoutMode): readonly string[] =>
-  mode === "external" ? ["redirect"] : ["embedded", "redirect"];
-
-const decodeCheckoutSessionSecret = (checkoutSessionId: string): string | null => {
-  if (!checkoutSessionId.startsWith("sw_checkout_")) return null;
-  try {
-    const decoded: unknown = JSON.parse(atob(checkoutSessionId.slice("sw_checkout_".length)));
-    const secret =
-      typeof decoded === "object" && decoded !== null
-        ? (decoded as { stripeCheckoutSessionId?: unknown }).stripeCheckoutSessionId
-        : undefined;
-    if (typeof secret !== "string" || secret.length === 0) return null;
-    try {
-      return decodeURIComponent(secret);
-    } catch {
-      return secret;
-    }
-  } catch {
-    return null;
+const allowedDirectivesFor = (mode: CheckoutMode): readonly string[] => {
+  switch (mode) {
+    case "external":
+      return ["redirect"];
+    case "applePay":
+      return ["elements", "embedded", "redirect"];
+    default:
+      return ["embedded", "redirect"];
   }
 };
 
@@ -56,21 +60,92 @@ export class WebCheckoutController {
   private inFlight = new Map<string, Promise<CheckoutSessionResult>>();
   private cacheGeneration = 0;
 
-  private appliedDiscountCode: string | null = null;
-
-  onDiscountDropped: ((droppedCode: string) => void) | null = null;
+  private appliedDiscount: AppliedDiscountState | null = null;
+  private discountApplicableProducts: ReadonlySet<string> | null = null;
+  private discountListeners = new Set<() => void>();
+  private discountDroppedListeners = new Set<(code: string) => void>();
 
   constructor(private getSnapshot: SnapshotSource) {}
 
   storeIsEligible = (store: string) => WEB_CHECKOUT_ELIGIBLE_STORES.includes(store);
 
-  setDiscountCode(code: string | null) {
-    this.appliedDiscountCode = code;
-    this.clearSessionCache();
+  getAppliedDiscount(): AppliedDiscountState | null {
+    return this.appliedDiscount;
   }
 
-  getDiscountCode() {
-    return this.appliedDiscountCode;
+  subscribeDiscount(listener: () => void): () => void {
+    this.discountListeners.add(listener);
+    return () => {
+      this.discountListeners.delete(listener);
+    };
+  }
+
+  subscribeDiscountDropped(listener: (code: string) => void): () => void {
+    this.discountDroppedListeners.add(listener);
+    return () => {
+      this.discountDroppedListeners.delete(listener);
+    };
+  }
+
+  getDiscountCode(): string | null {
+    return this.appliedDiscount?.code ?? null;
+  }
+
+  getDiscountCodeForProduct(productIdentifier: string): string | null {
+    if (!this.appliedDiscount) return null;
+    if (
+      this.discountApplicableProducts &&
+      !this.discountApplicableProducts.has(bareProductIdentifier(productIdentifier))
+    ) {
+      return null;
+    }
+    return this.appliedDiscount.code;
+  }
+
+  async redeemDiscount(code: string): Promise<DiscountValidationResult> {
+    const trimmed = code.trim();
+    if (!trimmed) return { valid: false, reason: "empty_code" };
+
+    const productIdentifiers = this.getSnapshot()
+      .products.map((product) => product.productId ?? product.productIdentifier ?? product.id)
+      .filter((identifier): identifier is string => isStripeProductIdentifier(identifier))
+      .map(bareProductIdentifier);
+    if (productIdentifiers.length === 0) return { valid: false, reason: "no_stripe_products" };
+
+    const result = await this.validateDiscount({ code: trimmed, productIdentifiers });
+    if (!result.valid) return result;
+    if (!result.products.some((product) => product.applies)) {
+      return { valid: false, reason: "no_applicable_products" };
+    }
+
+    this.appliedDiscount = { code: trimmed, discount: result.discount, products: result.products };
+    this.discountApplicableProducts = new Set(
+      result.products
+        .filter((product) => product.applies)
+        .map((product) => bareProductIdentifier(product.productIdentifier)),
+    );
+    this.clearSessionCache();
+    this.notifyDiscount();
+    return result;
+  }
+
+  clearDiscount() {
+    if (!this.appliedDiscount) return;
+    this.appliedDiscount = null;
+    this.discountApplicableProducts = null;
+    this.clearSessionCache();
+    this.notifyDiscount();
+  }
+
+  private dropDiscount(code: string) {
+    this.appliedDiscount = null;
+    this.discountApplicableProducts = null;
+    this.notifyDiscount();
+    this.discountDroppedListeners.forEach((listener) => listener(code));
+  }
+
+  private notifyDiscount() {
+    this.discountListeners.forEach((listener) => listener());
   }
 
   validateDiscount = async ({
@@ -111,6 +186,21 @@ export class WebCheckoutController {
     );
   }
 
+  productIdentifierOf(referenceName: string): string | undefined {
+    const product = this.getSnapshot().productsByReference[referenceName];
+    return product?.productId ?? product?.productIdentifier ?? product?.id;
+  }
+
+  identity(): { email?: string; stripeCustomerId?: string } {
+    const { user } = this.getSnapshot();
+    return {
+      ...(typeof user.email === "string" && user.email.length > 0 ? { email: user.email } : {}),
+      ...(typeof user.stripe_customer_id === "string" && user.stripe_customer_id.length > 0
+        ? { stripeCustomerId: user.stripe_customer_id }
+        : {}),
+    };
+  }
+
   beginCheckout = (options: BeginOptions): Promise<CheckoutSessionResult> => {
     const scope = options.cacheScope ?? "default";
     const requestKey = `${scope}:${options.referenceName}`;
@@ -120,7 +210,8 @@ export class WebCheckoutController {
 
     const request = this.createSession({ ...options, cacheScope: scope });
     this.inFlight.set(requestKey, request);
-    request.finally(() => this.inFlight.delete(requestKey));
+    const release = () => this.inFlight.delete(requestKey);
+    void request.then(release, release);
 
     return request;
   };
@@ -134,7 +225,7 @@ export class WebCheckoutController {
     try {
       const result = await this.beginCheckout({ ...options, silent: true });
       if (generation !== this.cacheGeneration) return null;
-      if (!result.checkoutSessionId) return null;
+      if (!result.checkoutSessionId && result.directive !== "elements") return null;
       return result;
     } catch {
       return null;
@@ -164,7 +255,7 @@ export class WebCheckoutController {
       throw new Error(`Product "${referenceName}" has no store identifier.`);
     }
 
-    const productIdentifier = rawProductIdentifier.replace(/^stripe\|/, "");
+    const productIdentifier = bareProductIdentifier(rawProductIdentifier);
 
     const device = snapshot.device;
     const user = snapshot.user;
@@ -180,6 +271,7 @@ export class WebCheckoutController {
       allowedCheckoutDirectives: allowedDirectivesFor(mode),
       shouldRespectIsFreeTrialAvailable: false,
       isPrefetch: silent,
+      deferElementsIntentCreation: mode === "applePay",
       context: {
         paywall: {
           paywallId: snapshot.paywall?.id ?? "0",
@@ -269,19 +361,19 @@ export class WebCheckoutController {
         body: JSON.stringify(promotionCode ? { ...body, promotionCode } : body),
       });
 
+    const promotionCode = this.getDiscountCodeForProduct(rawProductIdentifier);
+
     let response: Response;
     try {
-      response = await requestSession(this.appliedDiscountCode);
+      response = await requestSession(promotionCode);
     } catch (error) {
-      const refusedCode =
-        this.appliedDiscountCode &&
+      const refused =
+        promotionCode !== null &&
         error instanceof Error &&
         error.message.startsWith("Client error:");
-      if (!refusedCode) throw error;
+      if (!refused) throw error;
 
-      const droppedCode = this.appliedDiscountCode as string;
-      this.appliedDiscountCode = null;
-      this.onDiscountDropped?.(droppedCode);
+      this.dropDiscount(promotionCode);
       response = await requestSession(null);
     }
 
@@ -305,13 +397,41 @@ export class WebCheckoutController {
     silent: boolean,
   ): CheckoutSessionResult {
     const { directive } = data;
+    const prefetched = silent ? { wasPrefetched: true as const } : {};
+
+    if (directive.directive === "elements") {
+      const publishableKey = asString(directive.publishableKey);
+      const subscriptionDetails = directive.subscriptionDetails as SubscriptionDetails | undefined;
+      if (!publishableKey || !subscriptionDetails) {
+        throw new Error("Missing publishableKey or subscriptionDetails for elements directive");
+      }
+      const checkoutSessionId = asString(directive.checkoutSessionId) || null;
+      const intentType = directive.intentType;
+
+      return {
+        directive: "elements",
+        checkoutSessionId,
+        publishableKey,
+        checkoutContextId: data.checkoutContextId,
+        referenceName,
+        subscriptionDetails,
+        ...(intentType === "SetupIntent" || intentType === "PaymentIntent" ? { intentType } : {}),
+        ...(typeof directive.stripeAccountCountryCode === "string"
+          ? { stripeAccountCountryCode: directive.stripeAccountCountryCode }
+          : {}),
+        ...(typeof directive.managementUrl === "string"
+          ? { managementUrl: directive.managementUrl }
+          : {}),
+        ...prefetched,
+      };
+    }
 
     if (directive.directive === "embedded") {
       const checkoutSessionId = asString(directive.checkoutSessionId);
       const publishableKey = asString(directive.publishableKey);
       const clientSecret =
         asString(directive.clientSecret) ||
-        decodeCheckoutSessionSecret(checkoutSessionId) ||
+        decodeCheckoutSessionId(checkoutSessionId) ||
         checkoutSessionId;
 
       if (!checkoutSessionId || !publishableKey) {
@@ -325,7 +445,7 @@ export class WebCheckoutController {
         publishableKey,
         checkoutContextId: data.checkoutContextId,
         referenceName,
-        ...(silent ? { wasPrefetched: true } : {}),
+        ...prefetched,
       };
     }
 
@@ -343,7 +463,7 @@ export class WebCheckoutController {
         checkoutUrl,
         checkoutContextId: data.checkoutContextId,
         referenceName,
-        ...(silent ? { wasPrefetched: true } : {}),
+        ...prefetched,
       };
     }
 

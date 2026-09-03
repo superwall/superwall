@@ -147,7 +147,11 @@ export default function PlusUpgrade() {
 ```
 
 One concern each: `useProducts`, `usePurchase` (resolves `completed |
-abandoned | failed`, never throws for flow outcomes), `useActions`,
+abandoned | failed`, never throws for flow outcomes; with `checkout:
+"applePay"` it opens the native Apple Pay sheet and falls back to Stripe's
+sheet), `useDiscount` (`await redeem(code)` resolves with the verdict and the
+discounted prices per product; `onDropped` fires if checkout later refuses
+the code), `useActions`,
 `useHaptics`, `useColorScheme`, `useTranslation`, `useTrialEligibility`,
 `useDevice` / `useUser` / `useVariables`, `useLocalResource`,
 `useSuperwallEvent`, `useGameController`.

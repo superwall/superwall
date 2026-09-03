@@ -23,7 +23,8 @@ export default definePaywall({
    * session and renders it in a sheet over this funnel, so nobody leaves for
    * a hosted page mid-flow. `external` navigates to Superwall's hosted
    * checkout instead, and `applePay` goes straight to Apple Pay where the
-   * device offers it.
+   * device offers it — free trials and intro offers show as such on the
+   * sheet — and falls back to the in-page sheet everywhere else.
    *
    * Only `sheet` and `applePay` carry Stripe's payment UI into the bundle;
    * a native paywall that omits this key carries none of it.

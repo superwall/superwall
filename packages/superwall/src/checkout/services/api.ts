@@ -10,8 +10,8 @@ export type SubscriptionsApiPath =
 
 const BASE_URL_BY_ENV: Record<SubscriptionsApiEnvironment, string> = {
   local: "http://localhost:3045/subscriptions-api/public/v1",
-  staging: "https://subscriptions-api.superwallbeta.app/public/v1",
-  production: "https://subscriptions.superwall.com/public/v1",
+  staging: "https://subscriptions-api.superwall.dev/subscriptions-api/public/v1",
+  production: "https://subscriptions-api.superwall.com/subscriptions-api/public/v1",
 };
 
 const buildUrl = (environment: SubscriptionsApiEnvironment, path: SubscriptionsApiPath) =>

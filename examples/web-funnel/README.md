@@ -34,7 +34,9 @@ export default definePaywall({
 `external`, `sheet` and `applePay`. `sheet` takes payment in the page:
 Superwall opens a Stripe checkout session and renders it over this funnel, so
 nobody leaves mid-flow. `external` sends them to Superwall's hosted page
-instead, and `applePay` goes straight to Apple Pay where the device offers it.
+instead, and `applePay` goes straight to Apple Pay where the device offers it
+and falls back to the in-page sheet everywhere else. `useDiscount` applies a
+Stripe promotion code to either.
 
 **Prefetch decides how fast the sheet opens.** A checkout session takes a round
 trip to create, so `prefetch: "monthly"` warms that product's session up front
