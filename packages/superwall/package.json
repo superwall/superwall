@@ -1,6 +1,6 @@
 {
   "name": "superwall",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Superwall for Agents — build paywalls and web funnels as mini React apps with file-based routing, preview them against real product data, and ship them through Superwall.",
   "keywords": [
     "agents",
