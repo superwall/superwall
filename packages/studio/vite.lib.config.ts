@@ -8,9 +8,9 @@ export default defineConfig({
     outDir: "dist/lib",
     emptyOutDir: true,
     lib: {
-      entry: "src/index.ts",
+      entry: { index: "src/index.ts", products: "src/lib/products.ts" },
       formats: ["es"],
-      fileName: () => "index.js",
+      fileName: (_format, name) => `${name}.js`,
       cssFileName: "studio",
     },
     rollupOptions: {

@@ -28,8 +28,8 @@ app that is also a component library — one codebase, two hosts:
 
 - **`superwall dev`** serves the BUILT app (`dist/`, assets under
   `/__studio/`) plus the data endpoint and preview mounts — the local studio.
-- **The hosted studio** in the dashboard's editor imports the component
-  library (`dist/lib/`, the package's `.` export, plus the compiled
+- **The hosted studio** in the dashboard imports the component library
+  (`dist/lib/`, the package's `.` export, plus the compiled
   `@superwall/studio/studio.css`) and renders `SurfaceEditor` over published
   snapshots and platform data. See [Hosting](#hosting).
 
@@ -72,8 +72,8 @@ the same channel published snapshots accept once opted in with
 
 ## Hosting
 
-The dashboard's editor opens a code-first paywall in this studio instead of
-the visual editor. What the library gives a host:
+The dashboard opens a code-first paywall in this studio instead of the visual
+editor. What the library gives a host:
 
 - `snapshotPreviewUrl(urlOf)` — a `previewUrl` that resolves each surface to
   its published snapshot URL, opts it into simulation (`sw_preview=1`), and
@@ -93,8 +93,12 @@ the visual editor. What the library gives a host:
   the stylesheet scopes its base rules to.
 - `@superwall/studio/studio.css` is compiled Tailwind v4 output including a
   preflight. Mount it in a shadow root (or an iframe) rather than beside
-  another design system — the editor does exactly that, and re-registers the
-  sheet's `@property` rules at document level, where browsers expect them.
+  another design system — the dashboard does exactly that, and re-registers
+  the sheet's `@property` rules at document level, where browsers expect them.
+- `@superwall/studio/products` is the pure mapping from a dashboard product
+  (the v2 API shape) to the variables a paywall reads (`price`, `periodly`,
+  `trialPeriodDays`, …). The CLI and the hosted studio share it, so the
+  Variables panel shows the same numbers in both.
   `@superwall/studio/styles.css` is the Tailwind source for hosts that run
   their own v4 pipeline.
 
