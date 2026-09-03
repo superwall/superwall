@@ -18,9 +18,6 @@
 npm install @superwall/studio
 ```
 
-Released to npm and mirrored to GitHub Packages (`npm.pkg.github.com`), so a
-repository whose `.npmrc` scopes `@superwall` there resolves it as well.
-
 You will not usually install this directly: the
 [`superwall`](https://www.npmjs.com/package/superwall) framework depends on
 it and `superwall dev` serves it. It is a standalone vite + React + Tailwind

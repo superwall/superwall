@@ -219,9 +219,7 @@ handing work back; `format:check` must pass), `.editorconfig`,
 `vitest.config.ts` (`test:coverage` fails below them). CI lives at
 `.github/workflows/checks.yml`: install (postinstall builds cli + studio) →
 lint → format:check → typecheck → test:coverage; publishing is
-`.github/workflows/release.yml` (see Releasing): every package goes to npm
-and is mirrored to GitHub Packages, which is where the dashboard's `.npmrc`
-resolves the `@superwall` scope. Every gate that runs in CI
+`.github/workflows/release.yml` (see Releasing). Every gate that runs in CI
 runs identically on a laptop — keep it that way.
 
 ## Verifying device-visible changes — the static config is the truth
