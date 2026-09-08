@@ -271,7 +271,6 @@ test("pushPaywallVersion spreads the paywall settings into the version body", as
       on_device_cache: false,
       scroll_enabled: true,
       game_controller_enabled: false,
-      introductory_offer_eligibility: "automatic",
     },
   });
 
@@ -282,7 +281,6 @@ test("pushPaywallVersion spreads the paywall settings into the version body", as
     on_device_cache: false,
     scroll_enabled: true,
     game_controller_enabled: false,
-    introductory_offer_eligibility: "automatic",
   });
 
   await pushPaywallVersion(fake, "1", { html: "<html></html>" });
@@ -309,7 +307,6 @@ test("pushPaywallVersion spreads background and checkout destination from the se
     on_device_cache: true,
     scroll_enabled: true,
     game_controller_enabled: false,
-    introductory_offer_eligibility: "automatic" as const,
   };
 
   await pushPaywallVersion(api, "1", {

@@ -57,7 +57,7 @@ export const hostContextFor = (
   const eventName = snapshot.params.event_name;
   return {
     checkoutContextId,
-    productIdentifier: product?.productId ?? product?.productIdentifier ?? product?.id ?? "",
+    productIdentifier: product?.productId ?? "",
     paywallIdentifier: snapshot.paywall?.identifier,
     experimentVariantId: snapshot.experiment?.variantId,
     ...(typeof eventName === "string" ? { presentedByEventName: eventName } : {}),

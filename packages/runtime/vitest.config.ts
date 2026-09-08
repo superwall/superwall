@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     coverage: {
       reporter: ["text"],
-      thresholds: { statements: 95, branches: 85, functions: 90, lines: 95 },
+      thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
     },
   },
 });

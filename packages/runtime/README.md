@@ -20,48 +20,44 @@ npm install @superwall/runtime
 You will not usually install this directly: the
 [`superwall`](https://www.npmjs.com/package/superwall) framework depends on
 it and exposes everything here through its hooks. Reach for it alone when a
-paywall is not React, or when a host (the studio, the dashboard, a test
-harness) needs the session model without a UI.
+paywall is not React.
 
 ## What's here
 
-This package is the runtime boundary shared by every paywall Superwall
-serves — built with this framework or with the visual editor. It owns
-transport selection, message logging, base64 message ingestion, product
-state, localization, SDK action dispatch, and purchase promise resolution.
-It must not import React, or anything above it in the stack.
+This package is the paywall side of the SDK protocol. It owns transport
+selection, base64 message ingestion, product state, localization, action
+dispatch, and purchase promise resolution. It must not import React, or
+anything above it in the stack. Hosts live elsewhere: the native SDKs, the
+web host, and
+[`@superwall/host`](https://github.com/superwall/superwall/tree/main/packages/host)
+for the studio, the dashboard and tests. A session never invents a product or
+a reply; everything in its snapshot arrived from a host.
 
-- **`SuperwallBridge`** — transport auto-detection (WebKit / Android / editor
-  iframe), message log, `accept` / `accept64` ingestion, `postMessage`.
-- **`SuperwallSession`** — the runtime model on top of the bridge:
-  - product state merged from `products` + `template_variables`
-  - `device` / `user` / `params` variables, `experiment` assignment
-  - trial eligibility from `template_substitutions_prefix` ("freeTrial")
-  - locale resolution + `t()` translation from the config's message catalogs
-  - promise-based `purchase()` with timeout, resolved by transaction messages
-  - auto-scheduled trial reminder notifications on `freeTrial_start`
-  - typed events: `session.on("paywall_open", …)`, `"message"` for all
-- **`MockSuperwallTransport`** — a simulated native SDK host for local dev,
-  dashboard previews, tests, and the build-time conformance harness.
+| Directory           | Owns                                                                                                                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/bridge/`       | The wire: transport detection (`?platform=android`, `?transport=editor`, else WebKit), `detectSuperwallHost`, base64 batch decoding for `accept64`                          |
+| `src/config/`       | The `SuperwallConfig` contract a running paywall reads, one file per concern (products, checkout, presentation, background, notifications, localization)                    |
+| `src/localization/` | Locale resolution, the `t()` catalog, and `periods.ts` — the editor's period translation table, copied verbatim, with its lookup code trimmed of unreachable branches       |
+| `src/products/`     | The product model, merging of `products` + `template_variables`, and derived variables (localized `period`/`periodly`, `trialPeriodEndDate`)                                |
+| `src/session/`      | `createSuperwallSession`: outgoing message builders, purchase and request trackers, trial reminders, the incoming reducer, and the state `window.app.getAllState()` returns |
 
 ## Usage
 
 ```ts
-import { createSuperwallSession, defineSuperwallConfig } from "@superwall/runtime"
+import { createSuperwallSession, type SuperwallConfig } from "@superwall/runtime"
 
-const config = defineSuperwallConfig({
+const config: SuperwallConfig = {
   products: { primary: "pro_3999_year" },
-  purchaseTimeoutMs: 5 * 60 * 1000,
   notifications: {
     trialReminder: { title: "notifications.trialTitle", body: "…", beforeTrialEndDays: 1 },
   },
   localization: { defaultLocale: "en", messages: { en: { notifications: { trialTitle: "…" } } } },
-})
+}
 
 const superwall = createSuperwallSession({ config })
 superwall.start({ sendPing: true })
 
-const { products, device, trial, locale } = superwall.getSnapshot()
+const { products, device, introductoryOffer, locale } = superwall.getSnapshot()
 superwall.t("paywall.title")
 
 const result = await superwall.purchase("primary")
@@ -70,43 +66,65 @@ const result = await superwall.purchase("primary")
 superwall.on("transaction_complete", (message) => {})
 ```
 
+The session detects its host from the page. Pass `transport` to host it
+yourself (tests, tools), or `transportKind` to force one.
+
 ### Purchase semantics
 
 - `{ status: "completed", product, message }` from `transaction_complete`
 - `{ status: "abandoned", product, message }` from `transaction_abandon`
-- `{ status: "failed", product, reason: "timeout" }` if `timeoutMs` (or
-  `config.purchaseTimeoutMs`) elapses without a transaction message
+- `{ status: "failed", product, reason: "sdk" }` from `transaction_fail` or
+  `transaction_timeout` (iOS reports these; Android does not, so there a
+  failed purchase stays pending until the user abandons or completes)
+- `{ status: "failed", product, reason: "superseded" }` when a newer purchase
+  of the same reference starts, or the paywall re-opens
 
-`restore()` is fire-and-forget: the protocol has no restore-result event.
+The paywall runs no timer of its own: the SDK owns purchase timing.
 
-### Trial flow
+A transaction is attributed to a pending purchase by reference, then by store
+identifier, then, for a bare transaction, to the only pending purchase.
 
-The SDK signals introductory-offer eligibility via
-`template_substitutions_prefix` (`"freeTrial"`), exposed as `snapshot.trial`
-and `products.hasIntroductoryOffer` in conditional state.
-`config.introductoryOfferEligibility` can force either way. On
-`freeTrial_start` with a `trial_end_date`, the session schedules the config's
+### Restore
+
+`restore()` has no result to await. What the SDK reports lands on
+`snapshot.restore` (`started`, `completed`, `failed`) and the `restore_start`,
+`restore_complete`, `restore_fail` events. iOS reports all three; Android
+reports only `restore_fail`.
+
+### Introductory offers
+
+The SDK signals eligibility via `template_substitutions_prefix`
+(`"freeTrial"`), exposed as `snapshot.introductoryOffer.eligible` and
+`products.hasIntroductoryOffer` in the SDK state. The store decides; a
+paywall never overrides it. On `freeTrial_start` with a `trial_end_date`,
+the session schedules the config's
 trial reminder (`schedule_notification`, id
 `{paywallIdentifier}_TRIAL_STARTED`) — title/body run through `t()`.
 
-### Mock host
+### The window interface
+
+The framework's provider publishes what the native SDKs call into:
+`window.paywall.accept64(base64)` for message batches and
+`window.app.getAllState()` for the state object. `buildSuperwallState` builds
+that object in the shape paywall.js exposes for editor paywalls, so an SDK
+reads the same keys from both generations.
+
+### Hosting a session in-process
 
 ```ts
-import { createMockSuperwallTransport, mockOptionsFromConfig } from "@superwall/runtime"
+import { createHostTransport, recordingDelegate } from "@superwall/host"
 
-const transport = createMockSuperwallTransport(
-  mockOptionsFromConfig(config, { purchaseOutcome: "abandoned", latencyMs: 500 })
-)
+const { transport } = createHostTransport({
+  state: { products: [{ reference: "primary", productId: "pro_3999_year", variables: { price: "$39.99" } }] },
+  delegate: recordingDelegate({ purchase: "abandoned" }),
+  latencyMs: 500,
+})
 const superwall = createSuperwallSession({ config, transport })
 ```
 
-The mock answers `ping` with `paywall_open`, `products` (one slot per config
-entry, carrying the product identifier and nothing else — real product data
-comes from Superwall, never from the mock), `template_variables` (products +
-device + user + params), and trial eligibility; resolves purchase/restore
-with transactions including `freeTrial_start`; grants permissions; answers
-callbacks. `detectNativeSuperwallHost()` reports whether a real host is
-present — used by `SuperwallProvider`'s `mock="auto"`.
+The host answers `ping` with the web host's burst and replies to purchase,
+restore, permission and callback requests with the iOS SDK's messages. The
+runtime's own tests are hosted this way.
 
 ## Develop
 
@@ -116,9 +134,7 @@ first** - the conventions in it are decided, not suggested.
 
 ```bash
 bun install
-bun run test          # fixture tests drive the session through recorded
-                      # message sequences and assert snapshot state — they
-                      # are the protocol contract
+bun run test          # tests mirror src/: fixture-driven session tests are the protocol contract
 bun run typecheck
 ```
 

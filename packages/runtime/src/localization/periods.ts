@@ -676,18 +676,21 @@ const periodTranslations: Record<string, Record<PeriodKey, string>> = {
   },
 };
 
-const formatDynamicPeriod = (count: number, unit: string, locale: string): string => {
+const DYNAMIC_UNITS = ["day", "week", "month", "year"] as const;
+
+type DynamicUnit = (typeof DYNAMIC_UNITS)[number];
+
+const formatDynamicPeriod = (count: number, unit: DynamicUnit, locale: string): string => {
   try {
     return new Intl.NumberFormat(locale.replace(/_/g, "-"), {
       style: "unit",
-      unit: (unit.endsWith("s") ? unit.slice(0, -1) : unit) as Intl.NumberFormatOptions["unit"],
+      unit,
       unitDisplay: "long",
     })
       .format(count)
       .replace(/\u00a0/g, " ");
   } catch {
-    const singularUnit = unit.endsWith("s") ? unit.slice(0, -1) : unit;
-    return `${count} ${count === 1 ? singularUnit : `${singularUnit}s`}`;
+    return `${count} ${count === 1 ? unit : `${unit}s`}`;
   }
 };
 
@@ -716,12 +719,16 @@ const getDynamicPeriodlyFormatter = (locale: string): DynamicPeriodlyFormatter |
   );
 };
 
-const formatDynamicLocalizedValue = (count: number, unit: string, languages: string[]): string => {
+const formatDynamicLocalizedValue = (
+  count: number,
+  unit: DynamicUnit,
+  languages: string[],
+): string => {
   const preferredLocale = languages.find((language) => language.trim());
   return formatDynamicPeriod(count, unit, preferredLocale || "en");
 };
 
-const formatDynamicPeriodly = (count: number, unit: string, languages: string[]): string => {
+const formatDynamicPeriodly = (count: number, unit: DynamicUnit, languages: string[]): string => {
   for (const language of languages) {
     const formatter = getDynamicPeriodlyFormatter(language);
     if (!formatter) {
@@ -746,9 +753,10 @@ const getDynamicLocalizedPeriod = (value: string, languages: string[]): string |
 
   const count = Number.parseInt(match[1]!, 10);
   const rawUnit = match[2]!;
-  const unit = rawUnit.endsWith("s") ? rawUnit.slice(0, -1) : rawUnit;
+  const singular = rawUnit.endsWith("s") ? rawUnit.slice(0, -1) : rawUnit;
+  const unit = DYNAMIC_UNITS.find((candidate) => candidate === singular);
 
-  if (!["day", "week", "month", "year"].includes(unit) || !Number.isFinite(count)) {
+  if (!unit) {
     return null;
   }
 
@@ -757,6 +765,13 @@ const getDynamicLocalizedPeriod = (value: string, languages: string[]): string |
   }
 
   return formatDynamicLocalizedValue(count, unit, languages);
+};
+
+export const languageCandidates = (locale: string | undefined): string[] => {
+  if (!locale) return ["en"];
+  const normalized = locale.replace(/-/g, "_");
+  const [language] = normalized.split("_");
+  return language && language !== normalized ? [normalized, language.toLowerCase()] : [normalized];
 };
 
 export function getLocalizedPeriod(value: string, languages: string[]): string {

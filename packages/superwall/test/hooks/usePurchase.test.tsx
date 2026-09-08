@@ -30,7 +30,7 @@ describe("usePurchase", () => {
 
   it("resolves abandonment as a purchase result", async () => {
     const { result } = renderWithProvider(() => usePurchase(), {
-      mock: { purchaseOutcome: "abandoned" },
+      host: { purchase: "abandoned" },
     });
     await flush();
 

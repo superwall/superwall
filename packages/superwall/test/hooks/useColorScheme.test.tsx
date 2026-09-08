@@ -12,7 +12,7 @@ const withSystemDark = (dark: boolean) => {
 };
 
 const scheme = async (device: Record<string, unknown>) => {
-  const { result } = renderWithProvider(() => useColorScheme(), { mock: { device } });
+  const { result } = renderWithProvider(() => useColorScheme(), { host: { device } });
   await flush();
   return result.current;
 };

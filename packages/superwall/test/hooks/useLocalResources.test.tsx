@@ -8,7 +8,7 @@ import {
 import { flush, renderWithProvider } from "../helpers";
 
 const resources = async (device: Record<string, unknown>) => {
-  const { result } = renderWithProvider(() => useLocalResources(), { mock: { device } });
+  const { result } = renderWithProvider(() => useLocalResources(), { host: { device } });
   await flush();
   return result.current;
 };
@@ -42,13 +42,13 @@ describe("useLocalResources", () => {
 describe("useLocalResource", () => {
   it("is the one-liner form of resolve", async () => {
     const { result } = renderWithProvider(() => useLocalResource("logo", "/logo.png"), {
-      mock: { device: { localResourceIds: "logo" } },
+      host: { device: { localResourceIds: "logo" } },
     });
     await flush();
     expect(result.current).toBe("swlocal://logo");
 
     const missing = renderWithProvider(() => useLocalResource("logo", "/logo.png"), {
-      mock: { device: {} },
+      host: { device: {} },
     });
     await flush();
     expect(missing.result.current).toBe("/logo.png");

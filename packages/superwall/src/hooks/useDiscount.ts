@@ -123,7 +123,7 @@ export const useDiscount = (options: UseDiscountOptions = {}): UseDiscountResult
     );
     const entries: Record<string, DiscountedProduct> = {};
     for (const product of products) {
-      const identifier = product.productId ?? product.productIdentifier ?? product.id;
+      const identifier = product.productId;
       const price = identifier ? byIdentifier.get(bareProductIdentifier(identifier)) : undefined;
       if (!price) continue;
       entries[product.reference] = toDiscountedProduct(
@@ -152,7 +152,7 @@ export const useDiscount = (options: UseDiscountOptions = {}): UseDiscountResult
           products: Object.fromEntries(
             result.products.flatMap((price) => {
               const reference = products.find((product) => {
-                const identifier = product.productId ?? product.productIdentifier ?? product.id;
+                const identifier = product.productId;
                 return (
                   identifier !== undefined &&
                   bareProductIdentifier(identifier) ===

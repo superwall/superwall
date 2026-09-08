@@ -2,19 +2,15 @@ import * as React from "react";
 import { useColorScheme } from "../hooks/useColorScheme";
 import {
   backgroundOf,
-  createMockSuperwallTransport,
   createSuperwallSession,
-  detectNativeSuperwallHost,
-  detectPreviewOptIn,
-  documentAttributes,
-  mockOptionsFromConfig,
   pendingHostMessages,
-  type SuperwallMockOptions,
+  type ITransport,
   type SuperwallConfig,
   type SuperwallProduct,
   type SuperwallSession,
   type ResolvedBackground,
 } from "@superwall/runtime";
+import { documentAttributes } from "../document";
 
 const SuperwallContext = React.createContext<SuperwallSession | null>(null);
 
@@ -22,71 +18,25 @@ const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
 /**
- * How the provider gets its runtime data. `"auto"` (what the build emits)
- * runs against the real host and simulates *only* when the page opts in with
- * `?sw_preview` — so a snapshot behaves identically in a webview and in a
- * preview with no code change, and can never quietly downgrade itself to fake
- * products when a real host is merely slow to appear. An options object
- * supplies preview data; only `true` forces the mock even inside a real host.
- */
-export type SuperwallMockProp = boolean | "auto" | SuperwallMockOptions;
-
-/**
  * The framework mounts this — users write hooks, not the provider, and it is
- * exported only so the generated build entry can import it. `config` and
- * `mock` are the whole surface; the session always starts, exposes its
- * native interface, and pings.
+ * exported only so the generated build entry can import it. `config` is the
+ * whole surface: the session detects its host from the page (WebKit, Android,
+ * or a parent window over `?transport=editor`), starts, exposes its native
+ * interface, and pings. `transport` exists for tests and tools that host a
+ * session in-process.
  */
 export type SuperwallProviderProps = React.PropsWithChildren<{
   config?: SuperwallConfig;
-  mock?: SuperwallMockProp;
+  transport?: ITransport;
 }>;
 
-const resolveMockOptions = (
-  mock: SuperwallMockProp | undefined,
-  config: SuperwallConfig | undefined,
-): SuperwallMockOptions | undefined => {
-  if (!mock) return undefined;
-  // `true` is an explicit instruction, honoured even inside a real host.
-  if (mock === true) return mockOptionsFromConfig(config, {});
-  // A real host always wins over any non-forced request to simulate.
-  if (detectNativeSuperwallHost()) return undefined;
-  // `"auto"` ships in every built snapshot, so it must never be the reason a
-  // production paywall starts serving placeholder products — it simulates only
-  // when the page explicitly asks. Options objects come from preview surfaces
-  // that have already decided, so they stand on their own.
-  if (mock === "auto" && !detectPreviewOptIn()) return undefined;
-  return mockOptionsFromConfig(config, typeof mock === "object" ? mock : {});
-};
-
-/**
- * Compared by value, not identity: the studio hands down a freshly built mock
- * object on every render, and only a real change of simulated device, locale or
- * products should cost a new session. Functions drop out of the comparison, so
- * a new callback identity is not a change.
- */
-const describeMock = (mock: SuperwallMockProp | undefined): string => {
-  if (mock === undefined) return "none";
-  if (typeof mock !== "object") return String(mock);
-  try {
-    return JSON.stringify(mock);
-  } catch {
-    return "unserializable";
-  }
-};
-
-export const SuperwallProvider = ({ children, config, mock }: SuperwallProviderProps) => {
+export const SuperwallProvider = ({ children, config, transport }: SuperwallProviderProps) => {
   const ownedSession = React.useRef<SuperwallSession | null>(null);
-  const ownedMock = React.useRef<string | null>(null);
-  const signature = describeMock(mock);
+  const ownedTransport = React.useRef<ITransport | undefined>(undefined);
 
-  if (ownedSession.current === null || ownedMock.current !== signature) {
-    ownedMock.current = signature;
-    const mockOptions = resolveMockOptions(mock, config);
-    ownedSession.current = createSuperwallSession({
-      config,
-      transport: mockOptions ? createMockSuperwallTransport(mockOptions) : undefined,
-    });
+  if (ownedSession.current === null || ownedTransport.current !== transport) {
+    ownedTransport.current = transport;
+    ownedSession.current = createSuperwallSession({ config, transport });
   }
 
   const value = ownedSession.current;

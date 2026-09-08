@@ -109,7 +109,7 @@ const mount = (
   } = {},
 ) => {
   const Wrapper = createWrapper(
-    options.onOutgoing ? { mock: { onOutgoing: options.onOutgoing } } : {},
+    options.onOutgoing ? { host: { onOutgoing: options.onOutgoing } } : {},
   );
   return render(
     <Wrapper>

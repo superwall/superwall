@@ -41,13 +41,6 @@ export type SuperwallCapability = {
   eventNames?: readonly string[];
 };
 
-/**
- * Device variables the native SDK delivers via `template_variables`. The names
- * mirror the SDK's device template exactly — there is no index signature, so a
- * key the SDK does not send is a compile error rather than `undefined` on a
- * device. Every field is optional: availability varies by platform and SDK
- * version, and a paywall must render without any of them.
- */
 export type SuperwallDeviceVariables = {
   publicApiKey?: string;
   platform?: string;
@@ -75,6 +68,9 @@ export type SuperwallDeviceVariables = {
   interfaceStyleMode?: string;
   timezoneOffset?: number;
   radioType?: string;
+  fontSize?: number;
+  fontScale?: number;
+  preferredContentSizeCategory?: string;
   isLowPowerModeEnabled?: boolean;
   isApplePayAvailable?: boolean;
   isMac?: boolean;

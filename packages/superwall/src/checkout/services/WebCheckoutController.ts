@@ -107,7 +107,7 @@ export class WebCheckoutController {
     if (!trimmed) return { valid: false, reason: "empty_code" };
 
     const productIdentifiers = this.getSnapshot()
-      .products.map((product) => product.productId ?? product.productIdentifier ?? product.id)
+      .products.map((product) => product.productId)
       .filter((identifier): identifier is string => isStripeProductIdentifier(identifier))
       .map(bareProductIdentifier);
     if (productIdentifiers.length === 0) return { valid: false, reason: "no_stripe_products" };
@@ -181,14 +181,12 @@ export class WebCheckoutController {
 
   isStripeProduct(referenceName: string): boolean {
     const product = this.getSnapshot().productsByReference[referenceName];
-    return isStripeProductIdentifier(
-      product?.productId ?? product?.productIdentifier ?? product?.id,
-    );
+    return isStripeProductIdentifier(product?.productId);
   }
 
   productIdentifierOf(referenceName: string): string | undefined {
     const product = this.getSnapshot().productsByReference[referenceName];
-    return product?.productId ?? product?.productIdentifier ?? product?.id;
+    return product?.productId;
   }
 
   identity(): { email?: string; stripeCustomerId?: string } {
@@ -250,7 +248,7 @@ export class WebCheckoutController {
       throw new Error(`No product named "${referenceName}" on this paywall.`);
     }
 
-    const rawProductIdentifier = product.productId ?? product.productIdentifier ?? product.id;
+    const rawProductIdentifier = product.productId;
     if (!rawProductIdentifier) {
       throw new Error(`Product "${referenceName}" has no store identifier.`);
     }
@@ -279,7 +277,7 @@ export class WebCheckoutController {
           paywallName: "",
           paywallUrl: typeof window === "undefined" ? "" : window.location.href,
           paywallProductIds: snapshot.products
-            .map((entry) => entry.productId ?? entry.productIdentifier ?? "")
+            .map((entry) => entry.productId ?? "")
             .filter(Boolean)
             .join(","),
         },
@@ -288,7 +286,7 @@ export class WebCheckoutController {
           variantId: snapshot.experiment?.variantId ?? "0",
         },
         presentment: {
-          isFreeTrialAvailable: snapshot.trial.eligible === true,
+          isFreeTrialAvailable: snapshot.introductoryOffer.eligible === true,
           presentedBy: "placement",
           presentationSourceType: "register",
           presentedByEventName: asString(snapshot.params.event_name),

@@ -1,12 +1,8 @@
 import * as path from "node:path";
 import { importDefault } from "../config/load";
 import type { PaywallDefinition } from "../config";
-import {
-  MOCK_DEVICE_VARIABLES,
-  isPlatformProductIds,
-  normalizePlatform,
-  productIdFor,
-} from "@superwall/runtime";
+import { isPlatformProductIds, normalizePlatform, productIdFor } from "@superwall/runtime";
+import { DEFAULT_PARAMS, DEFAULT_USER, defaultDevice } from "@superwall/host/defaults";
 import { discoverProject } from "../discover";
 import { firstBinding, readLock } from "../lock";
 
@@ -38,18 +34,14 @@ export type SampleDefaults = typeof SAMPLE_DEFAULTS;
 
 export type StudioProjectEntry = { slug: string; title: string };
 
-export const SAMPLE_DEFAULTS = {
-  device: MOCK_DEVICE_VARIABLES as Record<string, unknown>,
-  user: {
-    applicationInstalledAt: "2026-01-01T00:00:00Z",
-    subscriptionStatus: "INACTIVE",
-  } as Record<string, unknown>,
-  params: {
-    $event_name: "campaign_trigger",
-    event_name: "campaign_trigger",
-    $is_standard_event: false,
-    $is_feature_gatable: false,
-  } as Record<string, unknown>,
+export const SAMPLE_DEFAULTS: {
+  device: Record<string, unknown>;
+  user: Record<string, unknown>;
+  params: Record<string, unknown>;
+} = {
+  device: defaultDevice(),
+  user: DEFAULT_USER,
+  params: DEFAULT_PARAMS,
 };
 
 export const buildStudioProject = async (

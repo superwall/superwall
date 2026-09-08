@@ -51,11 +51,13 @@ export const usePurchase = <
   const snapshot = useSuperwallSnapshot<SuperwallProduct<TVariables>>();
 
   const mode = checkoutModeOf(snapshot.config?.checkout);
+  const hasApiKey =
+    typeof snapshot.device.publicApiKey === "string" && snapshot.device.publicApiKey !== "";
 
   const purchase = React.useCallback(
     (async (input, options) => {
       const reference = typeof input === "string" ? input : input.reference;
-      if (mode === "sheet" || mode === "applePay") {
+      if (hasApiKey && (mode === "sheet" || mode === "applePay")) {
         const controller = controllerFor(session);
         if (controller.isStripeProduct(reference)) {
           try {
@@ -90,7 +92,7 @@ export const usePurchase = <
       }
       return session.purchase(input, options);
     }) as UsePurchaseResult<TVariables>["purchase"],
-    [session, mode],
+    [session, mode, hasApiKey],
   );
 
   const products = snapshot.products;

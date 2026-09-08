@@ -19,7 +19,7 @@ renders undefined, and publishing stays disabled.
 **The store decides who gets a trial, not you.**
 
 ```tsx
-const { eligible } = useTrialEligibility();
+const { eligible } = useIntroductoryOffer();
 ```
 
 **The length comes from the product:**

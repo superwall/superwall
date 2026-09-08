@@ -1,8 +1,4 @@
-export {
-  SuperwallProvider,
-  type SuperwallMockProp,
-  type SuperwallProviderProps,
-} from "./provider/context";
+export { SuperwallProvider, type SuperwallProviderProps } from "./provider/context";
 
 export type {
   SuperwallCallbackResult,
@@ -15,7 +11,6 @@ export type {
   SuperwallKnownProductVariables,
   SuperwallLocalizationConfig,
   SuperwallMessages,
-  SuperwallMockOptions,
   SuperwallNotificationsConfig,
   SuperwallPaywallIdentity,
   SuperwallPendingPurchase,
@@ -43,6 +38,5 @@ export type {
   SuperwallTrialReminderContext,
   SuperwallTrialReminderNotification,
   SuperwallTrialReminderStaticConfig,
-  SuperwallTrialState,
   SuperwallUserVariables,
 } from "@superwall/runtime";

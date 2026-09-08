@@ -1,4 +1,19 @@
-import { backgroundOf, documentAttributes, type SuperwallConfig } from "@superwall/runtime";
+import { backgroundOf, type SuperwallConfig } from "@superwall/runtime";
+
+/** The framework's paywall generation: v4 is the visual editor, v5 is code. */
+export const SUPERWALL_GENERATION = 5;
+
+/**
+ * Document semantics as `<html>` data attributes. The build stamps these
+ * statically and `SuperwallProvider` reasserts them at runtime; the platform's
+ * serve-time stylesheet owns what they mean.
+ */
+export const documentAttributes = (
+  config: SuperwallConfig | undefined,
+): Record<string, string> => ({
+  "data-sw-generation": String(SUPERWALL_GENERATION),
+  "data-sw-scroll": String(config?.scrollEnabled ?? true),
+});
 
 /**
  * The document contract: the exact HTML a paywall is, and the platform layer

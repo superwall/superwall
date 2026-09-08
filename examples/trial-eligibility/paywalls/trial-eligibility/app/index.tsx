@@ -1,7 +1,7 @@
-import { useHaptics, useProducts, usePurchase, useTrialEligibility } from "superwall/hooks";
+import { useHaptics, useProducts, usePurchase, useIntroductoryOffer } from "superwall/hooks";
 
 export default function Index() {
-  const { eligible } = useTrialEligibility();
+  const { eligible } = useIntroductoryOffer();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
   const haptics = useHaptics();
@@ -24,7 +24,7 @@ export default function Index() {
 
       <div className="rows">
         <div className="kv">
-          <span className="kv-key">trial.eligible</span>
+          <span className="kv-key">introductoryOffer.eligible</span>
           <span className="kv-value">{String(eligible)}</span>
         </div>
         <div className="kv">
@@ -34,7 +34,7 @@ export default function Index() {
       </div>
 
       <p className="note">
-        The store decides who gets a trial, not you. Toggle Trial in the footer to see both.
+        The store decides who gets a trial, not you. Toggle Intro offer in the footer to see both.
       </p>
 
       <div className="actions">

@@ -48,7 +48,7 @@ globalThis.ResizeObserver = class {
 
 const { SuperwallCheckout, checkoutEvents } = await import("../../src/checkout");
 const { SuperwallProvider } = await import("../../src");
-const { testConfig } = await import("../helpers");
+const { createHost, testConfig } = await import("../helpers");
 
 const session = {
   directive: "embedded" as const,
@@ -61,7 +61,7 @@ const session = {
 
 const mount = () =>
   render(
-    <SuperwallProvider config={testConfig} mock>
+    <SuperwallProvider config={testConfig} transport={createHost().transport}>
       <SuperwallCheckout />
     </SuperwallProvider>,
   );

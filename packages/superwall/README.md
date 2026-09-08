@@ -152,7 +152,7 @@ abandoned | failed`, never throws for flow outcomes; with `checkout:
 sheet), `useDiscount` (`await redeem(code)` resolves with the verdict and the
 discounted prices per product; `onDropped` fires if checkout later refuses
 the code), `useActions`,
-`useHaptics`, `useColorScheme`, `useTranslation`, `useTrialEligibility`,
+`useHaptics`, `useColorScheme`, `useTranslation`, `useIntroductoryOffer`,
 `useDevice` / `useUser` / `useVariables`, `useLocalResource`,
 `useSuperwallEvent`, `useGameController`.
 
@@ -179,9 +179,13 @@ checkout and in-app browsers hand a flow back where it left off.
 and funnel as a live card, and an editor with a device-frame preview (nine
 devices, iPhone SE to Desktop), light/dark, locale switching, and live
 controls for the user, device, params, and product variables the SDK
-reports. Previews run against a stand-in SDK host — purchases resolve, trials
-start — while product data is read from Superwall, never invented. The same
-build runs unchanged inside a real SDK webview.
+reports. The studio hosts each preview the way the native SDK hosts a
+webview: it answers the paywall's `ping` with the SDK's messages, delivers
+product data read from Superwall (or the visual editor's example prices for
+a slot Superwall has no product for), and asks you for the outcome of every
+purchase, restore, permission and callback. The paywall cannot tell the
+studio from a device, and the same build runs unchanged inside a real SDK
+webview.
 
 ### Push, promote, publish
 
@@ -326,13 +330,13 @@ The `superwall` and `sw` binaries launch [`@superwall/cli`](https://github.com/s
 which owns every command. `superwall/build`, `superwall/preview`, and
 `superwall/discover` are the CLI's tooling contract and `superwall/internal`
 belongs to the generated entry — none of them is a public API. That entry
-mounts `PreviewHost`: against a real SDK a snapshot behaves exactly as
-before, and opened with `?sw_preview=1` it simulates the SDK from the
-studio's query params (`theme`, `locale`, `sw_device`, `sw_user`,
-`sw_params`, `sw_products`, `sw_trial`) and talks to an embedding studio over
-`postMessage` — which is how the dashboard previews a published paywall. The React-free
-core lives in [`@superwall/runtime`](https://github.com/superwall/superwall/tree/main/packages/runtime),
+mounts `SuperwallProvider` and nothing else: a snapshot carries no
+simulation, and whichever host loads it — a native SDK webview, or a parent
+window that opened it with `?transport=editor`, which is what the studio and
+the dashboard do — speaks the same protocol to it. The React-free core lives
+in [`@superwall/runtime`](https://github.com/superwall/superwall/tree/main/packages/runtime),
 the SDK message contract in [`@superwall/protocol`](https://github.com/superwall/superwall/tree/main/packages/protocol),
+the host in [`@superwall/host`](https://github.com/superwall/superwall/tree/main/packages/host),
 and the studio in [`@superwall/studio`](https://github.com/superwall/superwall/tree/main/packages/studio).
 
 ## Develop

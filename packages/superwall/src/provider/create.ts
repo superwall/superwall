@@ -6,8 +6,8 @@ import { useProducts } from "../hooks/useProducts";
 import { usePurchase } from "../hooks/usePurchase";
 import { useGameController, useSuperwallEvent } from "../hooks/useSuperwallEvent";
 import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
+import { useIntroductoryOffer } from "../hooks/useIntroductoryOffer";
 import { useTranslation } from "../hooks/useTranslation";
-import { useTrialEligibility } from "../hooks/useTrialEligibility";
 import { useVariables } from "../hooks/useVariables";
 
 export const createSuperwall = <
@@ -23,7 +23,7 @@ export const createSuperwall = <
     useDevice,
     useUser: () => useSuperwallSnapshot().user,
     useVariables,
-    useTrialEligibility,
+    useIntroductoryOffer,
     useTranslation,
     useSuperwallEvent,
     useGameController,

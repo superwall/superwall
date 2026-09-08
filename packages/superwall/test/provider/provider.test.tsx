@@ -1,7 +1,8 @@
 import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { SuperwallProvider } from "../../src";
 import { createSuperwall, useProducts } from "../../src/hooks";
-import { createWrapper, flush, renderWithProvider, testConfig } from "../helpers";
+import { createHost, createWrapper, flush, testConfig } from "../helpers";
 
 describe("window.paywall interface", () => {
   it("exposes accept/accept64/getAllState and restores on unmount", async () => {
@@ -65,25 +66,24 @@ describe("window.paywall interface", () => {
   });
 });
 
-describe("mock auto mode", () => {
-  it("stays out of the way when a native host is detected", async () => {
+describe("without a transport", () => {
+  it("talks to the page's host and invents nothing while it waits", async () => {
     window.history.replaceState({}, "", "/?transport=editor");
+    const posted: string[] = [];
+    const parent = vi.spyOn(window, "postMessage").mockImplementation((message) => {
+      if (typeof message === "string") posted.push(message);
+    });
 
-    const { result } = renderWithProvider(() => useProducts(), { mock: "auto" });
+    const { result } = renderHook(() => useProducts(), {
+      wrapper: ({ children }) => (
+        <SuperwallProvider config={testConfig}>{children}</SuperwallProvider>
+      ),
+    });
     await flush();
 
-    expect(result.current.products).toHaveLength(2);
-    expect(result.current.getProduct("primary")?.variables).toEqual({});
-  });
-
-  it("stands in for the SDK in a plain browser, without inventing a catalogue", async () => {
-    const { result } = renderWithProvider(() => useProducts(), { mock: "auto" });
-    await flush();
-
-    // The references resolve so a paywall can render; the prices do not, because
-    // only Superwall knows them.
-    await waitFor(() => expect(result.current.getProduct("primary")).toBeDefined());
-    expect(result.current.getProduct("primary")?.variables.price).toBeUndefined();
+    expect(result.current.products).toEqual([]);
+    expect(posted.some((message) => message.includes('"event_name":"ping"'))).toBe(true);
+    parent.mockRestore();
   });
 });
 
@@ -97,7 +97,7 @@ describe("createSuperwall factory", () => {
     };
 
     render(
-      <sw.SuperwallProvider config={testConfig} mock>
+      <sw.SuperwallProvider config={testConfig} transport={createHost().transport}>
         <Paywall />
       </sw.SuperwallProvider>,
     );

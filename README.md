@@ -90,11 +90,12 @@ export default function PlusUpgrade() {
 }
 ```
 
-`superwall dev` serves every surface against a **stand-in SDK host**: purchases
-resolve, trials start, and product data is read from Superwall — never invented,
-so a price you see locally is a price a device would see. The same build runs
-unchanged inside a real SDK webview; the stand-in detects a native host and
-stays out of the way.
+`superwall dev` hosts every surface **the way the native SDK hosts a webview**:
+the studio answers the paywall's `ping` over the SDK protocol with products,
+device, user and eligibility, and asks you for every purchase, restore,
+permission and callback outcome. Product data is read from Superwall — never
+invented, so a price you see locally is a price a device would see. The same
+build runs unchanged inside a real SDK webview.
 
 Funnels sell on the web too: `definePaywall({ checkout: … })` puts Stripe
 checkout in the page — as an embedded sheet, Apple Pay, or an external step —

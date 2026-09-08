@@ -4,12 +4,9 @@ import * as path from "node:path";
 import {
   backgroundOf,
   checkoutModeOf,
-  checkoutNeedsPaymentUi,
   isPlatformProductIds,
   normalizePlatform,
-  paywallSettingsOf,
   productIdFor,
-  type PaywallSettings,
   type SuperwallConfig,
   type SuperwallPlatform,
 } from "@superwall/runtime";
@@ -17,6 +14,7 @@ import react from "@vitejs/plugin-react-swc";
 import { build as viteBuild, type Plugin } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import { externalSources } from "./externality";
+import { checkoutNeedsPaymentUi, paywallSettingsOf, type PaywallSettings } from "./settings";
 import { loadSurfaceConfig } from "../config/load";
 import type { PaywallDefinition } from "../config/paywall";
 import type { DiscoveredSurface, Project } from "../discover";
@@ -249,7 +247,8 @@ const entrySource = (
   const lines: string[] = [
     `import * as React from "react";`,
     `import { createRoot } from "react-dom/client";`,
-    `import { mergeMessages, PreviewHost } from "superwall/internal";`,
+    `import { SuperwallProvider } from "superwall";`,
+    `import { mergeMessages } from "superwall/internal";`,
     `import { PaywallRouter } from "superwall/navigation";`,
     ...(checkout ? [`import { SuperwallCheckout } from "superwall/checkout";`] : []),
   ];
@@ -291,12 +290,12 @@ const entrySource = (
     ``,
     `createRoot(document.getElementById("root")).render(`,
     `  <React.StrictMode>`,
-    `    <PreviewHost config={config}>`,
+    `    <SuperwallProvider config={config}>`,
     surface.layoutFile
       ? `      <PaywallRouter routes={routes} Layout={Layout} transition={definition?.transition} queryState={definition?.queryState} navigationId={${JSON.stringify(surface.id)}} />`
       : `      <PaywallRouter routes={routes} transition={definition?.transition} queryState={definition?.queryState} navigationId={${JSON.stringify(surface.id)}} />`,
     ...(checkout ? [`      <SuperwallCheckout />`] : []),
-    `    </PreviewHost>`,
+    `    </SuperwallProvider>`,
     `  </React.StrictMode>,`,
     `);`,
   );

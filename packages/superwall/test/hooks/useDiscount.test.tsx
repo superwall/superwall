@@ -66,7 +66,7 @@ const renderDiscount = async (onDropped?: (code: string) => void) => {
     {
       config: { ...testConfig, checkout: "applePay" },
       // The mock host ships no public API key; checkout warm-ups need one.
-      mock: { products, device: { publicApiKey: "pk_test" } },
+      host: { products, device: { publicApiKey: "pk_test" } },
     },
   );
   await flush();

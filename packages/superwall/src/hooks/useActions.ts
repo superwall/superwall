@@ -20,9 +20,10 @@ export type UseActionsResult = Pick<
  * `openUrl`/`openExternalUrl`/`openDeepLink`, `customPlacement`,
  * permissions, callbacks, and store review. Haptics live in `useHaptics`.
  *
- * `restore()` is fire-and-forget — the message protocol has no
- * restore-result event; successful restores surface as
- * `transaction_complete` or a dismissed paywall.
+ * `restore()` has no result to await: what the SDK reports lands on
+ * `useSuperwallSnapshot().restore` and the `restore_*` events (iOS all
+ * three, Android `restore_fail` only); success usually surfaces as a
+ * dismissed paywall.
  */
 export const useActions = (): UseActionsResult => {
   const session = useSuperwallSession();

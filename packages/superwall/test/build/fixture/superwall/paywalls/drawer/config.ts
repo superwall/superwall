@@ -5,6 +5,5 @@ export default definePaywall({
   featureGating: "gated",
   onDeviceCacheEnabled: false,
   gameControllerEnabled: true,
-  introductoryOfferEligibility: "alwaysIneligible",
   products: {},
 });

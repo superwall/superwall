@@ -54,10 +54,9 @@ self-describing npm project — clone it, install, `superwall dev`:
 - `superwall/paywalls/<id>/` and `superwall/funnels/<id>/` — each surface is a
   mini React app: a **required** `config.ts` (`definePaywall`: the dashboard
   `name`, its products, and every paywall setting — presentation style,
-  feature gating, on-device cache, scrolling, game controller, intro-offer
-  eligibility. A headless paywall has no dashboard
-  editor, so `config.ts` is the only source: `paywallSettingsOf` (runtime)
-  resolves them — together with the web checkout destination and
+  feature gating, on-device cache, scrolling, game controller. A headless
+  paywall has no dashboard editor, so `config.ts` is the only source:
+  `paywallSettingsOf` (the framework's `build/settings.ts`) resolves them — together with the web checkout destination and
   background — at build, the version push carries them, promote stamps them
   onto the paywall columns SDKs read, and an omitted key resets to its
   default. Products are the one per-platform field and travel separately. A surface without `config.ts` is invalid; product data comes from
@@ -112,17 +111,35 @@ The stack, bottom to top — each layer depends only on the one below it:
   **Backward compatibility is sacred here**: old app binaries with old native
   SDKs load new paywall bundles indefinitely. Additive changes only.
 - `packages/runtime` — `@superwall/runtime`: framework-agnostic runtime on top
-  of the protocol. **No React imports allowed.** Layout:
-  - `src/bridge/` — the wire layer: `SuperwallBridge` (transport
-    auto-detection, message log, `accept`/`accept64`), transport/native-host
-    detection, base64 message decoding
-  - `src/session/` — the runtime model: the covariant `SuperwallSession`
-    interface + implementation, its public types, and SDK state building
-  - `src/localization/` — locale resolution, `t()` translator, and the
-    period translation table
-  - `src/config.ts` / `src/products.ts` / `src/mock.ts` — the paywall config
-    contract, the product model + SDK merge logic, and the mock SDK host used
-    by dev, previews, and tests
+  of the protocol, the paywall side only. **No React imports allowed.** Hosts
+  (the SDKs, the web host, `@superwall/host`) deliver everything in a
+  snapshot; the runtime merges and derives, never invents. Layout:
+  - `src/bridge/` — the wire: transport detection (`?platform=android`,
+    `?transport=editor`, else WebKit), `detectSuperwallHost`, base64 batch
+    decoding for `accept64`
+  - `src/config/` — the `SuperwallConfig` contract a running paywall reads,
+    one file per concern (`products`, `checkout`, `presentation`,
+    `background`, `notifications`, `localization`). Push-time concerns (the
+    settings wire, document attributes) live in the framework, not here.
+  - `src/localization/` — `locale.ts` (resolution), `catalog.ts` (`t()`),
+    `periods.ts` (the editor's period translation table from
+    `pwn/packages/schema/src/editor/swschema/products/localizations.ts`,
+    copied verbatim; its lookup code is the editor's, trimmed of unreachable
+    branches so it can be covered completely)
+  - `src/products/` — the product model (`reference`, `productId`,
+    `variables`, `source`), `merge.ts` (`products` + `template_variables`,
+    including the iOS template's top-level `primary`/`secondary`/`tertiary`),
+    `derive.ts` (localized `period`/`periodly`, `trialPeriodEndDate`)
+  - `src/session/` — `createSuperwallSession` (a factory over the raw
+    transport) composed from `outgoing.ts` (message builders, mirror of the
+    host package's `messages/`), `purchases.ts` (pending purchases, timers,
+    attribution), `requests.ts` (permission/callback correlation and the
+    paywall.js request-id format), `reminders.ts` (trial reminder
+    scheduling), `incoming.ts` (the pure snapshot reducer), `state.ts` (the
+    object `window.app.getAllState()` returns to the iOS SDK, in paywall.js's
+    shape), `variables.ts` (device/user/params types mirroring the iOS
+    `DeviceTemplate`), `types.ts` (the covariant `SuperwallSession`
+    interface and the snapshot)
 - `packages/superwall` — `superwall`, THE framework. The public surface is
   split by concern, and no subpath entry may import the root barrel:
   `.` (slim: `SuperwallProvider`, its props, and the runtime types) ·
@@ -182,7 +199,8 @@ The stack, bottom to top — each layer depends only on the one below it:
     server both render through it, so local and published are the same
     document. Nothing else may enter it.
   - `src/build/` — `superwall/build`: one surface → one self-contained,
-    content-addressed HTML snapshot
+    content-addressed HTML snapshot; `settings.ts` turns `config.ts` into
+    the version's settings wire (`paywallSettingsOf`)
   - `src/preview/` — `superwall/preview`: serving surfaces locally the way
     the runtime serves published snapshots — `server.ts` (vite; studio dist,
     project payload, surface previews), `mount.tsx`/`surface.tsx` (what runs
@@ -266,7 +284,7 @@ a scratch check is: publish → create a campaign with one placement and one
 the paywall. Fields to read: `url`, `products_v2[].store_product`,
 `background_color_hex`, `web_checkout_destination`, `presentation_style_v3`,
 `feature_gating`, `on_device_cache`, `is_scroll_enabled`,
-`game_controller_support`, `introductory_offer_eligibility`. Never leave a
+`game_controller_support`. Never leave a
 config key "accepted by the type but inert": it either reaches the device or
 it does not exist.
 
@@ -307,9 +325,8 @@ it does not exist.
     `useSuperwallSession`, `requestCallback`) — a caller's declaration about
     SDK-owned data, applied once and derived everywhere else;
   - the **SDK-trust boundaries** (`asProductVariables`, the transport
-    no-op `Validator`) — wire data trusted for forward compatibility;
-  - the event-store **correlation seam** (`handlersFor`,
-    microsoft/TypeScript#47109);
+    no-op `Validator`, `decodeIncomingMessages`' message-like predicate) —
+    wire data trusted for forward compatibility;
   - **host-global views** (`window as typeof window & {…}` for
     SDK-injected/published globals).
     A new cast needs a justification of this kind in a comment, or it doesn't

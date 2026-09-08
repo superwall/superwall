@@ -1,13 +1,20 @@
 import type {
+  ITransport,
+  TEventTrackingBehavior,
   TIncomingMessage,
   TIncomingMessageCallbackResult,
   TIncomingMessageTransactionAbandon,
   TIncomingMessageTransactionComplete,
   TOutgoingMessage,
+  TPermissionStatus,
+  TPermissionTypeMessage,
+  TransportKind,
 } from "@superwall/protocol";
-import type { SuperwallBridge, SuperwallBridgeOptions, SuperwallMessageLogEntry } from "../bridge";
 import type { SuperwallConfig } from "../config";
-import type { SuperwallProduct } from "../products";
+import type { SuperwallTranslateValues } from "../localization";
+import type { SuperwallProduct, SuperwallProductInput } from "../products";
+import type { Outgoing, PageViewInput } from "./outgoing";
+import type { CallbackBehavior } from "./requests";
 import type {
   SuperwallCallbackStates,
   SuperwallPermissionStatuses,
@@ -47,11 +54,11 @@ export type SuperwallTransaction<TProduct extends SuperwallProduct = SuperwallPr
 export type SuperwallPurchaseFailure<out TProduct extends SuperwallProduct = SuperwallProduct> = {
   status: "failed";
   product: TProduct;
-  /**
-   * "timeout": no transaction message arrived in time. "superseded": a newer
-   * purchase for the same product, or a paywall re-open, replaced this one.
-   */
-  reason: "timeout" | "superseded";
+  reason: "sdk" | "superseded";
+};
+
+export type SuperwallRestoreState = {
+  status: "started" | "completed" | "failed";
 };
 
 export type SuperwallPurchaseResult<TProduct extends SuperwallProduct = SuperwallProduct> =
@@ -64,11 +71,7 @@ export type SuperwallCallbackResult<TData = Record<string, unknown>> = {
   message: TIncomingMessageCallbackResult;
 };
 
-export type SuperwallTrialState = {
-  /**
-   * Whether the user is eligible for an introductory offer. `undefined` until
-   * the SDK signals eligibility (or the config forces it).
-   */
+export type SuperwallIntroductoryOfferState = {
   eligible?: boolean;
 };
 
@@ -83,12 +86,13 @@ export type SuperwallRuntimeSnapshot<out TProduct extends SuperwallProduct = Sup
   user: SuperwallUserVariables;
   params: SuperwallPlacementParams;
   experiment?: SuperwallExperiment;
-  trial: SuperwallTrialState;
+  introductoryOffer: SuperwallIntroductoryOfferState;
+  restore?: SuperwallRestoreState;
+  eventTrackingBehavior?: TEventTrackingBehavior;
   locale: string;
   state: SuperwallSdkState;
   permissionStatuses: SuperwallPermissionStatuses;
   callbackStates: SuperwallCallbackStates;
-  messages: readonly SuperwallMessageLogEntry[];
   pendingPurchase?: SuperwallPendingPurchase<TProduct>;
   lastTransaction?: SuperwallTransaction<TProduct>;
   lastPurchaseFailure?: SuperwallPurchaseFailure<TProduct>;
@@ -96,28 +100,62 @@ export type SuperwallRuntimeSnapshot<out TProduct extends SuperwallProduct = Sup
 
 export type SuperwallPurchaseOptions = {
   shouldDismiss?: boolean;
-  /** Resolve as `{ status: "failed", reason: "timeout" }` if no transaction message arrives in time. */
-  timeoutMs?: number;
 };
+
+export type SuperwallCallbackOptions = {
+  behavior?: CallbackBehavior;
+  variables?: Record<string, unknown>;
+};
+
+export type SuperwallEventName = TIncomingMessage["event_name"] | "message";
 
 export type SuperwallEventMap = {
-  [E in TIncomingMessage["event_name"]]: Extract<TIncomingMessage, { event_name: E }>;
-} & {
-  /** Fires for every incoming message. */
-  message: TIncomingMessage;
+  [E in SuperwallEventName]: E extends "message"
+    ? TIncomingMessage
+    : Extract<TIncomingMessage, { event_name: E }>;
 };
-
-export type SuperwallEventName = keyof SuperwallEventMap & string;
 
 export type SuperwallSessionStartOptions = {
   sendPing?: boolean;
-  ping?: Partial<Extract<TOutgoingMessage, { event_name: "ping" }>>;
 };
 
-export type SuperwallSessionOptions<TProduct extends SuperwallProduct = SuperwallProduct> =
-  SuperwallBridgeOptions & {
-    bridge?: SuperwallBridge;
-    config?: SuperwallConfig;
-    products?: readonly TProduct[];
-    variables?: Record<string, unknown>;
-  };
+export type SuperwallSessionOptions = {
+  config?: SuperwallConfig;
+  transport?: ITransport;
+  transportKind?: TransportKind;
+  onDecodeError?: (error: unknown) => void;
+};
+
+export interface SuperwallSession<out TProduct extends SuperwallProduct = SuperwallProduct> {
+  on: <E extends SuperwallEventName>(
+    event: E,
+    handler: (payload: SuperwallEventMap[E]) => void,
+  ) => () => void;
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: () => SuperwallRuntimeSnapshot<TProduct>;
+  t: (key: string, values?: SuperwallTranslateValues) => string;
+  setLocale: (locale: string | undefined) => void;
+  configure: (config: SuperwallConfig) => void;
+  start: (options?: SuperwallSessionStartOptions) => void;
+  postMessage: (message: TOutgoingMessage) => void;
+  accept: (messages: TIncomingMessage[]) => void;
+  accept64: (message: string) => void;
+  close: () => void;
+  restore: () => void;
+  openUrl: (url: string, options?: { browserType?: "payment_sheet" }) => void;
+  openExternalUrl: (url: string) => void;
+  openDeepLink: (link: string) => void;
+  customPlacement: (name: string, params?: Record<string, unknown>) => void;
+  requestStoreReview: (reviewType: Outgoing<"request_store_review">["review_type"]) => void;
+  pageView: (input: PageViewInput) => void;
+  hapticFeedback: (hapticType: Outgoing<"haptic_feedback">["haptic_type"]) => void;
+  requestPermission: (permissionType: TPermissionTypeMessage) => Promise<TPermissionStatus>;
+  requestCallback: <TData extends Record<string, unknown> = Record<string, unknown>>(
+    name: string,
+    options?: SuperwallCallbackOptions,
+  ) => Promise<SuperwallCallbackResult<TData>>;
+  purchase: (
+    input: SuperwallProductInput,
+    options?: SuperwallPurchaseOptions,
+  ) => Promise<SuperwallPurchaseResult<TProduct>>;
+}

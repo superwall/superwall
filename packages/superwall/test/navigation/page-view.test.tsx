@@ -57,7 +57,7 @@ const mount = (strict = false) => {
   const onOutgoing = (message: TOutgoingMessage) => {
     if (message.event_name === "page_view") sent.push(message as PageView);
   };
-  const Wrapper = createWrapper({ mock: { onOutgoing } });
+  const Wrapper = createWrapper({ host: { onOutgoing } });
   const tree = (
     <Wrapper>
       <PaywallRouter routes={routes} navigationId="get-started" />

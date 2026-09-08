@@ -7,7 +7,7 @@ import { flush, renderWithProvider } from "../helpers";
 describe("useActions", () => {
   it("dispatches paywall actions to the host", async () => {
     const onOutgoing = vi.fn<(message: TOutgoingMessage) => void>();
-    const { result } = renderWithProvider(() => useActions(), { mock: { onOutgoing } });
+    const { result } = renderWithProvider(() => useActions(), { host: { onOutgoing } });
     await flush();
 
     act(() => {

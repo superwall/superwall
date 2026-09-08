@@ -18,10 +18,10 @@ const snapshot = (overrides: Record<string, unknown> = {}) =>
     device: { publicApiKey: "pk_test", platform: "web" },
     user: {},
     params: {},
-    trial: { eligible: false },
+    introductoryOffer: { eligible: false },
     paywall: undefined,
     experiment: undefined,
-    products: [{ reference: "monthly", product: "monthly", productId: "test:price_1:no-trial" }],
+    products: [{ reference: "monthly", productId: "test:price_1:no-trial" }],
     productsByReference: {
       monthly: {
         reference: "monthly",

@@ -7,7 +7,7 @@ import { flush, renderWithProvider } from "../helpers";
 describe("useHaptics", () => {
   it("sends one haptic_feedback message per variant", async () => {
     const onOutgoing = vi.fn<(message: TOutgoingMessage) => void>();
-    const { result } = renderWithProvider(() => useHaptics(), { mock: { onOutgoing } });
+    const { result } = renderWithProvider(() => useHaptics(), { host: { onOutgoing } });
     await flush();
 
     act(() => {
@@ -25,7 +25,7 @@ describe("useHaptics", () => {
 
   it("covers every haptic the protocol accepts", async () => {
     const onOutgoing = vi.fn<(message: TOutgoingMessage) => void>();
-    const { result } = renderWithProvider(() => useHaptics(), { mock: { onOutgoing } });
+    const { result } = renderWithProvider(() => useHaptics(), { host: { onOutgoing } });
     await flush();
 
     const variants = ["light", "medium", "heavy", "success", "warning", "error", "selection"];

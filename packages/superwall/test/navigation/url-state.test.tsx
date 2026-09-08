@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineSuperwallConfig, type TOutgoingMessage } from "@superwall/runtime";
+import type { TOutgoingMessage } from "@superwall/runtime";
 import { REPLACE_THROTTLE_MS } from "../../src/navigation/query";
 import {
   NAV_KEY,
@@ -49,7 +49,7 @@ const mount = (props: Partial<PaywallRouterProps> = {}, config: typeof testConfi
   views = [];
   const Wrapper = createWrapper({
     config,
-    mock: {
+    host: {
       onOutgoing: (message: TOutgoingMessage) => {
         if (message.event_name === "page_view") views.push(message as PageView);
       },
@@ -209,17 +209,14 @@ describe("when the URL is kept", () => {
   });
 
   it("is on for a surface with checkout, in any mode", () => {
-    mount(
-      { queryState: undefined },
-      defineSuperwallConfig({ ...testConfig, checkout: "external" }),
-    );
+    mount({ queryState: undefined }, { ...testConfig, checkout: "external" });
     fireEvent.click(screen.getByText("push goal"));
     settle();
     expect(navParam()).toBe("index,goal");
   });
 
   it("stays off when the surface says so, checkout or not", () => {
-    mount({ queryState: false }, defineSuperwallConfig({ ...testConfig, checkout: "sheet" }));
+    mount({ queryState: false }, { ...testConfig, checkout: "sheet" });
     fireEvent.click(screen.getByText("push goal"));
     settle();
     expect(search()).toBe("");

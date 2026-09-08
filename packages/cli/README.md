@@ -152,7 +152,7 @@ export default function PlusUpgrade() {
 
 One concern each: `useProducts`, `usePurchase` (resolves `completed |
 abandoned | failed`, never throws for flow outcomes), `useActions`,
-`useHaptics`, `useColorScheme`, `useTranslation`, `useTrialEligibility`,
+`useHaptics`, `useColorScheme`, `useTranslation`, `useIntroductoryOffer`,
 `useDevice` / `useUser` / `useVariables`, `useLocalResource`,
 `useSuperwallEvent`, `useGameController`.
 
@@ -179,9 +179,11 @@ checkout and in-app browsers hand a flow back where it left off.
 and funnel as a live card, and an editor with a device-frame preview (nine
 devices, iPhone SE to Desktop), light/dark, locale switching, and live
 controls for the user, device, params, and product variables the SDK
-reports. Previews run against a stand-in SDK host — purchases resolve, trials
-start — while product data is read from Superwall, never invented. The same
-build runs unchanged inside a real SDK webview.
+reports. The studio hosts each preview the way the native SDK hosts a
+webview: it answers the paywall's `ping` over the SDK protocol with products,
+device, user and eligibility, and asks you for every purchase, restore,
+permission and callback outcome. Product data is read from Superwall, never
+invented, and the same build runs unchanged inside a real SDK webview.
 
 ### Push, promote, publish
 

@@ -76,16 +76,23 @@ describe("hosted assets", () => {
     expect(built.assetBytes).toBe(built.assets.reduce((total, asset) => total + asset.bytes, 0));
   });
 
-  it("boots through the preview host, so a snapshot opened with ?sw_preview simulates the SDK from the studio's query", () => {
+  it("mounts the provider and nothing else, so a snapshot carries no simulation", () => {
     const entry = fs.readFileSync(
       path.join(FIXTURE, "superwall", ".superwall", "entries", "paywall", "demo", "entry.jsx"),
       "utf8",
     );
-    expect(entry).toContain('import { mergeMessages, PreviewHost } from "superwall/internal";');
-    expect(entry).toContain("<PreviewHost config={config}>");
-    expect(entry).not.toContain("SuperwallProvider");
-    expect(built.html).toContain("__swPreviewApply");
-    expect(built.html).toContain("sw_preview");
+    expect(entry).toContain('import { SuperwallProvider } from "superwall";');
+    expect(entry).toContain('import { mergeMessages } from "superwall/internal";');
+    expect(entry).toContain("<SuperwallProvider config={config}>");
+    expect(entry).not.toContain("PreviewHost");
+    for (const trace of [
+      "__swPreviewApply",
+      "sw_preview",
+      "superwall-studio",
+      "MockSuperwallTransport",
+    ]) {
+      expect(built.html).not.toContain(trace);
+    }
   });
 
   it("carries the mime type each asset will be served with", () => {
@@ -453,7 +460,6 @@ describe("paywall settings ride on the snapshot", () => {
       on_device_cache: false,
       scroll_enabled: true,
       game_controller_enabled: true,
-      introductory_offer_eligibility: "always_ineligible",
     });
   }, 120_000);
 
@@ -465,7 +471,6 @@ describe("paywall settings ride on the snapshot", () => {
       on_device_cache: true,
       scroll_enabled: true,
       game_controller_enabled: false,
-      introductory_offer_eligibility: "automatic",
     });
   }, 120_000);
 });

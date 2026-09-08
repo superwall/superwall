@@ -1,5 +1,5 @@
 import * as React from "react";
-import { checkoutModeOf, detectNativeSuperwallHost } from "@superwall/runtime";
+import { checkoutModeOf, detectSuperwallHost } from "@superwall/runtime";
 import { useSuperwallSession } from "../provider/context";
 import { createQueryStore, QueryStoreContext, type QueryHistory, type QueryStore } from "./query";
 import "./routes.css";
@@ -241,7 +241,7 @@ export const PaywallRouter = ({
   const [store] = React.useState<QueryStore>(() =>
     createQueryStore(
       (queryState ?? checkoutModeOf(session.getSnapshot().config?.checkout) !== undefined) &&
-        !detectNativeSuperwallHost(),
+        !detectSuperwallHost(),
     ),
   );
   const [nav, setNav] = React.useState<Nav>(() => ({
@@ -321,6 +321,15 @@ export const PaywallRouter = ({
       },
     };
   }, [entries, top]);
+
+  React.useEffect(
+    () =>
+      session.on("back_button_input", () => {
+        if (router.canGoBack()) router.back();
+        else session.close();
+      }),
+    [session, router],
+  );
 
   React.useEffect(() => {
     if (nav.sync === "skip") return;

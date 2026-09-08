@@ -37,7 +37,10 @@ const redirect: RedirectCheckoutSession = {
 const renderCheckout = async (checkout?: SuperwallCheckoutConfig) => {
   const rendered = renderWithProvider(
     () => ({ session: useSuperwallSession(), purchase: usePurchase() }),
-    { config: { ...testConfig, checkout }, mock: { products } },
+    {
+      config: { ...testConfig, checkout },
+      host: { products, device: { publicApiKey: "pk_test" } },
+    },
   );
   await flush();
   const session = rendered.result.current.session;

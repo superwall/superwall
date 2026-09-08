@@ -2,7 +2,7 @@ import { act, render, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSuperwall } from "../../src/hooks";
 import { useDevice } from "../../src/hooks/useDevice";
-import { createWrapper, flush, renderWithProvider, testConfig } from "../helpers";
+import { createHost, createWrapper, flush, renderWithProvider, testConfig } from "../helpers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -57,14 +57,14 @@ describe("createSuperwall typed bundle", () => {
         device: superwall.useDevice(),
         user: superwall.useUser(),
         variables: superwall.useVariables(),
-        trial: superwall.useTrialEligibility(),
+        introductoryOffer: superwall.useIntroductoryOffer(),
         translation: superwall.useTranslation(),
         session: superwall.useSuperwallSession(),
         snapshot: superwall.useSuperwallSnapshot(),
       }),
       {
         wrapper: ({ children }) => (
-          <superwall.SuperwallProvider config={testConfig} mock>
+          <superwall.SuperwallProvider config={testConfig} transport={createHost().transport}>
             {children}
           </superwall.SuperwallProvider>
         ),
