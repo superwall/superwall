@@ -128,10 +128,11 @@ one store identifier, or one per platform when the store product differs —
 `purchase("annual")` stays one call, and each platform's build carries only
 its own ids. Product data (price, period, trial…) arrives from the SDK at
 runtime and is never invented locally. Presentation style, feature gating,
-caching, scrolling, game controller, introductory-offer eligibility,
-background, and web checkout are all settings here too: pushed with the
-version, stamped on promote, and an omitted key resets to its default. Share
-settings by exporting a plain object and spreading it.
+caching, scrolling, game controller, background, and web checkout are all
+settings here too: pushed with the version, stamped on promote, and an
+omitted key resets to its default. The authoring keys — `name`, `platforms`,
+`transition`, `queryState` — are read by the build and the CLI; the runtime
+ignores them. Share settings by exporting a plain object and spreading it.
 
 ### Hooks
 
@@ -338,6 +339,22 @@ in [`@superwall/runtime`](https://github.com/superwall/superwall/tree/main/packa
 the SDK message contract in [`@superwall/protocol`](https://github.com/superwall/superwall/tree/main/packages/protocol),
 the host in [`@superwall/host`](https://github.com/superwall/superwall/tree/main/packages/host),
 and the studio in [`@superwall/studio`](https://github.com/superwall/superwall/tree/main/packages/studio).
+
+### `superwall/preview`
+
+`startPreviewServer(roots, { port, host?, platformStylesheet?, studio? })`
+is what `superwall dev` runs: a vite server that serves the studio at `/`,
+each surface at `/preview/<kind>/<id>` as the same document a snapshot is,
+the phone-facing `/device` page, and `/device/manifest.json` for the iOS
+SDK's dev mode. The studio opens each preview with `?transport=editor` and
+hosts it over the SDK protocol. `buildStudioProject(root)` is the payload the
+studio loads: surfaces, routes, locales, products and diagnostics.
+
+`studio` is the CLI's side of the studio contract, typed in
+`@superwall/studio`: `run(action, surface, onProgress)` for push, promote
+and publish, `status(surface)` for the bound paywall, `samples()` for the
+dashboard's device, user and product samples, and `appScheme()` for the
+"Open in app" button. Without it the studio previews only.
 
 ## Develop
 

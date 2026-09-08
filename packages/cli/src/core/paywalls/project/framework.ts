@@ -2,6 +2,14 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import type {
+  AppScheme,
+  Samples,
+  StudioActionName,
+  StudioActionProgress,
+  StudioActionResult,
+  StudioStatus,
+} from "@superwall/studio/contract";
 
 export interface FrameworkRoute {
   name: string;
@@ -76,35 +84,14 @@ export interface PreviewServerHandle {
   resolvedUrls?: { local: string[]; network: string[] } | null;
 }
 
-export type StudioActionName = "push" | "promote" | "publish";
-
-export type StudioActionResult =
-  | { ok: true; version: number; live: boolean }
-  | { ok: false; error: string };
-
-export interface StudioStatus {
-  paywallId?: string;
-  liveUrl?: string;
-  active?: boolean;
-  updatedAt?: string;
-  unreachable?: string;
-}
-
-export type StudioActionProgress = (step: string, state: "start" | "done") => void;
-
-export interface Samples {
-  device?: Record<string, unknown>;
-  user?: Record<string, unknown>;
-  products?: Record<string, Record<string, unknown>>;
-  live?: { device: boolean; user: boolean };
-  unreachable?: string;
-}
-
-export interface AppScheme {
-  scheme?: string;
-  source?: "dashboard" | "app";
-  blocksLocalNetworking?: string;
-}
+export type {
+  AppScheme,
+  Samples,
+  StudioActionName,
+  StudioActionProgress,
+  StudioActionResult,
+  StudioStatus,
+} from "@superwall/studio/contract";
 
 export interface StudioActions {
   appScheme?(): Promise<AppScheme>;

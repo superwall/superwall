@@ -1,3 +1,14 @@
+import type { StudioActionName } from "./contract";
+
+export type {
+  AppScheme,
+  Samples,
+  StudioActionName,
+  StudioActionProgress,
+  StudioActionResult,
+  StudioStatus,
+} from "./contract";
+
 export type StudioSurfaceKind = "paywall" | "funnel";
 
 export type StudioSurface = {
@@ -29,13 +40,7 @@ export type VariableOverrides = {
 
 export type PreviewUrlBuilder = (surface: StudioSurface) => string;
 
-export type StudioActionName = "push" | "promote" | "publish";
-
 export type CompareTarget = { type: "live" } | { type: "surface"; surface: StudioSurface };
-
-export type StudioActionResult =
-  | { ok: true; version: number; live: boolean }
-  | { ok: false; error: string };
 
 export type StudioStepState = "pending" | "active" | "done" | "failed";
 
@@ -56,14 +61,6 @@ export const STEP_LABELS: Record<StudioActionStep, string> = {
   promote: "Promote to live",
 };
 
-export type StudioStatus = {
-  paywallId?: string;
-  liveUrl?: string;
-  active?: boolean;
-  updatedAt?: string;
-  unreachable?: string;
-};
-
 export type StudioSource = {
   scheme?: string;
   title: string;
@@ -74,13 +71,4 @@ export type StudioSource = {
   standaloneUrl?: PreviewUrlBuilder;
   capabilities?: { actions: boolean };
   compareHint?: string;
-};
-
-export type Samples = {
-  device?: Record<string, unknown>;
-  user?: Record<string, unknown>;
-  products?: Record<string, Record<string, unknown>>;
-  live?: { device: boolean; user: boolean };
-  /** Why samples couldn't be fetched, when they couldn't. */
-  unreachable?: string;
 };

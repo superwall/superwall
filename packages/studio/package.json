@@ -35,6 +35,9 @@
       "types": "./dist/lib/lib/products.d.ts",
       "default": "./dist/lib/products.js"
     },
+    "./contract": {
+      "types": "./dist/lib/lib/contract.d.ts"
+    },
     "./studio.css": "./dist/lib/studio.css",
     "./styles.css": "./src/styles.css",
     "./package.json": "./package.json"

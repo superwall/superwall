@@ -16,10 +16,15 @@ export type { HostInputs } from "./lib/host";
 export { buildPreviewPath, hostedUrl, snapshotPreviewUrl, surfacePath } from "./lib/preview";
 export { parseProjectPayload, type StudioProjectPayload } from "./lib/project";
 export type {
+  AppScheme,
   PreviewUrlBuilder,
   SampleDefaults,
   Samples,
+  StudioActionName,
+  StudioActionProgress,
+  StudioActionResult,
   StudioSource,
+  StudioStatus,
   StudioSurface,
   StudioSurfaceKind,
   VariableOverrides,

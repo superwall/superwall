@@ -106,6 +106,9 @@ editor. What the library gives a host:
   (the v2 API shape) to the variables a paywall reads (`price`, `periodly`,
   `trialPeriodDays`, …). The CLI and the hosted studio share it, so the
   Variables panel shows the same numbers in both.
+- `@superwall/studio/contract` is a types-only entry: the action, status,
+  samples and app-scheme shapes the CLI implements for the framework's
+  preview server, importable from node without DOM types.
   `@superwall/studio/styles.css` is the Tailwind source for hosts that run
   their own v4 pipeline.
 

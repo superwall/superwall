@@ -4,6 +4,14 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react-swc";
 import { createServer, searchForWorkspaceRoot, type Plugin, type ViteDevServer } from "vite";
+import type {
+  AppScheme,
+  Samples,
+  StudioActionName,
+  StudioActionProgress,
+  StudioActionResult,
+  StudioStatus,
+} from "@superwall/studio/contract";
 import { loadSurfaceConfig } from "../config/load";
 import { discoverProject, type DiscoveredSurface, type Project } from "../discover";
 import { injectPlatformLayer, PLATFORM_STYLESHEET_URL, renderDocument } from "../document";
@@ -190,37 +198,6 @@ const STUDIO_MISSING = `superwall studio is not built.
 
 Run: bun run --filter '@superwall/studio' build
 (or reinstall — the workspace postinstall builds it)`;
-
-export type StudioActionName = "push" | "promote" | "publish";
-
-export type StudioActionResult =
-  | { ok: true; version: number; live: boolean }
-  | { ok: false; error: string };
-
-export type StudioActionProgress = (step: string, state: "start" | "done") => void;
-
-export type StudioStatus = {
-  paywallId?: string;
-  liveUrl?: string;
-  active?: boolean;
-  updatedAt?: string;
-  unreachable?: string;
-  identifier?: string;
-};
-
-export type Samples = {
-  device?: Record<string, unknown>;
-  user?: Record<string, unknown>;
-  products?: Record<string, Record<string, unknown>>;
-  live?: { device: boolean; user: boolean };
-  unreachable?: string;
-};
-
-export type AppScheme = {
-  scheme?: string;
-  source?: "dashboard" | "app";
-  blocksLocalNetworking?: string;
-};
 
 export type StudioActions = {
   appScheme?(): Promise<AppScheme>;
