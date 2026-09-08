@@ -1,0 +1,145 @@
+{
+  "source": "ios/Sources/SuperwallKit/Paywall/View Controller/Web View/Message Handling/PaywallMessageHandler.swift:148-158,271-318,656-773; ios/Sources/SuperwallKit/StoreKit/Transactions/TransactionManager.swift:319-1118",
+  "direction": "to_paywall",
+  "sequences": {
+    "purchase_completed_with_trial": [
+      {
+        "event_name": "transaction_start",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      },
+      {
+        "event_name": "transaction_complete",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall",
+        "product_identifier": "com.app.annual"
+      },
+      {
+        "event_name": "freeTrial_start",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall",
+        "product_identifier": "com.app.annual",
+        "trial_end_date": 1758542400000
+      }
+    ],
+    "purchase_completed_without_trial": [
+      {
+        "event_name": "transaction_start",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      },
+      {
+        "event_name": "transaction_complete",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall",
+        "product_identifier": "com.app.monthly"
+      },
+      {
+        "event_name": "freeTrial_start",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall",
+        "product_identifier": "com.app.monthly"
+      }
+    ],
+    "purchase_abandoned": [
+      {
+        "event_name": "transaction_start",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      },
+      {
+        "event_name": "transaction_abandon",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      }
+    ],
+    "purchase_failed": [
+      {
+        "event_name": "transaction_start",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      },
+      {
+        "event_name": "transaction_fail",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      }
+    ],
+    "purchase_timed_out": [
+      {
+        "event_name": "transaction_start",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      },
+      {
+        "event_name": "transaction_timeout",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      }
+    ],
+    "restore_completed": [
+      {
+        "event_name": "restore_start",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      },
+      {
+        "event_name": "transaction_restore",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      },
+      {
+        "event_name": "restore_complete",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      }
+    ],
+    "restore_failed": [
+      {
+        "event_name": "restore_start",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      },
+      {
+        "event_name": "restore_fail",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      }
+    ],
+    "permission_granted": [
+      {
+        "event_name": "permission_result",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall",
+        "permission_type": "notification",
+        "request_id": "permission-notification-8c3a7b0e",
+        "status": "granted"
+      }
+    ],
+    "callback_success": [
+      {
+        "event_name": "callback_result",
+        "request_id": "syncUser-blocking-8c3a7b0e",
+        "name": "sync user",
+        "status": "success",
+        "data": { "plan": "pro" }
+      }
+    ],
+    "callback_unregistered": [
+      {
+        "event_name": "callback_result",
+        "request_id": "syncUser-blocking-8c3a7b0e",
+        "name": "sync user",
+        "status": "failure"
+      }
+    ],
+    "paywall_closed": [
+      {
+        "event_name": "paywall_close",
+        "paywall_id": "123",
+        "paywall_identifier": "my_paywall"
+      }
+    ],
+    "event_tracking": [{ "event_name": "event_tracking_behavior", "behavior": "all" }]
+  }
+}

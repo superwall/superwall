@@ -1,0 +1,112 @@
+{
+  "source": "pwn/packages/web-paywalls/src/controller/index.ts:760-807 (message order), pwn/packages/api/src/v2/repository/users/UserDataService.ts:45-109 (device sample), pwn/apps/web2/src/lib/paywall-preview-variables.ts:226-267 (example product)",
+  "direction": "to_paywall",
+  "events": [
+    {
+      "event_name": "template_variables",
+      "variables": {
+        "device": {
+          "publicApiKey": "pk_8d21d5122bb23839a2de6c8c76975e74f85b43ab4476c039",
+          "platform": "iOS",
+          "appUserId": "44dd573cd1e849a6997a5eaf98298e47",
+          "aliases": ["$SuperwallAlias:00EB5C40-68A7-4778-B634-F3714D2010B9"],
+          "vendorId": "86A1F395-D3A3-4A1C-914A-5912EF0363E2",
+          "appVersion": "8.4",
+          "osVersion": "15.5.0",
+          "deviceLocale": "en_US",
+          "deviceModel": "iPhone10",
+          "deviceLanguageCode": "en",
+          "deviceCurrencyCode": "USD",
+          "deviceCurrencySymbol": "$",
+          "timezoneOffset": -18000,
+          "radioType": "Wifi",
+          "interfaceStyle": "Dark",
+          "isLowPowerModeEnabled": 0,
+          "bundleId": "com.jakemor.fitnessai",
+          "isMac": 0,
+          "totalPaywallViews": 0,
+          "interfaceType": "iphone",
+          "daysSinceInstall": 5,
+          "minutesSinceInstall": 7200,
+          "appInstallDate": "2026-09-03T12:00:00.000Z",
+          "daysSinceLastPaywallView": 0,
+          "minutesSinceLastPaywallView": 360,
+          "utcDate": "2026-09-08",
+          "utcTime": "12:00:00",
+          "utcDateTime": "2026-09-08T12:00:00",
+          "localDate": "2026-09-08",
+          "localTime": "07:00:00",
+          "localDateTime": "2026-09-08T07:00:00"
+        },
+        "user": {
+          "appUserId": "44dd573cd1e849a6997a5eaf98298e47",
+          "email": "preview@example.com",
+          "firstName": "John",
+          "lastName": "Doe",
+          "country": "US",
+          "language": "en"
+        },
+        "params": {
+          "$event_name": "campaign_trigger",
+          "event_name": "campaign_trigger",
+          "$is_standard_event": false,
+          "$is_feature_gatable": false
+        },
+        "products": [
+          {
+            "primary": {
+              "currencyCode": "USD",
+              "currencySymbol": "$",
+              "languageCode": "en",
+              "locale": "en_US@currency=USD",
+              "price": "$89.99",
+              "rawPrice": 89.99,
+              "dailyPrice": "$0.25",
+              "weeklyPrice": "$1.73",
+              "monthlyPrice": "$7.50",
+              "yearlyPrice": "$89.99",
+              "period": "year",
+              "periodly": "yearly",
+              "localizedPeriod": "year",
+              "periodAlt": "1 yr",
+              "periodDays": 365,
+              "periodWeeks": 52,
+              "periodMonths": 12,
+              "periodYears": 1,
+              "trialPeriodDays": 7,
+              "trialPeriodWeeks": 1,
+              "trialPeriodMonths": 0,
+              "trialPeriodYears": 0,
+              "trialPeriodText": "7-day",
+              "rawTrialPeriodPrice": 0,
+              "trialPeriodPrice": "$0.00",
+              "trialPeriodDailyPrice": "$0.00",
+              "trialPeriodWeeklyPrice": "$0.00",
+              "trialPeriodMonthlyPrice": "$0.00",
+              "trialPeriodYearlyPrice": "$0.00"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "event_name": "experiment",
+      "experimentId": "0",
+      "variantId": "0",
+      "campaignId": "0"
+    },
+    {
+      "event_name": "products",
+      "products": [{ "product": "primary", "productId": "com.app.annual" }]
+    },
+    {
+      "event_name": "template_substitutions_prefix",
+      "prefix": "freeTrial"
+    },
+    {
+      "event_name": "paywall_open",
+      "paywall_id": "123",
+      "paywall_identifier": "my_paywall"
+    }
+  ]
+}

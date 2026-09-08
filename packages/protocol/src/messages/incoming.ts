@@ -248,6 +248,7 @@ const IncomingMessageTransactionAbandon = z.object({
 });
 
 export type TIncomingMessageTransactionAbandon = z.infer<typeof IncomingMessageTransactionAbandon>;
+
 /**
  * Permission status values matching OS-level permission states
  */
@@ -285,6 +286,77 @@ const IncomingMessageCallbackResult = z.object({
 
 export type TIncomingMessageCallbackResult = z.infer<typeof IncomingMessageCallbackResult>;
 
+const IncomingMessageTransactionStart = z.object({
+  event_name: z.literal("transaction_start"),
+  product_identifier: z.string().optional(),
+  product: z.string().optional(),
+});
+
+export type TIncomingMessageTransactionStart = z.infer<typeof IncomingMessageTransactionStart>;
+
+const IncomingMessageTransactionFail = z.object({
+  event_name: z.literal("transaction_fail"),
+  product_identifier: z.string().optional(),
+  product: z.string().optional(),
+});
+
+export type TIncomingMessageTransactionFail = z.infer<typeof IncomingMessageTransactionFail>;
+
+const IncomingMessageTransactionTimeout = z.object({
+  event_name: z.literal("transaction_timeout"),
+  product_identifier: z.string().optional(),
+  product: z.string().optional(),
+});
+
+export type TIncomingMessageTransactionTimeout = z.infer<typeof IncomingMessageTransactionTimeout>;
+
+const IncomingMessageTransactionRestore = z.object({
+  event_name: z.literal("transaction_restore"),
+  product_identifier: z.string().optional(),
+  product: z.string().optional(),
+});
+
+export type TIncomingMessageTransactionRestore = z.infer<typeof IncomingMessageTransactionRestore>;
+
+const IncomingMessageRestoreStart = z.object({
+  event_name: z.literal("restore_start"),
+});
+
+export type TIncomingMessageRestoreStart = z.infer<typeof IncomingMessageRestoreStart>;
+
+const IncomingMessageRestoreComplete = z.object({
+  event_name: z.literal("restore_complete"),
+});
+
+export type TIncomingMessageRestoreComplete = z.infer<typeof IncomingMessageRestoreComplete>;
+
+const IncomingMessageRestoreFail = z.object({
+  event_name: z.literal("restore_fail"),
+});
+
+export type TIncomingMessageRestoreFail = z.infer<typeof IncomingMessageRestoreFail>;
+
+const IncomingMessagePaywallClose = z.object({
+  event_name: z.literal("paywall_close"),
+  paywall_id: z.string().optional(),
+  paywall_identifier: z.string().optional(),
+});
+
+export type TIncomingMessagePaywallClose = z.infer<typeof IncomingMessagePaywallClose>;
+
+export const EventTrackingBehaviorSchema = z.enum(["all", "superwallOnly", "none"]);
+
+export type TEventTrackingBehavior = z.infer<typeof EventTrackingBehaviorSchema>;
+
+const IncomingMessageEventTrackingBehavior = z.object({
+  event_name: z.literal("event_tracking_behavior"),
+  behavior: EventTrackingBehaviorSchema,
+});
+
+export type TIncomingMessageEventTrackingBehavior = z.infer<
+  typeof IncomingMessageEventTrackingBehavior
+>;
+
 export const IncomingMessageSchema = z.union([
   IncomingMessageTemplateVariablesSchema,
   IncomingMessageTemplateSubstitutionsSchema,
@@ -309,6 +381,15 @@ export const IncomingMessageSchema = z.union([
   IncomingMessageTransactionAbandon,
   IncomingMessagePermissionResult,
   IncomingMessageCallbackResult,
+  IncomingMessageTransactionStart,
+  IncomingMessageTransactionFail,
+  IncomingMessageTransactionTimeout,
+  IncomingMessageTransactionRestore,
+  IncomingMessageRestoreStart,
+  IncomingMessageRestoreComplete,
+  IncomingMessageRestoreFail,
+  IncomingMessagePaywallClose,
+  IncomingMessageEventTrackingBehavior,
 ]);
 
 export type TIncomingMessage = z.infer<typeof IncomingMessageSchema>;

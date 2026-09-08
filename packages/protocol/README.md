@@ -28,9 +28,20 @@ transport of your own.
 
 - **`messages/`** — zod schemas for both directions:
   - _incoming_ (SDK → paywall): `template_variables`, `products`,
-    `experiment`, `paywall_open`, `freeTrial_start`, `transaction_complete`,
-    `transaction_abandon`, `permission_result`, `callback_result`, editor
-    focus/blur events, … united as `IncomingMessageSchema`.
+    `experiment`, `paywall_open`, `paywall_close`, the transaction lifecycle
+    (`transaction_start`, `transaction_complete`, `transaction_abandon`,
+    `transaction_fail`, `transaction_timeout`, `transaction_restore`,
+    `freeTrial_start`), the restore lifecycle (`restore_start`,
+    `restore_complete`, `restore_fail`), `permission_result`,
+    `callback_result`, `event_tracking_behavior`, editor focus/blur events, …
+    united as `IncomingMessageSchema`. The native SDK stamps `paywall_id` and
+    `paywall_identifier` onto most of these; the schemas strip what they do
+    not declare, so hosts may send them and paywalls may ignore them.
+- **`test/fixtures/host/`** — literal message sequences copied from the
+  production hosts: the web host's five-message `ping` reply (`ping-reply.json`)
+  and the iOS SDK's transaction, restore, permission and callback sequences
+  (`sdk-lifecycle.json`). They are the contract every host and every paywall
+  runtime in this repo is tested against; change them only when the SDK does.
   - _outgoing_ (paywall → SDK): `ping`, `close`, `restore`, `open_url`,
     `purchase`, `custom_placement`, `request_permission`,
     `schedule_notification`, … united as `OutgoingMessageSchema`.
