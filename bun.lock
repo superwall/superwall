@@ -263,7 +263,7 @@
     },
     "packages/cli": {
       "name": "@superwall/cli",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "0.3.201",
         "@superwall/studio": "workspace:*",
@@ -287,9 +287,22 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/host": {
+      "name": "@superwall/host",
+      "version": "1.2.0",
+      "dependencies": {
+        "@superwall/protocol": "workspace:*",
+      },
+      "devDependencies": {
+        "@vitest/coverage-v8": "^3.2.0",
+        "jsdom": "^26.1.0",
+        "typescript": "5.8.3",
+        "vitest": "^3.2.0",
+      },
+    },
     "packages/protocol": {
       "name": "@superwall/protocol",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "dependencies": {
         "zod": "3.25.76",
       },
@@ -302,7 +315,7 @@
     },
     "packages/runtime": {
       "name": "@superwall/runtime",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "dependencies": {
         "@superwall/protocol": "workspace:*",
       },
@@ -316,7 +329,7 @@
     },
     "packages/studio": {
       "name": "@superwall/studio",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "dependencies": {
         "sonner": "^2.0.7",
       },
@@ -342,7 +355,7 @@
     },
     "packages/superwall": {
       "name": "superwall",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "bin": {
         "superwall": "./bin/superwall.js",
         "sw": "./bin/superwall.js",
@@ -666,6 +679,8 @@
     "@stripe/stripe-js": ["@stripe/stripe-js@8.11.0", "", {}, "sha512-3fVF4z3efsgwgyj64nFK+6F4/vMw0mUXD2TBbOfftJtKVNx4JNv3CSfe1fY4DCtCk0JFp8/YPNcRkzgV0HJ8cg=="],
 
     "@superwall/cli": ["@superwall/cli@workspace:packages/cli"],
+
+    "@superwall/host": ["@superwall/host@workspace:packages/host"],
 
     "@superwall/protocol": ["@superwall/protocol@workspace:packages/protocol"],
 

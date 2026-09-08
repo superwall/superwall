@@ -1,0 +1,51 @@
+{
+  "name": "@superwall/host",
+  "version": "1.2.0",
+  "description": "A Superwall paywall host for browsers and tests: answers the paywall's ping the way the SDKs do and replies to its events with the SDK's messages.",
+  "keywords": [
+    "host",
+    "paywall",
+    "protocol",
+    "superwall"
+  ],
+  "homepage": "https://github.com/superwall/superwall/tree/main/packages/host#readme",
+  "bugs": {
+    "url": "https://github.com/superwall/superwall/issues"
+  },
+  "license": "FSL-1.1-ALv2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/superwall/superwall.git",
+    "directory": "packages/host"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./defaults": "./src/defaults/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest",
+    "test:run": "vitest --run",
+    "test:coverage": "vitest --run --coverage",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@superwall/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.0",
+    "jsdom": "^26.1.0",
+    "typescript": "5.8.3",
+    "vitest": "^3.2.0"
+  }
+}
