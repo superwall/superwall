@@ -1,5 +1,6 @@
 import * as React from "react";
 import { toast, Toaster } from "sonner";
+import type { HostDelegate } from "@superwall/host";
 import {
   AlertTriangleIcon,
   BellIcon,
@@ -13,7 +14,7 @@ import {
   StarIcon,
   UserIcon,
 } from "./icons";
-import { isBridgeMessage, noticeFor, STUDIO_CHANNEL, type EventNotice } from "../lib/events";
+import { noticeFor, type EventNotice } from "../lib/events";
 
 const TINT: Record<EventNotice["tone"], string> = {
   info: "text-cream/45",
@@ -29,6 +30,8 @@ const ICON: Record<string, () => React.ReactElement> = {
   transaction_fail: AlertTriangleIcon,
   close: CloseIcon,
   restore: RotateIcon,
+  restore_complete: CheckCircleIcon,
+  restore_fail: AlertTriangleIcon,
   open_url: ExternalIcon,
   open_url_external: ExternalIcon,
   open_deep_link: ExternalIcon,
@@ -92,67 +95,170 @@ const Notice = ({ notice }: { notice: EventNotice }) => (
   </Toast>
 );
 
-const OUTCOME: Record<string, { action: string; tone: EventNotice["tone"]; label: string }> = {
-  completed: { action: "transaction_complete", tone: "success", label: "purchase completed." },
-  abandoned: { action: "transaction_abandon", tone: "warning", label: "purchase abandoned." },
-  granted: { action: "request_permission", tone: "success", label: "granted." },
-  denied: { action: "request_permission", tone: "warning", label: "denied." },
-  success: { action: "request_callback", tone: "success", label: "succeeded." },
-  failure: { action: "request_callback", tone: "warning", label: "failed." },
+type Choice<T> = {
+  label: string;
+  value: T;
+  primary?: boolean;
+  action: string;
+  tone: EventNotice["tone"];
+  done: string;
 };
 
-const Outcome = ({ outcome, subject }: { outcome: string; subject: string }) => {
-  const spec = OUTCOME[outcome] ?? OUTCOME.completed;
-  return (
-    <Toast action={spec?.action ?? "purchase"} tone={spec?.tone ?? "info"}>
-      <Pill>{subject}</Pill> {spec?.label}
-    </Toast>
-  );
-};
+const Outcome = <T,>({ choice, subject }: { choice: Choice<T>; subject: string }) => (
+  <Toast action={choice.action} tone={choice.tone}>
+    <Pill>{subject}</Pill> {choice.done}
+  </Toast>
+);
 
-const ASK: Record<string, { action: string; verb: string; no: string; yes: string }> = {
-  purchase: { action: "purchase", verb: "purchase", no: "Abandon", yes: "Complete" },
-  permission: { action: "request_permission", verb: "permission", no: "Deny", yes: "Grant" },
-  callback: { action: "request_callback", verb: "callback", no: "Fail", yes: "Succeed" },
-};
-
-const OUTCOMES: Record<string, readonly [string, string]> = {
-  purchase: ["abandoned", "completed"],
-  permission: ["denied", "granted"],
-  callback: ["failure", "success"],
-};
-
-const Ask = ({
-  kind,
+const Ask = <T,>({
+  action,
+  verb,
   subject,
+  choices,
   onAnswer,
 }: {
-  kind: string;
+  action: string;
+  verb: string;
   subject: string;
-  onAnswer: (outcome: string) => void;
-}) => {
-  const spec = ASK[kind] ?? ASK.purchase;
-  const [no, yes] = OUTCOMES[kind] ?? ["abandoned", "completed"];
+  choices: readonly Choice<T>[];
+  onAnswer: (choice: Choice<T>) => void;
+}) => (
+  <Toast
+    action={action}
+    tone="info"
+    actions={choices.map((choice) => (
+      <button
+        key={choice.label}
+        type="button"
+        className={choice.primary ? "sw-btn sw-btn--primary" : "sw-btn"}
+        onClick={() => onAnswer(choice)}
+      >
+        {choice.label}
+      </button>
+    ))}
+  >
+    Tap triggered a <Pill>{verb}</Pill> for <Pill>{subject}</Pill>.
+  </Toast>
+);
 
-  return (
-    <Toast
-      action={spec?.action ?? "purchase"}
-      tone="info"
-      actions={
-        <>
-          <button type="button" className="sw-btn" onClick={() => onAnswer(no)}>
-            {spec?.no}
-          </button>
-          <button type="button" className="sw-btn sw-btn--primary" onClick={() => onAnswer(yes)}>
-            {spec?.yes}
-          </button>
-        </>
-      }
-    >
-      Tap triggered a <Pill>{spec?.verb}</Pill> for <Pill>{subject}</Pill>.
-    </Toast>
-  );
-};
+const PURCHASE: readonly Choice<"completed" | "abandoned" | "failed">[] = [
+  {
+    label: "Abandon",
+    value: "abandoned",
+    action: "transaction_abandon",
+    tone: "warning",
+    done: "purchase abandoned.",
+  },
+  {
+    label: "Fail",
+    value: "failed",
+    action: "transaction_fail",
+    tone: "warning",
+    done: "purchase failed.",
+  },
+  {
+    label: "Complete",
+    value: "completed",
+    primary: true,
+    action: "transaction_complete",
+    tone: "success",
+    done: "purchase completed.",
+  },
+];
+
+const RESTORE: readonly Choice<"restored" | "failed">[] = [
+  {
+    label: "Nothing",
+    value: "failed",
+    action: "restore_fail",
+    tone: "warning",
+    done: "nothing to restore.",
+  },
+  {
+    label: "Restore",
+    value: "restored",
+    primary: true,
+    action: "restore_complete",
+    tone: "success",
+    done: "restored.",
+  },
+];
+
+const PERMISSION: readonly Choice<"granted" | "denied">[] = [
+  {
+    label: "Deny",
+    value: "denied",
+    action: "request_permission",
+    tone: "warning",
+    done: "denied.",
+  },
+  {
+    label: "Grant",
+    value: "granted",
+    primary: true,
+    action: "request_permission",
+    tone: "success",
+    done: "granted.",
+  },
+];
+
+const CALLBACK: readonly Choice<"success" | "failure">[] = [
+  { label: "Fail", value: "failure", action: "request_callback", tone: "warning", done: "failed." },
+  {
+    label: "Succeed",
+    value: "success",
+    primary: true,
+    action: "request_callback",
+    tone: "success",
+    done: "succeeded.",
+  },
+];
+
+let asked = 0;
+
+const ask = <T,>(
+  action: string,
+  verb: string,
+  subject: string,
+  choices: readonly Choice<T>[],
+): Promise<T> =>
+  new Promise((resolve) => {
+    const id = `${action}-${(asked += 1)}`;
+    toast.custom(
+      () => (
+        <Ask
+          action={action}
+          verb={verb}
+          subject={subject}
+          choices={choices}
+          onAnswer={(choice) => {
+            toast.dismiss(id);
+            toast.custom(() => <Outcome choice={choice} subject={subject} />);
+            resolve(choice.value);
+          }}
+        />
+      ),
+      { id, duration: Number.POSITIVE_INFINITY },
+    );
+  });
+
+export const createStudioDelegate = (): HostDelegate => ({
+  event: (message) => {
+    const notice = noticeFor(message);
+    if (notice) toast.custom(() => <Notice notice={notice} />);
+  },
+  purchase: (product) => ask("purchase", "purchase", product.reference, PURCHASE),
+  restore: () => ask("restore", "restore", "purchases", RESTORE),
+  close: () => {},
+  openUrl: () => {},
+  custom: () => {},
+  customPlacement: () => {},
+  permission: (type) => ask("request_permission", "permission", type, PERMISSION),
+  callback: (name) =>
+    ask("request_callback", "callback", name, CALLBACK).then((status) => ({ status })),
+});
+
+export const useStudioDelegate = (): HostDelegate => React.useMemo(createStudioDelegate, []);
 
 export const PaywallToasts = ({
   surfaceKey,
@@ -164,36 +270,6 @@ export const PaywallToasts = ({
   React.useEffect(() => {
     toast.dismiss();
   }, [surfaceKey]);
-
-  React.useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (!isBridgeMessage(event.data)) return;
-
-      if (event.data.type === "ask") {
-        const { id, kind, subject } = event.data;
-        const answer = (outcome: string) => {
-          (event.source as Window | null)?.postMessage(
-            { channel: STUDIO_CHANNEL, type: "answer", id, outcome },
-            "*",
-          );
-          toast.dismiss(id);
-          toast.custom(() => <Outcome outcome={outcome} subject={subject} />);
-        };
-        toast.custom(() => <Ask kind={kind} subject={subject} onAnswer={answer} />, {
-          id,
-          duration: Number.POSITIVE_INFINITY,
-        });
-        return;
-      }
-
-      if (event.data.type !== "event") return;
-      const notice = noticeFor(event.data.message);
-      if (notice) toast.custom(() => <Notice notice={notice} />);
-    };
-
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
 
   return (
     <Toaster

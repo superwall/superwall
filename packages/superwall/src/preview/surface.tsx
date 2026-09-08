@@ -5,8 +5,6 @@ import type { PaywallDefinition } from "../config";
 import { mergeMessages } from "../internal";
 import { PaywallRouter, type RouteMap } from "../navigation/index";
 import { SuperwallProvider } from "../provider/context";
-import { previewMockOptions, useStudioAnnouncement } from "./host";
-import type { PreviewOverrides } from "./overrides";
 
 const loadCatalogs = async (
   shared: PreviewMessages[],
@@ -84,18 +82,7 @@ const useSurface = (surface: PreviewSurface): Loaded => {
   return loaded;
 };
 
-const Announce = ({ config }: { config: SuperwallConfig }): null => {
-  useStudioAnnouncement(config);
-  return null;
-};
-
-export const SurfaceHost = ({
-  surface,
-  overrides = {},
-}: {
-  surface: PreviewSurface;
-  overrides?: PreviewOverrides;
-}) => {
+export const SurfaceHost = ({ surface }: { surface: PreviewSurface }) => {
   const loaded = useSurface(surface);
 
   if (loaded.status === "loading") return null;
@@ -108,8 +95,7 @@ export const SurfaceHost = ({
   }
 
   return (
-    <SuperwallProvider config={loaded.config} mock={previewMockOptions(overrides, loaded.config)}>
-      <Announce config={loaded.config} />
+    <SuperwallProvider config={loaded.config}>
       <PaywallRouter
         routes={loaded.routes}
         Layout={loaded.Layout}

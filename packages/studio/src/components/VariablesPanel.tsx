@@ -1,6 +1,6 @@
 import * as React from "react";
 import { ChevronDownIcon } from "./icons";
-import type { PreviewOverrides } from "../lib/types";
+import type { VariableOverrides } from "../lib/types";
 
 export type VariableGroup = "user" | "device" | "params" | "products";
 
@@ -157,9 +157,9 @@ export const VariablesPanel = ({
   groups,
   onChange,
 }: {
-  overrides: PreviewOverrides;
+  overrides: VariableOverrides;
   groups: VariableGroups;
-  onChange: (overrides: PreviewOverrides) => void;
+  onChange: (overrides: VariableOverrides) => void;
 }) => {
   const update = (group: VariableGroup, path: string, value: unknown) => {
     if (group !== "products") {

@@ -1,141 +1,143 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { PaywallToasts } from "../src/components/PaywallToasts";
-import { STUDIO_CHANNEL } from "../src/lib/events";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import type { HostDelegate } from "@superwall/host";
+import { createStudioDelegate, PaywallToasts } from "../src/components/PaywallToasts";
 
-const sourceWindow = { postMessage: vi.fn() };
+const product = { reference: "annual", productId: "pro_5999_year", variables: {} };
 
-const send = async (data: unknown) => {
-  await act(async () => {
-    window.dispatchEvent(
-      new MessageEvent("message", { data, source: sourceWindow as unknown as Window }),
-    );
-    await Promise.resolve();
-  });
+const mount = () => {
+  const delegate: HostDelegate = createStudioDelegate();
+  render(<PaywallToasts surfaceKey="a/pro" />);
+  return delegate;
 };
 
-afterEach(() => sourceWindow.postMessage.mockClear());
+const settle = () => act(async () => {});
+
+const askFor = async (subject: string): Promise<HTMLElement> => {
+  const pills = await screen.findAllByText(subject);
+  const toast = pills.at(-1)?.closest("[data-sonner-toast]");
+  if (!(toast instanceof HTMLElement)) throw new Error(`no toast asking about ${subject}`);
+  return toast;
+};
 
 describe("PaywallToasts", () => {
   it("reports what the paywall asked of its host", async () => {
-    render(<PaywallToasts surfaceKey="a/pro" />);
-    await send({ channel: STUDIO_CHANNEL, type: "event", message: { event_name: "close" } });
+    const delegate = mount();
+    await act(async () => {
+      delegate.event({ event_name: "close" });
+    });
 
     expect(await screen.findByText("close")).toBeDefined();
   });
 
   it("says nothing for events a device would not act on", async () => {
-    render(<PaywallToasts surfaceKey="a/pro" />);
-    await send({
-      channel: STUDIO_CHANNEL,
-      type: "event",
-      message: { event_name: "haptic_feedback" },
+    const delegate = mount();
+    await act(async () => {
+      delegate.event({ event_name: "haptic_feedback", haptic_type: "light" });
     });
 
     expect(screen.queryByText(/haptic/i)).toBeNull();
   });
 
-  it("answers a pending purchase, so the paywall resolves the way you chose", async () => {
-    render(<PaywallToasts surfaceKey="a/pro" />);
-    await send({
-      channel: STUDIO_CHANNEL,
-      type: "ask",
-      id: "purchase-1",
-      kind: "purchase",
-      subject: "annual",
+  it("asks you to complete a purchase and reports the outcome", async () => {
+    const delegate = mount();
+    let outcome: string | undefined;
+    await act(async () => {
+      Promise.resolve(delegate.purchase(product)).then((value) => {
+        outcome = value;
+      });
     });
-
     expect(await screen.findByText("annual")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Complete" }));
 
-    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
-      { channel: STUDIO_CHANNEL, type: "answer", id: "purchase-1", outcome: "completed" },
-      "*",
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Complete" }));
+    await settle();
+
+    expect(outcome).toBe("completed");
     expect(await screen.findByText(/purchase completed/)).toBeDefined();
   });
 
-  it("abandons when you say so, rather than defaulting to a sale", async () => {
-    render(<PaywallToasts surfaceKey="a/pro" />);
-    await send({
-      channel: STUDIO_CHANNEL,
-      type: "ask",
-      id: "purchase-2",
-      kind: "purchase",
-      subject: "monthly",
+  it("lets you abandon or fail a purchase, so a paywall has to handle both", async () => {
+    const delegate = mount();
+    const outcomes: string[] = [];
+    await act(async () => {
+      Promise.resolve(delegate.purchase(product)).then((value) => {
+        outcomes.push(value);
+      });
     });
     fireEvent.click(await screen.findByRole("button", { name: "Abandon" }));
+    await settle();
 
-    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
-      { channel: STUDIO_CHANNEL, type: "answer", id: "purchase-2", outcome: "abandoned" },
-      "*",
-    );
-    expect(await screen.findByText(/purchase abandoned/)).toBeDefined();
-  });
-
-  it("ignores window traffic that is not the preview's", async () => {
-    render(<PaywallToasts surfaceKey="a/pro" />);
-    await send({ type: "event", message: { event_name: "close" } });
-    await send("vite-hmr");
-
-    expect(screen.queryByText("close")).toBeNull();
-    expect(sourceWindow.postMessage).not.toHaveBeenCalled();
-  });
-});
-
-describe("what the host is asked", () => {
-  it("asks the studio to answer a permission, the way a device would", async () => {
-    render(<PaywallToasts surfaceKey="a/pro" />);
-    await send({
-      channel: STUDIO_CHANNEL,
-      type: "ask",
-      id: "permission-1",
-      kind: "permission",
-      subject: "notification",
+    const monthly = { reference: "monthly", productId: "pro_999_month", variables: {} };
+    await act(async () => {
+      Promise.resolve(delegate.purchase(monthly)).then((value) => {
+        outcomes.push(value);
+      });
     });
+    fireEvent.click(within(await askFor("monthly")).getByRole("button", { name: "Fail" }));
+    await settle();
 
-    expect(await screen.findByText("notification")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Grant" }));
-
-    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
-      { channel: STUDIO_CHANNEL, type: "answer", id: "permission-1", outcome: "granted" },
-      "*",
-    );
-    expect(await screen.findByText(/granted/)).toBeDefined();
+    expect(outcomes).toEqual(["abandoned", "failed"]);
   });
 
-  it("denies when you say so, so a paywall has to handle a no", async () => {
-    render(<PaywallToasts surfaceKey="a/pro" />);
-    await send({
-      channel: STUDIO_CHANNEL,
-      type: "ask",
-      id: "permission-2",
-      kind: "permission",
-      subject: "camera",
+  it("asks you whether a restore finds anything", async () => {
+    const delegate = mount();
+    let outcome: string | undefined;
+    await act(async () => {
+      Promise.resolve(delegate.restore()).then((value) => {
+        outcome = value;
+      });
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Deny" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Restore" }));
+    await settle();
 
-    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
-      { channel: STUDIO_CHANNEL, type: "answer", id: "permission-2", outcome: "denied" },
-      "*",
-    );
+    expect(outcome).toBe("restored");
+    expect(await screen.findByText(/restored/)).toBeDefined();
+  });
+
+  it("grants or denies a permission on your say-so", async () => {
+    const delegate = mount();
+    const statuses: string[] = [];
+    await act(async () => {
+      Promise.resolve(delegate.permission("notification")).then((value) => {
+        statuses.push(value);
+      });
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Grant" }));
+    await settle();
+
+    await act(async () => {
+      Promise.resolve(delegate.permission("camera")).then((value) => {
+        statuses.push(value);
+      });
+    });
+    fireEvent.click(within(await askFor("camera")).getByRole("button", { name: "Deny" }));
+    await settle();
+
+    expect(statuses).toEqual(["granted", "denied"]);
   });
 
   it("answers a callback the app would normally resolve", async () => {
-    render(<PaywallToasts surfaceKey="a/pro" />);
-    await send({
-      channel: STUDIO_CHANNEL,
-      type: "ask",
-      id: "callback-1",
-      kind: "callback",
-      subject: "checkAccount",
+    const delegate = mount();
+    let result: { status: string } | undefined;
+    await act(async () => {
+      Promise.resolve(delegate.callback("checkAccount", {})).then((value) => {
+        result = value;
+      });
     });
+    expect(await screen.findByText("checkAccount")).toBeDefined();
     fireEvent.click(await screen.findByRole("button", { name: "Succeed" }));
+    await settle();
 
-    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
-      { channel: STUDIO_CHANNEL, type: "answer", id: "callback-1", outcome: "success" },
-      "*",
-    );
+    expect(result).toEqual({ status: "success" });
     expect(await screen.findByText(/succeeded/)).toBeDefined();
+  });
+
+  it("does nothing on its own for navigation and custom actions", () => {
+    const delegate = mount();
+    delegate.close();
+    delegate.openUrl("https://superwall.com", "external");
+    delegate.custom("data");
+    delegate.customPlacement("upsell", {});
+    expect(screen.queryByText(/superwall\.com/)).toBeNull();
   });
 });

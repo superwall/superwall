@@ -1,9 +1,10 @@
 import * as React from "react";
+import { hasIntroductoryOffer, type HostDelegate, type HostState } from "@superwall/host";
 import { ActionMenu, type ActionProgress } from "../components/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/CompareMenu";
 import { DeviceFrame, DevicePlaceholder } from "../components/DeviceFrame";
 import { MissingProducts } from "../components/MissingProducts";
-import { PaywallToasts } from "../components/PaywallToasts";
+import { PaywallToasts, useStudioDelegate } from "../components/PaywallToasts";
 import { Segmented, Select, Switch } from "../components/controls";
 import {
   ExternalIcon,
@@ -22,7 +23,6 @@ import {
   type VariableRow,
 } from "../components/VariablesPanel";
 import { fetchStatus, runAction } from "../lib/actions";
-import { localesAnnounced } from "../lib/events";
 import {
   DEFAULT_DEVICE_ID,
   deviceById,
@@ -31,18 +31,19 @@ import {
   STUDIO_DEVICES,
   type DeviceChromeSpec,
 } from "../lib/devices";
-import { withOverrides } from "../lib/preview";
+import { hostStateFor, studioDefaults } from "../lib/host";
+import { hostedUrl } from "../lib/preview";
 import {
   ACTION_STEPS,
   type CompareTarget,
-  type PreviewOverrides,
+  type Samples,
   type StudioActionName,
   type StudioActionStep,
-  type Samples,
   type StudioSource,
   type StudioStatus,
   type StudioStepState,
   type StudioSurface,
+  type VariableOverrides,
 } from "../lib/types";
 
 const clampSize = (value: number, fallback: number): number =>
@@ -89,6 +90,8 @@ const StagePane = ({
   height,
   title,
   src,
+  hostState,
+  delegate,
   reloadKey,
   empty,
   chrome,
@@ -100,6 +103,8 @@ const StagePane = ({
   height: number;
   title: string;
   src?: string;
+  hostState: HostState;
+  delegate: HostDelegate;
   reloadKey: number;
   empty?: string;
   chrome?: DeviceChromeSpec;
@@ -117,6 +122,8 @@ const StagePane = ({
             height={height}
             title={title}
             src={src}
+            hostState={hostState}
+            delegate={delegate}
             stageRef={paneRef}
             reloadKey={reloadKey}
             chrome={chrome}
@@ -152,7 +159,7 @@ export const SurfaceEditor = ({
   const [size, setSize] = React.useState(RESPONSIVE_DEFAULT);
   const [theme, setTheme] = React.useState<"light" | "dark">("light");
   const [locale, setLocale] = React.useState<string | undefined>(undefined);
-  const [edited, setEdited] = React.useState<PreviewOverrides>({});
+  const [edited, setEdited] = React.useState<VariableOverrides>({});
   const [panelOpen, setPanelOpen] = React.useState(false);
   const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(undefined);
   const [reloadKey, setReloadKey] = React.useState(0);
@@ -163,17 +170,10 @@ export const SurfaceEditor = ({
   React.useEffect(() => () => window.clearTimeout(dismissTimer.current), []);
 
   const actionsEnabled = source.capabilities?.actions === true;
+  const delegate = useStudioDelegate();
+  const defaults = React.useMemo(studioDefaults, [surface]);
 
-  const [announced, setAnnounced] = React.useState<string[]>([]);
-  React.useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      const locales = localesAnnounced(event.data);
-      if (locales) setAnnounced(locales);
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
-  const locales = surface.locales.length > 0 ? surface.locales : announced;
+  const locales = surface.locales;
 
   React.useEffect(() => {
     if (!actionsEnabled) return;
@@ -220,41 +220,45 @@ export const SurfaceEditor = ({
     }
   };
 
-  const openPreview = () => {
-    if (frame.width > 768) {
-      window.open(previewSrc, "_blank");
-      return;
-    }
-    const left = Math.max(0, window.screen.width / 2 - frame.width / 2);
-    const top = Math.max(0, window.screen.height / 2 - frame.height / 2);
-    const popup = window.open(
-      previewSrc,
-      "superwall-preview",
-      `toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=no,width=${frame.width},height=${frame.height},top=${top},left=${left}`,
-    );
-    if (!popup) window.open(previewSrc, "_blank");
-  };
-
   const responsive = deviceId === RESPONSIVE_ID;
   const device = deviceById(deviceId);
   const upright = responsive ? size : { width: device.width, height: device.height };
   const frame = landscape ? { width: upright.height, height: upright.width } : upright;
 
-  const overrides: PreviewOverrides = {
-    theme,
-    locale,
-    user: edited.user,
-    params: edited.params,
-    products: edited.products,
-    trialEligible: edited.trialEligible,
-    device: {
-      ...(responsive ? {} : device.device),
-      ...edited.device,
-    },
+  const openPreview = () => {
+    const standalone = source.standaloneUrl?.(surface);
+    if (standalone === undefined) return;
+    if (frame.width > 768) {
+      window.open(standalone, "_blank");
+      return;
+    }
+    const left = Math.max(0, window.screen.width / 2 - frame.width / 2);
+    const top = Math.max(0, window.screen.height / 2 - frame.height / 2);
+    const popup = window.open(
+      standalone,
+      "superwall-preview",
+      `toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=no,width=${frame.width},height=${frame.height},top=${top},left=${left}`,
+    );
+    if (!popup) window.open(standalone, "_blank");
   };
+
+  const hostState = React.useMemo(
+    () =>
+      hostStateFor({
+        surface,
+        defaults,
+        sourceSamples: source.samples,
+        samples,
+        frame: responsive ? undefined : device.device,
+        theme,
+        locale,
+        edited,
+      }),
+    [surface, defaults, source.samples, samples, responsive, device.device, theme, locale, edited],
+  );
   const chrome = responsive ? undefined : device.chrome;
-  const previewSrc = source.previewUrl(surface, overrides);
-  const liveSrc = status.liveUrl ? withOverrides(status.liveUrl, overrides) : undefined;
+  const previewSrc = source.previewUrl(surface);
+  const liveSrc = status.liveUrl ? hostedUrl(status.liveUrl) : undefined;
 
   const compareOptions: CompareOption[] = [
     ...(actionsEnabled
@@ -290,7 +294,7 @@ export const SurfaceEditor = ({
         }
       : {
           label: nameOf(compareWith.surface),
-          src: source.previewUrl(compareWith.surface, overrides),
+          src: source.previewUrl(compareWith.surface),
           title: `${nameOf(compareWith.surface)} preview`,
         });
 
@@ -301,18 +305,19 @@ export const SurfaceEditor = ({
         .toSorted((a, b) => a.path.localeCompare(b.path));
 
     return {
-      user: rows("user", { ...source.samples?.user, ...samples.user }),
+      user: rows("user", { ...defaults.user, ...source.samples?.user, ...samples.user }),
       device: rows("device", {
+        ...defaults.device,
         ...source.samples?.device,
         ...samples.device,
         ...(device.device as Record<string, unknown>),
       }),
-      params: rows("params", source.samples?.params),
+      params: rows("params", { ...defaults.params, ...source.samples?.params }),
       products: Object.entries(surface.products ?? {}).flatMap(([reference, identifier]) =>
         rows(`products.${reference}`, samples.products?.[identifier]),
       ),
     };
-  }, [source.samples, samples, device.device, surface.products]);
+  }, [defaults, source.samples, samples, device.device, surface.products]);
 
   const missingProducts = React.useMemo(() => {
     if (!samples.products) return [];
@@ -364,14 +369,16 @@ export const SurfaceEditor = ({
             >
               <RotateIcon />
             </button>
-            <button
-              type="button"
-              className="sw-btn sw-btn--icon"
-              aria-label="Open preview"
-              onClick={openPreview}
-            >
-              <ExternalIcon />
-            </button>
+            {source.standaloneUrl && (
+              <button
+                type="button"
+                className="sw-btn sw-btn--icon"
+                aria-label="Open preview"
+                onClick={openPreview}
+              >
+                <ExternalIcon />
+              </button>
+            )}
             {actionsEnabled && (
               <ActionMenu
                 progress={progress}
@@ -399,6 +406,8 @@ export const SurfaceEditor = ({
               height={frame.height}
               title={comparePane.title}
               src={comparePane.src}
+              hostState={hostState}
+              delegate={delegate}
               reloadKey={reloadKey}
               empty={"empty" in comparePane ? comparePane.empty : undefined}
               chrome={chrome}
@@ -412,6 +421,8 @@ export const SurfaceEditor = ({
             height={frame.height}
             title={`${surface.id} preview`}
             src={previewSrc}
+            hostState={hostState}
+            delegate={delegate}
             reloadKey={reloadKey}
             chrome={chrome}
             landscape={landscape}
@@ -425,11 +436,13 @@ export const SurfaceEditor = ({
       </div>
 
       <Toolbar>
-        <ToolbarGroup label="Trial">
+        <ToolbarGroup label="Intro offer">
           <Switch
-            label="Trial eligibility"
-            checked={edited.trialEligible ?? false}
-            onChange={(checked) => setEdited((current) => ({ ...current, trialEligible: checked }))}
+            label="Introductory offer"
+            checked={hasIntroductoryOffer(hostState)}
+            onChange={(checked) =>
+              setEdited((current) => ({ ...current, introductoryOfferEligible: checked }))
+            }
           />
         </ToolbarGroup>
         <ToolbarGroup label="Theme">

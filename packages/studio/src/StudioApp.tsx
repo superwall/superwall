@@ -2,7 +2,7 @@ import * as React from "react";
 import { StudioShell } from "./components/StudioShell";
 import { SurfaceEditor } from "./screens/SurfaceEditor";
 import { SurfaceList } from "./screens/SurfaceList";
-import { devicePreviewPath, surfacePath } from "./lib/preview";
+import { surfacePath } from "./lib/preview";
 import { fetchSamples } from "./lib/actions";
 import type { Samples, StudioSource, StudioSurface } from "./lib/types";
 
@@ -23,11 +23,9 @@ const surfaceFromPath = (
 export const StudioApp = ({
   source,
   device = false,
-  openPreview = (url) => window.location.assign(url),
 }: {
   source: StudioSource;
   device?: boolean;
-  openPreview?: (url: string) => void;
 }) => {
   const [pathname, setPathname] = React.useState(() => window.location.pathname);
   const [samples, setSamples] = React.useState<Samples>({});
@@ -54,7 +52,7 @@ export const StudioApp = ({
     setPathname(path);
   };
 
-  const active = device ? undefined : surfaceFromPath(source.surfaces, pathname);
+  const active = surfaceFromPath(source.surfaces, pathname);
 
   return (
     <StudioShell>
@@ -63,15 +61,13 @@ export const StudioApp = ({
           source={source}
           surface={active}
           samples={samples}
-          onBack={() => navigate("/")}
+          onBack={() => navigate(device ? "/device" : "/")}
         />
       ) : (
         <SurfaceList
           source={source}
           device={device}
-          onOpen={(surface) =>
-            device ? openPreview(devicePreviewPath(surface)) : navigate(surfacePath(surface))
-          }
+          onOpen={(surface) => navigate(surfacePath(surface))}
         />
       )}
     </StudioShell>

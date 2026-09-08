@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
-import { buildPreviewPath } from "./lib/preview";
+import { buildPreviewPath, surfacePath } from "./lib/preview";
 import { parseProjectPayload } from "./lib/project";
 import { StudioApp } from "./StudioApp";
 import "./styles.css";
@@ -12,7 +12,7 @@ const loadSource = async (): Promise<StudioSource> => {
     throw new Error(`project data unavailable (${response.status})`);
   }
   const payload = parseProjectPayload(await response.json());
-  return { ...payload, previewUrl: buildPreviewPath };
+  return { ...payload, previewUrl: buildPreviewPath, standaloneUrl: surfacePath };
 };
 
 const Failure = ({ error }: { error: unknown }) => (

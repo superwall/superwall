@@ -1,17 +1,4 @@
-export const STUDIO_CHANNEL = "superwall-studio";
-
 export type PaywallEvent = { event_name: string } & Record<string, unknown>;
-
-export type BridgeMessage =
-  | { channel: typeof STUDIO_CHANNEL; type: "hello"; locales: string[] }
-  | { channel: typeof STUDIO_CHANNEL; type: "event"; message: PaywallEvent }
-  | {
-      channel: typeof STUDIO_CHANNEL;
-      type: "ask";
-      id: string;
-      kind: "purchase" | "permission" | "callback";
-      subject: string;
-    };
 
 export type EventNotice = {
   action: string;
@@ -32,6 +19,7 @@ const SILENT = new Set([
   "paywall_open",
   "experiment",
   "purchase",
+  "restore",
 ]);
 
 const SUBJECT: Record<string, readonly string[]> = {
@@ -40,7 +28,7 @@ const SUBJECT: Record<string, readonly string[]> = {
   open_deep_link: ["link", "url"],
   custom_placement: ["name", "placementName"],
   custom: ["name", "data"],
-  request_permission: ["permissionType"],
+  request_permission: ["permission_type", "permissionType"],
   request_callback: ["name"],
   schedule_notification: ["title"],
 };
@@ -70,17 +58,3 @@ export const noticeFor = (event: PaywallEvent): EventNotice | undefined => {
         : "info",
   };
 };
-
-export const isBridgeMessage = (data: unknown): data is BridgeMessage =>
-  typeof data === "object" &&
-  data !== null &&
-  Reflect.get(data, "channel") === STUDIO_CHANNEL &&
-  ["hello", "event", "ask"].includes(String(Reflect.get(data, "type")));
-
-const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((entry) => typeof entry === "string");
-
-export const localesAnnounced = (data: unknown): string[] | undefined =>
-  isBridgeMessage(data) && data.type === "hello" && isStringArray(data.locales)
-    ? data.locales
-    : undefined;

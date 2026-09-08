@@ -10,6 +10,7 @@ export type StudioSurface = {
   locales: string[];
   platforms?: string[];
   paywallId?: string;
+  paywallIdentifier?: string;
 };
 
 export type SampleDefaults = {
@@ -18,17 +19,15 @@ export type SampleDefaults = {
   params: Record<string, unknown>;
 };
 
-export type PreviewOverrides = {
-  theme?: "light" | "dark";
-  locale?: string;
+export type VariableOverrides = {
   device?: Record<string, unknown>;
   user?: Record<string, unknown>;
   params?: Record<string, unknown>;
   products?: Record<string, Record<string, unknown>>;
-  trialEligible?: boolean;
+  introductoryOfferEligible?: boolean;
 };
 
-export type PreviewUrlBuilder = (surface: StudioSurface, overrides: PreviewOverrides) => string;
+export type PreviewUrlBuilder = (surface: StudioSurface) => string;
 
 export type StudioActionName = "push" | "promote" | "publish";
 
@@ -62,7 +61,6 @@ export type StudioStatus = {
   liveUrl?: string;
   active?: boolean;
   updatedAt?: string;
-  /** Why the live version couldn't be read, when it couldn't. */
   unreachable?: string;
 };
 
@@ -73,6 +71,7 @@ export type StudioSource = {
   diagnostics?: string[];
   samples?: SampleDefaults;
   previewUrl: PreviewUrlBuilder;
+  standaloneUrl?: PreviewUrlBuilder;
   capabilities?: { actions: boolean };
   compareHint?: string;
 };

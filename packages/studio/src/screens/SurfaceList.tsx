@@ -4,7 +4,8 @@ import { SurfaceCard } from "../components/SurfaceCard";
 import { TopBar } from "../components/TopBar";
 import { fetchStatus } from "../lib/actions";
 import type { StudioSource, StudioStatus, StudioSurface } from "../lib/types";
-import { devicePreviewPath, surfacePath } from "../lib/preview";
+import { hostStateFor, studioDefaults } from "../lib/host";
+import { surfacePath } from "../lib/preview";
 
 let lastScroll = 0;
 
@@ -18,6 +19,7 @@ export const SurfaceList = ({
   device?: boolean;
 }) => {
   const [statuses, setStatuses] = React.useState<Record<string, StudioStatus>>({});
+  const defaults = React.useMemo(studioDefaults, [source]);
 
   React.useEffect(() => {
     if (source.capabilities?.actions !== true) return;
@@ -119,9 +121,17 @@ export const SurfaceList = ({
                     key={surfacePath(surface)}
                     surface={surface}
                     status={statuses[surfacePath(surface)]}
-                    previewSrc={source.previewUrl(surface, {})}
+                    previewSrc={source.previewUrl(surface)}
+                    hostState={hostStateFor({
+                      surface,
+                      defaults,
+                      sourceSamples: source.samples,
+                      samples: {},
+                      theme: "light",
+                      edited: {},
+                    })}
                     onOpen={() => onOpen(surface)}
-                    href={device ? devicePreviewPath(surface) : undefined}
+                    href={device ? surfacePath(surface) : undefined}
                   />
                 ))}
               </div>

@@ -1,4 +1,6 @@
 import * as React from "react";
+import { silentDelegate, type HostState } from "@superwall/host";
+import { HostedIframe } from "./HostedIframe";
 import { surfacePath } from "../lib/preview";
 import { timeAgo } from "../lib/time";
 import type { StudioStatus, StudioSurface } from "../lib/types";
@@ -27,18 +29,21 @@ export const SurfaceCard = ({
   surface,
   status,
   previewSrc,
+  hostState,
   onOpen,
   href,
 }: {
   surface: StudioSurface;
   status?: StudioStatus;
   previewSrc: string;
+  hostState: HostState;
   onOpen: () => void;
   href?: string;
 }) => {
   const previewRef = React.useRef<HTMLDivElement>(null);
   const width = useElementWidth(previewRef);
   const scale = width > 0 ? width / PREVIEW_WIDTH : 0;
+  const delegate = React.useMemo(silentDelegate, []);
 
   return (
     <a
@@ -55,7 +60,9 @@ export const SurfaceCard = ({
         ref={previewRef}
       >
         {scale > 0 && (
-          <iframe
+          <HostedIframe
+            hostState={hostState}
+            delegate={delegate}
             className="pointer-events-none block origin-top-left border-0 bg-white"
             title={`${surface.project ? `${surface.project}/` : ""}${surface.id} preview`}
             src={previewSrc}

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
-import { buildPreviewPath } from "../src/lib/preview";
+import { buildPreviewPath, surfacePath } from "../src/lib/preview";
 import { StudioApp } from "../src/StudioApp";
 import type { StudioSource } from "../src/lib/types";
 
@@ -50,6 +50,20 @@ const shippable: StudioSource = {
   },
   capabilities: { actions: true },
   previewUrl: buildPreviewPath,
+  standaloneUrl: surfacePath,
+};
+
+const hostOf = (frame: HTMLElement | undefined) => {
+  if (!(frame instanceof HTMLIFrameElement) || !frame.contentWindow) {
+    throw new Error("no hosted frame");
+  }
+  const post = vi.spyOn(frame.contentWindow, "postMessage").mockImplementation(() => {});
+  return () =>
+    post.mock.calls.map(([message]) => {
+      if (typeof message !== "string") throw new Error("host must post strings");
+      const envelope: { payload: { events: Record<string, unknown>[] } } = JSON.parse(message);
+      return envelope.payload.events;
+    });
 };
 
 const source: StudioSource = { ...shippable, capabilities: undefined };
@@ -126,8 +140,8 @@ describe("StudioApp across projects", () => {
     // Without the project segment both surfaces resolve to /paywall/pro and
     // every card renders whichever project happened to be first.
     const [first, second] = twoProjects.surfaces;
-    expect(buildPreviewPath(first, {})).toBe("/preview/minimal/paywall/pro");
-    expect(buildPreviewPath(second, {})).toBe("/preview/i18n/paywall/pro");
+    expect(buildPreviewPath(first)).toBe("/preview/minimal/paywall/pro?transport=editor");
+    expect(buildPreviewPath(second)).toBe("/preview/i18n/paywall/pro?transport=editor");
   });
 
   it("links each card at its own project-scoped path", () => {
@@ -179,7 +193,7 @@ describe("StudioApp", () => {
     // the open control pops a device-sized preview window
     const opener = vi.spyOn(window, "open").mockReturnValue(null);
     fireEvent.click(screen.getByRole("button", { name: "Open preview" }));
-    expect(String(opener.mock.calls[0]?.[0])).toContain("/preview/paywall/plus-upgrade");
+    expect(String(opener.mock.calls[0]?.[0])).toBe("/paywall/plus-upgrade");
     expect(String(opener.mock.calls[0]?.[2])).toContain("width=402");
     opener.mockRestore();
 
@@ -243,12 +257,19 @@ describe("StudioApp", () => {
     fireEvent.click(panel.getByRole("button", { name: /^User/ }));
     const field = screen.getByRole("textbox", { name: "user.subscriptionStatus" });
     expect((field as HTMLInputElement).value).toBe("INACTIVE");
+    const sent = hostOf(screen.getAllByTitle("plus-upgrade preview").at(-1));
     fireEvent.change(field, { target: { value: "ACTIVE" } });
 
-    const frame = screen.getAllByTitle("plus-upgrade preview").at(-1);
-    expect(frame?.getAttribute("src")).toContain(
-      encodeURIComponent('{"subscriptionStatus":"ACTIVE"}'),
-    );
+    // the edit reaches the paywall as template_variables, not a reload
+    expect(screen.getAllByTitle("plus-upgrade preview")).toHaveLength(1);
+    expect(sent().at(-1)).toEqual([
+      expect.objectContaining({
+        event_name: "template_variables",
+        variables: expect.objectContaining({
+          user: expect.objectContaining({ subscriptionStatus: "ACTIVE" }),
+        }),
+      }),
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Close variables" }));
     expect(screen.queryByRole("textbox", { name: "user.subscriptionStatus" })).toBeNull();
@@ -284,15 +305,19 @@ describe("StudioApp", () => {
     expect(panel.queryByRole("textbox", { name: "user.subscriptionStatus" })).toBeNull();
   });
 
-  it("carries trial eligibility into the preview, so trial copy can be seen either way", () => {
+  it("flips introductory offer eligibility through the prefix, so both copy variants can be seen", () => {
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
     render(<StudioApp source={source} />);
 
-    const frame = () => screen.getAllByTitle("plus-upgrade preview").at(-1)?.getAttribute("src");
-    expect(frame()).not.toContain("sw_trial");
+    const sent = hostOf(screen.getAllByTitle("plus-upgrade preview").at(-1));
+    const toggle = screen.getByRole("switch", { name: "Introductory offer" });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
 
-    fireEvent.click(screen.getByRole("switch", { name: "Trial eligibility" }));
-    expect(frame()).toContain("sw_trial=1");
+    fireEvent.click(toggle);
+    expect(sent().at(-1)).toEqual([
+      { event_name: "template_substitutions_prefix", prefix: "default" },
+    ]);
+    expect(screen.getAllByTitle("plus-upgrade preview")).toHaveLength(1);
   });
 
   it("edits a boolean with a switch, and keeps it a boolean", () => {
@@ -307,11 +332,16 @@ describe("StudioApp", () => {
     expect(toggle.getAttribute("aria-checked")).toBe("false");
     expect(panel.queryByRole("textbox", { name: "params.$is_feature_gatable" })).toBeNull();
 
+    const sent = hostOf(screen.getAllByTitle("plus-upgrade preview").at(-1));
     fireEvent.click(toggle);
-    const frame = screen.getAllByTitle("plus-upgrade preview").at(-1);
-    expect(frame?.getAttribute("src")).toContain(
-      encodeURIComponent('{"$is_feature_gatable":true}'),
-    );
+    expect(sent().at(-1)).toEqual([
+      expect.objectContaining({
+        event_name: "template_variables",
+        variables: expect.objectContaining({
+          params: expect.objectContaining({ $is_feature_gatable: true }),
+        }),
+      }),
+    ]);
   });
 
   it("shows a variable with no value as empty, never as the word undefined", () => {
@@ -365,13 +395,16 @@ describe("StudioApp", () => {
     expect(screen.getByRole("textbox", { name: "products.annual.price" })).toBeDefined();
     expect(screen.queryByRole("textbox", { name: "products.monthly.price" })).toBeNull();
 
+    const sent = hostOf(screen.getAllByTitle("plus-upgrade preview").at(-1));
     fireEvent.change(screen.getByRole("textbox", { name: "products.annual.price" }), {
       target: { value: "$19.99" },
     });
-    const frame = screen.getAllByTitle("plus-upgrade preview").at(-1);
-    expect(frame?.getAttribute("src")).toContain(
-      encodeURIComponent('{"annual":{"price":"$19.99"}}'),
-    );
+    expect(sent().at(-1)).toEqual([
+      expect.objectContaining({
+        event_name: "template_variables",
+        variables: expect.objectContaining({ products: [{ annual: { price: "$19.99" } }] }),
+      }),
+    ]);
   });
 });
 
@@ -424,21 +457,21 @@ describe("a product Superwall has no record of", () => {
 });
 
 describe("device mode", () => {
-  it("titles the bar Preview and opens cards as standalone previews, never the editor", () => {
+  it("titles the bar Preview and opens cards in the hosted editor, like everywhere else", () => {
     window.history.replaceState({}, "", "/device");
-    const openPreview = vi.fn();
-    render(<StudioApp source={source} device openPreview={openPreview} />);
+    render(<StudioApp source={source} device />);
 
     expect(screen.getByText("Preview")).toBeDefined();
     expect(screen.queryByText("Studio")).toBeNull();
     expect(screen.queryByText(/simulated SDK host/)).toBeNull();
 
     const card = screen.getByText("plus-upgrade").closest("a");
-    expect(card?.getAttribute("href")).toBe("/preview/paywall/plus-upgrade?sw_preview=1");
+    expect(card?.getAttribute("href")).toBe("/paywall/plus-upgrade");
     fireEvent.click(screen.getByText("plus-upgrade"));
-    expect(openPreview).toHaveBeenCalledWith("/preview/paywall/plus-upgrade?sw_preview=1");
-    expect(window.location.pathname).toBe("/device");
-    expect(screen.queryByRole("combobox", { name: "Device" })).toBeNull();
+    expect(window.location.pathname).toBe("/paywall/plus-upgrade");
+    expect(screen.getByRole("combobox", { name: "Device" })).toBeDefined();
+    const frame = screen.getAllByTitle("plus-upgrade preview").at(-1);
+    expect(frame?.getAttribute("src")).toBe("/preview/paywall/plus-upgrade?transport=editor");
   });
 
   it("asks for the scheme on click when nothing knows it, then remembers it", () => {

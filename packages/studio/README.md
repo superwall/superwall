@@ -60,12 +60,25 @@ Everything renders from a `StudioSource` — `{ title, surfaces, diagnostics?,
 samples?, previewUrl, capabilities? }`. Locally that's
 `/__studio/project.json` (the dev server evaluates configs server-side and
 ships sample device/user/params/product data alongside). A hosted studio
-swaps the fetch, nothing else. `previewUrl(surface, overrides)` decides what
-the preview iframes load: `/preview/<kind>/<id>` mounts locally, published
-snapshot URLs in the dashboard. Overrides travel as query params (`theme`,
-`locale`, `sw_device`, `sw_user`, `sw_params`, `sw_products`, `sw_trial`) —
-the same channel published snapshots accept once opted in with
-`?sw_preview=1`, so preview behavior is identical in both hosts.
+swaps the fetch, nothing else. `previewUrl(surface)` decides what the preview
+iframes load: `/preview/<kind>/<id>` mounts locally, published snapshot URLs
+in the dashboard. Both carry `?transport=editor`, which makes the paywall
+talk to its parent window, and the studio is that parent.
+
+The studio is a paywall host in the SDK's sense, through `@superwall/host`.
+Each `DeviceFrame` answers its paywall's `ping` with the same burst the web
+host sends (`template_variables`, `experiment`, `products`,
+`template_substitutions_prefix`, `paywall_open`), built from the host state
+`SurfaceEditor` assembles: the API's device and user samples (or the host
+package's defaults), the selected device frame's `platform`/`deviceModel`/
+`osVersion`, the theme as `interfaceStyle`, the chosen locale as
+`deviceLocale`, one product per slot with the catalogue's variables (or the
+visual editor's example prices for a slot the catalogue cannot price), and
+whatever the Variables panel edits on top. Every edit re-sends only what
+changed; nothing reloads. Purchases, restores, permissions and callbacks come
+back as prompts in the toasts and are answered with the messages the iOS SDK
+sends. Nothing about this is specific to the studio: the paywall cannot tell
+it from a device.
 
 ## Hosting
 
@@ -73,14 +86,11 @@ The dashboard opens a code-first paywall in this studio instead of the visual
 editor. What the library gives a host:
 
 - `snapshotPreviewUrl(urlOf)` — a `previewUrl` that resolves each surface to
-  its published snapshot URL, opts it into simulation (`sw_preview=1`), and
-  appends the overrides. Every built snapshot boots through the framework's
-  `PreviewHost`, which reads that channel, exposes `__swPreviewApply` for
-  instant re-application (same origin only — cross-origin frames reload), and
-  drives the studio bridge: paywall events and purchase/permission/callback
-  prompts reach the host's toasts, and a `hello` message carries the
-  paywall's locales, so `SurfaceEditor` fills its locale switcher when the
-  host passes `locales: []`.
+  its published snapshot URL and adds `transport=editor`. Set
+  `paywallId`, `paywallIdentifier`, `products` and `locales` on each
+  `StudioSurface` from the paywall and version records; the studio hosts the
+  snapshot from them. `hostStateFor` and `hostPatch` are exported for a host
+  that wants to drive a `DeviceFrame` itself.
 - One `StudioSurface` per version, told apart by `label` (`"v12 · live"`);
   `StudioSource.compareHint` names what the compare menu offers, and
   `SurfaceEditor`'s `actions` slot takes the host's own controls (a version

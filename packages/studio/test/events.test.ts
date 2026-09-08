@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBridgeMessage, localesAnnounced, noticeFor, STUDIO_CHANNEL } from "../src/lib/events";
+import { noticeFor } from "../src/lib/events";
 
 describe("noticeFor", () => {
   it("names the action the paywall asked for, and how it reads", () => {
@@ -8,7 +8,7 @@ describe("noticeFor", () => {
       subject: undefined,
       tone: "warning",
     });
-    expect(noticeFor({ event_name: "restore" })?.tone).toBe("info");
+    expect(noticeFor({ event_name: "open_url_external", url: "https://x" })?.tone).toBe("info");
     expect(noticeFor({ event_name: "transaction_complete" })?.tone).toBe("success");
   });
 
@@ -18,8 +18,9 @@ describe("noticeFor", () => {
     }
   });
 
-  it("stays quiet for the purchase request itself — the prompt already covers it", () => {
+  it("stays quiet for the purchase and restore requests — the prompt already covers them", () => {
     expect(noticeFor({ event_name: "purchase" })).toBeUndefined();
+    expect(noticeFor({ event_name: "restore" })).toBeUndefined();
   });
 
   it("carries the subject worth naming, taking the first field that has one", () => {
@@ -29,9 +30,9 @@ describe("noticeFor", () => {
     expect(noticeFor({ event_name: "custom_placement", placementName: "done" })?.subject).toBe(
       "done",
     );
-    expect(noticeFor({ event_name: "request_permission", permissionType: "push" })?.subject).toBe(
-      "push",
-    );
+    expect(
+      noticeFor({ event_name: "request_permission", permission_type: "notification" })?.subject,
+    ).toBe("notification");
     expect(noticeFor({ event_name: "open_deep_link", link: "app://x" })?.subject).toBe("app://x");
   });
 
@@ -47,39 +48,5 @@ describe("noticeFor", () => {
       subject: undefined,
       tone: "info",
     });
-  });
-});
-
-describe("isBridgeMessage", () => {
-  it("accepts the two shapes the preview sends", () => {
-    expect(isBridgeMessage({ channel: STUDIO_CHANNEL, type: "event", message: {} })).toBe(true);
-    expect(isBridgeMessage({ channel: STUDIO_CHANNEL, type: "ask", id: "1" })).toBe(true);
-  });
-
-  it("ignores anything else on the window, including its own answers", () => {
-    expect(isBridgeMessage({ channel: STUDIO_CHANNEL, type: "answer", id: "1" })).toBe(false);
-    expect(isBridgeMessage({ type: "event" })).toBe(false);
-    expect(isBridgeMessage("hello")).toBe(false);
-    expect(isBridgeMessage(null)).toBe(false);
-  });
-});
-
-describe("localesAnnounced", () => {
-  it("reads the locales a paywall introduces itself with", () => {
-    expect(
-      localesAnnounced({ channel: STUDIO_CHANNEL, type: "hello", locales: ["en", "de"] }),
-    ).toEqual(["en", "de"]);
-    expect(isBridgeMessage({ channel: STUDIO_CHANNEL, type: "hello", locales: [] })).toBe(true);
-  });
-
-  it("ignores every other message, and a hello with no usable locales", () => {
-    expect(localesAnnounced({ channel: STUDIO_CHANNEL, type: "event", message: {} })).toBe(
-      undefined,
-    );
-    expect(localesAnnounced({ channel: STUDIO_CHANNEL, type: "hello", locales: "en" })).toBe(
-      undefined,
-    );
-    expect(localesAnnounced({ channel: "other", type: "hello", locales: ["en"] })).toBe(undefined);
-    expect(localesAnnounced(null)).toBe(undefined);
   });
 });

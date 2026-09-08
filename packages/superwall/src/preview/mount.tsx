@@ -1,7 +1,6 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { surfaces } from "virtual:superwall/project";
-import { usePreviewOverrides } from "./host";
 import { SurfaceHost } from "./surface";
 
 const match = window.location.pathname.match(
@@ -16,19 +15,10 @@ const surface = match
     )
   : undefined;
 
-const PreviewRoot = ({ surfaceEntry }: { surfaceEntry: NonNullable<typeof surface> }) => {
-  const overrides = usePreviewOverrides();
-
-  // Deliberately unkeyed: remounting here would rebuild the router and drop
-  // whichever route you were looking at. The provider swaps the session when
-  // the overrides actually change.
-  return <SurfaceHost surface={surfaceEntry} overrides={overrides} />;
-};
-
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     {surface ? (
-      <PreviewRoot surfaceEntry={surface} />
+      <SurfaceHost surface={surface} />
     ) : (
       <pre style={{ padding: 24, fontFamily: "ui-monospace, monospace" }}>
         {`No surface at ${window.location.pathname} — expected /preview/<paywall|funnel>/<id>`}

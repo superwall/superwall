@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runAction } from "../src/lib/actions";
-import { buildPreviewPath, withOverrides } from "../src/lib/preview";
+import { buildPreviewPath } from "../src/lib/preview";
 import { StudioApp } from "../src/StudioApp";
 import type { StudioSource } from "../src/lib/types";
 
@@ -238,18 +238,6 @@ describe("home cards", () => {
     await waitFor(() => expect(screen.getByText("Inactive")).toBeDefined());
     expect(screen.queryByText("Active")).toBeNull();
     expect(screen.getByText("Not published")).toBeDefined();
-  });
-});
-
-describe("withOverrides", () => {
-  it("appends the override channel to snapshot URLs", () => {
-    expect(withOverrides("https://r.test/a.html", { theme: "dark" })).toBe(
-      "https://r.test/a.html?theme=dark",
-    );
-    expect(withOverrides("https://r.test/a.html?x=1", { user: { plan: "go" } })).toContain(
-      "&sw_user=",
-    );
-    expect(withOverrides("https://r.test/a.html", {})).toBe("https://r.test/a.html");
   });
 });
 
