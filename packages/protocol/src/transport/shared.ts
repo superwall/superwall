@@ -1,19 +1,17 @@
-import { TIncomingMessage, TOutgoingMessage } from "../messages";
+import type { TIncomingMessage, TOutgoingMessage } from "../messages";
 
-const isTransportDebugEnabled = () => {
-  if (typeof localStorage === "undefined" || !localStorage) return false;
-  return localStorage?.getItem("SW_DEBUG_TRANSPORT") === "true";
-};
+const isTransportDebugEnabled = () =>
+  typeof localStorage !== "undefined" && localStorage.getItem("SW_DEBUG_TRANSPORT") === "true";
 
 const TRANSPORT_COLORS: Record<string, string> = {
-  WebKit: "#9C27B0", // Purple
-  Android: "#4CAF50", // Green
-  Editor: "#2196F3", // Blue
-  Transport: "#FF9800", // Orange
+  WebKit: "#9C27B0",
+  Android: "#4CAF50",
+  Editor: "#2196F3",
+  Transport: "#FF9800",
 };
 
 export const createTransportLogger = (transportName: string) => {
-  const color = TRANSPORT_COLORS[transportName] || "#999";
+  const color = TRANSPORT_COLORS[transportName] ?? "#999";
 
   const log = (level: "debug" | "info" | "warn" | "error", message: string, ...args: unknown[]) => {
     if (!isTransportDebugEnabled() && level === "debug") return;
@@ -62,10 +60,6 @@ export enum MessageDirection {
   FromPaywallUi = "from_paywall_ui",
 }
 
-export type WrappedMessagePayload<T extends TMessage> = {
-  events: T[];
-};
-
 export type WrappedMessage<T extends TMessage> = {
   version: 1;
   direction: MessageDirection;
@@ -74,51 +68,43 @@ export type WrappedMessage<T extends TMessage> = {
   };
 };
 
-export const wrap = <T extends TMessage>(message: T | T[], messageDirection: MessageDirection) => {
-  var events: T[];
-  if (!Array.isArray(message)) {
-    events = [message];
-  } else {
-    events = message;
-  }
+export const wrap = <T extends TMessage>(
+  message: T | T[],
+  messageDirection: MessageDirection,
+): string => {
   const payload: WrappedMessage<T> = {
     direction: messageDirection,
     version: 1,
-    payload: {
-      events,
-    },
+    payload: { events: Array.isArray(message) ? message : [message] },
   };
   return JSON.stringify(payload);
 };
 
 type Validator<T extends TMessage> = {
-  parse: (arg0: object) => WrappedMessage<T>;
+  parse: (value: object) => WrappedMessage<T>;
 };
 
-const buildNopValidator = <T extends TMessage>() => {
-  return {
-    parse: (arg0: object) => {
-      return arg0 as WrappedMessage<T>;
-    },
-  };
-};
+// The wire is trusted for forward compatibility: an unknown message from a
+// newer host must reach the paywall rather than drop the whole batch.
+const trustingValidator = <T extends TMessage>(): Validator<T> => ({
+  parse: (value) => value as WrappedMessage<T>,
+});
 
 const sharedLogger = createTransportLogger("Transport");
 
 export const unwrap = <T extends TMessage>(
   message: string,
   messageDirection: MessageDirection,
-  validator: Validator<T> = buildNopValidator(),
+  validator: Validator<T> = trustingValidator(),
 ): T[] => {
   try {
-    let parsed = JSON.parse(message);
-    let validated = validator.parse(parsed);
+    const validated = validator.parse(JSON.parse(message));
     if (validated.direction !== messageDirection) {
       throw new Error("Message direction incorrect");
     }
     return validated.payload.events;
-  } catch (e) {
-    sharedLogger.error("Failed to parse incoming message", { message, error: e });
+  } catch (error) {
+    sharedLogger.error("Failed to parse incoming message", { message, error });
     return [];
   }
 };

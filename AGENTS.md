@@ -76,7 +76,7 @@ self-describing npm project — clone it, install, `superwall dev`:
   platform build resolves it and rewrites the `products` literal in the
   config module (`rewriteConfigProducts`, via rollup's AST) so other
   platforms' ids don't ship; products reached through a spread keep the entry
-  override only. Dev builds keep the map live so the mock resolves by device.
+  override only. Dev builds keep the map live so the session resolves it by the device the host reports.
   A platform the slot doesn't name is refused. Every (surface, platform) pair is its own build
   (asset host is per app, product ids per platform), version history
   (`play-store` on android), and source commit. Publish-time
@@ -107,7 +107,7 @@ read from both, the project's own file winning.
 The stack, bottom to top — each layer depends only on the one below it:
 
 - `packages/protocol` — `@superwall/protocol`: the SDK ↔ paywall message
-  contract (zod message schemas, transports, initialization params).
+  contract (zod message schemas, the envelope, and the transports).
   **Backward compatibility is sacred here**: old app binaries with old native
   SDKs load new paywall bundles indefinitely. Additive changes only.
 - `packages/runtime` — `@superwall/runtime`: framework-agnostic runtime on top
@@ -203,13 +203,13 @@ The stack, bottom to top — each layer depends only on the one below it:
     the version's settings wire (`paywallSettingsOf`)
   - `src/preview/` — `superwall/preview`: serving surfaces locally the way
     the runtime serves published snapshots — `server.ts` (vite; studio dist,
-    project payload, surface previews), `mount.tsx`/`surface.tsx` (what runs
-    inside the iframe), `overrides.ts` (theme/locale/device query params),
-    `webview.ts` (the one deliberate local-only difference), `host.tsx`
-    (`PreviewHost`: what every built entry mounts — real host by default,
-    simulated from the studio's query params behind `?sw_preview=1` — plus
-    the override hook and mock-option mapping the local mount shares), and
-    `studio-bridge.ts` (the `postMessage` channel to an embedding studio)
+    project payload, surface previews, the `/device/manifest.json` the iOS
+    SDK's dev mode reads), `mount.tsx`/`surface.tsx` (what runs inside the
+    iframe: the same `SuperwallProvider` a built entry mounts, hosted by the
+    studio over `?transport=editor`), `project.ts` (the project payload the
+    studio loads, with the host defaults for unsampled data), `device.ts`
+    (the manifest), and `webview.ts` (the one deliberate local-only difference). No preview code
+    ships in a snapshot; a paywall cannot tell the studio from a device.
 - `packages/cli` — `@superwall/cli`: THE command surface (integrate/migrate/
   review, apps, products, campaigns, query, ASC, ASA, auth, telemetry; yargs + ink)
   **plus the paywall commands** (`create`, `dev`, `push`, `promote`, `publish` in

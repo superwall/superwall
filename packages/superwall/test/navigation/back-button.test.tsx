@@ -35,7 +35,7 @@ const mount = () => {
 
 const pressBack = (hosted: ReturnType<typeof createHost>) =>
   act(async () => {
-    hosted.host.send([{ event_name: "back_button_input", pressed: true }]);
+    hosted.host.send([{ event_name: "back_button_input" }]);
     await Promise.resolve();
     await Promise.resolve();
   });

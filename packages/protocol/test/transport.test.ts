@@ -214,8 +214,8 @@ describe("Editor transport", () => {
     const handler = vi.fn();
     transport.addListener(handler);
 
-    // not listening yet
     dispatchWrapped(wrap(incoming, MessageDirection.ToPaywall));
+    transport.accept(incoming);
     expect(handler).not.toHaveBeenCalled();
 
     transport.startListening();

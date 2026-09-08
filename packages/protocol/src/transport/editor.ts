@@ -1,78 +1,59 @@
-import { TIncomingMessage, TOutgoingMessage } from "../messages";
+import type { TIncomingMessage, TOutgoingMessage } from "../messages";
 import {
   createTransportLogger,
-  ITransport,
   MessageDirection,
-  TIncomingHandler,
   unwrap,
   wrap,
+  type ITransport,
+  type TIncomingHandler,
 } from "./shared";
 
 const log = createTransportLogger("Editor");
 
-/**
- * Editor transport assumes we are loaded in an iframe in the editor
- */
+export type EditorTransportOptions = {
+  targetWindow: Window;
+  targetOrigin: string;
+};
+
 export class EditorTransport implements ITransport {
-  constructor({ targetWindow, targetOrigin }: { targetWindow: Window; targetOrigin: string }) {
-    this._targetWindow = targetWindow;
-    this._targetOrigin = targetOrigin;
+  private readonly targetWindow: Window;
+  private readonly targetOrigin: string;
+  private handlers: TIncomingHandler[] = [];
+  private listener: ((event: MessageEvent) => void) | undefined;
+
+  constructor({ targetWindow, targetOrigin }: EditorTransportOptions) {
+    this.targetWindow = targetWindow;
+    this.targetOrigin = targetOrigin;
   }
 
-  private _targetWindow: Window;
-  private _targetOrigin: string;
-
-  postMessage(messages: TOutgoingMessage | TOutgoingMessage[]): void {
-    const wrappedOutgoingMessage = wrap(messages, MessageDirection.FromPaywall);
-    log.debug("Wrapped message for editor", wrappedOutgoingMessage);
-    this._targetWindow.postMessage(wrappedOutgoingMessage, this._targetOrigin);
+  postMessage(message: TOutgoingMessage): void {
+    this.targetWindow.postMessage(wrap(message, MessageDirection.FromPaywall), this.targetOrigin);
     log.info("Sent message to editor via postMessage");
   }
 
-  private _handlers: TIncomingHandler[] = [];
   addListener(handler: TIncomingHandler): void {
-    this._handlers.push(handler);
+    this.handlers.push(handler);
   }
 
-  /**
-   * In order for `window.removeEventListener` to work we need to pass the same
-   * exact function that we used for `addListener`. This is a way to cache that
-   * value because `.bind(this)` creates a new function each call.
-   *
-   * This also implicitly tracks state about if we're listening or not,
-   * `undefined` meaning not listening
-   *
-   */
-  private _listeningRef: ((event: MessageEvent) => void) | undefined = undefined;
-
-  startListening() {
-    if (this._listeningRef !== undefined) {
-      return;
-    }
-    this._listeningRef = this._onRawMessageReceived.bind(this);
-    window.addEventListener("message", this._listeningRef);
-  }
-
-  stopListening() {
-    if (this._listeningRef === undefined) {
-      return;
-    }
-    window.removeEventListener("message", this._listeningRef);
-    this._listeningRef = undefined;
-  }
-
-  private _onRawMessageReceived(event: MessageEvent) {
-    if (event.data && typeof event.data === "string") {
-      let events = unwrap<TIncomingMessage>(event.data, MessageDirection.ToPaywall);
-      events.forEach((message) => {
+  startListening(): void {
+    if (this.listener) return;
+    this.listener = (event: MessageEvent) => {
+      if (typeof event.data !== "string") return;
+      for (const message of unwrap<TIncomingMessage>(event.data, MessageDirection.ToPaywall)) {
         this.accept(message);
-      });
-    }
+      }
+    };
+    window.addEventListener("message", this.listener);
   }
 
-  accept(message: TIncomingMessage) {
-    if (this._listeningRef) {
-      this._handlers.forEach((handler) => handler(message));
-    }
+  stopListening(): void {
+    if (!this.listener) return;
+    window.removeEventListener("message", this.listener);
+    this.listener = undefined;
+  }
+
+  accept(message: TIncomingMessage): void {
+    if (!this.listener) return;
+    this.handlers.forEach((handler) => handler(message));
   }
 }

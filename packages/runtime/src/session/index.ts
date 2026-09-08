@@ -104,7 +104,7 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
         introductoryOffer: next.introductoryOffer,
       }),
     };
-    
+
     for (const listener of listeners) listener();
   };
 

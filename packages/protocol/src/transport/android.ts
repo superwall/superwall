@@ -1,58 +1,42 @@
-import { TIncomingMessage, TOutgoingMessage } from "../messages";
+import type { TIncomingMessage, TOutgoingMessage } from "../messages";
 import {
   createTransportLogger,
-  ITransport,
   MessageDirection,
-  TIncomingHandler,
   wrap,
+  type ITransport,
+  type TIncomingHandler,
 } from "./shared";
 
 const log = createTransportLogger("Android");
 
 declare global {
-  /**
-   * Injected by the Android SDK's JavascriptInterface; absent in every other
-   * environment. Not part of any lib types, so the host contract is declared
-   * here.
-   */
   // eslint-disable-next-line no-var
   var SWAndroid: { postMessage: (message: string) => void } | undefined;
 }
 
-export const buildAndroidTransport = (): AndroidTransport => {
-  return new AndroidTransport();
-};
+export class AndroidTransport implements ITransport {
+  private handlers: TIncomingHandler[] = [];
+  private listening = false;
 
-class AndroidTransport implements ITransport {
-  postMessage(messages: TOutgoingMessage | TOutgoingMessage[]): void {
-    log.debug("Attempting to send messages", messages);
-
-    if (typeof SWAndroid !== "undefined" && SWAndroid) {
-      const wrappedOutgoingMessage = wrap(messages, MessageDirection.FromPaywall);
-      log.debug("Wrapped message for transport", wrappedOutgoingMessage);
-
-      SWAndroid.postMessage(wrappedOutgoingMessage);
-      log.info("Sent message via SWAndroid interface");
+  postMessage(message: TOutgoingMessage): void {
+    if (typeof SWAndroid === "undefined" || !SWAndroid) {
+      log.warn("Unable to send message - SWAndroid interface not available");
       return;
     }
-
-    log.warn("Unable to send message - SWAndroid interface not available");
+    SWAndroid.postMessage(wrap(message, MessageDirection.FromPaywall));
+    log.info("Sent message via SWAndroid interface");
   }
 
-  private _handlers: TIncomingHandler[] = [];
   addListener(handler: TIncomingHandler): void {
-    this._handlers.push(handler);
+    this.handlers.push(handler);
   }
 
-  private _listening = false;
-
-  startListening() {
-    this._listening = true;
+  startListening(): void {
+    this.listening = true;
   }
 
-  accept(message: TIncomingMessage) {
-    if (this._listening) {
-      this._handlers.forEach((handler) => handler(message));
-    }
+  accept(message: TIncomingMessage): void {
+    if (!this.listening) return;
+    this.handlers.forEach((handler) => handler(message));
   }
 }

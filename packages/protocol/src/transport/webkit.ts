@@ -1,10 +1,10 @@
-import { TIncomingMessage, TOutgoingMessage } from "../messages";
+import type { TIncomingMessage, TOutgoingMessage } from "../messages";
 import {
   createTransportLogger,
-  ITransport,
   MessageDirection,
-  TIncomingHandler,
   wrap,
+  type ITransport,
+  type TIncomingHandler,
 } from "./shared";
 
 const log = createTransportLogger("WebKit");
@@ -31,47 +31,32 @@ export const pendingHostMessages = (): unknown[] => {
   return (host.messages ??= []);
 };
 
-export const buildWebKitTransport = (): WebKitTransport => {
-  return new WebKitTransport();
-};
+export class WebKitTransport implements ITransport {
+  private handlers: TIncomingHandler[] = [];
+  private listening = false;
 
-class WebKitTransport implements ITransport {
-  postMessage(messages: TOutgoingMessage | TOutgoingMessage[]): void {
-    log.debug("Attempting to send messages", messages);
-
-    const paywallMessageHandler = window.webkit?.messageHandlers?.paywallMessageHandler;
-    log.debug("Checking window.webkit availability", {
-      hasWebkit: !!window.webkit,
-      hasMessageHandlers: !!window.webkit?.messageHandlers,
-      hasPaywallHandler: !!paywallMessageHandler,
-    });
-
-    const wrappedOutgoingMessage = wrap(messages, MessageDirection.FromPaywall);
-    log.debug("Wrapped message for transport", wrappedOutgoingMessage);
-
-    if (paywallMessageHandler) {
+  postMessage(message: TOutgoingMessage): void {
+    const wrapped = wrap(message, MessageDirection.FromPaywall);
+    const handler = window.webkit?.messageHandlers?.paywallMessageHandler;
+    if (handler) {
       log.info("Sending message via WebKit message handler");
-      paywallMessageHandler.postMessage(wrappedOutgoingMessage);
+      handler.postMessage(wrapped);
       return;
     }
-
     log.warn("No message handler yet - queueing for the host to drain");
-    pendingHostMessages().push(wrappedOutgoingMessage);
+    pendingHostMessages().push(wrapped);
   }
-  private _handlers: TIncomingHandler[] = [];
+
   addListener(handler: TIncomingHandler): void {
-    this._handlers.push(handler);
+    this.handlers.push(handler);
   }
 
-  private _listening = false;
-
-  startListening() {
-    this._listening = true;
+  startListening(): void {
+    this.listening = true;
   }
 
-  accept(message: TIncomingMessage) {
-    if (this._listening) {
-      this._handlers.forEach((handler) => handler(message));
-    }
+  accept(message: TIncomingMessage): void {
+    if (!this.listening) return;
+    this.handlers.forEach((handler) => handler(message));
   }
 }
