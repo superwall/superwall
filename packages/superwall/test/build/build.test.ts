@@ -492,6 +492,14 @@ describe("superwall dev serves the settings push would stamp", () => {
     expect(dev?.settings).toEqual(built.settings);
   }, 120_000);
 
+  it("agrees with the studio on which locales a surface speaks", async () => {
+    const built = await buildSnapshot(project(), surface("demo"), {});
+    const dev = (await devSurfaces()).find((one) => one.id === "demo");
+
+    expect(built.locales).toEqual(dev?.locales);
+    expect(built.locales).toContain("en");
+  }, 120_000);
+
   it("puts that block on the manifest surface the SDK reads", async () => {
     const surfaces = await devSurfaces();
     const manifest = attachSurfaceDetails(

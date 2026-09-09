@@ -1,0 +1,10 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+
+const home = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-test-home-"));
+process.env.SUPERWALL_HOME = home;
+
+process.on("exit", () => {
+  fs.rmSync(home, { recursive: true, force: true });
+});

@@ -157,7 +157,13 @@ message that lists the affected files; never emit the same sentence per file.
   rebuilding is on you.)
 - `bun run typecheck` (tsc) and `bun run test` (node's test runner via
   `tsx --test`; needs ripgrep on PATH) must be green. Tests live in `tests/`
-  mirroring `src/`. CI runs `bun run test:coverage`, which enforces coverage
+  mirroring `src/`. **Never invoke a command handler from a test.** A handler is
+  a real command: one of them logs you out, one scaffolds a project into the
+  cwd and installs dependencies, one shells out to npx. Drive commands through
+  `executeCommand` with the `tests/helpers/command.ts` harness, and assert
+  wiring (a lazy import's module and export) statically — `tests/cli/commands.test.ts`
+  is the pattern. `tests/setup.ts` points `SUPERWALL_HOME` at a temp directory
+  for every run, so no test can read or write the developer's real session. CI runs `bun run test:coverage`, which enforces coverage
   thresholds — a green `test` alone is not the CI gate.
 - Verify behavior with the real binary against an account you are logged into
   (`superwall whoami` to confirm), not just types. For workflows, `--dry-run`

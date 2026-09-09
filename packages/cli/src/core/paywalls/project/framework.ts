@@ -66,6 +66,7 @@ export interface BuiltSnapshot {
   checkout?: string;
   background?: { light: string; dark?: string };
   settings?: PaywallSettings;
+  locales?: string[];
   snapshotId: string;
   html: string;
   bytes: number;

@@ -24,6 +24,7 @@ import { entrySource } from "./entry";
 import { resolveConfigProducts, resolveProductIds } from "./products";
 import { paywallSettingsOf, type PaywallSettings } from "./settings";
 import { loadSurfaceConfig } from "../config/load";
+import { localesOf } from "../config/messages";
 import type { PaywallDefinition } from "../config/paywall";
 import type { DiscoveredSurface, Project } from "../discover";
 import { renderDocument } from "../document";
@@ -39,6 +40,7 @@ export type BuiltSnapshot = {
   checkout: ReturnType<typeof checkoutModeOf>;
   background: ReturnType<typeof backgroundOf>;
   settings: PaywallSettings;
+  locales: string[];
   snapshotId: string;
   html: string;
   bytes: number;
@@ -89,6 +91,7 @@ export const buildSnapshot = async (
   const { definition, config } = await loadSurfaceConfig(surface);
   const products = resolveProductIds(config, surface, platform);
   const settings = paywallSettingsOf(config);
+  const locales = localesOf(project, surface, definition);
 
   fs.writeFileSync(
     path.join(entryDir, "entry.jsx"),
@@ -170,6 +173,7 @@ export const buildSnapshot = async (
     htmlFile,
     definition,
     config,
+    locales,
     assets: collected.assets,
     assetBytes: collected.assets.reduce((total, asset) => total + asset.bytes, 0),
     externalSources: collected.externalSources,

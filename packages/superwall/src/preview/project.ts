@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { paywallSettingsOf, type PaywallSettings } from "../build/settings";
 import { importDefault } from "../config/load";
+import { localesOf } from "../config/messages";
 import type { PaywallDefinition } from "../config";
 import {
   isPlatformProductIds,
@@ -70,14 +71,6 @@ export const buildStudioProject = async (
     project.surfaces.map(async (surface): Promise<StudioSurfacePayload> => {
       const definition = await loadConfig(surface.configFile);
 
-      const locales = new Set<string>();
-      for (const entry of [...project.sharedMessages, ...surface.messages]) {
-        locales.add(entry.locale);
-      }
-      for (const locale of Object.keys(definition?.localization?.messages ?? {})) {
-        locales.add(locale);
-      }
-
       const binding =
         surface.kind === "paywall" ? lock.paywalls[surface.id] : lock.funnels[surface.id];
       const platforms = declaredPlatforms(definition?.platforms);
@@ -88,7 +81,7 @@ export const buildStudioProject = async (
         kind: surface.kind,
         id: surface.id,
         routes: surface.routes.map((route) => route.name),
-        locales: [...locales].toSorted(),
+        locales: localesOf(project, surface, definition),
         products: Object.fromEntries(
           slots.map(([reference, input]) => [
             reference,

@@ -1229,3 +1229,32 @@ test("the settings a build resolves from config.ts travel with the version", asy
     assert.deepEqual(Reflect.get(Object(version), key), value, key);
   }
 });
+
+test("the locales a surface speaks travel with the version", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () =>
+      frameworkFor(project, {
+        buildSnapshot: async () => built({ locales: ["de", "en", "es"] }),
+      }),
+  });
+
+  const version: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  assert.deepEqual(Reflect.get(Object(version), "locales"), ["de", "en", "es"]);
+});
+
+test("a surface with no catalogs sends no locales at all", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () => frameworkFor(project, { buildSnapshot: async () => built({ locales: [] }) }),
+  });
+
+  const version: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  assert.equal("locales" in Object(version), false);
+});

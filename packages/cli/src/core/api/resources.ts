@@ -343,6 +343,7 @@ export function pushPaywallVersion(
     assets?: VersionAsset[];
     products?: VersionProduct[];
     settings?: PaywallSettings;
+    locales?: string[];
   },
 ): Promise<PushedVersion> {
   return api.post<PushedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/versions`, {
@@ -350,6 +351,7 @@ export function pushPaywallVersion(
     ...(opts.surface ? { surface: opts.surface } : {}),
     ...(opts.assets && opts.assets.length > 0 ? { assets: opts.assets } : {}),
     ...(opts.products && opts.products.length > 0 ? { products: opts.products } : {}),
+    ...(opts.locales && opts.locales.length > 0 ? { locales: opts.locales } : {}),
     ...(opts.settings ?? {}),
   });
 }

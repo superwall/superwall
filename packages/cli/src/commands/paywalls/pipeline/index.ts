@@ -367,6 +367,7 @@ export async function runPushPipeline(
           assets: synced.value.assets,
           products: versionProducts(build.products, target.platform),
           settings: build.settings,
+          locales: build.locales,
         }),
       );
       version = push.value.version;
