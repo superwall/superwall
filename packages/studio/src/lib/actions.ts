@@ -5,7 +5,7 @@ import type {
   StudioActionResult,
   StudioStatus,
   StudioSurface,
-} from "./types";
+} from "./surfaces";
 
 export const runAction = async (
   surface: StudioSurface,

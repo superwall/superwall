@@ -1,12 +1,12 @@
 import * as React from "react";
-import { ChevronDownIcon } from "./icons";
+import { ChevronDownIcon } from "../icons";
 import {
   ACTION_STEPS,
   STEP_LABELS,
-  type StudioActionName,
   type StudioActionStep,
   type StudioStepState,
-} from "../lib/types";
+} from "../../lib/steps";
+import { type StudioActionName } from "../../lib/surfaces";
 
 const ACTIONS: readonly { name: StudioActionName; label: string; hint: string }[] = [
   { name: "push", label: "Push", hint: "New version, nothing live changes" },

@@ -1,9 +1,9 @@
 import * as React from "react";
 import { OpenInApp } from "../components/OpenInApp";
 import { SurfaceCard } from "../components/SurfaceCard";
-import { TopBar } from "../components/TopBar";
+import { TopBar } from "../components/chrome/TopBar";
 import { fetchStatus } from "../lib/actions";
-import type { StudioSource, StudioStatus, StudioSurface } from "../lib/types";
+import type { StudioSource, StudioStatus, StudioSurface } from "../lib/surfaces";
 import { hostStateFor, studioDefaults } from "../lib/host";
 import { surfacePath } from "../lib/preview";
 
@@ -157,8 +157,8 @@ export const SurfaceList = ({
 
       {!device && (
         <footer className="bg-bar flex h-11 flex-none items-center justify-center border-t border-cream/10 text-xs text-cream/55">
-          Previews run against the simulated SDK host. Edit files under superwall/ and they update
-          live.
+          Previews run against a real SDK host — you choose the outcomes. Edit files under
+          superwall/ and they update live.
         </footer>
       )}
     </>

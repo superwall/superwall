@@ -1,6 +1,6 @@
 import * as React from "react";
-import { ChevronDownIcon } from "./icons";
-import type { VariableOverrides } from "../lib/types";
+import { ChevronDownIcon } from "../icons";
+import type { VariableOverrides } from "../../lib/variables";
 
 export type VariableGroup = "user" | "device" | "params" | "products";
 

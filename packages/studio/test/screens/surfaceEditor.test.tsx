@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SurfaceEditor } from "../src/screens/SurfaceEditor";
-import { snapshotPreviewUrl } from "../src/lib/preview";
-import type { StudioSource, StudioSurface } from "../src/lib/types";
+import { SurfaceEditor } from "../../src/screens/SurfaceEditor";
+import { snapshotPreviewUrl } from "../../src/lib/preview";
+import type { StudioSource, StudioSurface } from "../../src/lib/surfaces";
 
 /**
  * The hosted shape: one paywall, several sealed versions, each a surface with

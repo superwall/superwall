@@ -2,7 +2,7 @@ import * as React from "react";
 import type { HostDelegate, HostState } from "@superwall/host";
 import { DeviceChrome } from "./DeviceChrome";
 import { HostedIframe } from "./HostedIframe";
-import type { DeviceChromeSpec } from "../lib/devices";
+import type { DeviceChromeSpec } from "../../lib/devices";
 
 const FRAME_MARGIN = 96;
 

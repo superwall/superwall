@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DEVICE_ID, deviceById, STUDIO_DEVICES } from "../src/lib/devices";
+import { DEFAULT_DEVICE_ID, deviceById, STUDIO_DEVICES } from "../../src/lib/devices";
 
 describe("device catalog", () => {
   it("has unique ids and sane viewports", () => {

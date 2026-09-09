@@ -25,7 +25,7 @@ const IPHONE_ISLAND: DeviceChromeSpec = {
   homeIndicator: true,
 };
 
-export const STUDIO_DEVICES: readonly StudioDevice[] = [
+export const STUDIO_DEVICES: readonly [StudioDevice, ...StudioDevice[]] = [
   {
     id: "iphone-se",
     name: "iPhone SE",
@@ -103,7 +103,8 @@ export const DEFAULT_DEVICE_ID = "iphone-17";
 export const RESPONSIVE_ID = "responsive";
 export const RESPONSIVE_DEFAULT = { width: 393, height: 852 };
 
+const DEFAULT_DEVICE: StudioDevice =
+  STUDIO_DEVICES.find((device) => device.id === DEFAULT_DEVICE_ID) ?? STUDIO_DEVICES[0];
+
 export const deviceById = (id: string): StudioDevice =>
-  STUDIO_DEVICES.find((device) => device.id === id) ??
-  STUDIO_DEVICES.find((device) => device.id === DEFAULT_DEVICE_ID) ??
-  STUDIO_DEVICES[0];
+  STUDIO_DEVICES.find((device) => device.id === id) ?? DEFAULT_DEVICE;

@@ -1,10 +1,10 @@
 import * as React from "react";
-import { StudioShell } from "./components/StudioShell";
+import { StudioShell } from "./components/chrome/StudioShell";
 import { SurfaceEditor } from "./screens/SurfaceEditor";
 import { SurfaceList } from "./screens/SurfaceList";
 import { surfacePath } from "./lib/preview";
 import { fetchSamples } from "./lib/actions";
-import type { Samples, StudioSource, StudioSurface } from "./lib/types";
+import type { Samples, StudioSource, StudioSurface } from "./lib/surfaces";
 
 const surfaceFromPath = (
   surfaces: StudioSurface[],

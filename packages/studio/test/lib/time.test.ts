@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { timeAgo } from "../src/lib/time";
+import { timeAgo } from "../../src/lib/time";
 
 describe("timeAgo", () => {
   const now = Date.parse("2026-07-27T12:00:00Z");

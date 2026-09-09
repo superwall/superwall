@@ -1,9 +1,9 @@
 import * as React from "react";
 import { silentDelegate, type HostState } from "@superwall/host";
-import { HostedIframe } from "./HostedIframe";
+import { HostedIframe } from "./preview/HostedIframe";
 import { surfacePath } from "../lib/preview";
 import { timeAgo } from "../lib/time";
-import type { StudioStatus, StudioSurface } from "../lib/types";
+import type { StudioStatus, StudioSurface } from "../lib/surfaces";
 
 const PREVIEW_WIDTH = 390;
 const PREVIEW_HEIGHT = 844;

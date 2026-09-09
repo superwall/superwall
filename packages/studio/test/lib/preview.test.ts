@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildPreviewPath, hostedUrl, snapshotPreviewUrl, surfacePath } from "../src/lib/preview";
-import type { StudioSurface } from "../src/lib/types";
+import {
+  buildPreviewPath,
+  hostedUrl,
+  snapshotPreviewUrl,
+  surfacePath,
+} from "../../src/lib/preview";
+import type { StudioSurface } from "../../src/lib/surfaces";
 
 const surface: StudioSurface = {
   kind: "paywall",

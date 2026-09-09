@@ -1,6 +1,6 @@
 import * as React from "react";
-import { ColumnsIcon } from "./icons";
-import type { CompareTarget } from "../lib/types";
+import { ColumnsIcon } from "../icons";
+import type { CompareTarget } from "../../lib/surfaces";
 
 export type CompareOption = {
   key: string;

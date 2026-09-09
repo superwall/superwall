@@ -285,6 +285,50 @@ The stack, bottom to top — each layer depends only on the one below it:
   framework only dynamically at command runtime. This package is **excluded
   from oxfmt/oxlint** (it keeps its own conventions — see its `AGENTS.md`)
   and is consumed **built** (tsdown → `dist/`; root `postinstall` builds it).
+- `packages/host` — `@superwall/host`: the other half of the SDK ↔ paywall
+  conversation, so anything can play the SDK's part. `createWindowHost({ target,
+state, delegate })` answers the handshake, streams variables as a patch, and
+  asks a `delegate` for every outcome a device would decide (purchase, restore,
+  permission, callback). It is what makes a preview indistinguishable from an
+  app: the paywall speaks one protocol and never learns who is listening.
+- `packages/studio` — `@superwall/studio`: the preview UI around that host —
+  device frames, theme/locale/orientation switches, the variables panel, the
+  outcome prompts, the surface list. A component library, not an app: its only
+  wiring to a paywall is `HostedIframe`, which calls `createWindowHost` on the
+  iframe's `contentWindow` and sends `hostPatch(sent, next)` diffs as state
+  changes.
+  - **Two hosts mount it**, and the seam between them is one type,
+    `StudioSource` (title, `StudioSurface[]`, `previewUrl(surface)`):
+    `superwall dev` supplies surfaces discovered on disk and previews
+    `/preview/{kind}/{id}?transport=editor`, while the dashboard
+    (`../pwn/apps/web2`) supplies pushed versions and previews the immutable CDN
+    snapshot. Same component, same protocol, same paywall bytes — only the
+    surface list and the URL differ.
+  - Anything the **hosted** studio needs has to travel through the push
+    payload, because the dashboard has no access to the repo. That is why a
+    pushed version carries `locales` (and why the device manifest carries
+    `settings`): locally the studio reads the project, hosted it can only read
+    what push recorded.
+  - `src/lib/products.ts` is a **hand-rolled mirror** of the dashboard's
+    canonical engine (`ProductVariables` in pwn's unpublished
+    `@superwall/schema-next`), used only on the local path — the CLI feeds its
+    output in as the catalogue. Its period-unit rounding is deliberately
+    non-uniform because theirs is: days exact, weeks rounded, months and years
+    floored. Do not "simplify" it; the fix is the V2 paywall response resolving
+    variables server-side so both engines go away.
+  - `src/lib/contract.ts` is the **dev-server ↔ studio contract**, exported as
+    the types-only entry `@superwall/studio/contract` (a `types` field, no
+    `default`): the shapes of `/__studio/action`, `/__studio/status`,
+    `/__studio/samples.json` and the app-scheme lookup. The CLI implements the
+    server side and the framework's `preview/server.ts` serves it, so both need
+    the shapes without importing the studio's React code — hence types-only.
+    `src/lib/surfaces.ts` is the studio's own domain (`StudioSurface`,
+    `StudioSource`) that either host fills in; everything else in `lib/` is
+    studio-internal.
+  - `src/lib/` keeps its name on purpose: its modules are each named for what
+    they own, and the package's public entries (`@superwall/studio/contract`,
+    `/products`) point into `dist/lib/lib/*`, which the dashboard's tsconfig and
+    vite alias resolve. Renaming it breaks the dashboard until it re-vendors.
 - `examples/*` — each example **is** a superwall project directory (not an
   app repo with one inside): `package.json` and its paywall at the root.
   Using one means copying the directory into a real app as `superwall/`.

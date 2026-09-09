@@ -5,7 +5,7 @@ import {
   type HostState,
   type PaywallHost,
 } from "@superwall/host";
-import { hostPatch } from "../lib/host";
+import { hostPatch } from "../../lib/host";
 
 type Hosted = { host: PaywallHost; detach: () => void; sent: HostState };
 

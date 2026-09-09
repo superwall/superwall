@@ -59,6 +59,25 @@ const PERIODLY: Record<string, string> = {
   year: "yearly",
 };
 
+const PERIOD_UNITS: Record<string, { days: number; weeks: number; months: number; years: number }> =
+  {
+    day: { days: 1, weeks: 1 / 7, months: 1 / 30, years: 1 / 365 },
+    week: { days: 7, weeks: 1, months: 1 / 4, years: 1 / 52 },
+    month: { days: 30, weeks: 4, months: 1, years: 1 / 12 },
+    year: { days: 365, weeks: 52, months: 12, years: 1 },
+  };
+
+const periodCounts = (period: string, count: number): Record<string, number> | undefined => {
+  const units = PERIOD_UNITS[period];
+  if (!units) return undefined;
+  return {
+    periodDays: units.days * count,
+    periodWeeks: Math.round(units.weeks * count),
+    periodMonths: Math.floor(units.months * count),
+    periodYears: Math.floor(units.years * count),
+  };
+};
+
 export const productVariables = (product: DashboardProduct): Record<string, unknown> => {
   const variables: Record<string, unknown> = {};
   if (product.identifier) variables.identifier = product.identifier;
@@ -79,7 +98,7 @@ export const productVariables = (product: DashboardProduct): Record<string, unkn
   const count = product.subscription?.period_count ?? 1;
   variables.period = period;
   variables.periodly = PERIODLY[period] ?? `${period}ly`;
-  variables[`period${period.charAt(0).toUpperCase()}${period.slice(1)}s`] = count;
+  Object.assign(variables, periodCounts(period, count) ?? {});
 
   const perYear = (PER_YEAR[period] ?? 1) / count;
   variables.yearlyPrice = money(value * perYear, currency);

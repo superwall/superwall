@@ -1,9 +1,9 @@
 import * as React from "react";
 import { hasIntroductoryOffer, type HostDelegate, type HostState } from "@superwall/host";
-import { ActionMenu, type ActionProgress } from "../components/ActionMenu";
-import { CompareMenu, type CompareOption } from "../components/CompareMenu";
-import { DeviceFrame, DevicePlaceholder } from "../components/DeviceFrame";
-import { MissingProducts } from "../components/MissingProducts";
+import { ActionMenu, type ActionProgress } from "../components/menus/ActionMenu";
+import { CompareMenu, type CompareOption } from "../components/menus/CompareMenu";
+import { DeviceFrame, DevicePlaceholder } from "../components/preview/DeviceFrame";
+import { MissingProducts } from "../components/panels/MissingProducts";
 import { PaywallToasts, useStudioDelegate } from "../components/PaywallToasts";
 import { Segmented, Select, Switch } from "../components/controls";
 import {
@@ -14,14 +14,14 @@ import {
   SlidersIcon,
   SunIcon,
 } from "../components/icons";
-import { SidePanel } from "../components/SidePanel";
-import { Toolbar, ToolbarDivider, ToolbarGroup } from "../components/Toolbar";
-import { TopBar } from "../components/TopBar";
+import { SidePanel } from "../components/panels/SidePanel";
+import { Toolbar, ToolbarDivider, ToolbarGroup } from "../components/chrome/Toolbar";
+import { TopBar } from "../components/chrome/TopBar";
 import {
   VariablesPanel,
   type VariableGroups,
   type VariableRow,
-} from "../components/VariablesPanel";
+} from "../components/panels/VariablesPanel";
 import { fetchStatus, runAction } from "../lib/actions";
 import {
   DEFAULT_DEVICE_ID,
@@ -33,18 +33,16 @@ import {
 } from "../lib/devices";
 import { hostStateFor, studioDefaults } from "../lib/host";
 import { hostedUrl } from "../lib/preview";
+import { ACTION_STEPS, type StudioActionStep, type StudioStepState } from "../lib/steps";
 import {
-  ACTION_STEPS,
   type CompareTarget,
   type Samples,
   type StudioActionName,
-  type StudioActionStep,
   type StudioSource,
   type StudioStatus,
-  type StudioStepState,
   type StudioSurface,
-  type VariableOverrides,
-} from "../lib/types";
+} from "../lib/surfaces";
+import { type VariableOverrides } from "../lib/variables";
 
 const clampSize = (value: number, fallback: number): number =>
   Number.isFinite(value) ? Math.min(3000, Math.max(200, Math.round(value))) : fallback;

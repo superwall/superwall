@@ -14,7 +14,7 @@ import {
   StarIcon,
   UserIcon,
 } from "./icons";
-import { noticeFor, type EventNotice } from "../lib/events";
+import { noticeFor, type EventNotice, type PaywallMessageName } from "../lib/notices";
 
 const TINT: Record<EventNotice["tone"], string> = {
   info: "text-cream/45",
@@ -22,7 +22,7 @@ const TINT: Record<EventNotice["tone"], string> = {
   warning: "text-red",
 };
 
-const ICON: Record<string, () => React.ReactElement> = {
+const ICON: Partial<Record<PaywallMessageName, () => React.ReactElement>> = {
   purchase: CartIcon,
   transaction_complete: CheckCircleIcon,
   freeTrial_start: CheckCircleIcon,
@@ -62,7 +62,7 @@ const Toast = ({
   children,
   actions,
 }: React.PropsWithChildren<{
-  action: string;
+  action: PaywallMessageName;
   tone: EventNotice["tone"];
   actions?: React.ReactNode;
 }>) => {
@@ -99,7 +99,7 @@ type Choice<T> = {
   label: string;
   value: T;
   primary?: boolean;
-  action: string;
+  action: PaywallMessageName;
   tone: EventNotice["tone"];
   done: string;
 };
@@ -117,7 +117,7 @@ const Ask = <T,>({
   choices,
   onAnswer,
 }: {
-  action: string;
+  action: PaywallMessageName;
   verb: string;
   subject: string;
   choices: readonly Choice<T>[];
@@ -217,7 +217,7 @@ const CALLBACK: readonly Choice<"success" | "failure">[] = [
 let asked = 0;
 
 const ask = <T,>(
-  action: string,
+  action: PaywallMessageName,
   verb: string,
   subject: string,
   choices: readonly Choice<T>[],

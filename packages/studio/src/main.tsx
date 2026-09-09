@@ -4,7 +4,7 @@ import { buildPreviewPath, surfacePath } from "./lib/preview";
 import { parseProjectPayload } from "./lib/project";
 import { StudioApp } from "./StudioApp";
 import "./styles.css";
-import type { StudioSource } from "./lib/types";
+import type { StudioSource } from "./lib/surfaces";
 
 const loadSource = async (): Promise<StudioSource> => {
   const response = await fetch("/__studio/project.json");

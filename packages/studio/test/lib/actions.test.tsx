@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runAction } from "../src/lib/actions";
-import { buildPreviewPath } from "../src/lib/preview";
-import { StudioApp } from "../src/StudioApp";
-import type { StudioSource } from "../src/lib/types";
+import { runAction } from "../../src/lib/actions";
+import { buildPreviewPath } from "../../src/lib/preview";
+import { StudioApp } from "../../src/StudioApp";
+import type { StudioSource } from "../../src/lib/surfaces";
 
 const source: StudioSource = {
   title: "chatgpt",
@@ -374,5 +374,35 @@ describe("runAction framing", () => {
 
     const result = await runAction(surface, "push");
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("fetchStatus and fetchSamples", () => {
+  it("carry the reason the dev server could not be reached", async () => {
+    const { fetchSamples, fetchStatus } = await import("../../src/lib/actions");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("connection refused");
+      }),
+    );
+
+    const status = await fetchStatus({ kind: "paywall", id: "plus", routes: [], locales: [] });
+    expect(status).toEqual({ unreachable: "connection refused" });
+
+    const samples = await fetchSamples();
+    expect(samples).toMatchObject({ unreachable: "connection refused" });
+  });
+
+  it("read what the dev server answers", async () => {
+    const { fetchStatus } = await import("../../src/lib/actions");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ paywallId: "208540", active: true })),
+    );
+
+    expect(
+      await fetchStatus({ kind: "paywall", id: "plus", routes: [], locales: [] }),
+    ).toMatchObject({ paywallId: "208540", active: true });
   });
 });

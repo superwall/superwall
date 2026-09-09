@@ -1,4 +1,4 @@
-import type { PreviewUrlBuilder, StudioSurface } from "./types";
+import type { PreviewUrlBuilder, StudioSurface } from "./surfaces";
 
 export const surfacePath = (surface: StudioSurface): string =>
   `${surface.project ? `/${surface.project}` : ""}/${surface.kind}/${surface.id}`;

@@ -5,7 +5,6 @@ const UNITS: [number, Intl.RelativeTimeFormatUnit][] = [
   [7, "day"],
   [4.348, "week"],
   [12, "month"],
-  [Number.POSITIVE_INFINITY, "year"],
 ];
 
 export const timeAgo = (iso: string, now = Date.now()): string | undefined => {
@@ -17,5 +16,5 @@ export const timeAgo = (iso: string, now = Date.now()): string | undefined => {
     if (value < factor) return formatter.format(-Math.round(value), unit);
     value /= factor;
   }
-  return undefined;
+  return formatter.format(-Math.round(value), "year");
 };

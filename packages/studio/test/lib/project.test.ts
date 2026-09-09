@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProjectPayload } from "../src/lib/project";
+import { parseProjectPayload } from "../../src/lib/project";
 
 describe("parseProjectPayload", () => {
   it("parses a full payload", () => {
@@ -21,6 +21,28 @@ describe("parseProjectPayload", () => {
     expect(payload.title).toBe("chatgpt");
     expect(payload.diagnostics).toEqual(["a warning"]);
     expect(payload.surfaces[0]?.platforms).toEqual(["ios", "android"]);
+  });
+
+  it("takes a surface's products only when every entry is a store identifier", () => {
+    const payload = parseProjectPayload({
+      surfaces: [
+        {
+          kind: "paywall",
+          id: "good",
+          routes: [],
+          locales: [],
+          products: { monthly: "pro_999_month" },
+        },
+        { kind: "paywall", id: "numbers", routes: [], locales: [], products: { monthly: 999 } },
+        { kind: "paywall", id: "listed", routes: [], locales: [], products: ["pro_999_month"] },
+        { kind: "paywall", id: "absent", routes: [], locales: [] },
+      ],
+    });
+
+    expect(payload.surfaces[0]?.products).toEqual({ monthly: "pro_999_month" });
+    expect(payload.surfaces[1]?.products).toEqual({});
+    expect(payload.surfaces[2]?.products).toEqual({});
+    expect(payload.surfaces[3]?.products).toEqual({});
   });
 
   it("leaves platforms off a surface that declares none, or declares them badly", () => {

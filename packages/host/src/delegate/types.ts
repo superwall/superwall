@@ -1,4 +1,6 @@
 import type { TOutgoingMessage, TPermissionStatus } from "@superwall/protocol";
+
+export type { TIncomingMessage, TOutgoingMessage } from "@superwall/protocol";
 import type { HostProduct } from "../state";
 
 export type PurchaseOutcome = "completed" | "abandoned" | "failed";

@@ -1,4 +1,5 @@
-import type { SampleDefaults, StudioSurface, StudioSurfaceKind } from "./types";
+import type { StudioSurface, StudioSurfaceKind } from "./surfaces";
+import type { SampleDefaults } from "./variables";
 
 export type StudioProjectPayload = {
   title: string;

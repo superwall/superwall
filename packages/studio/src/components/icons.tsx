@@ -6,12 +6,6 @@ const Icon = ({ children }: React.PropsWithChildren) => (
   </svg>
 );
 
-export const ChevronLeftIcon = () => (
-  <Icon>
-    <path d="m15 18-6-6 6-6" />
-  </Icon>
-);
-
 export const RotateIcon = () => (
   <Icon>
     <path d="M21 12a9 9 0 1 1-2.64-6.36" />
@@ -37,13 +31,6 @@ export const SunIcon = () => (
 export const MoonIcon = () => (
   <Icon>
     <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-  </Icon>
-);
-
-export const ResetIcon = () => (
-  <Icon>
-    <path d="M3 12a9 9 0 1 0 2.64-6.36" />
-    <path d="M3 3v6h6" />
   </Icon>
 );
 

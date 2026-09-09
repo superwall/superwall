@@ -1,4 +1,4 @@
-import type { DeviceChromeSpec } from "../lib/devices";
+import type { DeviceChromeSpec } from "../../lib/devices";
 
 const CellularIcon = () => (
   <svg width="19" height="12" viewBox="0 0 19 12" fill="currentColor" aria-hidden="true">

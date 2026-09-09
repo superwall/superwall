@@ -9,7 +9,8 @@ import {
   type HostStatePatch,
   type HostVariables,
 } from "@superwall/host";
-import type { SampleDefaults, Samples, StudioSurface, VariableOverrides } from "./types";
+import type { Samples, StudioSurface } from "./surfaces";
+import type { SampleDefaults, VariableOverrides } from "./variables";
 
 export type HostInputs = {
   surface: StudioSurface;

@@ -2,8 +2,8 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { createRoot } from "react-dom/client";
 import type * as React from "react";
 import { describe, expect, it, vi } from "vitest";
-import { CompareMenu, type CompareOption } from "../src/components/CompareMenu";
-import type { StudioSurface } from "../src/lib/types";
+import { CompareMenu, type CompareOption } from "../../../src/components/menus/CompareMenu";
+import type { StudioSurface } from "../../../src/lib/surfaces";
 
 const surface = (id: string): StudioSurface => ({
   kind: "paywall",

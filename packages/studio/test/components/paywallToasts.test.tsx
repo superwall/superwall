@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { HostDelegate } from "@superwall/host";
-import { createStudioDelegate, PaywallToasts } from "../src/components/PaywallToasts";
+import { createStudioDelegate, PaywallToasts } from "../../src/components/PaywallToasts";
 
 const product = { reference: "annual", productId: "pro_5999_year", variables: {} };
 
@@ -139,5 +139,45 @@ describe("PaywallToasts", () => {
     delegate.custom("data");
     delegate.customPlacement("upsell", {});
     expect(screen.queryByText(/superwall\.com/)).toBeNull();
+  });
+});
+
+describe("the events that get their own icon", () => {
+  it("names a scheduled notification, a review request and an attribute change", async () => {
+    const delegate = mount();
+
+    await act(async () => {
+      delegate.event({
+        event_name: "schedule_notification",
+        id: "trial-ending",
+        type: "TRIAL_STARTED",
+        title: "Trial ending",
+        body: "2 days left",
+        delay: 172_800_000,
+      });
+      delegate.event({ event_name: "request_store_review", review_type: "in-app" });
+      delegate.event({
+        event_name: "user_attribute_updated",
+        attributes: [{ key: "plan", value: "pro" }],
+      });
+    });
+
+    expect(await screen.findByText("schedule_notification")).toBeDefined();
+    expect(await screen.findByText("request_store_review")).toBeDefined();
+    expect(await screen.findByText("user_attribute_updated")).toBeDefined();
+  });
+
+  it("still reports an event it has no icon for", async () => {
+    const delegate = mount();
+
+    await act(async () => {
+      delegate.event({
+        event_name: "post_checkout_complete",
+        checkout_context_id: "ctx_1",
+        product_identifier: "test:price_123:no-trial",
+      });
+    });
+
+    expect(await screen.findByText("post_checkout_complete")).toBeDefined();
   });
 });

@@ -2,8 +2,8 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHostState, recordingDelegate, type HostState } from "@superwall/host";
-import { DeviceFrame } from "../src/components/DeviceFrame";
-import { deviceById } from "../src/lib/devices";
+import { DeviceFrame } from "../../../src/components/preview/DeviceFrame";
+import { deviceById } from "../../../src/lib/devices";
 
 /**
  * The double-buffer contract: a src change loads a second, hidden iframe

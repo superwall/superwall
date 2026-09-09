@@ -3,7 +3,7 @@ import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { buildPreviewPath, surfacePath } from "../src/lib/preview";
 import { StudioApp } from "../src/StudioApp";
-import type { StudioSource } from "../src/lib/types";
+import type { StudioSource } from "../src/lib/surfaces";
 
 /** Renders with a stubbed dashboard catalogue, the only source of product data. */
 const withCatalogue = async (
@@ -529,5 +529,32 @@ describe("device mode", () => {
     render(<StudioApp source={source} device />);
     expect(screen.getByText("Paywalls")).toBeDefined();
     expect(screen.queryByRole("group", { name: "Theme" })).toBeNull();
+  });
+});
+
+describe("the surface list's own states", () => {
+  it("shows the project's problems above the surfaces", async () => {
+    await withCatalogue(
+      undefined,
+      <StudioApp
+        source={{
+          ...shippable,
+          diagnostics: ["paywalls/pro has two files claiming index", "funnels/quiz has no config"],
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/two files claiming index/)).toBeTruthy();
+    expect(screen.getByText(/has no config/)).toBeTruthy();
+  });
+
+  it("says how to make the first paywall when a project has none", async () => {
+    await withCatalogue(
+      undefined,
+      <StudioApp source={{ ...shippable, surfaces: [], diagnostics: [] }} />,
+    );
+
+    expect(screen.getByText(/No paywalls yet/)).toBeTruthy();
+    expect(screen.getByText(/superwall\/paywalls/)).toBeTruthy();
   });
 });
