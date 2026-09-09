@@ -20,7 +20,7 @@ import {
   type SubscriptionPeriod,
 } from "@/core/api/resources";
 import { scanProject } from "@/core/project/scan";
-import { apiCall } from "@/util/api-output";
+import { apiCall } from "@/commands/api-output";
 import { pickScope } from "./scope";
 
 export async function create(

@@ -16,7 +16,8 @@ import {
   selectSurfaces,
 } from "@/commands/paywalls/pipeline";
 import type { CommandContext } from "@/command";
-import { SuperwallApi } from "@/core/api/client";
+import { createSuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import type {
   Framework,
   FrameworkProject,
@@ -72,7 +73,7 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
   const bare = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pipeline-bare-"));
   dirs.push(bare);
   execFileSync("git", ["init", "--bare", "--initial-branch", "main", bare]);
-  const fake: Fake = { calls: [], bodies: {}, routes, api: SuperwallApi.of({} as never), bare };
+  const fake: Fake = { calls: [], bodies: {}, routes, api: createSuperwallApi({} as never), bare };
   const server = http.createServer((req, res) => {
     let raw = "";
     req.on("data", (chunk) => (raw += String(chunk)));
@@ -137,7 +138,7 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
   const port = typeof address === "object" && address !== null ? address.port : 0;
   process.env.SUPERWALL_API_KEY = "sk_test_pipeline";
   process.env.SUPERWALL_API_HOST = `http://127.0.0.1:${port}`;
-  fake.api = SuperwallApi.of({
+  fake.api = createSuperwallApi({
     authMethod: "api_key",
     apiKey: "sk_test_pipeline",
     host: `http://127.0.0.1:${port}`,

@@ -13,7 +13,7 @@ import {
 import { getDefaultApp, setDefaultApp } from "@/core/state/config";
 import { detectExisting } from "@/core/project/existing";
 import { scanProject } from "@/core/project/scan";
-import { apiCall } from "@/util/api-output";
+import { apiCall } from "@/commands/api-output";
 
 interface LocalApp {
   apiKey?: string;

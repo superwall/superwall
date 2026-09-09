@@ -8,8 +8,8 @@ import {
   findAscAppId,
   listAscApps,
 } from "@/core/api/asc-products";
-import { parseParams } from "@/util/params";
-import { apiCall, emitJson } from "@/util/api-output";
+import { parseParams } from "@/commands/platform/params";
+import { apiCall, emitJson } from "@/commands/api-output";
 import { buildAscBody, lookupAscOp, renderAscDocs, validateAscBody } from "@/core/api/asc-schema";
 import {
   type AscIndex,

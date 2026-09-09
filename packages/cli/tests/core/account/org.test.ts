@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SuperwallApi } from "@/core/api/client";
+import { createSuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import { requireOrg } from "@/core/account/org";
 import type { Session } from "@/core/auth/storage";
 
@@ -18,7 +19,7 @@ function apiWithOrgs(
     new Response(JSON.stringify({ data: orgs }), {
       status: 200,
     })) as typeof fetch;
-  return SuperwallApi.of({
+  return createSuperwallApi({
     apiKey: "sk_x",
     host: "https://api.example.com",
     createdAt: "n",
@@ -30,7 +31,7 @@ test("requireOrg returns the session org without fetching", async () => {
   globalThis.fetch = (async () => {
     throw new Error("should not fetch");
   }) as typeof fetch;
-  const api = SuperwallApi.of({
+  const api = createSuperwallApi({
     apiKey: "sk_x",
     orgId: "42",
     orgName: "Acme",

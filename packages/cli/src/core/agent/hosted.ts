@@ -1,4 +1,4 @@
-import { API_HOST } from "@/constants";
+import { API_HOST } from "@/environment";
 import { loadSession } from "@/core/auth/storage";
 import { getOAuthAccessToken } from "@/core/auth/token";
 
@@ -14,7 +14,7 @@ export interface HostedAgentStatus {
 }
 
 function baseUrl(): string {
-  return loadSession()?.host || API_HOST;
+  return loadSession()?.host || API_HOST();
 }
 
 export function getHostedAnthropicBaseUrl(): string {

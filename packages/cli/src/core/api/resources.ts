@@ -1,4 +1,4 @@
-import { SuperwallApi } from "./client";
+import type { SuperwallApi } from "./client";
 import type { PaywallSettings } from "@/core/paywalls/project/framework";
 
 export interface Application {

@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import { query, type Options, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { VERSION } from "@/constants";
+import { VERSION } from "@/environment";
 import {
   getHostedAnthropicBaseUrl,
   getHostedAuthToken,

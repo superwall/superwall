@@ -13,7 +13,7 @@ import {
   type ResourceName,
 } from "@/core/api/resources";
 import { getDefaultApp, setDefaultApp } from "@/core/state/config";
-import { apiCall } from "@/util/api-output";
+import { apiCall } from "@/commands/api-output";
 import { chooseApp, pickProject, pickScope, type PickedScope } from "./scope";
 
 export async function list(

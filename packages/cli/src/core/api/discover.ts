@@ -1,4 +1,4 @@
-import { SuperwallApi } from "./client";
+import type { SuperwallApi } from "./client";
 import { listApplications, type Application } from "./resources";
 
 export interface DiscoveredKey {

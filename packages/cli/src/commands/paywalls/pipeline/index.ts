@@ -39,151 +39,40 @@ import { parseRenameFlags, resolveRenames } from "@/core/paywalls/binding/rename
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import { collectSourceFiles } from "@/core/paywalls/source/source";
 import { pushSource } from "@/core/paywalls/source/source-push";
-import { VERSION } from "@/constants";
+import { VERSION } from "@/environment";
 import { ui } from "@/ui";
-import { pickApplicationOption } from "./pick-app";
-import { pickRenameOption } from "./pick-rename";
-import { pickStaleOption } from "./pick-stale";
-
-const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)} kB`;
-
-const weight = (bytes: number) =>
-  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : kb(bytes);
-
-const SHORT_SHA = 7;
-
-const shortSha = (sha: string | undefined): string | undefined =>
-  typeof sha === "string" && sha.length >= SHORT_SHA ? sha.slice(0, SHORT_SHA) : undefined;
-
-export function pushedLine(input: {
-  version: number;
-  snapshotId?: string;
-  live?: number;
-  promoting: boolean;
-}): string {
-  const sha = shortSha(input.snapshotId);
-  const version = input.promoting
-    ? `version ${input.version}`
-    : pc.yellow(`version ${input.version}`);
-  const pushed = `Pushed ${version}${sha ? ` ${pc.dim(`(${sha})`)}` : ""}`;
-  return input.promoting || input.live === undefined
-    ? pushed
-    : `${pushed} · ${pc.dim(`live ${input.live}`)}`;
-}
-
-export function transition(before: number | undefined, after: number): string {
-  if (before === undefined) return `Promoted ${pc.green(`version ${after}`)}`;
-  if (before === after) return `Version ${pc.green(String(after))} already live`;
-  if (after < before) return `Rolled back ${pc.green(`version ${before} → ${after}`)}`;
-  return `Promoted ${pc.green(`version ${before} → ${after}`)}`;
-}
-
-const BIND_VERB: Record<ResolvedBinding["source"], string> = {
-  lock: "Linked to",
-  matched: "Linked to",
-  created: "Created",
-  renamed: "Rebound after rename to",
-};
-
-export const LAYOUT_HINT =
-  "expected superwall/{paywalls,funnels}/<id>/ with config.ts and app/index.tsx";
-
-export function projectDir(context: CommandContext): string {
-  const [first] = projectDirs(context);
-  return first ?? process.cwd();
-}
-
-export function projectDirs(context: CommandContext): string[] {
-  const raw = context.argv.dir;
-  const list = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter(
-    (entry): entry is string => typeof entry === "string" && entry.length > 0,
-  );
-  if (list.length === 0) return [process.cwd()];
-
-  const expanded = list.flatMap((entry) => (entry.includes("*") ? expandGlob(entry) : [entry]));
-  return [...new Set(expanded.map((entry) => resolve(entry)))];
-}
-
-function expandGlob(pattern: string): string[] {
-  try {
-    return [...globSync(pattern)]
-      .filter((entry) => statSync(entry, { throwIfNoEntry: false })?.isDirectory() ?? false)
-      .sort();
-  } catch {
-    return [pattern];
-  }
-}
-
-export function requireProject(project: FrameworkProject, dir: string): FrameworkProject {
-  if (!project.marker) {
-    throw new Error(
-      `Not a superwall project: ${dir}\n` +
-        "Expected a package.json here (or in superwall/) that depends on superwall.",
-    );
-  }
-  if (project.packageName === "superwall") {
-    throw new Error(
-      `${project.superwallDir}/package.json is named "superwall".\n` +
-        'Node resolves every bare `import "superwall"` inside a package to that package ' +
-        "itself, so the framework can never load. Rename it to your project's name.",
-    );
-  }
-  return project;
-}
-
-export function parseIds(value: unknown): string[] {
-  const raw = Array.isArray(value) ? value : value === undefined ? [] : [value];
-  return raw
-    .flatMap((entry) => (typeof entry === "string" ? entry.split(",") : []))
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-}
-
-export function selectSurfaces(project: FrameworkProject, ids: unknown): FrameworkSurface[] {
-  const wanted = parseIds(ids);
-  const known = project.surfaces.map((surface) => surface.id).join(", ");
-
-  if (wanted.length === 0) {
-    if (project.surfaces.length === 0) {
-      throw new Error(`No paywalls or funnels found — ${LAYOUT_HINT}.`);
-    }
-    return [...project.surfaces];
-  }
-
-  const selected: FrameworkSurface[] = [];
-  for (const id of wanted) {
-    const matches = project.surfaces.filter((surface) => surface.id === id);
-    if (matches.length === 0) {
-      throw new Error(
-        `No paywall or funnel named "${id}"` +
-          (known ? ` — this project has: ${known}.` : ` — ${LAYOUT_HINT}.`),
-      );
-    }
-    if (matches.length > 1) {
-      const kinds = matches.map((surface) => `${surface.kind}/${surface.id}`).join(" and ");
-      throw new Error(`"${id}" is ambiguous — this project has ${kinds}.`);
-    }
-    const surface = matches[0];
-    if (surface && !selected.includes(surface)) selected.push(surface);
-  }
-  return selected;
-}
-
-export function requireClean(surfaces: readonly FrameworkSurface[]): void {
-  const problems = surfaces.flatMap((surface) => surface.diagnostics ?? []);
-  if (problems.length === 0) return;
-  throw new Error(
-    [...problems, "", "Publishing is immutable — fix these first, then push again."].join("\n"),
-  );
-}
-
-export function needsWork(
-  built: string,
-  pushed: string | undefined,
-  live: string | undefined,
-): boolean {
-  return built !== pushed && built !== live;
-}
+import {
+  BIND_VERB,
+  kb,
+  pendingPromoteWarning,
+  pushedLine,
+  resolveNote,
+  took,
+  transition,
+  weight,
+} from "./report";
+export { LAYOUT_HINT, pushedLine, transition } from "./report";
+export {
+  needsWork,
+  parseIds,
+  projectDir,
+  projectDirs,
+  requireClean,
+  requireProject,
+  selectSurfaces,
+} from "./selection";
+export { pendingPromoteWarning } from "./report";
+import {
+  needsWork,
+  parseIds,
+  projectDir,
+  requireClean,
+  requireProject,
+  selectSurfaces,
+} from "./selection";
+import { pickApplicationOption } from "../pick-app";
+import { pickRenameOption } from "../pick-rename";
+import { pickStaleOption } from "../pick-stale";
 
 async function pooled<T, R>(
   items: readonly T[],
@@ -203,52 +92,6 @@ async function pooled<T, R>(
   await Promise.all(runners);
   return results;
 }
-
-const NOTE_LIMIT = 2000;
-
-const PENDING_NAMES = 10;
-
-export function pendingPromoteWarning(
-  pending: readonly (string | { id: string; platform: string })[],
-  multi = false,
-): string | undefined {
-  if (pending.length === 0) return undefined;
-  const entries: { id: string; platform?: string }[] = pending.map((entry) =>
-    typeof entry === "string" ? { id: entry } : entry,
-  );
-  const ids = [...new Set(entries.map((entry) => entry.id))];
-  const platforms = new Set(entries.flatMap((entry) => (entry.platform ? [entry.platform] : [])));
-  const platformFlag = multi && platforms.size === 1 ? ` --platform ${[...platforms][0]}` : "";
-  const command = `superwall promote --id ${ids.join(",")}${platformFlag}`;
-  const labels = entries.map((entry) =>
-    multi && entry.platform ? `${entry.id} · ${entry.platform}` : entry.id,
-  );
-  if (labels.length === 1) {
-    return `${labels[0]} is pushed but not live — run \`${command}\` to publish it.`;
-  }
-  const shown = labels.slice(0, PENDING_NAMES).map((label) => `  ${label}`);
-  const rest = labels.length - shown.length;
-  return [
-    `These ${labels.length} paywalls are pushed but not live:`,
-    ...shown,
-    ...(rest > 0 ? [`  …and ${rest} more`] : []),
-    "",
-    `  ${command}`,
-  ].join("\n");
-}
-
-function resolveNote(message: unknown): string | undefined {
-  if (typeof message !== "string") return undefined;
-  if (message.length > NOTE_LIMIT) {
-    throw new Error(`Publish note is ${message.length} characters (limit ${NOTE_LIMIT}).`);
-  }
-  return message;
-}
-
-const took = (since: number): string => {
-  const seconds = (Date.now() - since) / 1000;
-  return pc.dim(seconds < 10 ? `(${seconds.toFixed(1)}s)` : `(${Math.round(seconds)}s)`);
-};
 
 async function timed<T>(work: () => Promise<T>): Promise<{ value: T; took: string }> {
   const at = Date.now();
@@ -474,6 +317,7 @@ export async function runPushPipeline(
     interactive: context.interactive,
     promote: options.promote,
   });
+  
   for (const entry of prepared) {
     for (const source of entry.build.externalSources ?? []) external.add(source);
   }

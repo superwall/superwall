@@ -16,8 +16,8 @@ import {
   withQuery,
   type AsaPage,
 } from "@/core/api/asa-ops";
-import { parseParams } from "@/util/params";
-import { apiCall, emitJson } from "@/util/api-output";
+import { parseParams } from "@/commands/platform/params";
+import { apiCall, emitJson } from "@/commands/api-output";
 
 const VERBS = new Set(["get", "post", "put", "delete"]);
 

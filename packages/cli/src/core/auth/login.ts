@@ -1,4 +1,4 @@
-import { API_HOST, AUTH_HOST, CLI_CLIENT_ID, OAUTH_SCOPE } from "@/constants";
+import { API_HOST, AUTH_HOST, CLI_CLIENT_ID, OAUTH_SCOPE } from "@/environment";
 import { getOnboardedOrg, getOnboardingIdempotencyKey, setOnboardedOrg } from "@/core/state/config";
 import { openBrowser } from "./browser";
 import { saveSession, type Session } from "./storage";
@@ -49,9 +49,9 @@ export interface ProvisionedApp {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function performLogin(opts: LoginOptions = {}): Promise<Session> {
-  const issuer = opts.issuer ?? AUTH_HOST;
-  const apiHost = opts.apiHost ?? API_HOST;
-  const clientId = opts.clientId ?? CLI_CLIENT_ID;
+  const issuer = opts.issuer ?? AUTH_HOST();
+  const apiHost = opts.apiHost ?? API_HOST();
+  const clientId = opts.clientId ?? CLI_CLIENT_ID();
 
   const disc = await discover(issuer);
   if (!disc.device_authorization_endpoint) {
@@ -143,7 +143,7 @@ export async function performLogin(opts: LoginOptions = {}): Promise<Session> {
   return session;
 }
 
-export async function loginWithApiKey(apiKey: string, apiHost = API_HOST): Promise<Session> {
+export async function loginWithApiKey(apiKey: string, apiHost = API_HOST()): Promise<Session> {
   const key = apiKey.trim();
   if (!key) throw new Error("An API key is required.");
 

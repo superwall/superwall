@@ -53,7 +53,7 @@
     "prepack": "bun run build",
     "prepublishOnly": "bun run typecheck && bun run test",
     "test:run": "tsx --test $(rg --files tests -g '*.test.ts')",
-    "test:coverage": "tsx --test --experimental-test-coverage --test-coverage-lines=70 --test-coverage-branches=82 --test-coverage-functions=68 $(rg --files tests -g '*.test.ts')",
+    "test:coverage": "tsx --test --experimental-test-coverage --test-coverage-lines=85 --test-coverage-branches=88 --test-coverage-functions=85 $(rg --files tests -g '*.test.ts')",
     "clean": "rm -rf dist"
   },
   "dependencies": {

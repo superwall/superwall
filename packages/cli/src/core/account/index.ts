@@ -1,6 +1,6 @@
 import type { Arguments } from "yargs";
 import type { Renderer } from "@/ui";
-import { apiKeyFromEnv } from "@/util/env";
+import { apiKeyFromEnv } from "@/environment";
 import type { ExistingIntegration } from "@/core/project/existing";
 
 export interface AccountResult {

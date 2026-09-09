@@ -1,10 +1,10 @@
 import { basename, dirname, join, relative, sep } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import fg from "fast-glob";
-import { Integration } from "@/constants";
+import { Integration } from "@/environment";
 import type { Framework } from "@/core/project/frameworks";
 import { frameworkByIntegration } from "./frameworks";
-import { allDeps, readPackageJson } from "@/util/fs";
+import { allDeps, readPackageJson } from "@/core/project/package";
 
 export interface DetectedApp {
   path: string;

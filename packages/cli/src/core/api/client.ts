@@ -1,4 +1,4 @@
-import { API_HOST } from "@/constants";
+import { API_HOST } from "@/environment";
 import { loadSession, saveSession, type Session } from "@/core/auth/storage";
 import { resolveAuthToken } from "@/core/auth/token";
 import { NotLoggedInError } from "@/core/auth/errors";
@@ -81,53 +81,49 @@ export interface RequestOptions {
   headers?: Record<string, string>;
 }
 
-export class SuperwallApi {
-  private constructor(private session: Session) {}
+export type SuperwallApi = {
+  readonly org: { id?: string; name?: string; count: number };
+  readonly userEmail: string | undefined;
+  readonly host: string;
+  setOrg(org: { id: string; name?: string }): void;
+  get<T>(path: string, options?: RequestOptions): Promise<T>;
+  post<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
+  put<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
+  patch<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
+  del<T>(path: string, options?: RequestOptions): Promise<T>;
+  postText(path: string, body: string): Promise<string>;
+  list<T>(path: string): Promise<T[]>;
+};
 
-  static of(session: Session): SuperwallApi {
-    return new SuperwallApi(session);
-  }
+const PAGE_LIMIT = 50;
 
-  static fromSession(): SuperwallApi {
-    const session = loadSession();
-    if (!session) throw new NotLoggedInError();
-    return new SuperwallApi(session);
-  }
+export const createSuperwallApi = (initial: Session): SuperwallApi => {
+  let session = initial;
 
-  get org(): { id?: string; name?: string; count: number } {
-    const override = process.env.SUPERWALL_ORG_ID;
-    return {
-      id: override ?? this.session.orgId,
-      name: override ? undefined : this.session.orgName,
-      count: this.session.orgCount ?? 1,
-    };
-  }
-  get userEmail(): string | undefined {
-    return this.session.userEmail;
-  }
+  const host = (): string => process.env.SUPERWALL_API_HOST ?? session.host ?? API_HOST();
 
-  setOrg(org: { id: string; name?: string }): void {
-    this.session = { ...this.session, orgId: org.id, orgName: org.name };
-    saveSession(this.session);
-  }
+  const send = async (url: string, init: RequestInit): Promise<Response> => {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      throw new ApiUnreachableError(host(), error);
+    }
+  };
 
-  get host(): string {
-    return process.env.SUPERWALL_API_HOST ?? this.session.host ?? API_HOST;
-  }
+  const authorized = async (): Promise<string> => {
+    const resolved = await resolveAuthToken(session);
+    session = resolved.session;
+    return resolved.token;
+  };
 
-  private base(): string {
-    return this.host;
-  }
-
-  private async request<T>(
+  const request = async <T>(
     method: string,
     path: string,
     body?: unknown,
     options: RequestOptions = {},
-  ): Promise<T> {
-    const { token, session } = await resolveAuthToken(this.session);
-    this.session = session;
-    const res = await this.fetch(`${this.base()}${path}`, {
+  ): Promise<T> => {
+    const token = await authorized();
+    const res = await send(`${host()}${path}`, {
       method,
       headers: {
         ...options.headers,
@@ -143,64 +139,71 @@ export class SuperwallApi {
     }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
-  }
+  };
 
-  private async fetch(url: string, init: RequestInit): Promise<Response> {
-    try {
-      return await fetch(url, init);
-    } catch (error) {
-      throw new ApiUnreachableError(this.base(), error);
-    }
-  }
+  const api: SuperwallApi = {
+    get org() {
+      const override = process.env.SUPERWALL_ORG_ID;
+      return {
+        id: override ?? session.orgId,
+        name: override ? undefined : session.orgName,
+        count: session.orgCount ?? 1,
+      };
+    },
+    get userEmail() {
+      return session.userEmail;
+    },
+    get host() {
+      return host();
+    },
+    setOrg(org) {
+      session = { ...session, orgId: org.id, orgName: org.name };
+      saveSession(session);
+    },
+    get: (path, options) => request("GET", path, undefined, options),
+    post: (path, body, options) => request("POST", path, body, options),
+    put: (path, body, options) => request("PUT", path, body, options),
+    patch: (path, body, options) => request("PATCH", path, body, options),
+    del: (path, options) => request("DELETE", path, undefined, options),
+    async postText(path, body) {
+      const token = await authorized();
+      const res = await send(`${host()}${path}`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: "text/plain",
+          "content-type": "text/plain; charset=utf-8",
+        },
+        body,
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new ApiError(`POST ${path}`, res.status, text);
+      }
+      return res.text();
+    },
+    async list<T>(path: string) {
+      const out: T[] = [];
+      let after: string | undefined;
+      for (let page = 0; page < PAGE_LIMIT; page++) {
+        const sep = path.includes("?") ? "&" : "?";
+        const url = `${path}${sep}limit=100${after ? `&starting_after=${after}` : ""}`;
+        const batch = await api.get<{ data: T[]; has_more?: boolean }>(url);
+        out.push(...batch.data);
+        if (!batch.has_more || batch.data.length === 0) break;
+        const last = batch.data[batch.data.length - 1] as { id?: string | number };
+        if (last?.id == null) break;
+        after = String(last.id);
+      }
+      return out;
+    },
+  };
 
-  get<T>(path: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>("GET", path, undefined, options);
-  }
-  post<T>(path: string, body: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>("POST", path, body, options);
-  }
-  put<T>(path: string, body: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>("PUT", path, body, options);
-  }
-  patch<T>(path: string, body: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>("PATCH", path, body, options);
-  }
-  del<T>(path: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>("DELETE", path, undefined, options);
-  }
+  return api;
+};
 
-  async postText(path: string, body: string): Promise<string> {
-    const { token, session } = await resolveAuthToken(this.session);
-    this.session = session;
-    const res = await this.fetch(`${this.base()}${path}`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        accept: "text/plain",
-        "content-type": "text/plain; charset=utf-8",
-      },
-      body,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new ApiError(`POST ${path}`, res.status, text);
-    }
-    return res.text();
-  }
-
-  async list<T>(path: string): Promise<T[]> {
-    const out: T[] = [];
-    let after: string | undefined;
-    for (let i = 0; i < 50; i++) {
-      const sep = path.includes("?") ? "&" : "?";
-      const url = `${path}${sep}limit=100${after ? `&starting_after=${after}` : ""}`;
-      const page = await this.get<{ data: T[]; has_more?: boolean }>(url);
-      out.push(...page.data);
-      if (!page.has_more || page.data.length === 0) break;
-      const last = page.data[page.data.length - 1] as { id?: string | number };
-      if (last?.id == null) break;
-      after = String(last.id);
-    }
-    return out;
-  }
-}
+export const superwallApi = (): SuperwallApi => {
+  const session = loadSession();
+  if (!session) throw new NotLoggedInError();
+  return createSuperwallApi(session);
+};

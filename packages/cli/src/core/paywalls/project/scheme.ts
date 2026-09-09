@@ -132,6 +132,27 @@ export const detectLocalScheme = async (
   return undefined;
 };
 
+const APP_MARKERS = [
+  "package.json",
+  "app.json",
+  "app.config.json",
+  "Podfile",
+  "ios",
+  "android",
+  ".git",
+];
+
+const looksLikeAppRoot = (dir: string): boolean => {
+  if (APP_MARKERS.some((marker) => fs.existsSync(path.join(dir, marker)))) return true;
+  try {
+    return fs
+      .readdirSync(dir)
+      .some((entry) => entry.endsWith(".xcodeproj") || entry.endsWith(".xcworkspace"));
+  } catch {
+    return false;
+  }
+};
+
 export const schemeSearchRoots = (project: {
   root: string;
   superwallDir: string;
@@ -139,7 +160,8 @@ export const schemeSearchRoots = (project: {
   const root = path.resolve(project.root);
   const superwallDir = path.resolve(project.superwallDir);
   const roots = [root];
-  if (root === superwallDir) roots.push(path.dirname(root));
+  const parent = path.dirname(root);
+  if (root === superwallDir && parent !== root && looksLikeAppRoot(parent)) roots.push(parent);
   return roots;
 };
 

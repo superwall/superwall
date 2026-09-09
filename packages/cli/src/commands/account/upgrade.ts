@@ -1,4 +1,4 @@
-import { VERSION } from "@/constants";
+import { VERSION } from "@/environment";
 import { defineCommand } from "@/command";
 import { spawnStream } from "@/core/agent/drivers/spawn";
 import { setUpdateCheck } from "@/core/state/config";

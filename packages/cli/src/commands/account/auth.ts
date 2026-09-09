@@ -1,5 +1,5 @@
 import { defineCommand } from "@/command";
-import { API_HOST } from "@/constants";
+import { API_HOST } from "@/environment";
 import { ensureSkillsCurrent } from "@/core/agent/skills";
 import { onboardingHooks } from "@/core/account/onboarding";
 import { track } from "@/core/telemetry";
@@ -131,7 +131,7 @@ export const runWhoami = defineCommand({
 });
 
 function effectiveHost(session: Session): string {
-  return process.env.SUPERWALL_API_HOST ?? session.host ?? API_HOST;
+  return process.env.SUPERWALL_API_HOST ?? session.host ?? API_HOST();
 }
 
 function sessionOutput(session: Session): Record<string, unknown> {

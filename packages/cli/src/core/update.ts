@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { VERSION } from "@/constants";
+import { VERSION } from "@/environment";
 import { getUpdateCheck, setUpdateCheck } from "@/core/state/config";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;

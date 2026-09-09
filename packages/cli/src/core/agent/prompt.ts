@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DASHBOARD_URL } from "@/constants";
-import { packagedDir } from "@/util/assets";
+import { DASHBOARD_URL } from "@/environment";
+import { packagedDir } from "@/packaged";
 import type { ActionContext, WizardAction } from "./actions";
 
 const cache = new Map<string, string>();

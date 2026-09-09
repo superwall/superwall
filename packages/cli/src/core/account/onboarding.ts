@@ -1,4 +1,4 @@
-import { Integration } from "@/constants";
+import { Integration } from "@/environment";
 import type { OnboardSetup, ProvisionedApp } from "@/core/auth/login";
 import type { DetectedApp } from "@/core/project/scan";
 import { setOnboardedApp } from "@/core/state/config";

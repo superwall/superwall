@@ -1,4 +1,4 @@
-import { DASHBOARD_URL, VERSION } from "@/constants";
+import { DASHBOARD_URL, VERSION } from "@/environment";
 import { ui } from "@/ui";
 import { withSpinner } from "@/ui/spinner";
 import { defineCommand, type CommandContext, type DefinedCommand } from "@/command";
@@ -15,10 +15,11 @@ import {
 import { loadSession } from "@/core/auth/storage";
 import type { ProvisionedApp } from "@/core/auth/login";
 import { getOnboardedApp } from "@/core/state/config";
-import { SuperwallApi } from "@/core/api/client";
+import { superwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import { discoverPublicApiKey } from "@/core/api/discover";
 import { platformLabel, type Scope } from "@/core/api/resources";
-import { apiKeyFromEnv } from "@/util/env";
+import { apiKeyFromEnv } from "@/environment";
 import {
   runProductsStage,
   runPaywallStage,
@@ -113,7 +114,7 @@ async function runPipeline(ctx: CommandContext): Promise<void> {
   // Resolve the app scope in the background so the dashboard stages don't wait on it mid-flow.
   let scopePromise: ReturnType<typeof resolveScopeFromKey> | null = null;
   if (session && existing.apiKey) {
-    scopePromise = resolveScopeFromKey(SuperwallApi.fromSession(), existing.apiKey).catch(
+    scopePromise = resolveScopeFromKey(superwallApi(), existing.apiKey).catch(
       () => null,
     );
   }
@@ -155,7 +156,7 @@ async function runPipeline(ctx: CommandContext): Promise<void> {
     if (!ctx.interactive) {
       if (session) {
         const disc = await withSpinner("Finding your app", () =>
-          discoverPublicApiKey(SuperwallApi.fromSession()),
+          discoverPublicApiKey(superwallApi()),
         );
         if (disc) {
           apiKey = disc.apiKey;
@@ -176,7 +177,7 @@ async function runPipeline(ctx: CommandContext): Promise<void> {
         ui.success(`Created \`${app.name}\` in Superwall`);
       } else {
         try {
-          const bound = await resolveAppBinding(SuperwallApi.fromSession(), {
+          const bound = await resolveAppBinding(superwallApi(), {
             platform: platformForIntegration(app.integration),
             appName: app.name,
           });
@@ -263,7 +264,7 @@ async function runPipeline(ctx: CommandContext): Promise<void> {
     const resolved = await withSpinner("Finding this app in Superwall", () =>
       scopePromise
         ? scopePromise
-        : resolveScopeFromKey(SuperwallApi.fromSession(), apiKey).catch(() => null),
+        : resolveScopeFromKey(superwallApi(), apiKey).catch(() => null),
     );
     if (resolved) {
       scope = resolved;
@@ -281,7 +282,7 @@ async function runPipeline(ctx: CommandContext): Promise<void> {
   }
   if (scope) {
     const stageCtx: StageCtx = {
-      api: SuperwallApi.fromSession(),
+      api: superwallApi(),
       scope,
       appName: app.name,
       bundleId,
@@ -369,7 +370,7 @@ async function runFlow(ctx: CommandContext, forced?: ActionId): Promise<void> {
         ui.success(`Created \`${app.name}\` in Superwall`);
       } else {
         try {
-          const bound = await resolveAppBinding(SuperwallApi.fromSession(), {
+          const bound = await resolveAppBinding(superwallApi(), {
             platform: platformForIntegration(app.integration),
             appName: app.name,
           });

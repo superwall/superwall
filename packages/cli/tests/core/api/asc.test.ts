@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SuperwallApi } from "@/core/api/client";
+import { createSuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import { createAscConfig, deleteAscConfig } from "@/core/api/asc";
 import { generateStoreKit } from "@/core/dashboard/storekit";
 import type { Session } from "@/core/auth/storage";
@@ -11,7 +12,7 @@ const SESSION: Session = {
   host: "https://api.example.com",
   createdAt: "n",
 };
-const api = SuperwallApi.of(SESSION);
+const api = createSuperwallApi(SESSION);
 
 function record(): { url?: string; method?: string; body?: unknown } {
   const rec: { url?: string; method?: string; body?: unknown } = {};

@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { formatJson } from "@/util/json";
+import { SUPERWALL_HOME } from "@/environment";
+import { formatJson } from "@/output";
 
 export interface Session {
   authMethod?: "oauth" | "api_key";
@@ -20,7 +21,7 @@ export interface Session {
 }
 
 function dir(): string {
-  return join(homedir(), ".superwall");
+  return SUPERWALL_HOME() ?? join(homedir(), ".superwall");
 }
 function file(): string {
   return join(dir(), "auth.json");

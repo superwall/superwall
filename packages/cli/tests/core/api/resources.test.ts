@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SuperwallApi } from "@/core/api/client";
+import { createSuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import {
   createCampaign,
   createEntitlement,
@@ -23,7 +24,7 @@ const SESSION: Session = {
   host: "https://api.example.com",
   createdAt: "n",
 };
-const api = SuperwallApi.of(SESSION);
+const api = createSuperwallApi(SESSION);
 const SCOPE: Scope = { projectId: "9", applicationId: "42", projectName: "P" };
 
 interface Rec {

@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { formatJson } from "@/util/json";
+import { formatJson } from "@/output";
+import { SUPERWALL_HOME } from "@/environment";
 
 export interface SkillsSync {
   cliVersion: string;
@@ -29,7 +30,7 @@ interface Config {
 }
 
 function dir(): string {
-  return join(homedir(), ".superwall");
+  return SUPERWALL_HOME() ?? join(homedir(), ".superwall");
 }
 function file(): string {
   return join(dir(), "config.json");

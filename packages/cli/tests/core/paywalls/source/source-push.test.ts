@@ -5,7 +5,8 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
-import { SuperwallApi } from "@/core/api/client";
+import { createSuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import type { SourceFile } from "@/core/paywalls/source/source";
 import { pushSource } from "@/core/paywalls/source/source-push";
 
@@ -40,7 +41,7 @@ async function fakeApi(options: { conflicts?: number; status?: number } = {}): P
     calls: [],
     bodies: {},
     conflicts: options.conflicts ?? 0,
-    api: SuperwallApi.of({} as never),
+    api: createSuperwallApi({} as never),
     remote: `file://${bare}`,
     bare,
   };
@@ -85,7 +86,7 @@ async function fakeApi(options: { conflicts?: number; status?: number } = {}): P
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
-  fake.api = SuperwallApi.of({
+  fake.api = createSuperwallApi({
     authMethod: "api_key",
     apiKey: "sk_test",
     host: `http://127.0.0.1:${port}`,

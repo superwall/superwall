@@ -11,6 +11,11 @@ export function selectRenderer(opts: { mode: OutputMode }): Renderer {
   return active;
 }
 
+export function useRenderer(renderer: Renderer): Renderer {
+  active = renderer;
+  return renderer;
+}
+
 const silentRenderer: Renderer = {
   start: () => {},
   stop: () => {},

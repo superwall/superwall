@@ -4,7 +4,7 @@ import { defineCommand } from "@/command";
 import { detectDrivers } from "@/core/agent/drivers";
 import { scanProject } from "@/core/project/scan";
 import { detectExisting } from "@/core/project/existing";
-import { apiKeyFromEnv } from "@/util/env";
+import { apiKeyFromEnv } from "@/environment";
 import { loadSession } from "@/core/auth/storage";
 
 export const runDoctor = defineCommand({

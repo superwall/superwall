@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import type { CommandContext } from "@/command";
-import { SuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import { createAscConfig, deleteAscConfig, listAscConfigs } from "@/core/api/asc";
 import { rowName } from "@/core/api/resources";
-import { apiCall, emitJson } from "@/util/api-output";
+import { apiCall, emitJson } from "@/commands/api-output";
 
 export async function runAscKeys(ctx: CommandContext, api: SuperwallApi): Promise<void> {
   const action = (ctx.argv.value as string | undefined) ?? "list";

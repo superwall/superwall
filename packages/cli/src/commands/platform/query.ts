@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { defineCommand, type CommandContext } from "@/command";
 import { requireOrg } from "@/core/account/org";
-import { apiCall } from "@/util/api-output";
+import { apiCall } from "@/commands/api-output";
 
 export const runQuery = defineCommand({
   name: "query",

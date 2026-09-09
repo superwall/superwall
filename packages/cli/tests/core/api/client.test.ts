@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SuperwallApi, ApiError } from "@/core/api/client";
+import { ApiError, createSuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import type { Session } from "@/core/auth/storage";
 
 const SESSION: Session = {
@@ -46,7 +47,7 @@ function mockTextFetch(
 
 test("get() sends Bearer auth to the session host and parses JSON", async () => {
   const calls = mockFetch(() => ({ body: { ok: true } }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
   const res = await api.get<{ ok: boolean }>("/v2/thing");
   assert.equal(res.ok, true);
   assert.equal(calls[0]!.url, "https://api.example.com/v2/thing");
@@ -58,7 +59,7 @@ test("get() sends Bearer auth to the session host and parses JSON", async () => 
 
 test("non-2xx throws ApiError with status + body", async () => {
   mockFetch(() => ({ status: 400, body: { message: "bad" } }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
   await assert.rejects(
     () => api.get("/v2/x"),
     (e: unknown) => e instanceof ApiError && (e as ApiError).status === 400,
@@ -78,7 +79,7 @@ const ENVELOPE = {
 
 test("an error envelope renders as its message and nothing else", async () => {
   mockFetch(() => ({ status: 404, body: ENVELOPE }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
 
   const error = await api.post("/v2/paywalls/208540/promote", {}).then(
     () => undefined,
@@ -94,7 +95,7 @@ test("an error envelope renders as its message and nothing else", async () => {
 
 test("the envelope's machine fields stay on the error for callers that want them", async () => {
   mockFetch(() => ({ status: 404, body: ENVELOPE }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
 
   const error = await api.post("/v2/paywalls/208540/promote", {}).then(
     () => undefined,
@@ -112,7 +113,7 @@ test("the envelope's machine fields stay on the error for callers that want them
 
 test("a body that is not our envelope falls back to the status and a snippet", async () => {
   mockTextFetch(() => ({ status: 502, body: "<html><body>Bad Gateway</body></html>" }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
 
   const error = await api.postText("/v2/x", "q").then(
     () => undefined,
@@ -127,7 +128,7 @@ test("a body that is not our envelope falls back to the status and a snippet", a
 
 test("a long non-envelope body is truncated rather than dumped whole", async () => {
   mockTextFetch(() => ({ status: 500, body: "x".repeat(5000) }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
 
   const error = await api.postText("/v2/x", "q").then(
     () => undefined,
@@ -141,7 +142,7 @@ test("a long non-envelope body is truncated rather than dumped whole", async () 
 
 test("JSON without a message is not our envelope", async () => {
   mockFetch(() => ({ status: 400, body: { error: "nope" } }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
 
   const error = await api.get("/v2/x").then(
     () => undefined,
@@ -158,7 +159,7 @@ test("list() paginates via has_more + starting_after", async () => {
     if (url.includes("starting_after=2")) return { body: { data: [{ id: 3 }], has_more: false } };
     return { body: { data: [{ id: 1 }, { id: 2 }], has_more: true } };
   });
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
   const rows = await api.list<{ id: number }>("/v2/products?project_id=9");
   assert.deepEqual(
     rows.map((r) => r.id),
@@ -170,7 +171,7 @@ test("list() paginates via has_more + starting_after", async () => {
 
 test("postText() sends a raw text body and returns the raw response", async () => {
   const calls = mockTextFetch(() => ({ body: "ok\t1\n" }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
   const res = await api.postText("/v2/organizations/1/query?default_format=JSON", "SELECT 1");
 
   assert.equal(res, "ok\t1\n");
@@ -191,7 +192,7 @@ test("postText() sends a raw text body and returns the raw response", async () =
 
 test("postText() includes the raw ClickHouse error in ApiError", async () => {
   mockTextFetch(() => ({ status: 403, body: "data:read scope required" }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
 
   await assert.rejects(
     () => api.postText("/v2/organizations/1/query", "SELECT 1"),
@@ -202,7 +203,7 @@ test("postText() includes the raw ClickHouse error in ApiError", async () => {
 
 test("put() sends a JSON body and per-request headers ride along", async () => {
   const calls = mockFetch(() => ({ body: { ok: true } }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
   await api.put("/v2/thing/1", { name: "x" }, { headers: { "x-ap-context": "orgId=1" } });
   assert.equal(calls[0]!.init.method, "PUT");
   assert.equal(calls[0]!.init.body, JSON.stringify({ name: "x" }));
@@ -219,7 +220,7 @@ test("put() sends a JSON body and per-request headers ride along", async () => {
 
 test("custom headers can't override the session's authorization", async () => {
   const calls = mockFetch(() => ({ body: {} }));
-  const api = SuperwallApi.of(SESSION);
+  const api = createSuperwallApi(SESSION);
   await api.get("/v2/thing", { headers: { authorization: "Bearer stolen" } });
   assert.equal((calls[0]!.init.headers as Record<string, string>).authorization, "Bearer sk_test123");
 });

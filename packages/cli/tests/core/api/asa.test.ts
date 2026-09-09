@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SuperwallApi } from "@/core/api/client";
+import { createSuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import { asaProxy, asaUpstreamPath, listAsaApps, pickAsaApp, type AsaApp } from "@/core/api/asa";
 import type { Session } from "@/core/auth/storage";
 
@@ -10,7 +11,7 @@ const SESSION: Session = {
   host: "https://api.example.com",
   createdAt: "n",
 };
-const api = SuperwallApi.of(SESSION);
+const api = createSuperwallApi(SESSION);
 
 function record(body: unknown = { data: [] }): { url?: string; method?: string; body?: unknown; headers?: Record<string, string> } {
   const rec: { url?: string; method?: string; body?: unknown; headers?: Record<string, string> } = {};
@@ -54,7 +55,7 @@ test("asaProxy targets the org's proxy for the app and forwards the org context"
 });
 
 test("asaProxy needs an organization", async () => {
-  const orgless = SuperwallApi.of({ ...SESSION, orgId: undefined });
+  const orgless = createSuperwallApi({ ...SESSION, orgId: undefined });
   await assert.rejects(asaProxy(orgless, "5", "get", "/me"), /No organization selected/);
 });
 

@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { ASSET_HOST } from "@/constants";
+import { ASSET_HOST } from "@/environment";
 import { ApiError, type SuperwallApi } from "@/core/api/client";
 import {
   pushPaywallAssets,
@@ -8,7 +8,7 @@ import {
 } from "@/core/api/resources";
 import type { BuiltSnapshot } from "./project/framework";
 
-export const assetBaseUrl = (applicationId: string): string => `${ASSET_HOST}/${applicationId}`;
+export const assetBaseUrl = (applicationId: string): string => `${ASSET_HOST()}/${applicationId}`;
 
 export interface BuildAsset {
   fileName: string;

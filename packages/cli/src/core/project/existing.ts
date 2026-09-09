@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import fg from "fast-glob";
-import { Integration } from "@/constants";
+import { Integration } from "@/environment";
 import type { DetectedApp } from "./scan";
-import { allDeps, readPackageJson } from "@/util/fs";
+import { allDeps, readPackageJson } from "@/core/project/package";
 
 export interface ExistingIntegration {
   sdkInstalled: boolean;

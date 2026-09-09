@@ -2,11 +2,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import fg from "fast-glob";
-import { DASHBOARD_URL } from "@/constants";
+import { DASHBOARD_URL } from "@/environment";
 import { ui } from "@/ui";
 import { withSpinner } from "@/ui/spinner";
 import { generateStoreKit } from "@/core/dashboard/storekit";
-import { formatJson } from "@/util/json";
+import { formatJson } from "@/output";
 import { createAscConfig, listAscConfigs } from "@/core/api/asc";
 import {
   ascTypeDisplay,

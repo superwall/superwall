@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import { defineCommand } from "@/command";
-import { VERSION } from "@/constants";
+import { VERSION } from "@/environment";
 import { ApiError } from "@/core/api/client";
 import { livePaywallVersion, promotePaywallVersion } from "@/core/api/resources";
 import { resolveApps } from "@/core/paywalls/binding/apps";

@@ -1,0 +1,62 @@
+import type { Argv } from "yargs";
+import { apiKeyOption, dryRunOption, installDirOption, skillOption } from "./options";
+
+export const registerWorkflowCommands = <T>(cli: Argv<T>): Argv<T> =>
+  cli
+  .command(
+    "integrate",
+    "Set up the SDK, placements, and dashboard in your app",
+    (y) =>
+      y.options({
+        ...installDirOption,
+        ...apiKeyOption,
+        ...dryRunOption,
+        ...skillOption,
+        driver: {
+          type: "string",
+          choices: ["claude", "codex", "superwall"],
+          describe: "Force a coding-agent backend (default: first detected)",
+          hidden: true,
+        },
+      }),
+    (argv) => {
+      if (argv.skill)
+        return import("@/commands/workflow/print-skill").then((m) => m.runPrintSkill("integrate")(argv));
+      return import("@/commands/workflow/integrate").then((m) => m.runIntegrate(argv));
+    },
+  )
+  .command(
+    "review",
+    "Review an existing Superwall setup end to end",
+    (y) =>
+      y.options({
+        ...installDirOption,
+        ...dryRunOption,
+        ...skillOption,
+        fix: {
+          type: "boolean",
+          describe: "Apply verified, safe fixes from the latest review",
+        },
+      }),
+    (argv) => {
+      const id = argv.fix ? "review-fix" : "review";
+      if (argv.skill)
+        return import("@/commands/workflow/print-skill").then((m) => m.runPrintSkill(id)(argv));
+      return import("@/commands/workflow/integrate").then((m) => m.runActionCommand(id)(argv));
+    },
+  )
+  .command(
+    "migrate",
+    "Migrate from RevenueCat / Adapty / Qonversion to Superwall",
+    (y) =>
+      y.options({
+        ...installDirOption,
+        "dry-run": { type: "boolean", describe: "Plan without changes" },
+        ...skillOption,
+      }),
+    (argv) => {
+      if (argv.skill)
+        return import("@/commands/workflow/print-skill").then((m) => m.runPrintSkill("migrate")(argv));
+      return import("@/commands/workflow/migrate").then((m) => m.runMigrate(argv));
+    },
+  );

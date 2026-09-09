@@ -1,6 +1,6 @@
-import { TELEMETRY_HOST, TELEMETRY_KEY, VERSION } from "@/constants";
+import { TELEMETRY_HOST, TELEMETRY_KEY, VERSION } from "@/environment";
 import { getAnonymousId, setTelemetryNoticeShown, telemetryNoticeShown } from "@/core/state/config";
-import { isNonInteractive } from "@/util/env";
+import { isNonInteractive } from "@/environment";
 
 export interface TelemetryTags {
   framework?: string;
@@ -24,7 +24,7 @@ export function isTelemetryEnabled(env: NodeJS.ProcessEnv, key: string): boolean
 }
 
 export function telemetryEnabled(): boolean {
-  return isTelemetryEnabled(process.env, TELEMETRY_KEY);
+  return isTelemetryEnabled(process.env, TELEMETRY_KEY());
 }
 
 /**
@@ -38,7 +38,7 @@ export function buildEvent(
   distinctId: string,
 ): Record<string, unknown> {
   return {
-    api_key: TELEMETRY_KEY,
+    api_key: TELEMETRY_KEY(),
     event,
     distinct_id: distinctId,
     timestamp: new Date().toISOString(),
@@ -59,7 +59,7 @@ export function track(event: string, props: Record<string, unknown> = {}): void 
   try {
     const payload = buildEvent(event, props, getAnonymousId());
     pending.push(
-      fetch(`${TELEMETRY_HOST}/capture/`, {
+      fetch(`${TELEMETRY_HOST()}/capture/`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),

@@ -1,4 +1,4 @@
-import { Integration } from "@/constants";
+import { Integration } from "@/environment";
 
 export interface Framework {
   integration: Integration;

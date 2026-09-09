@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SuperwallApi } from "@/core/api/client";
+import { createSuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import type { Session } from "@/core/auth/storage";
 import {
   buildReport,
@@ -24,7 +25,7 @@ const SESSION: Session = {
   host: "https://api.example.com",
   createdAt: "n",
 };
-const api = SuperwallApi.of(SESSION);
+const api = createSuperwallApi(SESSION);
 
 interface Call {
   url: string;

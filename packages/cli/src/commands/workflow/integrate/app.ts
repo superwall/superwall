@@ -10,7 +10,8 @@ import {
   resolveScopeFromKey,
   platformForIntegration,
 } from "@/core/account/bind";
-import { SuperwallApi } from "@/core/api/client";
+import { superwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import type { Scope } from "@/core/api/resources";
 import { clearSession, loadSession, type Session } from "@/core/auth/storage";
 import { getHostedStatus } from "@/core/agent/hosted";
@@ -82,7 +83,7 @@ export async function recoverUnmatchedScope(
       clearSession();
       if (!(await performLoginWithUi(app))) return null;
       const resolved = await withSpinner("Finding this app in Superwall", () =>
-        resolveScopeFromKey(SuperwallApi.fromSession(), apiKey).catch(() => null),
+        resolveScopeFromKey(superwallApi(), apiKey).catch(() => null),
       );
       if (resolved) {
         ui.success(`Found \`${resolved.appName ?? app.name}\``);
@@ -99,7 +100,7 @@ export async function recoverUnmatchedScope(
     }
 
     try {
-      const bound = await resolveAppBinding(SuperwallApi.fromSession(), {
+      const bound = await resolveAppBinding(superwallApi(), {
         platform: platformForIntegration(app.integration),
         appName: app.name,
       });

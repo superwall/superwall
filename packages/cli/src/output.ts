@@ -1,8 +1,9 @@
 import { stripVTControlCharacters } from "node:util";
 import type { ListOpts, Renderer } from "@/ui/types";
-import { formatJson } from "@/util/json";
 
-export { formatJson } from "@/util/json";
+export function formatJson(value: unknown): string {
+  return JSON.stringify(value, null, 2);
+}
 
 export type OutputMode = "rich" | "text" | "json";
 

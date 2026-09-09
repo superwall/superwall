@@ -1,4 +1,4 @@
-import { TELEMETRY_HOST, TELEMETRY_KEY, VERSION } from "@/constants";
+import { TELEMETRY_HOST, TELEMETRY_KEY, VERSION } from "@/environment";
 import { loadSession } from "@/core/auth/storage";
 import { getAnonymousId } from "@/core/state/config";
 
@@ -11,7 +11,7 @@ export function buildFeedbackEvent(
   session: { userEmail?: string; orgId?: string; orgName?: string } | null,
 ): Record<string, unknown> {
   return {
-    api_key: TELEMETRY_KEY,
+    api_key: TELEMETRY_KEY(),
     event: "feedback submitted",
     distinct_id: distinctId,
     timestamp: new Date().toISOString(),
@@ -29,10 +29,10 @@ export function buildFeedbackEvent(
 }
 
 export async function submitFeedback(message: string, via: FeedbackVia): Promise<boolean> {
-  if (!TELEMETRY_KEY) return false;
+  if (!TELEMETRY_KEY()) return false;
   const payload = buildFeedbackEvent(message, via, getAnonymousId(), loadSession());
   try {
-    const res = await fetch(`${TELEMETRY_HOST}/capture/`, {
+    const res = await fetch(`${TELEMETRY_HOST()}/capture/`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),

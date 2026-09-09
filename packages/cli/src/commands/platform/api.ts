@@ -12,8 +12,8 @@ import {
   type Project,
   type Row,
 } from "@/core/api/resources";
-import { parseParams } from "@/util/params";
-import { apiCall, emitJson } from "@/util/api-output";
+import { parseParams } from "@/commands/platform/params";
+import { apiCall, emitJson } from "@/commands/api-output";
 
 export type ApiVerb = "get" | "post" | "patch" | "delete";
 

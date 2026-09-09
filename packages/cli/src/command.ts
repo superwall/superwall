@@ -1,14 +1,15 @@
 import { resolve } from "node:path";
 import pc from "picocolors";
 import type { Arguments } from "yargs";
-import { ApiError, SuperwallApi } from "@/core/api/client";
+import { ApiError, superwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import { NotLoggedInError } from "@/core/auth/errors";
 import { createCommandOutput, type CommandOutput, type OutputMode, writeJson } from "@/output";
 import { maybeShowTelemetryNotice, track } from "@/core/telemetry";
 import { maybeNotifyUpdate, refreshUpdateCheck } from "@/core/update";
-import { selectRenderer } from "@/ui";
+import { selectRenderer, useRenderer } from "@/ui";
 import type { Renderer } from "@/ui/types";
-import { isNonInteractive } from "@/util/env";
+import { isNonInteractive } from "@/environment";
 
 export type AuthPolicy = "none" | "optional" | "required";
 export type InteractionPolicy = "allowed" | "none";
@@ -74,7 +75,9 @@ export async function executeCommand<Auth extends AuthPolicy>(
     !explicitNonInteractive &&
     !environmentNonInteractive;
   const installDir = resolve((argv.installDir as string | undefined) ?? process.cwd());
-  const ui = runtime.renderer?.(outputMode) ?? selectRenderer({ mode: outputMode });
+  const ui = runtime.renderer
+    ? useRenderer(runtime.renderer(outputMode))
+    : selectRenderer({ mode: outputMode });
   const stdout = runtime.stdout ?? process.stdout;
   const output = createCommandOutput(outputMode, ui, { stdout });
 
@@ -98,7 +101,7 @@ export async function executeCommand<Auth extends AuthPolicy>(
     track("workflow started", { workflow: definition.name });
   }
   try {
-    const api = resolveApi(definition.auth ?? "none", runtime.api ?? SuperwallApi.fromSession);
+    const api = resolveApi(definition.auth ?? "none", runtime.api ?? superwallApi);
     const context = {
       argv,
       ui,

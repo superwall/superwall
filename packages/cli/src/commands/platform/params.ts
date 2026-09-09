@@ -24,7 +24,6 @@ function parseTyped(raw: string, pair: string): unknown {
   }
 }
 
-/** `items[0][price]` → ["items", "0", "price"]. */
 function splitKey(key: string): string[] {
   return key
     .replace(/\]/g, "")

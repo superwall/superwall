@@ -1,4 +1,4 @@
-import { Integration } from "@/constants";
+import { Integration } from "@/environment";
 import type { DetectedApp } from "@/core/project/scan";
 import type { ExistingIntegration } from "@/core/project/existing";
 import type { AgentCapabilities } from "./drivers";

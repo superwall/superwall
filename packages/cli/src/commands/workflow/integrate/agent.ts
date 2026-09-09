@@ -1,4 +1,4 @@
-import { DASHBOARD_URL } from "@/constants";
+import { DASHBOARD_URL } from "@/environment";
 import type { CommandContext } from "@/command";
 import { blocks } from "@/output";
 import { ui } from "@/ui";
@@ -6,7 +6,7 @@ import { stripReport } from "@/ui/log";
 import { saveReport } from "@/core/state/reports";
 import { runAction } from "@/core/agent/run";
 import { buildCopyPrompt } from "@/core/agent/prompt";
-import { copyToClipboard } from "@/util/clipboard";
+import { copyToClipboard } from "@/clipboard";
 import {
   actionById,
   type ActionContext,

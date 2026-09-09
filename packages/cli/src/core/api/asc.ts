@@ -1,4 +1,4 @@
-import { SuperwallApi } from "./client";
+import type { SuperwallApi } from "./client";
 import type { Row } from "./resources";
 
 export interface AscCredentials {

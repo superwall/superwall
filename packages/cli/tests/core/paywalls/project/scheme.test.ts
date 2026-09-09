@@ -82,6 +82,9 @@ test("looks beside superwall/ when the command ran from inside it", async () => 
   const superwallDir = path.join(appRoot, "superwall");
   fs.mkdirSync(path.join(appRoot, "MyApp"), { recursive: true });
   fs.mkdirSync(superwallDir, { recursive: true });
+  // What makes the level above superwall/ the app: without a marker it is just
+  // whatever directory the project happens to sit in.
+  fs.writeFileSync(path.join(appRoot, "package.json"), `{"name":"my-app"}`);
   fs.writeFileSync(
     path.join(appRoot, "MyApp", "Info.plist"),
     `<key>CFBundleURLSchemes</key><array><string>siblingapp</string></array>`,
@@ -150,4 +153,39 @@ test("survives a dashboard app whose scheme is null, and still checks the app", 
     scheme: "localapp",
     source: "app",
   });
+});
+
+test("never searches the directory a loose project happens to sit in", async () => {
+  const holder = tempDir();
+  const superwallDir = path.join(holder, "superwall");
+  fs.mkdirSync(superwallDir, { recursive: true });
+  // An unrelated app beside the project, as a home or temp directory would hold.
+  fs.mkdirSync(path.join(holder, "SomeoneElsesApp"), { recursive: true });
+  fs.writeFileSync(
+    path.join(holder, "SomeoneElsesApp", "Info.plist"),
+    `<key>CFBundleIdentifier</key><string>x</string>
+<key>CFBundleURLSchemes</key><array><string>strangerapp</string></array>`,
+  );
+
+  const roots = schemeSearchRoots({ root: superwallDir, superwallDir });
+
+  assert.deepEqual(roots, [superwallDir]);
+  assert.equal(await detectLocalScheme(roots), undefined);
+  assert.equal(await detectAppTransportSecurity(roots), undefined);
+});
+
+test("recognises a native app root by its Xcode project", async () => {
+  const appRoot = tempDir();
+  const superwallDir = path.join(appRoot, "superwall");
+  fs.mkdirSync(path.join(appRoot, "MyApp.xcodeproj"), { recursive: true });
+  fs.mkdirSync(superwallDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(appRoot, "Info.plist"),
+    `<key>CFBundleURLSchemes</key><array><string>nativeapp</string></array>`,
+  );
+
+  const roots = schemeSearchRoots({ root: superwallDir, superwallDir });
+
+  assert.deepEqual(roots, [superwallDir, appRoot]);
+  assert.equal(await detectLocalScheme(roots), "nativeapp");
 });

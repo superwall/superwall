@@ -5,7 +5,7 @@ import {
   versionProducts,
 } from "@/core/api/resources";
 import type { SuperwallApi } from "@/core/api/client";
-import { VERSION } from "@/constants";
+import { VERSION } from "@/environment";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
 import { resolveApps } from "@/core/paywalls/binding/apps";
 import { resolveBinding } from "@/core/paywalls/binding/binding";

@@ -1,4 +1,4 @@
-import { DASHBOARD_URL, VERSION } from "@/constants";
+import { DASHBOARD_URL, VERSION } from "@/environment";
 import { ui } from "@/ui";
 import { defineCommand } from "@/command";
 import { blocks } from "@/output";

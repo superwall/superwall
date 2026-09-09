@@ -3,8 +3,8 @@ import type { CommandContext } from "@/command";
 import type { SuperwallApi } from "@/core/api/client";
 import { addPlacement, listResource } from "@/core/api/resources";
 import { generateStoreKit } from "@/core/dashboard/storekit";
-import { apiCall } from "@/util/api-output";
-import { formatJson } from "@/util/json";
+import { apiCall } from "@/commands/api-output";
+import { formatJson } from "@/output";
 import { pickScope } from "./scope";
 
 export async function addCampaignPlacement(

@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
-import { VERSION } from "@/constants";
+import { VERSION } from "@/environment";
 import { track } from "@/core/telemetry";
 import { ui } from "@/ui";
-import { packagedDir } from "@/util/assets";
+import { packagedDir } from "@/packaged";
 import { getSkillsSync, setSkillsSync, type SkillsSync } from "@/core/state/config";
 import { spawnStream } from "./drivers/spawn";
 

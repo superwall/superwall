@@ -1,7 +1,7 @@
-import { Integration } from "@/constants";
+import { Integration } from "@/environment";
 import { ui, type Opt } from "@/ui";
 import { requireOrg } from "@/core/account/org";
-import { SuperwallApi } from "@/core/api/client";
+import type { SuperwallApi } from "@/core/api/client";
 import {
   createApplication,
   createProject,

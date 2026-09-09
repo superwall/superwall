@@ -50,7 +50,7 @@ skill.
 - **Kill commands that don't earn their place.** A command that duplicates
   another's output (scan vs doctor) or has no user (pull/plan) gets deleted,
   not deprecated.
-- **Help is hand-written** in `printHelp()` (`src/cli.ts`), Stripe-style grouped
+- **Help is hand-written** in `printHelp()` (`src/cli/help.ts`), Stripe-style grouped
   sections: Workflow / Resource / API / App Store Connect / Other. Every command
   add/remove/rename MUST update it - yargs' auto-help is never shown at the root.
 - **Errors are short.** Unknown command / bad args → `✗ message` + "Run
@@ -110,7 +110,7 @@ skills. Missing variables throw; keep it that way (it catches template drift).
 When a command is added, renamed, or removed, or its flags/output change, sweep
 and update ALL of:
 
-1. `printHelp()` in `src/cli.ts`
+1. `printHelp()` in `src/cli/help.ts`
 2. `README.md` command examples (user-facing: runnable code blocks, no internal jargon)
 3. This package's `skills/**/*.md` (bundled skills reference CLI commands constantly)
 4. `prompts/actions/*.xml` if the harness wrapper mentions commands
@@ -131,8 +131,10 @@ you have it checked out) before calling it done.
   "coming soon" notes, never comment out code - delete it (git remembers).
   Leave existing comments alone unless you are changing the code they sit on.
 - No dead code, no unused exports, no aliases kept "just in case".
-- `VERSION` comes from `package.json` (single source). Constants live in
-  `src/constants.ts` only if used in 2+ places.
+- `VERSION` comes from `package.json` (single source). Anything the CLI reads
+  from its surroundings — hosts, `SUPERWALL_API_KEY`, `SUPERWALL_HOME`, whether
+  the terminal is interactive — lives in `src/environment.ts`; a value used in
+  one place stays there.
 - Branded UI color is `THEME.primary` cyan; picocolors for dim/bold (auto-safe
   for non-TTY); never raw ANSI in command code.
 
@@ -165,8 +167,10 @@ message that lists the affected files; never emit the same sentence per file.
 
 1. Handler in `src/commands/<category>/<name>.ts` (categories: `paywalls`,
    `workflow`, `resource`, `platform`, `account`) using `defineCommand`
-   (lifecycle, renderer, error handling come free). Lazy-import it in `cli.ts`.
-2. Register in `cli.ts` with describe + options; respect the naming rules above.
+   (lifecycle, renderer, error handling come free). Lazy-import it from the
+   matching `src/cli/<category>.ts` registrar.
+2. Register in `src/cli/<category>.ts` with describe + options; respect the
+   naming rules above.
 3. Add to the right `printHelp()` section.
 4. `--json` support if it outputs data.
 5. Run the sync sweep (section above).

@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import { renderUnicodeCompact } from "uqr";
 import { defineCommand } from "@/command";
-import { VERSION } from "@/constants";
+import { VERSION } from "@/environment";
 import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
 import { frameworkVersion, loadFramework } from "@/core/paywalls/project/framework";
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";

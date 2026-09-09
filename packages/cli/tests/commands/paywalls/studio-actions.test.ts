@@ -6,7 +6,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import { createStudioActions } from "@/commands/paywalls/studio-actions";
-import { VERSION } from "@/constants";
+import { VERSION } from "@/environment";
 import type { Framework, FrameworkProject, FrameworkSurface } from "@/core/paywalls/project/framework";
 import { readLock, writeApp, writeBinding } from "@/core/paywalls/project/lock";
 

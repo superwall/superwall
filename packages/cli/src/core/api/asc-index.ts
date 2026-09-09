@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { SUPERWALL_HOME } from "@/environment";
 
 export const SPEC_URL =
   "https://developer.apple.com/sample-code/app-store-connect/app-store-connect-openapi-specification.zip";
@@ -35,7 +36,10 @@ export interface AscIndex {
 }
 
 function cachePath(): string {
-  return process.env.SUPERWALL_ASC_INDEX_PATH ?? join(homedir(), ".superwall", "asc-index.json");
+  return (
+    process.env.SUPERWALL_ASC_INDEX_PATH ??
+    join(SUPERWALL_HOME() ?? join(homedir(), ".superwall"), "asc-index.json")
+  );
 }
 
 let mem: AscIndex | undefined;

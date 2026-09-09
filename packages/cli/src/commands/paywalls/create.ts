@@ -28,7 +28,7 @@ import { writeTemplate } from "@/core/paywalls/project/template";
 import { gitAvailable } from "@/core/paywalls/source/git";
 import { detectExisting, type ExistingIntegration } from "@/core/project/existing";
 import { scanProject, type DetectedApp } from "@/core/project/scan";
-import { readPackageJson, allDeps } from "@/util/fs";
+import { readPackageJson, allDeps } from "@/core/project/package";
 import type { Renderer } from "@/ui";
 
 const run = promisify(execFile);
