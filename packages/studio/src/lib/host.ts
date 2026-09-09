@@ -6,7 +6,6 @@ import {
   EXAMPLE_PRODUCT_VARIABLES,
   type HostProduct,
   type HostState,
-  type HostStatePatch,
   type HostVariables,
 } from "@superwall/host";
 import type { Samples, StudioSurface } from "./surfaces";
@@ -78,39 +77,4 @@ export const hostStateFor = ({
     products,
     introductoryOfferEligible: edited.introductoryOfferEligible,
   });
-};
-
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-
-const diffRecord = (before: HostVariables, after: HostVariables): HostVariables | undefined => {
-  const patch: HostVariables = {};
-  let changed = false;
-  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    if (!(key in after)) {
-      patch[key] = undefined;
-      changed = true;
-    } else if (!same(before[key], after[key])) {
-      patch[key] = after[key];
-      changed = true;
-    }
-  }
-  return changed ? patch : undefined;
-};
-
-export const hostPatch = (previous: HostState, next: HostState): HostStatePatch => {
-  const patch: HostStatePatch = {};
-  const device = diffRecord(previous.device, next.device);
-  if (device) patch.device = device;
-  const user = diffRecord(previous.user, next.user);
-  if (user) patch.user = user;
-  const params = diffRecord(previous.params, next.params);
-  if (params) patch.params = params;
-  if (!same(previous.products, next.products)) patch.products = next.products;
-  if (previous.introductoryOfferEligible !== next.introductoryOfferEligible)
-    patch.introductoryOfferEligible = next.introductoryOfferEligible;
-  if (previous.paywallId !== next.paywallId) patch.paywallId = next.paywallId;
-  if (previous.paywallIdentifier !== next.paywallIdentifier) {
-    patch.paywallIdentifier = next.paywallIdentifier;
-  }
-  return patch;
 };

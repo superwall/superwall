@@ -3,6 +3,7 @@ import type { TIncomingMessage, TOutgoingMessage } from "@superwall/protocol";
 import pingReply from "../../protocol/test/fixtures/host/ping-reply.json";
 import sdkLifecycle from "../../protocol/test/fixtures/host/sdk-lifecycle.json";
 import {
+  createHostState,
   createPaywallHost,
   recordingDelegate,
   type DelegateAnswers,
@@ -362,5 +363,44 @@ describe("update", () => {
     const { host } = setup();
     host.update({ user: { email: undefined } });
     expect("email" in host.state.user).toBe(false);
+  });
+});
+
+describe("resolving which product a paywall meant", () => {
+  it("matches on the store identifier when the reference is unknown", async () => {
+    const sent: unknown[] = [];
+    const host = createPaywallHost({
+      state: createHostState({
+        products: [{ reference: "annual", productId: "com.app.annual", variables: {} }],
+      }),
+      delegate: recordingDelegate({ purchase: "completed" }),
+      send: (messages) => sent.push(...messages),
+    });
+
+    await host.receive([
+      { event_name: "purchase", product: "unknown", product_identifier: "com.app.annual" },
+    ]);
+
+    const complete = sent.find(
+      (message) => (message as { event_name?: string }).event_name === "transaction_complete",
+    );
+    expect(complete).toMatchObject({ product_identifier: "com.app.annual" });
+  });
+
+  it("invents a product rather than dropping a purchase it cannot place", async () => {
+    const sent: unknown[] = [];
+    const host = createPaywallHost({
+      state: createHostState(),
+      delegate: recordingDelegate({ purchase: "completed" }),
+      send: (messages) => sent.push(...messages),
+    });
+
+    await host.receive([{ event_name: "purchase", product: "primary" }]);
+
+    expect(
+      sent.some(
+        (message) => (message as { event_name?: string }).event_name === "transaction_complete",
+      ),
+    ).toBe(true);
   });
 });

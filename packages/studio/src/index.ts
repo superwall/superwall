@@ -11,7 +11,7 @@ export { VariablesPanel } from "./components/panels/VariablesPanel";
 export { Segmented, Select, Switch } from "./components/controls";
 export { DEFAULT_DEVICE_ID, deviceById, STUDIO_DEVICES } from "./lib/devices";
 export type { StudioDevice } from "./lib/devices";
-export { hostPatch, hostStateFor, studioDefaults } from "./lib/host";
+export { hostStateFor, studioDefaults } from "./lib/host";
 export type { HostInputs } from "./lib/host";
 export { buildPreviewPath, hostedUrl, snapshotPreviewUrl, surfacePath } from "./lib/preview";
 export { parseProjectPayload, type StudioProjectPayload } from "./lib/project";

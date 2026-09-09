@@ -1,11 +1,11 @@
 import * as React from "react";
 import {
   createWindowHost,
+  diffHostState,
   type HostDelegate,
   type HostState,
   type PaywallHost,
 } from "@superwall/host";
-import { hostPatch } from "../../lib/host";
 
 type Hosted = { host: PaywallHost; detach: () => void; sent: HostState };
 
@@ -29,7 +29,7 @@ const useHostedWindow = (hostState: HostState, delegate: HostDelegate) => {
     initial.current = { hostState, delegate };
     const current = hosted.current;
     if (!current) return;
-    current.host.update(hostPatch(current.sent, hostState));
+    current.host.update(diffHostState(current.sent, hostState));
     current.sent = hostState;
   }, [hostState, delegate]);
 

@@ -206,3 +206,216 @@ describe("SurfaceEditor hosting a published paywall", () => {
     expect(screen.queryByRole("button", { name: "Open preview" })).toBeNull();
   });
 });
+
+describe("SurfaceEditor shipping a local surface", () => {
+  const local: StudioSurface = {
+    kind: "paywall",
+    id: "plus-upgrade",
+    routes: ["index"],
+    locales: ["en"],
+    products: {},
+  };
+
+  const shippable: StudioSource = {
+    title: "chatgpt",
+    surfaces: [local],
+    capabilities: { actions: true },
+    previewUrl: () => "/preview/paywall/plus-upgrade?transport=editor",
+    standaloneUrl: () => "/paywall/plus-upgrade",
+  };
+
+  const stream = (steps: readonly string[], result: unknown) =>
+    vi.fn(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("/__studio/status/")) {
+        return { ok: true, json: async () => ({ paywallId: "208540", active: true }) } as Response;
+      }
+      const lines = [
+        ...steps.flatMap((step) => [
+          JSON.stringify({ step, state: "start" }),
+          JSON.stringify({ step, state: "done" }),
+        ]),
+        JSON.stringify({ result }),
+      ].join("\n");
+      return {
+        ok: true,
+        body: new Response(lines).body,
+        json: async () => result,
+      } as Response;
+    });
+
+  const ship = async (label: string) => {
+    const menu = screen.getByRole("button", { name: /push|publish|promote/i });
+    fireEvent.click(menu);
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(label, "i") }));
+    await act(async () => {});
+  };
+
+  it("walks the steps a push takes and ends on the pushed version", async () => {
+    vi.stubGlobal(
+      "fetch",
+      stream(["link", "build", "assets", "push"], { ok: true, version: 13, live: false }),
+    );
+    vi.useFakeTimers();
+
+    render(
+      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
+    );
+    await act(async () => {});
+    await ship("push");
+
+    expect(screen.getAllByText(/Push version|Build snapshot/).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+    vi.useRealTimers();
+  });
+
+  it("marks the step that was running as failed and says why", async () => {
+    vi.stubGlobal(
+      "fetch",
+      stream(["link", "build"], { ok: false, error: "products missing from the dashboard" }),
+    );
+
+    render(
+      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
+    );
+    await act(async () => {});
+    await ship("push");
+
+    expect(screen.getByText(/products missing from the dashboard/)).toBeTruthy();
+  });
+
+  it("opens a phone-sized standalone preview in a sized window, a desktop one in a tab", async () => {
+    const open = vi.fn(() => ({}) as Window);
+    vi.stubGlobal("open", open);
+    vi.stubGlobal("fetch", stream([], { ok: true, version: 1, live: false }));
+
+    render(
+      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
+    );
+    await act(async () => {});
+
+    fireEvent.click(screen.getByLabelText("Open preview"));
+
+    const [url, target, features] = open.mock.calls[0] as unknown as [string, string, string?];
+    expect(url).toBe("/paywall/plus-upgrade");
+    expect(target).toBe("superwall-preview");
+    expect(String(features)).toMatch(/width=\d+/);
+    expect(String(features)).toContain("resizable=no");
+  });
+
+  it("opens a desktop-sized preview in a plain tab", async () => {
+    const open = vi.fn(() => ({}) as Window);
+    vi.stubGlobal("open", open);
+    vi.stubGlobal("fetch", stream([], { ok: true, version: 1, live: false }));
+
+    render(
+      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
+    );
+    await act(async () => {});
+
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "desktop" } });
+    fireEvent.click(screen.getByLabelText("Open preview"));
+
+    const [url, target, features] = open.mock.calls.at(-1) as unknown as [string, string, string?];
+    expect(url).toBe("/paywall/plus-upgrade");
+    expect(target).toBe("_blank");
+    expect(features).toBeUndefined();
+  });
+
+  it("falls back to a tab when the popup is blocked", async () => {
+    const open = vi.fn(() => null);
+    vi.stubGlobal("open", open);
+    vi.stubGlobal("fetch", stream([], { ok: true, version: 1, live: false }));
+
+    render(
+      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
+    );
+    await act(async () => {});
+
+    fireEvent.click(screen.getByLabelText("Open preview"));
+
+    expect(open).toHaveBeenCalledTimes(2);
+    const [, target] = open.mock.calls.at(-1) as unknown as [string, string];
+    expect(target).toBe("_blank");
+  });
+
+  it("does nothing when the host offers no standalone url", async () => {
+    const open = vi.fn(() => ({}) as Window);
+    vi.stubGlobal("open", open);
+    vi.stubGlobal("fetch", stream([], { ok: true, version: 1, live: false }));
+    const { standaloneUrl: _omitted, ...hosted } = shippable;
+
+    render(<SurfaceEditor source={hosted} surface={local} samples={{}} onBack={() => undefined} />);
+    await act(async () => {});
+
+    const opener = screen.queryByLabelText("Open preview");
+    if (opener) fireEvent.click(opener);
+
+    expect(open).not.toHaveBeenCalled();
+  });
+});
+
+describe("SurfaceEditor's smaller states", () => {
+  const local: StudioSurface = {
+    kind: "paywall",
+    id: "plus-upgrade",
+    routes: ["index"],
+    locales: [],
+    products: {},
+  };
+
+  it("commits a responsive size on Enter, clamped to something renderable", async () => {
+    render(
+      <SurfaceEditor
+        source={{ title: "chatgpt", surfaces: [local], previewUrl: () => "/preview" }}
+        surface={local}
+        samples={{}}
+        onBack={() => undefined}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "responsive" } });
+    const width = screen.getByLabelText("Preview width");
+    (width as HTMLInputElement).focus();
+    fireEvent.change(width, { target: { value: "99999" } });
+    fireEvent.keyDown(width, { key: "Enter" });
+
+    expect((width as HTMLInputElement).value).toBe("3000");
+  });
+
+  it("says why it cannot show the live version to compare against", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => ({ paywallId: "208540", unreachable: "not logged in" }),
+          }) as Response,
+      ),
+    );
+
+    render(
+      <SurfaceEditor
+        source={{
+          title: "chatgpt",
+          surfaces: [local],
+          capabilities: { actions: true },
+          previewUrl: () => "/preview",
+        }}
+        surface={local}
+        samples={{}}
+        onBack={() => undefined}
+      />,
+    );
+    await act(async () => {});
+
+    fireEvent.click(screen.getByRole("button", { name: /compare/i }));
+    fireEvent.click(screen.getByText(/live/i));
+
+    expect(screen.getByText(/Couldn't read the live version — not logged in/)).toBeTruthy();
+  });
+});

@@ -5,7 +5,6 @@ import type {
   TIncomingMessageTransactionFail,
   TIncomingMessageTransactionRestore,
   TIncomingMessageTransactionStart,
-  TIncomingMessageTransactionTimeout,
 } from "@superwall/protocol";
 import type { HostProduct } from "../state";
 
@@ -31,11 +30,6 @@ export const transactionAbandon = (product: HostProduct): TIncomingMessageTransa
 
 export const transactionFail = (product: HostProduct): TIncomingMessageTransactionFail => ({
   event_name: "transaction_fail",
-  ...identified(product),
-});
-
-export const transactionTimeout = (product: HostProduct): TIncomingMessageTransactionTimeout => ({
-  event_name: "transaction_timeout",
   ...identified(product),
 });
 

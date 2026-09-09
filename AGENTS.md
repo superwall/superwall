@@ -291,6 +291,10 @@ state, delegate })` answers the handshake, streams variables as a patch, and
   asks a `delegate` for every outcome a device would decide (purchase, restore,
   permission, callback). It is what makes a preview indistinguishable from an
   app: the paywall speaks one protocol and never learns who is listening.
+  `state.ts` owns both halves of the wire — `diffHostState(previous, next)`
+  produces a patch and `mergeHostState(state, patch)` applies one, held together
+  by a round-trip test, so no consumer reimplements the diff (the studio did,
+  until pass H).
 - `packages/studio` — `@superwall/studio`: the preview UI around that host —
   device frames, theme/locale/orientation switches, the variables panel, the
   outcome prompts, the surface list. A component library, not an app: its only

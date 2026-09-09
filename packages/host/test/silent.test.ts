@@ -32,3 +32,34 @@ describe("silent delegate", () => {
     expect(sent).toEqual(["transaction_start", "transaction_complete", "freeTrial_start"]);
   });
 });
+
+describe("recordingDelegate's fixed answers", () => {
+  it("takes a plain value as the answer to every ask", async () => {
+    const { recordingDelegate } = await import("../src/delegate/recording");
+    const delegate = recordingDelegate({
+      purchase: "abandoned",
+      restore: "failed",
+      permission: "denied",
+      callback: { status: "failure" },
+    });
+
+    expect(await delegate.purchase({ reference: "a", productId: "a", variables: {} })).toBe(
+      "abandoned",
+    );
+    expect(await delegate.restore()).toBe("failed");
+    expect(await delegate.permission("notification")).toBe("denied");
+    expect(await delegate.callback("done", {})).toEqual({ status: "failure" });
+  });
+
+  it("falls back to the answers a device would most often give", async () => {
+    const { recordingDelegate } = await import("../src/delegate/recording");
+    const delegate = recordingDelegate();
+
+    expect(await delegate.purchase({ reference: "a", productId: "a", variables: {} })).toBe(
+      "completed",
+    );
+    expect(await delegate.restore()).toBe("restored");
+    expect(await delegate.permission("notification")).toBe("granted");
+    expect(await delegate.callback("done", {})).toEqual({ status: "success" });
+  });
+});

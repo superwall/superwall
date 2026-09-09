@@ -15,7 +15,7 @@ export default defineConfig({
         "**/*.config.ts",
         "test/**",
       ],
-      thresholds: { statements: 98, branches: 91, functions: 95, lines: 98 },
+      thresholds: { statements: 99, branches: 91, functions: 95, lines: 99 },
     },
   },
 });

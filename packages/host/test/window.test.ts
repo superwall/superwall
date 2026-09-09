@@ -2,7 +2,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MessageDirection, unwrap, wrap, type TIncomingMessage } from "@superwall/protocol";
 import pingReply from "../../protocol/test/fixtures/host/ping-reply.json";
-import { attachToWindow, createPaywallHost, createWindowHost, recordingDelegate } from "../src";
+import {
+  attachToWindow,
+  createHostState,
+  createPaywallHost,
+  createWindowHost,
+  recordingDelegate,
+  silentDelegate,
+} from "../src";
 import { fixtureState } from "./messages.test";
 
 const ping = wrap(
@@ -55,6 +62,41 @@ describe("window host", () => {
     expect(received).toEqual([]);
     deliver(ping);
     expect(received).toHaveLength(5);
+    detach();
+  });
+});
+
+describe("createWindowHost", () => {
+  it("hosts a window and listens on it, then lets go", () => {
+    const posted: unknown[] = [];
+    const target = {
+      postMessage: (message: unknown) => posted.push(message),
+    } as unknown as Window;
+
+    const { host, detach } = createWindowHost({
+      target,
+      state: createHostState({ paywallId: "1", paywallIdentifier: "plus" }),
+      delegate: silentDelegate(),
+    });
+
+    host.receive([{ event_name: "ping", substitutions: [], page_styles: [] }]);
+    expect(posted.length).toBeGreaterThan(0);
+
+    detach();
+  });
+
+  it("listens on a window other than the one it posts to", () => {
+    const listen = new EventTarget() as unknown as Window;
+    const target = { postMessage: () => {} } as unknown as Window;
+
+    const { detach } = createWindowHost({
+      target,
+      listen,
+      state: createHostState(),
+      delegate: silentDelegate(),
+    });
+
+    expect(typeof detach).toBe("function");
     detach();
   });
 });
