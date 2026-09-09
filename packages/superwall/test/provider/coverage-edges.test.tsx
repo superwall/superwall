@@ -105,3 +105,32 @@ describe("paywall interface exposure", () => {
     delete paywallWindow.__sw_runtime_session;
   });
 });
+
+describe("background on the document", () => {
+  it("paints the light color, then the dark one when the host reports dark", async () => {
+    const view = renderWithProvider(() => null, {
+      config: { ...testConfig, background: { light: "#ffffff", dark: "#000000" } },
+      host: { device: { interfaceStyle: "Light" } },
+    });
+    await flush();
+    expect(document.documentElement.style.backgroundColor).toBe("rgb(255, 255, 255)");
+    view.unmount();
+
+    renderWithProvider(() => null, {
+      config: { ...testConfig, background: { light: "#ffffff", dark: "#000000" } },
+      host: { device: { interfaceStyle: "Dark" } },
+    });
+    await flush();
+    expect(document.documentElement.style.backgroundColor).toBe("rgb(0, 0, 0)");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+  });
+
+  it("falls back to the light color for a paywall with no dark one", async () => {
+    renderWithProvider(() => null, {
+      config: { ...testConfig, background: "#123456" },
+      host: { device: { interfaceStyle: "Dark" } },
+    });
+    await flush();
+    expect(document.documentElement.style.backgroundColor).toBe("rgb(18, 52, 86)");
+  });
+});

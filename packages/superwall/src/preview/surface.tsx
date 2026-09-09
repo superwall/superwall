@@ -11,11 +11,9 @@ const loadCatalogs = async (
   local: PreviewMessages[],
 ): Promise<Record<string, SuperwallMessages>> => {
   const catalogs: Record<string, SuperwallMessages> = {};
-  for (const source of [shared, local]) {
-    for (const entry of source) {
-      const catalog = (await entry.load()).default as SuperwallMessages;
-      catalogs[entry.locale] = mergeMessages(catalogs[entry.locale], catalog);
-    }
+  for (const entry of [...shared, ...local]) {
+    const { default: catalog } = await entry.load();
+    catalogs[entry.locale] = mergeMessages(catalogs[entry.locale], catalog);
   }
   return catalogs;
 };
@@ -39,15 +37,10 @@ const useSurface = (surface: PreviewSurface): Loaded => {
     let cancelled = false;
     const load = async () => {
       const [definition, layout, catalogs, loadedRoutes] = await Promise.all([
-        surface.loadConfig().then((mod) => mod.default as PaywallDefinition | undefined),
+        surface.loadConfig().then((mod) => mod.default),
         surface.loadLayout?.().then((mod) => mod.default),
         loadCatalogs(surface.sharedMessages, surface.messages),
-        Promise.all(
-          surface.routes.map(async (route) => {
-            const module = await route.load();
-            return [route.name, module] as const;
-          }),
-        ),
+        Promise.all(surface.routes.map(async (route) => [route.name, await route.load()] as const)),
       ]);
       if (cancelled) return;
 
@@ -56,6 +49,7 @@ const useSurface = (surface: PreviewSurface): Loaded => {
       for (const [locale, catalog] of Object.entries(merged.localization?.messages ?? {})) {
         messages[locale] = mergeMessages(messages[locale], catalog);
       }
+
       setLoaded({
         status: "ready",
         config: {
@@ -67,13 +61,15 @@ const useSurface = (surface: PreviewSurface): Loaded => {
         },
         transition: definition?.transition,
         queryState: definition?.queryState,
-        routes: Object.fromEntries(loadedRoutes) as RouteMap,
+        routes: Object.fromEntries(loadedRoutes),
         Layout: layout,
       });
     };
+
     load().catch((error: unknown) => {
       if (!cancelled) setLoaded({ status: "error", error });
     });
+
     return () => {
       cancelled = true;
     };

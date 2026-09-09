@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useDiscount, useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
-import type { DiscountSummary } from "superwall/hooks";
+import type { AppliedDiscount, DiscountedProduct } from "superwall/hooks";
 
 const PLANS = [
   { reference: "trial", label: "3-day free trial", note: "then billed monthly" },
@@ -12,21 +12,22 @@ type PlanReference = (typeof PLANS)[number]["reference"];
 
 /**
  * "15% off forever", "$5 off on your first payment" — assembled here, from
- * this paywall's own message catalog, because `summary` deliberately carries
- * the parts rather than a sentence in one language.
+ * this paywall's own message catalog and Stripe's coupon fields, because the
+ * hook hands over the parts rather than a sentence in one language.
  */
 const describeDiscount = (
-  summary: DiscountSummary,
+  discount: AppliedDiscount,
+  product: DiscountedProduct | undefined,
   t: (key: string, values?: Record<string, string | number>) => string,
 ): string => {
   const amount =
-    summary.kind === "percent"
-      ? t("discount.percentOff", { percent: summary.percentOff ?? 0 })
-      : t("discount.amountOff", { amount: summary.amountOffPrice ?? summary.savingsPrice });
+    discount.percentOff != null
+      ? t("discount.percentOff", { percent: discount.percentOff })
+      : t("discount.amountOff", { amount: product?.savingsPrice ?? "" });
   const duration =
-    summary.duration === "repeating"
-      ? t("discount.repeating", { months: summary.durationInMonths ?? 0 })
-      : t(`discount.${summary.duration}`);
+    discount.duration === "repeating"
+      ? t("discount.repeating", { months: discount.durationInMonths ?? 0 })
+      : t(`discount.${discount.duration ?? "forever"}`);
   return `${amount} ${duration}`;
 };
 
@@ -68,7 +69,7 @@ export default function Index() {
 
   const strikethroughFor = (reference: PlanReference) => {
     const discounted = getDiscountedProduct(reference);
-    return discounted?.applies ? discounted.originalPrice : undefined;
+    return discounted?.applies ? discounted.price : undefined;
   };
 
   return (
@@ -109,10 +110,8 @@ export default function Index() {
         {applied ? (
           <p className="promo-applied">
             <strong>{t("discount.applied", { code: applied.code })}</strong>
-            {(() => {
-              const summary = getDiscountedProduct(selected)?.summary;
-              return summary ? ` · ${describeDiscount(summary, t)}` : "";
-            })()} <button
+            {` · ${describeDiscount(applied.discount, getDiscountedProduct(selected), t)}`}
+            <button
               type="button"
               className="link"
               onClick={() => {

@@ -1,0 +1,34 @@
+import type { SuperwallRuntimeSnapshot } from "@superwall/runtime";
+import { asString } from "../api/decode";
+
+/**
+ * Native SDK versions old enough to change what web checkout may do, as
+ * paywall.js gates them (`pjs/utils/sdkVersion.ts`). The SDK reports
+ * `sdkVersionPadded` in its device variables (`004.010.008`), which sorts
+ * lexicographically.
+ */
+const IN_PAYWALL_CHECKOUT = "004.010.008";
+const CHECKOUT_EVENTS = "004.014.000";
+
+const paddedVersionOf = (snapshot: SuperwallRuntimeSnapshot): string =>
+  asString(snapshot.device.sdkVersionPadded);
+
+/**
+ * Whether the SDK can host payment inside the paywall. Below this it knows
+ * nothing of the checkout lifecycle, so a shopper is sent to Superwall's
+ * hosted page instead — the same downgrade paywall.js makes. A host that
+ * reports no version is assumed current, as paywall.js assumes.
+ */
+export const sdkHostsCheckoutInPaywall = (snapshot: SuperwallRuntimeSnapshot): boolean => {
+  const padded = paddedVersionOf(snapshot);
+  return padded === "" || padded >= IN_PAYWALL_CHECKOUT;
+};
+
+/**
+ * Whether the SDK redeems a completed web purchase itself. Below this — and
+ * for a host that reports no version, which paywall.js also treats as old
+ * here — the paywall asks the backend for a redemption link and hands it back
+ * through `open_deep_link`, or the shopper pays and is granted nothing.
+ */
+export const sdkRedeemsCheckout = (snapshot: SuperwallRuntimeSnapshot): boolean =>
+  paddedVersionOf(snapshot) >= CHECKOUT_EVENTS;

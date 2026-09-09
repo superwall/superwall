@@ -337,3 +337,22 @@ describe("useQueryState", () => {
     silence.mockRestore();
   });
 });
+
+const Size = () => {
+  const [size] = useQueryState("size", parseAsInteger);
+  return <span data-testid="size">{String(size)}</span>;
+};
+
+describe("a value the parser cannot read", () => {
+  it("is null when the parser has no default to fall back on", () => {
+    window.history.replaceState(null, "", "/?size=huge");
+    const Wrapper = createWrapper();
+    render(
+      <Wrapper>
+        <PaywallRouter routes={{ index: { default: Size } }} queryState navigationId="demo" />
+      </Wrapper>,
+    );
+
+    expect(screen.getByTestId("size").textContent).toBe("null");
+  });
+});

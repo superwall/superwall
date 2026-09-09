@@ -1,13 +1,7 @@
 import { backgroundOf, type SuperwallConfig } from "@superwall/runtime";
 
-/** The framework's paywall generation: v4 is the visual editor, v5 is code. */
 export const SUPERWALL_GENERATION = 5;
 
-/**
- * Document semantics as `<html>` data attributes. The build stamps these
- * statically and `SuperwallProvider` reasserts them at runtime; the platform's
- * serve-time stylesheet owns what they mean.
- */
 export const documentAttributes = (
   config: SuperwallConfig | undefined,
 ): Record<string, string> => ({
@@ -15,36 +9,13 @@ export const documentAttributes = (
   "data-sw-scroll": String(config?.scrollEnabled ?? true),
 });
 
-/**
- * The document contract: the exact HTML a paywall is, and the platform layer
- * the runtime wraps it in. The build writes this document into every
- * snapshot and the local preview server renders the same one, so a paywall
- * on a laptop is byte-comparable to the one Superwall serves.
- *
- * Two layers, mirroring production:
- *
- *   1. the snapshot — self-contained HTML carrying `data-sw-*` semantics on
- *      `<html>`, immutable once pushed;
- *   2. the platform layer — live.css, injected at serve time by the runtime
- *      worker (and by the preview server locally), so Superwall can restyle
- *      the fleet without anyone republishing.
- *
- * Nothing else may enter the document. Anything the preview needs that
- * production lacks belongs in the webview simulation, not here.
- */
-
-/**
- * live.css's canonical home. The runtime serves it behind a stable, unhashed
- * URL precisely so tooling can hardcode it; `SUPERWALL_RUNTIME_URL` points
- * previews at a local runtime instead.
- */
 export const PLATFORM_STYLESHEET_URL = "https://runtime-static.superwall.com/live.css";
+
+export const ROUTE_ASSETS_ID = "sw-route-assets";
 
 export type DocumentOptions = {
   title: string;
-  /** Merged surface config — its `data-sw-*` semantics land on `<html>`. */
   config: SuperwallConfig;
-  /** Module script the document boots: the built entry, or the preview mount. */
   entry: string;
 };
 
@@ -70,12 +41,6 @@ export const renderDocument = ({ title, config, entry }: DocumentOptions): strin
 </html>`;
 };
 
-/**
- * Applies the platform layer to a document — the same transform the runtime
- * worker performs on every snapshot it serves. The link lands at the top of
- * `<head>` so the paywall's own styles keep cascade priority; the fallbacks
- * cover documents that reach here without a `<head>`.
- */
 export const injectPlatformLayer = (html: string, stylesheetUrl: string): string => {
   const tag = `<link rel="stylesheet" href="${stylesheetUrl}">`;
 

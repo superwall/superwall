@@ -1,7 +1,12 @@
 import * as path from "node:path";
 import { importDefault } from "../config/load";
 import type { PaywallDefinition } from "../config";
-import { isPlatformProductIds, normalizePlatform, productIdFor } from "@superwall/runtime";
+import {
+  isPlatformProductIds,
+  normalizePlatform,
+  productIdFor,
+  type SuperwallProductSlotInput,
+} from "@superwall/runtime";
 import { DEFAULT_PARAMS, DEFAULT_USER, defaultDevice } from "@superwall/host/defaults";
 import { discoverProject } from "../discover";
 import { firstBinding, readLock } from "../lock";
@@ -23,6 +28,14 @@ export type StudioSurfacePayload = {
 
 const declaredPlatforms = (value: unknown): string[] | undefined =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : undefined;
+
+const productIdsOf = (input: SuperwallProductSlotInput): string[] => {
+  if (typeof input === "string") return [input];
+  if (isPlatformProductIds(input)) {
+    return [...new Set(Object.values(input).filter((id) => typeof id === "string"))];
+  }
+  return [input.productId].filter((id) => typeof id === "string");
+};
 
 export type StudioProjectPayload = {
   title: string;
@@ -53,7 +66,7 @@ export const buildStudioProject = async (
 
   const surfaces = await Promise.all(
     project.surfaces.map(async (surface): Promise<StudioSurfacePayload> => {
-      const definition = surface.configFile ? await loadConfig(surface.configFile) : undefined;
+      const definition = await loadConfig(surface.configFile);
 
       const locales = new Set<string>();
       for (const entry of [...project.sharedMessages, ...surface.messages]) {
@@ -81,12 +94,7 @@ export const buildStudioProject = async (
           ]),
         ),
         productIds: Object.fromEntries(
-          slots.map(([reference, input]) => [
-            reference,
-            isPlatformProductIds(input)
-              ? [...new Set(Object.values(input).filter((id) => typeof id === "string"))]
-              : [productIdFor(input) ?? reference],
-          ]),
+          slots.map(([reference, input]) => [reference, productIdsOf(input)]),
         ),
         ...(platforms === undefined ? {} : { platforms }),
         paywallId: firstBinding(binding)?.paywallId,

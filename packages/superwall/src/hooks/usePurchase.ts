@@ -3,25 +3,31 @@ import type {
   SuperwallProduct,
   SuperwallProductVariables,
   SuperwallPurchaseFailure,
-  SuperwallSession,
+  SuperwallPurchaseOptions,
+  SuperwallPurchaseResult,
   SuperwallTransaction,
 } from "@superwall/runtime";
 import { checkoutModeOf } from "@superwall/runtime";
 import { useSuperwallSession } from "../provider/context";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
 import type { ProductReference } from "./index";
-import {
-  controllerFor,
-  openEmbeddedCheckout,
-  prefetchSession,
-  purchaseWithApplePay,
-} from "../checkout/services/registry";
+import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
+import type { CheckoutMode, PurchaseOutcome } from "../checkout/types";
+
+export type WebCheckoutResult<TProduct extends SuperwallProduct = SuperwallProduct> = {
+  status: PurchaseOutcome;
+  product: TProduct;
+};
+
+export type PurchaseResult<TVariables extends SuperwallProductVariables> =
+  | SuperwallPurchaseResult<SuperwallProduct<TVariables>>
+  | WebCheckoutResult<SuperwallProduct<TVariables>>;
 
 export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
   purchase: (
     input: ProductReference | SuperwallProduct<TVariables>,
-    options?: Parameters<SuperwallSession<SuperwallProduct<TVariables>>["purchase"]>[1],
-  ) => ReturnType<SuperwallSession<SuperwallProduct<TVariables>>["purchase"]>;
+    options?: SuperwallPurchaseOptions,
+  ) => Promise<PurchaseResult<TVariables>>;
   isPurchasing: boolean;
   pendingProduct?: SuperwallProduct<TVariables>;
   transaction?: SuperwallTransaction<SuperwallProduct<TVariables>>;
@@ -29,20 +35,14 @@ export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
   prefetch: (input?: ProductReference | SuperwallProduct<TVariables>) => void;
 };
 
+const referenceOf = (input: string | { reference: string }): string =>
+  typeof input === "string" ? input : input.reference;
+
 /**
- * Purchase with built-in pending state — no `useState(isPurchasing)` needed.
- * React to outcomes on the awaited result, not on state:
- *
- * ```tsx
- * const { purchase, isPurchasing } = usePurchase()
- * const result = await purchase("primary")
- * if (result.status === "abandoned") showAbandonmentOffer()
- * ```
- *
- * With `checkout: "applePay"`, a Stripe product opens the native Apple Pay
- * sheet where the device offers it and falls back to Stripe's embedded
- * sheet everywhere else; `checkout: "sheet"` always opens the embedded
- * sheet. Store products go to the native SDK either way.
+ * Buy a product. Store products go to the native SDK. With `checkout: "sheet"`
+ * a Stripe product opens Stripe's embedded sheet; with `"applePay"` it opens
+ * the wallet where the device offers it and falls back to the sheet. Web
+ * checkout only runs when a host supplied a public API key.
  */
 export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
@@ -54,62 +54,33 @@ export const usePurchase = <
   const hasApiKey =
     typeof snapshot.device.publicApiKey === "string" && snapshot.device.publicApiKey !== "";
 
-  const purchase = React.useCallback(
-    (async (input, options) => {
-      const reference = typeof input === "string" ? input : input.reference;
-      if (hasApiKey && (mode === "sheet" || mode === "applePay")) {
-        const controller = controllerFor(session);
-        if (controller.isStripeProduct(reference)) {
-          try {
-            if (mode === "applePay") {
-              const outcome = await purchaseWithApplePay(session, reference);
-              if (outcome.status !== "unavailable") return outcome;
-            }
+  const webMode: CheckoutMode | undefined = hasApiKey ? mode : undefined;
+  const warmMode = webMode === "sheet" || webMode === "applePay" ? webMode : undefined;
 
-            const warmed =
-              mode === "applePay" ? controller.getCachedSession(reference, "apple-pay") : null;
-            const result =
-              warmed?.directive === "embedded"
-                ? warmed
-                : await controller.beginCheckout({
-                    referenceName: reference,
-                    mode: "sheet",
-                    cacheScope: "default",
-                  });
-            if (result.directive === "embedded") {
-              return await openEmbeddedCheckout(result, { session, referenceName: reference });
-            }
-            if (result.directive === "redirect" && typeof window !== "undefined") {
-              window.location.assign(result.checkoutUrl);
-              return { status: "abandoned" };
-            }
-            return { status: "failed" };
-          } catch (error) {
-            console.error("Error beginning web checkout:", error);
-            return { status: "failed" };
-          }
-        }
+  const purchase = React.useCallback(
+    async (
+      input: ProductReference | SuperwallProduct<TVariables>,
+      options?: SuperwallPurchaseOptions,
+    ): Promise<PurchaseResult<TVariables>> => {
+      const reference = referenceOf(input);
+      const product = session.getSnapshot().productsByReference[reference];
+      if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
+        return { status: await purchaseOnWeb(session, reference, webMode), product };
       }
       return session.purchase(input, options);
-    }) as UsePurchaseResult<TVariables>["purchase"],
-    [session, mode, hasApiKey],
+    },
+    [session, webMode],
   );
 
-  const products = snapshot.products;
+  const first = snapshot.products[0]?.reference;
   const prefetch = React.useCallback(
     (input?: ProductReference | SuperwallProduct<TVariables>) => {
-      if (mode !== "sheet" && mode !== "applePay") return;
-      const reference =
-        input === undefined
-          ? products[0]?.reference
-          : typeof input === "string"
-            ? input
-            : input.reference;
-      if (!reference) return;
-      if (!controllerFor(session).isStripeProduct(reference)) return;
-      void prefetchSession(session, reference, mode);
+      const reference = input === undefined ? first : referenceOf(input);
+      if (!warmMode || reference === undefined) return;
+      if (!sessionsFor(session).isStripeProduct(reference)) return;
+      void prefetchSession(session, reference, warmMode);
     },
-    [session, mode, products],
+    [session, warmMode, first],
   );
 
   return React.useMemo(

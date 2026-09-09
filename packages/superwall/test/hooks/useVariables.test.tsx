@@ -1,6 +1,6 @@
 import { waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useDevice, useVariables } from "../../src/hooks";
+import { useDevice, useUser, useVariables } from "../../src/hooks";
 import { flush, renderWithProvider } from "../helpers";
 
 describe("useVariables", () => {
@@ -21,5 +21,15 @@ describe("useDevice", () => {
     const { result } = renderWithProvider(() => useDevice());
     await flush();
     expect(result.current.orientation).toBe("portrait");
+  });
+});
+
+describe("useUser", () => {
+  it("is the user attributes on their own", async () => {
+    const { result } = renderWithProvider(() => useUser(), {
+      host: { user: { firstName: "Ada" } },
+    });
+    await flush();
+    expect(result.current).toEqual({ firstName: "Ada" });
   });
 });

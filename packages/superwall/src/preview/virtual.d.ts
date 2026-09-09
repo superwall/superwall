@@ -2,11 +2,11 @@ declare module "virtual:superwall/project" {
   export type PreviewModule<T> = () => Promise<{ default: T }>;
   export type PreviewRoute = {
     name: string;
-    load: () => Promise<{ default: React.ComponentType; transition?: string }>;
+    load: () => Promise<import("../navigation/index").RouteModule>;
   };
   export type PreviewMessages = {
     locale: string;
-    load: PreviewModule<Record<string, unknown>>;
+    load: PreviewModule<import("@superwall/runtime").SuperwallMessages>;
   };
   export type PreviewSurface = {
     kind: "paywall" | "funnel";
@@ -15,7 +15,7 @@ declare module "virtual:superwall/project" {
     routes: PreviewRoute[];
     messages: PreviewMessages[];
     sharedMessages: PreviewMessages[];
-    loadConfig: PreviewModule<unknown>;
+    loadConfig: PreviewModule<import("../config").PaywallDefinition | undefined>;
     loadLayout?: PreviewModule<React.ComponentType<React.PropsWithChildren>>;
   };
   export const surfaces: PreviewSurface[];

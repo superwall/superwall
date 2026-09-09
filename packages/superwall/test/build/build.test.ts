@@ -282,10 +282,10 @@ describe("background is carried onto the snapshot", () => {
   });
 });
 
-describe("checkout is bundled only where it is asked for", () => {
-  const stripeIsPresent = (html: string) =>
-    html.includes("js.stripe.com") || html.includes("checkout-sheet-wrapper");
+const stripeIsPresent = (html: string) =>
+  html.includes("js.stripe.com") || html.includes("checkout-sheet-wrapper");
 
+describe("checkout is bundled only where it is asked for", () => {
   it("keeps Stripe out of a paywall that never mentions checkout", async () => {
     const built = await buildSnapshot(project(), surface("tiny"), {});
 
@@ -421,7 +421,7 @@ describe("other platforms' product ids never reach the snapshot", () => {
 });
 
 describe("rewriteConfigProducts", () => {
-  const parse = (code: string) => rollupParse(code);
+  const parse = rollupParse;
   const resolved = { annual: "play" };
 
   it("replaces the products literal inside definePaywall(...) and inside a bare object", () => {

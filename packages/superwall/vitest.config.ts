@@ -6,15 +6,14 @@ export default defineConfig({
     setupFiles: ["./test/setup.ts"],
     coverage: {
       reporter: ["text"],
+      include: ["src/**/*.{ts,tsx}"],
       exclude: [
+        "src/**/*.d.ts",
         "src/preview/server.ts",
         "src/preview/mount.tsx",
         "src/preview/surface.tsx",
-        "src/preview/virtual.d.ts",
-        "**/*.config.ts",
-        "test/**",
       ],
-      thresholds: { statements: 90, branches: 80, functions: 85, lines: 90 },
+      thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
     },
   },
 });

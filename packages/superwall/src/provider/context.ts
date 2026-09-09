@@ -14,17 +14,6 @@ import { documentAttributes } from "../document";
 
 const SuperwallContext = React.createContext<SuperwallSession | null>(null);
 
-const useIsomorphicLayoutEffect =
-  typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
-
-/**
- * The framework mounts this — users write hooks, not the provider, and it is
- * exported only so the generated build entry can import it. `config` is the
- * whole surface: the session detects its host from the page (WebKit, Android,
- * or a parent window over `?transport=editor`), starts, exposes its native
- * interface, and pings. `transport` exists for tests and tools that host a
- * session in-process.
- */
 export type SuperwallProviderProps = React.PropsWithChildren<{
   config?: SuperwallConfig;
   transport?: ITransport;
@@ -41,13 +30,7 @@ export const SuperwallProvider = ({ children, config, transport }: SuperwallProv
 
   const value = ownedSession.current;
 
-  // Expose the interface the native SDK calls into to deliver messages
-  // (`window.paywall.accept`), before paint so nothing is dropped.
-  useIsomorphicLayoutEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
+  React.useLayoutEffect(() => {
     const paywallWindow = window as typeof window & {
       paywall?: unknown;
       app?: unknown;
@@ -105,9 +88,6 @@ export const SuperwallProvider = ({ children, config, transport }: SuperwallProv
   // Document semantics (`data-sw-*`) on <html>; the platform stylesheet reads
   // them. In dev there is no build step, so the provider reasserts them.
   React.useEffect(() => {
-    if (typeof document === "undefined") {
-      return;
-    }
     for (const [name, attribute] of Object.entries(documentAttributes(config))) {
       document.documentElement.setAttribute(name, attribute);
     }
@@ -121,17 +101,10 @@ export const SuperwallProvider = ({ children, config, transport }: SuperwallProv
   );
 };
 
-/**
- * Puts the SDK's colour scheme on `<html>` so a paywall can be styled with
- * plain CSS. A media query cannot do this job: hosts report the device's
- * setting over the bridge, and the studio simulates it, neither of which
- * changes what `prefers-color-scheme` evaluates to.
- */
 const ColorScheme = ({ background }: { background?: ResolvedBackground }): null => {
   const scheme = useColorScheme();
 
   React.useEffect(() => {
-    if (typeof document === "undefined") return;
     const root = document.documentElement;
     root.classList.toggle("dark", scheme === "dark");
     root.classList.toggle("light", scheme === "light");

@@ -155,3 +155,36 @@ describe("screen asset prefetching", () => {
     expect(preloaded().map((link) => link.href)).toEqual([shared]);
   });
 });
+
+describe("a route-asset map with entries that are not lists", () => {
+  it("warms the lists it can read and ignores the rest", () => {
+    trackImages();
+    withMap({ index: [{ url: hero, as: "image" }], offer: "nope", terms: 7 });
+    mount();
+    expect(images).toEqual([hero]);
+    expect(preloaded()).toEqual([]);
+  });
+});
+
+describe("onNavigate", () => {
+  it("names each route the paywall lands on", () => {
+    const navigated: string[] = [];
+    const Wrapper = createWrapper();
+    render(
+      <Wrapper>
+        <PaywallRouter routes={routes} onNavigate={(route) => navigated.push(route)} />
+      </Wrapper>,
+    );
+    expect(navigated).toEqual(["index"]);
+  });
+});
+
+describe("a route-asset payload that is not a map", () => {
+  it("warms nothing at all", () => {
+    trackImages();
+    withMap("null");
+    mount();
+    expect(images).toEqual([]);
+    expect(preloaded()).toEqual([]);
+  });
+});

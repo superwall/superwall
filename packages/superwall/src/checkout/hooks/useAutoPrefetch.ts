@@ -2,7 +2,7 @@ import * as React from "react";
 import { checkoutModeOf } from "@superwall/runtime";
 import { useSuperwallSession } from "../../provider/context";
 import { useSuperwallSnapshot } from "../../hooks/useSuperwallSnapshot";
-import { autoPrefetchTargets, prefetchSession } from "../services/registry";
+import { autoPrefetchTargets, prefetchSession } from "../flow";
 
 export const useAutoPrefetch = () => {
   const session = useSuperwallSession();

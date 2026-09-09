@@ -1,9 +1,9 @@
 import { act } from "@testing-library/react";
+import type { TOutgoingMessage } from "@superwall/runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useDiscount, useSuperwallSession } from "../../src/hooks";
-import { controllerFor } from "../../src/checkout/services/registry";
-import { checkoutEvents } from "../../src/checkout/services/CheckoutEvents";
-import { sessionCache } from "../../src/checkout/services/SessionCache";
+import { sessionsFor } from "../../src/checkout/flow";
+import { checkoutEvents } from "../../src/checkout/events";
 import { flush, renderWithProvider, testConfig } from "../helpers";
 
 const products = [
@@ -60,13 +60,16 @@ const stubFetch = (discount: unknown = validation) => {
   return fetchMock;
 };
 
-const renderDiscount = async (onDropped?: (code: string) => void) => {
+const renderDiscount = async (
+  onDropped?: (code: string) => void,
+  onOutgoing?: (message: TOutgoingMessage) => void,
+) => {
   const rendered = renderWithProvider(
     () => ({ session: useSuperwallSession(), discount: useDiscount({ onDropped }) }),
     {
       config: { ...testConfig, checkout: "applePay" },
       // The mock host ships no public API key; checkout warm-ups need one.
-      host: { products, device: { publicApiKey: "pk_test" } },
+      host: { products, device: { publicApiKey: "pk_test" }, onOutgoing },
     },
   );
   await flush();
@@ -76,7 +79,6 @@ const renderDiscount = async (onDropped?: (code: string) => void) => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  sessionCache.clear();
 });
 
 describe("useDiscount", () => {
@@ -105,7 +107,7 @@ describe("useDiscount", () => {
       products: {
         primary: {
           applies: true,
-          originalPrice: "$19.99",
+          price: "$19.99",
           discountedPrice: "$14.99",
           discountedAmount: 1499,
         },
@@ -135,7 +137,7 @@ describe("useDiscount", () => {
     ).toBeUndefined();
   });
 
-  it("describes an amount coupon in parts a paywall can compose", async () => {
+  it("hands back Stripe's coupon, so the paywall writes its own sentence", async () => {
     stubFetch();
     const { result } = await renderDiscount();
     await act(async () => {
@@ -144,17 +146,22 @@ describe("useDiscount", () => {
 
     // $5 off, once — enough to write "$5 off your first month" without this
     // hook ever choosing a language.
-    expect(result.current.discount.getDiscountedProduct("primary")?.summary).toEqual({
-      kind: "amount",
+    expect(result.current.discount.applied?.discount).toMatchObject({
+      code: "SAVE5",
       amountOff: 500,
-      amountOffPrice: "$5",
+      currency: "usd",
+      duration: "once",
+      percentOff: null,
+    });
+    expect(result.current.discount.getDiscountedProduct("primary")).toMatchObject({
+      amount: 1999,
+      discountedAmount: 1499,
       savings: 500,
       savingsPrice: "$5",
-      duration: "once",
     });
   });
 
-  it("describes a percent coupon by its percentage and how long it lasts", async () => {
+  it("keeps a percent coupon's own fields, and prices what it saves", async () => {
     stubFetch({
       valid: true,
       discount: {
@@ -180,13 +187,14 @@ describe("useDiscount", () => {
       await result.current.discount.redeem("FOREVER15");
     });
 
-    expect(result.current.discount.getDiscountedProduct("primary")?.summary).toEqual({
-      kind: "percent",
+    expect(result.current.discount.applied?.discount).toMatchObject({
       percentOff: 15,
-      savings: 300,
-      savingsPrice: "$3",
       duration: "repeating",
       durationInMonths: 3,
+    });
+    expect(result.current.discount.getDiscountedProduct("primary")).toMatchObject({
+      savings: 300,
+      savingsPrice: "$3",
     });
   });
 
@@ -216,9 +224,8 @@ describe("useDiscount", () => {
       await result.current.discount.redeem("BIG");
     });
 
-    const summary = result.current.discount.getDiscountedProduct("primary")?.summary;
-    expect(summary?.savings).toBe(1999);
-    expect(summary?.amountOff).toBe(5000);
+    expect(result.current.discount.getDiscountedProduct("primary")?.savings).toBe(1999);
+    expect(result.current.discount.applied?.discount.amountOff).toBe(5000);
   });
 
   it("resolves with the reason when a code is not valid", async () => {
@@ -232,19 +239,26 @@ describe("useDiscount", () => {
     expect(result.current.discount.applied).toBeNull();
   });
 
-  it("never throws when the backend is unreachable", async () => {
+  it("never throws when the backend is unreachable, and says so to the host", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
         throw new Error("offline");
       }),
     );
-    const { result } = await renderDiscount();
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const posted: TOutgoingMessage[] = [];
+    const { result } = await renderDiscount(undefined, (message) => posted.push(message));
     let redemption: unknown;
     await act(async () => {
       redemption = await result.current.discount.redeem("SAVE5");
     });
-    expect(redemption).toEqual({ valid: false, reason: "request_failed" });
+
+    expect(redemption).toEqual({ valid: false, reason: "error" });
+    expect(posted.filter((message) => message.event_name === "discount_redemption_result")).toEqual(
+      [{ event_name: "discount_redemption_result", code: "SAVE5", valid: false, reason: "error" }],
+    );
+    expect(error).toHaveBeenCalledWith("Error redeeming a promotion code:", expect.any(Error));
   });
 
   it("clears the code and the sessions quoted with it", async () => {
@@ -270,17 +284,59 @@ describe("useDiscount", () => {
     await act(async () => {
       await result.current.discount.redeem("SAVE5");
     });
-    const controller = controllerFor(result.current.session);
+    const sessions = sessionsFor(result.current.session);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("refused", { status: 400 })),
     );
 
     await act(async () => {
-      await controller.beginCheckout({ referenceName: "primary", mode: "sheet" }).catch(() => {});
+      await sessions.begin({ referenceName: "primary", mode: "sheet" }).catch(() => {});
     });
 
     expect(onDropped).toHaveBeenCalledWith("SAVE5");
     expect(result.current.discount.applied).toBeNull();
+  });
+});
+
+describe("useDiscount without a listener or a code", () => {
+  it("drops a code with no onDropped to tell, and clears nothing when nothing is applied", async () => {
+    stubFetch();
+    const { result } = await renderDiscount();
+    const sessions = sessionsFor(result.current.session);
+
+    act(() => {
+      result.current.discount.clear();
+    });
+    expect(result.current.discount.applied).toBeNull();
+
+    await act(async () => {
+      await result.current.discount.redeem("SAVE5");
+    });
+    act(() => {
+      sessions.discounts.drop("SAVE5");
+    });
+    expect(result.current.discount.applied).toBeNull();
+  });
+
+  it("prices only the products the backend named", async () => {
+    stubFetch({
+      valid: true,
+      discount: { code: "SAVE5", promotionCodeId: "promo_1", couponId: "c_1", percentOff: 10 },
+      products: [
+        {
+          productIdentifier: "test:price_9:no-trial",
+          applies: true,
+          originalAmount: 1999,
+          discountedAmount: 1799,
+          currency: "usd",
+        },
+      ],
+    });
+    const { result } = await renderDiscount();
+    await act(async () => {
+      await result.current.discount.redeem("SAVE5");
+    });
+    expect(result.current.discount.applied?.products).toEqual({});
   });
 });

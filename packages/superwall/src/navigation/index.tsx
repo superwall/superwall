@@ -1,8 +1,20 @@
 import * as React from "react";
 import { checkoutModeOf, detectSuperwallHost } from "@superwall/runtime";
 import { useSuperwallSession } from "../provider/context";
+import {
+  freeze,
+  longestAnimationMs,
+  stillness,
+  thaw,
+  TRANSITION_CAP,
+  TRANSITION_MS,
+} from "./animation";
+import { readRouteAssets, warmAssets, whenIdle } from "./assets";
 import { createQueryStore, QueryStoreContext, type QueryHistory, type QueryStore } from "./query";
+import type { StyleWithVariables } from "../css";
 import "./routes.css";
+
+export { TRANSITION_MS } from "./animation";
 
 export {
   createParser,
@@ -21,7 +33,6 @@ export {
   type SetQueryState,
 } from "./query";
 
-// biome-ignore lint/suspicious/noEmptyInterface: augmentation target
 export interface SuperwallRoutes {}
 
 export type RouteName = keyof SuperwallRoutes extends never
@@ -38,6 +49,7 @@ type BuiltInTransition = "push" | "slide" | "fade" | "shift" | "none";
 export type Transition = BuiltInTransition | (string & {});
 
 export type NavigateOptions = {
+  /** The transition for this navigation, overriding the route's and the paywall's. */
   transition?: Transition;
 };
 
@@ -46,9 +58,13 @@ export type Router = {
   name: RouteName;
   /** How many routes are stacked underneath this one. */
   depth: number;
+  /** Adds a route on top; the one below it stays mounted. */
   push: (route: RouteName, options?: NavigateOptions) => void;
+  /** Swaps the top route, so going back skips the one it replaced. */
   replace: (route: RouteName, options?: NavigateOptions) => void;
+  /** Goes back one route. A no-op at the first. */
   back: () => void;
+  /** Whether anything is underneath the current route. */
   canGoBack: () => boolean;
   /** Goes back `count` routes, stopping at the first. */
   dismiss: (count?: number) => void;
@@ -59,7 +75,9 @@ export type Router = {
 };
 
 export type RouteModule = {
+  /** The route component, the default export of a file in `app/`. */
   default: React.ComponentType;
+  /** This route's own transition, overriding the paywall's. */
   transition?: Transition;
 };
 
@@ -71,7 +89,7 @@ type Direction = "forward" | "back";
 
 type Entry = {
   key: number;
-  name: string;
+  name: RouteName;
   transition?: Transition;
 };
 
@@ -84,10 +102,16 @@ type Nav = {
 
 export const NAV_KEY = "sw_nav";
 
-const parseStack = (value: string | null, routes: RouteMap): string[] | undefined => {
+const isRoute = (routes: RouteMap, name: string): name is RouteName => Object.hasOwn(routes, name);
+
+const parseStack = (value: string | null, routes: RouteMap): RouteName[] | undefined => {
   if (value === null || value === "") return [INITIAL_ROUTE];
-  const names = value.split(",");
-  return names.every((name) => Object.hasOwn(routes, name)) ? names : undefined;
+  const names: RouteName[] = [];
+  for (const name of value.split(",")) {
+    if (!isRoute(routes, name)) return undefined;
+    names.push(name);
+  }
+  return names;
 };
 
 const serializeStack = (entries: readonly Entry[]): string | null =>
@@ -111,123 +135,22 @@ export const useRouter = (): Router => {
 
 export const useIsFocused = (): boolean => React.useContext(FocusContext);
 
-type RouteAsset = { url: string; as: "image" | "video" | "audio" | "font" };
-
-const ROUTE_ASSETS_ID = "sw-route-assets";
-
-const isRouteAsset = (value: unknown): value is RouteAsset =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof Reflect.get(value, "url") === "string" &&
-  ["image", "video", "audio", "font"].includes(String(Reflect.get(value, "as")));
-
-const readRouteAssets = (): Record<string, RouteAsset[]> => {
-  if (typeof document === "undefined") return {};
-  const source = document.getElementById(ROUTE_ASSETS_ID)?.textContent;
-  if (!source) return {};
-  try {
-    const parsed: unknown = JSON.parse(source);
-    if (typeof parsed !== "object" || parsed === null) return {};
-    const map: Record<string, RouteAsset[]> = {};
-    for (const name of Object.keys(parsed)) {
-      const value: unknown = Reflect.get(parsed, name);
-      if (Array.isArray(value)) map[name] = value.filter(isRouteAsset);
-    }
-    return map;
-  } catch {
-    return {};
-  }
-};
-
-const warmAssets = (assets: readonly RouteAsset[], warmed: Set<string>): void => {
-  if (typeof document === "undefined") return;
-  for (const asset of assets) {
-    if (warmed.has(asset.url)) continue;
-    warmed.add(asset.url);
-    if (asset.as === "image") {
-      new Image().src = asset.url;
-      continue;
-    }
-    const link = document.createElement("link");
-    link.setAttribute("rel", "preload");
-    link.setAttribute("as", asset.as);
-    link.setAttribute("href", asset.url);
-    if (asset.as === "font") link.setAttribute("crossorigin", "anonymous");
-    document.head.appendChild(link);
-  }
-};
-
-const whenIdle = (run: () => void): (() => void) => {
-  if (typeof window === "undefined") return () => {};
-  const idle = Reflect.get(window, "requestIdleCallback") as
-    | ((callback: () => void) => number)
-    | undefined;
-  if (typeof idle === "function") {
-    const handle = idle(run);
-    const cancel = Reflect.get(window, "cancelIdleCallback") as
-      | ((handle: number) => void)
-      | undefined;
-    return () => cancel?.(handle);
-  }
-  const timer = setTimeout(run, 200);
-  return () => clearTimeout(timer);
-};
-
-export const TRANSITION_MS = 500;
-
-const TRANSITION_CAP = 5000;
-
-const stillness = (): boolean =>
-  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-const milliseconds = (value: string): number[] =>
-  value.split(",").map((one) => {
-    const time = Number.parseFloat(one);
-    return Number.isFinite(time) ? (one.includes("ms") ? time : time * 1000) : 0;
-  });
-
-const animationMs = (element: Element): number => {
-  const style = getComputedStyle(element);
-  if (style.animationName === "none" || style.animationName === "") return 0;
-  const durations = milliseconds(style.animationDuration);
-  const delays = milliseconds(style.animationDelay);
-  return style.animationName.split(",").reduce((longest, _name, index) => {
-    const total = (durations[index % durations.length] ?? 0) + (delays[index % delays.length] ?? 0);
-    return Math.max(longest, total);
-  }, 0);
-};
-
-const FROZEN = ["--sw-from-transform", "--sw-from-filter", "--sw-from-opacity"] as const;
-
-const freeze = (container: HTMLElement | null): void => {
-  for (const child of container?.children ?? []) {
-    if (!(child instanceof HTMLElement)) continue;
-    if (typeof child.getAnimations !== "function" || child.getAnimations().length === 0) {
-      for (const property of FROZEN) child.style.removeProperty(property);
-      continue;
-    }
-    const style = getComputedStyle(child);
-    child.style.setProperty("--sw-from-transform", style.transform);
-    child.style.setProperty("--sw-from-filter", style.filter);
-    child.style.setProperty("--sw-from-opacity", style.opacity);
-  }
-};
-
-const thaw = (container: HTMLElement | null): void => {
-  for (const child of container?.children ?? []) {
-    if (!(child instanceof HTMLElement)) continue;
-    for (const property of FROZEN) child.style.removeProperty(property);
-  }
-};
-
 export type PaywallRouterProps = {
+  /** Every route in the surface, keyed by name. The build generates this. */
   routes: RouteMap;
+  /** Wraps the whole stack, from the surface's `app/layout.tsx`. */
   Layout?: React.ComponentType<React.PropsWithChildren>;
+  /** Names this stack in the `page_view` events the SDK receives. */
   navigationId?: string;
+  /** The paywall's default transition. Defaults to `push`. */
   transition?: Transition;
+  /** Keeps the stack and `useQueryState` in the URL. Defaults to on with web checkout. */
   queryState?: boolean;
+  /** Called with each route the paywall lands on, after it is reported. */
   onNavigate?: (route: string) => void;
 };
+
+type LayerState = "active" | "behind" | "below" | "exiting";
 
 export const PaywallRouter = ({
   routes,
@@ -264,8 +187,8 @@ export const PaywallRouter = ({
   const top = entries[entries.length - 1];
 
   const router = React.useMemo<Router>(() => {
-    const resolve = (name: string): string => {
-      if (name in known.current) return name;
+    const resolve = (name: string): RouteName => {
+      if (isRoute(known.current, name)) return name;
       throw new Error(
         `Unknown route "${name}". Available routes: ${Object.keys(known.current).join(", ")}`,
       );
@@ -304,7 +227,7 @@ export const PaywallRouter = ({
     };
 
     return {
-      name: top.name as RouteName,
+      name: top.name,
       depth: entries.length - 1,
       push: (name, options) => go(name, options, undefined),
       replace: (name, options) => go(name, options, entries.length - 1),
@@ -416,9 +339,7 @@ export const PaywallRouter = ({
   React.useLayoutEffect(() => {
     if (settled) return;
     const container = layers.current;
-    let live = true;
     const done = () => {
-      if (!live) return;
       thaw(container);
       setSettled(true);
     };
@@ -428,18 +349,12 @@ export const PaywallRouter = ({
       return;
     }
 
-    const measured = [...(container?.children ?? [])].reduce(
-      (longest, child) => Math.max(longest, animationMs(child)),
-      0,
-    );
+    const measured = longestAnimationMs(container);
     const timer = setTimeout(done, Math.min(measured || TRANSITION_MS, TRANSITION_CAP));
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
+    return () => clearTimeout(timer);
   }, [movement, settled, moving]);
 
-  const phaseOf = (state: "active" | "behind" | "below" | "exiting"): string | undefined => {
+  const phaseOf = (state: LayerState): string | undefined => {
     if (settled) return undefined;
     if (state === "active") return direction === "back" ? "return" : "enter";
     if (state === "exiting") return direction === "back" ? "leave" : "recede";
@@ -447,11 +362,7 @@ export const PaywallRouter = ({
     return undefined;
   };
 
-  const render = (
-    entry: Entry,
-    state: "active" | "behind" | "below" | "exiting",
-    layer: number,
-  ) => {
+  const render = (entry: Entry, state: LayerState, layer: number) => {
     const module = routes[entry.name];
     if (!module) return null;
     const Component = module.default;
@@ -475,23 +386,14 @@ export const PaywallRouter = ({
     );
   };
 
+  const stateOf = (index: number): LayerState =>
+    index === entries.length - 1 ? "active" : index === entries.length - 2 ? "behind" : "below";
+
+  const layerStyle: StyleWithVariables = { "--sw-transition": `${TRANSITION_MS}ms` };
+
   const stack = (
-    <div
-      ref={layers}
-      data-sw-routes=""
-      style={{ "--sw-transition": `${TRANSITION_MS}ms` } as React.CSSProperties}
-    >
-      {entries.map((entry, index) =>
-        render(
-          entry,
-          index === entries.length - 1
-            ? "active"
-            : index === entries.length - 2
-              ? "behind"
-              : "below",
-          index + 1,
-        ),
-      )}
+    <div ref={layers} data-sw-routes="" style={layerStyle}>
+      {entries.map((entry, index) => render(entry, stateOf(index), index + 1))}
       {exiting && !settled
         ? render(exiting, "exiting", direction === "back" ? entries.length + 1 : entries.length - 1)
         : null}

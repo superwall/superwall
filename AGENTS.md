@@ -151,32 +151,83 @@ The stack, bottom to top — each layer depends only on the one below it:
     re-exported through `src/internal.ts`)
   - `src/checkout/` — `superwall/checkout`: web checkout (Stripe). The build
     mounts it only when `config.checkout` is `sheet` or `applePay`
-    (`build/index.ts`), so a store-only paywall carries none of it. The
-    sheet's appearance is fixed and takes nothing from the paywall around it.
-    - `sheet` opens Stripe's Embedded Checkout in `CheckoutSheet`. `applePay`
-      opens the native Apple Pay sheet through Stripe's PaymentRequest
-      (`services/ApplePayCheckoutController.ts`) and falls back to the
-      embedded sheet where the device cannot pay. The wallet is built from
-      the backend's deferred `elements` quote (no Stripe object until the
-      wallet authorizes; `checkout/session/confirm` creates the subscription),
-      so `WebCheckoutController` requests `elements` with
-      `deferElementsIntentCreation` only in `applePay` mode. Trials and intro
-      offers are quoted as Apple's `recurringPaymentRequest` with a
-      `trialBilling` line (`utils/applePay.ts`) — that is what makes the sheet
-      say "Free Trial" — and an applied promotion code shows as line items.
-    - `services/registry.ts` owns the per-session controllers and the
-      orchestration (`prefetchSession`, `purchaseWithApplePay`,
-      `openEmbeddedCheckout`, `invalidateSessions`, `reprefetch`). Both sheets
-      report the same lifecycle to the native SDK through
-      `services/hostEvents.ts` (`initiate_web_checkout`, `stripe_checkout_*`),
-      which is how the SDK tracks, dismisses, and grants access for a web
-      purchase; keep them in step.
-    - Promotion codes live on `WebCheckoutController` (`redeemDiscount`,
-      `clearDiscount`, `subscribeDiscount`, `subscribeDiscountDropped`) and are
-      forwarded only on sessions for the products the backend said they apply
-      to — a paywall can mix Stripe environments, and a refused session that
-      carried the code drops it paywall-wide. `useDiscount` is the public
-      surface.
+    (`build/index.ts`), so a store-only paywall carries none of it. One
+    directory per part; the root holds only the entry, the shared vocabulary
+    and the orchestrator, and there is no `services/`, `utils/` or
+    `constants.ts` drawer — a tunable lives in the module it tunes:
+
+    | Root          | Owns                                                                      |
+    | ------------- | ------------------------------------------------------------------------- |
+    | `index.tsx`   | `SuperwallCheckout` and the module's public exports                       |
+    | `types.ts`    | the domain: modes, session directives, discounts, post-purchase behaviour |
+    | `flow.ts`     | the orchestration, below                                                  |
+    | `products.ts` | the Stripe product-identifier vocabulary                                  |
+    | `events.ts`   | the in-page bus between the flow and the sheet (public `checkoutEvents`)  |
+    | `loading.ts`  | the loading-overlay flag                                                  |
+    - `flow.ts` is the only orchestrator: it holds one `session` source and one
+      `applePay` per paywall (`sessionsFor`, `applePayFor`, keyed by the runtime
+      session in a `WeakMap`) and owns every sequence a purchase can take —
+      `prefetchSession`, `purchaseOnWeb`, `purchaseWithApplePay`,
+      `openEmbeddedSheet`, `openHostedCheckout`/`watchHostedCheckout`,
+      `reportCompletedCheckout`/`watchCompletedCheckouts`,
+      `redeemDiscount`, `clearDiscount`, `invalidateSessions`, `reprefetch`. A
+      paywall hook calls into it and never drives checkout itself.
+      `PaywallSession` is the narrowed runtime session; a _checkout_ session is
+      always spelled out (`EmbeddedCheckoutSession`, `CheckoutSessionResult`).
+    - `session/` is where a checkout session comes from: `index.ts`
+      (`createCheckoutSessions` — asks the backend, dedupes in-flight requests,
+      applies a promotion code to what it creates), `cache.ts` (its own cache,
+      owned per paywall, so two paywalls in one page cannot share one), `id.ts`
+      (the `sw_checkout_` codec, which is also where an embedded session's
+      Stripe client secret comes from).
+    - `api/` is the only place that touches the subscriptions API: `url.ts`
+      (environment), `fetch.ts` (retry — a 4xx is the backend's verdict and
+      throws at once, as paywall.js does), `body.ts` (the v4 session body and
+      identity), `decode.ts` (**a trust boundary**: every response is read
+      field by field, never cast).
+    - `host/` is the native SDK side: `index.ts` builds what the SDK hears
+      (`initiate_web_checkout`, `stripe_checkout_*`, `discount_redemption_result`,
+      the redemption `open_deep_link`) — that is how the SDK tracks, dismisses
+      and grants access for a web purchase, so keep both sheets reporting
+      identically — and `sdk.ts` holds the version gates paywall.js also
+      applies: below 4.10.8 an SDK cannot host payment, so the same
+      `purchase()` sends the shopper to the hosted page and nothing is
+      prefetched; below 4.14.0 it does not redeem a completed purchase, so the
+      flow asks `checkout/session/complete` for a link and hands it back.
+      Completion is reported from exactly one place
+      (`reportCompletedCheckout`), so the sheet, the wallet and the hosted page
+      cannot drift. A hosted page is opened by the SDK and watched by polling
+      `checkout/status` every two seconds for two minutes, as paywall.js does;
+      only with no SDK there does the page navigate to it itself.
+    - `discount/` is everything about promotion codes: `store.ts` (the applied
+      code, reached as `sessions.discounts`), `pricing.ts` (per-product
+      amounts) and `money.ts` (minor-unit formatting). A code is forwarded
+      only on sessions for the products the backend said it applies to — a
+      paywall can mix Stripe environments, and a refused session that carried
+      the code drops it paywall-wide. `useDiscount` is the public surface and
+      hands back **Stripe's own coupon vocabulary** (`percentOff`, `amountOff`,
+      `duration`, `durationInMonths`) plus the amounts that had to be computed;
+      it invents no summary of its own. The host's `redeem_discount` reaches
+      the same `flow.redeemDiscount`.
+    - `applePay/` is the wallet: `index.ts` (`createApplePay`) opens the native
+      sheet through Stripe's PaymentRequest and falls back to the embedded
+      sheet where the device cannot pay. It is built from the backend's
+      deferred `elements` quote (no Stripe object until the wallet authorizes;
+      `checkout/session/confirm` creates the subscription), so `session/`
+      asks for `elements` with `deferElementsIntentCreation` only in
+      `applePay` mode. `request.ts` quotes trials and intro offers as Apple's
+      `recurringPaymentRequest` with a `trialBilling` line — that is what makes
+      the sheet say "Free Trial" — and shows an applied code as line items.
+    - `sheet/` is the payment UI and its stylesheet: `Sheet.tsx` (root),
+      `SheetShell.tsx` (portal, backdrop, insets), `SheetCard.tsx`,
+      `LoadingOverlay.tsx`, `state.tsx`/`reducer.ts` (which session is open),
+      `device.ts`. The shell reads what it needs off the snapshot and the
+      config — `deviceModel` for the safe-area inset and corner radius, the
+      paywall's presentation style for whether it lays out fullscreen, the same
+      derivation v4 makes. Nothing about the sheet is a prop a paywall can set.
+    - `hooks/` is what the host drives: `useAutoPrefetch`,
+      `useCheckoutCompletion`, `useHostDiscount`.
+
   - `src/hooks/` — the specialized hooks (`useProducts`, `usePurchase`,
     `useDiscount`, `useActions`, `useTranslation`, …), one file each; the
     barrel also carries `createSuperwall` and `useSuperwallSession`
@@ -188,7 +239,11 @@ The stack, bottom to top — each layer depends only on the one below it:
     stack stays mounted (and `inert`) so a pop restores state, and each
     navigation reports `page_view`. Names are typed via the CLI-generated
     `superwall.d.ts`, which augments the `SuperwallRoutes` interface and
-    carries the asset-module reference
+    carries the asset-module reference. `motion.ts` holds what the router
+    reads back off the DOM (how long the running animations last, freezing an
+    interrupted layer where it sits, reduced motion); `assets.ts` reads the
+    route-asset map the build stamps into the document and warms it. The
+    router itself owns only the stack.
   - `src/discover.ts` — filesystem discovery (`superwall/` dir conventions),
     including the project `marker`. It never throws — a markerless directory
     is a valid answer; the CLI's `requireProject` is what fails loudly.
@@ -199,17 +254,24 @@ The stack, bottom to top — each layer depends only on the one below it:
     server both render through it, so local and published are the same
     document. Nothing else may enter it.
   - `src/build/` — `superwall/build`: one surface → one self-contained,
-    content-addressed HTML snapshot; `settings.ts` turns `config.ts` into
-    the version's settings wire (`paywallSettingsOf`)
+    content-addressed HTML snapshot. `index.ts` drives vite; `entry.ts`
+    generates the entry a surface mounts, `assets.ts` collects and
+    content-addresses hosted assets (and attributes them per route),
+    `products.ts` resolves per-platform product ids and bakes them into the
+    snapshot's own config, `settings.ts` turns `config.ts` into the version's
+    settings wire (`paywallSettingsOf`)
   - `src/preview/` — `superwall/preview`: serving surfaces locally the way
     the runtime serves published snapshots — `server.ts` (vite; studio dist,
     project payload, surface previews, the `/device/manifest.json` the iOS
-    SDK's dev mode reads), `mount.tsx`/`surface.tsx` (what runs inside the
-    iframe: the same `SuperwallProvider` a built entry mounts, hosted by the
-    studio over `?transport=editor`), `project.ts` (the project payload the
-    studio loads, with the host defaults for unsampled data), `device.ts`
-    (the manifest), and `webview.ts` (the one deliberate local-only difference). No preview code
-    ships in a snapshot; a paywall cannot tell the studio from a device.
+    SDK's dev mode reads), `projects.ts` (its pure parts: discovery per root,
+    the virtual project module, dependency and PostCSS resolution),
+    `mount.tsx`/`surface.tsx` (what runs inside the iframe: the same
+    `SuperwallProvider` a built entry mounts, hosted by the studio over
+    `?transport=editor`), `project.ts` (the project payload the studio loads,
+    with the host defaults for unsampled data), `device.ts` (the manifest),
+    and `webview.ts` (the one deliberate local-only difference). No preview
+    code ships in a snapshot; a paywall cannot tell the studio from a device.
+
 - `packages/cli` — `@superwall/cli`: THE command surface (integrate/migrate/
   review, apps, products, campaigns, query, ASC, ASA, auth, telemetry; yargs + ink)
   **plus the paywall commands** (`create`, `dev`, `push`, `promote`, `publish` in
@@ -301,12 +363,14 @@ it does not exist.
 - Protocol schema tests parse representative real messages; when adding a
   message type, add accept AND reject cases.
 - Run `bun run test:coverage` before handing work back — thresholds are
-  gates, not decoration. The only files excluded from unit coverage are
-  process-level integrations vitest cannot host (vite dev server + browser
-  shell, yargs CLI orchestration, the studio app bootstrap), and each is
-  exercised end-to-end by the real binaries. Adding an exclusion requires the
-  same: a stated reason in the PR description and a real execution path that
-  covers it.
+  gates, not decoration. `@superwall/protocol`, `@superwall/runtime` and
+  `superwall` are at 100% of statements, branches, functions and lines, and
+  stay there: an untestable branch is a branch to delete, not a threshold to
+  lower. The only files excluded from unit coverage are process-level
+  integrations vitest cannot host (vite dev server + browser shell, yargs CLI
+  orchestration, the studio app bootstrap), and each is exercised end-to-end
+  by the real binaries. Adding an exclusion requires the same: a stated reason
+  in the PR description and a real execution path that covers it.
 - Code with I/O at its edges is written with an injectable seam so the logic
   is unit-testable (`buildStudioProject`'s config loader, `resolveBinding`
   over the mocked API client) — follow that pattern instead of widening the
@@ -316,6 +380,21 @@ it does not exist.
 
 - ESM only, TypeScript strict everywhere (shared `tsconfig.base.json`).
 - No default exports in package source.
+- **Naming and layout.** A module is named for what it owns, never for what
+  it is: `flow.ts`, `sessions.ts`, `discounts.ts`, `motion.ts` — never
+  `services/`, `utils/`, `helpers/`, `constants`, `manager`. camelCase files; PascalCase
+  only for React components, `useX` only for hooks. Inside a directory the
+  directory's own word is redundant (`checkout/events.ts` exports
+  `checkoutEvents` because it is public API, but `checkout/host.ts` exports
+  `hostEvents`, not `checkoutHostEvents`). Tests mirror the source tree file
+  for file, so `src/checkout/api/decode.ts` is tested by
+  `test/checkout/api/decode.test.ts`.
+- **Factories over classes.** State with one implementation is a `createX()`
+  returning an `X` object type (`createSuperwallSession`,
+  `createCheckoutSessions`, `createApplePay`, `createDiscountStore`), which
+  keeps private state private and needs no `Reflect` pokes in tests. Classes
+  are for a real interface with several implementations — the protocol's
+  transports are the only ones in the repo.
 - **Type discipline: no assertions.** No `as any`, no `as unknown as`, no
   non-null `!`. Types are derived, and variance is engineered instead of cast
   around: `SuperwallSession` is a covariant (`out`) public interface over a
@@ -326,7 +405,9 @@ it does not exist.
     SDK-owned data, applied once and derived everywhere else;
   - the **SDK-trust boundaries** (`asProductVariables`, the transport
     no-op `Validator`, `decodeIncomingMessages`' message-like predicate) —
-    wire data trusted for forward compatibility;
+    wire data trusted for forward compatibility. The checkout backend is not
+    one of them: its responses are read field by field in
+    `checkout/api/decode.ts`;
   - **host-global views** (`window as typeof window & {…}` for
     SDK-injected/published globals).
     A new cast needs a justification of this kind in a comment, or it doesn't
@@ -337,5 +418,15 @@ it does not exist.
 - Write no comments in new code. Constraints, workarounds and other rationale go
   in the PR description, not beside code they will outlive. Leave existing
   comments alone unless you are changing the code they sit on.
+- **Doc comments are for the public surface only, and are all-or-nothing per
+  type.** A type a paywall author can name from a `superwall/*` entry (hook
+  results, `definePaywall` config, the router, parsers) carries a `/** */` on
+  the type _and on every member_ — a half-documented type reads as if the
+  undocumented members were obvious, which is never why they were skipped.
+  Optional config fields state their default. Everything internal carries
+  none: no doc comments on `checkout/flow.ts`, `navigation/animation.ts`, or
+  any other module a paywall cannot import — the exception is a lone constant,
+  which states what it tunes where it sits (`SESSION_CACHE_TTL`). When in doubt, ask whether it
+  appears in the docs site; if it does not, it gets no doc comment.
 - New examples and surfaces are added under the maintainer's direction; do
   not scaffold them unprompted.

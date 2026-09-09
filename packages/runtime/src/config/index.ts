@@ -10,7 +10,10 @@ import type { SuperwallProductSlotInput } from "./products";
  * and localization. The session reads it at render time and the build reads
  * it at push time.
  */
-export type SuperwallConfig<TLocale extends string = string> = {
+export type SuperwallConfig<
+  TLocale extends string = string,
+  TStripeReference extends string = string,
+> = {
   /** Product slots this paywall renders, keyed by reference. Default: none. */
   products?: Record<string, SuperwallProductSlotInput>;
 
@@ -18,7 +21,7 @@ export type SuperwallConfig<TLocale extends string = string> = {
    * How a purchase completes on the web. Default: omitted, native-only —
    * nothing about checkout is bundled unless this asks for it.
    */
-  checkout?: SuperwallCheckoutConfig;
+  checkout?: SuperwallCheckoutConfig<TStripeReference>;
 
   /**
    * How the native SDK presents the paywall: style and drawer/popup

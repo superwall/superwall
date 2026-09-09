@@ -30,3 +30,12 @@ describe("useTranslation", () => {
     expect(result.current.t("paywall.title")).toBe("Hol dir Pro");
   });
 });
+
+describe("useTranslation without catalogs", () => {
+  it("lists no locales and echoes the key back", async () => {
+    const { result } = renderWithProvider(() => useTranslation(), { config: {} });
+    await flush();
+    expect(result.current.locales).toEqual([]);
+    expect(result.current.t("paywall.title")).toBe("paywall.title");
+  });
+});

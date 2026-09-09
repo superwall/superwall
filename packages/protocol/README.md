@@ -33,7 +33,7 @@ transport of your own.
 | `messages/outgoing.ts`    | `OutgoingMessageSchema`, paywall → host                                                                                        |
 | `messages/permissions.ts` | The permission types a paywall can request and the statuses a host answers with                                                |
 | `transport/`              | `ITransport`, the envelope (`wrap`/`unwrap`, `MessageDirection`), and the three transports `buildTransport(kind)` selects      |
-| `transport/params.ts`     | `TransportKind`, `Platform`, and the query params a host loads a paywall with (`?transport=`, `?platform=`, `?sdkVersion=`)    |
+| `transport/kind.ts`       | `TransportKind` and `detectTransportKind`: which host a paywall was loaded by (`?transport=`)                                  |
 | `test/fixtures/host/`     | Literal message sequences copied from the production hosts, the contract every host and runtime in this repo is tested against |
 
 The schemas are a copy of paywall.js's `paywall-js/messages`, kept in step

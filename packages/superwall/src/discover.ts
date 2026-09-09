@@ -63,8 +63,8 @@ const ROUTE_SEGMENT = /^[a-z0-9][a-z0-9-]*$/;
 const INITIAL_ROUTE = "index";
 const LAYOUT_FILE = "layout.tsx";
 
-const byName = (a: fs.Dirent, b: fs.Dirent): number =>
-  a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+const byName = (a: { name: string }, b: { name: string }): number =>
+  Number(a.name > b.name) - Number(a.name < b.name);
 
 const DEFAULT_EXPORT = /(?:^|[\s;})])export\s+default[\s({[]/;
 const DEFAULT_SPECIFIER = /export\s*\{[^}]*\bdefault\b[^}]*\}/;
@@ -159,9 +159,7 @@ const discoverSurface = (
   const label = `${kind}s/${id}`;
   const own: string[] = [];
   const strays: Stray[] = [];
-  const found = discoverRoutes(path.join(dir, "app"), strays).toSorted((a, b) =>
-    a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
-  );
+  const found = discoverRoutes(path.join(dir, "app"), strays).toSorted(byName);
   if (strays.length > 0) own.push(strayReport(label, strays));
 
   const routes: DiscoveredRoute[] = [];

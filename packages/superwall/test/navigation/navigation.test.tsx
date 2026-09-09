@@ -643,3 +643,29 @@ describe("interrupting a transition", () => {
     expect(attribute("onboarding/goals", "data-sw-settled")).toBe("");
   });
 });
+
+describe("a route that disappears while it is on screen", () => {
+  it("renders nothing for it rather than crashing the paywall", () => {
+    const full: RouteMap = {
+      index: { default: () => <span>at index</span> },
+      plans: { default: () => <span>at plans</span> },
+    };
+    const Wrapper = createWrapper();
+    const view = render(
+      <Wrapper>
+        <PaywallRouter routes={full} />
+      </Wrapper>,
+    );
+
+    act(() => {
+      screen.getByText("at index");
+    });
+    view.rerender(
+      <Wrapper>
+        <PaywallRouter routes={{ plans: full.plans }} />
+      </Wrapper>,
+    );
+
+    expect(screen.queryByText("at index")).toBeNull();
+  });
+});

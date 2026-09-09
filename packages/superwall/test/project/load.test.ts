@@ -1,3 +1,4 @@
+// @vitest-environment node
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -130,5 +131,12 @@ describe("readLock", () => {
     expect(readLock(scaffold({ "superwall.lock": "{{{" }))).toEqual(empty);
     expect(readLock(scaffold({ "superwall.lock": '{"version":2}' }))).toEqual(empty);
     expect(readLock(scaffold({ "superwall.lock": "[]" }))).toEqual(empty);
+  });
+});
+
+describe("importDefault of a readable module", () => {
+  it("returns its default export, keyed by mtime so edits are seen", async () => {
+    const dir = scaffold({ "ok.mjs": "export default { featureGating: 'nonGated' };\n" });
+    expect(await importDefault(path.join(dir, "ok.mjs"))).toEqual({ featureGating: "nonGated" });
   });
 });

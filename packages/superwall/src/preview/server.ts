@@ -13,15 +13,26 @@ import type {
   StudioStatus,
 } from "@superwall/studio/contract";
 import { loadSurfaceConfig } from "../config/load";
-import { discoverProject, type DiscoveredSurface, type Project } from "../discover";
+import type { DiscoveredSurface } from "../discover";
 import { injectPlatformLayer, PLATFORM_STYLESHEET_URL, renderDocument } from "../document";
-import { EXTRA_ASSET_TYPES } from "../build";
+import { EXTRA_ASSET_TYPES } from "../build/assets";
 import { readLock } from "../lock";
 import { attachIdentifiers, attachProducts, buildDeviceManifest } from "./device";
 import { buildStudioProjects } from "./project";
+import {
+  findSurface,
+  postcssSearchDir,
+  projectDependencies,
+  projectModule,
+  readActionRequest,
+  readProjects,
+  resolvableFrom,
+  type PreviewProject,
+} from "./projects";
+import { injectWebviewSimulation } from "./webview";
 
 export { buildStudioProject } from "./project";
-import { injectWebviewSimulation } from "./webview";
+export type { PreviewProject } from "./projects";
 
 const VIRTUAL_PROJECT_ID = "virtual:superwall/project";
 const RESOLVED_VIRTUAL_PROJECT_ID = "\0" + VIRTUAL_PROJECT_ID;
@@ -50,133 +61,6 @@ const STATIC_TYPES: Record<string, string> = {
   ".map": "application/json",
 };
 
-const moduleUrl = (viteRoot: string, file: string): string => {
-  const relative = path.relative(viteRoot, file);
-  return relative.startsWith("..") ? `/@fs/${file}` : `/${relative.split(path.sep).join("/")}`;
-};
-
-export type PreviewProject = { slug: string; root: string; project: Project };
-
-const slugFor = (root: string, taken: Set<string>): string => {
-  const base =
-    path
-      .basename(root)
-      .toLowerCase()
-      .replace(/[^a-z0-9-]+/g, "-") || "project";
-  let slug = base;
-  for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
-  taken.add(slug);
-  return slug;
-};
-
-const readProjects = (roots: readonly string[]): PreviewProject[] => {
-  const taken = new Set<string>();
-  return roots.map((root) => ({
-    slug: slugFor(root, taken),
-    root,
-    project: discoverProject(root),
-  }));
-};
-
-const findSurface = (
-  projects: readonly PreviewProject[],
-  slug: string | undefined,
-  kind: string,
-  id: string,
-) => {
-  const scoped = slug ? projects.filter((entry) => entry.slug === slug) : projects;
-  for (const entry of scoped) {
-    const surface = entry.project.surfaces.find(
-      (candidate) => candidate.kind === kind && candidate.id === id,
-    );
-    if (surface) return { entry, surface };
-  }
-  return undefined;
-};
-
-const projectModule = (projects: readonly PreviewProject[], viteRoot: string): string => {
-  const lazy = (file: string) => `() => import(${JSON.stringify(moduleUrl(viteRoot, file))})`;
-  const messageList = (messages: { locale: string; file: string }[]) =>
-    `[${messages
-      .map((entry) => `{ locale: ${JSON.stringify(entry.locale)}, load: ${lazy(entry.file)} }`)
-      .join(", ")}]`;
-
-  const surfaces = projects.flatMap(({ slug, project }) =>
-    project.surfaces.map((surface) => {
-      const routes = surface.routes
-        .map((route) => `{ name: ${JSON.stringify(route.name)}, load: ${lazy(route.file)} }`)
-        .join(", ");
-      const fields = [
-        `kind: ${JSON.stringify(surface.kind)}`,
-        `id: ${JSON.stringify(surface.id)}`,
-        `project: ${JSON.stringify(slug)}`,
-        `routes: [${routes}]`,
-        `messages: ${messageList(surface.messages)}`,
-        `sharedMessages: ${messageList(project.sharedMessages)}`,
-        `loadConfig: ${lazy(surface.configFile)}`,
-        surface.layoutFile ? `loadLayout: ${lazy(surface.layoutFile)}` : `loadLayout: undefined`,
-      ];
-      return `  { ${fields.join(", ")} }`;
-    }),
-  );
-
-  return [
-    `export const surfaces = [`,
-    surfaces.join(",\n"),
-    `]`,
-    `export const sharedMessages = ${messageList(projects[0]?.project.sharedMessages ?? [])}`,
-    `export const diagnostics = ${JSON.stringify(projects.flatMap((one) => one.project.diagnostics))}`,
-  ].join("\n");
-};
-
-const projectDependencies = (superwallDir: string): string[] => {
-  try {
-    const parsed: unknown = JSON.parse(
-      fs.readFileSync(path.join(superwallDir, "package.json"), "utf8"),
-    );
-    if (typeof parsed !== "object" || parsed === null) return [];
-    const deps = (parsed as { dependencies?: Record<string, string> }).dependencies ?? {};
-    return Object.keys(deps).filter(
-      (name) =>
-        name !== "react" &&
-        name !== "react-dom" &&
-        !name.startsWith("@superwall/") &&
-        name !== "superwall",
-    );
-  } catch {
-    return [];
-  }
-};
-
-const POSTCSS_CONFIG_FILES = [
-  "postcss.config.js",
-  "postcss.config.mjs",
-  "postcss.config.cjs",
-  "postcss.config.ts",
-  ".postcssrc",
-  ".postcssrc.json",
-  ".postcssrc.js",
-  ".postcssrc.cjs",
-  ".postcssrc.mjs",
-];
-
-const postcssSearchDir = (projects: readonly PreviewProject[]): string | undefined =>
-  projects
-    .flatMap((one) => [one.project.superwallDir, one.project.root])
-    .find((dir) => POSTCSS_CONFIG_FILES.some((file) => fs.existsSync(path.join(dir, file))));
-
-const resolvableFrom = (dir: string): ((name: string) => boolean) => {
-  const require = createRequire(path.join(dir, "package.json"));
-  return (name) => {
-    try {
-      require.resolve(name);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-};
-
 const previewDocument = async (
   surface: DiscoveredSurface,
   platformStylesheet: string,
@@ -192,6 +76,7 @@ const previewDocument = async (
 
 const PREVIEW_ROUTE = /^\/preview\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)\/?$/;
 const STUDIO_ROUTE = /^\/(?:[a-z0-9-]+\/)?(paywall|funnel)\/[a-z0-9-]+\/?$/;
+const STATUS_ROUTE = /^\/__studio\/status\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
 const STUDIO_ASSET_PREFIX = "/__studio/";
 
 const STUDIO_MISSING = `superwall studio is not built.
@@ -222,14 +107,16 @@ const readBody = (req: NodeJS.ReadableStream): Promise<string> =>
     req.on("error", reject);
   });
 
-const json = (
-  res: { setHeader(n: string, v: string): void; end(b: string): void },
-  value: unknown,
-) => {
+type Reply = { setHeader(name: string, value: string): void; end(body: string): void };
+
+const json = (res: Reply, value: unknown) => {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(value));
 };
+
+const messageOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 let identifierCache: Record<string, string> = {};
 let identifierRefreshAt = 0;
@@ -258,8 +145,6 @@ const refreshIdentifiers = (
     identifierRefresh = undefined;
   });
 };
-
-const STATUS_ROUTE = /^\/__studio\/status\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
 
 const previewPlugin = (
   roots: readonly string[],
@@ -317,27 +202,20 @@ const previewPlugin = (
           }
           sample
             .then((value) => json(res, value))
-            .catch((error: unknown) =>
-              json(res, { unreachable: error instanceof Error ? error.message : String(error) }),
-            );
+            .catch((error: unknown) => json(res, { unreachable: messageOf(error) }));
           return;
         }
 
         if (url === "/__studio/action" && req.method === "POST") {
           readBody(req)
             .then(async (body) => {
-              const request = JSON.parse(body) as {
-                action?: string;
-                kind?: string;
-                id?: string;
-                project?: string;
-              };
+              const request = readActionRequest(body);
               const action = ACTION_NAMES.find((name) => name === request.action);
               const surface = findSurface(
                 readProjects(roots),
                 request.project,
-                request.kind ?? "",
-                request.id ?? "",
+                request.kind,
+                request.id,
               )?.surface;
               res.setHeader("Content-Type", "application/x-ndjson");
               res.setHeader("Cache-Control", "no-store");
@@ -355,12 +233,7 @@ const previewPlugin = (
               }
               res.end();
             })
-            .catch((error: unknown) => {
-              json(res, {
-                ok: false,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            });
+            .catch((error: unknown) => json(res, { ok: false, error: messageOf(error) }));
           return;
         }
 
@@ -378,9 +251,7 @@ const previewPlugin = (
           studio
             .status(surface)
             .then((value) => json(res, value))
-            .catch((error: unknown) =>
-              json(res, { unreachable: error instanceof Error ? error.message : String(error) }),
-            );
+            .catch((error: unknown) => json(res, { unreachable: messageOf(error) }));
           return;
         }
 

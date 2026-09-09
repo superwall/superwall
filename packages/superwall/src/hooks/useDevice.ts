@@ -1,45 +1,20 @@
 import * as React from "react";
 import type { SuperwallDeviceVariables } from "@superwall/runtime";
+import { useMediaQuery } from "./useMediaQuery";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
 
 export type UseDeviceResult = SuperwallDeviceVariables & {
-  /** Live viewport orientation (derived client-side, not an SDK variable). */
+  /** Live viewport orientation, derived in the page rather than reported by the host. */
   orientation: "portrait" | "landscape";
 };
 
-const landscapeQuery = "(orientation: landscape)";
-
-const subscribeToOrientation = (onChange: () => void) => {
-  if (typeof window === "undefined" || !window.matchMedia) return () => {};
-  const mediaQueryList = window.matchMedia(landscapeQuery);
-  mediaQueryList.addEventListener("change", onChange);
-  return () => mediaQueryList.removeEventListener("change", onChange);
-};
-
-const getIsLandscape = () =>
-  typeof window !== "undefined" && !!window.matchMedia?.(landscapeQuery).matches;
-
-/**
- * Device variables from the SDK (platform, locale, osVersion, appVersion,
- * isSandbox, …) plus live viewport `orientation`.
- *
- * ```tsx
- * const { platform, locale, orientation } = useDevice()
- * ```
- */
+/** The host's device variables (platform, locale, osVersion, …) plus live `orientation`. */
 export const useDevice = (): UseDeviceResult => {
-  const snapshot = useSuperwallSnapshot();
-  const isLandscape = React.useSyncExternalStore(
-    subscribeToOrientation,
-    getIsLandscape,
-    () => false,
-  );
+  const { device } = useSuperwallSnapshot();
+  const landscape = useMediaQuery("(orientation: landscape)");
 
   return React.useMemo(
-    () => ({
-      ...snapshot.device,
-      orientation: isLandscape ? ("landscape" as const) : ("portrait" as const),
-    }),
-    [snapshot.device, isLandscape],
+    () => ({ ...device, orientation: landscape ? "landscape" : "portrait" }),
+    [device, landscape],
   );
 };

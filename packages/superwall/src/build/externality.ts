@@ -28,17 +28,20 @@ const packageRootOf = (file: string): string | undefined => {
 
 const FRAMEWORK_STACK = ["@superwall/runtime", "@superwall/protocol"];
 
-const frameworkTrees = (): string[] => {
-  const roots = new Set<string>();
-  let base = realpath(fileURLToPath(new URL("../../", import.meta.url)));
-  roots.add(base);
+export type Resolver = (fromDir: string, specifier: string) => string;
+
+const nodeResolver: Resolver = (fromDir, specifier) =>
+  createRequire(path.join(fromDir, "package.json")).resolve(specifier);
+
+export const packageTrees = (base: string, resolve: Resolver = nodeResolver): string[] => {
+  const roots = new Set<string>([base]);
+  let from = base;
   for (const specifier of FRAMEWORK_STACK) {
     try {
-      const entry = realpath(createRequire(path.join(base, "package.json")).resolve(specifier));
-      const root = packageRootOf(entry);
+      const root = packageRootOf(realpath(resolve(from, specifier)));
       if (!root) break;
       roots.add(root);
-      base = root;
+      from = root;
     } catch {
       break;
     }
@@ -48,13 +51,19 @@ const frameworkTrees = (): string[] => {
 
 let trees: string[] | undefined;
 
-export const externalSources = (moduleIds: Iterable<string>, superwallDir: string): string[] => {
-  trees ??= frameworkTrees();
+const frameworkTrees = (): string[] =>
+  (trees ??= packageTrees(realpath(fileURLToPath(new URL("../../", import.meta.url)))));
+
+export const externalSources = (
+  moduleIds: Iterable<string>,
+  superwallDir: string,
+  frameworkRoots: readonly string[] = frameworkTrees(),
+): string[] => {
   const external = new Set<string>();
 
   for (const moduleId of moduleIds) {
     if (moduleId.startsWith("\0")) continue;
-    const file = moduleId.split("?")[0] ?? moduleId;
+    const file = moduleId.replace(/\?.*$/, "");
     if (!path.isAbsolute(file)) continue;
     if (file.split(path.sep).includes("node_modules")) continue;
     if (inside(superwallDir, file)) continue;
@@ -62,7 +71,7 @@ export const externalSources = (moduleIds: Iterable<string>, superwallDir: strin
     const real = realpath(file);
     if (real.split(path.sep).includes("node_modules")) continue;
     if (inside(superwallDir, real)) continue;
-    if (trees.some((tree) => inside(tree, file) || inside(tree, real))) continue;
+    if (frameworkRoots.some((tree) => inside(tree, file) || inside(tree, real))) continue;
 
     external.add(path.relative(superwallDir, file).split(path.sep).join("/"));
   }

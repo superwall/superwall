@@ -1,5 +1,9 @@
 import * as React from "react";
 
+export const REPLACE_THROTTLE_MS = 300;
+export const RESERVED_PREFIX = "sw_";
+export const RESERVED_KEYS: readonly string[] = ["platform", "transport"];
+
 export type QueryHistory = "push" | "replace";
 
 export type QueryStateOptions = {
@@ -9,15 +13,23 @@ export type QueryStateOptions = {
   clearOnDefault?: boolean;
 };
 
+/** Reads one query value into a type, and writes it back. */
 export type Parser<T> = QueryStateOptions & {
+  /** Reads the raw value, or `null` when it is not one of yours. */
   parse(value: string): T | null;
+  /** Writes the value into the URL. Defaults to `String`. */
   serialize(value: T): string;
+  /** Compares two values, to know a no-op write. Defaults to `Object.is`. */
   eq(a: T, b: T): boolean;
+  /** The value a missing or unreadable key falls back to. */
   defaultValue?: T;
+  /** A copy with a default, so the state is never `null`. */
   withDefault(value: T): ParserWithDefault<T>;
+  /** A copy with different write options. */
   withOptions(options: QueryStateOptions): Parser<T>;
 };
 
+/** A parser whose state can never be `null`. */
 export type ParserWithDefault<T> = Parser<T> & {
   defaultValue: T;
   withOptions(options: QueryStateOptions): ParserWithDefault<T>;
@@ -93,12 +105,12 @@ export type QueryStore = {
   set(patch: QueryPatch, history: QueryHistory): void;
 };
 
-export const REPLACE_THROTTLE_MS = 300;
-
-const READABLE: Record<string, string> = { "%2C": ",", "%2F": "/", "%3A": ":", "%20": "+" };
-
 const encodePart = (raw: string): string =>
-  encodeURIComponent(raw).replace(/%2C|%2F|%3A|%20/g, (match) => READABLE[match] ?? match);
+  encodeURIComponent(raw)
+    .replaceAll("%2C", ",")
+    .replaceAll("%2F", "/")
+    .replaceAll("%3A", ":")
+    .replaceAll("%20", "+");
 
 export const renderQuery = (params: URLSearchParams): string => {
   const pairs: string[] = [];
@@ -199,10 +211,6 @@ export const createQueryStore = (url: boolean): QueryStore => {
 };
 
 export const QueryStoreContext = React.createContext<QueryStore | null>(null);
-
-export const RESERVED_PREFIX = "sw_";
-
-export const RESERVED_KEYS: readonly string[] = ["platform", "transport"];
 
 const useQueryStore = (key: string): QueryStore => {
   if (key.startsWith(RESERVED_PREFIX) || RESERVED_KEYS.includes(key)) {

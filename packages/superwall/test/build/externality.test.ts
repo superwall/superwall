@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { externalSources } from "../../src/build/externality";
+import { externalSources, packageTrees } from "../../src/build/externality";
 
 const roots: string[] = [];
 
@@ -168,6 +168,85 @@ describe("externalSources", () => {
     fs.mkdirSync(path.dirname(real), { recursive: true });
     fs.writeFileSync(real, "export default 1;\n");
     const link = path.join(root, "superwall/linked-ui.js");
+    fs.symlinkSync(real, link);
+
+    expect(externalSources([link], superwallDir(root))).toEqual([]);
+  });
+});
+
+describe("packageTrees", () => {
+  it("walks the framework stack, each package resolved from the last", () => {
+    const resolved: string[] = [];
+    const root = hostApp({
+      "vendor/runtime": "@superwall/runtime",
+      "vendor/protocol": "@superwall/protocol",
+    });
+    const trees = packageTrees(root, (fromDir, specifier) => {
+      resolved.push(`${path.relative(root, fromDir) || "."}:${specifier}`);
+      return path.join(root, "vendor", specifier.split("/")[1]!, "index.js");
+    });
+
+    expect(resolved).toEqual([".:@superwall/runtime", "vendor/runtime:@superwall/protocol"]);
+    expect(trees.map((tree) => path.relative(root, tree))).toEqual([
+      "",
+      "vendor/runtime",
+      "vendor/protocol",
+    ]);
+  });
+
+  it("stops at the first package it cannot resolve", () => {
+    const root = hostApp();
+    expect(
+      packageTrees(root, () => {
+        throw new Error("not installed");
+      }),
+    ).toEqual([root]);
+  });
+
+  it("stops when a resolved file belongs to no package", () => {
+    const root = hostApp();
+    const orphan = path.join(path.parse(root).root, "orphan", "index.js");
+    expect(packageTrees(root, () => orphan)).toEqual([root]);
+  });
+});
+
+describe("externalSources through a symlink", () => {
+  it("never flags a link whose target lives in the framework's own tree", () => {
+    const root = hostApp();
+    const framework = path.join(root, "vendor/framework");
+    fs.mkdirSync(path.join(framework, "src"), { recursive: true });
+    fs.writeFileSync(path.join(framework, "package.json"), JSON.stringify({ name: "superwall" }));
+    const real = path.join(framework, "src/index.ts");
+    fs.writeFileSync(real, "export default 1;\n");
+    const link = path.join(root, "src/linked.ts");
+    fs.mkdirSync(path.dirname(link), { recursive: true });
+    fs.symlinkSync(real, link);
+
+    expect(externalSources([link], superwallDir(root), [framework])).toEqual([]);
+    expect(externalSources([link], superwallDir(root), [])).toEqual(["../src/linked.ts"]);
+  });
+});
+
+describe("externalSources judging a link by its target", () => {
+  it("never flags a link outside the project that really points into node_modules", () => {
+    const root = hostApp();
+    const real = path.join(root, "node_modules/@acme/ui/index.js");
+    fs.mkdirSync(path.dirname(real), { recursive: true });
+    fs.writeFileSync(real, "export default 1;\n");
+    const link = path.join(root, "src/vendored-ui.js");
+    fs.mkdirSync(path.dirname(link), { recursive: true });
+    fs.symlinkSync(real, link);
+
+    expect(externalSources([link], superwallDir(root))).toEqual([]);
+  });
+
+  it("never flags a link outside the project that really points back into it", () => {
+    const root = hostApp();
+    const real = path.join(root, "superwall/components/Button.tsx");
+    fs.mkdirSync(path.dirname(real), { recursive: true });
+    fs.writeFileSync(real, "export default 1;\n");
+    const link = path.join(root, "src/button.tsx");
+    fs.mkdirSync(path.dirname(link), { recursive: true });
     fs.symlinkSync(real, link);
 
     expect(externalSources([link], superwallDir(root))).toEqual([]);
