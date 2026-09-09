@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { paywallSettingsOf, type PaywallSettings } from "../build/settings";
 import { importDefault } from "../config/load";
 import type { PaywallDefinition } from "../config";
 import {
@@ -21,6 +22,7 @@ export type StudioSurfacePayload = {
   locales: string[];
   products: Record<string, string>;
   productIds: Record<string, string[]>;
+  settings: PaywallSettings;
   platforms?: string[];
   paywallId?: string;
   editedAt?: string;
@@ -96,6 +98,7 @@ export const buildStudioProject = async (
         productIds: Object.fromEntries(
           slots.map(([reference, input]) => [reference, productIdsOf(input)]),
         ),
+        settings: paywallSettingsOf(definition),
         ...(platforms === undefined ? {} : { platforms }),
         paywallId: firstBinding(binding)?.paywallId,
       };

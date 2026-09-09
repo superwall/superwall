@@ -12,6 +12,8 @@ import {
   type SnapshotAsset,
 } from "../../src/build";
 import { discoverProject } from "../../src/discover";
+import { buildStudioProject } from "../../src/preview/project";
+import { attachSurfaceDetails, surfaceDetailsFrom } from "../../src/preview/device";
 
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixture");
 const BASE = "https://user-content.test/user-content/hl/42";
@@ -473,6 +475,37 @@ describe("paywall settings ride on the snapshot", () => {
       game_controller_enabled: false,
     });
   }, 120_000);
+});
+
+describe("superwall dev serves the settings push would stamp", () => {
+  const devSurfaces = async () => {
+    const payload = await buildStudioProject(
+      FIXTURE,
+      async (file) => (await import(String(file))).default,
+    );
+    return payload.surfaces;
+  };
+
+  it("hands the device the same settings block the snapshot carries", async () => {
+    const built = await buildSnapshot(project(), surface("drawer"), {});
+    const dev = (await devSurfaces()).find((one) => one.id === "drawer");
+    expect(dev?.settings).toEqual(built.settings);
+  }, 120_000);
+
+  it("puts that block on the manifest surface the SDK reads", async () => {
+    const surfaces = await devSurfaces();
+    const manifest = attachSurfaceDetails(
+      { surfaces: [{ kind: "paywall", id: "drawer", url: "/preview/paywall/drawer" }] },
+      surfaceDetailsFrom(surfaces),
+    );
+    const drawer = surfaces.find((one) => one.id === "drawer");
+    expect(manifest.surfaces[0]?.settings).toEqual(drawer?.settings);
+    expect(manifest.surfaces[0]?.settings?.presentation_style).toEqual({
+      type: "DRAWER",
+      height: 60,
+      corner_radius: 15,
+    });
+  });
 });
 
 describe("checkout and background ride the settings block", () => {

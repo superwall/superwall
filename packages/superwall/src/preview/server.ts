@@ -17,7 +17,12 @@ import type { DiscoveredSurface } from "../discover";
 import { injectPlatformLayer, PLATFORM_STYLESHEET_URL, renderDocument } from "../document";
 import { EXTRA_ASSET_TYPES } from "../build/assets";
 import { readLock } from "../lock";
-import { attachIdentifiers, attachProducts, buildDeviceManifest } from "./device";
+import {
+  attachIdentifiers,
+  attachSurfaceDetails,
+  buildDeviceManifest,
+  surfaceDetailsFrom,
+} from "./device";
 import { buildStudioProjects } from "./project";
 import {
   findSurface,
@@ -267,13 +272,11 @@ const previewPlugin = (
           refreshIdentifiers(entries, studio);
           buildStudioProjects(entries)
             .then((payload) => {
-              const products = Object.fromEntries(
-                payload.surfaces.map((surface) => [
-                  `${surface.kind}/${surface.id}`,
-                  surface.products,
-                ]),
+              const details = surfaceDetailsFrom(payload.surfaces);
+              json(
+                res,
+                attachSurfaceDetails(attachIdentifiers(manifest, identifierCache), details),
               );
-              json(res, attachProducts(attachIdentifiers(manifest, identifierCache), products));
             })
             .catch(next);
           return;

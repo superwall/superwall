@@ -1,8 +1,12 @@
+import type { PaywallSettings } from "../build/settings";
 import { boundPaywallIds, type LockFile } from "../lock";
 
 export type DeviceSurface = { kind: string; id: string };
 
-export type DeviceSurfaceProducts = Record<string, Record<string, string>>;
+export type DeviceSurfaceDetails = Record<
+  string,
+  { products: Record<string, string>; settings: PaywallSettings }
+>;
 
 export type DeviceManifestProject = {
   slug: string;
@@ -18,17 +22,36 @@ export type DeviceManifestSurface = {
   paywallIds?: string[];
   identifier?: string;
   products?: Record<string, string>;
+  settings?: PaywallSettings;
 };
 
-export const attachProducts = (
+export const surfaceDetailsFrom = (
+  surfaces: readonly {
+    kind: string;
+    id: string;
+    products: Record<string, string>;
+    settings: PaywallSettings;
+  }[],
+): DeviceSurfaceDetails =>
+  Object.fromEntries(
+    surfaces.map((surface) => [
+      `${surface.kind}/${surface.id}`,
+      { products: surface.products, settings: surface.settings },
+    ]),
+  );
+
+export const attachSurfaceDetails = (
   manifest: { surfaces: DeviceManifestSurface[] },
-  productsBySurface: DeviceSurfaceProducts,
+  detailsBySurface: DeviceSurfaceDetails,
 ): { surfaces: DeviceManifestSurface[] } => ({
   surfaces: manifest.surfaces.map((surface) => {
-    const products = productsBySurface[`${surface.kind}/${surface.id}`];
-    return products === undefined || Object.keys(products).length === 0
-      ? surface
-      : { ...surface, products };
+    const details = detailsBySurface[`${surface.kind}/${surface.id}`];
+    if (details === undefined) return surface;
+    return {
+      ...surface,
+      ...(Object.keys(details.products).length === 0 ? {} : { products: details.products }),
+      settings: details.settings,
+    };
   }),
 });
 

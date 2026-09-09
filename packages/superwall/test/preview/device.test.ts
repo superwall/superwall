@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { attachIdentifiers, attachProducts, buildDeviceManifest } from "../../src/preview/device";
+import { paywallSettingsOf } from "../../src/build/settings";
+import {
+  attachIdentifiers,
+  attachSurfaceDetails,
+  buildDeviceManifest,
+  surfaceDetailsFrom,
+} from "../../src/preview/device";
 
 const emptyLock = { version: 1 as const, apps: {}, paywalls: {}, funnels: {} };
 
@@ -69,20 +75,30 @@ describe("buildDeviceManifest", () => {
   });
 });
 
-describe("attachProducts", () => {
-  it("attaches config products by surface and leaves productless surfaces alone", () => {
+describe("attachSurfaceDetails", () => {
+  const settings = paywallSettingsOf({ presentation: { style: "drawer" } });
+
+  it("attaches products and settings by surface, and no empty product map", () => {
     const manifest = {
       surfaces: [
         { kind: "paywall", id: "pro", url: "/preview/paywall/pro" },
         { kind: "funnel", id: "onboarding", url: "/preview/funnel/onboarding" },
       ],
     };
-    const attached = attachProducts(manifest, {
-      "paywall/pro": { monthly: "pro_999_month" },
-      "funnel/onboarding": {},
+    const attached = attachSurfaceDetails(manifest, {
+      "paywall/pro": { products: { monthly: "pro_999_month" }, settings },
+      "funnel/onboarding": { products: {}, settings },
     });
+
     expect(attached.surfaces[0]?.products).toEqual({ monthly: "pro_999_month" });
+    expect(attached.surfaces[0]?.settings).toEqual(settings);
     expect(attached.surfaces[1]).not.toHaveProperty("products");
+    expect(attached.surfaces[1]?.settings).toEqual(settings);
+  });
+
+  it("leaves a surface the studio payload never described alone", () => {
+    const manifest = { surfaces: [{ kind: "paywall", id: "gone", url: "/preview/paywall/gone" }] };
+    expect(attachSurfaceDetails(manifest, {}).surfaces[0]).toEqual(manifest.surfaces[0]);
   });
 });
 
@@ -101,5 +117,20 @@ describe("attachIdentifiers", () => {
       manifest.surfaces[1],
       manifest.surfaces[2],
     ]);
+  });
+});
+
+describe("surfaceDetailsFrom", () => {
+  it("keys the studio payload the way the manifest looks surfaces up", () => {
+    const settings = paywallSettingsOf({});
+    expect(
+      surfaceDetailsFrom([
+        { kind: "paywall", id: "pro", products: { monthly: "pro_month" }, settings },
+        { kind: "funnel", id: "onboarding", products: {}, settings },
+      ]),
+    ).toEqual({
+      "paywall/pro": { products: { monthly: "pro_month" }, settings },
+      "funnel/onboarding": { products: {}, settings },
+    });
   });
 });
