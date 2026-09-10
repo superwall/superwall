@@ -10,6 +10,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       });
       child.on("error", () => resolve(false));
       child.on("close", (code) => resolve(code === 0));
+      child.stdin.on("error", () => resolve(false));
       child.stdin.write(text);
       child.stdin.end();
     } catch {

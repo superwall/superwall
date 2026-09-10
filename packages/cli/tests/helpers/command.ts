@@ -47,6 +47,8 @@ export async function run<Auth extends AuthPolicy>(
       return stdout.trim() === "" ? undefined : JSON.parse(stdout);
     },
     said: (method) =>
-      calls.filter((call) => call.method === method).map((call) => String(call.value ?? "")),
+      calls
+        .filter((call) => call.method === method)
+        .map((call) => String(call.value ?? "").replace(/\u001B\[[0-9;]*m/g, "")),
   };
 }
