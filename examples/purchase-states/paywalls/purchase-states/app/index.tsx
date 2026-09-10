@@ -53,8 +53,9 @@ export default function Index() {
       </div>
 
       <p className="note">
-        <code>purchase()</code> resolves with the outcome of that call. Events fire for anything the
-        SDK reports — a successful restore arrives as <code>transaction_complete</code> too.
+        <code>purchase()</code> and <code>restore()</code> each resolve with the outcome of that
+        call. Events fire for anything the SDK reports — a restore announces itself as{" "}
+        <code>transaction_restore</code>, never <code>transaction_complete</code>.
       </p>
 
       <div className="actions">
@@ -77,9 +78,13 @@ export default function Index() {
         <button
           type="button"
           className="link"
-          onClick={() => {
+          onClick={async () => {
             haptics.light();
-            restore();
+            const result = await restore();
+            add({
+              name: `restore_${result.status}`,
+              detail: result.status === "restored" ? "Restored." : "Nothing to restore.",
+            });
           }}
         >
           Restore purchases
