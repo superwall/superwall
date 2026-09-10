@@ -218,12 +218,12 @@ const useQueryStore = (key: string): QueryStore => {
       `The query key "${key}" is reserved by superwall (${RESERVED_PREFIX}* and ${RESERVED_KEYS.join(", ")})`,
     );
   }
-  
+
   const store = React.useContext(QueryStoreContext);
   if (!store) {
     throw new Error("useQueryState() must be used inside a paywall mounted by superwall");
   }
-  
+
   return store;
 };
 

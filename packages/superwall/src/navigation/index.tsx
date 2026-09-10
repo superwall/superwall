@@ -179,7 +179,7 @@ export const PaywallRouter = ({
     direction: "forward",
     sync: "replace",
   }));
-  
+
   const { entries, exiting, direction } = nav;
 
   const known = React.useRef(routes);
