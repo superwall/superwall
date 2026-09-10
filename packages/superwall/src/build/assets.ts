@@ -196,7 +196,7 @@ export const collectAssets = (
         const item = entry(asset);
         if (item) list.push(item);
       }
-      if (list.length > 0) routes[route.name] = list;
+      routes[route.name] = list;
     }
 
     const shared: RouteAsset[] = [];

@@ -232,9 +232,9 @@ describe("without a host to serve from", () => {
     expect(built.html).toContain("data:video/mp4;base64,");
   });
 
-  it("has no route map to prefetch from", () => {
-    expect(markup(built.html)).not.toContain("sw-route-assets");
-    expect(routeAssets(built.html)).toEqual({});
+  it("still names its routes, with nothing to prefetch for them", () => {
+    expect(markup(built.html)).toContain("sw-route-assets");
+    expect(routeAssets(built.html)).toEqual({ index: [], offer: [] });
   });
 
   it("is still one self-contained file", () => {

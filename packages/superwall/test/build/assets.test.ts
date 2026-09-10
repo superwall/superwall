@@ -207,9 +207,11 @@ describe("collectAssets", () => {
     expect(collected.misplaced).toBeUndefined();
   });
 
-  it("builds no preload map when nothing is hosted", () => {
+  it("lists every route with nothing to preload when nothing is hosted", () => {
+    // Still a route map: a capture reads it to learn which pages exist, which
+    // is true whether or not any of them preload something.
     const collected = runCollect(undefined, { [index]: ["/app/superwall/assets/hero.png"] });
-    expect(collected.routes).toEqual({});
+    expect(collected.routes).toEqual({ index: [], plans: [] });
     expect(collected.misplaced).toBeUndefined();
   });
 });
