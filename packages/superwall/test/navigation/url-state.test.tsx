@@ -235,3 +235,44 @@ describe("when the URL is kept", () => {
     }
   });
 });
+
+describe("sw_nav decides where a surface opens, whatever else it keeps", () => {
+  it("opens on the asked-for route even with query state off", () => {
+    window.history.replaceState({}, "", "/?sw_nav=goal");
+
+    mount({ queryState: false });
+
+    expect(screen.getByText("at goal")).toBeTruthy();
+  });
+
+  it("opens on a whole stack, so a deep page keeps its back button", () => {
+    window.history.replaceState({}, "", "/?sw_nav=index,goal,plan");
+
+    mount({ queryState: false });
+
+    expect(screen.getByText("at plan")).toBeTruthy();
+    expect(depth()).toBe("2");
+    fireEvent.click(screen.getAllByText("back").at(-1)!);
+    settle();
+    expect(screen.getByText("at goal")).toBeTruthy();
+  });
+
+  it("is ignored when it names a route the surface does not have", () => {
+    window.history.replaceState({}, "", "/?sw_nav=ghost");
+
+    mount({ queryState: false });
+
+    expect(screen.getByText("at index")).toBeTruthy();
+  });
+
+  it("stops tracking after entry when query state is off, rather than lying", () => {
+    window.history.replaceState({}, "", "/?sw_nav=goal");
+
+    mount({ queryState: false });
+    fireEvent.click(screen.getAllByText("push setup").at(-1)!);
+    settle();
+
+    expect(screen.getByText("at setup")).toBeTruthy();
+    expect(navParam()).toBe("goal");
+  });
+});

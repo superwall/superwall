@@ -114,6 +114,9 @@ const parseStack = (value: string | null, routes: RouteMap): RouteName[] | undef
   return names;
 };
 
+const askedStack = (routes: RouteMap): RouteName[] | undefined =>
+  parseStack(new URLSearchParams(window.location.search).get(NAV_KEY), routes);
+
 const serializeStack = (entries: readonly Entry[]): string | null =>
   entries.length === 1 && entries[0].name === INITIAL_ROUTE
     ? null
@@ -167,14 +170,16 @@ export const PaywallRouter = ({
         !detectSuperwallHost(),
     ),
   );
+
   const [nav, setNav] = React.useState<Nav>(() => ({
-    entries: (parseStack(store.get(NAV_KEY), routes) ?? [INITIAL_ROUTE]).map((name, key) => ({
+    entries: (askedStack(routes) ?? [INITIAL_ROUTE]).map((name, key) => ({
       key,
       name,
     })),
     direction: "forward",
     sync: "replace",
   }));
+  
   const { entries, exiting, direction } = nav;
 
   const known = React.useRef(routes);
