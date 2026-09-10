@@ -1,6 +1,6 @@
 {
   "name": "@superwall/cli",
-  "version": "1.3.0-beta.3",
+  "version": "1.3.0-beta.4",
   "description": "The official CLI for managing Superwall from your terminal or coding agent.",
   "keywords": [
     "agent",
