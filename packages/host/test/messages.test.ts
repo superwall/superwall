@@ -3,7 +3,6 @@ import pingReply from "../../protocol/test/fixtures/host/ping-reply.json";
 import {
   DEFAULT_PARAMS,
   DEFAULT_USER,
-  EXAMPLE_PRODUCT_VARIABLES,
   createHostState,
   defaultDevice,
   pingReply as buildPingReply,
@@ -14,6 +13,16 @@ import {
 
 export const FIXTURE_NOW = Date.UTC(2026, 8, 8, 12, 0, 0);
 
+/**
+ * The product bag the captured reply carries, kept here because reproducing that
+ * capture is all it is for. The SDK sends whatever the store returned; a host
+ * with no product data sends no variables at all.
+ */
+const FIXTURE_PRODUCT_VARIABLES = pingReply.events[0]?.variables?.products?.[0]?.primary as Record<
+  string,
+  unknown
+>;
+
 export const fixtureState = () =>
   createHostState({
     paywallId: "123",
@@ -22,7 +31,7 @@ export const fixtureState = () =>
     user: DEFAULT_USER,
     params: DEFAULT_PARAMS,
     products: [
-      { reference: "primary", productId: "com.app.annual", variables: EXAMPLE_PRODUCT_VARIABLES },
+      { reference: "primary", productId: "com.app.annual", variables: FIXTURE_PRODUCT_VARIABLES },
     ],
   });
 

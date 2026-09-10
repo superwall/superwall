@@ -43,15 +43,18 @@ describe("hostStateFor", () => {
     });
   });
 
-  it("prices a slot from the samples, and shows an example where it cannot", () => {
+  it("prices a slot from the samples, and leaves it priceless where it cannot", () => {
     const priced = state(
       inputs({ samples: { products: { pro_999_month: { price: "$9.99" } } } }),
     ).products;
     expect(priced[0]).toMatchObject({ reference: "monthly", productId: "pro_999_month" });
     expect(priced[0]?.variables).toMatchObject({ price: "$9.99" });
 
-    const example = state(inputs()).products[0];
-    expect(example?.variables.price).toBeTypeOf("string");
+    // No sample means no price. Inventing one would render a confident number
+    // for a product the studio could not read from the store.
+    const unpriced = state(inputs()).products[0];
+    expect(unpriced).toMatchObject({ reference: "monthly", productId: "pro_999_month" });
+    expect(unpriced?.variables).toEqual({});
   });
 
   it("lets an edited variable win over the sample it came from", () => {

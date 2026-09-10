@@ -150,6 +150,29 @@ describe("a session hosted in-process", () => {
     expect(failed.session.getSnapshot().restore).toEqual({ status: "failed" });
   });
 
+  it("resolves the restore it started, with the outcome the host chose", async () => {
+    const restored = hosted({ restore: "restored" });
+    await flushMicrotasks();
+    await expect(restored.session.restore()).resolves.toEqual({ status: "restored" });
+
+    const failed = hosted({ restore: "failed" });
+    await flushMicrotasks();
+    await expect(failed.session.restore()).resolves.toEqual({ status: "failed" });
+  });
+
+  it("answers a second restore with the first one's promise", async () => {
+    // Restore takes no argument and the SDK runs one at a time, so a second tap
+    // joins the restore already in flight rather than starting a rival one.
+    const { session } = hosted({ restore: "restored" });
+    await flushMicrotasks();
+
+    const first = session.restore();
+    const second = session.restore();
+
+    expect(second).toBe(first);
+    await expect(first).resolves.toEqual({ status: "restored" });
+  });
+
   it("resolves permission requests", async () => {
     const { session } = hosted({ permission: "denied" });
     await flushMicrotasks();

@@ -23,6 +23,7 @@ import {
 import { snapshotPatchFor } from "./incoming";
 import * as outgoing from "./outgoing";
 import { createPurchaseTracker } from "./purchases";
+import { createRestoreTracker } from "./restores";
 import { callbackStateName, createRequestTracker } from "./requests";
 import { trialReminderFor } from "./reminders";
 import { buildSuperwallState } from "./state";
@@ -49,6 +50,7 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
   const listeners = new Set<() => void>();
   const handlers: HandlerSets = {};
   const purchases = createPurchaseTracker();
+  const restores = createRestoreTracker();
   const requests = createRequestTracker();
   const derive = createProductDeriver();
 
@@ -206,6 +208,12 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
         if (failure) recordFailure(failure);
         break;
       }
+      case "restore_complete":
+        restores.settle("restored");
+        break;
+      case "restore_fail":
+        restores.settle("failed");
+        break;
       case "permission_result":
         requests.resolvePermission(message);
         break;
@@ -290,7 +298,11 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
       for (const entry of decoded) transport.accept(entry);
     },
     close: () => post(outgoing.close()),
-    restore: () => post(outgoing.restore()),
+    restore: () => {
+      const result = restores.begin();
+      post(outgoing.restore());
+      return result;
+    },
     openUrl: (url, urlOptions = {}) => post(outgoing.openUrl(url, urlOptions.browserType)),
     openExternalUrl: (url) => post(outgoing.openExternalUrl(url)),
     openDeepLink: (link) => post(outgoing.openDeepLink(link)),

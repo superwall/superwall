@@ -119,14 +119,14 @@ describe("SurfaceEditor hosting a published paywall", () => {
     });
   });
 
-  it("shows example prices for a slot the catalogue cannot price", () => {
+  it("sends no prices for a slot the catalogue cannot price", () => {
+    // The paywall hears about the slot but gets no variables for it, exactly as
+    // it would on a device whose store had nothing for that identifier.
     render(<SurfaceEditor source={source} surface={live} samples={{}} onBack={() => {}} />);
     const host = hostOf(preview());
     host.ping();
     const [burst] = host.sent();
-    expect(burst?.[0]).toMatchObject({
-      variables: { products: [{ annual: { price: "$89.99", trialPeriodText: "7-day" } }] },
-    });
+    expect(burst?.[0]).toMatchObject({ variables: { products: [{ annual: {} }] } });
   });
 
   it("switches theme and locale by re-sending device variables, not by reloading", () => {
@@ -171,11 +171,11 @@ describe("SurfaceEditor hosting a published paywall", () => {
     host.ping();
 
     const trial = screen.getByRole("switch", { name: "Introductory offer" });
-    expect(trial.getAttribute("aria-checked")).toBe("true");
+    expect(trial.getAttribute("aria-checked")).toBe("false");
     fireEvent.click(trial);
 
     expect(host.sent().at(-1)).toEqual([
-      { event_name: "template_substitutions_prefix", prefix: "default" },
+      { event_name: "template_substitutions_prefix", prefix: "freeTrial" },
     ]);
   });
 

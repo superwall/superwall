@@ -3,7 +3,6 @@ import {
   DEFAULT_PARAMS,
   DEFAULT_USER,
   defaultDevice,
-  EXAMPLE_PRODUCT_VARIABLES,
   type HostProduct,
   type HostState,
   type HostVariables,
@@ -63,7 +62,7 @@ export const hostStateFor = ({
       reference,
       productId,
       variables: {
-        ...(samples.products?.[productId] ?? EXAMPLE_PRODUCT_VARIABLES),
+        ...samples.products?.[productId],
         ...edited.products?.[reference],
       },
     }),

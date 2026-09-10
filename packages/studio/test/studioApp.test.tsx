@@ -311,11 +311,11 @@ describe("StudioApp", () => {
 
     const sent = hostOf(screen.getAllByTitle("plus-upgrade preview").at(-1));
     const toggle = screen.getByRole("switch", { name: "Introductory offer" });
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
 
     fireEvent.click(toggle);
     expect(sent().at(-1)).toEqual([
-      { event_name: "template_substitutions_prefix", prefix: "default" },
+      { event_name: "template_substitutions_prefix", prefix: "freeTrial" },
     ]);
     expect(screen.getAllByTitle("plus-upgrade preview")).toHaveLength(1);
   });

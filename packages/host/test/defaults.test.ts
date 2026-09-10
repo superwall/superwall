@@ -3,10 +3,8 @@ import pingReply from "../../protocol/test/fixtures/host/ping-reply.json";
 import {
   DEFAULT_PARAMS,
   DEFAULT_USER,
-  EXAMPLE_PRODUCT_VARIABLES,
   defaultDevice,
   derivedDeviceProperties,
-  withoutTrial,
 } from "../src/defaults";
 import { FIXTURE_NOW } from "./messages.test";
 
@@ -33,17 +31,6 @@ describe("defaults", () => {
   it("the default user and params match the fixture", () => {
     expect(DEFAULT_USER).toEqual(fixtureVariables().user);
     expect(DEFAULT_PARAMS).toEqual(fixtureVariables().params);
-  });
-
-  it("the example product matches the editor's fallback", () => {
-    expect(EXAMPLE_PRODUCT_VARIABLES).toEqual(fixtureVariables().products[0]?.primary);
-  });
-
-  it("withoutTrial strips every trial key, case-insensitively", () => {
-    const stripped = withoutTrial(EXAMPLE_PRODUCT_VARIABLES);
-    expect(Object.keys(stripped).some((key) => key.toLowerCase().includes("trial"))).toBe(false);
-    expect(stripped.price).toBe("$89.99");
-    expect("rawTrialPeriodPrice" in stripped).toBe(false);
   });
 
   it("defaultDevice uses the current time when none is given", () => {

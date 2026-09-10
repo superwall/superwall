@@ -61,6 +61,16 @@ export type SuperwallRestoreState = {
   status: "started" | "completed" | "failed";
 };
 
+/**
+ * How a restore ended.
+ *
+ * Deliberately no product list and no reason. The SDK announces a restored
+ * transaction with `transaction_restore`, which carries no payload, and reports
+ * "nothing to restore" as `restore_fail` like any other failure — the message it
+ * logs for that case never reaches the paywall.
+ */
+export type SuperwallRestoreResult = { status: "restored" | "failed" };
+
 export type SuperwallPurchaseResult<TProduct extends SuperwallProduct = SuperwallProduct> =
   | SuperwallTransaction<TProduct>
   | SuperwallPurchaseFailure<TProduct>;
@@ -141,7 +151,7 @@ export interface SuperwallSession<out TProduct extends SuperwallProduct = Superw
   accept: (messages: TIncomingMessage[]) => void;
   accept64: (message: string) => void;
   close: () => void;
-  restore: () => void;
+  restore: () => Promise<SuperwallRestoreResult>;
   openUrl: (url: string, options?: { browserType?: "payment_sheet" }) => void;
   openExternalUrl: (url: string) => void;
   openDeepLink: (link: string) => void;
