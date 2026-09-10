@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const PUBLISHED = ["protocol", "runtime", "studio", "cli", "superwall"];
+export const PUBLISHED = ["protocol", "host", "runtime", "studio", "cli", "superwall"];
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/;
 

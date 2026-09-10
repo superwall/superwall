@@ -30,7 +30,7 @@ jobs:
     if: github.repository == 'superwall/superwall'
     runs-on: ubuntu-latest
     env:
-      PACKAGES: protocol runtime studio cli superwall
+      PACKAGES: protocol host runtime studio cli superwall
     steps:
       - uses: actions/checkout@v4
         with:
