@@ -39,3 +39,5 @@ export type StudioSource = {
   capabilities?: { actions: boolean };
   compareHint?: string;
 };
+
+export const hasActions = (source: StudioSource): boolean => source.capabilities?.actions === true;

@@ -1,6 +1,15 @@
+import * as React from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SurfaceEditor } from "../../src/screens/SurfaceEditor";
+import { StudioHostProvider } from "../../src/lib/studio-host";
+
+const renderEditor = (element: React.ReactElement<React.ComponentProps<typeof SurfaceEditor>>) =>
+  render(
+    <StudioHostProvider mode="local" home={{ href: "/", navigate: () => {} }}>
+      {element}
+    </StudioHostProvider>,
+  );
 import { snapshotPreviewUrl } from "../../src/lib/preview";
 import type { StudioSource, StudioSurface } from "../../src/lib/surfaces";
 
@@ -69,7 +78,7 @@ afterEach(() => {
 
 describe("SurfaceEditor hosting a published paywall", () => {
   it("previews the snapshot the host resolves, over the editor transport", () => {
-    render(<SurfaceEditor source={source} surface={live} samples={{}} onBack={() => {}} />);
+    renderEditor(<SurfaceEditor source={source} surface={live} samples={{}} />);
     const url = new URL(preview().src);
     expect(`${url.origin}${url.pathname}`).toBe("https://cdn.test/v12.html");
     expect(url.searchParams.get("transport")).toBe("editor");
@@ -79,12 +88,11 @@ describe("SurfaceEditor hosting a published paywall", () => {
   });
 
   it("answers the paywall's ping with the version's products and identity", () => {
-    render(
+    renderEditor(
       <SurfaceEditor
         source={source}
         surface={live}
         samples={{ products: { pro_5999_year: { price: "$59.99", trialPeriodDays: 7 } } }}
-        onBack={() => {}}
       />,
     );
     const host = hostOf(preview());
@@ -122,7 +130,7 @@ describe("SurfaceEditor hosting a published paywall", () => {
   it("sends no prices for a slot the catalogue cannot price", () => {
     // The paywall hears about the slot but gets no variables for it, exactly as
     // it would on a device whose store had nothing for that identifier.
-    render(<SurfaceEditor source={source} surface={live} samples={{}} onBack={() => {}} />);
+    renderEditor(<SurfaceEditor source={source} surface={live} samples={{}} />);
     const host = hostOf(preview());
     host.ping();
     const [burst] = host.sent();
@@ -130,13 +138,8 @@ describe("SurfaceEditor hosting a published paywall", () => {
   });
 
   it("switches theme and locale by re-sending device variables, not by reloading", () => {
-    render(
-      <SurfaceEditor
-        source={source}
-        surface={{ ...live, locales: ["en", "de"] }}
-        samples={{}}
-        onBack={() => {}}
-      />,
+    renderEditor(
+      <SurfaceEditor source={source} surface={{ ...live, locales: ["en", "de"] }} samples={{}} />,
     );
     const frame = preview();
     const host = hostOf(frame);
@@ -161,12 +164,12 @@ describe("SurfaceEditor hosting a published paywall", () => {
   });
 
   it("lists only the locales the host knows", () => {
-    render(<SurfaceEditor source={source} surface={live} samples={{}} onBack={() => {}} />);
+    renderEditor(<SurfaceEditor source={source} surface={live} samples={{}} />);
     expect(screen.queryByLabelText("Locale")).toBeNull();
   });
 
   it("flips trial eligibility through the prefix alone", () => {
-    render(<SurfaceEditor source={source} surface={live} samples={{}} onBack={() => {}} />);
+    renderEditor(<SurfaceEditor source={source} surface={live} samples={{}} />);
     const host = hostOf(preview());
     host.ping();
 
@@ -180,7 +183,7 @@ describe("SurfaceEditor hosting a published paywall", () => {
   });
 
   it("offers the other versions to compare against, named by the host", () => {
-    render(<SurfaceEditor source={source} surface={live} samples={{}} onBack={() => {}} />);
+    renderEditor(<SurfaceEditor source={source} surface={live} samples={{}} />);
     fireEvent.click(screen.getByRole("button", { name: /compare/i }));
     expect(screen.getByText("Published snapshot")).toBeTruthy();
     expect(screen.queryByText("v12 · live")).toBeNull();
@@ -193,12 +196,11 @@ describe("SurfaceEditor hosting a published paywall", () => {
   });
 
   it("puts the host's own controls in the top bar and keeps standalone preview local", () => {
-    render(
+    renderEditor(
       <SurfaceEditor
         source={source}
         surface={live}
         samples={{}}
-        onBack={() => {}}
         actions={<button type="button">Version</button>}
       />,
     );
@@ -258,9 +260,7 @@ describe("SurfaceEditor shipping a local surface", () => {
     );
     vi.useFakeTimers();
 
-    render(
-      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
-    );
+    renderEditor(<SurfaceEditor source={shippable} surface={local} samples={{}} />);
     await act(async () => {});
     await ship("push");
 
@@ -278,9 +278,7 @@ describe("SurfaceEditor shipping a local surface", () => {
       stream(["link", "build"], { ok: false, error: "products missing from the dashboard" }),
     );
 
-    render(
-      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
-    );
+    renderEditor(<SurfaceEditor source={shippable} surface={local} samples={{}} />);
     await act(async () => {});
     await ship("push");
 
@@ -292,9 +290,7 @@ describe("SurfaceEditor shipping a local surface", () => {
     vi.stubGlobal("open", open);
     vi.stubGlobal("fetch", stream([], { ok: true, version: 1, live: false }));
 
-    render(
-      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
-    );
+    renderEditor(<SurfaceEditor source={shippable} surface={local} samples={{}} />);
     await act(async () => {});
 
     fireEvent.click(screen.getByLabelText("Open preview"));
@@ -311,9 +307,7 @@ describe("SurfaceEditor shipping a local surface", () => {
     vi.stubGlobal("open", open);
     vi.stubGlobal("fetch", stream([], { ok: true, version: 1, live: false }));
 
-    render(
-      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
-    );
+    renderEditor(<SurfaceEditor source={shippable} surface={local} samples={{}} />);
     await act(async () => {});
 
     fireEvent.change(screen.getByLabelText("Device"), { target: { value: "desktop" } });
@@ -330,9 +324,7 @@ describe("SurfaceEditor shipping a local surface", () => {
     vi.stubGlobal("open", open);
     vi.stubGlobal("fetch", stream([], { ok: true, version: 1, live: false }));
 
-    render(
-      <SurfaceEditor source={shippable} surface={local} samples={{}} onBack={() => undefined} />,
-    );
+    renderEditor(<SurfaceEditor source={shippable} surface={local} samples={{}} />);
     await act(async () => {});
 
     fireEvent.click(screen.getByLabelText("Open preview"));
@@ -348,7 +340,7 @@ describe("SurfaceEditor shipping a local surface", () => {
     vi.stubGlobal("fetch", stream([], { ok: true, version: 1, live: false }));
     const { standaloneUrl: _omitted, ...hosted } = shippable;
 
-    render(<SurfaceEditor source={hosted} surface={local} samples={{}} onBack={() => undefined} />);
+    renderEditor(<SurfaceEditor source={hosted} surface={local} samples={{}} />);
     await act(async () => {});
 
     const opener = screen.queryByLabelText("Open preview");
@@ -368,12 +360,11 @@ describe("SurfaceEditor's smaller states", () => {
   };
 
   it("commits a responsive size on Enter, clamped to something renderable", async () => {
-    render(
+    renderEditor(
       <SurfaceEditor
         source={{ title: "chatgpt", surfaces: [local], previewUrl: () => "/preview" }}
         surface={local}
         samples={{}}
-        onBack={() => undefined}
       />,
     );
 
@@ -398,7 +389,7 @@ describe("SurfaceEditor's smaller states", () => {
       ),
     );
 
-    render(
+    renderEditor(
       <SurfaceEditor
         source={{
           title: "chatgpt",
@@ -408,7 +399,6 @@ describe("SurfaceEditor's smaller states", () => {
         }}
         surface={local}
         samples={{}}
-        onBack={() => undefined}
       />,
     );
     await act(async () => {});

@@ -13,6 +13,14 @@ export { Segmented, Select, Switch } from "./components/controls";
 export { DEFAULT_DEVICE_ID, deviceById, STUDIO_DEVICES } from "./lib/devices";
 export type { StudioDevice } from "./lib/devices";
 export { hostStateFor, studioDefaults } from "./lib/host";
+export { hasActions } from "./lib/surfaces";
+export {
+  StudioHostProvider,
+  useStudioHome,
+  useStudioMode,
+  type StudioHome,
+  type StudioMode,
+} from "./lib/studio-host";
 export {
   createHostState,
   diffHostState,

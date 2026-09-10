@@ -4,6 +4,7 @@ import { buildPreviewPath, surfacePath } from "./lib/preview";
 import { parseProjectPayload } from "./lib/project";
 import { StudioApp } from "./StudioApp";
 import "./styles.css";
+import type { StudioMode } from "./lib/studio-host";
 import type { StudioSource } from "./lib/surfaces";
 
 const loadSource = async (): Promise<StudioSource> => {
@@ -30,13 +31,13 @@ const Failure = ({ error }: { error: unknown }) => (
 
 const root = createRoot(document.getElementById("root")!);
 
-const device = /^\/device\/?$/.test(window.location.pathname);
+const mode: StudioMode = /^\/device\/?$/.test(window.location.pathname) ? "device" : "local";
 
 loadSource()
   .then((source) => {
     root.render(
       <React.StrictMode>
-        <StudioApp source={source} device={device} />
+        <StudioApp source={source} mode={mode} />
       </React.StrictMode>,
     );
   })

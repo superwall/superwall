@@ -35,6 +35,7 @@ import { hostStateFor, studioDefaults } from "../lib/host";
 import { hostedUrl } from "../lib/preview";
 import { ACTION_STEPS, type StudioActionStep, type StudioStepState } from "../lib/steps";
 import {
+  hasActions,
   type CompareTarget,
   type Samples,
   type StudioActionName,
@@ -144,13 +145,11 @@ export const SurfaceEditor = ({
   source,
   surface,
   samples,
-  onBack,
   actions,
 }: {
   source: StudioSource;
   surface: StudioSurface;
   samples: Samples;
-  onBack: () => void;
   actions?: React.ReactNode;
 }) => {
   const [deviceId, setDeviceId] = React.useState(DEFAULT_DEVICE_ID);
@@ -167,7 +166,7 @@ export const SurfaceEditor = ({
   const dismissTimer = React.useRef<number | undefined>(undefined);
   React.useEffect(() => () => window.clearTimeout(dismissTimer.current), []);
 
-  const actionsEnabled = source.capabilities?.actions === true;
+  const actionsEnabled = hasActions(source);
   const delegate = useStudioDelegate();
   const defaults = React.useMemo(studioDefaults, [surface]);
 
@@ -355,7 +354,6 @@ export const SurfaceEditor = ({
         title={`${surface.project ?? source.title} / ${surface.id}${
           surface.label ? ` · ${surface.label}` : ""
         }`}
-        onHome={onBack}
         actions={
           <>
             {actions}

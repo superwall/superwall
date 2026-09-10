@@ -4,6 +4,7 @@ import { SurfaceEditor } from "./screens/SurfaceEditor";
 import { SurfaceList } from "./screens/SurfaceList";
 import { surfacePath } from "./lib/preview";
 import { fetchSamples } from "./lib/actions";
+import { StudioHostProvider, type StudioMode } from "./lib/studio-host";
 import type { Samples, StudioSource, StudioSurface } from "./lib/surfaces";
 
 const surfaceFromPath = (
@@ -22,10 +23,10 @@ const surfaceFromPath = (
 
 export const StudioApp = ({
   source,
-  device = false,
+  mode = "local",
 }: {
   source: StudioSource;
-  device?: boolean;
+  mode?: StudioMode;
 }) => {
   const [pathname, setPathname] = React.useState(() => window.location.pathname);
   const [samples, setSamples] = React.useState<Samples>({});
@@ -47,29 +48,29 @@ export const StudioApp = ({
     };
   }, [source.capabilities?.actions]);
 
-  const navigate = (path: string) => {
+  const homePath = mode === "device" ? "/device" : "/";
+
+  const navigate = React.useCallback((path: string) => {
     window.history.pushState(null, "", path);
     setPathname(path);
-  };
+  }, []);
+
+  const home = React.useMemo(
+    () => ({ href: homePath, navigate: () => navigate(homePath) }),
+    [homePath, navigate],
+  );
 
   const active = surfaceFromPath(source.surfaces, pathname);
 
   return (
-    <StudioShell>
-      {active ? (
-        <SurfaceEditor
-          source={source}
-          surface={active}
-          samples={samples}
-          onBack={() => navigate(device ? "/device" : "/")}
-        />
-      ) : (
-        <SurfaceList
-          source={source}
-          device={device}
-          onOpen={(surface) => navigate(surfacePath(surface))}
-        />
-      )}
-    </StudioShell>
+    <StudioHostProvider mode={mode} home={home}>
+      <StudioShell>
+        {active ? (
+          <SurfaceEditor source={source} surface={active} samples={samples} />
+        ) : (
+          <SurfaceList source={source} onOpen={(surface) => navigate(surfacePath(surface))} />
+        )}
+      </StudioShell>
+    </StudioHostProvider>
   );
 };

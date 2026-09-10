@@ -459,7 +459,7 @@ describe("a product Superwall has no record of", () => {
 describe("device mode", () => {
   it("titles the bar Preview and opens cards in the hosted editor, like everywhere else", () => {
     window.history.replaceState({}, "", "/device");
-    render(<StudioApp source={source} device />);
+    render(<StudioApp source={source} mode="device" />);
 
     expect(screen.getByText("Preview")).toBeDefined();
     expect(screen.queryByText("Studio")).toBeNull();
@@ -483,7 +483,7 @@ describe("device mode", () => {
       ...window.location,
       assign,
     } as unknown as Location);
-    render(<StudioApp source={source} device />);
+    render(<StudioApp source={source} mode="device" />);
 
     expect(screen.queryByLabelText("Edit app URL scheme")).toBeNull();
     fireEvent.click(screen.getByText("Open In App"));
@@ -501,7 +501,7 @@ describe("device mode", () => {
   it("links straight out when the project payload carries the scheme", () => {
     window.history.replaceState({}, "", "/device");
     window.localStorage.clear();
-    render(<StudioApp source={{ ...source, scheme: "detectedapp" }} device />);
+    render(<StudioApp source={{ ...source, scheme: "detectedapp" }} mode="device" />);
 
     const link = screen.getByText("Open In App").closest("a");
     expect(link?.getAttribute("href")).toBe(
@@ -514,7 +514,7 @@ describe("device mode", () => {
     window.history.replaceState({}, "", "/device");
     window.localStorage.clear();
     const prompt = vi.spyOn(window, "prompt").mockReturnValue("rightapp");
-    render(<StudioApp source={{ ...source, scheme: "wrongapp" }} device />);
+    render(<StudioApp source={{ ...source, scheme: "wrongapp" }} mode="device" />);
 
     fireEvent.click(screen.getByLabelText("Edit app URL scheme"));
     expect(prompt).toHaveBeenCalledWith(expect.any(String), "wrongapp");
@@ -526,7 +526,7 @@ describe("device mode", () => {
 
   it("never routes into the editor even when the path looks like one", () => {
     window.history.replaceState({}, "", "/device");
-    render(<StudioApp source={source} device />);
+    render(<StudioApp source={source} mode="device" />);
     expect(screen.getByText("Paywalls")).toBeDefined();
     expect(screen.queryByRole("group", { name: "Theme" })).toBeNull();
   });

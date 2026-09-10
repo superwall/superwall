@@ -3,26 +3,32 @@ import { OpenInApp } from "../components/OpenInApp";
 import { SurfaceCard } from "../components/SurfaceCard";
 import { TopBar } from "../components/chrome/TopBar";
 import { fetchStatus } from "../lib/actions";
-import type { StudioSource, StudioStatus, StudioSurface } from "../lib/surfaces";
+import {
+  hasActions,
+  type StudioSource,
+  type StudioStatus,
+  type StudioSurface,
+} from "../lib/surfaces";
 import { hostStateFor, studioDefaults } from "../lib/host";
 import { surfacePath } from "../lib/preview";
+import { useStudioMode } from "../lib/studio-host";
 
 let lastScroll = 0;
 
 export const SurfaceList = ({
   source,
   onOpen,
-  device = false,
 }: {
   source: StudioSource;
   onOpen: (surface: StudioSurface) => void;
-  device?: boolean;
 }) => {
+  const device = useStudioMode() === "device";
+  const actions = hasActions(source);
   const [statuses, setStatuses] = React.useState<Record<string, StudioStatus>>({});
   const defaults = React.useMemo(studioDefaults, [source]);
 
   React.useEffect(() => {
-    if (source.capabilities?.actions !== true) return;
+    if (!actions) return;
     let cancelled = false;
     for (const surface of source.surfaces) {
       void fetchStatus(surface).then((status) => {
@@ -33,7 +39,7 @@ export const SurfaceList = ({
     return () => {
       cancelled = true;
     };
-  }, [source]);
+  }, [source, actions]);
 
   const [queries, setQueries] = React.useState<Record<string, string>>({});
   const scroller = React.useRef<HTMLDivElement>(null);
@@ -79,7 +85,6 @@ export const SurfaceList = ({
     <>
       <TopBar
         title={source.title}
-        onHome={() => {}}
         inset
         label={device ? "Preview" : undefined}
         actions={
