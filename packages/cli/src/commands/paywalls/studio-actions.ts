@@ -4,7 +4,7 @@ import {
   pushPaywallVersion,
   versionProducts,
 } from "@/core/api/resources";
-import type { SuperwallApi } from "@/core/api/client";
+import { ApiError, type SuperwallApi } from "@/core/api/client";
 import { VERSION } from "@/environment";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
 import { resolveApps } from "@/core/paywalls/binding/apps";
@@ -204,6 +204,24 @@ export function createStudioActions(
       } catch (error) {
         return { ok: false, error: reason(error) };
       }
+    },
+
+    async screenshot(surface: FrameworkSurface) {
+      const lock = readLock(project.superwallDir);
+      const bindings = (surface.kind === "paywall" ? lock.paywalls : lock.funnels)[surface.id];
+      const bound = bindings === undefined ? undefined : Object.values(bindings)[0];
+      if (!bound) return undefined;
+      const client = await ensureApi();
+      const session = await client
+        .get<{
+          status?: string;
+          pages?: { url?: string }[];
+        }>(`/v2/paywalls/${encodeURIComponent(bound.paywallId)}/preview-images`)
+        .catch((error: unknown) => {
+          if (error instanceof ApiError && error.status === 400) return undefined;
+          throw error;
+        });
+      return session?.status === "ready" ? session.pages?.[0]?.url : undefined;
     },
 
     async status(surface: FrameworkSurface) {

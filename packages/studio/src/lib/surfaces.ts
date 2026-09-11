@@ -38,14 +38,8 @@ export type StudioSource = {
   previewUrl: PreviewUrlBuilder;
   standaloneUrl?: PreviewUrlBuilder;
   capabilities?: { actions: boolean };
-  /**
-   * Builds the URL a phone should open to see this surface on a real device.
-   *
-   * Only a hosted studio needs this: locally the studio builds a `superwall_dev`
-   * link to its own server, but a hosted one has no server to point at and the
-   * link has to carry a short-lived token, so the host mints it.
-   */
   previewLink?: (surface: StudioSurface) => Promise<string>;
+  screenshotUrl?: (surface: StudioSurface) => Promise<string | undefined>;
   compareHint?: string;
 };
 

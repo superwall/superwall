@@ -82,6 +82,8 @@ const previewDocument = async (
 const PREVIEW_ROUTE = /^\/preview\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)\/?$/;
 const STUDIO_ROUTE = /^\/(?:[a-z0-9-]+\/)?(paywall|funnel)\/[a-z0-9-]+\/?$/;
 const STATUS_ROUTE = /^\/__studio\/status\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
+const SCREENSHOT_ROUTE =
+  /^\/__studio\/screenshot\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
 const STUDIO_ASSET_PREFIX = "/__studio/";
 
 const STUDIO_MISSING = `superwall studio is not built.
@@ -92,6 +94,7 @@ Run: bun run --filter '@superwall/studio' build
 export type StudioActions = {
   appScheme?(): Promise<AppScheme>;
   samples?(): Promise<Samples>;
+  screenshot?(surface: DiscoveredSurface): Promise<string | undefined>;
   run(
     action: StudioActionName,
     surface: DiscoveredSurface,
@@ -241,6 +244,36 @@ const previewPlugin = (
               res.end();
             })
             .catch((error: unknown) => json(res, { ok: false, error: messageOf(error) }));
+          return;
+        }
+
+        const screenshot = SCREENSHOT_ROUTE.exec(url);
+        if (screenshot) {
+          const surface = findSurface(
+            readProjects(roots),
+            screenshot[1] || undefined,
+            screenshot[2] ?? "",
+            screenshot[3] ?? "",
+          )?.surface;
+          if (!surface || !studio?.screenshot) {
+            return json(res, {});
+          }
+          const wantsFile = (req.url ?? "").includes("download=1");
+          studio
+            .screenshot(surface)
+            .then(async (value) => {
+              if (value === undefined) return json(res, {});
+              if (!wantsFile) return json(res, { url: value });
+              const image = await fetch(value);
+              if (!image.ok) {
+                return json(res, { unreachable: `Screenshot host answered ${image.status}` });
+              }
+              res.setHeader("Content-Type", image.headers.get("content-type") ?? "image/png");
+              res.setHeader("Content-Disposition", `attachment; filename="${surface.id}.png"`);
+              res.setHeader("Cache-Control", "no-store");
+              res.end(Buffer.from(await image.arrayBuffer()));
+            })
+            .catch((error: unknown) => json(res, { unreachable: messageOf(error) }));
           return;
         }
 

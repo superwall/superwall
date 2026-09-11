@@ -96,6 +96,7 @@ export type {
 
 export interface StudioActions {
   appScheme?(): Promise<AppScheme>;
+  screenshot?(surface: FrameworkSurface): Promise<string | undefined>;
   samples?(): Promise<Samples>;
   run(
     action: StudioActionName,

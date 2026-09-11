@@ -59,8 +59,14 @@
     transition: background-color 150ms ease;
   }
 
-  .sw-btn:hover {
+  .sw-btn:hover:not(:disabled):not(.sw-btn--blocked) {
     background: color-mix(in srgb, var(--color-cream) 5%, transparent);
+  }
+
+  .sw-btn:disabled,
+  .sw-btn--blocked {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .sw-btn--primary {
@@ -69,7 +75,7 @@
     color: var(--color-ink);
   }
 
-  .sw-btn--primary:hover {
+  .sw-btn--primary:hover:not(:disabled) {
     background: color-mix(in srgb, var(--color-cream) 85%, transparent);
   }
 

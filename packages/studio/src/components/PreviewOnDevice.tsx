@@ -93,7 +93,7 @@ export const PreviewOnDevice = ({
               </span>
             </div>
 
-            {link.status === "ready" && (
+            {link.status === "ready" ? (
               <>
                 <div className="bg-cream p-3">
                   <QRCodeSVG value={link.url} size={192} />
@@ -102,14 +102,10 @@ export const PreviewOnDevice = ({
                   {link.url}
                 </code>
               </>
-            )}
-
-            {link.status === "loading" && (
-              <span className="py-16 text-[0.8125rem] text-cream/55">Building a link…</span>
-            )}
-
-            {link.status === "unavailable" && (
-              <span className="py-16 text-[0.8125rem] text-cream/55">{link.reason}</span>
+            ) : (
+              <div className="flex size-[216px] flex-none items-center justify-center border border-cream/20 px-6 text-center text-[0.8125rem] text-cream/55">
+                {link.status === "loading" ? "Building a link…" : link.reason}
+              </div>
             )}
 
             <div className="flex items-center gap-2">

@@ -5,6 +5,7 @@ import { CompareMenu, type CompareOption } from "../components/menus/CompareMenu
 import { DeviceFrame, DevicePlaceholder } from "../components/preview/DeviceFrame";
 import { MissingProducts } from "../components/panels/MissingProducts";
 import { PaywallToasts, useStudioDelegate } from "../components/PaywallToasts";
+import { DownloadScreenshot } from "../components/DownloadScreenshot";
 import { PreviewOnDevice } from "../components/PreviewOnDevice";
 import { Segmented, Select, Switch } from "../components/controls";
 import {
@@ -376,6 +377,7 @@ export const SurfaceEditor = ({
                 <ExternalIcon />
               </button>
             )}
+            <DownloadScreenshot source={source} surface={surface} />
             <PreviewOnDevice source={source} surface={surface} />
             {actionsEnabled && (
               <ActionMenu

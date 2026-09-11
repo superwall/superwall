@@ -68,6 +68,13 @@ export const fetchStatus = async (surface: StudioSurface): Promise<StudioStatus>
   }
 };
 
+export const fetchScreenshot = async (surface: StudioSurface): Promise<string | undefined> => {
+  const response = await fetch(`/__studio/screenshot${surfacePath(surface)}`);
+  const value = (await response.json()) as { url?: string; unreachable?: string };
+  if (value.unreachable !== undefined) throw new Error(value.unreachable);
+  return value.url;
+};
+
 export const fetchSamples = async (): Promise<Samples> => {
   try {
     const response = await fetch("/__studio/samples.json");
