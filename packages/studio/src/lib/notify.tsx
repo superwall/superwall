@@ -19,7 +19,7 @@ const ICON: Record<Tone, () => React.ReactElement> = {
 export const notify = (message: React.ReactNode, tone: Tone = "info") => {
   const Icon = ICON[tone];
   toast.custom(() => (
-    <div className="bg-panel font-sans w-[344px] border border-cream/15 p-3 shadow-[0_8px_24px_-8px] shadow-black/60">
+    <div className="bg-panel font-sans w-[344px] rounded border border-cream/15 p-3">
       <div className="grid grid-cols-[14px_1fr] items-start gap-x-2.5">
         <span className={`flex h-5 items-center justify-center ${TINT[tone]}`}>
           <Icon />

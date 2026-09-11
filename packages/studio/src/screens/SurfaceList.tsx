@@ -95,7 +95,7 @@ export const SurfaceList = ({
       <div className="flex-1 overflow-y-auto px-3 pt-6 pb-16 sm:px-6 sm:pt-10" ref={scroller}>
         <div className="mx-auto max-w-[1080px]">
           {source.diagnostics && source.diagnostics.length > 0 && (
-            <div className="border-red bg-red/10 mb-6 border-l-2 px-4 py-3 text-[0.8125rem] whitespace-pre-wrap">
+            <div className="border-red bg-red/10 mb-6 rounded border-l-2 px-4 py-3 text-[0.8125rem] whitespace-pre-wrap">
               {source.diagnostics.join("\n")}
             </div>
           )}
@@ -149,7 +149,7 @@ export const SurfaceList = ({
           ))}
 
           {source.surfaces.length === 0 && (
-            <div className="border border-dashed border-cream/20 p-12 text-center text-cream/55">
+            <div className="rounded border border-dashed border-cream/20 p-12 text-center text-cream/55">
               No paywalls yet — create{" "}
               <code className="font-mono text-[0.8125rem] text-cream">
                 superwall/paywalls/&lt;id&gt;/app/page.tsx

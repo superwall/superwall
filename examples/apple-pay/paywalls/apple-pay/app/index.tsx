@@ -3,9 +3,9 @@ import { useDiscount, useHaptics, useProducts, usePurchase, useTranslation } fro
 import type { AppliedDiscount, DiscountedProduct } from "superwall/hooks";
 
 const PLANS = [
-  { reference: "trial", label: "3-day free trial", note: "then billed monthly" },
-  { reference: "intro", label: "3 days for $3.49", note: "then billed monthly" },
-  { reference: "monthly", label: "Monthly", note: "billed every month" },
+  { reference: "trial", label: "plans.trial", note: "plans.trialNote" },
+  { reference: "intro", label: "plans.intro", note: "plans.introNote" },
+  { reference: "monthly", label: "plans.monthly", note: "plans.monthlyNote" },
 ] as const;
 
 type PlanReference = (typeof PLANS)[number]["reference"];
@@ -42,7 +42,7 @@ export default function Index() {
 
   const { t } = useTranslation();
   const { redeem, clear, applied, isRedeeming, getDiscountedProduct } = useDiscount({
-    onDropped: () => setCodeError("That code is no longer valid, so it was removed."),
+    onDropped: () => setCodeError(t("promo.dropped")),
   });
 
   const applyCode = async () => {
@@ -54,10 +54,10 @@ export default function Index() {
     }
     setCodeError(
       result.reason === "code_not_found" || result.reason === "code_invalid"
-        ? "We don't recognize that code."
+        ? t("promo.unknown")
         : result.reason === "no_applicable_products"
-          ? "That code doesn't apply to these plans."
-          : "We couldn't check that code. Try again.",
+          ? t("promo.ineligible")
+          : t("promo.failed"),
     );
   };
 
@@ -75,8 +75,8 @@ export default function Index() {
   return (
     <main className="page">
       <div className="lede">
-        <h1>Go Pro</h1>
-        <p>Pay with Apple Pay in two taps. Cancel any time.</p>
+        <h1>{t("title")}</h1>
+        <p>{t("subtitle")}</p>
       </div>
 
       <div className="plans">
@@ -94,8 +94,8 @@ export default function Index() {
               }}
             >
               <span className="plan-label">
-                {plan.label}
-                <span className="plan-note">{plan.note}</span>
+                {t(plan.label, { price: getProduct(plan.reference)?.variables.price ?? "" })}
+                <span className="plan-note">{t(plan.note)}</span>
               </span>
               <span className="plan-price">
                 {original ? <s className="plan-was">{original}</s> : null}
@@ -119,7 +119,7 @@ export default function Index() {
                 clear();
               }}
             >
-              Remove
+              {t("promo.remove")}
             </button>
           </p>
         ) : (
@@ -135,13 +135,13 @@ export default function Index() {
               className="promo-input"
               value={code}
               onChange={(event) => setCode(event.target.value)}
-              placeholder="Promo code"
-              aria-label="Promo code"
+              placeholder={t("promo.placeholder")}
+              aria-label={t("promo.placeholder")}
               autoCapitalize="characters"
               autoCorrect="off"
             />
             <button type="submit" className="button button--ghost" disabled={isRedeeming || !code}>
-              {isRedeeming ? "Checking…" : "Apply"}
+              {isRedeeming ? t("promo.applying") : t("promo.apply")}
             </button>
           </form>
         )}
@@ -158,7 +158,7 @@ export default function Index() {
             void purchase(selected);
           }}
         >
-          {isPurchasing ? "One moment…" : "Continue"}
+          {isPurchasing ? t("purchase.working") : t("purchase.continue")}
         </button>
       </div>
     </main>

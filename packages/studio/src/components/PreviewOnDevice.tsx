@@ -81,7 +81,7 @@ export const PreviewOnDevice = ({
           onClick={() => setOpen(false)}
         >
           <div
-            className="bg-bar flex w-[22rem] max-w-full flex-col items-center gap-4 border border-cream/10 p-6 text-center"
+            className="bg-bar flex w-[22rem] max-w-full flex-col items-center gap-4 rounded border border-cream/10 p-6 text-center"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex flex-col gap-1">
@@ -95,7 +95,7 @@ export const PreviewOnDevice = ({
 
             {link.status === "ready" ? (
               <>
-                <div className="bg-cream p-3">
+                <div className="bg-cream rounded p-3">
                   <QRCodeSVG value={link.url} size={192} />
                 </div>
                 <code className="max-w-full font-mono text-[0.6875rem] break-all text-cream/55">
@@ -103,7 +103,7 @@ export const PreviewOnDevice = ({
                 </code>
               </>
             ) : (
-              <div className="flex size-[216px] flex-none items-center justify-center border border-cream/20 px-6 text-center text-[0.8125rem] text-cream/55">
+              <div className="flex size-[216px] flex-none items-center justify-center rounded border border-cream/20 px-6 text-center text-[0.8125rem] text-cream/55">
                 {link.status === "loading" ? "Building a link…" : link.reason}
               </div>
             )}

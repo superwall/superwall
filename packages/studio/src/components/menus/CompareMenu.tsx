@@ -93,7 +93,7 @@ export const CompareMenu = ({
       </button>
 
       {open && (
-        <div className="bg-bar absolute bottom-full left-0 z-20 mb-1 flex w-72 flex-col border border-cream/20">
+        <div className="bg-bar absolute bottom-full left-0 z-20 mb-1 flex w-72 flex-col overflow-hidden rounded border border-cream/20">
           <div className="p-2">
             <input
               className="sw-input"

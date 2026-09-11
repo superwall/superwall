@@ -56,7 +56,7 @@ export const SurfaceCard = ({
       }}
     >
       <div
-        className="bg-panel relative aspect-[390/844] overflow-hidden border border-cream/20 transition-colors group-hover:border-cream/35"
+        className="bg-panel relative aspect-[390/844] overflow-hidden rounded border border-cream/20 transition-colors group-hover:border-cream/35"
         ref={previewRef}
       >
         {scale > 0 && (

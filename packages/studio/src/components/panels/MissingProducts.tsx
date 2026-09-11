@@ -13,7 +13,7 @@ export const MissingProducts = ({
     aria-modal="true"
     aria-labelledby="sw-missing-products"
   >
-    <div className="bg-panel flex w-full max-w-md flex-col gap-4 border border-cream/20 p-5">
+    <div className="bg-panel flex w-full max-w-md flex-col gap-4 rounded border border-cream/20 p-5">
       <div className="flex flex-col gap-1.5">
         <span id="sw-missing-products" className="text-[0.9375rem] font-medium text-cream">
           {missing.length === 1 ? "A product is missing" : `${missing.length} products are missing`}

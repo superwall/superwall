@@ -10,8 +10,8 @@ import { type StudioActionName } from "../../lib/surfaces";
 
 const ACTIONS: readonly { name: StudioActionName; label: string; hint: string }[] = [
   { name: "push", label: "Push", hint: "New version, nothing live changes" },
-  { name: "publish", label: "Publish", hint: "Push and make it live" },
   { name: "promote", label: "Promote", hint: "Make the latest push live" },
+  { name: "publish", label: "Publish", hint: "Push and make it live" },
 ];
 
 const labelFor = (name: StudioActionName): string =>
@@ -30,10 +30,10 @@ export type ActionProgress = {
 };
 
 const StepGlyph = ({ state }: { state: StudioStepState }) => {
-  if (state === "active") return <span className="bg-accent h-2 w-2 animate-pulse" />;
-  if (state === "done") return <span className="bg-accent h-2 w-2" />;
-  if (state === "failed") return <span className="bg-red h-2 w-2" />;
-  return <span className="bg-cream/55 h-2 w-2" />;
+  if (state === "active") return <span className="bg-accent h-2 w-2 rounded-full animate-pulse" />;
+  if (state === "done") return <span className="bg-accent h-2 w-2 rounded-full" />;
+  if (state === "failed") return <span className="bg-red h-2 w-2 rounded-full" />;
+  return <span className="bg-cream/55 h-2 w-2 rounded-full" />;
 };
 
 const ProgressPanel = ({ progress }: { progress: ActionProgress }) => {
@@ -126,7 +126,7 @@ export const ActionMenu = ({
     <div className="relative flex" ref={menuRef}>
       <button
         type="button"
-        className="sw-btn sw-btn--primary disabled:cursor-not-allowed disabled:opacity-40"
+        className="sw-btn sw-btn--primary rounded-r-none disabled:cursor-not-allowed disabled:opacity-40"
         disabled={busy}
         title={blocked}
         onClick={() => (stopped ? onBlocked?.() : onRun(selected))}
@@ -135,7 +135,7 @@ export const ActionMenu = ({
       </button>
       <button
         type="button"
-        className="sw-btn sw-btn--primary -ml-px w-6 !px-0 disabled:cursor-not-allowed disabled:opacity-40"
+        className="sw-btn sw-btn--primary -ml-px w-6 rounded-l-none !px-0 disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="Choose action"
         aria-expanded={open}
         title={blocked}
@@ -146,7 +146,7 @@ export const ActionMenu = ({
       </button>
 
       {(showPanel || open) && (
-        <div className="bg-bar absolute top-full right-0 z-20 mt-1 border border-cream/20">
+        <div className="bg-bar absolute top-full right-0 z-20 mt-1 overflow-hidden rounded border border-cream/20">
           {showPanel ? (
             <ProgressPanel progress={progress} />
           ) : (

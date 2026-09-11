@@ -1,6 +1,22 @@
 @import "tailwindcss";
 
 @theme {
+  /* One restrained corner at every scale, so a control's size never changes
+     the visual language. Genuinely circular shapes stay 9999px. */
+  --radius: 3px;
+  --radius-xs: 3px;
+  --radius-sm: 3px;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 3px;
+  --radius-2xl: 3px;
+  --radius-3xl: 3px;
+
+  /* Structure is one hairline everywhere; controls carry a slightly stronger
+     edge because they hold a shape of their own. */
+  --hairline: color-mix(in srgb, var(--color-cream) 10%, transparent);
+  --edge: color-mix(in srgb, var(--color-cream) 18%, transparent);
+
   --color-ink: #1a1918;
   --color-bar: #211f1d;
   --color-panel: #242220;
@@ -44,13 +60,14 @@
 
 @layer components {
   .sw-btn {
+    border-radius: var(--radius);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 7px;
     height: 30px;
     padding: 0 12px;
-    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    border: 1px solid var(--edge);
     background: transparent;
     color: var(--color-cream);
     font-size: 0.8125rem;
@@ -75,7 +92,7 @@
     color: var(--color-ink);
   }
 
-  .sw-btn--primary:hover:not(:disabled) {
+  .sw-btn--primary:hover:not(:disabled):not(.sw-btn--blocked) {
     background: color-mix(in srgb, var(--color-cream) 85%, transparent);
   }
 
@@ -97,11 +114,12 @@
   }
 
   .sw-chip {
+    border-radius: var(--radius);
     display: inline-flex;
     align-items: center;
     height: 20px;
     padding: 0 7px;
-    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    border: 1px solid var(--edge);
     color: var(--color-cream);
     white-space: nowrap;
   }
@@ -120,11 +138,12 @@
   }
 
   .sw-select {
+    border-radius: var(--radius);
     appearance: none;
     cursor: pointer;
     height: 30px;
     padding: 0 24px 0 9px;
-    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    border: 1px solid var(--edge);
     background:
       linear-gradient(
           45deg,
@@ -150,8 +169,9 @@
   }
 
   .sw-segmented {
+    border-radius: var(--radius);
     display: inline-flex;
-    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    border: 1px solid var(--edge);
     height: 30px;
   }
 
@@ -169,7 +189,15 @@
   }
 
   .sw-segmented button + button {
-    border-left: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    border-left: 1px solid var(--edge);
+  }
+
+  .sw-segmented button:first-child {
+    border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px);
+  }
+
+  .sw-segmented button:last-child {
+    border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0;
   }
 
   .sw-segmented button[aria-pressed="true"] {
@@ -187,9 +215,10 @@
   }
 
   .sw-input {
+    border-radius: var(--radius);
     height: 30px;
     padding: 0 9px;
-    border: 1px solid color-mix(in srgb, var(--color-cream) 18%, transparent);
+    border: 1px solid var(--edge);
     background: transparent;
     color: var(--color-cream);
     font: inherit;

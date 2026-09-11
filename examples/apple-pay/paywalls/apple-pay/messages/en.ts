@@ -1,4 +1,28 @@
 export default {
+  title: "Go Pro",
+  subtitle: "Pay with Apple Pay in two taps. Cancel any time.",
+  plans: {
+    trial: "3-day free trial",
+    trialNote: "then billed monthly",
+    intro: "3 days for {price}",
+    introNote: "then billed monthly",
+    monthly: "Monthly",
+    monthlyNote: "billed every month",
+  },
+  promo: {
+    placeholder: "Promo code",
+    apply: "Apply",
+    applying: "Checking…",
+    remove: "Remove",
+    unknown: "We don't recognize that code.",
+    ineligible: "That code doesn't apply to these plans.",
+    failed: "We couldn't check that code. Try again.",
+    dropped: "That code is no longer valid, so it was removed.",
+  },
+  purchase: {
+    continue: "Continue",
+    working: "One moment…",
+  },
   discount: {
     percentOff: "{percent}% off",
     amountOff: "{amount} off",
