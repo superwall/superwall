@@ -177,10 +177,23 @@ export const appScheme = async (
   return local === undefined ? {} : { scheme: local, source: "app" };
 };
 
+export const plutilAvailable = async (): Promise<boolean> => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  return promisify(execFile)("plutil", ["-help"]).then(
+    () => true,
+    () => false,
+  );
+};
+
 export const allowLocalNetworking = async (plist: string): Promise<void> => {
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
   const run = promisify(execFile);
+
+  if (!(await plutilAvailable())) {
+    throw new Error("Editing an Info.plist needs `plutil`, which ships with macOS.");
+  }
 
   const has = await run("plutil", ["-extract", "NSAppTransportSecurity", "raw", plist]).then(
     () => true,

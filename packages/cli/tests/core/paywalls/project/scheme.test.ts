@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import {
   allowLocalNetworking,
+  plutilAvailable,
   allowsLocalNetworking,
   appScheme,
   detectAppTransportSecurity,
@@ -200,7 +201,7 @@ ${body}
 </plist>
 `;
 
-test("allows local networking in a plist that has no App Transport Security yet", async () => {
+test("allows local networking in a plist that has no App Transport Security yet", { skip: !(await plutilAvailable()) }, async () => {
   const file = path.join(tempDir(), "Info.plist");
   fs.writeFileSync(file, PLIST("\t<key>CFBundleIdentifier</key>\n\t<string>com.example.app</string>"));
 
@@ -209,7 +210,7 @@ test("allows local networking in a plist that has no App Transport Security yet"
   assert.equal(allowsLocalNetworking(fs.readFileSync(file, "utf8")), true);
 });
 
-test("keeps the exceptions an app already declared", async () => {
+test("keeps the exceptions an app already declared", { skip: !(await plutilAvailable()) }, async () => {
   const file = path.join(tempDir(), "Info.plist");
   fs.writeFileSync(
     file,
@@ -225,7 +226,7 @@ test("keeps the exceptions an app already declared", async () => {
   assert.ok(contents.includes("NSExceptionDomains"));
 });
 
-test("is safe to run again on a plist that already allows it", async () => {
+test("is safe to run again on a plist that already allows it", { skip: !(await plutilAvailable()) }, async () => {
   const file = path.join(tempDir(), "Info.plist");
   fs.writeFileSync(file, PLIST("\t<key>CFBundleIdentifier</key>\n\t<string>com.example.app</string>"));
 
