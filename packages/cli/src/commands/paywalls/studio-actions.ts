@@ -216,12 +216,14 @@ export function createStudioActions(
         .get<{
           status?: string;
           pages?: { url?: string }[];
+          apple_review_image?: { url?: string } | null;
         }>(`/v2/paywalls/${encodeURIComponent(bound.paywallId)}/preview-images`)
         .catch((error: unknown) => {
           if (error instanceof ApiError && error.status === 400) return undefined;
           throw error;
         });
-      return session?.status === "ready" ? session.pages?.[0]?.url : undefined;
+      if (session?.status !== "ready") return undefined;
+      return session.apple_review_image?.url ?? session.pages?.[0]?.url;
     },
 
     async status(surface: FrameworkSurface) {
