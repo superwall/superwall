@@ -1,28 +1,8 @@
 import * as React from "react";
-
-const STORAGE_KEY = "superwall-device-scheme";
-
-const readStored = (): string | undefined => {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) ?? undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-const store = (value: string) => {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, value);
-  } catch {
-    /* private browsing */
-  }
-};
-
-const linkFor = (scheme: string, origin: string): string =>
-  `${scheme}://?superwall_dev=${encodeURIComponent(origin)}`;
+import { devServerLink, readScheme, storeScheme } from "../lib/scheme";
 
 export const OpenInApp = ({ origin, scheme }: { origin: string; scheme?: string }) => {
-  const [typed, setTyped] = React.useState(readStored);
+  const [typed, setTyped] = React.useState(readScheme);
   const known = typed ?? scheme;
 
   const ask = (initial: string): string | undefined => {
@@ -30,7 +10,7 @@ export const OpenInApp = ({ origin, scheme }: { origin: string; scheme?: string 
     const trimmed = answer?.trim();
     if (trimmed === undefined || trimmed === "") return undefined;
     setTyped(trimmed);
-    store(trimmed);
+    storeScheme(trimmed);
     return trimmed;
   };
 
@@ -38,7 +18,7 @@ export const OpenInApp = ({ origin, scheme }: { origin: string; scheme?: string 
     if (known !== undefined) return;
     event.preventDefault();
     const answer = ask("");
-    if (answer !== undefined) window.location.assign(linkFor(answer, origin));
+    if (answer !== undefined) window.location.assign(devServerLink(answer, origin));
   };
 
   return (
@@ -58,7 +38,7 @@ export const OpenInApp = ({ origin, scheme }: { origin: string; scheme?: string 
       )}
       <a
         className="sw-btn sw-btn--primary"
-        href={known === undefined ? "#" : linkFor(known, origin)}
+        href={known === undefined ? "#" : devServerLink(known, origin)}
         onClick={open}
       >
         Open In App

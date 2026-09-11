@@ -5,6 +5,8 @@ import { VERSION } from "@/environment";
 import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
 import { frameworkVersion, loadFramework } from "@/core/paywalls/project/framework";
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
+import * as path from "node:path";
+import { allowLocalNetworking } from "@/core/paywalls/project/scheme";
 import { createStudioActions } from "./studio-actions";
 import { ui } from "@/ui";
 import { LAYOUT_HINT, projectDir, projectDirs, requireProject } from "./pipeline";
@@ -92,13 +94,32 @@ export const runDev = defineCommand({
     }
 
     const scheme = await studio.appScheme?.().catch(() => undefined);
-    if (scheme?.blocksLocalNetworking !== undefined) {
+    const plist = scheme?.blocksLocalNetworking;
+    if (plist !== undefined) {
       ui.warn(
-        "This app can't reach the dev server: App Transport Security blocks plain http.\n" +
-          `Add to ${scheme.blocksLocalNetworking}:\n` +
-          "  NSAppTransportSecurity → NSAllowsLocalNetworking = YES\n" +
-          "                         → NSAllowsArbitraryLoadsInWebContent = YES",
+        "This app can't load paywalls from the dev server: App Transport Security blocks plain http.",
       );
+      const allowed = context.interactive
+        ? await ui.confirm({
+            message: `Allow local previewing in ${path.basename(plist)}? Development builds only.`,
+            initial: true,
+          })
+        : null;
+
+      if (allowed === true) {
+        try {
+          await allowLocalNetworking(plist);
+          ui.step(`Local previewing allowed in ${plist} — rebuild the app to pick it up.`);
+        } catch (error) {
+          ui.warn(`Could not edit ${plist}: ${error instanceof Error ? error.message : error}`);
+        }
+      } else {
+        ui.warn(
+          `Add to ${plist}, in your Debug configuration only:\n` +
+            "  NSAppTransportSecurity → NSAllowsLocalNetworking = YES\n" +
+            "                         → NSAllowsArbitraryLoadsInWebContent = YES",
+        );
+      }
     }
 
     for (const diagnostic of projects.flatMap((one) => one.diagnostics)) {

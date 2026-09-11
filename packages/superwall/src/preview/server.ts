@@ -189,10 +189,12 @@ const previewPlugin = (
         if (url === "/__studio/project.json") {
           Promise.all([buildStudioProjects(readProjects(roots)), appScheme])
             .then(([payload, scheme]) => {
+              const network = server.resolvedUrls?.network[0];
               json(res, {
                 ...payload,
                 capabilities: { actions: Boolean(studio) },
                 ...(scheme?.scheme === undefined ? {} : { scheme: scheme.scheme }),
+                ...(network === undefined ? {} : { networkOrigin: new URL(network).origin }),
               });
             })
             .catch(next);

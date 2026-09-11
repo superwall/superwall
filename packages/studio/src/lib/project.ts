@@ -4,6 +4,7 @@ import type { SampleDefaults } from "./variables";
 export type StudioProjectPayload = {
   title: string;
   scheme?: string;
+  networkOrigin?: string;
   surfaces: StudioSurface[];
   samples: SampleDefaults;
   diagnostics: string[];
@@ -53,6 +54,7 @@ export const parseProjectPayload = (data: unknown): StudioProjectPayload => {
   return {
     title: typeof data.title === "string" ? data.title : "superwall",
     scheme: typeof data.scheme === "string" ? data.scheme : undefined,
+    networkOrigin: typeof data.networkOrigin === "string" ? data.networkOrigin : undefined,
     surfaces,
     diagnostics: isStringArray(data.diagnostics) ? data.diagnostics : [],
     samples: {

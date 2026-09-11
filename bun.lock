@@ -263,7 +263,7 @@
     },
     "packages/cli": {
       "name": "@superwall/cli",
-      "version": "1.2.0",
+      "version": "1.3.0-beta.4",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "0.3.201",
         "@superwall/studio": "workspace:*",
@@ -289,7 +289,7 @@
     },
     "packages/host": {
       "name": "@superwall/host",
-      "version": "1.2.0",
+      "version": "1.3.0-beta.4",
       "dependencies": {
         "@superwall/protocol": "workspace:*",
       },
@@ -302,7 +302,7 @@
     },
     "packages/protocol": {
       "name": "@superwall/protocol",
-      "version": "1.2.0",
+      "version": "1.3.0-beta.4",
       "dependencies": {
         "zod": "3.25.76",
       },
@@ -315,7 +315,7 @@
     },
     "packages/runtime": {
       "name": "@superwall/runtime",
-      "version": "1.2.0",
+      "version": "1.3.0-beta.4",
       "dependencies": {
         "@superwall/protocol": "workspace:*",
       },
@@ -330,9 +330,10 @@
     },
     "packages/studio": {
       "name": "@superwall/studio",
-      "version": "1.2.0",
+      "version": "1.3.0-beta.4",
       "dependencies": {
         "@superwall/host": "workspace:*",
+        "qrcode.react": "^4.2.0",
         "sonner": "^2.0.7",
       },
       "devDependencies": {
@@ -357,7 +358,7 @@
     },
     "packages/superwall": {
       "name": "superwall",
-      "version": "1.2.0",
+      "version": "1.3.0-beta.4",
       "bin": {
         "superwall": "./bin/superwall.js",
         "sw": "./bin/superwall.js",
@@ -1224,6 +1225,8 @@
     "punycode": ["punycode@2.3.1", "", {}, "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg=="],
 
     "purchase-states": ["purchase-states@workspace:examples/purchase-states"],
+
+    "qrcode.react": ["qrcode.react@4.2.0", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-QpgqWi8rD9DsS9EP3z7BT+5lY5SFhsqGjpgW5DY/i3mK4M9DTBNz3ErMi8BWYEfI3L0d8GIbGmcdFAS1uIRGjA=="],
 
     "qs": ["qs@6.15.3", "", { "dependencies": { "es-define-property": "^1.0.1", "side-channel": "^1.1.1" } }, "sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A=="],
 

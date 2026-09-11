@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 import {
+  allowLocalNetworking,
   allowsLocalNetworking,
   appScheme,
   detectAppTransportSecurity,
@@ -188,4 +189,48 @@ test("recognises a native app root by its Xcode project", async () => {
 
   assert.deepEqual(roots, [superwallDir, appRoot]);
   assert.equal(await detectLocalScheme(roots), "nativeapp");
+});
+
+const PLIST = (body: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+${body}
+</dict>
+</plist>
+`;
+
+test("allows local networking in a plist that has no App Transport Security yet", async () => {
+  const file = path.join(tempDir(), "Info.plist");
+  fs.writeFileSync(file, PLIST("\t<key>CFBundleIdentifier</key>\n\t<string>com.example.app</string>"));
+
+  await allowLocalNetworking(file);
+
+  assert.equal(allowsLocalNetworking(fs.readFileSync(file, "utf8")), true);
+});
+
+test("keeps the exceptions an app already declared", async () => {
+  const file = path.join(tempDir(), "Info.plist");
+  fs.writeFileSync(
+    file,
+    PLIST(
+      "\t<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSExceptionDomains</key>\n\t\t<dict/>\n\t</dict>",
+    ),
+  );
+
+  await allowLocalNetworking(file);
+
+  const contents = fs.readFileSync(file, "utf8");
+  assert.equal(allowsLocalNetworking(contents), true);
+  assert.ok(contents.includes("NSExceptionDomains"));
+});
+
+test("is safe to run again on a plist that already allows it", async () => {
+  const file = path.join(tempDir(), "Info.plist");
+  fs.writeFileSync(file, PLIST("\t<key>CFBundleIdentifier</key>\n\t<string>com.example.app</string>"));
+
+  await allowLocalNetworking(file);
+  await allowLocalNetworking(file);
+
+  assert.equal(allowsLocalNetworking(fs.readFileSync(file, "utf8")), true);
 });

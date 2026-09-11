@@ -176,3 +176,23 @@ export const appScheme = async (
   const local = await detectLocalScheme(roots).catch(() => undefined);
   return local === undefined ? {} : { scheme: local, source: "app" };
 };
+
+export const allowLocalNetworking = async (plist: string): Promise<void> => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+
+  const has = await run("plutil", ["-extract", "NSAppTransportSecurity", "raw", plist]).then(
+    () => true,
+    () => false,
+  );
+  if (!has) {
+    await run("plutil", ["-insert", "NSAppTransportSecurity", "-dictionary", plist]);
+  }
+
+  for (const key of ["NSAllowsLocalNetworking", "NSAllowsArbitraryLoadsInWebContent"]) {
+    await run("plutil", ["-insert", `NSAppTransportSecurity.${key}`, "-bool", "YES", plist]).catch(
+      () => run("plutil", ["-replace", `NSAppTransportSecurity.${key}`, "-bool", "YES", plist]),
+    );
+  }
+};
