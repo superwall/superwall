@@ -73,8 +73,10 @@ export const buildStudioProject = async (
 
       const binding =
         surface.kind === "paywall" ? lock.paywalls[surface.id] : lock.funnels[surface.id];
-      const platforms = declaredPlatforms(definition?.platforms);
-      const platform = normalizePlatform(platforms?.[0] ?? Object.keys(lock.apps)[0]);
+      const bound = Object.keys(lock.apps);
+      const platforms =
+        declaredPlatforms(definition?.platforms) ?? (bound.length > 0 ? bound : undefined);
+      const platform = normalizePlatform(platforms?.[0]);
       const slots = Object.entries(definition?.products ?? {});
 
       return {

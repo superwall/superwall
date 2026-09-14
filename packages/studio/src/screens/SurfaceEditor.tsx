@@ -26,8 +26,12 @@ import {
 } from "../components/panels/VariablesPanel";
 import { fetchStatus, runAction } from "../lib/actions";
 import {
+  chromeFor,
   DEFAULT_DEVICE_ID,
   deviceById,
+  deviceVariablesFor,
+  isWebOnly,
+  webViewportFor,
   RESPONSIVE_DEFAULT,
   RESPONSIVE_ID,
   STUDIO_DEVICES,
@@ -41,6 +45,7 @@ import {
   type CompareTarget,
   type Samples,
   type StudioActionName,
+  type StudioPresentation,
   type StudioSource,
   type StudioStatus,
   type StudioSurface,
@@ -98,6 +103,7 @@ const StagePane = ({
   reloadKey,
   empty,
   chrome,
+  presentation,
   landscape,
   theme,
 }: {
@@ -111,6 +117,7 @@ const StagePane = ({
   reloadKey: number;
   empty?: string;
   chrome?: DeviceChromeSpec;
+  presentation?: StudioPresentation;
   landscape?: boolean;
   theme?: "light" | "dark";
 }) => {
@@ -130,6 +137,7 @@ const StagePane = ({
             stage={pane}
             reloadKey={reloadKey}
             chrome={chrome}
+            presentation={presentation}
             landscape={landscape}
             theme={theme}
           />
@@ -223,7 +231,14 @@ export const SurfaceEditor = ({
 
   const responsive = deviceId === RESPONSIVE_ID;
   const device = deviceById(deviceId);
-  const upright = responsive ? size : { width: device.width, height: device.height };
+  const web = isWebOnly(surface.platforms);
+  const frameDevice = React.useMemo(() => deviceVariablesFor(device, web), [device, web]);
+  const upright = responsive
+    ? size
+    : web
+      ? webViewportFor(device)
+      : { width: device.width, height: device.height };
+  const presentation = web ? undefined : surface.presentation;
   const frame = landscape ? { width: upright.height, height: upright.width } : upright;
 
   const openPreview = () => {
@@ -250,14 +265,14 @@ export const SurfaceEditor = ({
         defaults,
         sourceSamples: source.samples,
         samples,
-        frame: responsive ? undefined : device.device,
+        frame: responsive ? undefined : frameDevice,
         theme,
         locale,
         edited,
       }),
-    [surface, defaults, source.samples, samples, responsive, device.device, theme, locale, edited],
+    [surface, defaults, source.samples, samples, responsive, frameDevice, theme, locale, edited],
   );
-  const chrome = responsive ? undefined : device.chrome;
+  const chrome = responsive ? undefined : chromeFor(device, web);
   const previewSrc = source.previewUrl(surface);
   const versions = status.versions ?? [];
   const versionLabel = (entry: StudioVersion) => `v${entry.version}${entry.live ? " · live" : ""}`;
@@ -320,7 +335,7 @@ export const SurfaceEditor = ({
           ...defaults.device,
           ...source.samples?.device,
           ...samples.device,
-          ...(device.device as Record<string, unknown>),
+          ...frameDevice,
         }),
       ),
       params: rows("params", { ...defaults.params, ...source.samples?.params }),
@@ -328,7 +343,7 @@ export const SurfaceEditor = ({
         rows(`products.${reference}`, samples.products?.[identifier]),
       ),
     };
-  }, [defaults, source.samples, samples, device.device, surface.products]);
+  }, [defaults, source.samples, samples, frameDevice, surface.products]);
 
   const missingProducts = React.useMemo(() => {
     if (!samples.products) return [];
@@ -418,6 +433,11 @@ export const SurfaceEditor = ({
               height={frame.height}
               title={comparePane.title}
               src={comparePane.src}
+              presentation={
+                compareWith?.type === "surface" && !web
+                  ? compareWith.surface.presentation
+                  : presentation
+              }
               hostState={hostState}
               delegate={delegate}
               reloadKey={reloadKey}
@@ -433,6 +453,7 @@ export const SurfaceEditor = ({
             height={frame.height}
             title={`${surface.id} preview`}
             src={previewSrc}
+            presentation={presentation}
             hostState={hostState}
             delegate={delegate}
             reloadKey={reloadKey}

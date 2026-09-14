@@ -223,6 +223,39 @@ const Stage = ({ width, height }: { width: number; height: number }) => {
   );
 };
 
+describe("DeviceFrame presentation", () => {
+  it("gives a drawer paywall only the drawer's own viewport, over a backdrop", () => {
+    const [stage, setStage] = [null as HTMLDivElement | null, (_: HTMLDivElement | null) => {}];
+    render(
+      <DeviceFrame
+        width={device.width}
+        height={device.height}
+        title="preview"
+        src="/preview/paywall/a"
+        hostState={initialState}
+        delegate={recordingDelegate()}
+        stage={stage}
+        presentation={{ style: "drawer", height: 50, cornerRadius: 24 }}
+      />,
+    );
+    setStage(null);
+    const frame = frames()[0];
+    expect(frame.getAttribute("width")).toBe(String(device.width));
+    expect(frame.getAttribute("height")).toBe(String(Math.round(device.height * 0.5)));
+    expect(screen.getByTestId("presentation-backdrop")).toBeDefined();
+    const page = screen.getByTestId("presentation-page");
+    const scale = parseFloat(screen.getByTestId("device-frame").style.width) / device.width;
+    expect(parseFloat(page.style.top)).toBeCloseTo((device.height - Math.round(device.height * 0.5)) * scale);
+    expect(page.style.borderRadius.startsWith(`${24 * scale}px`)).toBe(true);
+  });
+
+  it("gives a fullscreen paywall the whole device and no backdrop", () => {
+    render(<Harness src="/preview/paywall/a" />);
+    expect(frames()[0].getAttribute("height")).toBe(String(device.height));
+    expect(screen.queryByTestId("presentation-backdrop")).toBeNull();
+  });
+});
+
 describe("DevicePlaceholder beside a DeviceFrame", () => {
   it("is exactly the size of the frame, and follows it when the hardware changes", () => {
     const view = render(<Stage width={device.width} height={device.height} />);

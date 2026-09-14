@@ -3,6 +3,7 @@ import type { HostDelegate, HostState } from "@superwall/host";
 import { DeviceChrome } from "./DeviceChrome";
 import { HostedIframe } from "./HostedIframe";
 import type { DeviceChromeSpec } from "../../lib/devices";
+import { presentationRect, type StudioPresentation } from "../../lib/presentation";
 
 const FRAME_MARGIN = 96;
 
@@ -73,6 +74,7 @@ export const DeviceFrame = ({
   stage,
   reloadKey = 0,
   chrome,
+  presentation,
   landscape = false,
   theme = "light",
 }: {
@@ -85,6 +87,7 @@ export const DeviceFrame = ({
   stage: HTMLElement | null;
   reloadKey?: number;
   chrome?: DeviceChromeSpec;
+  presentation?: StudioPresentation;
   landscape?: boolean;
   theme?: "light" | "dark";
 }) => {
@@ -118,6 +121,9 @@ export const DeviceFrame = ({
   const visible = frames.findLast((frame) => frame.ready);
 
   const radius = chrome ? chrome.radius * scale : 0;
+  const sheet = presentationRect(presentation, { width, height });
+  const page = sheet ?? { x: 0, y: 0, width, height, radius: { top: 0, bottom: 0 } };
+  const dark = theme === "dark";
 
   return (
     <div
@@ -127,24 +133,64 @@ export const DeviceFrame = ({
       data-testid="device-frame"
       style={{ width: width * scale, height: height * scale, borderRadius: radius }}
     >
-      {frames.map((frame) => (
-        <HostedIframe
-          key={frame.generation}
-          hostState={hostState}
-          delegate={delegate}
-          className={`absolute inset-0 origin-top-left border-0 bg-white transition-opacity duration-150 ${
-            frame === visible ? "opacity-100" : "opacity-0"
-          }`}
-          title={title}
-          src={frame.src}
-          width={width}
-          height={height}
-          style={{ transform: `scale(${scale})` }}
-          onLoad={() => {
-            if (!frame.ready) commit(frame.generation);
+      {sheet && (
+        <div
+          className="absolute inset-0 origin-top-left"
+          data-testid="presentation-backdrop"
+          style={{
+            width,
+            height,
+            transform: `scale(${scale})`,
+            background: dark
+              ? "repeating-linear-gradient(-45deg, #1c1f26 0 7px, #171a20 7px 20px)"
+              : "repeating-linear-gradient(-45deg, #e3e3e3 0 7px, #ededed 7px 20px)",
           }}
-        />
-      ))}
+        >
+          {sheet.underlay && (
+            <div
+              className="absolute left-1/2 -translate-x-1/2"
+              style={{
+                top: sheet.y - 12,
+                width: Math.round(width * 0.92),
+                height: 30,
+                borderRadius: "20px 20px 0 0",
+                background: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.3)",
+              }}
+            />
+          )}
+        </div>
+      )}
+      <div
+        className="absolute overflow-hidden"
+        data-testid="presentation-page"
+        style={{
+          left: page.x * scale,
+          top: page.y * scale,
+          width: page.width * scale,
+          height: page.height * scale,
+          borderRadius: `${page.radius.top * scale}px ${page.radius.top * scale}px ${page.radius.bottom * scale}px ${page.radius.bottom * scale}px`,
+          boxShadow: sheet ? "0 0 40px rgba(0,0,0,0.25)" : undefined,
+        }}
+      >
+        {frames.map((frame) => (
+          <HostedIframe
+            key={frame.generation}
+            hostState={hostState}
+            delegate={delegate}
+            className={`absolute inset-0 origin-top-left border-0 bg-white transition-opacity duration-150 ${
+              frame === visible ? "opacity-100" : "opacity-0"
+            }`}
+            title={title}
+            src={frame.src}
+            width={page.width}
+            height={page.height}
+            style={{ transform: `scale(${scale})` }}
+            onLoad={() => {
+              if (!frame.ready) commit(frame.generation);
+            }}
+          />
+        ))}
+      </div>
       {chrome && (
         <div
           className="pointer-events-none absolute inset-0 origin-top-left"

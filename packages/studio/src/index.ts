@@ -44,6 +44,7 @@ export type {
   StudioActionName,
   StudioActionProgress,
   StudioActionResult,
+  StudioPresentation,
   StudioSource,
   StudioStatus,
   StudioSurface,

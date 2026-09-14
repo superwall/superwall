@@ -14,6 +14,7 @@ describe("parseProjectPayload", () => {
           locales: ["en", "es"],
           platforms: ["ios", "android"],
           paywallId: "208540",
+          settings: { presentation_style: { type: "DRAWER", height: 60, corner_radius: 20 } },
         },
       ],
     });
@@ -21,6 +22,18 @@ describe("parseProjectPayload", () => {
     expect(payload.title).toBe("chatgpt");
     expect(payload.diagnostics).toEqual(["a warning"]);
     expect(payload.surfaces[0]?.platforms).toEqual(["ios", "android"]);
+    expect(payload.surfaces[0]?.presentation).toEqual({
+      style: "drawer",
+      height: 60,
+      cornerRadius: 20,
+    });
+  });
+
+  it("leaves presentation off a surface whose payload carries none", () => {
+    const payload = parseProjectPayload({
+      surfaces: [{ kind: "paywall", id: "plain", routes: [], locales: [] }],
+    });
+    expect(payload.surfaces[0]).not.toHaveProperty("presentation");
   });
 
   it("takes a surface's products only when every entry is a store identifier", () => {

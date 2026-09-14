@@ -218,4 +218,26 @@ describe("per-platform products in the studio payload", () => {
     const payload = await buildStudioProject(root, jsonLoader);
     expect(payload.surfaces[0]?.products).toEqual({ annual: "pro_year_play" });
   });
+
+  it("tells the studio the platforms the lock binds when the config names none", async () => {
+    const root = scaffold({
+      "superwall/paywalls/site/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/site/config.ts": JSON.stringify({ products: { annual: "pro_year" } }),
+      "superwall/superwall.lock": JSON.stringify({
+        version: 1,
+        apps: { web: "52518" },
+        paywalls: {},
+        funnels: {},
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    expect(payload.surfaces[0]?.platforms).toEqual(["web"]);
+
+    const unbound = scaffold({
+      "superwall/paywalls/site/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/site/config.ts": JSON.stringify({ products: { annual: "pro_year" } }),
+    });
+    expect((await buildStudioProject(unbound, jsonLoader)).surfaces[0]?.platforms).toBeUndefined();
+  });
 });

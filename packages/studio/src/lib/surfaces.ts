@@ -1,4 +1,7 @@
+import type { StudioPresentation } from "./presentation";
 import type { SampleDefaults } from "./variables";
+
+export type { StudioPresentation } from "./presentation";
 
 export type {
   AppScheme,
@@ -21,6 +24,7 @@ export type StudioSurface = {
   routes: string[];
   locales: string[];
   platforms?: string[];
+  presentation?: StudioPresentation;
   paywallId?: string;
   paywallIdentifier?: string;
 };

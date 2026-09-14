@@ -1,3 +1,4 @@
+import { parsePresentation } from "./presentation";
 import type { StudioSurface, StudioSurfaceKind } from "./surfaces";
 import type { SampleDefaults } from "./variables";
 
@@ -28,6 +29,9 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
   const kind: StudioSurfaceKind | undefined =
     value.kind === "paywall" || value.kind === "funnel" ? value.kind : undefined;
   if (!kind || typeof value.id !== "string") return undefined;
+  const presentation = parsePresentation(
+    isRecord(value.settings) ? value.settings.presentation_style : undefined,
+  );
   return {
     kind,
     id: value.id,
@@ -36,6 +40,7 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
     products: isStringRecord(value.products) ? value.products : {},
     locales: isStringArray(value.locales) ? value.locales : [],
     ...(isStringArray(value.platforms) ? { platforms: value.platforms } : {}),
+    ...(presentation === undefined ? {} : { presentation }),
     paywallId: typeof value.paywallId === "string" ? value.paywallId : undefined,
   };
 };

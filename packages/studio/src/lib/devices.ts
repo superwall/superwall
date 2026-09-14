@@ -100,6 +100,33 @@ export const STUDIO_DEVICES: readonly [StudioDevice, ...StudioDevice[]] = [
 
 export const DEFAULT_DEVICE_ID = "iphone-17";
 
+export const isWebOnly = (platforms: readonly string[] | undefined): boolean =>
+  platforms !== undefined &&
+  platforms.length > 0 &&
+  platforms.every((platform) => platform.toLowerCase() === "web");
+
+export const chromeFor = (device: StudioDevice, web: boolean): DeviceChromeSpec | undefined =>
+  web ? undefined : device.chrome;
+
+const BROWSER_CHROME = { iOS: 84, Android: 104, tablet: 66, desktop: 52 };
+
+export const webViewportFor = (device: StudioDevice): { width: number; height: number } => {
+  const statusBar = device.chrome?.statusBarHeight ?? 0;
+  const bars =
+    device.device === undefined
+      ? BROWSER_CHROME.desktop
+      : device.width >= 600
+        ? BROWSER_CHROME.tablet
+        : BROWSER_CHROME[device.device.platform];
+  return { width: device.width, height: device.height - statusBar - bars };
+};
+
+export const deviceVariablesFor = (
+  device: StudioDevice,
+  web: boolean,
+): Record<string, unknown> | undefined =>
+  web ? { ...device.device, platform: "web" } : device.device;
+
 export const RESPONSIVE_ID = "responsive";
 export const RESPONSIVE_DEFAULT = { width: 393, height: 852 };
 

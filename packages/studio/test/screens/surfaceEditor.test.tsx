@@ -377,6 +377,41 @@ describe("SurfaceEditor's smaller states", () => {
     expect((width as HTMLInputElement).value).toBe("3000");
   });
 
+  it("shows a web-only paywall as a bare viewport on the picked device, reporting web", async () => {
+    const web: StudioSurface = { ...live, platforms: ["web"] };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [web], previewUrl: () => "/preview" }}
+        surface={web}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+
+    expect((screen.getByLabelText("Device") as HTMLSelectElement).value).toBe("iphone-17");
+    expect(screen.queryByTestId("device-chrome")).toBeNull();
+    expect(parseFloat(screen.getByTestId("device-frame").style.borderRadius)).toBe(0);
+    expect(preview().getAttribute("width")).toBe("402");
+    expect(preview().getAttribute("height")).toBe(String(874 - 64 - 84));
+    const host = hostOf(preview());
+    host.ping();
+    expect(host.sent()[0]?.[0]).toMatchObject({
+      variables: { device: { platform: "web", deviceModel: "iPhone18,3" } },
+    });
+  });
+
+  it("keeps the phone's own chrome for a native paywall", async () => {
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [live], previewUrl: () => "/preview" }}
+        surface={live}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    expect(screen.getByTestId("device-chrome")).toBeDefined();
+  });
+
   it("says why it cannot list the pushed versions to compare against", async () => {
     vi.stubGlobal(
       "fetch",
