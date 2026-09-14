@@ -149,6 +149,19 @@ describe("sessionBody", () => {
     expect(bodyOf({ user: { stripe_customer_id: "" } })).not.toHaveProperty("stripeCustomerId");
   });
 
+  it("sends the managed-payments override only when the config takes a side", () => {
+    expect(
+      bodyOf({ config: { checkout: { mode: "sheet", managedPayments: true } } }).context,
+    ).toMatchObject({ paywallManagedPaymentsOverride: "USE_MANAGED_PAYMENTS" });
+    expect(
+      bodyOf({ config: { checkout: { mode: "sheet", managedPayments: false } } }).context,
+    ).toMatchObject({ paywallManagedPaymentsOverride: "USE_DEFAULT_PAYMENTS" });
+    expect(bodyOf({ config: { checkout: "sheet" } }).context).not.toHaveProperty(
+      "paywallManagedPaymentsOverride",
+    );
+    expect(bodyOf().context).not.toHaveProperty("paywallManagedPaymentsOverride");
+  });
+
   it("defaults product variables the store did not price", () => {
     const body = sessionBody({
       snapshot: snapshotOf(),

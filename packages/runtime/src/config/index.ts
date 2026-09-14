@@ -3,7 +3,10 @@ import type { SuperwallCheckoutConfig } from "./checkout";
 import type { SuperwallLocalizationConfig } from "./localization";
 import type { SuperwallNotificationsConfig } from "./notifications";
 import type { SuperwallPresentationConfig } from "./presentation";
+import type { SuperwallPostPurchase } from "./postPurchase";
 import type { SuperwallProductSlotInput } from "./products";
+
+export type SuperwallIntroductoryOfferEligibility = "automatic" | "eligible" | "ineligible";
 
 /**
  * A paywall's contract: product slots, presentation, gating, notifications,
@@ -52,12 +55,20 @@ export type SuperwallConfig<
   onDeviceCacheEnabled?: boolean;
 
   /**
-   * Whether this paywall asks the SDK to dismiss it after a completed
-   * purchase (`should_dismiss` on the purchase message). Default: `true`.
-   * The app can still veto it with
-   * `SuperwallOptions.paywalls.automaticallyDismiss = false`.
+   * How the SDK decides introductory-offer (trial) eligibility for this
+   * paywall's products: `"automatic"` asks the store, `"eligible"` and
+   * `"ineligible"` force the answer — useful to preview or ship the one
+   * variant regardless of the shopper's history. Default: `"automatic"`.
    */
-  dismissOnPurchase?: boolean;
+  introductoryOfferEligibility?: SuperwallIntroductoryOfferEligibility;
+
+  /**
+   * What happens once a purchase completes: `"dismiss"` (default), `"stay"`
+   * to keep the paywall in control, and on the web also `"redeem"` or
+   * `{ redirect: url }`. See `SuperwallPostPurchase`. A `purchase()` call can
+   * override it per button.
+   */
+  postPurchase?: SuperwallPostPurchase;
 
   /**
    * Local notifications the paywall schedules (e.g. trial reminders).
@@ -78,10 +89,12 @@ export {
   type SuperwallBackgroundConfig,
 } from "./background";
 export {
+  checkoutManagedPaymentsOf,
   checkoutModeOf,
   checkoutPrefetchOf,
   type SuperwallCheckoutConfig,
   type SuperwallCheckoutMode,
+  type SuperwallManagedPaymentsOverride,
 } from "./checkout";
 export type { SuperwallLocalizationConfig, SuperwallMessages } from "./localization";
 export type {
@@ -92,6 +105,7 @@ export type {
   SuperwallTrialReminderStaticConfig,
 } from "./notifications";
 export { normalizePlatform, SUPERWALL_PLATFORMS, type SuperwallPlatform } from "./platforms";
+export { dismissesOnPurchase, type SuperwallPostPurchase } from "./postPurchase";
 export type { SuperwallPresentationConfig, SuperwallPresentationStyle } from "./presentation";
 export {
   isPlatformProductIds,

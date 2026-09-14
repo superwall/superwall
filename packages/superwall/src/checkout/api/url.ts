@@ -4,6 +4,7 @@ export type SubscriptionsApiPath =
   | "checkout/session"
   | "checkout/session/confirm"
   | "checkout/session/complete"
+  | "checkout/session/complete-webapp"
   | "checkout/session/custom-metadata"
   | "checkout/discount"
   | "checkout/status";

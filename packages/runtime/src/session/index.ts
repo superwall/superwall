@@ -6,7 +6,7 @@ import type {
 } from "@superwall/protocol";
 import { decodeIncomingMessages } from "../bridge/base64";
 import { createRuntimeTransport } from "../bridge/transport";
-import { normalizePlatform, productIdFor } from "../config";
+import { dismissesOnPurchase, normalizePlatform, productIdFor } from "../config";
 import { createTranslator, languageCandidates, resolveLocale } from "../localization";
 import {
   createProductDeriver,
@@ -339,7 +339,7 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
       post(
         outgoing.purchase(
           product,
-          purchaseOptions.shouldDismiss ?? snapshot.config?.dismissOnPurchase,
+          dismissesOnPurchase(purchaseOptions.postPurchase ?? snapshot.config?.postPurchase),
         ),
       );
       return result;

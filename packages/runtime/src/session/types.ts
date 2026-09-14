@@ -10,7 +10,7 @@ import type {
   TPermissionTypeMessage,
   TransportKind,
 } from "@superwall/protocol";
-import type { SuperwallConfig } from "../config";
+import type { SuperwallConfig, SuperwallPostPurchase } from "../config";
 import type { SuperwallTranslateValues } from "../localization";
 import type { SuperwallProduct, SuperwallProductInput } from "../products";
 import type { Outgoing, PageViewInput } from "./outgoing";
@@ -109,7 +109,18 @@ export type SuperwallRuntimeSnapshot<out TProduct extends SuperwallProduct = Sup
 };
 
 export type SuperwallPurchaseOptions = {
-  shouldDismiss?: boolean;
+  /**
+   * What happens once this purchase completes, overriding the config's
+   * `postPurchase` for this call. See `SuperwallPostPurchase`.
+   */
+  postPurchase?: SuperwallPostPurchase;
+  /**
+   * Key/value pairs written onto the Stripe subscription (or payment) once
+   * a web purchase completes — a quiz session id, a plan name, anything you
+   * want to see in Stripe and in webhooks. Values are strings. Ignored by
+   * store purchases, which have no Stripe object to write to.
+   */
+  stripeMetadata?: Readonly<Record<string, string>>;
 };
 
 export type SuperwallCallbackOptions = {

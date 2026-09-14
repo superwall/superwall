@@ -156,9 +156,11 @@ under Stripe's own field names, and the discounted price per product;
 for the paywall with `redeem_discount`), `useActions` (close, restore, open
 URLs and deep links, custom placements, permissions, callbacks, store review,
 and `setUserAttributes` — the host SDK persists the attributes and the
-paywall's own `useUser()` sees them at once), `useHaptics`, `useColorScheme`,
-`useTranslation`, `useIntroductoryOffer`, `useDevice` / `useUser` /
-`useVariables`, `useLocalResource`, `useSuperwallEvent`, `useGameController`.
+paywall's own `useUser()` sees them at once), `useCheckoutRedemption`
+(finishes a `postPurchase: "stay"` web checkout — `completed`, `redeem`,
+`redirect`), `useHaptics`, `useColorScheme`, `useTranslation`,
+`useIntroductoryOffer`, `useDevice` / `useUser` / `useVariables`,
+`useLocalResource`, `useSuperwallEvent`, `useGameController`.
 
 Web checkout is made for one shopper: a `user.email` becomes the Stripe
 session's `customer_email` (shown in the sheet, not editable there) and a
@@ -167,6 +169,13 @@ created. Setting either later — a funnel capturing the email with
 `setUserAttributes({ email })`, or a host sending fresher variables — drops
 every cached session and prefetches again, so the sheet never opens with an
 empty email once one is known.
+
+Once a purchase completes, `postPurchase` (in `config.ts`, or per
+`purchase()` call) decides what happens: `"dismiss"` (the default),
+`"stay"` to keep the paywall in control, and on the web `"redeem"` or
+`{ redirect: url }`. Pass `stripeMetadata` to `purchase()` to write key/values
+onto the Stripe subscription. `checkout: { managedPayments }` and
+`introductoryOfferEligibility` round out the config.
 
 ### Navigation
 

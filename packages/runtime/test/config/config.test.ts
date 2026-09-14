@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   backgroundOf,
+  checkoutManagedPaymentsOf,
   checkoutModeOf,
   checkoutPrefetchOf,
   isPlatformProductIds,
@@ -55,6 +56,18 @@ describe("checkout", () => {
     expect(checkoutPrefetchOf({ mode: "sheet", prefetch: false })).toBe(false);
     expect(checkoutPrefetchOf("sheet")).toBeUndefined();
     expect(checkoutPrefetchOf(undefined)).toBeUndefined();
+  });
+
+  it("spells the managed-payments override the way the checkout API does", () => {
+    expect(checkoutManagedPaymentsOf({ mode: "sheet", managedPayments: true })).toBe(
+      "USE_MANAGED_PAYMENTS",
+    );
+    expect(checkoutManagedPaymentsOf({ mode: "sheet", managedPayments: false })).toBe(
+      "USE_DEFAULT_PAYMENTS",
+    );
+    expect(checkoutManagedPaymentsOf({ mode: "sheet" })).toBeUndefined();
+    expect(checkoutManagedPaymentsOf("sheet")).toBeUndefined();
+    expect(checkoutManagedPaymentsOf(undefined)).toBeUndefined();
   });
 });
 

@@ -1,5 +1,9 @@
 import type { SuperwallSession } from "@superwall/runtime";
-import type { DiscountValidationResult, PostPurchaseBehavior } from "../types";
+import type {
+  DiscountValidationResult,
+  PostCheckoutResolution,
+  PostPurchaseBehavior,
+} from "../types";
 
 type HostMessage = Parameters<SuperwallSession["postMessage"]>[0];
 
@@ -58,13 +62,17 @@ export const hostEvents = (post: (message: HostMessage) => void) => ({
     ctx: HostContext,
     checkoutSessionId: string | null,
     postPurchaseBehavior?: PostPurchaseBehavior,
+    resolution?: PostCheckoutResolution,
+    entitlementsToken?: string,
   ) =>
     post({
       event_name: "stripe_checkout_complete",
       sw_checkout_id: checkoutSessionId,
       checkout_context_id: ctx.checkoutContextId,
       product_identifier: ctx.productIdentifier,
+      ...(resolution ? { post_purchase_resolution: resolution } : {}),
       ...(postPurchaseBehavior ? { post_purchase_behavior: postPurchaseBehavior } : {}),
+      ...(entitlementsToken ? { entitlements_token: entitlementsToken } : {}),
     }),
   openHostedPage: (url: string) => post({ event_name: "open_url_external", url }),
   redeem: (link: string) => post({ event_name: "open_deep_link", link }),

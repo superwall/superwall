@@ -32,6 +32,17 @@ export type PaywallDefinition = SuperwallConfig<string, StripeProductReference> 
   queryState?: boolean;
 };
 
+type SellsOnWeb<TDefinition> = TDefinition extends { checkout: unknown }
+  ? TDefinition extends { platforms: readonly (infer TPlatform)[] }
+    ? "web" extends TPlatform
+      ? true
+      : false
+    : true
+  : false;
+
+export type PostPurchaseFor<TDefinition> =
+  SellsOnWeb<TDefinition> extends true ? unknown : { postPurchase?: "dismiss" | "stay" };
+
 export const definePaywall = <TDefinition extends PaywallDefinition>(
-  definition: TDefinition,
+  definition: TDefinition & PostPurchaseFor<TDefinition>,
 ): TDefinition => definition;

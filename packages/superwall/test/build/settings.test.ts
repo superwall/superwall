@@ -86,6 +86,19 @@ describe("presentationStyleWire", () => {
 });
 
 describe("paywallSettingsOf", () => {
+  it("stamps the introductory-offer override only when the config sets one", () => {
+    expect(paywallSettingsOf({ introductoryOfferEligibility: "eligible" })).toMatchObject({
+      introductory_offer_eligibility: "always_eligible",
+    });
+    expect(paywallSettingsOf({ introductoryOfferEligibility: "ineligible" })).toMatchObject({
+      introductory_offer_eligibility: "always_ineligible",
+    });
+    expect(paywallSettingsOf({ introductoryOfferEligibility: "automatic" })).toMatchObject({
+      introductory_offer_eligibility: "automatic",
+    });
+    expect(paywallSettingsOf({})).not.toHaveProperty("introductory_offer_eligibility");
+  });
+
   it("defaults every setting the way an untouched editor paywall is stored", () => {
     expect(paywallSettingsOf(undefined)).toEqual({
       presentation_style: { type: "FULLSCREEN" },

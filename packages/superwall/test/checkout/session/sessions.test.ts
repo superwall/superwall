@@ -56,6 +56,71 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("createCheckoutSessions.completeWebapp", () => {
+  it("self-claims the redemption and returns the entitlements token", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ status: "completed", entitlementsToken: "ent_1" })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const sessions = createCheckoutSessions(() => snapshot());
+
+    await expect(sessions.completeWebapp("ctx_1")).resolves.toBe("ent_1");
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("checkout/session/complete-webapp");
+    expect(JSON.parse(String(init.body))).toEqual({ checkoutContextId: "ctx_1" });
+    expect(init.headers).toMatchObject({ Authorization: "Bearer pk_test" });
+  });
+
+  it("returns nothing when the backend issued no token", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ claimed: true }))),
+    );
+    const sessions = createCheckoutSessions(() => snapshot());
+    await expect(sessions.completeWebapp("ctx_1")).resolves.toBeUndefined();
+  });
+});
+
+describe("createCheckoutSessions.attachMetadata", () => {
+  it("posts key/values to the custom-metadata endpoint and authorizes with the API key", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const sessions = createCheckoutSessions(() => snapshot());
+
+    await sessions.attachMetadata("ctx_1", { quiz_session: "sess_1" });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain("checkout/session/custom-metadata");
+    expect(JSON.parse(String(init.body))).toEqual({
+      checkoutContextId: "ctx_1",
+      metadata: { quiz_session: "sess_1" },
+      timing: "post_purchase",
+    });
+    expect(init.headers).toMatchObject({ Authorization: "Bearer pk_test" });
+  });
+
+  it("does nothing for an empty metadata record", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const sessions = createCheckoutSessions(() => snapshot());
+
+    await sessions.attachMetadata("ctx_1", {});
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("throws when the endpoint rejects the write", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 400 })),
+    );
+    const sessions = createCheckoutSessions(() => snapshot());
+
+    await expect(sessions.attachMetadata("ctx_1", { a: "b" })).rejects.toThrow("Client error: 400");
+  });
+});
+
 describe("createCheckoutSessions.createSession", () => {
   it("sends the v4 checkout context: presentment ids, bare identifier, embedded directives", async () => {
     const fetchMock = mockSession({

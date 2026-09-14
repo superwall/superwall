@@ -12,6 +12,7 @@ import {
 const WHEEL_ZOOM_SENSITIVITY = 0.01;
 const WHEEL_ZOOM_STEP_LIMIT = { min: 0.6, max: 1.6 };
 const DRAG_THRESHOLD = 4;
+const GRAB_STYLE_ATTRIBUTE = "data-studio-grab";
 
 type Point = { x: number; y: number };
 
@@ -72,8 +73,7 @@ const claimsWheel = (element: Element, axis: "x" | "y"): boolean => {
       : element.scrollWidth - element.clientWidth) > 0;
   if (!overflowing) return false;
   return (
-    /(auto|scroll|hidden|clip)/.test(overflow) ||
-    element === element.ownerDocument.scrollingElement
+    /(auto|scroll|hidden|clip)/.test(overflow) || element === element.ownerDocument.scrollingElement
   );
 };
 
@@ -160,8 +160,7 @@ export const Canvas = ({
   const contentSize = useSize(content);
   const handTool = useSpaceHeld();
 
-  const transform =
-    mode.kind === "fit" ? fitTransform(contentSize, viewportSize) : mode.transform;
+  const transform = mode.kind === "fit" ? fitTransform(contentSize, viewportSize) : mode.transform;
   const latest = useLatest(transform);
   const pointers = React.useRef(new Map<number, Point>());
   const pinch = React.useRef<Pinch | null>(null);
@@ -255,11 +254,17 @@ export const Canvas = ({
         apply(panBy(latest.current, -event.deltaX, -event.deltaY));
       };
       let press: { at: Point; panning: boolean } | null = null;
+      let grabStyle: HTMLStyleElement | null = null;
       const grab = (on: boolean) => {
-        const root = frame.contentDocument?.documentElement;
-        if (!root) return;
-        if (on) root.style.setProperty("cursor", "grabbing", "important");
-        else root.style.removeProperty("cursor");
+        const doc = frame.contentDocument;
+        if (!doc) return;
+        grabStyle?.remove();
+        grabStyle = null;
+        if (!on) return;
+        grabStyle = doc.createElement("style");
+        grabStyle.setAttribute(GRAB_STYLE_ATTRIBUTE, "");
+        grabStyle.textContent = "*, *::before, *::after { cursor: grabbing !important; }";
+        (doc.head ?? doc.documentElement).appendChild(grabStyle);
       };
       const onPointerDown = (event: PointerEvent) => {
         if (event.pointerType !== "mouse" || event.button !== 1) return;
@@ -401,9 +406,10 @@ export const Canvas = ({
           transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
         }}
       >
-        <CanvasScaleContext.Provider value={transform.scale}>{children}</CanvasScaleContext.Provider>
+        <CanvasScaleContext.Provider value={transform.scale}>
+          {children}
+        </CanvasScaleContext.Provider>
       </div>
-
     </div>
   );
 };

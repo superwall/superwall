@@ -14,16 +14,16 @@ const sizes: Record<string, Size> = {};
 
 const mockSizes = () => {
   const of = (element: HTMLElement) => sizes[element.getAttribute("data-testid") ?? ""];
-  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return of(this)?.width ?? 0;
-  });
-  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return of(this)?.height ?? 0;
-  });
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return of(this)?.width ?? 0;
+    },
+  );
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return of(this)?.height ?? 0;
+    },
+  );
 };
 
 class TestPointerEvent extends MouseEvent {
@@ -160,9 +160,16 @@ describe("Canvas", () => {
     const { layer, target } = mountWithFrame();
     const before = transformOf(layer);
     const pointer = (type: string, init: PointerEventInit) =>
-      new TestPointerEvent(type, { bubbles: true, cancelable: true, pointerType: "mouse", ...init });
+      new TestPointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerType: "mouse",
+        ...init,
+      });
     act(() => {
-      target.dispatchEvent(pointer("pointerdown", { pointerId: 1, button: 0, screenX: 100, screenY: 100 }));
+      target.dispatchEvent(
+        pointer("pointerdown", { pointerId: 1, button: 0, screenX: 100, screenY: 100 }),
+      );
       target.dispatchEvent(pointer("pointermove", { pointerId: 1, screenX: 180, screenY: 160 }));
       target.dispatchEvent(pointer("pointerup", { pointerId: 1, button: 0 }));
     });
@@ -179,10 +186,17 @@ describe("Canvas", () => {
     const { layer, target } = mountWithFrame();
     const before = transformOf(layer);
     const pointer = (type: string, init: PointerEventInit) =>
-      new TestPointerEvent(type, { bubbles: true, cancelable: true, pointerType: "mouse", ...init });
+      new TestPointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerType: "mouse",
+        ...init,
+      });
 
     act(() => {
-      target.dispatchEvent(pointer("pointerdown", { pointerId: 1, button: 1, screenX: 100, screenY: 100 }));
+      target.dispatchEvent(
+        pointer("pointerdown", { pointerId: 1, button: 1, screenX: 100, screenY: 100 }),
+      );
       target.dispatchEvent(pointer("pointermove", { pointerId: 1, screenX: 102, screenY: 101 }));
     });
     expect(transformOf(layer)).toEqual(before);
@@ -193,14 +207,14 @@ describe("Canvas", () => {
     expect(transformOf(layer).x).toBeCloseTo(before.x + 30);
     expect(transformOf(layer).y).toBeCloseTo(before.y + 20);
     expect(screen.getByTestId("canvas").hasAttribute("data-dragging")).toBe(true);
-    const root = target.document.documentElement;
-    expect(root.style.cursor).toBe("grabbing");
+    const grabRule = () => target.document.querySelector("style[data-studio-grab]")?.textContent;
+    expect(grabRule()).toContain("cursor: grabbing !important");
 
     act(() => {
       target.dispatchEvent(pointer("pointerup", { pointerId: 1, button: 1 }));
     });
     expect(screen.getByTestId("canvas").hasAttribute("data-dragging")).toBe(false);
-    expect(root.style.cursor).toBe("");
+    expect(grabRule()).toBeUndefined();
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
     act(() => {
       target.dispatchEvent(click);
@@ -335,7 +349,12 @@ describe("Canvas", () => {
     Object.defineProperty(page, "clientHeight", { value: 800 });
     body.appendChild(page);
 
-    const mostlyDown = new WheelEvent("wheel", { deltaX: 3, deltaY: 40, cancelable: true, bubbles: true });
+    const mostlyDown = new WheelEvent("wheel", {
+      deltaX: 3,
+      deltaY: 40,
+      cancelable: true,
+      bubbles: true,
+    });
     act(() => {
       page.dispatchEvent(mostlyDown);
     });

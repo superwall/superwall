@@ -65,7 +65,12 @@ export const usePurchase = <
       const reference = referenceOf(input);
       const product = session.getSnapshot().productsByReference[reference];
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
-        return { status: await purchaseOnWeb(session, reference, webMode), product };
+        const { postPurchase, stripeMetadata } = options ?? {};
+        const status = await purchaseOnWeb(session, reference, webMode, {
+          postPurchase,
+          stripeMetadata,
+        });
+        return { status, product };
       }
       return session.purchase(input, options);
     },

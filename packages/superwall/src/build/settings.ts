@@ -4,6 +4,7 @@ import {
   type SuperwallCheckoutConfig,
   type SuperwallCheckoutMode,
   type SuperwallConfig,
+  type SuperwallIntroductoryOfferEligibility,
   type SuperwallPresentationConfig,
 } from "@superwall/runtime";
 
@@ -14,15 +15,30 @@ export type PaywallPresentationStyleWire =
 
 export type WebCheckoutDestinationWire = "EXTERNAL" | "PAYWALL_EMBEDDED" | "PAYWALL_APPLE_PAY";
 
+export type IntroductoryOfferEligibilityWire =
+  | "automatic"
+  | "always_eligible"
+  | "always_ineligible";
+
 export type PaywallSettings = {
   presentation_style: PaywallPresentationStyleWire;
   feature_gating: "gated" | "non_gated";
   on_device_cache: boolean;
   scroll_enabled: boolean;
   game_controller_enabled: boolean;
+  introductory_offer_eligibility?: IntroductoryOfferEligibilityWire;
   web_checkout_destination?: WebCheckoutDestinationWire;
   background_color_hex?: string;
   dark_background_color_hex?: string;
+};
+
+const INTRODUCTORY_OFFER_WIRE: Record<
+  SuperwallIntroductoryOfferEligibility,
+  IntroductoryOfferEligibilityWire
+> = {
+  automatic: "automatic",
+  eligible: "always_eligible",
+  ineligible: "always_ineligible",
 };
 
 const DRAWER_DEFAULTS = { height: 70, cornerRadius: 15 };
@@ -99,6 +115,12 @@ export const paywallSettingsOf = (config: SuperwallConfig | undefined): PaywallS
     on_device_cache: config?.onDeviceCacheEnabled ?? true,
     scroll_enabled: config?.scrollEnabled ?? true,
     game_controller_enabled: config?.gameControllerEnabled ?? false,
+    ...(config?.introductoryOfferEligibility === undefined
+      ? {}
+      : {
+          introductory_offer_eligibility:
+            INTRODUCTORY_OFFER_WIRE[config.introductoryOfferEligibility],
+        }),
     ...(destination === undefined ? {} : { web_checkout_destination: destination }),
     ...(background === undefined ? {} : { background_color_hex: background.light }),
     ...(background?.dark === undefined ? {} : { dark_background_color_hex: background.dark }),
