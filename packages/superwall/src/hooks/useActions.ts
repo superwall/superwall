@@ -10,6 +10,7 @@ export type UseActionsResult = Pick<
   | "openExternalUrl"
   | "openDeepLink"
   | "customPlacement"
+  | "setUserAttributes"
   | "requestPermission"
   | "requestCallback"
   | "requestStoreReview"
@@ -26,6 +27,7 @@ export const useActions = (): UseActionsResult => {
       openExternalUrl: session.openExternalUrl.bind(session),
       openDeepLink: session.openDeepLink.bind(session),
       customPlacement: session.customPlacement.bind(session),
+      setUserAttributes: session.setUserAttributes.bind(session),
       requestPermission: session.requestPermission.bind(session),
       requestCallback: session.requestCallback.bind(session),
       requestStoreReview: session.requestStoreReview.bind(session),

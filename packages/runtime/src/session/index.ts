@@ -307,6 +307,19 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
     openExternalUrl: (url) => post(outgoing.openExternalUrl(url)),
     openDeepLink: (link) => post(outgoing.openDeepLink(link)),
     customPlacement: (name, params = {}) => post(outgoing.customPlacement(name, params)),
+    setUserAttributes: (attributes) => {
+      const entries = Object.entries(attributes).map(([key, value]) => ({
+        key,
+        value: String(value),
+      }));
+      if (entries.length === 0) return;
+      post(outgoing.userAttributeUpdated(entries));
+      const user = {
+        ...snapshot.user,
+        ...Object.fromEntries(entries.map(({ key, value }) => [key, value])),
+      };
+      commit({ user, variables: { ...snapshot.variables, user } });
+    },
     requestStoreReview: (reviewType) => post(outgoing.requestStoreReview(reviewType)),
     pageView: (input) => post(outgoing.pageView(input)),
     hapticFeedback: (hapticType) => post(outgoing.hapticFeedback(hapticType)),

@@ -40,6 +40,10 @@ export const customPlacement = (
   params: Record<string, unknown>,
 ): Outgoing<"custom_placement"> => ({ event_name: "custom_placement", name, params });
 
+export const userAttributeUpdated = (
+  attributes: Outgoing<"user_attribute_updated">["attributes"],
+): Outgoing<"user_attribute_updated"> => ({ event_name: "user_attribute_updated", attributes });
+
 export const requestStoreReview = (
   reviewType: Outgoing<"request_store_review">["review_type"],
 ): Outgoing<"request_store_review"> => ({

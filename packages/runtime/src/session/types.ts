@@ -136,6 +136,8 @@ export type SuperwallSessionOptions = {
   onDecodeError?: (error: unknown) => void;
 };
 
+export type SuperwallUserAttributes = Readonly<Record<string, string | number | boolean>>;
+
 export interface SuperwallSession<out TProduct extends SuperwallProduct = SuperwallProduct> {
   on: <E extends SuperwallEventName>(
     event: E,
@@ -156,6 +158,7 @@ export interface SuperwallSession<out TProduct extends SuperwallProduct = Superw
   openExternalUrl: (url: string) => void;
   openDeepLink: (link: string) => void;
   customPlacement: (name: string, params?: Record<string, unknown>) => void;
+  setUserAttributes: (attributes: SuperwallUserAttributes) => void;
   requestStoreReview: (reviewType: Outgoing<"request_store_review">["review_type"]) => void;
   pageView: (input: PageViewInput) => void;
   hapticFeedback: (hapticType: Outgoing<"haptic_feedback">["haptic_type"]) => void;

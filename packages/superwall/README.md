@@ -153,10 +153,20 @@ abandoned | failed`, never throws for flow outcomes; with `checkout:
 sheet), `useDiscount` (`await redeem(code)` resolves with the verdict, Stripe's coupon
 under Stripe's own field names, and the discounted price per product;
 `onDropped` fires if checkout later refuses the code, and a host can redeem one
-for the paywall with `redeem_discount`), `useActions`,
-`useHaptics`, `useColorScheme`, `useTranslation`, `useIntroductoryOffer`,
-`useDevice` / `useUser` / `useVariables`, `useLocalResource`,
-`useSuperwallEvent`, `useGameController`.
+for the paywall with `redeem_discount`), `useActions` (close, restore, open
+URLs and deep links, custom placements, permissions, callbacks, store review,
+and `setUserAttributes` — the host SDK persists the attributes and the
+paywall's own `useUser()` sees them at once), `useHaptics`, `useColorScheme`,
+`useTranslation`, `useIntroductoryOffer`, `useDevice` / `useUser` /
+`useVariables`, `useLocalResource`, `useSuperwallEvent`, `useGameController`.
+
+Web checkout is made for one shopper: a `user.email` becomes the Stripe
+session's `customer_email` (shown in the sheet, not editable there) and a
+`user.stripe_customer_id` pins the customer, both read when the session is
+created. Setting either later — a funnel capturing the email with
+`setUserAttributes({ email })`, or a host sending fresher variables — drops
+every cached session and prefetches again, so the sheet never opens with an
+empty email once one is known.
 
 ### Navigation
 

@@ -91,6 +91,16 @@ identifier, then, for a bare transaction, to the only pending purchase.
 `restore_complete`, `restore_fail` events. iOS reports all three; Android
 reports only `restore_fail`.
 
+### User attributes
+
+`setUserAttributes({ email: "ada@example.com", plan: "pro" })` sends
+`user_attribute_updated` — the wire the editor's "Set User Attribute" action
+uses, so every host already merges and persists it — and applies the same
+merge to `snapshot.user` (and `getAllState().user`) immediately. Hosts never
+send variables back after an attribute update, so without the local merge the
+paywall would keep reading the user as it was before its own action. Values
+travel as strings; an empty object sends nothing.
+
 ### Introductory offers
 
 The SDK signals eligibility via `template_substitutions_prefix`
