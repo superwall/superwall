@@ -5,58 +5,24 @@ import { HostedIframe } from "./HostedIframe";
 import type { DeviceChromeSpec } from "../../lib/devices";
 import { presentationRect, type StudioPresentation } from "../../lib/presentation";
 
-const FRAME_MARGIN = 96;
-
 const SWAP_DELAY_MS = 250;
-
-const useFitScale = (stage: HTMLElement | null, width: number, height: number): number => {
-  const [scale, setScale] = React.useState(1);
-
-  React.useLayoutEffect(() => {
-    if (!stage) return undefined;
-
-    const fit = () => {
-      const available = stage.getBoundingClientRect();
-      const next = Math.min(
-        1,
-        (available.width - FRAME_MARGIN) / width,
-        (available.height - FRAME_MARGIN) / height,
-      );
-      setScale(Math.max(0.1, next));
-    };
-
-    fit();
-    if (typeof ResizeObserver === "undefined") return undefined;
-    const observer = new ResizeObserver(fit);
-    observer.observe(stage);
-    return () => observer.disconnect();
-  }, [stage, width, height]);
-
-  return scale;
-};
 
 export const DevicePlaceholder = ({
   width,
   height,
-  stage,
   children,
 }: React.PropsWithChildren<{
   width: number;
   height: number;
-  stage: HTMLElement | null;
-}>) => {
-  const scale = useFitScale(stage, width, height);
-
-  return (
-    <div
-      className="flex flex-none items-center justify-center overflow-hidden border border-dashed border-cream/20 p-6 text-center text-sm text-cream/55"
-      data-testid="device-placeholder"
-      style={{ width: width * scale, height: height * scale }}
-    >
-      {children}
-    </div>
-  );
-};
+}>) => (
+  <div
+    className="flex flex-none items-center justify-center overflow-hidden border border-dashed border-cream/20 p-6 text-center text-sm text-cream/55"
+    data-testid="device-placeholder"
+    style={{ width, height }}
+  >
+    {children}
+  </div>
+);
 
 type Frame = {
   src: string;
@@ -71,7 +37,6 @@ export const DeviceFrame = ({
   src,
   hostState,
   delegate,
-  stage,
   reloadKey = 0,
   chrome,
   presentation,
@@ -84,15 +49,12 @@ export const DeviceFrame = ({
   src: string;
   hostState: HostState;
   delegate: HostDelegate;
-  stage: HTMLElement | null;
   reloadKey?: number;
   chrome?: DeviceChromeSpec;
   presentation?: StudioPresentation;
   landscape?: boolean;
   theme?: "light" | "dark";
 }) => {
-  const scale = useFitScale(stage, width, height);
-
   const generation = React.useRef(0);
   const [frames, setFrames] = React.useState<Frame[]>([{ src, generation: 0, ready: true }]);
 
@@ -120,7 +82,6 @@ export const DeviceFrame = ({
 
   const visible = frames.findLast((frame) => frame.ready);
 
-  const radius = chrome ? chrome.radius * scale : 0;
   const sheet = presentationRect(presentation, { width, height });
   const page = sheet ?? { x: 0, y: 0, width, height, radius: { top: 0, bottom: 0 } };
   const dark = theme === "dark";
@@ -131,16 +92,13 @@ export const DeviceFrame = ({
         chrome ? "shadow-[0_0_0_1px] shadow-cream/25" : "border border-cream/20"
       }`}
       data-testid="device-frame"
-      style={{ width: width * scale, height: height * scale, borderRadius: radius }}
+      style={{ width, height, borderRadius: chrome?.radius ?? 0 }}
     >
       {sheet && (
         <div
-          className="absolute inset-0 origin-top-left"
+          className="absolute inset-0"
           data-testid="presentation-backdrop"
           style={{
-            width,
-            height,
-            transform: `scale(${scale})`,
             background: dark
               ? "repeating-linear-gradient(-45deg, #1c1f26 0 7px, #171a20 7px 20px)"
               : "repeating-linear-gradient(-45deg, #e3e3e3 0 7px, #ededed 7px 20px)",
@@ -164,11 +122,11 @@ export const DeviceFrame = ({
         className="absolute overflow-hidden"
         data-testid="presentation-page"
         style={{
-          left: page.x * scale,
-          top: page.y * scale,
-          width: page.width * scale,
-          height: page.height * scale,
-          borderRadius: `${page.radius.top * scale}px ${page.radius.top * scale}px ${page.radius.bottom * scale}px ${page.radius.bottom * scale}px`,
+          left: page.x,
+          top: page.y,
+          width: page.width,
+          height: page.height,
+          borderRadius: `${page.radius.top}px ${page.radius.top}px ${page.radius.bottom}px ${page.radius.bottom}px`,
           boxShadow: sheet ? "0 0 40px rgba(0,0,0,0.25)" : undefined,
         }}
       >
@@ -177,14 +135,13 @@ export const DeviceFrame = ({
             key={frame.generation}
             hostState={hostState}
             delegate={delegate}
-            className={`absolute inset-0 origin-top-left border-0 bg-white transition-opacity duration-150 ${
+            className={`absolute inset-0 border-0 bg-white transition-opacity duration-150 ${
               frame === visible ? "opacity-100" : "opacity-0"
             }`}
             title={title}
             src={frame.src}
             width={page.width}
             height={page.height}
-            style={{ transform: `scale(${scale})` }}
             onLoad={() => {
               if (!frame.ready) commit(frame.generation);
             }}
@@ -192,10 +149,7 @@ export const DeviceFrame = ({
         ))}
       </div>
       {chrome && (
-        <div
-          className="pointer-events-none absolute inset-0 origin-top-left"
-          style={{ width, height, transform: `scale(${scale})` }}
-        >
+        <div className="pointer-events-none absolute inset-0" style={{ width, height }}>
           <DeviceChrome
             spec={chrome}
             width={width}

@@ -137,6 +137,7 @@
     font-size: 11px;
   }
 
+
   .sw-select {
     border-radius: var(--radius);
     appearance: none;
@@ -203,6 +204,52 @@
   .sw-segmented button[aria-pressed="true"] {
     background: var(--color-cream);
     color: var(--color-ink);
+  }
+
+  .sw-stepper {
+    border-radius: var(--radius);
+    display: inline-flex;
+    border: 1px solid var(--edge);
+    height: 30px;
+  }
+
+  .sw-stepper button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-cream);
+    transition: background-color 150ms ease;
+  }
+
+  .sw-stepper button:hover {
+    background: color-mix(in srgb, var(--color-cream) 5%, transparent);
+  }
+
+  .sw-stepper button + button {
+    border-left: 1px solid var(--edge);
+  }
+
+  .sw-stepper > button:first-child,
+  .sw-stepper > button:last-child {
+    width: 28px;
+  }
+
+  .sw-stepper > button:first-child {
+    border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px);
+  }
+
+  .sw-stepper > button:last-child {
+    border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0;
+  }
+
+  .sw-stepper svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   input[type="search"]::-webkit-search-cancel-button,

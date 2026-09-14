@@ -2,6 +2,12 @@ import * as React from "react";
 import { hasIntroductoryOffer, type HostDelegate, type HostState } from "@superwall/host";
 import { ActionMenu, type ActionProgress } from "../components/menus/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/menus/CompareMenu";
+import {
+  Canvas,
+  useCanvasScale,
+  type CanvasHandle,
+  type CanvasZoom,
+} from "../components/preview/Canvas";
 import { DeviceFrame, DevicePlaceholder } from "../components/preview/DeviceFrame";
 import { MissingProducts } from "../components/panels/MissingProducts";
 import { PaywallToasts, useStudioDelegate } from "../components/PaywallToasts";
@@ -38,6 +44,7 @@ import {
   type DeviceChromeSpec,
 } from "../lib/devices";
 import { hostStateFor, previewDevice, studioDefaults } from "../lib/host";
+import { percent } from "../lib/canvas";
 import { hostedUrl } from "../lib/preview";
 import { ACTION_STEPS, type StudioActionStep, type StudioStepState } from "../lib/steps";
 import {
@@ -121,32 +128,36 @@ const StagePane = ({
   landscape?: boolean;
   theme?: "light" | "dark";
 }) => {
-  const [pane, setPane] = React.useState<HTMLDivElement | null>(null);
+  const scale = useCanvasScale();
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center" ref={setPane}>
-      <div className="flex flex-col gap-2">
-        {label && <span className="text-xs text-cream/55">{label}</span>}
-        {src ? (
-          <DeviceFrame
-            width={width}
-            height={height}
-            title={title}
-            src={src}
-            hostState={hostState}
-            delegate={delegate}
-            stage={pane}
-            reloadKey={reloadKey}
-            chrome={chrome}
-            presentation={presentation}
-            landscape={landscape}
-            theme={theme}
-          />
-        ) : (
-          <DevicePlaceholder width={width} height={height} stage={pane}>
-            {empty ?? "Nothing live yet — publish to compare against production."}
-          </DevicePlaceholder>
-        )}
-      </div>
+    <div className="flex flex-none flex-col gap-2">
+      {label && (
+        <span
+          className="origin-bottom-left text-xs whitespace-nowrap text-cream/55"
+          style={{ transform: `scale(${1 / scale})` }}
+        >
+          {label}
+        </span>
+      )}
+      {src ? (
+        <DeviceFrame
+          width={width}
+          height={height}
+          title={title}
+          src={src}
+          hostState={hostState}
+          delegate={delegate}
+          reloadKey={reloadKey}
+          chrome={chrome}
+          presentation={presentation}
+          landscape={landscape}
+          theme={theme}
+        />
+      ) : (
+        <DevicePlaceholder width={width} height={height}>
+          {empty ?? "Nothing live yet — publish to compare against production."}
+        </DevicePlaceholder>
+      )}
     </div>
   );
 };
@@ -173,6 +184,8 @@ export const SurfaceEditor = ({
   const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(undefined);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [landscape, setLandscape] = React.useState(false);
+  const canvas = React.useRef<CanvasHandle>(null);
+  const [zoom, setZoom] = React.useState<CanvasZoom>({ scale: 1, fitted: true });
   const [status, setStatus] = React.useState<StudioStatus>({});
   const [progress, setProgress] = React.useState<ActionProgress | undefined>(undefined);
   const dismissTimer = React.useRef<number | undefined>(undefined);
@@ -424,8 +437,18 @@ export const SurfaceEditor = ({
         }
       />
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
+        <Canvas
+          ref={canvas}
+          onZoom={setZoom}
+          fitKey={[
+            deviceId,
+            frame.width,
+            frame.height,
+            comparePane ? "compare" : "single",
+            presentation?.style ?? "",
+          ].join(":")}
+        >
           {comparePane && (
             <StagePane
               label={comparePane.label}
@@ -461,7 +484,7 @@ export const SurfaceEditor = ({
             landscape={landscape}
             theme={theme}
           />
-        </div>
+        </Canvas>
 
         <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
           <VariablesPanel overrides={edited} groups={groups} onChange={setEdited} />
@@ -504,6 +527,37 @@ export const SurfaceEditor = ({
           </button>
         </ToolbarGroup>
         <ToolbarDivider />
+        <ToolbarGroup label="Zoom">
+          <div className="sw-stepper" role="group" aria-label="Zoom">
+            <button
+              type="button"
+              aria-label="Zoom out"
+              onClick={() => canvas.current?.zoomStep(-1)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="min-w-12 px-2 font-mono text-xs tabular-nums"
+              aria-label="Fit to view"
+              aria-pressed={zoom.fitted}
+              onClick={() => canvas.current?.fit()}
+            >
+              {percent(zoom.scale)}
+            </button>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              onClick={() => canvas.current?.zoomStep(1)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </div>
+        </ToolbarGroup>
         <ToolbarGroup label="Device">
           <Select
             label="Device"

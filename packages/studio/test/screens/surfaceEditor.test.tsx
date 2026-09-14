@@ -400,6 +400,27 @@ describe("SurfaceEditor's smaller states", () => {
     });
   });
 
+  it("puts zoom in the toolbar: step buttons, and the percentage fits", async () => {
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [live], previewUrl: () => "/preview" }}
+        surface={live}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    const fitButton = () => screen.getByRole("button", { name: "Fit to view" });
+    expect(fitButton().getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(fitButton().getAttribute("aria-pressed")).toBe("false");
+    expect(fitButton().textContent).toMatch(/\d+%/);
+
+    fireEvent.click(fitButton());
+    expect(fitButton().getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Fit" })).toBeNull();
+  });
+
   it("keeps the phone's own chrome for a native paywall", async () => {
     renderEditor(
       <SurfaceEditor

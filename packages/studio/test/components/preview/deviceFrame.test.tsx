@@ -1,5 +1,4 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHostState, recordingDelegate, type HostState } from "@superwall/host";
 import { DeviceFrame, DevicePlaceholder } from "../../../src/components/preview/DeviceFrame";
@@ -30,9 +29,8 @@ const Harness = ({
   reloadKey?: number;
   hostState?: HostState;
 }) => {
-  const [stage, setStage] = React.useState<HTMLDivElement | null>(null);
   return (
-    <div ref={setStage}>
+    <div>
       <DeviceFrame
         width={device.width}
         height={device.height}
@@ -40,7 +38,6 @@ const Harness = ({
         src={src}
         hostState={hostState}
         delegate={recordingDelegate()}
-        stage={stage}
         reloadKey={reloadKey}
       />
     </div>
@@ -203,29 +200,24 @@ describe("DeviceFrame as a host", () => {
   });
 });
 
-const Stage = ({ width, height }: { width: number; height: number }) => {
-  const [stage, setStage] = React.useState<HTMLDivElement | null>(null);
-  return (
-    <div ref={setStage}>
-      <DeviceFrame
-        width={width}
-        height={height}
-        title="preview"
-        src="/preview/paywall/a"
-        hostState={initialState}
-        delegate={recordingDelegate()}
-        stage={stage}
-      />
-      <DevicePlaceholder width={width} height={height} stage={stage}>
-        Nothing here
-      </DevicePlaceholder>
-    </div>
-  );
-};
+const Stage = ({ width, height }: { width: number; height: number }) => (
+  <div>
+    <DeviceFrame
+      width={width}
+      height={height}
+      title="preview"
+      src="/preview/paywall/a"
+      hostState={initialState}
+      delegate={recordingDelegate()}
+    />
+    <DevicePlaceholder width={width} height={height}>
+      Nothing here
+    </DevicePlaceholder>
+  </div>
+);
 
 describe("DeviceFrame presentation", () => {
   it("gives a drawer paywall only the drawer's own viewport, over a backdrop", () => {
-    const [stage, setStage] = [null as HTMLDivElement | null, (_: HTMLDivElement | null) => {}];
     render(
       <DeviceFrame
         width={device.width}
@@ -234,19 +226,24 @@ describe("DeviceFrame presentation", () => {
         src="/preview/paywall/a"
         hostState={initialState}
         delegate={recordingDelegate()}
-        stage={stage}
         presentation={{ style: "drawer", height: 50, cornerRadius: 24 }}
       />,
     );
-    setStage(null);
     const frame = frames()[0];
     expect(frame.getAttribute("width")).toBe(String(device.width));
     expect(frame.getAttribute("height")).toBe(String(Math.round(device.height * 0.5)));
     expect(screen.getByTestId("presentation-backdrop")).toBeDefined();
     const page = screen.getByTestId("presentation-page");
-    const scale = parseFloat(screen.getByTestId("device-frame").style.width) / device.width;
-    expect(parseFloat(page.style.top)).toBeCloseTo((device.height - Math.round(device.height * 0.5)) * scale);
-    expect(page.style.borderRadius.startsWith(`${24 * scale}px`)).toBe(true);
+    expect(page.style.top).toBe(`${device.height - Math.round(device.height * 0.5)}px`);
+    expect(page.style.borderRadius).toBe("24px 24px 0px 0px");
+  });
+
+  it("lays the frame out at its logical size, leaving zoom to the canvas", () => {
+    render(<Harness src="/preview/paywall/a" />);
+    const frame = screen.getByTestId("device-frame");
+    expect(frame.style.width).toBe(`${device.width}px`);
+    expect(frame.style.height).toBe(`${device.height}px`);
+    expect(frames()[0].style.transform).toBe("");
   });
 
   it("gives a fullscreen paywall the whole device and no backdrop", () => {
@@ -271,25 +268,6 @@ describe("DevicePlaceholder beside a DeviceFrame", () => {
     expect(screen.getByTestId("device-frame").style.width).not.toBe(before);
     expect(screen.getByTestId("device-placeholder").style.width).toBe(
       screen.getByTestId("device-frame").style.width,
-    );
-  });
-
-  it("fits the stage it is mounted under, not the stage as it was before mounting", () => {
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-      width: 500,
-      height: 600,
-      top: 0,
-      left: 0,
-      right: 500,
-      bottom: 600,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    });
-    render(<Stage width={device.width} height={device.height} />);
-    const expected = Math.min((500 - 96) / device.width, (600 - 96) / device.height);
-    expect(screen.getByTestId("device-frame").style.width).toBe(
-      `${device.width * expected}px`,
     );
   });
 
