@@ -21,6 +21,12 @@ export const ExternalIcon = () => (
   </Icon>
 );
 
+export const SpinnerIcon = () => (
+  <svg className="sw-icon animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M21 12a9 9 0 1 1-9-9" />
+  </svg>
+);
+
 export const SunIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="4" />

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHostState, recordingDelegate, type HostState } from "@superwall/host";
-import { DeviceFrame } from "../../../src/components/preview/DeviceFrame";
+import { DeviceFrame, DevicePlaceholder } from "../../../src/components/preview/DeviceFrame";
 import { deviceById } from "../../../src/lib/devices";
 
 /**
@@ -30,9 +30,9 @@ const Harness = ({
   reloadKey?: number;
   hostState?: HostState;
 }) => {
-  const stageRef = React.useRef<HTMLDivElement>(null);
+  const [stage, setStage] = React.useState<HTMLDivElement | null>(null);
   return (
-    <div ref={stageRef}>
+    <div ref={setStage}>
       <DeviceFrame
         width={device.width}
         height={device.height}
@@ -40,7 +40,7 @@ const Harness = ({
         src={src}
         hostState={hostState}
         delegate={recordingDelegate()}
-        stageRef={stageRef}
+        stage={stage}
         reloadKey={reloadKey}
       />
     </div>
@@ -200,5 +200,71 @@ describe("DeviceFrame as a host", () => {
     });
 
     expect(post).not.toHaveBeenCalled();
+  });
+});
+
+const Stage = ({ width, height }: { width: number; height: number }) => {
+  const [stage, setStage] = React.useState<HTMLDivElement | null>(null);
+  return (
+    <div ref={setStage}>
+      <DeviceFrame
+        width={width}
+        height={height}
+        title="preview"
+        src="/preview/paywall/a"
+        hostState={initialState}
+        delegate={recordingDelegate()}
+        stage={stage}
+      />
+      <DevicePlaceholder width={width} height={height} stage={stage}>
+        Nothing here
+      </DevicePlaceholder>
+    </div>
+  );
+};
+
+describe("DevicePlaceholder beside a DeviceFrame", () => {
+  it("is exactly the size of the frame, and follows it when the hardware changes", () => {
+    const view = render(<Stage width={device.width} height={device.height} />);
+    const frame = screen.getByTestId("device-frame");
+    const placeholder = screen.getByTestId("device-placeholder");
+    expect(placeholder.style.width).toBe(frame.style.width);
+    expect(placeholder.style.height).toBe(frame.style.height);
+    expect(placeholder.style.width).not.toBe("");
+
+    const before = frame.style.width;
+    const ipad = deviceById("ipad-pro-11");
+    view.rerender(<Stage width={ipad.width} height={ipad.height} />);
+    expect(screen.getByTestId("device-frame").style.width).not.toBe(before);
+    expect(screen.getByTestId("device-placeholder").style.width).toBe(
+      screen.getByTestId("device-frame").style.width,
+    );
+  });
+
+  it("fits the stage it is mounted under, not the stage as it was before mounting", () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 500,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 500,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    render(<Stage width={device.width} height={device.height} />);
+    const expected = Math.min((500 - 96) / device.width, (600 - 96) / device.height);
+    expect(screen.getByTestId("device-frame").style.width).toBe(
+      `${device.width * expected}px`,
+    );
+  });
+
+  it("centers the placeholder copy on both axes", () => {
+    render(<Stage width={device.width} height={device.height} />);
+    const placeholder = screen.getByTestId("device-placeholder");
+    for (const token of ["flex", "items-center", "justify-center", "text-center"]) {
+      expect(placeholder.className).toContain(token);
+    }
   });
 });

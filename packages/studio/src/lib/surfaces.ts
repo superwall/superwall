@@ -7,6 +7,7 @@ export type {
   StudioActionProgress,
   StudioActionResult,
   StudioStatus,
+  StudioVersion,
 } from "./contract";
 
 export type StudioSurfaceKind = "paywall" | "funnel";
@@ -26,7 +27,9 @@ export type StudioSurface = {
 
 export type PreviewUrlBuilder = (surface: StudioSurface) => string;
 
-export type CompareTarget = { type: "live" } | { type: "surface"; surface: StudioSurface };
+export type CompareTarget =
+  | { type: "version"; version: number }
+  | { type: "surface"; surface: StudioSurface };
 
 export type StudioSource = {
   scheme?: string;

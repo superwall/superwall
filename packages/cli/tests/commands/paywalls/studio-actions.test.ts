@@ -110,6 +110,18 @@ async function startApi(options: { rejectSource?: boolean } = {}): Promise<FakeA
             repo: "org1-app2",
             status: "committed",
           });
+      } else if (req.method === "GET" && url.endsWith("/versions")) {
+        send(200, {
+          object: "list",
+          data: [
+            {
+              version: 7,
+              url: "https://r.test/7.html",
+              live: true,
+              created_at: "2026-09-01T00:00:00.000Z",
+            },
+          ],
+        });
       } else if (url.endsWith("/versions")) {
         send(200, { version: 7, snapshot_id: "abc", url: "https://r.test/7.html" });
       } else if (url.endsWith("/promote")) {
@@ -345,13 +357,20 @@ test("promoting a surface that was never pushed explains itself instead of creat
   if (!result.ok) assert.match(result.error, /never been pushed/);
 });
 
-test("status reports the live url and active flag straight from the paywall", async () => {
+test("status reports every pushed version and the active flag straight from the paywall", async () => {
   await startApi();
   const project = boundProject();
 
   assert.deepEqual(await createStudioActions(framework, project).status(surface), {
     paywallId: "208540",
-    liveUrl: undefined,
+    versions: [
+      {
+        version: 7,
+        url: "https://r.test/7.html",
+        live: true,
+        pushedAt: "2026-09-01T00:00:00.000Z",
+      },
+    ],
     active: false,
     updatedAt: undefined,
     identifier: undefined,
@@ -399,6 +418,31 @@ test("a surface that names no platform while the project has several fails befor
   assert.equal(result.ok, false);
   if (!result.ok) assert.match(result.error, /doesn't say which platforms it's for/);
   assert.deepEqual(builds, []);
+});
+
+test("status keeps the live version and says so when the API cannot list versions", async () => {
+  const api = await startApi();
+  api.gate = (url) =>
+    url.endsWith("/versions")
+      ? { status: 404, body: { error: "not found" } }
+      : /\/v2\/paywalls\/\d+$/.test(url)
+        ? {
+            status: 200,
+            body: {
+              id: 208540,
+              application_id: 42,
+              version: 3,
+              paywall_url: "https://r.test/3.html",
+              status: "active",
+            },
+          }
+        : undefined;
+  const project = boundProject();
+
+  const status = await createStudioActions(framework, project).status(surface);
+  assert.deepEqual(status.versions, [{ version: 3, url: "https://r.test/3.html", live: true }]);
+  assert.equal(status.active, true);
+  assert.match(status.unreachable ?? "", /404/);
 });
 
 test("status reads the first app's binding", async () => {

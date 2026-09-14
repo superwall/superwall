@@ -44,7 +44,9 @@ import {
   type StudioSource,
   type StudioStatus,
   type StudioSurface,
+  type StudioVersion,
 } from "../lib/surfaces";
+import { timeAgo } from "../lib/time";
 import { type VariableOverrides } from "../lib/variables";
 
 const clampSize = (value: number, fallback: number): number =>
@@ -112,9 +114,9 @@ const StagePane = ({
   landscape?: boolean;
   theme?: "light" | "dark";
 }) => {
-  const paneRef = React.useRef<HTMLDivElement>(null);
+  const [pane, setPane] = React.useState<HTMLDivElement | null>(null);
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center" ref={paneRef}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center" ref={setPane}>
       <div className="flex flex-col gap-2">
         {label && <span className="text-xs text-cream/55">{label}</span>}
         {src ? (
@@ -125,14 +127,14 @@ const StagePane = ({
             src={src}
             hostState={hostState}
             delegate={delegate}
-            stageRef={paneRef}
+            stage={pane}
             reloadKey={reloadKey}
             chrome={chrome}
             landscape={landscape}
             theme={theme}
           />
         ) : (
-          <DevicePlaceholder width={width} height={height} stageRef={paneRef}>
+          <DevicePlaceholder width={width} height={height} stage={pane}>
             {empty ?? "Nothing live yet — publish to compare against production."}
           </DevicePlaceholder>
         )}
@@ -257,39 +259,46 @@ export const SurfaceEditor = ({
   );
   const chrome = responsive ? undefined : device.chrome;
   const previewSrc = source.previewUrl(surface);
-  const liveSrc = status.liveUrl ? hostedUrl(status.liveUrl) : undefined;
+  const versions = status.versions ?? [];
+  const versionLabel = (entry: StudioVersion) => `v${entry.version}${entry.live ? " · live" : ""}`;
+  const pushedHint = (entry: StudioVersion) => {
+    if (entry.live) return "What SDKs receive today";
+    const ago = entry.pushedAt ? timeAgo(entry.pushedAt) : undefined;
+    return ago ? `Pushed ${ago}` : "Pushed snapshot";
+  };
 
   const compareOptions: CompareOption[] = [
-    ...(actionsEnabled
-      ? [
-          {
-            key: "live",
-            label: "Live version",
-            hint: "What SDKs receive today",
-            target: { type: "live" } as const,
-          },
-        ]
-      : []),
+    ...versions.map((entry) => ({
+      key: `version:${entry.version}`,
+      label: versionLabel(entry),
+      hint: pushedHint(entry),
+      target: { type: "version", version: entry.version } as const,
+    })),
     ...source.surfaces
-      .map((candidate, index) => ({
-        key: `surface:${index}`,
+      .map((candidate) => ({
+        key: `surface:${candidate.kind}/${candidate.id}`,
         label: nameOf(candidate),
         hint: source.compareHint ?? "Local preview",
         target: { type: "surface", surface: candidate } as const,
       }))
       .filter((option) => option.target.surface !== surface),
   ];
+  const compareNotice = status.unreachable
+    ? `Couldn't read the pushed versions — ${status.unreachable}`
+    : undefined;
+  const compared =
+    compareWith?.type === "version"
+      ? versions.find((entry) => entry.version === compareWith.version)
+      : undefined;
 
   const comparePane =
     compareWith &&
-    (compareWith.type === "live"
+    (compareWith.type === "version"
       ? {
-          label: "Live",
-          src: liveSrc,
-          title: `${surface.id} live`,
-          empty: status.unreachable
-            ? `Couldn't read the live version — ${status.unreachable}`
-            : undefined,
+          label: compared ? versionLabel(compared) : `v${compareWith.version}`,
+          src: compared ? hostedUrl(compared.url) : undefined,
+          title: `${surface.id} v${compareWith.version}`,
+          empty: compareNotice ?? "This version is no longer on the dashboard.",
         }
       : {
           label: nameOf(compareWith.surface),
@@ -511,8 +520,13 @@ export const SurfaceEditor = ({
           </ToolbarGroup>
         )}
         <ToolbarDivider />
-        {compareOptions.length > 0 && (
-          <CompareMenu active={compareWith} options={compareOptions} onSelect={setCompareWith} />
+        {(actionsEnabled || compareOptions.length > 0) && (
+          <CompareMenu
+            active={compareWith}
+            options={compareOptions}
+            notice={compareNotice}
+            onSelect={setCompareWith}
+          />
         )}
         <button
           type="button"

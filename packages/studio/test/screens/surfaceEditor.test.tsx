@@ -377,7 +377,7 @@ describe("SurfaceEditor's smaller states", () => {
     expect((width as HTMLInputElement).value).toBe("3000");
   });
 
-  it("says why it cannot show the live version to compare against", async () => {
+  it("says why it cannot list the pushed versions to compare against", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -404,8 +404,10 @@ describe("SurfaceEditor's smaller states", () => {
     await act(async () => {});
 
     fireEvent.click(screen.getByRole("button", { name: /compare/i }));
-    fireEvent.click(screen.getByText(/live/i));
 
-    expect(screen.getByText(/Couldn't read the live version — not logged in/)).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain(
+      "Couldn't read the pushed versions — not logged in",
+    );
+    expect(screen.queryByText(/live/i)).toBeNull();
   });
 });

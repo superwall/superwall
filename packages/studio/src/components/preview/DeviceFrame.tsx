@@ -8,19 +8,14 @@ const FRAME_MARGIN = 96;
 
 const SWAP_DELAY_MS = 250;
 
-const useFitScale = (
-  container: React.RefObject<HTMLElement | null>,
-  width: number,
-  height: number,
-): number => {
+const useFitScale = (stage: HTMLElement | null, width: number, height: number): number => {
   const [scale, setScale] = React.useState(1);
 
   React.useLayoutEffect(() => {
-    const element = container.current;
-    if (!element) return undefined;
+    if (!stage) return undefined;
 
     const fit = () => {
-      const available = element.getBoundingClientRect();
+      const available = stage.getBoundingClientRect();
       const next = Math.min(
         1,
         (available.width - FRAME_MARGIN) / width,
@@ -32,9 +27,9 @@ const useFitScale = (
     fit();
     if (typeof ResizeObserver === "undefined") return undefined;
     const observer = new ResizeObserver(fit);
-    observer.observe(element);
+    observer.observe(stage);
     return () => observer.disconnect();
-  }, [container, width, height]);
+  }, [stage, width, height]);
 
   return scale;
 };
@@ -42,14 +37,14 @@ const useFitScale = (
 export const DevicePlaceholder = ({
   width,
   height,
-  stageRef,
+  stage,
   children,
 }: React.PropsWithChildren<{
   width: number;
   height: number;
-  stageRef: React.RefObject<HTMLElement | null>;
+  stage: HTMLElement | null;
 }>) => {
-  const scale = useFitScale(stageRef, width, height);
+  const scale = useFitScale(stage, width, height);
 
   return (
     <div
@@ -75,7 +70,7 @@ export const DeviceFrame = ({
   src,
   hostState,
   delegate,
-  stageRef,
+  stage,
   reloadKey = 0,
   chrome,
   landscape = false,
@@ -87,13 +82,13 @@ export const DeviceFrame = ({
   src: string;
   hostState: HostState;
   delegate: HostDelegate;
-  stageRef: React.RefObject<HTMLElement | null>;
+  stage: HTMLElement | null;
   reloadKey?: number;
   chrome?: DeviceChromeSpec;
   landscape?: boolean;
   theme?: "light" | "dark";
 }) => {
-  const scale = useFitScale(stageRef, width, height);
+  const scale = useFitScale(stage, width, height);
 
   const generation = React.useRef(0);
   const [frames, setFrames] = React.useState<Frame[]>([{ src, generation: 0, ready: true }]);

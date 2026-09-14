@@ -50,7 +50,7 @@ const shippable: StudioSource = {
   },
   capabilities: { actions: true },
   previewUrl: buildPreviewPath,
-  standaloneUrl: surfacePath,
+  standaloneUrl: (surface) => `/preview${surfacePath(surface)}`,
 };
 
 const hostOf = (frame: HTMLElement | undefined) => {
@@ -193,7 +193,7 @@ describe("StudioApp", () => {
     // the open control pops a device-sized preview window
     const opener = vi.spyOn(window, "open").mockReturnValue(null);
     fireEvent.click(screen.getByRole("button", { name: "Open preview" }));
-    expect(String(opener.mock.calls[0]?.[0])).toBe("/paywall/plus-upgrade");
+    expect(String(opener.mock.calls[0]?.[0])).toBe("/preview/paywall/plus-upgrade");
     expect(String(opener.mock.calls[0]?.[2])).toContain("width=402");
     opener.mockRestore();
 
