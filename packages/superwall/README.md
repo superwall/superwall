@@ -72,7 +72,9 @@ to begin from any example in the
 then looks at the app around it: if the Superwall SDK is already configured,
 it finds your app by its API key and binds pushes to it; otherwise it can log
 you in, pick an app, or create one on the spot. `--yes` accepts the defaults;
-`--no-install` and `--no-connect` skip those steps.
+`--no-install` and `--no-connect` skip those steps, and `--app <id>` connects a
+specific Superwall app (the dashboard's **Copy Prompt** passes it) instead of
+detecting or asking.
 
 ### A project is a directory
 
@@ -176,6 +178,28 @@ Once a purchase completes, `postPurchase` (in `config.ts`, or per
 `{ redirect: url }`. Pass `stripeMetadata` to `purchase()` to write key/values
 onto the Stripe subscription. `checkout: { managedPayments }` and
 `introductoryOfferEligibility` round out the config.
+
+### Insets
+
+The paywall is inset from the screen edges by default: the router wraps the
+layout and pages in `[data-sw-root]`, padded by
+`--sw-inset-top|right|bottom|left`, so nothing a paywall renders starts
+under the status bar, cutout or home indicator, and `[data-sw-content]`
+inside it is what layout chrome positions against, so `position: absolute;
+top: 4px` in a layout is 4px below the bar. `insets` in `config.ts`
+picks the padding — `"safe-area"` (default), `"none"`, pixels, a CSS
+length, or one value per edge — and the provider writes it inline on
+`<html>`. The safe area itself is `--sw-safe-area-inset-*`: the host's
+`env(safe-area-inset-*)` where it reports one, else a floor for the device
+and presentation the host described (59px above a Dynamic Island, 44px
+above a notch, 24px under Android's status bar, 34px over a home
+indicator, 0 at the top of a modal or drawer, 0 everywhere on the web).
+Fixed chrome on a full-bleed paywall reads those. The provider stamps
+`data-sw-platform`, `data-sw-idiom` and `data-sw-cutout` on `<html>` from
+the device the host reports, the document carries `data-sw-presentation`
+from `config.ts`, and `provider/insets.css` turns those into the floors.
+Every framework rule has bare-`:root` specificity and comes first, so a
+paywall's own `:root` declaration of any of the three variable layers wins.
 
 ### Navigation
 

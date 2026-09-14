@@ -119,7 +119,7 @@ The stack, bottom to top — each layer depends only on the one below it:
     decoding for `accept64`
   - `src/config/` — the `SuperwallConfig` contract a running paywall reads,
     one file per concern (`products`, `checkout`, `presentation`,
-    `background`, `notifications`, `localization`). Push-time concerns (the
+    `background`, `insets`, `notifications`, `localization`). Push-time concerns (the
     settings wire, document attributes) live in the framework, not here.
   - `src/localization/` — `locale.ts` (resolution), `catalog.ts` (`t()`),
     `periods.ts` (the editor's period translation table from
@@ -252,7 +252,38 @@ The stack, bottom to top — each layer depends only on the one below it:
     (`renderDocument`, `data-sw-*` semantics) and the platform layer the
     runtime wraps it in (`injectPlatformLayer`). The build and the preview
     server both render through it, so local and published are the same
-    document. Nothing else may enter it.
+    document. Nothing else may enter it. It owns both kinds of `data-sw-*`
+    attribute: `documentAttributes` (static, from `config.ts` — generation,
+    scroll, presentation — rendered into the HTML and reasserted by the
+    provider) and `hostAttributes` (live, from the device the host reports —
+    platform, idiom, cutout — stamped by the provider, absent when the host
+    has said nothing, never guessed).
+  - `src/device.ts` — what the framework knows about devices from the
+    variables a host sends: `platformOf`, `idiomOf`, `cutoutOf` (the iPhone
+    model tables). The checkout sheet's corner radius and the inset floors
+    both derive from it; nothing else keeps a model list.
+  - `src/provider/insets.css` — the inset system. The router wraps the
+    whole paywall in `[data-sw-root]` (`navigation/routes.css`), a flex
+    column at `100dvh` padded by `--sw-inset-*`, with `[data-sw-content]`
+    inside it as the positioned containing block for layout chrome, so
+    layouts and pages are inside the safe area by default, an absolute
+    `top: 0` in a layout is the top of the inset area, and
+    `--sw-routes-height` defaults to `auto`.
+    `config.insets` (runtime `config/insets.ts`, `insetsOf`) is written
+    inline on `<html>` by the provider; an edge it leaves at `"safe-area"`
+    falls through to the stylesheet, where `--sw-inset-*` defaults to
+    `--sw-safe-area-inset-*` = `max(env(safe-area-inset-*),
+--sw-safe-area-floor-*)`, and the floors key on the `data-sw-*`
+    attributes above (iOS cutout/idiom/orientation, Android's status bar,
+    the presentation style). Fixed chrome that means to sit over the bars
+    reads `--sw-safe-area-inset-*`, never `--sw-inset-*`. Every rule has
+    bare `:root` specificity (`:root:where([…])`) and lands before the
+    paywall's stylesheet so a paywall's own `:root` declaration wins. The
+    floors are minimums per device class, never exact values, so a real
+    `env()` is never shrunk. Android's come from the SDK's layout: a
+    fullscreen paywall is drawn under the status bar, and the SDK margins
+    the webview above the navigation bar itself, while Android WebView
+    reports no `env()` for either.
   - `src/build/` — `superwall/build`: one surface → one self-contained,
     content-addressed HTML snapshot. `index.ts` drives vite; `entry.ts`
     generates the entry a surface mounts, `assets.ts` collects and

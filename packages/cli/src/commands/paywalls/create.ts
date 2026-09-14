@@ -199,8 +199,24 @@ async function connectApp(
   root: string,
   target: string,
   detected: { app: DetectedApp; existing: ExistingIntegration } | undefined,
+  appId: string | undefined,
 ): Promise<void> {
   const api = await requireApi(interactive);
+
+  if (appId !== undefined) {
+    const apps = await listApplications(api);
+    const app = apps.find((candidate) => String(candidate.id) === appId);
+    if (app === undefined) {
+      throw new Error(
+        `No app with id \`${appId}\` in this account — run \`superwall apps\` to list them.`,
+      );
+    }
+    writeApp(target, requirePlatform(app), String(app.id));
+    ui.success(
+      `Pushes go to \`${app.name ?? app.id}\` — saved in superwall.lock, so commit that file.`,
+    );
+    return;
+  }
 
   if (detected?.existing.apiKey) {
     const scope = await resolveScopeFromKey(api, detected.existing.apiKey).catch(() => null);
@@ -272,6 +288,11 @@ export const runCreate = defineCommand({
     const problem = alreadyAProject(root);
     if (problem !== undefined) throw new Error(problem);
     const target = path.join(root, "superwall");
+    const appId =
+      typeof argv.app === "string" || typeof argv.app === "number" ? String(argv.app) : undefined;
+    if (appId !== undefined && argv.connect === false) {
+      throw new Error("`--app` connects the project to that app — drop `--no-connect`.");
+    }
 
     const detection = detectHostApp(root);
 
@@ -332,7 +353,7 @@ export const runCreate = defineCommand({
     const connect =
       argv.connect === false
         ? false
-        : interactive && argv.yes !== true
+        : interactive && argv.yes !== true && appId === undefined
           ? await ui.confirm({
               message: "Connect your Superwall account now? (Recommended)",
               initial: true,
@@ -340,8 +361,9 @@ export const runCreate = defineCommand({
           : true;
     if (connect === true) {
       try {
-        await connectApp(ui, interactive, root, target, detected);
+        await connectApp(ui, interactive, root, target, detected, appId);
       } catch (error) {
+        if (appId !== undefined) throw error;
         if (error instanceof LoginRequiredError) {
           ui.info("Not signed in — the first `superwall push` will connect you.");
         } else {

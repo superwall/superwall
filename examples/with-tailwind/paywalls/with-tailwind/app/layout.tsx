@@ -7,11 +7,11 @@ export default function Layout({ children }: PropsWithChildren) {
   const haptics = useHaptics();
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] font-sans text-fg antialiased [--safe-bottom:max(24px,env(safe-area-inset-bottom))] [--safe-top:max(64px,env(safe-area-inset-top))]">
+    <div className="flex flex-1 flex-col bg-bg font-sans text-fg antialiased">
       <button
         type="button"
         aria-label="Close"
-        className="fixed top-[calc(var(--safe-top)+4px)] right-[calc(16px+env(safe-area-inset-right))] z-10 flex size-8 cursor-pointer items-center justify-center text-xl text-fg/55 hover:text-fg"
+        className="absolute top-1 right-4 z-10 flex size-8 cursor-pointer items-center justify-center text-xl text-fg/55 hover:text-fg"
         onClick={() => {
           haptics.light();
           close();
@@ -31,7 +31,7 @@ export default function Layout({ children }: PropsWithChildren) {
         </svg>
       </button>
       {children}
-      <footer className="flex items-center justify-center gap-1.5 border-t border-fg/10 px-5 pt-3.5 pb-[var(--safe-bottom)] text-xs text-fg/50">
+      <footer className="flex items-center justify-center gap-1.5 border-t border-fg/10 px-5 pt-3.5 pb-3.5 text-xs text-fg/50">
         Built with
         <button
           type="button"

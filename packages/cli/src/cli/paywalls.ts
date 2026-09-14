@@ -16,6 +16,10 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
             type: "string",
             describe: "Start from a public example by name, e.g. --example with-rive",
           },
+          app: {
+            type: "string",
+            describe: "Connect this Superwall app by id instead of detecting or asking",
+          },
           yes: {
             type: "boolean",
             alias: "y",
@@ -33,7 +37,8 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
           },
         })
         .example("$0 create", "Set up superwall/ in the current app")
-        .example("$0 create --example with-rive", "Start from an example"),
+        .example("$0 create --example with-rive", "Start from an example")
+        .example("$0 create --app 52518", "Connect a specific Superwall app"),
     (argv) => {
       return import("@/commands/paywalls/create").then((m) => m.runCreate(argv));
     },

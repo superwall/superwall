@@ -15,7 +15,6 @@
 
 :root {
   --sw-background: var(--color-bg);
-  --sw-routes-height: auto;
 }
 
 :root.dark {

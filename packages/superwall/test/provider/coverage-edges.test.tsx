@@ -106,6 +106,50 @@ describe("paywall interface exposure", () => {
   });
 });
 
+describe("host attributes on the document", () => {
+  it("stamps platform, idiom and cutout from what the host reports, and clears what it doesn't", async () => {
+    const view = renderWithProvider(() => null, {
+      host: {
+        device: { platform: "iOS", interfaceType: "iphone", deviceModel: "iPhone18,3" },
+      },
+    });
+    await flush();
+    const root = document.documentElement;
+    expect(root.getAttribute("data-sw-platform")).toBe("ios");
+    expect(root.getAttribute("data-sw-idiom")).toBe("phone");
+    expect(root.getAttribute("data-sw-cutout")).toBe("island");
+    view.unmount();
+
+    renderWithProvider(() => null, {
+      host: { device: { platform: "Android", deviceModel: "Pixel 10" } },
+    });
+    await flush();
+    expect(root.getAttribute("data-sw-platform")).toBe("android");
+    expect(root.hasAttribute("data-sw-idiom")).toBe(false);
+    expect(root.hasAttribute("data-sw-cutout")).toBe(false);
+  });
+});
+
+describe("insets on the document", () => {
+  it("writes configured insets as --sw-inset-* and leaves safe-area edges to the stylesheet", async () => {
+    const style = document.documentElement.style;
+    const view = renderWithProvider(() => null, {
+      config: { ...testConfig, insets: { top: 0, bottom: "none", right: "1rem" } },
+    });
+    await flush();
+    expect(style.getPropertyValue("--sw-inset-top")).toBe("0px");
+    expect(style.getPropertyValue("--sw-inset-bottom")).toBe("0px");
+    expect(style.getPropertyValue("--sw-inset-right")).toBe("1rem");
+    expect(style.getPropertyValue("--sw-inset-left")).toBe("");
+    view.unmount();
+
+    renderWithProvider(() => null, { config: testConfig });
+    await flush();
+    expect(style.getPropertyValue("--sw-inset-top")).toBe("");
+    expect(style.getPropertyValue("--sw-inset-right")).toBe("");
+  });
+});
+
 describe("background on the document", () => {
   it("paints the light color, then the dark one when the host reports dark", async () => {
     const view = renderWithProvider(() => null, {

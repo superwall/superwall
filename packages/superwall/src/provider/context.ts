@@ -3,6 +3,8 @@ import { useColorScheme } from "../hooks/useColorScheme";
 import {
   backgroundOf,
   createSuperwallSession,
+  INSET_EDGES,
+  insetsOf,
   pendingHostMessages,
   type ITransport,
   type SuperwallConfig,
@@ -10,7 +12,9 @@ import {
   type SuperwallSession,
   type ResolvedBackground,
 } from "@superwall/runtime";
-import { documentAttributes } from "../document";
+import { documentAttributes, HOST_ATTRIBUTE_NAMES, hostAttributes } from "../document";
+import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
+import "./insets.css";
 
 const SuperwallContext = React.createContext<SuperwallSession | null>(null);
 
@@ -97,8 +101,40 @@ export const SuperwallProvider = ({ children, config, transport }: SuperwallProv
     SuperwallContext.Provider,
     { value },
     React.createElement(ColorScheme, { background: backgroundOf(config?.background) }),
+    React.createElement(HostAttributes),
+    React.createElement(Insets, { insets: config?.insets }),
     children,
   );
+};
+
+const Insets = ({ insets }: { insets: SuperwallConfig["insets"] }): null => {
+  React.useEffect(() => {
+    const resolved = insetsOf(insets);
+    const style = document.documentElement.style;
+    for (const edge of INSET_EDGES) {
+      const value = resolved[edge];
+      if (value === undefined) style.removeProperty(`--sw-inset-${edge}`);
+      else style.setProperty(`--sw-inset-${edge}`, value);
+    }
+  }, [insets]);
+
+  return null;
+};
+
+const HostAttributes = (): null => {
+  const { device } = useSuperwallSnapshot();
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const attributes = hostAttributes(device);
+    for (const name of HOST_ATTRIBUTE_NAMES) {
+      const value = attributes[name];
+      if (value === undefined) root.removeAttribute(name);
+      else root.setAttribute(name, value);
+    }
+  }, [device]);
+
+  return null;
 };
 
 const ColorScheme = ({ background }: { background?: ResolvedBackground }): null => {

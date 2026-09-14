@@ -1,5 +1,6 @@
 import type { SuperwallBackgroundConfig } from "./background";
 import type { SuperwallCheckoutConfig } from "./checkout";
+import type { SuperwallInsetsConfig } from "./insets";
 import type { SuperwallLocalizationConfig } from "./localization";
 import type { SuperwallNotificationsConfig } from "./notifications";
 import type { SuperwallPresentationConfig } from "./presentation";
@@ -38,6 +39,14 @@ export type SuperwallConfig<
    * a dark-mode color. Default: the platform default.
    */
   background?: SuperwallBackgroundConfig;
+
+  /**
+   * What every page is padded with: `"safe-area"` (the device's safe area,
+   * floored per platform and presentation), `"none"`, pixels, a CSS length,
+   * or one value per edge. Chrome that sits over the bars on purpose reads
+   * `--sw-safe-area-inset-*` instead. Default: `"safe-area"`.
+   */
+  insets?: SuperwallInsetsConfig;
 
   /**
    * Whether the feature behind the placement is gated on a purchase.
@@ -96,6 +105,14 @@ export {
   type SuperwallCheckoutMode,
   type SuperwallManagedPaymentsOverride,
 } from "./checkout";
+export {
+  INSET_EDGES,
+  insetsOf,
+  type InsetEdge,
+  type ResolvedInsets,
+  type SuperwallInsetSide,
+  type SuperwallInsetsConfig,
+} from "./insets";
 export type { SuperwallLocalizationConfig, SuperwallMessages } from "./localization";
 export type {
   SuperwallNotificationsConfig,

@@ -194,6 +194,84 @@ test("several apps and nobody to ask leaves the choice to the first push", async
   );
 });
 
+const twoApps = {
+  match: "/v2/projects",
+  body: {
+    data: [
+      {
+        id: 9,
+        name: "P",
+        applications: [
+          { id: 1, name: "A", platform: "ios" },
+          { id: 2, name: "B", platform: "android" },
+        ],
+      },
+    ],
+    has_more: false,
+  },
+};
+
+test("--app binds the named app without asking, even among several", async () => {
+  const root = path.join(scratch("create-app"), "my-app");
+  fs.mkdirSync(root, { recursive: true });
+  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  process.env.SUPERWALL_API_HOST = "https://api.example.com";
+  useFetch([twoApps]);
+
+  const { calls, failed } = await create({ dir: root, install: false, app: "2" });
+
+  assert.equal(failed, false);
+  const lock = JSON.parse(
+    fs.readFileSync(path.join(root, "superwall", "superwall.lock"), "utf8"),
+  ) as { apps: Record<string, string> };
+  assert.deepEqual(lock.apps, { android: "2" });
+  assert.match(
+    calls
+      .filter((call) => call.method === "success")
+      .map((call) => String(call.value))
+      .join(),
+    /Pushes go to `B`/,
+  );
+});
+
+test("--app with an id the account does not have fails loudly", async () => {
+  const root = path.join(scratch("create-app-missing"), "my-app");
+  fs.mkdirSync(root, { recursive: true });
+  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  process.env.SUPERWALL_API_HOST = "https://api.example.com";
+  useFetch([twoApps]);
+
+  const { calls, failed } = await create({ dir: root, install: false, app: "77" });
+
+  assert.equal(failed, true);
+  assert.match(
+    String(calls.find((call) => call.method === "error")?.value),
+    /No app with id `77`.*superwall apps/,
+  );
+});
+
+test("--app is refused alongside --no-connect", async () => {
+  const root = path.join(scratch("create-app-noconnect"), "my-app");
+  fs.mkdirSync(root, { recursive: true });
+
+  const { calls, failed } = await create({ dir: root, install: false, connect: false, app: "2" });
+
+  assert.equal(failed, true);
+  assert.equal(fs.existsSync(path.join(root, "superwall")), false);
+  assert.match(String(calls.find((call) => call.method === "error")?.value), /--no-connect/);
+});
+
+test("--app while signed out fails instead of deferring to push", async () => {
+  const root = path.join(scratch("create-app-anon"), "my-app");
+  fs.mkdirSync(root, { recursive: true });
+  useHome();
+
+  const { calls, failed } = await create({ dir: root, install: false, app: "2" });
+
+  assert.equal(failed, true);
+  assert.ok(calls.some((call) => call.method === "error"));
+});
+
 test("not being signed in never fails the scaffold", async () => {
   const root = path.join(scratch("create-anon"), "my-app");
   fs.mkdirSync(root, { recursive: true });

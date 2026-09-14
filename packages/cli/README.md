@@ -76,7 +76,9 @@ to begin from any example in the
 then looks at the app around it: if the Superwall SDK is already configured,
 it finds your app by its API key and binds pushes to it; otherwise it can log
 you in, pick an app, or create one on the spot. `--yes` accepts the defaults;
-`--no-install` and `--no-connect` skip those steps.
+`--no-install` and `--no-connect` skip those steps, and `--app <id>` connects a
+specific Superwall app (the dashboard's **Copy Prompt** passes it) instead of
+detecting or asking.
 
 ### A project is a directory
 

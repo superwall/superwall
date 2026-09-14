@@ -399,7 +399,9 @@ export const PaywallRouter = ({
   return (
     <QueryStoreContext.Provider value={store}>
       <RouterContext.Provider value={router}>
-        {Layout ? <Layout>{stack}</Layout> : stack}
+        <div data-sw-root="">
+          <div data-sw-content="">{Layout ? <Layout>{stack}</Layout> : stack}</div>
+        </div>
       </RouterContext.Provider>
     </QueryStoreContext.Provider>
   );

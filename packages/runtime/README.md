@@ -36,7 +36,7 @@ a reply; everything in its snapshot arrived from a host.
 | Directory           | Owns                                                                                                                                                                        |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/bridge/`       | The wire: transport detection (`?platform=android`, `?transport=editor`, else WebKit), `detectSuperwallHost`, base64 batch decoding for `accept64`                          |
-| `src/config/`       | The `SuperwallConfig` contract a running paywall reads, one file per concern (products, checkout, presentation, background, notifications, localization)                    |
+| `src/config/`       | The `SuperwallConfig` contract a running paywall reads, one file per concern (products, checkout, presentation, background, insets, notifications, localization)            |
 | `src/localization/` | Locale resolution, the `t()` catalog, and `periods.ts` — the editor's period translation table, copied verbatim, with its lookup code trimmed of unreachable branches       |
 | `src/products/`     | The product model, merging of `products` + `template_variables`, and derived variables (localized `period`/`periodly`, `trialPeriodEndDate`)                                |
 | `src/session/`      | `createSuperwallSession`: outgoing message builders, purchase and request trackers, trial reminders, the incoming reducer, and the state `window.app.getAllState()` returns |
@@ -80,6 +80,12 @@ yourself (tests, tools), or `transportKind` to force one.
   of the same reference starts, or the paywall re-opens
 
 The paywall runs no timer of its own: the SDK owns purchase timing.
+
+What happens after a completed purchase is `config.postPurchase` (`"dismiss"`,
+`"stay"`, or the web-only `"redeem"` / `{ redirect }`), overridable per call
+with `purchase(ref, { postPurchase })`; natively it becomes `should_dismiss`
+on the purchase message. `purchase(ref, { stripeMetadata })` is carried to web
+checkout by the framework and ignored by store purchases.
 
 A transaction is attributed to a pending purchase by reference, then by store
 identifier, then, for a bare transaction, to the only pending purchase.

@@ -12,6 +12,7 @@ describe("documentAttributes", () => {
     expect(documentAttributes(undefined)).toEqual({
       "data-sw-generation": String(SUPERWALL_GENERATION),
       "data-sw-scroll": "true",
+      "data-sw-presentation": "fullscreen",
     });
     expect(documentAttributes({ scrollEnabled: false })).toMatchObject({
       "data-sw-scroll": "false",

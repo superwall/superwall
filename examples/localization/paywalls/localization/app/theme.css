@@ -17,7 +17,6 @@
   --mono: "Roboto Mono", ui-monospace, monospace;
 
   --sw-background: var(--bg);
-  --sw-routes-height: auto;
   color-scheme: light;
 }
 
@@ -81,14 +80,9 @@ code {
 }
 
 .shell {
-  --safe-top: max(64px, env(safe-area-inset-top));
-  --safe-bottom: max(24px, env(safe-area-inset-bottom));
-
   display: flex;
-  min-height: 100vh;
-  min-height: 100dvh;
+  flex: 1 1 auto;
   flex-direction: column;
-  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
 
 .page {
@@ -99,7 +93,7 @@ code {
   width: 100%;
   max-width: 44rem;
   margin: 0 auto;
-  padding: calc(var(--safe-top) + 16px) 20px 24px;
+  padding: 16px 20px 24px;
 }
 
 .lede {
@@ -212,7 +206,7 @@ code {
   justify-content: center;
   gap: 6px;
   border-top: 1px solid var(--border);
-  padding: 14px 20px var(--safe-bottom);
+  padding: 14px 20px;
   font-size: 0.75rem;
   color: var(--fg-caption);
 }
