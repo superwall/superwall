@@ -33,7 +33,7 @@ import {
   STUDIO_DEVICES,
   type DeviceChromeSpec,
 } from "../lib/devices";
-import { hostStateFor, studioDefaults } from "../lib/host";
+import { hostStateFor, previewDevice, studioDefaults } from "../lib/host";
 import { hostedUrl } from "../lib/preview";
 import { ACTION_STEPS, type StudioActionStep, type StudioStepState } from "../lib/steps";
 import {
@@ -314,12 +314,15 @@ export const SurfaceEditor = ({
 
     return {
       user: rows("user", { ...defaults.user, ...source.samples?.user, ...samples.user }),
-      device: rows("device", {
-        ...defaults.device,
-        ...source.samples?.device,
-        ...samples.device,
-        ...(device.device as Record<string, unknown>),
-      }),
+      device: rows(
+        "device",
+        previewDevice({
+          ...defaults.device,
+          ...source.samples?.device,
+          ...samples.device,
+          ...(device.device as Record<string, unknown>),
+        }),
+      ),
       params: rows("params", { ...defaults.params, ...source.samples?.params }),
       products: Object.entries(surface.products ?? {}).flatMap(([reference, identifier]) =>
         rows(`products.${reference}`, samples.products?.[identifier]),

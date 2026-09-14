@@ -27,6 +27,11 @@ export const studioDefaults = (): SampleDefaults => ({
   params: DEFAULT_PARAMS,
 });
 
+export const previewDevice = (device: HostVariables): HostVariables => {
+  const { publicApiKey: _key, ...rest } = device;
+  return rest;
+};
+
 export const hostStateFor = ({
   surface,
   defaults,
@@ -37,7 +42,7 @@ export const hostStateFor = ({
   locale,
   edited,
 }: HostInputs): HostState => {
-  const device: HostVariables = {
+  const device: HostVariables = previewDevice({
     ...defaults.device,
     ...sourceSamples?.device,
     ...samples.device,
@@ -45,7 +50,7 @@ export const hostStateFor = ({
     interfaceStyle: theme === "dark" ? "Dark" : "Light",
     ...(locale ? { deviceLocale: locale, deviceLanguageCode: locale.split(/[-_]/)[0] } : {}),
     ...edited.device,
-  };
+  });
   const user: HostVariables = {
     ...defaults.user,
     ...sourceSamples?.user,
