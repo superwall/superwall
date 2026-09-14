@@ -49,13 +49,14 @@ export const platformOf = (device: SuperwallDeviceVariables): DevicePlatform | u
 
 export const idiomOf = (device: SuperwallDeviceVariables): DeviceIdiom | undefined => {
   const interfaceType = device.interfaceType?.toLowerCase();
-  if (interfaceType === "iphone") return "phone";
-  if (interfaceType === "ipad") return "tablet";
   if (interfaceType === "mac" || device.isMac === true) return "desktop";
 
   const model = device.deviceModel ?? "";
   if (model.startsWith("iPad")) return "tablet";
   if (model.startsWith("iPhone")) return "phone";
+
+  if (interfaceType === "iphone") return "phone";
+  if (interfaceType === "ipad") return "tablet";
   return undefined;
 };
 

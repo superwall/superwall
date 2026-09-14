@@ -53,8 +53,11 @@ describe("web paywalls", () => {
 
   it("get the viewport a browser leaves, not the whole screen", () => {
     expect(webViewportFor(deviceById("iphone-17"))).toEqual({ width: 402, height: 874 - 64 - 84 });
-    expect(webViewportFor(deviceById("pixel-10"))).toEqual({ width: 412, height: 915 - 48 - 104 });
-    expect(webViewportFor(deviceById("ipad-pro-11"))).toEqual({ width: 834, height: 1194 - 24 - 66 });
+    expect(webViewportFor(deviceById("pixel-10"))).toEqual({ width: 412, height: 915 - 24 - 104 });
+    expect(webViewportFor(deviceById("ipad-pro-11"))).toEqual({
+      width: 834,
+      height: 1194 - 24 - 66,
+    });
     expect(webViewportFor(deviceById("desktop"))).toEqual({ width: 1440, height: 900 - 52 });
   });
 
@@ -70,6 +73,22 @@ describe("web paywalls", () => {
       osVersion: "16",
     });
     expect(deviceVariablesFor(deviceById("desktop"), true)).toEqual({ platform: "web" });
-    expect(deviceVariablesFor(deviceById("pixel-10"), false)).toMatchObject({ platform: "Android" });
+    expect(deviceVariablesFor(deviceById("pixel-10"), false)).toMatchObject({
+      platform: "Android",
+    });
+  });
+
+  it("report the desktop preset as a Mac host to a native paywall, so it has no safe area", () => {
+    expect(deviceVariablesFor(deviceById("desktop"), false)).toEqual({
+      platform: "iOS",
+      deviceModel: "Mac",
+      osVersion: "26.0",
+      interfaceType: "mac",
+    });
+  });
+
+  it("reserve the Android navigation bar the way the SDK keeps the webview above it", () => {
+    expect(deviceById("pixel-10").chrome?.navigationBarHeight).toBe(24);
+    expect(deviceById("iphone-17").chrome?.navigationBarHeight).toBeUndefined();
   });
 });

@@ -22,9 +22,11 @@ describe("idiomOf", () => {
     expect(idiomOf({ isMac: true })).toBe("desktop");
   });
 
-  it("falls back to the device model, and to nothing", () => {
+  it("reads the device model, and lets it win over a contradicting interface type", () => {
     expect(idiomOf({ deviceModel: "iPad16,3" })).toBe("tablet");
     expect(idiomOf({ deviceModel: "iPhone18,3" })).toBe("phone");
+    expect(idiomOf({ deviceModel: "iPad16,3", interfaceType: "iphone" })).toBe("tablet");
+    expect(idiomOf({ deviceModel: "Mac", interfaceType: "mac" })).toBe("desktop");
     expect(idiomOf({ deviceModel: "Pixel 10" })).toBeUndefined();
     expect(idiomOf({})).toBeUndefined();
   });

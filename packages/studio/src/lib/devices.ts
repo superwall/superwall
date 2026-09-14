@@ -3,6 +3,7 @@ export type DeviceChromeSpec = {
   cutout?: "island" | "punch";
   statusBarHeight: number;
   homeIndicator: boolean;
+  navigationBarHeight?: number;
 };
 
 export type StudioDevice = {
@@ -14,6 +15,7 @@ export type StudioDevice = {
     platform: "iOS" | "Android";
     deviceModel: string;
     osVersion: string;
+    interfaceType?: string;
   };
   chrome?: DeviceChromeSpec;
 };
@@ -64,7 +66,13 @@ export const STUDIO_DEVICES: readonly [StudioDevice, ...StudioDevice[]] = [
     width: 412,
     height: 915,
     device: { platform: "Android", deviceModel: "Pixel 10", osVersion: "16" },
-    chrome: { radius: 28, cutout: "punch", statusBarHeight: 48, homeIndicator: true },
+    chrome: {
+      radius: 28,
+      cutout: "punch",
+      statusBarHeight: 24,
+      homeIndicator: true,
+      navigationBarHeight: 24,
+    },
   },
   {
     id: "galaxy-s25",
@@ -72,14 +80,20 @@ export const STUDIO_DEVICES: readonly [StudioDevice, ...StudioDevice[]] = [
     width: 360,
     height: 780,
     device: { platform: "Android", deviceModel: "SM-S931B", osVersion: "15" },
-    chrome: { radius: 26, cutout: "punch", statusBarHeight: 40, homeIndicator: true },
+    chrome: {
+      radius: 26,
+      cutout: "punch",
+      statusBarHeight: 24,
+      homeIndicator: true,
+      navigationBarHeight: 24,
+    },
   },
   {
     id: "ipad-mini",
     name: "iPad mini",
     width: 744,
     height: 1133,
-    device: { platform: "iOS", deviceModel: "iPad14,1", osVersion: "26.0" },
+    device: { platform: "iOS", deviceModel: "iPad14,1", osVersion: "26.0", interfaceType: "ipad" },
     chrome: { radius: 21, statusBarHeight: 24, homeIndicator: true },
   },
   {
@@ -87,7 +101,7 @@ export const STUDIO_DEVICES: readonly [StudioDevice, ...StudioDevice[]] = [
     name: "iPad Pro 11″",
     width: 834,
     height: 1194,
-    device: { platform: "iOS", deviceModel: "iPad16,3", osVersion: "26.0" },
+    device: { platform: "iOS", deviceModel: "iPad16,3", osVersion: "26.0", interfaceType: "ipad" },
     chrome: { radius: 18, statusBarHeight: 24, homeIndicator: true },
   },
   {
@@ -121,11 +135,18 @@ export const webViewportFor = (device: StudioDevice): { width: number; height: n
   return { width: device.width, height: device.height - statusBar - bars };
 };
 
+const DESKTOP_HOST = {
+  platform: "iOS",
+  deviceModel: "Mac",
+  osVersion: "26.0",
+  interfaceType: "mac",
+};
+
 export const deviceVariablesFor = (
   device: StudioDevice,
   web: boolean,
 ): Record<string, unknown> | undefined =>
-  web ? { ...device.device, platform: "web" } : device.device;
+  web ? { ...device.device, platform: "web" } : (device.device ?? DESKTOP_HOST);
 
 export const RESPONSIVE_ID = "responsive";
 export const RESPONSIVE_DEFAULT = { width: 393, height: 852 };

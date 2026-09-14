@@ -83,7 +83,14 @@ export const DeviceFrame = ({
   const visible = frames.findLast((frame) => frame.ready);
 
   const sheet = presentationRect(presentation, { width, height });
-  const page = sheet ?? { x: 0, y: 0, width, height, radius: { top: 0, bottom: 0 } };
+  const navigationBar = landscape ? 0 : (chrome?.navigationBarHeight ?? 0);
+  const page = sheet ?? {
+    x: 0,
+    y: 0,
+    width,
+    height: height - navigationBar,
+    radius: { top: 0, bottom: 0 },
+  };
   const dark = theme === "dark";
 
   return (
@@ -148,6 +155,13 @@ export const DeviceFrame = ({
           />
         ))}
       </div>
+      {navigationBar > 0 && !sheet && (
+        <div
+          className="absolute inset-x-0 bottom-0"
+          data-testid="navigation-bar"
+          style={{ height: navigationBar, background: dark ? "#000000" : "#ffffff" }}
+        />
+      )}
       {chrome && (
         <div className="pointer-events-none absolute inset-0" style={{ width, height }}>
           <DeviceChrome

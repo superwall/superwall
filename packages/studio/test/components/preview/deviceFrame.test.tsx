@@ -250,6 +250,26 @@ describe("DeviceFrame presentation", () => {
     render(<Harness src="/preview/paywall/a" />);
     expect(frames()[0].getAttribute("height")).toBe(String(device.height));
     expect(screen.queryByTestId("presentation-backdrop")).toBeNull();
+    expect(screen.queryByTestId("navigation-bar")).toBeNull();
+  });
+
+  it("keeps an Android paywall above the navigation bar, as the SDK does, except in landscape", () => {
+    const pixel = deviceById("pixel-10");
+    const props = {
+      title: "preview",
+      src: "/preview/paywall/a",
+      hostState: initialState,
+      delegate: recordingDelegate(),
+      chrome: pixel.chrome,
+    };
+    const view = render(<DeviceFrame {...props} width={pixel.width} height={pixel.height} />);
+    expect(frames()[0].getAttribute("height")).toBe(String(pixel.height - 24));
+    expect(screen.getByTestId("navigation-bar").style.height).toBe("24px");
+    view.unmount();
+
+    render(<DeviceFrame {...props} width={pixel.height} height={pixel.width} landscape />);
+    expect(frames()[0].getAttribute("height")).toBe(String(pixel.width));
+    expect(screen.queryByTestId("navigation-bar")).toBeNull();
   });
 });
 
