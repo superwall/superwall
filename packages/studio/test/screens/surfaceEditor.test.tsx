@@ -377,6 +377,37 @@ describe("SurfaceEditor's smaller states", () => {
     expect((width as HTMLInputElement).value).toBe("3000");
   });
 
+  it("resizes the responsive frame by dragging its edges, and only in responsive mode", async () => {
+    class TestPointerEvent extends MouseEvent {
+      pointerId: number;
+      pointerType: string;
+      constructor(type: string, init: PointerEventInit = {}) {
+        super(type, init);
+        this.pointerId = init.pointerId ?? 0;
+        this.pointerType = init.pointerType ?? "mouse";
+      }
+    }
+    vi.stubGlobal("PointerEvent", TestPointerEvent);
+    renderEditor(
+      <SurfaceEditor
+        source={{ title: "chatgpt", surfaces: [local], previewUrl: () => "/preview" }}
+        surface={local}
+        samples={{}}
+      />,
+    );
+    expect(screen.queryByTestId("resize-bottom-right")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "responsive" } });
+    const corner = screen.getByTestId("resize-bottom-right");
+    corner.setPointerCapture = () => {};
+    fireEvent.pointerDown(corner, { pointerId: 1, clientX: 0, clientY: 0, button: 0, buttons: 1 });
+    fireEvent.pointerMove(corner, { pointerId: 1, clientX: 27, clientY: -52, buttons: 1 });
+    fireEvent.pointerUp(corner, { pointerId: 1 });
+
+    expect((screen.getByLabelText("Preview width") as HTMLInputElement).value).toBe("420");
+    expect((screen.getByLabelText("Preview height") as HTMLInputElement).value).toBe("800");
+  });
+
   it("shows a web-only paywall as a bare viewport on the picked device, reporting web", async () => {
     const web: StudioSurface = { ...live, platforms: ["web"] };
     renderEditor(

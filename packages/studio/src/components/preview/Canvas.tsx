@@ -140,6 +140,8 @@ export type CanvasHandle = {
   zoomStep: (direction: 1 | -1) => void;
   actualSize: () => void;
   fit: () => void;
+  hold: () => void;
+  pan: (dx: number, dy: number) => void;
 };
 
 export const Canvas = ({
@@ -201,10 +203,19 @@ export const Canvas = ({
     apply(centered(1, contentSize, viewportSize));
   }, [apply, contentSize, viewportSize]);
 
-  React.useImperativeHandle(ref, () => ({ zoomStep, actualSize, fit }), [
+  const hold = React.useCallback(() => apply(latest.current), [apply, latest]);
+
+  const pan = React.useCallback(
+    (dx: number, dy: number) => apply(panBy(latest.current, dx, dy)),
+    [apply, latest],
+  );
+
+  React.useImperativeHandle(ref, () => ({ zoomStep, actualSize, fit, hold, pan }), [
     zoomStep,
     actualSize,
     fit,
+    hold,
+    pan,
   ]);
 
   React.useEffect(() => {

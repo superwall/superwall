@@ -135,6 +135,9 @@ describe("Canvas", () => {
 
     act(() => api().zoomStep(1));
     expect(transformOf(layer).scale).toBe(0.57);
+    act(() => api().hold());
+    expect(zoom.current?.fitted).toBe(false);
+    act(() => api().pan(10, -5));
     act(() => api().actualSize());
     expect(transformOf(layer)).toEqual({ scale: 1, x: -500, y: -100 });
     expect(zoom.current).toEqual({ scale: 1, fitted: false });

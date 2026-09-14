@@ -9,6 +9,7 @@ import {
   type CanvasZoom,
 } from "../components/preview/Canvas";
 import { DeviceFrame, DevicePlaceholder } from "../components/preview/DeviceFrame";
+import { type FrameSize, ResizeHandles } from "../components/preview/ResizeHandles";
 import { MissingProducts } from "../components/panels/MissingProducts";
 import { PaywallToasts, useStudioDelegate } from "../components/PaywallToasts";
 import { DownloadScreenshot } from "../components/DownloadScreenshot";
@@ -113,6 +114,8 @@ const StagePane = ({
   presentation,
   landscape,
   theme,
+  onResize,
+  canvas,
 }: {
   label?: string;
   width: number;
@@ -127,6 +130,8 @@ const StagePane = ({
   presentation?: StudioPresentation;
   landscape?: boolean;
   theme?: "light" | "dark";
+  onResize?: (next: FrameSize) => void;
+  canvas?: React.RefObject<CanvasHandle | null>;
 }) => {
   const scale = useCanvasScale();
   return (
@@ -139,25 +144,37 @@ const StagePane = ({
           {label}
         </span>
       )}
-      {src ? (
-        <DeviceFrame
-          width={width}
-          height={height}
-          title={title}
-          src={src}
-          hostState={hostState}
-          delegate={delegate}
-          reloadKey={reloadKey}
-          chrome={chrome}
-          presentation={presentation}
-          landscape={landscape}
-          theme={theme}
-        />
-      ) : (
-        <DevicePlaceholder width={width} height={height}>
-          {empty ?? "Nothing live yet — publish to compare against production."}
-        </DevicePlaceholder>
-      )}
+      <div className="relative">
+        {src ? (
+          <DeviceFrame
+            width={width}
+            height={height}
+            title={title}
+            src={src}
+            hostState={hostState}
+            delegate={delegate}
+            reloadKey={reloadKey}
+            chrome={chrome}
+            presentation={presentation}
+            landscape={landscape}
+            theme={theme}
+          />
+        ) : (
+          <DevicePlaceholder width={width} height={height}>
+            {empty ?? "Nothing live yet — publish to compare against production."}
+          </DevicePlaceholder>
+        )}
+        {onResize && (
+          <ResizeHandles
+            size={{ width, height }}
+            scale={scale}
+            clamp={clampSize}
+            onResize={onResize}
+            onDragStart={() => canvas?.current?.hold()}
+            onShift={(dx, dy) => canvas?.current?.pan(dx, dy)}
+          />
+        )}
+      </div>
     </div>
   );
 };
@@ -443,8 +460,7 @@ export const SurfaceEditor = ({
           onZoom={setZoom}
           fitKey={[
             deviceId,
-            frame.width,
-            frame.height,
+            responsive ? "" : `${frame.width}x${frame.height}`,
             comparePane ? "compare" : "single",
             presentation?.style ?? "",
           ].join(":")}
@@ -483,6 +499,12 @@ export const SurfaceEditor = ({
             chrome={chrome}
             landscape={landscape}
             theme={theme}
+            onResize={
+              responsive
+                ? (next) => setSize(landscape ? { width: next.height, height: next.width } : next)
+                : undefined
+            }
+            canvas={canvas}
           />
         </Canvas>
 
@@ -547,11 +569,7 @@ export const SurfaceEditor = ({
             >
               {percent(zoom.scale)}
             </button>
-            <button
-              type="button"
-              aria-label="Zoom in"
-              onClick={() => canvas.current?.zoomStep(1)}
-            >
+            <button type="button" aria-label="Zoom in" onClick={() => canvas.current?.zoomStep(1)}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
               </svg>
