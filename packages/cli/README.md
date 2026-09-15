@@ -345,9 +345,12 @@ already knows, so it gets a paywall right on the first try.
 
 ## Telemetry
 
-The CLI sends fully anonymous usage events (which workflow ran and whether it
-succeeded — never emails, IDs, file paths, SQL, prompts, or error messages).
-Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1`.
+The CLI sends fully anonymous usage events for every command (which command
+and subcommand ran, whether it succeeded, how long it took, and flags like
+`--json` or `--dry-run` — never emails, IDs, file paths, SQL, prompts, API
+paths, or error messages). Events carry a random per-machine id that is never
+linked to your account. Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or
+`DO_NOT_TRACK=1`.
 
 ## Package layout
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import type { Arguments } from "yargs";
-import { defineCommand, executeCommand } from "@/command";
+import { commandTelemetry, defineCommand, executeCommand } from "@/command";
 import { NotLoggedInError } from "@/core/auth/errors";
 import type { SuperwallApi } from "@/core/api/client";
 import { recordingRenderer } from "./helpers/renderer";
@@ -32,6 +32,34 @@ test("command definitions expose centralized policy metadata", () => {
     output: "both",
     run: command.definition.run,
   });
+});
+
+test("command telemetry keeps enum subcommands and drops paths, ids, and free text", () => {
+  const flags = { json: true, interactive: false };
+  assert.deepEqual(
+    commandTelemetry(
+      { name: "products", auth: "required" },
+      argv({ action: "create", value: "Pro Monthly", dryRun: true }),
+      flags,
+    ),
+    {
+      command: "products",
+      subcommand: "create",
+      auth: "required",
+      json: true,
+      prompts: false,
+      dry_run: true,
+      skill: false,
+    },
+  );
+  assert.deepEqual(
+    commandTelemetry({ name: "asc" }, argv({ target: "keys", action: "list" }), flags).subcommand,
+    "keys list",
+  );
+  for (const leak of ["/v1/apps", "1234567890", "com.example.app", "ORDER BY x"]) {
+    const props = commandTelemetry({ name: "asa" }, argv({ target: leak, action: leak }), flags);
+    assert.equal("subcommand" in props, false);
+  }
 });
 
 test("the kernel injects authentication before running a required command", async () => {

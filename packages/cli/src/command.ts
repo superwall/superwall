@@ -34,7 +34,6 @@ export interface CommandDefinition<Auth extends AuthPolicy = "none"> {
   auth?: Auth;
   interaction?: InteractionPolicy;
   output?: OutputPolicy;
-  telemetry?: "workflow";
   run: (ctx: CommandContext<Auth>) => void | Promise<void>;
 }
 
@@ -92,8 +91,8 @@ export async function executeCommand<Auth extends AuthPolicy>(
     return;
   }
 
-  const tracked = definition.telemetry === "workflow" && !argv.dryRun;
   const startedAt = Date.now();
+  const base = commandTelemetry(definition, argv, { json, interactive });
 
   ui.start();
   const offInterrupt = ui.onInterrupt?.(() => {
@@ -101,12 +100,11 @@ export async function executeCommand<Auth extends AuthPolicy>(
     process.stderr.write("\n✗ Cancelled.\n");
     process.exit(130);
   });
-  if (tracked) {
-    if (outputMode === "rich") maybeShowTelemetryNotice(ui);
-    track("workflow started", { workflow: definition.name });
-  }
+  if (outputMode === "rich") maybeShowTelemetryNotice(ui);
+  track("command started", base);
   try {
     const api = resolveApi(definition.auth ?? "none", runtime.api ?? superwallApi);
+    if (definition.auth && definition.auth !== "none") base.logged_in = api !== undefined;
     const context = {
       argv,
       ui,
@@ -119,22 +117,22 @@ export async function executeCommand<Auth extends AuthPolicy>(
       ...(api ? { api } : {}),
     } as CommandContext<Auth>;
     await definition.run(context);
-    if (tracked)
-      track("workflow finished", {
-        workflow: definition.name,
-        status: "success",
-        duration_ms: Date.now() - startedAt,
-      });
+    track("command finished", {
+      ...base,
+      status: "success",
+      duration_ms: Date.now() - startedAt,
+    });
   } catch (error) {
     reportError(ui, outputMode, stdout, error);
     process.exitCode = 1;
-    if (tracked)
-      track("workflow finished", {
-        workflow: definition.name,
-        status: "error",
-        error_code: normalizeError(error).code,
-        duration_ms: Date.now() - startedAt,
-      });
+    const { code, status } = normalizeError(error);
+    track("command finished", {
+      ...base,
+      status: "error",
+      error_code: code,
+      ...(status === undefined ? {} : { http_status: status }),
+      duration_ms: Date.now() - startedAt,
+    });
   } finally {
     offInterrupt?.();
     if (outputMode !== "json") refreshUpdateCheck();
@@ -146,6 +144,27 @@ export async function executeCommand<Auth extends AuthPolicy>(
       maybeNotifyUpdate(stdout);
     }
   }
+}
+
+const BARE_WORD = /^[a-z][a-z-]{0,31}$/;
+
+export function commandTelemetry(
+  definition: { name: string; auth?: AuthPolicy },
+  argv: Arguments,
+  flags: { json: boolean; interactive: boolean },
+): Record<string, unknown> {
+  const subcommand = [argv.target, argv.action]
+    .map((value) => (typeof value === "string" ? value : undefined))
+    .filter((value): value is string => value !== undefined && BARE_WORD.test(value));
+  return {
+    command: definition.name,
+    ...(subcommand.length === 0 ? {} : { subcommand: subcommand.join(" ") }),
+    auth: definition.auth ?? "none",
+    json: flags.json,
+    prompts: flags.interactive,
+    dry_run: Boolean(argv.dryRun),
+    skill: argv.skill === true,
+  };
 }
 
 function resolveApi(policy: AuthPolicy, factory: () => SuperwallApi): SuperwallApi | undefined {
