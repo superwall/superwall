@@ -52,7 +52,17 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
   };
 };
 
-const SCREEN_FRAMEWORKS: ReadonlySet<string> = new Set(["swiftui", "uikit", "compose", "android-views", "react-native", "flutter"]);
+const isFileName = (value: unknown): value is string =>
+  typeof value === "string" && value !== "" && !/[\\/]/.test(value) && !value.startsWith(".");
+
+const SCREEN_FRAMEWORKS: ReadonlySet<string> = new Set([
+  "swiftui",
+  "uikit",
+  "compose",
+  "android-views",
+  "react-native",
+  "flutter",
+]);
 
 const parseOrigin = (value: unknown): StudioOrigin | undefined => {
   if (!isRecord(value)) return undefined;
@@ -65,7 +75,7 @@ const parseOrigin = (value: unknown): StudioOrigin | undefined => {
     SCREEN_FRAMEWORKS.has(value.framework)
   ) {
     const framework = value.framework as StudioScreenFramework;
-    return typeof value.screenshot === "string"
+    return isFileName(value.screenshot)
       ? { path: value.path, framework, screenshot: value.screenshot }
       : { path: value.path, framework };
   }

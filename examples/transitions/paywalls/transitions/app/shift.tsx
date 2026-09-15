@@ -1,20 +1,18 @@
-import { useHaptics } from "superwall/hooks";
+import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export const transition = "shift";
 
 export default function Page() {
   const router = useRouter();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Shift</h1>
-        <p>
-          The funnel step. The new page fades in as it drifts into place; the old one is simply
-          gone. One layer moves at a time, so a long flow never feels like a stack.
-        </p>
+        <h1>{t("pages.shift.title")}</h1>
+        <p>{t("pages.shift.body")}</p>
       </div>
 
       <div className="actions">
@@ -26,7 +24,7 @@ export default function Page() {
             router.back();
           }}
         >
-          Back
+          {t("common.back")}
         </button>
       </div>
     </main>

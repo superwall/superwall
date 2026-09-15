@@ -78,7 +78,9 @@ export const DownloadScreenshot = ({
         hosted ? shot.url : `/__studio/screenshot${surfacePath(surface)}?download=1`,
       );
       if (!response.ok) {
-        throw new Error(`${hosted ? "the image host" : "the dev server"} answered ${response.status}`);
+        throw new Error(
+          `${hosted ? "the image host" : "the dev server"} answered ${response.status}`,
+        );
       }
       const href = URL.createObjectURL(await response.blob());
       open(href, `${surface.id}.png`);

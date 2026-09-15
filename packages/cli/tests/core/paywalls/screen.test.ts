@@ -62,7 +62,7 @@ test("a SwiftUI screen yields its copy, assets, symbols, links, product and acti
     "https://acme.example/changelog",
   ]);
   assert.deepEqual(screen.inventory.productIds, ["com.acme.pro.annual"]);
-  assert.deepEqual(kinds(screen), { "open-url": 3, "store-review": 1, dismiss: 1, tap: 2 });
+  assert.deepEqual(kinds(screen), { "open-url": 2, "store-review": 1, dismiss: 1, tap: 2 });
 });
 
 test("a React Native screen yields JSX text and props without import paths or broken JSX", () => {
@@ -251,7 +251,7 @@ test("the brief lists everything found and maps each action to a hook", () => {
   assert.match(brief, /System symbols: `arrow.down.circle.fill`/);
   assert.match(brief, /- `https:\/\/apps.apple.com\/app\/id123456789`/);
   assert.match(brief, /- `com.acme.pro.annual`/);
-  assert.match(brief, /\| opening a URL \(App Store links included\) \| ×3 \| `useActions\(\).openUrl\(url\)` \|/);
+  assert.match(brief, /\| opening a URL \(App Store links included\) \| ×2 \| `useActions\(\).openUrl\(url\)` \|/);
   assert.match(brief, /`useActions\(\).requestStoreReview\(\)`/);
 
   const bare = screenBrief(readScreen(process.cwd(), "tests/fixtures/screens/LegacyUpdateViewController.swift"));

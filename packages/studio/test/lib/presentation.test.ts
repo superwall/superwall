@@ -71,9 +71,12 @@ describe("parsePresentation", () => {
       height: 70,
       cornerRadius: 15,
     });
-    expect(
-      parsePresentation({ type: "POPUP", width: 80, height: 60, corner_radius: 12 }),
-    ).toEqual({ style: "popup", width: 80, height: 60, cornerRadius: 12 });
+    expect(parsePresentation({ type: "POPUP", width: 80, height: 60, corner_radius: 12 })).toEqual({
+      style: "popup",
+      width: 80,
+      height: 60,
+      cornerRadius: 12,
+    });
   });
 
   it("ignores what it does not recognise rather than guessing", () => {

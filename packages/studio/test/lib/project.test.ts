@@ -57,12 +57,34 @@ describe("parseProjectPayload", () => {
           id: "update-required",
           routes: [],
           locales: [],
-          origin: { path: "../App/UpdateRequiredView.swift", framework: "swiftui", screenshot: "original.png" },
+          origin: {
+            path: "../App/UpdateRequiredView.swift",
+            framework: "swiftui",
+            screenshot: "original.png",
+          },
         },
-        { kind: "paywall", id: "bare", routes: [], locales: [], origin: { path: "a.dart", framework: "flutter" } },
-        { kind: "paywall", id: "odd", routes: [], locales: [], origin: { path: "a.kt", framework: "kotlin" } },
+        {
+          kind: "paywall",
+          id: "bare",
+          routes: [],
+          locales: [],
+          origin: { path: "a.dart", framework: "flutter" },
+        },
+        {
+          kind: "paywall",
+          id: "odd",
+          routes: [],
+          locales: [],
+          origin: { path: "a.kt", framework: "kotlin" },
+        },
         { kind: "paywall", id: "half", routes: [], locales: [], origin: { paywallId: "1" } },
-        { kind: "paywall", id: "typed", routes: [], locales: [], origin: { path: "a.swift", framework: 3 } },
+        {
+          kind: "paywall",
+          id: "typed",
+          routes: [],
+          locales: [],
+          origin: { path: "a.swift", framework: 3 },
+        },
       ],
     });
     expect(payload.surfaces[0]?.origin).toEqual({

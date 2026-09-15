@@ -1,18 +1,20 @@
-import { useActions, useHaptics, useProducts, usePurchase } from "superwall/hooks";
+import { useActions, useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
 
 export default function Index() {
   const { restore } = useActions();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   const monthly = getProduct("monthly");
+  const price = monthly?.variables.price;
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Go Pro</h1>
-        <p>Everything unlocked, cancel whenever you like.</p>
+        <h1>{t("paywall.title")}</h1>
+        <p>{t("paywall.subtitle")}</p>
       </div>
 
       <div className="actions">
@@ -24,7 +26,7 @@ export default function Index() {
             purchase("monthly");
           }}
         >
-          {monthly?.variables.price ? `Subscribe · ${monthly.variables.price}` : "Subscribe"}
+          {price ? t("paywall.cta", { price }) : t("paywall.ctaBare")}
         </button>
         <button
           type="button"
@@ -34,7 +36,7 @@ export default function Index() {
             restore();
           }}
         >
-          Restore purchases
+          {t("paywall.restore")}
         </button>
       </div>
     </main>

@@ -1,9 +1,10 @@
 import type { PropsWithChildren } from "react";
-import { useActions, useHaptics } from "superwall/hooks";
+import { useActions, useHaptics, useTranslation } from "superwall/hooks";
 import "./theme.css";
 
 export default function Layout({ children }: PropsWithChildren) {
   const { close, openUrl } = useActions();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
@@ -11,7 +12,7 @@ export default function Layout({ children }: PropsWithChildren) {
       <button
         type="button"
         className="close"
-        aria-label="Close"
+        aria-label={t("common.close")}
         onClick={() => {
           haptics.light();
           close();
@@ -32,11 +33,11 @@ export default function Layout({ children }: PropsWithChildren) {
       </button>
       {children}
       <footer className="built">
-        Built with
+        {t("footer.builtWith")}
         <button
           type="button"
           className="wordmark"
-          aria-label="Superwall"
+          aria-label={t("footer.superwall")}
           onClick={() => {
             haptics.light();
             openUrl("https://superwall.com");

@@ -10,7 +10,10 @@ describe("lock origins", () => {
       funnels: {},
       origins: {
         "paywall/rebuilt": { paywallId: "65920", url: "https://runtime.example/doc/abc" },
-        "paywall/update-required": { path: "../App/UpdateRequiredView.swift", framework: "swiftui" },
+        "paywall/update-required": {
+          path: "../App/UpdateRequiredView.swift",
+          framework: "swiftui",
+        },
       },
     });
     expect(lock).toBeDefined();

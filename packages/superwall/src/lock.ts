@@ -23,7 +23,17 @@ export type SurfaceOrigin = PaywallOrigin | ScreenOrigin;
 
 export const isScreenOrigin = (origin: SurfaceOrigin): origin is ScreenOrigin => "path" in origin;
 
-const SCREEN_FRAMEWORKS: ReadonlySet<string> = new Set(["swiftui", "uikit", "compose", "android-views", "react-native", "flutter"]);
+const isFileName = (value: unknown): value is string =>
+  typeof value === "string" && value !== "" && !/[\\/]/.test(value) && !value.startsWith(".");
+
+const SCREEN_FRAMEWORKS: ReadonlySet<string> = new Set([
+  "swiftui",
+  "uikit",
+  "compose",
+  "android-views",
+  "react-native",
+  "flutter",
+]);
 
 const readOrigin = (candidate: Record<string, unknown>): SurfaceOrigin | undefined => {
   if (typeof candidate.paywallId === "string" && typeof candidate.url === "string") {
@@ -35,7 +45,7 @@ const readOrigin = (candidate: Record<string, unknown>): SurfaceOrigin | undefin
     SCREEN_FRAMEWORKS.has(candidate.framework)
   ) {
     const framework = candidate.framework as ScreenOrigin["framework"];
-    return typeof candidate.screenshot === "string"
+    return isFileName(candidate.screenshot)
       ? { path: candidate.path, framework, screenshot: candidate.screenshot }
       : { path: candidate.path, framework };
   }

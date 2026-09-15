@@ -1,19 +1,18 @@
-import { useHaptics } from "superwall/hooks";
+import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export const transition = "push";
 
 export default function Page() {
   const router = useRouter();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Push</h1>
-        <p>
-          The native iOS push. Best for drilling into a detail, because back feels like returning.
-        </p>
+        <h1>{t("pages.push.title")}</h1>
+        <p>{t("pages.push.body")}</p>
       </div>
 
       <div className="actions">
@@ -25,7 +24,7 @@ export default function Page() {
             router.back();
           }}
         >
-          Back
+          {t("common.back")}
         </button>
       </div>
     </main>

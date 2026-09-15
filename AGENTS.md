@@ -103,7 +103,7 @@ self-describing npm project — clone it, install, `superwall dev`:
   the rebuild is the framework skill's `migrate-from-editor.md`. The same
   section also holds native-screen origins
   (`{ path, framework, screenshot? }`, written by `superwall migrate
-  --screen <path>`): `packages/cli/src/core/paywalls/screen.ts` is the
+--screen <path>`): `packages/cli/src/core/paywalls/screen.ts` is the
   scanner (string literals, assets, product ids and actions per language,
   the candidate ranking, `config.ts` and the brief), the screenshot the
   CLI captures from a booted simulator is `paywalls/<id>/original.png`,

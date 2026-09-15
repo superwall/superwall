@@ -1,4 +1,4 @@
-import { useHaptics, useProducts, usePurchase } from "superwall/hooks";
+import { useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export const transition = "sheet";
@@ -7,21 +7,20 @@ export default function Offer() {
   const router = useRouter();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   const discount = getProduct("discount");
+  const price = discount?.variables.price;
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Before you go</h1>
-        <p>A second price, shown only to people who nearly bought.</p>
+        <h1>{t("offer.title")}</h1>
+        <p>{t("offer.subtitle")}</p>
       </div>
 
-      <p className="note">
-        Arrives as a sheet from the bottom, a transition this project defines in CSS. Dismissing it
-        plays the same movement in reverse.
-      </p>
+      <p className="note">{t("offer.note")}</p>
 
       <div className="actions">
         <button
@@ -32,7 +31,7 @@ export default function Offer() {
             purchase("discount");
           }}
         >
-          {discount?.variables.price ? `Get it for ${discount.variables.price}` : "Take the offer"}
+          {price ? t("offer.cta", { price }) : t("offer.ctaBare")}
         </button>
         <button
           type="button"
@@ -42,7 +41,7 @@ export default function Offer() {
             router.back();
           }}
         >
-          No thanks
+          {t("offer.decline")}
         </button>
       </div>
     </main>

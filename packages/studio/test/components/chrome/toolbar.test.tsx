@@ -24,16 +24,16 @@ afterEach(() => {
 });
 
 const mount = () => {
-  vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return boxes.get(this)?.top ?? 0;
-  });
-  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return boxes.get(this)?.height ?? 0;
-  });
+  vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return boxes.get(this)?.top ?? 0;
+    },
+  );
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return boxes.get(this)?.height ?? 0;
+    },
+  );
   const view = render(
     <Toolbar>
       <span>a</span>

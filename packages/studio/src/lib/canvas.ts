@@ -16,9 +16,7 @@ export const fitTransform = (content: Size, viewport: Size): CanvasTransform => 
     return { scale: 1, x: 0, y: 0 };
   }
   const room = insetRoom(viewport);
-  const scale = clampScale(
-    Math.min(1, room.width / content.width, room.height / content.height),
-  );
+  const scale = clampScale(Math.min(1, room.width / content.width, room.height / content.height));
   return centered(scale, content, viewport);
 };
 
@@ -57,8 +55,6 @@ export const panBy = (transform: CanvasTransform, dx: number, dy: number): Canva
 });
 
 export const stepScale = (scale: number, direction: 1 | -1): number =>
-  clampScale(
-    Math.round((direction === 1 ? scale * STEP_FACTOR : scale / STEP_FACTOR) * 100) / 100,
-  );
+  clampScale(Math.round((direction === 1 ? scale * STEP_FACTOR : scale / STEP_FACTOR) * 100) / 100);
 
 export const percent = (scale: number): string => `${Math.round(scale * 100)}%`;

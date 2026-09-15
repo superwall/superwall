@@ -57,7 +57,9 @@ export const presentationRect = (
 
   switch (presentation.style) {
     case "modal":
-      return tablet ? centered(70, 80) : bottom(modalHeightPercent(frame.width, frame.height), true);
+      return tablet
+        ? centered(70, 80)
+        : bottom(modalHeightPercent(frame.width, frame.height), true);
     case "drawer":
       return bottom(presentation.height ?? DRAWER_DEFAULT_HEIGHT, false);
     case "popup":

@@ -1,11 +1,12 @@
 import type { PropsWithChildren } from "react";
-import { useActions, useHaptics } from "superwall/hooks";
+import { useActions, useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 import "./theme.css";
 
 const Chrome = () => {
   const router = useRouter();
   const { close } = useActions();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
@@ -19,21 +20,19 @@ const Chrome = () => {
             router.back();
           }}
         >
-          Back
+          {t("chrome.back")}
         </button>
       ) : (
         <span className="chrome-button" />
       )}
-      <span className="step">
-        {router.depth + 1} of {3}
-      </span>
+      <span className="step">{t("chrome.step", { current: router.depth + 1, total: 3 })}</span>
       <button
         type="button"
         className="chrome-button"
         style={{ textAlign: "right" }}
         onClick={close}
       >
-        Close
+        {t("chrome.close")}
       </button>
     </header>
   );
@@ -41,6 +40,7 @@ const Chrome = () => {
 
 export default function Layout({ children }: PropsWithChildren) {
   const { openUrl } = useActions();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
@@ -48,11 +48,11 @@ export default function Layout({ children }: PropsWithChildren) {
       <Chrome />
       {children}
       <footer className="built">
-        Built with
+        {t("footer.builtWith")}
         <button
           type="button"
           className="wordmark"
-          aria-label="Superwall"
+          aria-label={t("footer.superwall")}
           onClick={() => {
             haptics.light();
             openUrl("https://superwall.com");

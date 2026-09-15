@@ -112,7 +112,9 @@ describe("downloading a paywall's screenshot", () => {
     fireEvent.click(button());
 
     await waitFor(() => expect(toasted).toHaveBeenCalledTimes(1));
-    const card = render(<>{(toasted.mock.calls[0]?.[0] as () => React.ReactNode)()}</>);
+    const content = toasted.mock.calls[0]?.[0] as (() => React.ReactNode) | undefined;
+    expect(content).toBeDefined();
+    const card = render(<>{content?.()}</>);
     expect(card.container.textContent).toContain("the dev server answered 502");
     await waitFor(() => expect(blocked()).toBe(false));
     expect(clicked).not.toHaveBeenCalled();

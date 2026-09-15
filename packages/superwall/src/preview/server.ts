@@ -328,12 +328,20 @@ const previewPlugin = (
           );
           const origin =
             found &&
-            originOf(readLock(found.entry.project.superwallDir), found.surface.kind, found.surface.id);
+            originOf(
+              readLock(found.entry.project.superwallDir),
+              found.surface.kind,
+              found.surface.id,
+            );
           const file =
             found && origin && isScreenOrigin(origin) && origin.screenshot
-              ? path.join(found.surface.dir, origin.screenshot)
+              ? path.resolve(found.surface.dir, origin.screenshot)
               : undefined;
-          if (file === undefined || !fs.existsSync(file)) {
+          const inside =
+            file !== undefined &&
+            found !== undefined &&
+            path.dirname(file) === path.resolve(found.surface.dir);
+          if (file === undefined || !inside || !fs.existsSync(file)) {
             res.statusCode = 404;
             res.end("No original screenshot");
             return;

@@ -139,6 +139,8 @@ const StagePane = ({
   canvas?: React.RefObject<CanvasHandle | null>;
 }) => {
   const scale = useCanvasScale();
+  const [broken, setBroken] = React.useState(false);
+  React.useEffect(() => setBroken(false), [image]);
   return (
     <div className="flex flex-none flex-col gap-2">
       {label && (
@@ -150,17 +152,18 @@ const StagePane = ({
         </span>
       )}
       <div className="relative">
-        {image ? (
+        {image && !broken ? (
           <div
             className="flex flex-none items-center justify-center overflow-hidden bg-black"
             style={{ width, height }}
           >
             <img
               src={image}
-              alt=""
+              alt={title}
               title={title}
               className="max-h-full max-w-full object-contain"
               draggable={false}
+              onError={() => setBroken(true)}
             />
           </div>
         ) : src ? (
@@ -386,7 +389,10 @@ export const SurfaceEditor = ({
               ? { image: surface.origin.screenshot ? originalUrl(surface) : undefined }
               : { src: surface.origin?.url }),
             title: `${surface.id} original`,
-            empty: "This paywall was not rebuilt from a dashboard paywall or a native screen.",
+            empty:
+              surface.origin && isScreenOrigin(surface.origin)
+                ? "The original's screenshot is missing — capture it again with `superwall migrate --screen <path> --screenshot <file>`."
+                : "This paywall was not rebuilt from a dashboard paywall or a native screen.",
           }
         : {
             label: nameOf(compareWith.surface),

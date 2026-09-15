@@ -1,26 +1,33 @@
-import { useDevice, useHaptics, useProducts, usePurchase } from "superwall/hooks";
+import { useDevice, useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
 
-const FEATURES = ["Unlimited workouts", "Offline downloads", "Form checks", "Coaching"];
+const FEATURES = [
+  "features.workouts",
+  "features.offline",
+  "features.formChecks",
+  "features.coaching",
+] as const;
 
 export default function Index() {
   const { orientation } = useDevice();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   const annual = getProduct("annual");
+  const price = annual?.variables.price;
   const landscape = orientation === "landscape";
 
   return (
     <main className={`page ${landscape ? "page--landscape" : ""}`}>
       <div className="lede">
-        <h1>Go Pro</h1>
-        <p>Rotate the device. Same paywall, a layout that suits the shape.</p>
+        <h1>{t("paywall.title")}</h1>
+        <p>{t("paywall.subtitle")}</p>
       </div>
 
       <ul className="features">
         {FEATURES.map((feature) => (
-          <li key={feature}>{feature}</li>
+          <li key={feature}>{t(feature)}</li>
         ))}
       </ul>
 
@@ -33,7 +40,7 @@ export default function Index() {
             purchase("annual");
           }}
         >
-          {annual?.variables.price ? `Subscribe · ${annual.variables.price}` : "Subscribe"}
+          {price ? t("paywall.cta", { price }) : t("paywall.ctaBare")}
         </button>
         <span className="orientation">{orientation}</span>
       </div>

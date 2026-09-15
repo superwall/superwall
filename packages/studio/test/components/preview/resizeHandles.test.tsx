@@ -45,7 +45,14 @@ const handle = (id: string) => {
 };
 
 const down = (element: HTMLElement, pointerId: number, x = 0, y = 0, init: PointerEventInit = {}) =>
-  fireEvent.pointerDown(element, { pointerId, clientX: x, clientY: y, button: 0, buttons: 1, ...init });
+  fireEvent.pointerDown(element, {
+    pointerId,
+    clientX: x,
+    clientY: y,
+    button: 0,
+    buttons: 1,
+    ...init,
+  });
 
 const move = (element: HTMLElement, pointerId: number, x: number, y: number, buttons = 1) =>
   fireEvent.pointerMove(element, { pointerId, clientX: x, clientY: y, buttons });

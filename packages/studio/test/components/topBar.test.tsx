@@ -85,26 +85,26 @@ const boxes = new WeakMap<HTMLElement, Box>();
 let barWidth = 1200;
 
 const mockLayout = () => {
-  vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return boxes.get(this)?.left ?? 0;
-  });
-  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return boxes.get(this)?.width ?? 0;
-  });
-  vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return boxes.get(this)?.width ?? 0;
-  });
-  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    return this.hasAttribute("data-bar") ? barWidth : 0;
-  });
+  vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return boxes.get(this)?.left ?? 0;
+    },
+  );
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return boxes.get(this)?.width ?? 0;
+    },
+  );
+  vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return boxes.get(this)?.width ?? 0;
+    },
+  );
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute("data-bar") ? barWidth : 0;
+    },
+  );
 };
 
 const mountTitled = (title: string) => {

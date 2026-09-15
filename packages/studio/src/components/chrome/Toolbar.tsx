@@ -9,8 +9,8 @@ const sameRow = (a: HTMLElement, b: HTMLElement) =>
   Math.abs(midline(a) - midline(b)) <= Math.min(a.offsetHeight, b.offsetHeight) / 2 + 1;
 
 export const markOrphanDividers = (toolbar: HTMLElement) => {
-  const items = [...toolbar.children].filter((child): child is HTMLElement =>
-    child instanceof HTMLElement,
+  const items = [...toolbar.children].filter(
+    (child): child is HTMLElement => child instanceof HTMLElement,
   );
   items.forEach((item, index) => {
     if (!item.hasAttribute(DIVIDER)) return;

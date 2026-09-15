@@ -1,16 +1,17 @@
 import type { PropsWithChildren } from "react";
-import { useActions, useHaptics } from "superwall/hooks";
+import { useActions, useHaptics, useTranslation } from "superwall/hooks";
 import "./theme.css";
 
 export default function Layout({ children }: PropsWithChildren) {
   const { close, openUrl } = useActions();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
     <div className="flex flex-1 flex-col bg-bg font-sans text-fg antialiased">
       <button
         type="button"
-        aria-label="Close"
+        aria-label={t("paywall.close")}
         className="absolute top-1 right-4 z-10 flex size-8 cursor-pointer items-center justify-center text-xl text-fg/55 hover:text-fg"
         onClick={() => {
           haptics.light();
@@ -32,10 +33,10 @@ export default function Layout({ children }: PropsWithChildren) {
       </button>
       {children}
       <footer className="flex items-center justify-center gap-1.5 border-t border-fg/10 px-5 pt-3.5 pb-3.5 text-xs text-fg/50">
-        Built with
+        {t("footer.builtWith")}
         <button
           type="button"
-          aria-label="Superwall"
+          aria-label={t("footer.superwall")}
           className="cursor-pointer font-semibold text-fg"
           onClick={() => {
             haptics.light();

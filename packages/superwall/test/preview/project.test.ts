@@ -136,7 +136,10 @@ describe("buildStudioProject", () => {
       framework: "swiftui",
       screenshot: "original.png",
     });
-    expect(surfaces["rate-us"]?.origin).toEqual({ path: "src/RateUs.tsx", framework: "react-native" });
+    expect(surfaces["rate-us"]?.origin).toEqual({
+      path: "src/RateUs.tsx",
+      framework: "react-native",
+    });
   });
 
   it("ignores an origins section with nothing usable in it", async () => {

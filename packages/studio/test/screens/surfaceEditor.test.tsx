@@ -244,11 +244,19 @@ describe("SurfaceEditor hosting a published paywall", () => {
     const shot: StudioSurface = {
       ...live,
       id: "update-required",
-      origin: { path: "../App/UpdateRequiredView.swift", framework: "swiftui", screenshot: "original.png" },
+      origin: {
+        path: "../App/UpdateRequiredView.swift",
+        framework: "swiftui",
+        screenshot: "original.png",
+      },
     };
     window.history.replaceState({}, "", `/paywall/${shot.id}?compare=origin`);
     const view = renderEditor(
-      <SurfaceEditor source={{ ...source, surfaces: [pushed, shot] }} surface={shot} samples={{}} />,
+      <SurfaceEditor
+        source={{ ...source, surfaces: [pushed, shot] }}
+        surface={shot}
+        samples={{}}
+      />,
     );
     const image = screen.getByTitle(`${shot.id} original`);
     expect(image).toBeInstanceOf(HTMLImageElement);
@@ -256,7 +264,9 @@ describe("SurfaceEditor hosting a published paywall", () => {
       expect(image.getAttribute("src")).toBe("/__studio/original/paywall/update-required");
     }
     fireEvent.click(screen.getByRole("button", { name: /compare/i }));
-    expect(screen.getByText(/SwiftUI screen \.\.\/App\/UpdateRequiredView.swift, as captured/)).toBeTruthy();
+    expect(
+      screen.getByText(/SwiftUI screen \.\.\/App\/UpdateRequiredView.swift, as captured/),
+    ).toBeTruthy();
     view.unmount();
 
     const bare: StudioSurface = {
@@ -266,7 +276,11 @@ describe("SurfaceEditor hosting a published paywall", () => {
     };
     window.history.replaceState({}, "", `/paywall/${bare.id}?compare=origin`);
     renderEditor(
-      <SurfaceEditor source={{ ...source, surfaces: [pushed, bare] }} surface={bare} samples={{}} />,
+      <SurfaceEditor
+        source={{ ...source, surfaces: [pushed, bare] }}
+        surface={bare}
+        samples={{}}
+      />,
     );
     expect(screen.queryByTitle(`${bare.id} original`)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /compare/i }));

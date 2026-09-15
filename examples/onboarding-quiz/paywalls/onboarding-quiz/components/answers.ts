@@ -12,7 +12,7 @@ export type Time = "15" | "30" | "45";
 export const answers: { goal?: Goal; level?: Level; time?: Time } = {};
 
 export const PLAN: Record<Goal, { title: string; blurb: string }> = {
-  lose: { title: "Lean", blurb: "Steady deficit, plenty of walking, three lifts a week." },
-  build: { title: "Strong", blurb: "Progressive overload, four lifts a week, eat for it." },
-  endure: { title: "Distance", blurb: "Easy miles, one hard session, one long run." },
+  lose: { title: "plan.lose.title", blurb: "plan.lose.blurb" },
+  build: { title: "plan.build.title", blurb: "plan.build.blurb" },
+  endure: { title: "plan.endure.title", blurb: "plan.endure.blurb" },
 };

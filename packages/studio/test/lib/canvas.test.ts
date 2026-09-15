@@ -45,7 +45,10 @@ describe("zoomAt", () => {
   it("keeps the point under the cursor fixed", () => {
     const before = { scale: 1, x: 100, y: 50 };
     const cursor = { x: 400, y: 300 };
-    const contentPoint = { x: (cursor.x - before.x) / before.scale, y: (cursor.y - before.y) / before.scale };
+    const contentPoint = {
+      x: (cursor.x - before.x) / before.scale,
+      y: (cursor.y - before.y) / before.scale,
+    };
     const after = zoomAt(before, 2, cursor);
     expect(after.scale).toBe(2);
     expect(after.x + contentPoint.x * after.scale).toBeCloseTo(cursor.x);
@@ -71,7 +74,11 @@ describe("steps and helpers", () => {
 
   it("pans, centres and formats", () => {
     expect(panBy({ scale: 1, x: 10, y: 10 }, 5, -5)).toEqual({ scale: 1, x: 15, y: 5 });
-    expect(centered(1, { width: 400, height: 300 }, viewport)).toEqual({ scale: 1, x: 300, y: 250 });
+    expect(centered(1, { width: 400, height: 300 }, viewport)).toEqual({
+      scale: 1,
+      x: 300,
+      y: 250,
+    });
     expect(percent(0.519)).toBe("52%");
   });
 });

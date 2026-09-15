@@ -1,26 +1,27 @@
-import { useHaptics } from "superwall/hooks";
+import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 const FEATURES = [
-  "Unlimited projects",
-  "Offline access",
-  "Priority support",
-  "Everything, forever",
+  "features.items.projects",
+  "features.items.offline",
+  "features.items.support",
+  "features.items.forever",
 ];
 
 export default function Features() {
   const router = useRouter();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
     <main className="page page--chromed">
       <div className="lede">
-        <h1>What you get</h1>
+        <h1>{t("features.title")}</h1>
       </div>
 
       <ul className="features">
         {FEATURES.map((feature) => (
-          <li key={feature}>{feature}</li>
+          <li key={feature}>{t(feature)}</li>
         ))}
       </ul>
 
@@ -33,7 +34,7 @@ export default function Features() {
             router.push("plans");
           }}
         >
-          Choose a plan
+          {t("features.cta")}
         </button>
       </div>
     </main>

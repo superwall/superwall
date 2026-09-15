@@ -191,8 +191,16 @@ test("a screen origin with an unknown framework or no path is dropped", () => {
         "paywall/a": { path: "x.kt", framework: "kotlin" },
         "paywall/b": { framework: "swiftui" },
         "paywall/c": { path: "x.swift", framework: "swiftui", screenshot: 1 },
+        "paywall/d": { path: "d.swift", framework: "swiftui", screenshot: "../../etc/passwd" },
+        "paywall/e": { path: "e.swift", framework: "swiftui", screenshot: ".hidden.png" },
+        "paywall/f": { path: "f.swift", framework: "swiftui", screenshot: "" },
       },
     }),
   );
-  assert.deepEqual(readLock(dir).origins, { "paywall/c": { path: "x.swift", framework: "swiftui" } });
+  assert.deepEqual(readLock(dir).origins, {
+    "paywall/c": { path: "x.swift", framework: "swiftui" },
+    "paywall/d": { path: "d.swift", framework: "swiftui" },
+    "paywall/e": { path: "e.swift", framework: "swiftui" },
+    "paywall/f": { path: "f.swift", framework: "swiftui" },
+  });
 });

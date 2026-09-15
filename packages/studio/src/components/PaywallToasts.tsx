@@ -73,7 +73,9 @@ const Toast = ({
         <span className={`flex h-5 items-center justify-center ${TINT[tone]}`}>
           <Icon />
         </span>
-        <span className="min-w-0 text-[0.8125rem] leading-5 font-medium break-words text-cream">{children}</span>
+        <span className="min-w-0 text-[0.8125rem] leading-5 font-medium break-words text-cream">
+          {children}
+        </span>
         {actions && <div className="col-start-2 mt-2.5 flex justify-end gap-2">{actions}</div>}
       </div>
     </div>

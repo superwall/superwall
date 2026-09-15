@@ -306,7 +306,14 @@ export function scanScreen(source: string, framework: ScreenFramework): ScreenIn
   if (framework === "react-native") copy.push(...jsxText(source));
 
   const actions: ScreenAction[] = [];
-  const lines = code.split("\n").filter((line) => !/^\s*(import|package)\b/.test(line));
+  const lines = code
+    .split("\n")
+    .filter((line) => !/^\s*(import|package)\b/.test(line))
+    .map((line) =>
+      line
+        .replace(/@Environment(Object)?\([^)]*\)\s*(private\s+)?var\s+\w+/g, "")
+        .replace(/^\s*(?:(?:private|public|internal|override|@objc)\s+)*(?:func|fun|def)\s+\w+\s*\([^)]*\)\s*(?:->\s*[\w<>?]+\s*)?/, ""),
+    );
   for (const [kind, pattern] of Object.entries(ACTION_PATTERNS[framework]) as [ScreenActionKind, RegExp][]) {
     const count = lines.filter((line) => new RegExp(pattern.source).test(line)).length;
     if (count > 0) actions.push({ kind, count });

@@ -67,7 +67,7 @@ test("scaffolding from a screen writes the surface, the brief, the lock origin, 
     "paywall/update-required": { path: "../App/UpdateRequiredView.swift", framework: "swiftui" },
   });
   const steps = calls.filter((call) => call.method === "step").map((call) => String(call.value));
-  assert.match(steps[0] ?? "", /Read `\.\.\/App\/UpdateRequiredView.swift` \(SwiftUI\): 6 strings, 2 assets, 1 product, 7 actions/);
+  assert.match(steps[0] ?? "", /Read `\.\.\/App\/UpdateRequiredView.swift` \(SwiftUI\): 6 strings, 2 assets, 1 product, 6 actions/);
   assert.match(steps[1] ?? "", /Created superwall\/paywalls\/update-required for `Update Required`/);
   assert.match(String(calls.find((call) => call.method === "warn")?.value), /Product identifiers were lifted/);
 
