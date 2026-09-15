@@ -96,6 +96,11 @@ export async function executeCommand<Auth extends AuthPolicy>(
   const startedAt = Date.now();
 
   ui.start();
+  const offInterrupt = ui.onInterrupt?.(() => {
+    ui.stop();
+    process.stderr.write("\n✗ Cancelled.\n");
+    process.exit(130);
+  });
   if (tracked) {
     if (outputMode === "rich") maybeShowTelemetryNotice(ui);
     track("workflow started", { workflow: definition.name });
@@ -131,6 +136,7 @@ export async function executeCommand<Auth extends AuthPolicy>(
         duration_ms: Date.now() - startedAt,
       });
   } finally {
+    offInterrupt?.();
     if (outputMode !== "json") refreshUpdateCheck();
     if (outputMode === "rich" && runtime.waitForPaint !== false) {
       await new Promise((done) => setTimeout(done, 50));

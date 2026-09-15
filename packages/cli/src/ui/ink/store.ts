@@ -78,6 +78,29 @@ export function getState(): State {
   return state;
 }
 
+const interruptListeners = new Set<() => void>();
+
+export function onInterrupt(listener: () => void): () => void {
+  interruptListeners.add(listener);
+  return () => {
+    interruptListeners.delete(listener);
+  };
+}
+
+export function interrupt(): void {
+  const active = state.active;
+  if (active && active.type !== "spinner") {
+    state = {
+      ...state,
+      items: [...state.items, { id: nextId++, kind: "step", text: `${active.message}\ncancelled` }],
+      active: null,
+    };
+    emit();
+    active.resolve(null);
+  }
+  for (const listener of [...interruptListeners]) listener();
+}
+
 export function addItem(kind: ItemKind, text: string, title?: string): void {
   state = {
     ...state,

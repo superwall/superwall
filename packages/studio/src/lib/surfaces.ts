@@ -27,13 +27,20 @@ export type StudioSurface = {
   presentation?: StudioPresentation;
   paywallId?: string;
   paywallIdentifier?: string;
+  origin?: StudioOrigin;
+};
+
+export type StudioOrigin = {
+  paywallId: string;
+  url: string;
 };
 
 export type PreviewUrlBuilder = (surface: StudioSurface) => string;
 
 export type CompareTarget =
   | { type: "version"; version: number }
-  | { type: "surface"; surface: StudioSurface };
+  | { type: "surface"; surface: StudioSurface }
+  | { type: "origin" };
 
 export type StudioSource = {
   scheme?: string;

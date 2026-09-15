@@ -1,6 +1,6 @@
 import { render, type Instance } from "ink";
 import { App } from "./App";
-import { addItem, addList, reset, setActive, updateActive } from "./store";
+import { addItem, addList, onInterrupt, reset, setActive, updateActive } from "./store";
 import type { MultiSelectOpts, Renderer, SelectOpts, Spinner, TextOpts } from "../types";
 
 let instance: Instance | null = null;
@@ -8,7 +8,7 @@ let instance: Instance | null = null;
 function start(): void {
   if (!instance) {
     reset();
-    instance = render(<App />);
+    instance = render(<App />, { exitOnCtrlC: false });
   }
 }
 
@@ -34,6 +34,7 @@ export const inkRenderer: Renderer = {
   outro: (text: string) => {
     if (text) addItem("outro", text);
   },
+  onInterrupt,
 
   spinner(): Spinner {
     return {

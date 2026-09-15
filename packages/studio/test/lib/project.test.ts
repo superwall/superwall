@@ -29,6 +29,26 @@ describe("parseProjectPayload", () => {
     });
   });
 
+  it("keeps the paywall a surface was rebuilt from, and drops a malformed one", () => {
+    const payload = parseProjectPayload({
+      surfaces: [
+        {
+          kind: "paywall",
+          id: "rebuilt",
+          routes: [],
+          locales: [],
+          origin: { paywallId: "65920", url: "https://runtime.example/doc/abc" },
+        },
+        { kind: "paywall", id: "odd", routes: [], locales: [], origin: { paywallId: 65920 } },
+      ],
+    });
+    expect(payload.surfaces[0]?.origin).toEqual({
+      paywallId: "65920",
+      url: "https://runtime.example/doc/abc",
+    });
+    expect(payload.surfaces[1]).not.toHaveProperty("origin");
+  });
+
   it("leaves presentation off a surface whose payload carries none", () => {
     const payload = parseProjectPayload({
       surfaces: [{ kind: "paywall", id: "plain", routes: [], locales: [] }],

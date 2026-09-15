@@ -13,6 +13,7 @@ they also install directly into any agent with `npx skills add`.
 | [`superwall-dashboard`](superwall-dashboard) | Create the entitlements, products, and campaigns a placement needs to present          | `setup`                                   | `superwall integrate` (phase 3)      |
 | [`superwall-review`](superwall-review)       | Audit an existing setup end to end; `--fix` repairs verified findings                  | `ios` `expo` `react-native` `flutter`     | `superwall review [--fix]`           |
 | [`superwall-migrate`](superwall-migrate)     | Move an app off RevenueCat, Adapty, or Qonversion                                      | `revenuecat` `adapty` `qonversion`        | `superwall migrate`                  |
+| [`superwall-paywall-migrate`](superwall-paywall-migrate) | Rebuild a dashboard (visual editor) paywall as a framework paywall from its `MIGRATION.md` brief; leans on the installed `superwall-framework` skill for the mapping and layout rules | none | `superwall migrate <paywall-id>`, `superwall create --from` |
 
 The broad toolkit skills — `superwall` (resources, analytics SQL, docs, SDK
 triage) and `superwall-editor` (build paywalls in the visual editor from the

@@ -8,6 +8,11 @@ export interface SurfaceBinding {
 
 export type SurfaceBindings = Record<string, SurfaceBinding>;
 
+export interface SurfaceOrigin {
+  paywallId: string;
+  url: string;
+}
+
 const EXPLAINER =
   "Commit this file: it binds each paywall to its dashboard entry, per app, so every machine and CI push to the same place. Managed by the Superwall CLI.";
 
@@ -16,11 +21,25 @@ export interface LockFile {
   apps: Record<string, string>;
   paywalls: Record<string, SurfaceBindings>;
   funnels: Record<string, SurfaceBindings>;
+  origins?: Record<string, SurfaceOrigin>;
 }
 
 export type SurfaceKind = "paywall" | "funnel";
 
 const emptyLock = (): LockFile => ({ version: 1, apps: {}, paywalls: {}, funnels: {} });
+
+export const originKey = (kind: SurfaceKind, surfaceId: string): string => `${kind}/${surfaceId}`;
+
+const readOrigins = (value: unknown): Record<string, SurfaceOrigin> | undefined => {
+  if (!isRecord(value)) return undefined;
+  const origins: Record<string, SurfaceOrigin> = {};
+  for (const [key, candidate] of Object.entries(value)) {
+    if (!isRecord(candidate)) continue;
+    if (typeof candidate.paywallId !== "string" || typeof candidate.url !== "string") continue;
+    origins[key] = { paywallId: candidate.paywallId, url: candidate.url };
+  }
+  return Object.keys(origins).length > 0 ? origins : undefined;
+};
 
 const lockPath = (superwallDir: string) => path.join(superwallDir, "superwall.lock");
 
@@ -63,6 +82,8 @@ export function readLock(superwallDir: string): LockFile {
     }
     lock.paywalls = readSection(parsed.paywalls);
     lock.funnels = readSection(parsed.funnels);
+    const origins = readOrigins(parsed.origins);
+    if (origins) lock.origins = origins;
     return lock;
   } catch {
   }
@@ -76,8 +97,20 @@ function writeLock(superwallDir: string, lock: LockFile): void {
     apps: lock.apps,
     paywalls: lock.paywalls,
     funnels: lock.funnels,
+    ...(lock.origins && Object.keys(lock.origins).length > 0 ? { origins: lock.origins } : {}),
   };
   fs.writeFileSync(lockPath(superwallDir), `${JSON.stringify(annotated, null, 2)}\n`);
+}
+
+export function writeOrigin(
+  superwallDir: string,
+  kind: SurfaceKind,
+  surfaceId: string,
+  origin: SurfaceOrigin,
+): void {
+  const lock = readLock(superwallDir);
+  lock.origins = { ...lock.origins, [originKey(kind, surfaceId)]: origin };
+  writeLock(superwallDir, lock);
 }
 
 const sectionOf = (lock: LockFile, kind: SurfaceKind) =>

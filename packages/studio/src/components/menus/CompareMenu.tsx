@@ -74,7 +74,9 @@ export const CompareMenu = ({
     active &&
     (active.type === "version"
       ? `version:${active.version}`
-      : `surface:${active.surface.kind}/${active.surface.id}`);
+      : active.type === "origin"
+        ? "origin"
+        : `surface:${active.surface.kind}/${active.surface.id}`);
 
   const choose = (target: CompareTarget | undefined) => {
     setOpen(false);
@@ -84,9 +86,10 @@ export const CompareMenu = ({
   const needle = query.trim().toLowerCase();
   const matches = (option: CompareOption) =>
     needle === "" || `${option.label} ${option.hint}`.toLowerCase().includes(needle);
+  const origins = options.filter((option) => option.target.type === "origin").filter(matches);
   const versions = options.filter((option) => option.target.type === "version").filter(matches);
   const paywalls = options.filter((option) => option.target.type === "surface").filter(matches);
-  const grouped = versions.length > 0 && paywalls.length > 0;
+  const grouped = [origins, versions, paywalls].filter((group) => group.length > 0).length > 1;
   const rows = (group: CompareOption[]) =>
     group.map((option) => (
       <Row
@@ -125,7 +128,7 @@ export const CompareMenu = ({
           </div>
 
           <div className="max-h-64 overflow-y-auto">
-            {versions.length + paywalls.length === 0 ? (
+            {origins.length + versions.length + paywalls.length === 0 ? (
               <span className="block px-3 pt-2 pb-4 text-[0.8125rem] text-cream/45">
                 {needle === ""
                   ? "No pushed versions or other paywalls here."
@@ -133,9 +136,11 @@ export const CompareMenu = ({
               </span>
             ) : (
               <>
-                {grouped && <Heading>Versions</Heading>}
+                {grouped && origins.length > 0 && <Heading>Rebuilt from</Heading>}
+                {rows(origins)}
+                {grouped && versions.length > 0 && <Heading>Versions</Heading>}
                 {rows(versions)}
-                {grouped && <Heading>Paywalls</Heading>}
+                {grouped && paywalls.length > 0 && <Heading>Paywalls</Heading>}
                 {rows(paywalls)}
               </>
             )}

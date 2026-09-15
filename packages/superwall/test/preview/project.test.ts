@@ -78,6 +78,51 @@ describe("buildStudioProject", () => {
     expect(surface.locales).toEqual(["de", "en", "es"]);
   });
 
+  it("carries the paywall a surface was rebuilt from, when the lock records one", async () => {
+    const root = scaffold({
+      "superwall/paywalls/rebuilt/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/rebuilt/config.ts": JSON.stringify({}),
+      "superwall/paywalls/fresh/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/fresh/config.ts": JSON.stringify({}),
+      "superwall/superwall.lock": JSON.stringify({
+        version: 1,
+        apps: {},
+        paywalls: {},
+        funnels: {},
+        origins: {
+          "paywall/rebuilt": { paywallId: "65920", url: "https://runtime.example/doc/abc" },
+          "paywall/broken": { paywallId: 1 },
+          "paywall/fresh": 5,
+        },
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    const surfaces = Object.fromEntries(payload.surfaces.map((surface) => [surface.id, surface]));
+    expect(surfaces.rebuilt?.origin).toEqual({
+      paywallId: "65920",
+      url: "https://runtime.example/doc/abc",
+    });
+    expect(surfaces.fresh).not.toHaveProperty("origin");
+  });
+
+  it("ignores an origins section with nothing usable in it", async () => {
+    const root = scaffold({
+      "superwall/paywalls/fresh/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/fresh/config.ts": JSON.stringify({}),
+      "superwall/superwall.lock": JSON.stringify({
+        version: 1,
+        apps: {},
+        paywalls: {},
+        funnels: {},
+        origins: { "paywall/fresh": { url: "https://runtime.example/doc/abc" } },
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    expect(payload.surfaces[0]).not.toHaveProperty("origin");
+  });
+
   it("keeps a surface listed when its config.ts is broken", async () => {
     const root = scaffold({
       "superwall/paywalls/broken/app/index.tsx": "export default () => null\n",

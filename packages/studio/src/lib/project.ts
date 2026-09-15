@@ -42,6 +42,11 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
     ...(isStringArray(value.platforms) ? { platforms: value.platforms } : {}),
     ...(presentation === undefined ? {} : { presentation }),
     paywallId: typeof value.paywallId === "string" ? value.paywallId : undefined,
+    ...(isRecord(value.origin) &&
+    typeof value.origin.paywallId === "string" &&
+    typeof value.origin.url === "string"
+      ? { origin: { paywallId: value.origin.paywallId, url: value.origin.url } }
+      : {}),
   };
 };
 

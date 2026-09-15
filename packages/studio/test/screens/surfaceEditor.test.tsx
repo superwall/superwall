@@ -195,6 +195,51 @@ describe("SurfaceEditor hosting a published paywall", () => {
     if (compared instanceof HTMLIFrameElement) expect(compared.src).toContain("v13.html");
   });
 
+  it("offers the dashboard paywall a surface was rebuilt from, served as it is today", () => {
+    const rebuilt: StudioSurface = {
+      ...live,
+      origin: { paywallId: "65920", url: "https://runtime.example/doc/abc" },
+    };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [pushed, rebuilt] }}
+        surface={rebuilt}
+        samples={{}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /compare/i }));
+    expect(screen.getByText("Rebuilt from")).toBeTruthy();
+    fireEvent.click(screen.getByText("Original"));
+
+    const compared = screen.getByTitle(`${rebuilt.id} original`);
+    expect(compared).toBeInstanceOf(HTMLIFrameElement);
+    if (compared instanceof HTMLIFrameElement) {
+      expect(compared.src).toBe("https://runtime.example/doc/abc");
+    }
+  });
+
+  it("opens straight onto the original when the URL asks for it", () => {
+    const rebuilt: StudioSurface = {
+      ...live,
+      origin: { paywallId: "65920", url: "https://runtime.example/doc/abc" },
+    };
+    window.history.replaceState({}, "", `/paywall/${rebuilt.id}?compare=origin`);
+    const view = renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [pushed, rebuilt] }}
+        surface={rebuilt}
+        samples={{}}
+      />,
+    );
+    expect(screen.getByTitle(`${rebuilt.id} original`)).toBeInstanceOf(HTMLIFrameElement);
+    view.unmount();
+
+    window.history.replaceState({}, "", `/paywall/${live.id}?compare=origin`);
+    renderEditor(<SurfaceEditor source={source} surface={live} samples={{}} />);
+    expect(screen.queryByTitle(`${live.id} original`)).toBeNull();
+    window.history.replaceState({}, "", "/");
+  });
+
   it("puts the host's own controls in the top bar and keeps standalone preview local", () => {
     renderEditor(
       <SurfaceEditor

@@ -20,12 +20,28 @@ test("the template is a complete project: config, routes, types, ignores", () =>
     ".gitignore",
     "README.md",
     "paywalls/pro/config.ts",
+    "paywalls/pro/messages/en.ts",
     "paywalls/pro/app/index.tsx",
     "paywalls/pro/app/layout.tsx",
     "paywalls/pro/app/theme.css",
   ]) {
     assert.ok(fs.existsSync(path.join(target, file)), `missing ${file}`);
   }
+});
+
+test("the starter's copy lives in messages and reaches the pages through t()", () => {
+  const target = path.join(scratch("template"), "app");
+  writeTemplate(target);
+  const index = fs.readFileSync(path.join(target, "paywalls/pro/app/index.tsx"), "utf8");
+  const layout = fs.readFileSync(path.join(target, "paywalls/pro/app/layout.tsx"), "utf8");
+  const messages = fs.readFileSync(path.join(target, "paywalls/pro/messages/en.ts"), "utf8");
+  for (const key of ["paywall.title", "paywall.cta", "paywall.ctaBare", "paywall.restore", "paywall.close"]) {
+    assert.match(index, new RegExp(`t\\("${key.replace(".", "\\.")}"`), key);
+  }
+  assert.match(layout, /t\("footer\.builtWith"\)/);
+  assert.doesNotMatch(index, />\s*Go Pro\s*</);
+  assert.match(messages, /cta: "Subscribe · \{price\}"/);
+  assert.doesNotMatch(messages, /\$\d/);
 });
 
 test("package name comes from the directory, sanitized; superwall floats on latest", () => {

@@ -52,6 +52,7 @@ instead of running it — paste it into any agent.
 
 ```bash
 superwall create      # start a paywalls project — minimal, or any public example
+superwall create --from 65920   # rebuild a dashboard paywall as code (config.ts, a migration brief, Compare › Original)
 superwall dev         # open the studio and preview everything live
 superwall push        # build and push immutable versions (production untouched)
 superwall promote     # point production at a pushed version

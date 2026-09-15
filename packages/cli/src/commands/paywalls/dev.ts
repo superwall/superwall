@@ -7,6 +7,7 @@ import { frameworkVersion, loadFramework } from "@/core/paywalls/project/framewo
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import * as path from "node:path";
 import { allowLocalNetworking } from "@/core/paywalls/project/scheme";
+import { openBrowser } from "@/core/auth/browser";
 import { createStudioActions } from "./studio-actions";
 import { ui } from "@/ui";
 import { LAYOUT_HINT, projectDir, projectDirs, requireProject } from "./pipeline";
@@ -79,6 +80,9 @@ export const runDev = defineCommand({
       ];
     });
     ui.step([`Studio ${pc.green(url)}`, ...rows].join("\n"));
+    if (typeof context.argv.open === "string" && context.argv.open !== "") {
+      openBrowser(`${url}${context.argv.open.replace(/^\//, "")}`);
+    }
 
     const network = server.resolvedUrls?.network[0];
     if (network) {

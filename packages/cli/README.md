@@ -56,6 +56,8 @@ instead of running it — paste it into any agent.
 
 ```bash
 superwall create      # start a paywalls project — minimal, or any public example
+superwall create --from {ID}   # rebuild a dashboard paywall as code: its config.ts, a migration brief, Compare › Original in the studio
+superwall migrate {ID}         # …then rebuild its pages with your coding agent, or copy the prompt (--skill prints it)
 superwall dev         # open the studio and preview everything live
 superwall push        # build and push immutable versions (production untouched)
 superwall promote     # point production at a pushed version

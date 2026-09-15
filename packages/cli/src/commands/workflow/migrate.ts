@@ -1,6 +1,17 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { DASHBOARD_URL, VERSION } from "@/environment";
 import { ui } from "@/ui";
-import { defineCommand } from "@/command";
+import { defineCommand, type CommandContext } from "@/command";
+import {
+  buildMigrationCopyPrompt,
+  migrationFor,
+  offerMigration,
+  projectDirOf,
+  scaffoldFromPaywall,
+} from "@/core/paywalls/migration";
+import { requireApi } from "@/core/paywalls/project/session";
+import { askStudio, migrationNextSteps, startStudio } from "@/commands/paywalls/open-studio";
 import { blocks } from "@/output";
 import { stripReport } from "@/ui/log";
 import { detectDrivers } from "@/core/agent/drivers";
@@ -13,11 +24,77 @@ import { runAction } from "@/core/agent/run";
 import { saveReport } from "@/core/state/reports";
 import { actionById, type ActionContext } from "@/core/agent/actions";
 
+const paywallIdOf = (value: unknown): string | undefined =>
+  typeof value === "string" || typeof value === "number" ? String(value) : undefined;
+
+async function runPaywallMigrate(ctx: CommandContext, paywallId: string): Promise<void> {
+  const { installDir, interactive, argv } = ctx;
+  const existingDir = projectDirOf(installDir);
+  let migration = existingDir === undefined ? undefined : migrationFor(existingDir, paywallId);
+
+  if (argv.skill) {
+    if (migration === undefined) {
+      throw new Error(
+        `Paywall ${paywallId} isn't in this project yet — run \`superwall migrate ${paywallId}\` once without --skill to scaffold it, then print the prompt.`,
+      );
+    }
+    process.stdout.write(`${buildMigrationCopyPrompt(migration)}\n`);
+    return;
+  }
+
+  if (migration === undefined) {
+    const api = await requireApi(interactive);
+    const target = existingDir ?? path.join(installDir, "superwall");
+    if (existingDir === undefined && fs.existsSync(path.join(target, "package.json"))) {
+      throw new Error(
+        `\`${target}\` already has a package.json that isn't a superwall project — move it aside first.`,
+      );
+    }
+    const origin = await scaffoldFromPaywall(ui, api, {
+      root: installDir,
+      target,
+      paywallId,
+      newProject: existingDir === undefined,
+    });
+    migration = migrationFor(target, origin.id);
+    if (migration === undefined) {
+      throw new Error(
+        `Paywall ${paywallId} has no served document to rebuild from — nothing was recorded in superwall.lock.`,
+      );
+    }
+  } else {
+    ui.info(
+      `\`paywalls/${migration.surfaceId}\` was scaffolded from paywall ${paywallId} — picking up the rebuild.`,
+    );
+  }
+
+  const choice = await offerMigration(ui, interactive, migration);
+  const opening = choice === "agent" && (await askStudio(ui, interactive, migration.surfaceId));
+  ctx.output.render(
+    blocks.nextSteps(
+      migrationNextSteps(
+        opening,
+        path.relative(installDir, migration.superwallDir) || ".",
+        paywallId,
+        choice,
+      ),
+    ),
+    blocks.outro(`Done.  ${DASHBOARD_URL}`),
+  );
+  if (opening) await startStudio(migration.superwallDir, migration.surfaceId);
+}
+
 export const runMigrate = defineCommand({
   name: "migrate",
   auth: "optional",
   async run(ctx) {
     const { installDir, dryRun } = ctx;
+    const paywallId = paywallIdOf(ctx.argv.paywall);
+    if (paywallId !== undefined) {
+      if (!ctx.argv.skill) ui.intro(`Superwall migrate v${VERSION}`);
+      await runPaywallMigrate(ctx, paywallId);
+      return;
+    }
     ui.intro(`Superwall migrate v${VERSION}`);
 
     const drivers = await detectDrivers();

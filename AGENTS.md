@@ -88,7 +88,19 @@ self-describing npm project — clone it, install, `superwall dev`:
   `--rename <old>=<new>` flag on push/publish is the non-interactive escape. A
   binding no rename claims is offered for removal interactively (lock-only —
   the paywall keeps serving, and restoring the directory re-binds it); a
-  non-interactive run never mutates the lock without consent.
+  non-interactive run never mutates the lock without consent. The lock's
+  optional `origins` section (`"paywall/<id>": { paywallId, url }`) is
+  written by `superwall create --from <paywall-id>` — the dashboard
+  (editor) paywall a surface was rebuilt from and the document it serves.
+  It is never a binding (both lock readers keep it apart from
+  `paywalls`/`funnels`); the framework passes it to the studio as
+  `origin`, which offers it as **Compare › Original**, a view-only pane
+  (the editor runtime does not speak the studio's host protocol). The
+  deterministic half of a migration — `config.ts` from the API row plus
+  the `paywall`/`paywall_language` records of the editor store embedded in
+  the served document (`vike_pageContext`), and a `MIGRATION.md` brief with
+  the inventory — is `packages/cli/src/core/paywalls/project/origin.ts`;
+  the rebuild is the framework skill's `migrate-from-editor.md`.
 - Identity is the path. No name fields, no registration, and user projects
   never contain vite configs, index.html, or build tooling — the framework
   owns bundling. `@/…` aliases the `superwall/` directory.
@@ -312,7 +324,10 @@ The stack, bottom to top — each layer depends only on the one below it:
   hard-depends on a framework version, and commands always run against the
   project's lockfile. It owns **no bin** — it exports `main()`, and the
   framework's `superwall` bin (prefer-local launcher + tsx + project `.env`)
-  starts it. Dependency direction: framework → cli for the bin, cli →
+  starts it. The launcher registers tsx against the superwall project's own
+  `tsconfig.json` (or none), never the host app's: an app's `paths` (the
+  dashboard maps `@superwall/studio/*` onto a vendored `.d.ts`) would
+  otherwise redirect the CLI's imports. Dependency direction: framework → cli for the bin, cli →
   framework only dynamically at command runtime. This package is **excluded
   from oxfmt/oxlint** (it keeps its own conventions — see its `AGENTS.md`)
   and is consumed **built** (tsdown → `dist/`; root `postinstall` builds it).

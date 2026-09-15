@@ -1,0 +1,24 @@
+<context>
+  <project_directory>{{project_dir}}</project_directory>
+  <surface_directory>{{surface_dir}}</surface_directory>
+  <source_paywall id="{{paywall_id}}">{{source_url}}</source_paywall>
+  <dashboard note="for the user, not you">{{dashboard_url}}</dashboard>
+</context>
+
+<task>
+Rebuild the dashboard paywall described in {{surface_dir}}/MIGRATION.md as a framework paywall in that directory.
+
+{{skill}}
+
+<brief>
+{{brief}}
+</brief>
+
+<rules>
+  <rule>Before editing any file, read it first. Match the project's existing style.</rule>
+  <rule>When using the superwall CLI, pass --json for every data command. Never run superwall push, promote or publish, and never create or change campaigns or products.</rule>
+  <rule>Emit a one-line progress update prefixed with '[STATUS] ' before EVERY step, including before running any shell command. The user only sees these [STATUS] lines, so keep a fresh, human-readable [STATUS] flowing the whole way through. Never go more than one tool call without a [STATUS] update.</rule>
+  <rule>Do not write a long summary. End with a short note listing anything not carried over, then '[STATUS] Done'.</rule>
+  <rule>If you cannot complete the rebuild safely (the served document cannot be read, a page's design cannot be inferred), stop and explain what you need instead of guessing.</rule>
+</rules>
+</task>

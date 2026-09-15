@@ -6,6 +6,7 @@ import { THEME } from "../theme";
 import type { ListItem } from "../types";
 import {
   addItem,
+  interrupt,
   setActive,
   updateActive,
   useStore,
@@ -486,6 +487,9 @@ function ActiveRegion({ active }: { active: NonNullable<Active> }): React.ReactE
 
 export function App(): React.ReactElement {
   const s = useStore();
+  useInput((input, key) => {
+    if (key.ctrl && input === "c") interrupt();
+  });
   return (
     <Box flexDirection="column">
       <Static items={s.items}>

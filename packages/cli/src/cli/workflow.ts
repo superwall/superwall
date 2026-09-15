@@ -46,16 +46,24 @@ export const registerWorkflowCommands = <T>(cli: Argv<T>): Argv<T> =>
     },
   )
   .command(
-    "migrate",
-    "Migrate from RevenueCat / Adapty / Qonversion to Superwall",
+    "migrate [paywall]",
+    "Migrate from RevenueCat / Adapty / Qonversion, or rebuild a dashboard paywall as code",
     (y) =>
-      y.options({
-        ...installDirOption,
-        "dry-run": { type: "boolean", describe: "Plan without changes" },
-        ...skillOption,
-      }),
+      y
+        .positional("paywall", {
+          type: "string",
+          describe:
+            "A dashboard paywall id: scaffold it as code (if not already) and rebuild its pages with your agent, or copy the prompt",
+        })
+        .options({
+          ...installDirOption,
+          "dry-run": { type: "boolean", describe: "Plan without changes" },
+          ...skillOption,
+        })
+        .example("$0 migrate", "Move this app off RevenueCat / Adapty / Qonversion")
+        .example("$0 migrate 65920", "Rebuild dashboard paywall 65920 as code"),
     (argv) => {
-      if (argv.skill)
+      if (argv.skill && argv.paywall === undefined)
         return import("@/commands/workflow/print-skill").then((m) => m.runPrintSkill("migrate")(argv));
       return import("@/commands/workflow/migrate").then((m) => m.runMigrate(argv));
     },

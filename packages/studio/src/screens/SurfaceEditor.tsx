@@ -198,7 +198,11 @@ export const SurfaceEditor = ({
   const [locale, setLocale] = React.useState<string | undefined>(undefined);
   const [edited, setEdited] = React.useState<VariableOverrides>({});
   const [panelOpen, setPanelOpen] = React.useState(false);
-  const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(undefined);
+  const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(() =>
+    surface.origin && new URLSearchParams(window.location.search).get("compare") === "origin"
+      ? { type: "origin" }
+      : undefined,
+  );
   const [reloadKey, setReloadKey] = React.useState(0);
   const [landscape, setLandscape] = React.useState(false);
   const canvas = React.useRef<CanvasHandle>(null);
@@ -313,6 +317,16 @@ export const SurfaceEditor = ({
   };
 
   const compareOptions: CompareOption[] = [
+    ...(surface.origin
+      ? [
+          {
+            key: "origin",
+            label: "Original",
+            hint: `Dashboard paywall ${surface.origin.paywallId}, as it serves today`,
+            target: { type: "origin" } as const,
+          },
+        ]
+      : []),
     ...versions.map((entry) => ({
       key: `version:${entry.version}`,
       label: versionLabel(entry),
@@ -345,11 +359,18 @@ export const SurfaceEditor = ({
           title: `${surface.id} v${compareWith.version}`,
           empty: compareNotice ?? "This version is no longer on the dashboard.",
         }
-      : {
-          label: nameOf(compareWith.surface),
-          src: source.previewUrl(compareWith.surface),
-          title: `${nameOf(compareWith.surface)} preview`,
-        });
+      : compareWith.type === "origin"
+        ? {
+            label: "Original",
+            src: surface.origin?.url,
+            title: `${surface.id} original`,
+            empty: "This paywall was not rebuilt from a dashboard paywall.",
+          }
+        : {
+            label: nameOf(compareWith.surface),
+            src: source.previewUrl(compareWith.surface),
+            title: `${nameOf(compareWith.surface)} preview`,
+          });
 
   const groups = React.useMemo((): VariableGroups => {
     const rows = (prefix: string, record: Record<string, unknown> | undefined): VariableRow[] =>

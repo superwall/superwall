@@ -8,11 +8,17 @@ export type SurfaceBinding = {
 
 export type SurfaceBindings = Record<string, SurfaceBinding>;
 
+export type SurfaceOrigin = {
+  paywallId: string;
+  url: string;
+};
+
 export type LockFile = {
   version: 1;
   apps: Record<string, string>;
   paywalls: Record<string, SurfaceBindings>;
   funnels: Record<string, SurfaceBindings>;
+  origins?: Record<string, SurfaceOrigin>;
 };
 
 const emptyLock = (): LockFile => ({ version: 1, apps: {}, paywalls: {}, funnels: {} });
@@ -53,8 +59,23 @@ export const parseLock = (parsed: unknown): LockFile | undefined => {
   }
   lock.paywalls = readSection(parsed.paywalls);
   lock.funnels = readSection(parsed.funnels);
+  if (isRecord(parsed.origins)) {
+    const origins: Record<string, SurfaceOrigin> = {};
+    for (const [key, candidate] of Object.entries(parsed.origins)) {
+      if (!isRecord(candidate)) continue;
+      if (typeof candidate.paywallId !== "string" || typeof candidate.url !== "string") continue;
+      origins[key] = { paywallId: candidate.paywallId, url: candidate.url };
+    }
+    if (Object.keys(origins).length > 0) lock.origins = origins;
+  }
   return lock;
 };
+
+export const originOf = (
+  lock: LockFile,
+  kind: "paywall" | "funnel",
+  surfaceId: string,
+): SurfaceOrigin | undefined => lock.origins?.[`${kind}/${surfaceId}`];
 
 export const readLock = (superwallDir: string): LockFile => {
   const file = path.join(superwallDir, "superwall.lock");

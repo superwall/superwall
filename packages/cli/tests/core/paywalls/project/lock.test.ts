@@ -5,11 +5,13 @@ import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import {
   describeBindings,
+  originKey,
   readLock,
   removeBinding,
   writeApp,
   writeBinding,
   writeBindings,
+  writeOrigin,
   writeSnapshot,
 } from "@/core/paywalls/project/lock";
 
@@ -32,6 +34,30 @@ const EMPTY = { version: 1, apps: {}, paywalls: {}, funnels: {} };
 
 test("readLock returns an empty lock when the file is missing", () => {
   assert.deepEqual(readLock(scaffold()), EMPTY);
+});
+
+test("the paywall a surface was rebuilt from is recorded beside the bindings, never as one", () => {
+  const dir = scaffold();
+  writeOrigin(dir, "paywall", "increase-your-revenue", {
+    paywallId: "65920",
+    url: "https://runtime.example/doc/abc",
+  });
+  writeBinding(dir, "paywall", "increase-your-revenue", "ios", { paywallId: "300100" });
+
+  const lock = readLock(dir);
+  assert.deepEqual(lock.origins, {
+    [originKey("paywall", "increase-your-revenue")]: {
+      paywallId: "65920",
+      url: "https://runtime.example/doc/abc",
+    },
+  });
+  assert.deepEqual(lock.paywalls["increase-your-revenue"], { ios: { paywallId: "300100" } });
+
+  fs.writeFileSync(
+    path.join(dir, "superwall.lock"),
+    JSON.stringify({ version: 1, apps: {}, paywalls: {}, funnels: {}, origins: { odd: { paywallId: 1 } } }),
+  );
+  assert.equal(readLock(dir).origins, undefined);
 });
 
 test("apps and per-app bindings round-trip and merge", () => {

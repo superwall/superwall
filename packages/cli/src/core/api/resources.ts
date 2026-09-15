@@ -237,12 +237,41 @@ export async function listAppPaywalls(
   });
 }
 
+export interface PaywallProductRef {
+  reference: string;
+  identifier: string;
+  store?: string;
+}
+
 export interface PaywallDetail extends HeadlessPaywallRef {
   applicationId?: string;
+  projectId?: string;
+  platform?: string;
   name?: string;
   version?: number;
   url?: string;
+  previewUrl?: string;
+  headless?: boolean;
+  presentationStyle?: string;
+  featureGating?: string;
+  products: PaywallProductRef[];
 }
+
+const productRefsOf = (value: unknown): PaywallProductRef[] => {
+  if (!Array.isArray(value)) return [];
+  const refs: PaywallProductRef[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const row = entry as Record<string, unknown>;
+    if (typeof row.reference_name !== "string" || typeof row.identifier !== "string") continue;
+    refs.push({
+      reference: row.reference_name,
+      identifier: row.identifier,
+      ...(typeof row.store === "string" ? { store: row.store } : {}),
+    });
+  }
+  return refs;
+};
 
 export async function getPaywall(api: SuperwallApi, paywallId: string): Promise<PaywallDetail> {
   const row = await api.get<Row>(`/v2/paywalls/${encodeURIComponent(paywallId)}`);
@@ -263,9 +292,31 @@ export async function getPaywall(api: SuperwallApi, paywallId: string): Promise<
       typeof applicationId === "string" || typeof applicationId === "number"
         ? String(applicationId)
         : undefined,
+    projectId:
+      typeof row.project_id === "string" || typeof row.project_id === "number"
+        ? String(row.project_id)
+        : undefined,
+    platform: typeof row.application_platform === "string" ? row.application_platform : undefined,
     version: typeof row.version === "number" ? row.version : undefined,
     url: typeof row.paywall_url === "string" ? row.paywall_url : undefined,
+    previewUrl: typeof row.preview_url === "string" ? row.preview_url : undefined,
+    headless: row.headless === true,
+    presentationStyle:
+      typeof row.presentation_style === "string" ? row.presentation_style : undefined,
+    featureGating: typeof row.feature_gating === "string" ? row.feature_gating : undefined,
+    products: productRefsOf(row.products),
   };
+}
+
+export async function projectOrganizationId(
+  api: SuperwallApi,
+  projectId: string,
+): Promise<string | undefined> {
+  const row = await api.get<Row>(`/v2/projects/${encodeURIComponent(projectId)}`);
+  const organization = row.organization_id;
+  return typeof organization === "string" || typeof organization === "number"
+    ? String(organization)
+    : undefined;
 }
 
 export interface LivePaywall {
