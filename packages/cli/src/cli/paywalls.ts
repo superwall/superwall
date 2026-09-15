@@ -93,7 +93,7 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
             type: "array",
             string: true,
             describe:
-              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web, flutter, react_native",
+              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web",
           },
           rename: {
             type: "array",
@@ -130,7 +130,7 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
             type: "array",
             string: true,
             describe:
-              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web, flutter, react_native",
+              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web",
           },
           version: {
             type: "number",
@@ -158,7 +158,7 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
             type: "array",
             string: true,
             describe:
-              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web, flutter, react_native",
+              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web",
           },
           rename: {
             type: "array",

@@ -146,7 +146,7 @@ export const ActionMenu = ({
       </button>
 
       {(showPanel || open) && (
-        <div className="bg-bar absolute top-full right-0 z-20 mt-1 overflow-hidden rounded border border-cream/20">
+        <div className="bg-bar absolute top-full right-0 z-20 mt-[calc(0.5rem+2px)] overflow-hidden rounded border border-cream/20">
           {showPanel ? (
             <ProgressPanel progress={progress} />
           ) : (

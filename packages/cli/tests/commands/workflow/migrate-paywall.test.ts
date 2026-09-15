@@ -183,3 +183,21 @@ test("migrate without a paywall id is still the provider migration", async () =>
   assert.equal(failed, true);
   assert.match(String(calls.find((call) => call.method === "error")?.value), /No coding agent|No iOS/);
 });
+
+test("migrate <id> never overwrites a surface that already exists under the paywall's slug", async () => {
+  const root = scratch("migrate-existing-slug");
+  fs.writeFileSync(
+    path.join(root, "package.json"),
+    JSON.stringify({ name: "mine", dependencies: { superwall: "latest" } }),
+  );
+  fs.mkdirSync(path.join(root, "paywalls", "force-update"), { recursive: true });
+  fs.writeFileSync(path.join(root, "paywalls", "force-update", "config.ts"), "mine");
+  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  process.env.SUPERWALL_API_HOST = "https://api.example.com";
+  useFetch([{ match: "/v2/paywalls/255456", body: originRow }]);
+
+  const { calls, failed } = await migrate({ paywall: "255456", installDir: root });
+  assert.equal(failed, true);
+  assert.match(String(calls.find((call) => call.method === "error")?.value), /`paywalls\/force-update` already exists/);
+  assert.equal(fs.readFileSync(path.join(root, "paywalls", "force-update", "config.ts"), "utf8"), "mine");
+});

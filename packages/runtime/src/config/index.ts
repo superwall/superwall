@@ -1,3 +1,4 @@
+import type { SuperwallAllowedHostsConfig } from "./allowedHosts";
 import type { SuperwallBackgroundConfig } from "./background";
 import type { SuperwallCheckoutConfig } from "./checkout";
 import type { SuperwallInsetsConfig } from "./insets";
@@ -90,8 +91,23 @@ export type SuperwallConfig<
    * `{ defaultLocale: "en" }`; file-based catalogs need no config.
    */
   localization?: SuperwallLocalizationConfig<TLocale>;
+
+  /**
+   * Hosts this surface may reach over the network, as bare hostnames —
+   * `["api.example.com"]`. Superwall and Stripe are always reachable;
+   * everything else is refused by the browser until it is named here.
+   * Default: none. See `SuperwallAllowedHostsConfig`.
+   */
+  allowedHosts?: SuperwallAllowedHostsConfig;
 };
 
+export {
+  allowedHostsOf,
+  LOOPBACK_HOST,
+  MAX_ALLOWED_HOSTS,
+  type ResolvedAllowedHosts,
+  type SuperwallAllowedHostsConfig,
+} from "./allowedHosts";
 export {
   backgroundOf,
   type ResolvedBackground,

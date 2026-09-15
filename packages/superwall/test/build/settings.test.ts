@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowedHostsWire,
   checkoutNeedsPaymentUi,
   paywallSettingsOf,
   presentationStyleWire,
@@ -86,7 +87,64 @@ describe("presentationStyleWire", () => {
   });
 });
 
+describe("allowedHostsWire", () => {
+  it("sends nothing when the surface names no hosts", () => {
+    expect(allowedHostsWire(undefined)).toBeUndefined();
+    expect(allowedHostsWire([])).toBeUndefined();
+  });
+
+  it("sends normalized origins", () => {
+    expect(allowedHostsWire(["api.example.com", "https://cdn.example.com/"])).toEqual([
+      "https://api.example.com",
+      "https://cdn.example.com",
+    ]);
+  });
+
+  it("refuses the loopback interface with an explanation, not a typo hint", () => {
+    for (const entry of ["localhost:3000", "http://localhost:3000", "127.0.0.1"]) {
+      expect(() => allowedHostsWire([entry])).toThrow(/cannot name the loopback interface/);
+    }
+    expect(() => allowedHostsWire(["localhost:3000"])).toThrow(
+      /`superwall dev` applies no policy at all/,
+    );
+  });
+
+  it("only ever sends https origins", () => {
+    expect(allowedHostsWire(["api.example.com", "https://cdn.example.com"])!.every((o) =>
+      o.startsWith("https://"),
+    )).toBe(true);
+    expect(() => allowedHostsWire(["http://api.example.com"])).toThrow(
+      /http:\/\/ are not accepted/,
+    );
+  });
+
+  it("fails the push on a host it cannot read, naming the entry", () => {
+    expect(() => allowedHostsWire(["*.example.com"])).toThrow(/"\*\.example\.com"/);
+    expect(() => allowedHostsWire(["http://api.example.com"])).toThrow(
+      /Wildcards, paths and http:\/\/ are not accepted/,
+    );
+  });
+
+  it("fails the push when more hosts are named than the cap allows", () => {
+    const hosts = Array.from({ length: 21 }, (_, index) => `h${index}.example.com`);
+    expect(() => allowedHostsWire(hosts)).toThrow(/names 21 hosts, more than the 20 allowed/);
+  });
+
+  it("counts the cap after deduping", () => {
+    const hosts = Array.from({ length: 21 }, () => "api.example.com");
+    expect(allowedHostsWire(hosts)).toEqual(["https://api.example.com"]);
+  });
+});
+
 describe("paywallSettingsOf", () => {
+  it("carries allowed hosts onto the wire, and omits the key when there are none", () => {
+    expect(paywallSettingsOf({ allowedHosts: ["api.example.com"] })).toMatchObject({
+      allowed_hosts: ["https://api.example.com"],
+    });
+    expect(paywallSettingsOf({})).not.toHaveProperty("allowed_hosts");
+    expect(paywallSettingsOf({ allowedHosts: [] })).not.toHaveProperty("allowed_hosts");
+  });
+
   it("stamps the introductory-offer override only when the config sets one", () => {
     expect(paywallSettingsOf({ introductoryOfferEligibility: "eligible" })).toMatchObject({
       introductory_offer_eligibility: "always_eligible",

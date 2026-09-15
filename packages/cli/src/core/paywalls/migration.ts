@@ -204,6 +204,11 @@ export async function scaffoldFromPaywall(
       : `Read \`${origin.name}\` from the API only — its served document could not be fetched, so inventory it by hand`,
   );
 
+  if (fs.existsSync(path.join(target, "paywalls", origin.slug, "config.ts"))) {
+    throw new Error(
+      `\`paywalls/${origin.slug}\` already exists in ${path.relative(root, target) || "."} — rename or remove it first.`,
+    );
+  }
   if (options.newProject) writeProjectFiles(target, projectPackageName(root));
   writeSurfaceFiles(target, origin.slug, originConfigSource(origin));
   fs.writeFileSync(path.join(target, "paywalls", origin.slug, "MIGRATION.md"), originBrief(origin));

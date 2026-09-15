@@ -151,9 +151,9 @@ test("identifiers, colors, numbers, paths and escapes are not copy", () => {
   assert.deepEqual(inventory.copy, ["Real copy here"]);
 });
 
-test("product identifiers are read from product contexts as well as reverse-DNS literals", () => {
+test("product identifiers need a product context; a reverse-DNS analytics key is not one", () => {
   const inventory = scanScreen(
-    'import SwiftUI\nstruct A: View {\n  let ids = ["com.acme.pro.monthly", "com.acme.pro.annual"]\n  let sku: String = "pro_annual"\n  var body: some View { Text("x") }\n}',
+    'import SwiftUI\nstruct A: View {\n  let ids = ["com.acme.pro.monthly", "com.acme.pro.annual"]\n  let sku: String = "pro_annual"\n  func track() { Analytics.log("screen.paywall.shown") }\n  var body: some View { Text("x") }\n}',
     "swiftui",
   );
   assert.deepEqual(inventory.productIds, ["com.acme.pro.monthly", "com.acme.pro.annual", "pro_annual"]);

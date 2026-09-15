@@ -44,7 +44,7 @@ export const TopBar = ({
   }, [bar, titleElement, title, actions]);
 
   return (
-    <header className="relative z-10 flex h-11 flex-none items-center border-b border-cream/10 bg-ink">
+    <header className="relative z-20 flex h-11 flex-none items-center border-b border-cream/10 bg-ink">
       <div
         className={`relative flex h-full w-full items-center px-3 ${inset ? "mx-auto max-w-[1080px] sm:px-0" : ""}`}
         ref={setBar}

@@ -176,7 +176,7 @@ const COPY_CONTEXT =
   /(Text|Button|Label|Link|Toggle|Section|Alert|NavigationLink|TextField|SecureField|Menu|Picker|DisclosureGroup|String\(localized|NSLocalizedString|\.navigationTitle|\.accessibilityLabel|\.accessibilityHint|\.help|UILabel|setTitle|\.text\s*=|\.title\s*=|title|message|subtitle|placeholder|label|semanticsLabel|tooltip|hintText|labelText|accessibilityLabel|contentDescription|headerText|children)\s*[:=(]?\s*(\{|\()?\s*$/;
 const ASSET_CONTEXT = /(Image|UIImage\(named|Image\.asset|AssetImage|require|uri|ImageResource|\.font\(\.custom|Lottie|LottieView|source)\s*[:=(]?\s*(\{)?\s*$/;
 const SYMBOL_CONTEXT = /(systemName|UIImage\(systemName|Icon|name)\s*[:=(]?\s*$/;
-const PRODUCT_CONTEXT = /(product|sku|identifier|subscription|purchase|plan|offering|package|entitlement)\w*\s*(:\s*\w+)?\s*[:=(\[]?\s*(\[)?\s*$/i;
+const PRODUCT_CONTEXT = /(product|sku|identifier|subscription|purchase|plan|offering|package|entitlement|ids)\w*\s*(:\s*\w+)?\s*[:=(\[]?\s*(\[)?\s*$|,\s*$/i;
 const REVERSE_DNS = /^[a-z][a-z0-9]*(\.[a-z0-9_-]+){2,}$/;
 const SNAKE_ID = /^[a-z0-9]+(_[a-z0-9.]+)+$/;
 const IDENTIFIER_LIKE = /^[A-Za-z_$][\w$.\-/]*$/;
@@ -295,7 +295,7 @@ export function scanScreen(source: string, framework: ScreenFramework): ScreenIn
       assets.push(value);
       continue;
     }
-    if (REVERSE_DNS.test(value) || (PRODUCT_CONTEXT.test(before) && (SNAKE_ID.test(value) || /\./.test(value)) && !/\s/.test(value))) {
+    if (PRODUCT_CONTEXT.test(before) && !/\s/.test(value) && (REVERSE_DNS.test(value) || SNAKE_ID.test(value) || /\./.test(value))) {
       productIds.push(value);
       continue;
     }

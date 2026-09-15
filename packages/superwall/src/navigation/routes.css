@@ -2,7 +2,8 @@
  * The paywall is inset from the screen edges by default — the safe area, or
  * whatever `insets` in config.ts says — so everything a layout or page renders
  * starts clear of the status bar, cutout and home indicator. Chrome that means
- * to sit over them is positioned fixed and reads --sw-safe-area-inset-*.
+ * to sit over them is positioned absolutely in the layout and reads
+ * --sw-safe-area-inset-*.
  *
  * The root carries the padding; the content box inside it is the containing
  * block for anything a layout positions absolutely, so `top: 0` in a layout

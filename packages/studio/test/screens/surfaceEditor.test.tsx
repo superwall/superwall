@@ -262,7 +262,10 @@ describe("SurfaceEditor hosting a published paywall", () => {
     expect(image).toBeInstanceOf(HTMLImageElement);
     if (image instanceof HTMLImageElement) {
       expect(image.getAttribute("src")).toBe("/__studio/original/paywall/update-required");
+      expect(image.getAttribute("alt")).toBe(`${shot.id} original`);
+      fireEvent.error(image);
     }
+    expect(screen.getByText(/screenshot is missing/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /compare/i }));
     expect(
       screen.getByText(/SwiftUI screen \.\.\/App\/UpdateRequiredView.swift, as captured/),

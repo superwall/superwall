@@ -96,6 +96,19 @@ describe("parseProjectPayload", () => {
     expect(payload.surfaces[2]).not.toHaveProperty("origin");
     expect(payload.surfaces[3]).not.toHaveProperty("origin");
     expect(payload.surfaces[4]).not.toHaveProperty("origin");
+    expect(
+      parseProjectPayload({
+        surfaces: [
+          {
+            kind: "paywall",
+            id: "escape",
+            routes: [],
+            locales: [],
+            origin: { path: "a.swift", framework: "swiftui", screenshot: "../secret.png" },
+          },
+        ],
+      }).surfaces[0]?.origin,
+    ).toEqual({ path: "a.swift", framework: "swiftui" });
   });
 
   it("leaves presentation off a surface whose payload carries none", () => {
