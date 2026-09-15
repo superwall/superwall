@@ -30,6 +30,7 @@ export const TELEMETRY_KEY = (): string =>
 
 export enum Integration {
   swift = "swift",
+  android = "android",
   expo = "expo",
   reactNative = "react-native",
   flutter = "flutter",

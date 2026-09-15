@@ -24,8 +24,8 @@ test("a dry run prints the npx commands it would run and installs nothing", asyn
 
   const commands = result.said("info").filter((line) => line.startsWith("npx"));
   assert.equal(commands.length, 2);
-  assert.match(commands[0] ?? "", /^npx -y skills@latest add superwall\/skills --global --yes/);
-  assert.match(commands[1] ?? "", /--copy$/);
+  assert.match(commands[0] ?? "", /--copy$/);
+  assert.match(commands[1] ?? "", /^npx -y skills@latest add superwall\/skills --global --yes/);
   assert.match(result.said("spinner.stop").join(), /Dry run/);
 });
 

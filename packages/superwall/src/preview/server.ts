@@ -16,7 +16,7 @@ import { loadSurfaceConfig } from "../config/load";
 import type { DiscoveredSurface } from "../discover";
 import { injectPlatformLayer, PLATFORM_STYLESHEET_URL, renderDocument } from "../document";
 import { EXTRA_ASSET_TYPES } from "../build/assets";
-import { readLock } from "../lock";
+import { isScreenOrigin, originOf, readLock } from "../lock";
 import {
   attachIdentifiers,
   attachSurfaceDetails,
@@ -80,6 +80,7 @@ const previewDocument = async (
 };
 
 const PREVIEW_ROUTE = /^\/preview\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)\/?$/;
+const ORIGINAL_ROUTE = /^\/__studio\/original\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
 const STUDIO_ROUTE = /^\/(?:[a-z0-9-]+\/)?(paywall|funnel)\/[a-z0-9-]+\/?$/;
 const STATUS_ROUTE = /^\/__studio\/status\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
 const SCREENSHOT_ROUTE =
@@ -314,6 +315,32 @@ const previewPlugin = (
               );
             })
             .catch(next);
+          return;
+        }
+
+        const original = ORIGINAL_ROUTE.exec(url);
+        if (original) {
+          const found = findSurface(
+            readProjects(roots),
+            original[1] || undefined,
+            original[2] ?? "",
+            original[3] ?? "",
+          );
+          const origin =
+            found &&
+            originOf(readLock(found.entry.project.superwallDir), found.surface.kind, found.surface.id);
+          const file =
+            found && origin && isScreenOrigin(origin) && origin.screenshot
+              ? path.join(found.surface.dir, origin.screenshot)
+              : undefined;
+          if (file === undefined || !fs.existsSync(file)) {
+            res.statusCode = 404;
+            res.end("No original screenshot");
+            return;
+          }
+          res.setHeader("Content-Type", STATIC_TYPES[path.extname(file)] ?? "image/png");
+          res.setHeader("Cache-Control", "no-store");
+          res.end(fs.readFileSync(file));
           return;
         }
 

@@ -69,3 +69,11 @@ test("a directory literally named superwall cannot self-capture the framework im
   const parsed = JSON.parse(fs.readFileSync(path.join(target, "package.json"), "utf8"));
   assert.equal(parsed.name, "superwall-project");
 });
+
+test("the scaffold theme keeps the pages above the layout's footer", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sw-template-inset-"));
+  writeTemplate(dir);
+  const theme = fs.readFileSync(path.join(dir, "paywalls", "pro", "app", "theme.css"), "utf8");
+  assert.match(theme, /--sw-background: var\(--bg\);\n  --sw-page-inset-bottom: 0px;/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

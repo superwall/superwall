@@ -15,6 +15,7 @@
 
 :root {
   --sw-background: var(--color-bg);
+  --sw-page-inset-bottom: 0px;
 }
 
 :root.dark {

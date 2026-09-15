@@ -17,6 +17,7 @@
   --mono: "Roboto Mono", ui-monospace, monospace;
 
   --sw-background: var(--bg);
+  --sw-page-inset-bottom: 0px;
 
   /*
    * How far a covered page dims, and the scrim behind it. They are one number:

@@ -100,7 +100,17 @@ self-describing npm project — clone it, install, `superwall dev`:
   the `paywall`/`paywall_language` records of the editor store embedded in
   the served document (`vike_pageContext`), and a `MIGRATION.md` brief with
   the inventory — is `packages/cli/src/core/paywalls/project/origin.ts`;
-  the rebuild is the framework skill's `migrate-from-editor.md`.
+  the rebuild is the framework skill's `migrate-from-editor.md`. The same
+  section also holds native-screen origins
+  (`{ path, framework, screenshot? }`, written by `superwall migrate
+  --screen <path>`): `packages/cli/src/core/paywalls/screen.ts` is the
+  scanner (string literals, assets, product ids and actions per language,
+  the candidate ranking, `config.ts` and the brief), the screenshot the
+  CLI captures from a booted simulator is `paywalls/<id>/original.png`,
+  served by the preview server at `/__studio/original/<kind>/<id>` and
+  shown by the studio as an image pane; the rebuild playbook is the
+  framework skill's `references/migrate-from-native.md` with one
+  `references/native/<framework>.md` per source framework.
 - Identity is the path. No name fields, no registration, and user projects
   never contain vite configs, index.html, or build tooling — the framework
   owns bundling. `@/…` aliases the `superwall/` directory.
@@ -280,7 +290,15 @@ The stack, bottom to top — each layer depends only on the one below it:
     inside it as the positioned containing block for layout chrome, so
     layouts and pages are inside the safe area by default, an absolute
     `top: 0` in a layout is the top of the inset area, and
-    `--sw-routes-height` defaults to `auto`.
+    `--sw-routes-height` defaults to `auto`. `[data-sw-routes]` then
+    reaches back out under the insets with negative margins and each
+    `[data-sw-route]` (the scroll container) carries them as padding
+    (`--sw-page-inset-*`, = the insets), so pages scroll edge to edge
+    like a native scroll view with a content inset and a sticky footer
+    sticks above the home indicator; a layout with its own footer below
+    the pages sets `--sw-page-inset-bottom: 0`. `--sw-bleed` /
+    `--sw-page-bleed` are the negative insets for overlays that must
+    cover the bars.
     `config.insets` (runtime `config/insets.ts`, `insetsOf`) is written
     inline on `<html>` by the provider; an edge it leaves at `"safe-area"`
     falls through to the stylesheet, where `--sw-inset-*` defaults to

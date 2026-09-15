@@ -8,9 +8,38 @@ export type SurfaceBinding = {
 
 export type SurfaceBindings = Record<string, SurfaceBinding>;
 
-export type SurfaceOrigin = {
+export type PaywallOrigin = {
   paywallId: string;
   url: string;
+};
+
+export type ScreenOrigin = {
+  path: string;
+  framework: "swiftui" | "uikit" | "compose" | "android-views" | "react-native" | "flutter";
+  screenshot?: string;
+};
+
+export type SurfaceOrigin = PaywallOrigin | ScreenOrigin;
+
+export const isScreenOrigin = (origin: SurfaceOrigin): origin is ScreenOrigin => "path" in origin;
+
+const SCREEN_FRAMEWORKS: ReadonlySet<string> = new Set(["swiftui", "uikit", "compose", "android-views", "react-native", "flutter"]);
+
+const readOrigin = (candidate: Record<string, unknown>): SurfaceOrigin | undefined => {
+  if (typeof candidate.paywallId === "string" && typeof candidate.url === "string") {
+    return { paywallId: candidate.paywallId, url: candidate.url };
+  }
+  if (
+    typeof candidate.path === "string" &&
+    typeof candidate.framework === "string" &&
+    SCREEN_FRAMEWORKS.has(candidate.framework)
+  ) {
+    const framework = candidate.framework as ScreenOrigin["framework"];
+    return typeof candidate.screenshot === "string"
+      ? { path: candidate.path, framework, screenshot: candidate.screenshot }
+      : { path: candidate.path, framework };
+  }
+  return undefined;
 };
 
 export type LockFile = {
@@ -63,8 +92,8 @@ export const parseLock = (parsed: unknown): LockFile | undefined => {
     const origins: Record<string, SurfaceOrigin> = {};
     for (const [key, candidate] of Object.entries(parsed.origins)) {
       if (!isRecord(candidate)) continue;
-      if (typeof candidate.paywallId !== "string" || typeof candidate.url !== "string") continue;
-      origins[key] = { paywallId: candidate.paywallId, url: candidate.url };
+      const origin = readOrigin(candidate);
+      if (origin) origins[key] = origin;
     }
     if (Object.keys(origins).length > 0) lock.origins = origins;
   }

@@ -46,10 +46,13 @@ import {
 } from "../lib/devices";
 import { hostStateFor, previewDevice, studioDefaults } from "../lib/host";
 import { percent } from "../lib/canvas";
-import { hostedUrl } from "../lib/preview";
+import { hostedUrl, originalUrl } from "../lib/preview";
 import { ACTION_STEPS, type StudioActionStep, type StudioStepState } from "../lib/steps";
 import {
   hasActions,
+  hasOriginal,
+  isScreenOrigin,
+  SCREEN_FRAMEWORK_LABEL,
   type CompareTarget,
   type Samples,
   type StudioActionName,
@@ -106,6 +109,7 @@ const StagePane = ({
   height,
   title,
   src,
+  image,
   hostState,
   delegate,
   reloadKey,
@@ -122,6 +126,7 @@ const StagePane = ({
   height: number;
   title: string;
   src?: string;
+  image?: string;
   hostState: HostState;
   delegate: HostDelegate;
   reloadKey: number;
@@ -145,7 +150,20 @@ const StagePane = ({
         </span>
       )}
       <div className="relative">
-        {src ? (
+        {image ? (
+          <div
+            className="flex flex-none items-center justify-center overflow-hidden bg-black"
+            style={{ width, height }}
+          >
+            <img
+              src={image}
+              alt=""
+              title={title}
+              className="max-h-full max-w-full object-contain"
+              draggable={false}
+            />
+          </div>
+        ) : src ? (
           <DeviceFrame
             width={width}
             height={height}
@@ -199,7 +217,7 @@ export const SurfaceEditor = ({
   const [edited, setEdited] = React.useState<VariableOverrides>({});
   const [panelOpen, setPanelOpen] = React.useState(false);
   const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(() =>
-    surface.origin && new URLSearchParams(window.location.search).get("compare") === "origin"
+    hasOriginal(surface) && new URLSearchParams(window.location.search).get("compare") === "origin"
       ? { type: "origin" }
       : undefined,
   );
@@ -317,12 +335,14 @@ export const SurfaceEditor = ({
   };
 
   const compareOptions: CompareOption[] = [
-    ...(surface.origin
+    ...(surface.origin && hasOriginal(surface)
       ? [
           {
             key: "origin",
             label: "Original",
-            hint: `Dashboard paywall ${surface.origin.paywallId}, as it serves today`,
+            hint: isScreenOrigin(surface.origin)
+              ? `${SCREEN_FRAMEWORK_LABEL[surface.origin.framework]} screen ${surface.origin.path}, as captured in the simulator`
+              : `Dashboard paywall ${surface.origin.paywallId}, as it serves today`,
             target: { type: "origin" } as const,
           },
         ]
@@ -362,9 +382,11 @@ export const SurfaceEditor = ({
       : compareWith.type === "origin"
         ? {
             label: "Original",
-            src: surface.origin?.url,
+            ...(surface.origin && isScreenOrigin(surface.origin)
+              ? { image: surface.origin.screenshot ? originalUrl(surface) : undefined }
+              : { src: surface.origin?.url }),
             title: `${surface.id} original`,
-            empty: "This paywall was not rebuilt from a dashboard paywall.",
+            empty: "This paywall was not rebuilt from a dashboard paywall or a native screen.",
           }
         : {
             label: nameOf(compareWith.surface),
@@ -492,7 +514,8 @@ export const SurfaceEditor = ({
               width={frame.width}
               height={frame.height}
               title={comparePane.title}
-              src={comparePane.src}
+              src={"src" in comparePane ? comparePane.src : undefined}
+              image={"image" in comparePane ? comparePane.image : undefined}
               presentation={
                 compareWith?.type === "surface" && !web
                   ? compareWith.surface.presentation

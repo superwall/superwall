@@ -58,6 +58,7 @@ instead of running it — paste it into any agent.
 superwall create      # start a paywalls project — minimal, or any public example
 superwall create --from {ID}   # rebuild a dashboard paywall as code: its config.ts, a migration brief, Compare › Original in the studio
 superwall migrate {ID}         # …then rebuild its pages with your coding agent, or copy the prompt (--skill prints it)
+superwall migrate --screen App/UpdateRequiredView.swift   # rebuild a native screen (Swift, Kotlin, RN, Flutter) as a Superwall surface (no path: pick from candidates)
 superwall dev         # open the studio and preview everything live
 superwall push        # build and push immutable versions (production untouched)
 superwall promote     # point production at a pushed version
@@ -364,7 +365,7 @@ packages/cli/
 │   ├── core/             api client, auth, project detection, paywall
 │   │                     binding + lock, agent runners, telemetry, skills sync
 │   └── ui/               the renderer: human output, --json envelopes, prompts
-├── skills/               the bundled playbooks integrate/migrate/review run
+├── dist/skills/          the playbooks integrate/migrate/review run, bundled from superwall/skills at build
 └── tests/                mirrors src/
 ```
 

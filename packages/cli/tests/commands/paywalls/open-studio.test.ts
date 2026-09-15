@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { askStudio, migrationNextSteps } from "@/commands/paywalls/open-studio";
+import { askStudio, migrationNextSteps, screenNextSteps } from "@/commands/paywalls/open-studio";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
 
 test("the studio is never offered without someone at the terminal", async () => {
@@ -31,4 +31,36 @@ test("the next steps follow the answers: studio opening, or how to open it; twea
   const copied = migrationNextSteps(false, "superwall", "255456", "copy");
   assert.equal(copied.length, 3);
   assert.match(copied[0] ?? "", /superwall dev` in superwall/);
+});
+
+test("a screen without a captured original is offered the studio without the compare pane", async () => {
+  const calls: RendererCall[] = [];
+  await askStudio(recordingRenderer(calls), true, "update-required", false);
+  const confirm = calls.find((call) => call.method === "confirm");
+  assert.equal(String((confirm?.value as { message: string }).message), "Open the studio now, on paywall/update-required?");
+});
+
+test("screen next steps follow the screenshot, the studio answer, and end with wiring the app", () => {
+  const base = {
+    superwallDir: "superwall",
+    screenPath: "App/UpdateRequiredView.swift",
+    placement: "update_required",
+  };
+  const shot = screenNextSteps({ ...base, studioOpening: true, screenshot: true, choice: "agent" });
+  assert.equal(shot.length, 3);
+  assert.match(shot[0] ?? "", /with the simulator screenshot beside it/);
+  assert.match(shot[2] ?? "", /register\("update_required"\) where it presented App\/UpdateRequiredView.swift/);
+  assert.match(shot[2] ?? "", /delete the native screen/);
+
+  const noShot = screenNextSteps({ ...base, studioOpening: true, screenshot: false, choice: "agent" });
+  assert.match(noShot[0] ?? "", /Keep the original open in the simulator/);
+
+  const later = screenNextSteps({ ...base, studioOpening: false, screenshot: true, choice: "later" });
+  assert.equal(later.length, 4);
+  assert.match(later[0] ?? "", /^superwall migrate --screen App\/UpdateRequiredView.swift/);
+  assert.match(later[1] ?? "", /Compare › Original shows the simulator screenshot/);
+
+  const copied = screenNextSteps({ ...base, studioOpening: false, screenshot: false, choice: "copy" });
+  assert.equal(copied.length, 3);
+  assert.match(copied[0] ?? "", /next to the original running in the simulator/);
 });

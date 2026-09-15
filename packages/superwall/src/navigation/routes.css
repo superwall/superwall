@@ -7,6 +7,14 @@
  * The root carries the padding; the content box inside it is the containing
  * block for anything a layout positions absolutely, so `top: 0` in a layout
  * is the top of the inset area, not the top of the screen.
+ *
+ * The page stack reaches back out under the insets and each page carries them
+ * as its own padding (--sw-page-inset-*, the insets by default), the way a
+ * native scroll view runs edge to edge with a content inset: content scrolls
+ * under the bars and rests clear of them, and a sticky footer sticks above
+ * the home indicator because sticky honours the scroll container's padding.
+ * A layout that puts something of its own between the pages and an edge (a
+ * footer below them) sets that edge's --sw-page-inset-* to 0 on :root.
  */
 [data-sw-root] {
   display: flex;
@@ -30,6 +38,8 @@
   overflow: hidden;
   flex: 1 1 auto;
   min-height: var(--sw-routes-height, auto);
+  margin: calc(-1 * var(--sw-page-inset-top)) calc(-1 * var(--sw-page-inset-right))
+    calc(-1 * var(--sw-page-inset-bottom)) calc(-1 * var(--sw-page-inset-left));
   background-color: var(--sw-background, Canvas);
 }
 
@@ -41,6 +51,9 @@
 [data-sw-route] {
   position: absolute;
   inset: 0;
+  box-sizing: border-box;
+  padding: var(--sw-page-inset-top) var(--sw-page-inset-right) var(--sw-page-inset-bottom)
+    var(--sw-page-inset-left);
   overflow: auto;
   background-color: var(--sw-background, Canvas);
 }

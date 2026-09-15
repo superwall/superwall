@@ -13,10 +13,20 @@ import { detectDrivers, type AgentEvent, type AgentResult } from "@/core/agent/d
 import { loadPrompt } from "@/core/agent/prompt";
 import { runWithDriverFallback } from "@/core/agent/run";
 import { loadBundledSkill } from "@/core/agent/skills";
-import { originKey, readLock, writeApp, writeOrigin, type SurfaceOrigin } from "./project/lock";
+import {
+  isScreenOrigin,
+  originKey,
+  readLock,
+  writeApp,
+  writeOrigin,
+  type PaywallOrigin,
+  type ScreenOrigin,
+  type SurfaceOrigin,
+} from "./project/lock";
 import { originBrief, originConfigSource, originOf, parseOriginDocument, type OriginPaywall } from "./project/origin";
 import { projectPackageName } from "./project/scaffold";
 import { writeProjectFiles, writeSurfaceFiles } from "./project/template";
+import { readScreen, screenBrief, screenConfigSource, screenFrameworkLabel, type ScreenSource } from "./screen";
 import { readPackageJson, allDeps } from "@/core/project/package";
 import { stripReport } from "@/ui/log";
 import type { Renderer } from "@/ui";
@@ -27,6 +37,22 @@ export interface PaywallMigration {
   origin: SurfaceOrigin;
   brief: string;
 }
+
+export const screenFileOf = (migration: PaywallMigration, origin: ScreenOrigin): string =>
+  path.resolve(migration.superwallDir, origin.path);
+
+export const migrationSource = (migration: PaywallMigration, from = process.cwd()): string =>
+  isScreenOrigin(migration.origin)
+    ? path.relative(from, screenFileOf(migration, migration.origin)) || "."
+    : migration.origin.paywallId;
+
+export const migrationCommand = (migration: PaywallMigration, from = process.cwd()): string =>
+  isScreenOrigin(migration.origin)
+    ? `superwall migrate --screen ${migrationSource(migration, from)}`
+    : `superwall migrate ${migration.origin.paywallId}`;
+
+export const hasOriginal = (migration: PaywallMigration): boolean =>
+  !isScreenOrigin(migration.origin) || migration.origin.screenshot !== undefined;
 
 export function isSuperwallProject(dir: string): boolean {
   if (fs.existsSync(path.join(dir, "superwall.lock"))) return true;
@@ -60,7 +86,75 @@ export function migrationFor(
   superwallDir: string,
   paywallId: string,
 ): PaywallMigration | undefined {
-  return migrationsOf(superwallDir).find((entry) => entry.origin.paywallId === paywallId);
+  return migrationsOf(superwallDir).find(
+    (entry) => !isScreenOrigin(entry.origin) && entry.origin.paywallId === paywallId,
+  );
+}
+
+export function screenMigrationFor(
+  superwallDir: string,
+  file: string,
+): PaywallMigration | undefined {
+  const absolute = path.resolve(file);
+  return migrationsOf(superwallDir).find(
+    (entry) => isScreenOrigin(entry.origin) && screenFileOf(entry, entry.origin) === absolute,
+  );
+}
+
+export interface ScreenScaffoldOptions {
+  root: string;
+  target: string;
+  file: string;
+  newProject: boolean;
+  screenshot?: string;
+}
+
+export const ORIGINAL_SCREENSHOT = "original.png";
+
+export function scaffoldFromScreen(ui: Renderer, options: ScreenScaffoldOptions): ScreenSource {
+  const { root, target, file } = options;
+  const screen = readScreen(target, path.resolve(root, file), root);
+  const { inventory } = screen;
+  const surfaceDir = path.join(target, "paywalls", screen.slug);
+  if (fs.existsSync(path.join(surfaceDir, "config.ts"))) {
+    throw new Error(
+      `\`paywalls/${screen.slug}\` already exists in ${path.relative(root, target) || "."} — rename or remove it first.`,
+    );
+  }
+
+  if (options.newProject) writeProjectFiles(target, projectPackageName(root));
+  writeSurfaceFiles(target, screen.slug, screenConfigSource(screen));
+  let screenshot: string | undefined;
+  if (options.screenshot !== undefined) {
+    fs.copyFileSync(options.screenshot, path.join(surfaceDir, ORIGINAL_SCREENSHOT));
+    screenshot = ORIGINAL_SCREENSHOT;
+  }
+  fs.writeFileSync(path.join(surfaceDir, "MIGRATION.md"), screenBrief(screen, screenshot));
+  const origin: ScreenOrigin = {
+    path: screen.path,
+    framework: screen.framework,
+    ...(screenshot === undefined ? {} : { screenshot }),
+  };
+  writeOrigin(target, "paywall", screen.slug, origin);
+
+  const found = [
+    `${inventory.copy.length} string${inventory.copy.length === 1 ? "" : "s"}`,
+    `${inventory.assets.length} asset${inventory.assets.length === 1 ? "" : "s"}`,
+    `${inventory.productIds.length} product${inventory.productIds.length === 1 ? "" : "s"}`,
+    `${inventory.actions.reduce((sum, action) => sum + action.count, 0)} action${inventory.actions.length === 1 ? "" : "s"}`,
+  ].join(", ");
+  ui.step(
+    `Read \`${screen.path}\` (${screenFrameworkLabel(screen.framework)}): ${found}`,
+  );
+  ui.step(
+    `Created ${path.relative(root, target) || "."}/paywalls/${screen.slug} for \`${screen.name}\``,
+  );
+  if (inventory.productIds.length > 0) {
+    ui.warn(
+      "Product identifiers were lifted from the source — confirm each exists on the dashboard before pushing.",
+    );
+  }
+  return screen;
 }
 
 export interface ScaffoldOptions {
@@ -154,16 +248,42 @@ export async function scaffoldFromPaywall(
 
 export const migrationKey = (surfaceId: string): string => originKey("paywall", surfaceId);
 
-export function buildMigrationPrompt(migration: PaywallMigration): string {
-  return loadPrompt("actions/paywall-migrate.xml", {
+const SCREEN_REFERENCE: Record<ScreenOrigin["framework"], string> = {
+  swiftui: "ios",
+  uikit: "ios",
+  compose: "android",
+  "android-views": "android",
+  "react-native": "react-native",
+  flutter: "flutter",
+};
+
+const screenPrompt = (migration: PaywallMigration, origin: ScreenOrigin): string =>
+  loadPrompt("actions/screen-migrate.xml", {
     project_dir: migration.superwallDir,
     surface_dir: `paywalls/${migration.surfaceId}`,
-    paywall_id: migration.origin.paywallId,
-    source_url: migration.origin.url,
+    source_path: origin.path,
+    framework: screenFrameworkLabel(origin.framework),
+    screenshot: origin.screenshot === undefined ? "none" : `paywalls/${migration.surfaceId}/${origin.screenshot}`,
+    dashboard_url: DASHBOARD_URL,
+    skill: loadBundledSkill("superwall-screen-migrate", SCREEN_REFERENCE[origin.framework]),
+    brief: migration.brief || "(MIGRATION.md is missing — inventory the source file first.)",
+  });
+
+const paywallPrompt = (migration: PaywallMigration, origin: PaywallOrigin): string =>
+  loadPrompt("actions/paywall-migrate.xml", {
+    project_dir: migration.superwallDir,
+    surface_dir: `paywalls/${migration.surfaceId}`,
+    paywall_id: origin.paywallId,
+    source_url: origin.url,
     dashboard_url: DASHBOARD_URL,
     skill: loadBundledSkill("superwall-paywall-migrate"),
     brief: migration.brief || "(MIGRATION.md is missing — inventory the source from its URL first.)",
   });
+
+export function buildMigrationPrompt(migration: PaywallMigration): string {
+  return isScreenOrigin(migration.origin)
+    ? screenPrompt(migration, migration.origin)
+    : paywallPrompt(migration, migration.origin);
 }
 
 export function buildMigrationCopyPrompt(migration: PaywallMigration): string {
@@ -239,7 +359,7 @@ export async function offerMigration(
         {
           value: "later",
           label: "Not now",
-          hint: `superwall migrate ${migration.origin.paywallId} picks this up later`,
+          hint: `${migrationCommand(migration)} picks this up later`,
         },
       ],
       initialValue: agentName === undefined ? "copy" : "agent",
@@ -252,7 +372,9 @@ export async function offerMigration(
     const copied = await deps.copyToClipboard(prompt);
     if (copied) {
       ui.note(
-        "Paste it into Claude Code, Codex, Cursor, or another coding agent, opened in the superwall/ directory.",
+        isScreenOrigin(migration.origin)
+          ? "Paste it into Claude Code, Codex, Cursor, or another coding agent, opened in the app's root so it can read the source screen."
+          : "Paste it into Claude Code, Codex, Cursor, or another coding agent, opened in the superwall/ directory.",
         "Migration prompt copied to clipboard",
       );
     } else {

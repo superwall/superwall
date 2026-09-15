@@ -17,6 +17,7 @@
   --mono: "Roboto Mono", ui-monospace, monospace;
 
   --sw-background: var(--bg);
+  --sw-page-inset-bottom: 0px;
   color-scheme: light;
 }
 

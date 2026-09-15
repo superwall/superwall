@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { actionById } from "@/core/agent/actions";
+import { actionById, FRAMEWORK_REF } from "@/core/agent/actions";
+import { Integration } from "@/environment";
 import { checkSkillsSync, loadBundledSkill } from "@/core/agent/skills";
 
 test("review uses the broad setup skill rather than the placement skill", () => {
@@ -16,6 +17,7 @@ test("review uses the broad setup skill rather than the placement skill", () => 
 test("review composes exactly one framework reference", () => {
   const cases = [
     ["ios", "iOS / Swift"],
+    ["android", "Android / Kotlin"],
     ["expo", "Expo"],
     ["react-native", "React Native"],
     ["flutter", "Flutter"],
@@ -60,6 +62,13 @@ test("skills sync: stale on missing/changed CLI version, fresh within a day, ver
 test("missing bundled references fail closed", () => {
   assert.throws(
     () => loadBundledSkill("superwall-review", "missing-framework"),
-    /Bundled skill asset is missing: superwall-review\/references\/missing-framework\.md/,
+    /Bundled skill asset is missing: superwall\/workflows\/review\/missing-framework\.md/,
   );
+});
+
+test("integrate, placements and screen migration carry an Android reference", () => {
+  assert.match(loadBundledSkill("superwall-integrate", "android"), /# Integrate Superwall - Android \/ Kotlin/);
+  assert.match(loadBundledSkill("superwall-placements", ["strategy", "android"]), /# Superwall placements - Android \/ Kotlin/);
+  assert.match(loadBundledSkill("superwall-screen-migrate", "android"), /# Android source screens/);
+  assert.equal(FRAMEWORK_REF[Integration.android], "android");
 });

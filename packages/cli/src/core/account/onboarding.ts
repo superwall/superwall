@@ -15,9 +15,11 @@ export function onboardingHooks(app?: DetectedApp): OnboardingHooks {
   const platform =
     app?.integration === Integration.swift
       ? ("ios" as const)
-      : app?.integration === Integration.web
-        ? ("web" as const)
-        : undefined;
+      : app?.integration === Integration.android
+        ? ("android" as const)
+        : app?.integration === Integration.web
+          ? ("web" as const)
+          : undefined;
 
   return {
     onOnboard: async () => {

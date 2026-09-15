@@ -167,3 +167,32 @@ test("describeBindings names one paywall plainly and several by app", () => {
     "paywalls 1 (ios), 2 (android)",
   );
 });
+
+test("a native screen origin is recorded with its framework and optional screenshot", () => {
+  const dir = scaffold();
+  writeOrigin(dir, "paywall", "update-required", { path: "../App/UpdateRequiredView.swift", framework: "swiftui" });
+  writeOrigin(dir, "paywall", "rate-us", { path: "src/RateUs.tsx", framework: "react-native", screenshot: "original.png" });
+  assert.deepEqual(readLock(dir).origins, {
+    "paywall/update-required": { path: "../App/UpdateRequiredView.swift", framework: "swiftui" },
+    "paywall/rate-us": { path: "src/RateUs.tsx", framework: "react-native", screenshot: "original.png" },
+  });
+});
+
+test("a screen origin with an unknown framework or no path is dropped", () => {
+  const dir = scaffold();
+  fs.writeFileSync(
+    path.join(dir, "superwall.lock"),
+    JSON.stringify({
+      version: 1,
+      apps: {},
+      paywalls: {},
+      funnels: {},
+      origins: {
+        "paywall/a": { path: "x.kt", framework: "kotlin" },
+        "paywall/b": { framework: "swiftui" },
+        "paywall/c": { path: "x.swift", framework: "swiftui", screenshot: 1 },
+      },
+    }),
+  );
+  assert.deepEqual(readLock(dir).origins, { "paywall/c": { path: "x.swift", framework: "swiftui" } });
+});

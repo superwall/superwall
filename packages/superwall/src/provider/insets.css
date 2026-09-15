@@ -16,6 +16,16 @@
   --sw-inset-right: var(--sw-safe-area-inset-right);
   --sw-inset-bottom: var(--sw-safe-area-inset-bottom);
   --sw-inset-left: var(--sw-safe-area-inset-left);
+
+  --sw-page-inset-top: var(--sw-inset-top);
+  --sw-page-inset-right: var(--sw-inset-right);
+  --sw-page-inset-bottom: var(--sw-inset-bottom);
+  --sw-page-inset-left: var(--sw-inset-left);
+
+  --sw-bleed: calc(-1 * var(--sw-inset-top)) calc(-1 * var(--sw-inset-right))
+    calc(-1 * var(--sw-inset-bottom)) calc(-1 * var(--sw-inset-left));
+  --sw-page-bleed: calc(-1 * var(--sw-page-inset-top)) calc(-1 * var(--sw-page-inset-right))
+    calc(-1 * var(--sw-page-inset-bottom)) calc(-1 * var(--sw-page-inset-left));
 }
 
 :root:where([data-sw-platform="ios"]) {

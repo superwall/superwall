@@ -299,17 +299,59 @@ function SelectView({
       {active.options.map((o, i) => {
         const sel = i === active.index;
         return (
-          <Box key={i}>
-            <Text dimColor>│ </Text>
-            <Text color={sel ? PRIMARY : undefined} dimColor={o.disabled}>
-              {" "}
-              {sel ? "●" : "○"} {o.label}
-            </Text>
-            {o.hint ? <Text dimColor> {o.hint}</Text> : null}
-          </Box>
+          <OptionRow
+            key={i}
+            marker={`${sel ? "●" : "○"} `}
+            label={o.label}
+            hint={o.hint}
+            color={sel ? PRIMARY : undefined}
+            dim={o.disabled}
+          />
         );
       })}
       <Footer text={active.footer} />
+    </Box>
+  );
+}
+
+const OPTION_INDENT = "│   ";
+
+function OptionRow({
+  marker,
+  label,
+  hint,
+  color,
+  dim,
+  bold,
+}: {
+  marker: string;
+  label: string;
+  hint?: string;
+  color?: string;
+  dim?: boolean;
+  bold?: boolean;
+}): React.ReactElement {
+  const columns = process.stdout.columns ?? 80;
+  const inline = !hint || OPTION_INDENT.length + marker.length + label.length + 1 + hint.length <= columns;
+  return (
+    <Box flexDirection="column">
+      <Box>
+        <Text dimColor>{OPTION_INDENT}</Text>
+        <Text color={color} dimColor={dim} bold={bold}>
+          {marker}
+          {label}
+        </Text>
+        {hint && inline ? <Text dimColor> {hint}</Text> : null}
+      </Box>
+      {hint && !inline ? (
+        <Box>
+          <Text dimColor>{OPTION_INDENT}</Text>
+          <Text dimColor>
+            {" ".repeat(marker.length)}
+            {hint}
+          </Text>
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -360,14 +402,14 @@ function MultiSelectView({
         const cur = i === active.index;
         const on = active.selected.has(o.value);
         return (
-          <Box key={i}>
-            <Text dimColor>│ </Text>
-            <Text color={PRIMARY}>{cur ? "❯ " : "  "}</Text>
-            <Text color={on ? PRIMARY : undefined} bold={cur}>
-              {on ? "◼" : "◻"} {o.label}
-            </Text>
-            {o.hint ? <Text dimColor> {o.hint}</Text> : null}
-          </Box>
+          <OptionRow
+            key={i}
+            marker={`${cur ? "❯" : " "} ${on ? "◼" : "◻"} `}
+            label={o.label}
+            hint={o.hint}
+            color={on ? PRIMARY : undefined}
+            bold={cur}
+          />
         );
       })}
     </Box>

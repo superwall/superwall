@@ -48,6 +48,9 @@ function sdkInstalledFor(app: DetectedApp): boolean {
       "**/Podfile",
       "**/pubspec.yaml",
       "**/pubspec.lock",
+      "**/build.gradle",
+      "**/build.gradle.kts",
+      "**/libs.versions.toml",
     ],
     { cwd: app.path, ignore: IGNORE, absolute: true, deep: 5 },
   );

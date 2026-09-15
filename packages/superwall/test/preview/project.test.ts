@@ -106,6 +106,39 @@ describe("buildStudioProject", () => {
     expect(surfaces.fresh).not.toHaveProperty("origin");
   });
 
+  it("carries the native screen a surface was rebuilt from, screenshot included", async () => {
+    const root = scaffold({
+      "superwall/paywalls/update-required/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/update-required/config.ts": JSON.stringify({}),
+      "superwall/paywalls/rate-us/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/rate-us/config.ts": JSON.stringify({}),
+      "superwall/superwall.lock": JSON.stringify({
+        version: 1,
+        apps: {},
+        paywalls: {},
+        funnels: {},
+        origins: {
+          "paywall/update-required": {
+            path: "../App/UpdateRequiredView.swift",
+            framework: "swiftui",
+            screenshot: "original.png",
+          },
+          "paywall/rate-us": { path: "src/RateUs.tsx", framework: "react-native", screenshot: 1 },
+          "paywall/odd": { path: "x.kt", framework: "kotlin" },
+        },
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    const surfaces = Object.fromEntries(payload.surfaces.map((surface) => [surface.id, surface]));
+    expect(surfaces["update-required"]?.origin).toEqual({
+      path: "../App/UpdateRequiredView.swift",
+      framework: "swiftui",
+      screenshot: "original.png",
+    });
+    expect(surfaces["rate-us"]?.origin).toEqual({ path: "src/RateUs.tsx", framework: "react-native" });
+  });
+
   it("ignores an origins section with nothing usable in it", async () => {
     const root = scaffold({
       "superwall/paywalls/fresh/app/index.tsx": "export default () => null\n",

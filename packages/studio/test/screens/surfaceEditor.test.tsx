@@ -240,6 +240,40 @@ describe("SurfaceEditor hosting a published paywall", () => {
     window.history.replaceState({}, "", "/");
   });
 
+  it("shows a native screen's simulator screenshot as the original, and offers nothing without one", () => {
+    const shot: StudioSurface = {
+      ...live,
+      id: "update-required",
+      origin: { path: "../App/UpdateRequiredView.swift", framework: "swiftui", screenshot: "original.png" },
+    };
+    window.history.replaceState({}, "", `/paywall/${shot.id}?compare=origin`);
+    const view = renderEditor(
+      <SurfaceEditor source={{ ...source, surfaces: [pushed, shot] }} surface={shot} samples={{}} />,
+    );
+    const image = screen.getByTitle(`${shot.id} original`);
+    expect(image).toBeInstanceOf(HTMLImageElement);
+    if (image instanceof HTMLImageElement) {
+      expect(image.getAttribute("src")).toBe("/__studio/original/paywall/update-required");
+    }
+    fireEvent.click(screen.getByRole("button", { name: /compare/i }));
+    expect(screen.getByText(/SwiftUI screen \.\.\/App\/UpdateRequiredView.swift, as captured/)).toBeTruthy();
+    view.unmount();
+
+    const bare: StudioSurface = {
+      ...live,
+      id: "rate-us",
+      origin: { path: "src/RateUs.tsx", framework: "react-native" },
+    };
+    window.history.replaceState({}, "", `/paywall/${bare.id}?compare=origin`);
+    renderEditor(
+      <SurfaceEditor source={{ ...source, surfaces: [pushed, bare] }} surface={bare} samples={{}} />,
+    );
+    expect(screen.queryByTitle(`${bare.id} original`)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /compare/i }));
+    expect(screen.queryByText("Original")).toBeNull();
+    window.history.replaceState({}, "", "/");
+  });
+
   it("puts the host's own controls in the top bar and keeps standalone preview local", () => {
     renderEditor(
       <SurfaceEditor

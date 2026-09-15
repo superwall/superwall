@@ -17,7 +17,7 @@ function packageRoot(): string {
   return (root = dir);
 }
 
-/** Locate a directory shipped with the package. */
+/** Locate a directory shipped with the package; skills are bundled into dist/ by the build. */
 export function packagedDir(name: "skills" | "prompts"): string {
-  return join(packageRoot(), name) + "/";
+  return join(packageRoot(), name === "skills" ? "dist/skills" : name) + "/";
 }

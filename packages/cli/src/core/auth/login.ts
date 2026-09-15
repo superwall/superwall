@@ -36,7 +36,7 @@ export interface LoginOptions {
 
 export interface OnboardSetup {
   orgName: string;
-  app?: { name: string; platform: "ios" | "web"; bundleId?: string };
+  app?: { name: string; platform: "ios" | "android" | "web"; bundleId?: string };
 }
 
 export interface ProvisionedApp {

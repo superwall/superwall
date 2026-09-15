@@ -47,7 +47,7 @@ export const registerWorkflowCommands = <T>(cli: Argv<T>): Argv<T> =>
   )
   .command(
     "migrate [paywall]",
-    "Migrate from RevenueCat / Adapty / Qonversion, or rebuild a dashboard paywall as code",
+    "Migrate from RevenueCat / Adapty / Qonversion, or rebuild a dashboard paywall or a native screen as code",
     (y) =>
       y
         .positional("paywall", {
@@ -59,11 +59,21 @@ export const registerWorkflowCommands = <T>(cli: Argv<T>): Argv<T> =>
           ...installDirOption,
           "dry-run": { type: "boolean", describe: "Plan without changes" },
           ...skillOption,
+          screen: {
+            type: "string",
+            describe:
+              "A SwiftUI, UIKit, Kotlin (Compose or Views), React Native or Flutter file to rebuild as a Superwall screen (no path: pick from likely candidates)",
+          },
+          screenshot: {
+            type: "string",
+            describe: "A screenshot of the native screen, shown as Compare › Original in the studio",
+          },
         })
         .example("$0 migrate", "Move this app off RevenueCat / Adapty / Qonversion")
-        .example("$0 migrate 65920", "Rebuild dashboard paywall 65920 as code"),
+        .example("$0 migrate 65920", "Rebuild dashboard paywall 65920 as code")
+        .example("$0 migrate --screen App/UpdateRequiredView.swift", "Rebuild a native screen as a Superwall surface"),
     (argv) => {
-      if (argv.skill && argv.paywall === undefined)
+      if (argv.skill && argv.paywall === undefined && argv.screen === undefined)
         return import("@/commands/workflow/print-skill").then((m) => m.runPrintSkill("migrate")(argv));
       return import("@/commands/workflow/migrate").then((m) => m.runMigrate(argv));
     },

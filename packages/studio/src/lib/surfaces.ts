@@ -30,10 +30,34 @@ export type StudioSurface = {
   origin?: StudioOrigin;
 };
 
-export type StudioOrigin = {
-  paywallId: string;
-  url: string;
+export type StudioScreenFramework =
+  | "swiftui"
+  | "uikit"
+  | "compose"
+  | "android-views"
+  | "react-native"
+  | "flutter";
+
+export type StudioOrigin =
+  | { paywallId: string; url: string }
+  | { path: string; framework: StudioScreenFramework; screenshot?: string };
+
+export const SCREEN_FRAMEWORK_LABEL: Record<StudioScreenFramework, string> = {
+  swiftui: "SwiftUI",
+  uikit: "UIKit",
+  compose: "Jetpack Compose",
+  "android-views": "Android Views",
+  "react-native": "React Native",
+  flutter: "Flutter",
 };
+
+export const isScreenOrigin = (
+  origin: StudioOrigin,
+): origin is Extract<StudioOrigin, { path: string }> => "path" in origin;
+
+export const hasOriginal = (surface: StudioSurface): boolean =>
+  surface.origin !== undefined &&
+  (!isScreenOrigin(surface.origin) || surface.origin.screenshot !== undefined);
 
 export type PreviewUrlBuilder = (surface: StudioSurface) => string;
 

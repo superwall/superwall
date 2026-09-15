@@ -26,9 +26,21 @@ The `superwall` CLI is two thin things around the **skills**, which are the prod
 2. A **router/toolbelt**: authenticated resource + raw API commands agents and
    humans use directly.
 
-All agent-facing expertise lives in `skills/` (this package: task-specific) and
-[superwall/skills](https://github.com/superwall/skills) (the public skills repo,
-which `superwall skills` installs from).
+All agent-facing expertise lives in the public
+[superwall/skills](https://github.com/superwall/skills) repo; nothing
+skill-shaped is source in this package. `bun run build` bundles its
+`superwall` and `superwall-framework` skills into `dist/skills/`
+(`scripts/vendor-skills.ts`, `VENDORED_SKILLS` in `src/core/agent/skills.ts`)
+from `main`, or from a local checkout with
+`bun run skills:vendor --from ../../../skills` (or `SUPERWALL_SKILLS_DIR=…
+bun run build`; `SUPERWALL_SKILLS_REF=<branch>` bundles another branch) while iterating; `bun run test` bundles first when
+`dist/skills` is missing. The build fails, on purpose, when `main` lacks a
+skill the CLI composes: push the skills repo first. The workflow playbooks are nested inside those skills
+(`superwall/workflows/<job>/playbook.md` + one file per framework or provider,
+`superwall-framework/references/migrate-from-*.md` + `native/<framework>.md`),
+and `PLAYBOOKS` maps each `BundledSkillId` to its path. `superwall login`
+installs this copy first and the live repo over it, so agents always read the
+newest text and the copy is the offline fallback.
 TypeScript never contains domain expertise. If you're writing
 paywall/migration/integration knowledge in a `.ts` file, stop and put it in a
 skill.
@@ -76,14 +88,14 @@ skill.
 
 ## Skills (the product)
 
-Read [`skills/README.md`](skills/README.md) before writing or editing any
-skill. The short version:
+Read the skills repo's `AUTHORING.md` before writing or editing any skill,
+and edit it there, then `bun run build`. The short version:
 
-- Layout: lean `SKILL.md` router (≤ ~80 lines) + deep `references/<x>.md` per
-  framework (`ios`, `expo`, `react-native`, `flutter`) or provider (`revenuecat`,
-  `adapty`, `qonversion`). The CLI composes SKILL.md + one framework/provider
-  reference (`FRAMEWORK_REF` in `src/core/agent/actions.ts`; placements also
-  gets `strategy.md`) - an Expo agent must never see Swift docs.
+- Layout: lean `playbook.md` (≤ ~80 lines) + one deep file per framework
+  (`ios`, `android`, `expo`, `react-native`, `flutter`) or provider (`revenuecat`,
+  `adapty`, `qonversion`) beside it. The CLI composes the playbook + one
+  framework/provider file (`FRAMEWORK_REF` in `src/core/agent/actions.ts`;
+  placements also gets `strategy.md`) - an Expo agent must never see Swift docs.
 - Every API name/version verified against live docs before it's written. Docs are
   fetchable as markdown: `curl -sL superwall.com/docs/llms.txt` (index),
   `curl -sL superwall.com/docs/{path}.md` (any page). Every skill carries a
@@ -112,12 +124,14 @@ and update ALL of:
 
 1. `printHelp()` in `src/cli/help.ts`
 2. `README.md` command examples (user-facing: runnable code blocks, no internal jargon)
-3. This package's `skills/**/*.md` (bundled skills reference CLI commands constantly)
+3. The skills repo (its playbooks quote CLI commands constantly); rebuild to bundle them
 4. `prompts/actions/*.xml` if the harness wrapper mentions commands
-5. **The public skills repo** ([superwall/skills](https://github.com/superwall/skills),
-   `skills/superwall/` in that repo) - `SKILL.md` (workflow router
-   table) and `references/api.md` (the CLI reference). It documents this
-   CLI; a rename here without an edit there ships lies to every installed agent.
+5. **The public skills repo** ([superwall/skills](https://github.com/superwall/skills)):
+   the workflow skills this package vendors, plus `skills/superwall/`
+   (`SKILL.md` workflow router table, `references/api.md` CLI reference). It
+   documents this CLI; a rename here without an edit there ships lies to every
+   installed agent. Skill changes and CLI releases ship together: edit there,
+   `bun run skills:vendor`, commit both.
 
 `grep -rn "superwall <old-name>"` across this package (and the skills repo, if
 you have it checked out) before calling it done.

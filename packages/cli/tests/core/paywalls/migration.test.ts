@@ -90,7 +90,8 @@ test("the prompt carries the brief, the bundled playbook, and the source, and th
   assert.match(prompt, /<surface_directory>paywalls\/force-update<\/surface_directory>/);
   assert.match(prompt, /<source_paywall id="255456">https:\/\/runtime\.example\/store\/document\/abc/);
   assert.match(prompt, /- Pages: 2/);
-  assert.match(prompt, /Rebuild a dashboard paywall as code/);
+  assert.match(prompt, /## Playbook: rebuilding the pages/);
+  assert.match(prompt, /# Migrating a dashboard \(editor\) paywall to code/);
   assert.match(prompt, /Never run `superwall push`/);
   assert.match(prompt, /\[STATUS\]/);
 

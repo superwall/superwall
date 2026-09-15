@@ -40,3 +40,54 @@ test("a generated ios/*.xcodeproj inside an RN app is not a separate Swift app",
   assert.equal(scan.apps.length, 1);
   assert.equal(scan.apps[0]?.integration, "react-native");
 });
+
+test("detects an Android app module from its Gradle plugin, telling Compose from Views", async () => {
+  const dir = tmp();
+  mkdirSync(join(dir, "app", "src", "main", "java", "com", "acme"), { recursive: true });
+  writeFileSync(join(dir, "settings.gradle.kts"), 'include(":app")');
+  writeFileSync(join(dir, "build.gradle.kts"), "plugins { id(\"com.android.application\") version \"8.5.0\" apply false }");
+  writeFileSync(
+    join(dir, "app", "build.gradle.kts"),
+    'plugins { id("com.android.application") }\ndependencies { implementation(platform("androidx.compose:compose-bom:2024.09.00")) }',
+  );
+  const scan = await scanProject(dir);
+  assert.equal(scan.apps.length, 1);
+  assert.equal(scan.apps[0]?.integration, "android");
+  assert.equal(scan.apps[0]?.relPath, "app");
+  assert.equal(scan.apps[0]?.details, "Jetpack Compose");
+  assert.equal(scan.apps[0]?.framework.sdkPackage, "com.superwall.sdk:superwall-android");
+
+  const views = tmp();
+  mkdirSync(join(views, "app", "src"), { recursive: true });
+  writeFileSync(join(views, "app", "build.gradle"), "apply plugin: 'com.android.application'\n");
+  writeFileSync(join(views, "app", "src", "Main.kt"), "class MainActivity : AppCompatActivity()");
+  const scanned = await scanProject(views);
+  assert.equal(scanned.apps[0]?.integration, "android");
+  assert.equal(scanned.apps[0]?.details, "Views");
+});
+
+test("a generated android/ module inside an Expo or Flutter app is not a separate Android app", async () => {
+  const dir = tmp();
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ dependencies: { expo: "52.0.0" } }));
+  mkdirSync(join(dir, "android", "app"), { recursive: true });
+  writeFileSync(join(dir, "android", "app", "build.gradle"), "apply plugin: \"com.android.application\"");
+  const scan = await scanProject(dir);
+  assert.equal(scan.apps.length, 1);
+  assert.equal(scan.apps[0]?.integration, "expo");
+
+  const flutter = tmp();
+  writeFileSync(join(flutter, "pubspec.yaml"), "name: acme\ndependencies:\n  flutter:\n    sdk: flutter\n");
+  mkdirSync(join(flutter, "android", "app"), { recursive: true });
+  writeFileSync(join(flutter, "android", "app", "build.gradle.kts"), 'plugins { id("com.android.application") }');
+  const scanned = await scanProject(flutter);
+  assert.deepEqual(scanned.apps.map((app) => app.integration), ["flutter"]);
+});
+
+test("Compose is recognised from the sources when Gradle does not say", async () => {
+  const dir = tmp();
+  mkdirSync(join(dir, "app", "src", "main", "java"), { recursive: true });
+  writeFileSync(join(dir, "app", "build.gradle.kts"), 'plugins { id("com.android.application") }');
+  writeFileSync(join(dir, "app", "src", "main", "java", "Home.kt"), "@Composable\nfun Home() {}");
+  const scan = await scanProject(dir);
+  assert.equal(scan.apps[0]?.details, "Jetpack Compose");
+});

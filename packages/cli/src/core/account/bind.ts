@@ -28,6 +28,8 @@ export function platformForIntegration(integration: Integration): string {
   switch (integration) {
     case Integration.swift:
       return "ios";
+    case Integration.android:
+      return "android";
     case Integration.flutter:
       return "flutter";
     case Integration.expo:
