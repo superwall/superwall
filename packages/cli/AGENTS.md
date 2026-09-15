@@ -35,7 +35,11 @@ from `main`, or from a local checkout with
 `bun run skills:vendor --from ../../../skills` (or `SUPERWALL_SKILLS_DIR=…
 bun run build`; `SUPERWALL_SKILLS_REF=<branch>` bundles another branch) while iterating; `bun run test` bundles first when
 `dist/skills` is missing. The build fails, on purpose, when `main` lacks a
-skill the CLI composes: push the skills repo first. The workflow playbooks are nested inside those skills
+skill the CLI composes: push the skills repo first. At run time the CLI reads
+each playbook from the live copy `superwall login` installed for the user's
+agents (`AGENT_SKILLS_DIR`, `~/.agents/skills`) when it is there and falls
+back to `dist/skills`, so `--skill` and headless runs use the same text an
+agent reads on its own. The workflow playbooks are nested inside those skills
 (`superwall/workflows/<job>/playbook.md` + one file per framework or provider,
 `superwall-framework/references/migrate-from-*.md` + `native/<framework>.md`),
 and `PLAYBOOKS` maps each `BundledSkillId` to its path. `superwall login`

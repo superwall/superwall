@@ -447,11 +447,6 @@ export const SurfaceEditor = ({
           onDismiss={() => setDismissedProducts(true)}
         />
       )}
-      {unverified && (
-        <div className="border-b border-cream/10 bg-red/10 px-4 py-1.5 text-[0.8125rem] text-cream/75">
-          Couldn't check this paywall's products — {unverified}
-        </div>
-      )}
       <TopBar
         title={`${surface.project ?? source.title} / ${surface.id}${
           surface.label ? ` · ${surface.label}` : ""
@@ -496,6 +491,14 @@ export const SurfaceEditor = ({
           </>
         }
       />
+      {unverified && (
+        <div
+          role="status"
+          className="relative z-10 flex-none border-b border-cream/10 bg-[color-mix(in_srgb,var(--color-red)_10%,var(--color-ink))] px-4 py-1.5 text-[0.8125rem] text-cream/75"
+        >
+          Couldn't check this paywall's products — {unverified}
+        </div>
+      )}
 
       <div className="relative flex min-h-0 flex-1">
         <Canvas

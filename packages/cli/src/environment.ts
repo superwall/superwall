@@ -1,9 +1,14 @@
+import { join } from "node:path";
+import { homedir } from "node:os";
 import { version } from "../package.json";
 
 export const VERSION = version;
 export const DASHBOARD_URL = "https://superwall.com/dashboard";
 
 export const ENV_API_KEY = "SUPERWALL_API_KEY";
+
+export const AGENT_SKILLS_DIR = (): string =>
+  process.env.SUPERWALL_AGENT_SKILLS_DIR ?? join(homedir(), ".agents", "skills");
 
 export const SUPERWALL_HOME = (): string | undefined => {
   const value = process.env.SUPERWALL_HOME;

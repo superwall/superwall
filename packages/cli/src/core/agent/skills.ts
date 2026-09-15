@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { VERSION } from "@/environment";
+import { existsSync, readFileSync } from "node:fs";
+import { AGENT_SKILLS_DIR, VERSION } from "@/environment";
 import { track } from "@/core/telemetry";
 import { ui } from "@/ui";
 import { packagedDir } from "@/packaged";
@@ -38,20 +38,26 @@ export function loadBundledSkill(
   reference?: string | Array<string | undefined>,
 ): string {
   const refs = (Array.isArray(reference) ? reference : [reference]).filter((r): r is string => !!r);
-  const key = refs.length ? `${id}#${refs.join("+")}` : id;
+  const { playbook, refs: refsDir } = PLAYBOOKS[id];
+  const base = skillsBaseFor(playbook);
+  const key = `${base}:${refs.length ? `${id}#${refs.join("+")}` : id}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
-  const { playbook, refs: refsDir } = PLAYBOOKS[id];
-  const skill = readSkillFile(playbook);
-  const bodies = refs.map((r) => readSkillFile(`${refsDir}/${r}.md`));
+  const skill = readSkillFile(base, playbook);
+  const bodies = refs.map((r) => readSkillFile(base, `${refsDir}/${r}.md`));
   const body = [skill, ...bodies].filter(Boolean).join("\n\n");
   cache.set(key, body);
   return body;
 }
 
-function readSkillFile(rel: string): string {
+function skillsBaseFor(playbook: string): string {
+  const installed = `${AGENT_SKILLS_DIR()}/`;
+  return existsSync(`${installed}${playbook}`) ? installed : packagedDir("skills");
+}
+
+function readSkillFile(base: string, rel: string): string {
   try {
-    return stripFrontmatter(readFileSync(`${packagedDir("skills")}${rel}`, "utf8")).trim();
+    return stripFrontmatter(readFileSync(`${base}${rel}`, "utf8")).trim();
   } catch (error) {
     throw new Error(`Bundled skill asset is missing: ${rel}`, { cause: error });
   }
