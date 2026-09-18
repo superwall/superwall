@@ -58,9 +58,8 @@ source (`npx skills add`, the picker listing, the staleness SHA) points at the
 skills repo's `next` branch instead of `main`, and the bundled copy installed
 at login includes `superwall-framework`; off it only the skills bundled from
 `main` are installed (`bundledSkillsForChannel()`), and the commands do not
-exist: unknown command, not hidden. `superwall create` writes
-`SUPERWALL_CHANNEL=next` into the project's `.env` (write-if-absent) so a
-project stays on the channel for every later command and agent. Tests run
+exist: unknown command, not hidden. The channel is set globally by the
+user (shell rc); the CLI never writes it anywhere. Tests run
 with the channel set (`tests/setup.ts`); `tests/cli/channel.test.ts` covers
 both states. Nothing framework-shaped may leak to the `latest` surface: no
 help row, no skill name, no playbook sentence. The workflow playbooks are nested inside those skills

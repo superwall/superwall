@@ -360,9 +360,8 @@ already knows, so it gets a paywall right on the first try.
 Set `SUPERWALL_CHANNEL=next` to opt into experimental and beta features:
 commands that are not in the stable set yet, and the matching agent skills
 from the `next` branch of the skills repo. Everything else is unchanged.
-Put it in a project's `.env` (the CLI loads `superwall/.env` and `.env` from
-the current directory) to keep that project on the channel, or export it in
-your shell. Unset it to go back to the stable set.
+Export it in your shell rc so every terminal and agent sees it. Unset it to
+go back to the stable set.
 
 ## Telemetry
 

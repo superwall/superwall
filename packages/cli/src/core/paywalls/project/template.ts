@@ -52,8 +52,7 @@ npx skills add https://github.com/superwall/skills/tree/next --skill superwall-f
 \`\`\`
 
 The framework is on the \`next\` channel: its commands exist only while
-\`SUPERWALL_CHANNEL=next\` is set. \`.env\` in this directory carries it and
-the CLI loads that file, so run commands from here or export it yourself.
+\`SUPERWALL_CHANNEL=next\` is set in the environment.
 
 Docs: \`curl -sL https://superwall.com/docs/framework/llms.txt\`
 `;

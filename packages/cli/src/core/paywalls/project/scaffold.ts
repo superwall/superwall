@@ -60,5 +60,4 @@ export function writeProjectScaffold(options: {
     packageJson(projectPackageName(options.root), options.frameworkVersion),
   );
   writeIfAbsent(path.join(options.superwallDir, ".gitignore"), GITIGNORE);
-  writeIfAbsent(path.join(options.superwallDir, ".env"), "SUPERWALL_CHANNEL=next\n");
 }

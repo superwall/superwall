@@ -85,17 +85,6 @@ test("never overwrites a package.json the user owns", () => {
   assert.equal(fs.readFileSync(file, "utf8"), '{"name":"mine"}');
 });
 
-test("writes a .env that keeps the project on the next channel, never over an existing one", () => {
-  const dir = scaffold(tmp());
-  assert.equal(fs.readFileSync(path.join(dir, ".env"), "utf8"), "SUPERWALL_CHANNEL=next\n");
-
-  const root = tmp("other");
-  const file = path.join(root, "superwall", ".env");
-  fs.writeFileSync(file, "SUPERWALL_API_KEY=sk_test\n");
-  scaffold(root);
-  assert.equal(fs.readFileSync(file, "utf8"), "SUPERWALL_API_KEY=sk_test\n");
-});
-
 test("never overwrites an existing .gitignore", () => {
   const root = tmp();
   const file = path.join(root, "superwall", ".gitignore");
