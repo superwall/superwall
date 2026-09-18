@@ -15,6 +15,8 @@ export function printHelp(): void {
       head("Workflow commands"),
       row("integrate", "Set up Superwall in your app (agent-driven)"),
       row("migrate", "Migrate from RevenueCat / Adapty / Qonversion"),
+      row("migrate <paywall-id>", "Rebuild a dashboard paywall as code with your agent"),
+      row("migrate --screen <path>", "Rebuild a native screen as a Superwall surface"),
       row("review [--fix]", "Audit an existing Superwall setup; --fix repairs issues"),
       pc.dim(
         "                                  Each takes --skill to print the playbook instead of running.",

@@ -5,11 +5,13 @@ import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import {
   describeBindings,
+  originKey,
   readLock,
   removeBinding,
   writeApp,
   writeBinding,
   writeBindings,
+  writeOrigin,
   writeSnapshot,
 } from "@/core/paywalls/project/lock";
 
@@ -32,6 +34,30 @@ const EMPTY = { version: 1, apps: {}, paywalls: {}, funnels: {} };
 
 test("readLock returns an empty lock when the file is missing", () => {
   assert.deepEqual(readLock(scaffold()), EMPTY);
+});
+
+test("the paywall a surface was rebuilt from is recorded beside the bindings, never as one", () => {
+  const dir = scaffold();
+  writeOrigin(dir, "paywall", "increase-your-revenue", {
+    paywallId: "65920",
+    url: "https://runtime.example/doc/abc",
+  });
+  writeBinding(dir, "paywall", "increase-your-revenue", "ios", { paywallId: "300100" });
+
+  const lock = readLock(dir);
+  assert.deepEqual(lock.origins, {
+    [originKey("paywall", "increase-your-revenue")]: {
+      paywallId: "65920",
+      url: "https://runtime.example/doc/abc",
+    },
+  });
+  assert.deepEqual(lock.paywalls["increase-your-revenue"], { ios: { paywallId: "300100" } });
+
+  fs.writeFileSync(
+    path.join(dir, "superwall.lock"),
+    JSON.stringify({ version: 1, apps: {}, paywalls: {}, funnels: {}, origins: { odd: { paywallId: 1 } } }),
+  );
+  assert.equal(readLock(dir).origins, undefined);
 });
 
 test("apps and per-app bindings round-trip and merge", () => {
@@ -140,4 +166,41 @@ test("describeBindings names one paywall plainly and several by app", () => {
     describeBindings({ ios: { paywallId: "1" }, android: { paywallId: "2" } }),
     "paywalls 1 (ios), 2 (android)",
   );
+});
+
+test("a native screen origin is recorded with its framework and optional screenshot", () => {
+  const dir = scaffold();
+  writeOrigin(dir, "paywall", "update-required", { path: "../App/UpdateRequiredView.swift", framework: "swiftui" });
+  writeOrigin(dir, "paywall", "rate-us", { path: "src/RateUs.tsx", framework: "react-native", screenshot: "original.png" });
+  assert.deepEqual(readLock(dir).origins, {
+    "paywall/update-required": { path: "../App/UpdateRequiredView.swift", framework: "swiftui" },
+    "paywall/rate-us": { path: "src/RateUs.tsx", framework: "react-native", screenshot: "original.png" },
+  });
+});
+
+test("a screen origin with an unknown framework or no path is dropped", () => {
+  const dir = scaffold();
+  fs.writeFileSync(
+    path.join(dir, "superwall.lock"),
+    JSON.stringify({
+      version: 1,
+      apps: {},
+      paywalls: {},
+      funnels: {},
+      origins: {
+        "paywall/a": { path: "x.kt", framework: "kotlin" },
+        "paywall/b": { framework: "swiftui" },
+        "paywall/c": { path: "x.swift", framework: "swiftui", screenshot: 1 },
+        "paywall/d": { path: "d.swift", framework: "swiftui", screenshot: "../../etc/passwd" },
+        "paywall/e": { path: "e.swift", framework: "swiftui", screenshot: ".hidden.png" },
+        "paywall/f": { path: "f.swift", framework: "swiftui", screenshot: "" },
+      },
+    }),
+  );
+  assert.deepEqual(readLock(dir).origins, {
+    "paywall/c": { path: "x.swift", framework: "swiftui" },
+    "paywall/d": { path: "d.swift", framework: "swiftui" },
+    "paywall/e": { path: "e.swift", framework: "swiftui" },
+    "paywall/f": { path: "f.swift", framework: "swiftui" },
+  });
 });

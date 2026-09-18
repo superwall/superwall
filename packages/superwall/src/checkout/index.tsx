@@ -4,11 +4,15 @@ import { SheetProvider } from "./sheet/state";
 import { useAutoPrefetch } from "./hooks/useAutoPrefetch";
 import { useCheckoutCompletion } from "./hooks/useCheckoutCompletion";
 import { useHostDiscount } from "./hooks/useHostDiscount";
+import { useIdentityRefresh } from "./hooks/useIdentityRefresh";
+import { useWebCheckoutBridge } from "./hooks/useWebCheckoutBridge";
 
 const HostDriven = () => {
   useAutoPrefetch();
+  useIdentityRefresh();
   useCheckoutCompletion();
   useHostDiscount();
+  useWebCheckoutBridge();
   return null;
 };
 

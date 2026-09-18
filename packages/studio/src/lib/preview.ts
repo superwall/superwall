@@ -8,6 +8,9 @@ export const hostedUrl = (url: string): string => {
   return `${url}${url.includes("?") ? "&" : "?"}transport=editor`;
 };
 
+export const originalUrl = (surface: StudioSurface): string =>
+  `/__studio/original${surfacePath(surface)}`;
+
 export const buildPreviewPath: PreviewUrlBuilder = (surface) =>
   hostedUrl(`/preview${surfacePath(surface)}`);
 

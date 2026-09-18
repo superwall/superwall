@@ -84,6 +84,23 @@ function classifyJs(dir: string): Classification | null {
   return null;
 }
 
+function androidUiKind(dir: string, gradle: string): string {
+  if (/androidx\.compose|compose-bom|compose\.ui|kotlin\("plugin\.compose"\)|org\.jetbrains\.kotlin\.plugin\.compose/.test(gradle)) {
+    return "Jetpack Compose";
+  }
+  const files = fg.sync("**/*.kt", { cwd: dir, ignore: IGNORE, absolute: true, deep: 8 });
+  for (const f of files.slice(0, 300)) {
+    try {
+      if (readFileSync(f, "utf8").includes("@Composable")) return "Jetpack Compose";
+    } catch {
+      /* ignore */
+    }
+  }
+  return "Views";
+}
+
+const ANDROID_APP_PLUGIN = /com\.android\.application|alias\(libs\.plugins\.android\.application\)|libs\.plugins\.androidApplication/;
+
 function swiftUiKind(dir: string): string {
   const files = fg.sync("**/*.swift", {
     cwd: dir,
@@ -156,12 +173,13 @@ function looksLikeMonorepoRoot(root: string): boolean {
 
 export async function scanProject(root: string): Promise<ScanResult> {
   const opts = { cwd: root, ignore: IGNORE, deep: SCAN_DEPTH } as const;
-  const [pkgPaths, xcodeProjects, packageSwifts, tuistProjects, pubspecs] = await Promise.all([
+  const [pkgPaths, xcodeProjects, packageSwifts, tuistProjects, pubspecs, gradles] = await Promise.all([
     fg("**/package.json", opts),
     fg("**/*.xcodeproj", { ...opts, onlyDirectories: true }),
     fg("**/Package.swift", opts),
     fg("**/Project.swift", opts),
     fg("**/pubspec.yaml", opts),
+    fg("**/build.gradle{,.kts}", opts),
   ]);
 
   const jsRoots = pkgPaths.map((p) => dirname(join(root, p)));
@@ -193,6 +211,30 @@ export async function scanProject(root: string): Promise<ScanResult> {
       makeApp(root, dir, {
         integration: Integration.swift,
         details: swiftUiKind(dir),
+        score: 0.95,
+      }),
+    );
+  }
+
+  const nativeRoots = new Set([...jsRootSet, ...pubspecs.map((p) => dirname(join(root, p)))]);
+  for (const g of gradles) {
+    const file = join(root, g);
+    let gradle: string;
+    try {
+      gradle = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    const applies = gradle
+      .split("\n")
+      .some((line) => ANDROID_APP_PLUGIN.test(line) && !/apply\s+false/.test(line));
+    if (!applies) continue;
+    const moduleDir = dirname(file);
+    if (isGeneratedNative(moduleDir, nativeRoots)) continue;
+    apps.push(
+      makeApp(root, moduleDir, {
+        integration: Integration.android,
+        details: androidUiKind(moduleDir, gradle),
         score: 0.95,
       }),
     );

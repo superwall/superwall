@@ -10,7 +10,7 @@ import type {
   TPermissionTypeMessage,
   TransportKind,
 } from "@superwall/protocol";
-import type { SuperwallConfig } from "../config";
+import type { SuperwallConfig, SuperwallPostPurchase } from "../config";
 import type { SuperwallTranslateValues } from "../localization";
 import type { SuperwallProduct, SuperwallProductInput } from "../products";
 import type { Outgoing, PageViewInput } from "./outgoing";
@@ -109,7 +109,18 @@ export type SuperwallRuntimeSnapshot<out TProduct extends SuperwallProduct = Sup
 };
 
 export type SuperwallPurchaseOptions = {
-  shouldDismiss?: boolean;
+  /**
+   * What happens once this purchase completes, overriding the config's
+   * `postPurchase` for this call. See `SuperwallPostPurchase`.
+   */
+  postPurchase?: SuperwallPostPurchase;
+  /**
+   * Key/value pairs written onto the Stripe subscription (or payment) once
+   * a web purchase completes — a quiz session id, a plan name, anything you
+   * want to see in Stripe and in webhooks. Values are strings. Ignored by
+   * store purchases, which have no Stripe object to write to.
+   */
+  stripeMetadata?: Readonly<Record<string, string>>;
 };
 
 export type SuperwallCallbackOptions = {
@@ -136,6 +147,8 @@ export type SuperwallSessionOptions = {
   onDecodeError?: (error: unknown) => void;
 };
 
+export type SuperwallUserAttributes = Readonly<Record<string, string | number | boolean>>;
+
 export interface SuperwallSession<out TProduct extends SuperwallProduct = SuperwallProduct> {
   on: <E extends SuperwallEventName>(
     event: E,
@@ -156,6 +169,7 @@ export interface SuperwallSession<out TProduct extends SuperwallProduct = Superw
   openExternalUrl: (url: string) => void;
   openDeepLink: (link: string) => void;
   customPlacement: (name: string, params?: Record<string, unknown>) => void;
+  setUserAttributes: (attributes: SuperwallUserAttributes) => void;
   requestStoreReview: (reviewType: Outgoing<"request_store_review">["review_type"]) => void;
   pageView: (input: PageViewInput) => void;
   hapticFeedback: (hapticType: Outgoing<"haptic_feedback">["haptic_type"]) => void;

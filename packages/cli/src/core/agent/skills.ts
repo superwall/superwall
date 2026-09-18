@@ -1,17 +1,31 @@
-import { readFileSync } from "node:fs";
-import { VERSION } from "@/environment";
+import { existsSync, readFileSync } from "node:fs";
+import { AGENT_SKILLS_DIR, VERSION } from "@/environment";
 import { track } from "@/core/telemetry";
 import { ui } from "@/ui";
 import { packagedDir } from "@/packaged";
 import { getSkillsSync, setSkillsSync, type SkillsSync } from "@/core/state/config";
 import { spawnStream } from "./drivers/spawn";
 
+export const VENDORED_SKILLS = ["superwall", "superwall-framework"] as const;
+
 export type BundledSkillId =
   | "superwall-integrate"
-  | "superwall-migrate"
-  | "superwall-review"
   | "superwall-placements"
-  | "superwall-dashboard";
+  | "superwall-dashboard"
+  | "superwall-review"
+  | "superwall-migrate"
+  | "superwall-paywall-migrate"
+  | "superwall-screen-migrate";
+
+export const PLAYBOOKS: Record<BundledSkillId, { playbook: string; refs: string }> = {
+  "superwall-integrate": { playbook: "superwall/workflows/integrate/playbook.md", refs: "superwall/workflows/integrate" },
+  "superwall-placements": { playbook: "superwall/workflows/placements/playbook.md", refs: "superwall/workflows/placements" },
+  "superwall-dashboard": { playbook: "superwall/workflows/dashboard/playbook.md", refs: "superwall/workflows/dashboard" },
+  "superwall-review": { playbook: "superwall/workflows/review/playbook.md", refs: "superwall/workflows/review" },
+  "superwall-migrate": { playbook: "superwall/workflows/migrate/playbook.md", refs: "superwall/workflows/migrate" },
+  "superwall-paywall-migrate": { playbook: "superwall-framework/references/migrate-from-editor.md", refs: "superwall-framework/references" },
+  "superwall-screen-migrate": { playbook: "superwall-framework/references/migrate-from-native.md", refs: "superwall-framework/references/native" },
+};
 
 const cache = new Map<string, string>();
 
@@ -19,25 +33,31 @@ export function bundledSkillsDir(): string {
   return packagedDir("skills").replace(/\/$/, "");
 }
 
-/** SKILL.md body, plus references/<name>.md for each given reference (framework/provider depth). */
 export function loadBundledSkill(
   id: BundledSkillId,
   reference?: string | Array<string | undefined>,
 ): string {
   const refs = (Array.isArray(reference) ? reference : [reference]).filter((r): r is string => !!r);
-  const key = refs.length ? `${id}#${refs.join("+")}` : id;
+  const { playbook, refs: refsDir } = PLAYBOOKS[id];
+  const base = skillsBaseFor(playbook);
+  const key = `${base}:${refs.length ? `${id}#${refs.join("+")}` : id}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
-  const skill = readSkillFile(`${id}/SKILL.md`);
-  const bodies = refs.map((r) => readSkillFile(`${id}/references/${r}.md`));
+  const skill = readSkillFile(base, playbook);
+  const bodies = refs.map((r) => readSkillFile(base, `${refsDir}/${r}.md`));
   const body = [skill, ...bodies].filter(Boolean).join("\n\n");
   cache.set(key, body);
   return body;
 }
 
-function readSkillFile(rel: string): string {
+function skillsBaseFor(playbook: string): string {
+  const installed = `${AGENT_SKILLS_DIR()}/`;
+  return existsSync(`${installed}${playbook}`) ? installed : packagedDir("skills");
+}
+
+function readSkillFile(base: string, rel: string): string {
   try {
-    return stripFrontmatter(readFileSync(`${packagedDir("skills")}${rel}`, "utf8")).trim();
+    return stripFrontmatter(readFileSync(`${base}${rel}`, "utf8")).trim();
   } catch (error) {
     throw new Error(`Bundled skill asset is missing: ${rel}`, { cause: error });
   }
@@ -68,6 +88,17 @@ export const KNOWN_SKILLS: SkillInfo[] = [
     name: "superwall-editor",
     summary: "Build and edit live paywalls, onboarding, and web2app flows from the CLI",
   },
+  {
+    name: "superwall-framework",
+    summary: "Paywalls, funnels and any updatable screen as React mini-apps with the framework",
+  },
+  { name: "superwall-integrate", summary: "Install and configure the SDK in an app for the first time" },
+  { name: "superwall-placements", summary: "Add or audit placements at feature gates and route them to campaigns" },
+  { name: "superwall-dashboard", summary: "Create the entitlements, products and campaigns a placement needs" },
+  { name: "superwall-review", summary: "Audit an existing Superwall setup end to end" },
+  { name: "superwall-migrate", summary: "Move an app off RevenueCat, Adapty or Qonversion" },
+  { name: "superwall-paywall-migrate", summary: "Rebuild a dashboard paywall as a framework paywall" },
+  { name: "superwall-screen-migrate", summary: "Rebuild a native screen as a framework surface" },
 ];
 
 export async function fetchPublicSkills(): Promise<SkillInfo[]> {
@@ -221,19 +252,19 @@ export type SkillsSyncTrigger = "login" | "workflow" | "manual";
 export async function syncSkills(
   opts: InstallSkillsOptions & { trigger?: SkillsSyncTrigger } = {},
 ): Promise<SyncSkillsResult> {
-  const pub = await installPublicSkills(opts);
   const bundled = await installBundledSkills(opts);
-  const ok = pub.ok && bundled.ok;
+  const pub = await installPublicSkills(opts);
+  const ok = bundled.ok;
   if (!opts.dryRun) {
-    track("skills synced", { trigger: opts.trigger ?? "manual", ok });
-    if (ok)
+    track("skills synced", { trigger: opts.trigger ?? "manual", ok, current: pub.ok });
+    if (ok && pub.ok)
       setSkillsSync({
         cliVersion: VERSION,
         syncedAt: new Date().toISOString(),
         sourceSha: (await fetchSourceSha()) ?? undefined,
       });
   }
-  return { ok, commands: [pub.command, bundled.command] };
+  return { ok, commands: [bundled.command, pub.command] };
 }
 
 /**

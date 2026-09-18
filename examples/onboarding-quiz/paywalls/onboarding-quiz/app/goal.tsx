@@ -1,9 +1,10 @@
-import { useHaptics } from "superwall/hooks";
+import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 import { answers, type Goal } from "../components/answers";
 
 export default function Page() {
   const router = useRouter();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   const choose = (value: Goal) => {
@@ -14,24 +15,24 @@ export default function Page() {
 
   return (
     <main className="page">
-      <span className="step">Step 1 of 3</span>
+      <span className="step">{t("quiz.step", { current: 1, total: 3 })}</span>
 
       <div className="lede">
-        <h1>What are you here for?</h1>
+        <h1>{t("goal.title")}</h1>
       </div>
 
       <div className="choices">
         <button type="button" className="choice" onClick={() => choose("lose")}>
-          <span className="choice-name">Lose fat</span>
-          <span className="choice-hint">Down a size, keep the strength</span>
+          <span className="choice-name">{t("goal.lose.name")}</span>
+          <span className="choice-hint">{t("goal.lose.hint")}</span>
         </button>
         <button type="button" className="choice" onClick={() => choose("build")}>
-          <span className="choice-name">Build muscle</span>
-          <span className="choice-hint">Heavier, thicker, stronger</span>
+          <span className="choice-name">{t("goal.build.name")}</span>
+          <span className="choice-hint">{t("goal.build.hint")}</span>
         </button>
         <button type="button" className="choice" onClick={() => choose("endure")}>
-          <span className="choice-name">Go further</span>
-          <span className="choice-hint">Runs, rides, long days</span>
+          <span className="choice-name">{t("goal.endure.name")}</span>
+          <span className="choice-hint">{t("goal.endure.hint")}</span>
         </button>
       </div>
     </main>

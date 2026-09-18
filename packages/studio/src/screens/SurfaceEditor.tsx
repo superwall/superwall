@@ -2,7 +2,14 @@ import * as React from "react";
 import { hasIntroductoryOffer, type HostDelegate, type HostState } from "@superwall/host";
 import { ActionMenu, type ActionProgress } from "../components/menus/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/menus/CompareMenu";
+import {
+  Canvas,
+  useCanvasScale,
+  type CanvasHandle,
+  type CanvasZoom,
+} from "../components/preview/Canvas";
 import { DeviceFrame, DevicePlaceholder } from "../components/preview/DeviceFrame";
+import { type FrameSize, ResizeHandles } from "../components/preview/ResizeHandles";
 import { MissingProducts } from "../components/panels/MissingProducts";
 import { PaywallToasts, useStudioDelegate } from "../components/PaywallToasts";
 import { DownloadScreenshot } from "../components/DownloadScreenshot";
@@ -26,25 +33,36 @@ import {
 } from "../components/panels/VariablesPanel";
 import { fetchStatus, runAction } from "../lib/actions";
 import {
+  chromeFor,
   DEFAULT_DEVICE_ID,
   deviceById,
+  deviceVariablesFor,
+  isWebOnly,
+  webViewportFor,
   RESPONSIVE_DEFAULT,
   RESPONSIVE_ID,
   STUDIO_DEVICES,
   type DeviceChromeSpec,
 } from "../lib/devices";
-import { hostStateFor, studioDefaults } from "../lib/host";
-import { hostedUrl } from "../lib/preview";
+import { hostStateFor, previewDevice, studioDefaults } from "../lib/host";
+import { percent } from "../lib/canvas";
+import { hostedUrl, originalUrl } from "../lib/preview";
 import { ACTION_STEPS, type StudioActionStep, type StudioStepState } from "../lib/steps";
 import {
   hasActions,
+  hasOriginal,
+  isScreenOrigin,
+  SCREEN_FRAMEWORK_LABEL,
   type CompareTarget,
   type Samples,
   type StudioActionName,
+  type StudioPresentation,
   type StudioSource,
   type StudioStatus,
   type StudioSurface,
+  type StudioVersion,
 } from "../lib/surfaces";
+import { timeAgo } from "../lib/time";
 import { type VariableOverrides } from "../lib/variables";
 
 const clampSize = (value: number, fallback: number): number =>
@@ -91,33 +109,64 @@ const StagePane = ({
   height,
   title,
   src,
+  image,
   hostState,
   delegate,
   reloadKey,
   empty,
   chrome,
+  presentation,
   landscape,
   theme,
+  onResize,
+  canvas,
 }: {
   label?: string;
   width: number;
   height: number;
   title: string;
   src?: string;
+  image?: string;
   hostState: HostState;
   delegate: HostDelegate;
   reloadKey: number;
   empty?: string;
   chrome?: DeviceChromeSpec;
+  presentation?: StudioPresentation;
   landscape?: boolean;
   theme?: "light" | "dark";
+  onResize?: (next: FrameSize) => void;
+  canvas?: React.RefObject<CanvasHandle | null>;
 }) => {
-  const paneRef = React.useRef<HTMLDivElement>(null);
+  const scale = useCanvasScale();
+  const [broken, setBroken] = React.useState(false);
+  React.useEffect(() => setBroken(false), [image]);
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center" ref={paneRef}>
-      <div className="flex flex-col gap-2">
-        {label && <span className="text-xs text-cream/55">{label}</span>}
-        {src ? (
+    <div className="flex flex-none flex-col gap-2">
+      {label && (
+        <span
+          className="origin-bottom-left text-xs whitespace-nowrap text-cream/55"
+          style={{ transform: `scale(${1 / scale})` }}
+        >
+          {label}
+        </span>
+      )}
+      <div className="relative">
+        {image && !broken ? (
+          <div
+            className="flex flex-none items-center justify-center overflow-hidden bg-black"
+            style={{ width, height }}
+          >
+            <img
+              src={image}
+              alt={title}
+              title={title}
+              className="max-h-full max-w-full object-contain"
+              draggable={false}
+              onError={() => setBroken(true)}
+            />
+          </div>
+        ) : src ? (
           <DeviceFrame
             width={width}
             height={height}
@@ -125,16 +174,26 @@ const StagePane = ({
             src={src}
             hostState={hostState}
             delegate={delegate}
-            stageRef={paneRef}
             reloadKey={reloadKey}
             chrome={chrome}
+            presentation={presentation}
             landscape={landscape}
             theme={theme}
           />
         ) : (
-          <DevicePlaceholder width={width} height={height} stageRef={paneRef}>
+          <DevicePlaceholder width={width} height={height}>
             {empty ?? "Nothing live yet — publish to compare against production."}
           </DevicePlaceholder>
+        )}
+        {onResize && (
+          <ResizeHandles
+            size={{ width, height }}
+            scale={scale}
+            clamp={clampSize}
+            onResize={onResize}
+            onDragStart={() => canvas?.current?.hold()}
+            onShift={(dx, dy) => canvas?.current?.pan(dx, dy)}
+          />
         )}
       </div>
     </div>
@@ -160,9 +219,15 @@ export const SurfaceEditor = ({
   const [locale, setLocale] = React.useState<string | undefined>(undefined);
   const [edited, setEdited] = React.useState<VariableOverrides>({});
   const [panelOpen, setPanelOpen] = React.useState(false);
-  const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(undefined);
+  const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(() =>
+    hasOriginal(surface) && new URLSearchParams(window.location.search).get("compare") === "origin"
+      ? { type: "origin" }
+      : undefined,
+  );
   const [reloadKey, setReloadKey] = React.useState(0);
   const [landscape, setLandscape] = React.useState(false);
+  const canvas = React.useRef<CanvasHandle>(null);
+  const [zoom, setZoom] = React.useState<CanvasZoom>({ scale: 1, fitted: true });
   const [status, setStatus] = React.useState<StudioStatus>({});
   const [progress, setProgress] = React.useState<ActionProgress | undefined>(undefined);
   const dismissTimer = React.useRef<number | undefined>(undefined);
@@ -221,7 +286,14 @@ export const SurfaceEditor = ({
 
   const responsive = deviceId === RESPONSIVE_ID;
   const device = deviceById(deviceId);
-  const upright = responsive ? size : { width: device.width, height: device.height };
+  const web = isWebOnly(surface.platforms);
+  const frameDevice = React.useMemo(() => deviceVariablesFor(device, web), [device, web]);
+  const upright = responsive
+    ? size
+    : web
+      ? webViewportFor(device)
+      : { width: device.width, height: device.height };
+  const presentation = web ? undefined : surface.presentation;
   const frame = landscape ? { width: upright.height, height: upright.width } : upright;
 
   const openPreview = () => {
@@ -248,54 +320,85 @@ export const SurfaceEditor = ({
         defaults,
         sourceSamples: source.samples,
         samples,
-        frame: responsive ? undefined : device.device,
+        frame: responsive ? undefined : frameDevice,
         theme,
         locale,
         edited,
       }),
-    [surface, defaults, source.samples, samples, responsive, device.device, theme, locale, edited],
+    [surface, defaults, source.samples, samples, responsive, frameDevice, theme, locale, edited],
   );
-  const chrome = responsive ? undefined : device.chrome;
+  const chrome = responsive ? undefined : chromeFor(device, web);
   const previewSrc = source.previewUrl(surface);
-  const liveSrc = status.liveUrl ? hostedUrl(status.liveUrl) : undefined;
+  const versions = status.versions ?? [];
+  const versionLabel = (entry: StudioVersion) => `v${entry.version}${entry.live ? " · live" : ""}`;
+  const pushedHint = (entry: StudioVersion) => {
+    if (entry.live) return "What SDKs receive today";
+    const ago = entry.pushedAt ? timeAgo(entry.pushedAt) : undefined;
+    return ago ? `Pushed ${ago}` : "Pushed snapshot";
+  };
 
   const compareOptions: CompareOption[] = [
-    ...(actionsEnabled
+    ...(surface.origin && hasOriginal(surface)
       ? [
           {
-            key: "live",
-            label: "Live version",
-            hint: "What SDKs receive today",
-            target: { type: "live" } as const,
+            key: "origin",
+            label: "Original",
+            hint: isScreenOrigin(surface.origin)
+              ? `${SCREEN_FRAMEWORK_LABEL[surface.origin.framework]} screen ${surface.origin.path}, as captured in the simulator`
+              : `Dashboard paywall ${surface.origin.paywallId}, as it serves today`,
+            target: { type: "origin" } as const,
           },
         ]
       : []),
+    ...versions.map((entry) => ({
+      key: `version:${entry.version}`,
+      label: versionLabel(entry),
+      hint: pushedHint(entry),
+      target: { type: "version", version: entry.version } as const,
+    })),
     ...source.surfaces
-      .map((candidate, index) => ({
-        key: `surface:${index}`,
+      .map((candidate) => ({
+        key: `surface:${candidate.kind}/${candidate.id}`,
         label: nameOf(candidate),
         hint: source.compareHint ?? "Local preview",
         target: { type: "surface", surface: candidate } as const,
       }))
       .filter((option) => option.target.surface !== surface),
   ];
+  const compareNotice = status.unreachable
+    ? `Couldn't read the pushed versions — ${status.unreachable}`
+    : undefined;
+  const compared =
+    compareWith?.type === "version"
+      ? versions.find((entry) => entry.version === compareWith.version)
+      : undefined;
 
   const comparePane =
     compareWith &&
-    (compareWith.type === "live"
+    (compareWith.type === "version"
       ? {
-          label: "Live",
-          src: liveSrc,
-          title: `${surface.id} live`,
-          empty: status.unreachable
-            ? `Couldn't read the live version — ${status.unreachable}`
-            : undefined,
+          label: compared ? versionLabel(compared) : `v${compareWith.version}`,
+          src: compared ? hostedUrl(compared.url) : undefined,
+          title: `${surface.id} v${compareWith.version}`,
+          empty: compareNotice ?? "This version is no longer on the dashboard.",
         }
-      : {
-          label: nameOf(compareWith.surface),
-          src: source.previewUrl(compareWith.surface),
-          title: `${nameOf(compareWith.surface)} preview`,
-        });
+      : compareWith.type === "origin"
+        ? {
+            label: "Original",
+            ...(surface.origin && isScreenOrigin(surface.origin)
+              ? { image: surface.origin.screenshot ? originalUrl(surface) : undefined }
+              : { src: surface.origin?.url }),
+            title: `${surface.id} original`,
+            empty:
+              surface.origin && isScreenOrigin(surface.origin)
+                ? "The original's screenshot is missing — capture it again with `superwall migrate --screen <path> --screenshot <file>`."
+                : "This paywall was not rebuilt from a dashboard paywall or a native screen.",
+          }
+        : {
+            label: nameOf(compareWith.surface),
+            src: source.previewUrl(compareWith.surface),
+            title: `${nameOf(compareWith.surface)} preview`,
+          });
 
   const groups = React.useMemo((): VariableGroups => {
     const rows = (prefix: string, record: Record<string, unknown> | undefined): VariableRow[] =>
@@ -305,18 +408,21 @@ export const SurfaceEditor = ({
 
     return {
       user: rows("user", { ...defaults.user, ...source.samples?.user, ...samples.user }),
-      device: rows("device", {
-        ...defaults.device,
-        ...source.samples?.device,
-        ...samples.device,
-        ...(device.device as Record<string, unknown>),
-      }),
+      device: rows(
+        "device",
+        previewDevice({
+          ...defaults.device,
+          ...source.samples?.device,
+          ...samples.device,
+          ...frameDevice,
+        }),
+      ),
       params: rows("params", { ...defaults.params, ...source.samples?.params }),
       products: Object.entries(surface.products ?? {}).flatMap(([reference, identifier]) =>
         rows(`products.${reference}`, samples.products?.[identifier]),
       ),
     };
-  }, [defaults, source.samples, samples, device.device, surface.products]);
+  }, [defaults, source.samples, samples, frameDevice, surface.products]);
 
   const missingProducts = React.useMemo(() => {
     if (!samples.products) return [];
@@ -346,11 +452,6 @@ export const SurfaceEditor = ({
           missing={missingProducts}
           onDismiss={() => setDismissedProducts(true)}
         />
-      )}
-      {unverified && (
-        <div className="border-b border-cream/10 bg-red/10 px-4 py-1.5 text-[0.8125rem] text-cream/75">
-          Couldn't check this paywall's products — {unverified}
-        </div>
       )}
       <TopBar
         title={`${surface.project ?? source.title} / ${surface.id}${
@@ -396,16 +497,39 @@ export const SurfaceEditor = ({
           </>
         }
       />
+      {unverified && (
+        <div
+          role="status"
+          className="relative z-10 flex-none border-b border-cream/10 bg-[color-mix(in_srgb,var(--color-red)_10%,var(--color-ink))] px-4 py-1.5 text-[0.8125rem] text-cream/75"
+        >
+          Couldn't check this paywall's products — {unverified}
+        </div>
+      )}
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
+        <Canvas
+          ref={canvas}
+          onZoom={setZoom}
+          fitKey={[
+            deviceId,
+            responsive ? "" : `${frame.width}x${frame.height}`,
+            comparePane ? "compare" : "single",
+            presentation?.style ?? "",
+          ].join(":")}
+        >
           {comparePane && (
             <StagePane
               label={comparePane.label}
               width={frame.width}
               height={frame.height}
               title={comparePane.title}
-              src={comparePane.src}
+              src={"src" in comparePane ? comparePane.src : undefined}
+              image={"image" in comparePane ? comparePane.image : undefined}
+              presentation={
+                compareWith?.type === "surface" && !web
+                  ? compareWith.surface.presentation
+                  : presentation
+              }
               hostState={hostState}
               delegate={delegate}
               reloadKey={reloadKey}
@@ -421,14 +545,21 @@ export const SurfaceEditor = ({
             height={frame.height}
             title={`${surface.id} preview`}
             src={previewSrc}
+            presentation={presentation}
             hostState={hostState}
             delegate={delegate}
             reloadKey={reloadKey}
             chrome={chrome}
             landscape={landscape}
             theme={theme}
+            onResize={
+              responsive
+                ? (next) => setSize(landscape ? { width: next.height, height: next.width } : next)
+                : undefined
+            }
+            canvas={canvas}
           />
-        </div>
+        </Canvas>
 
         <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
           <VariablesPanel overrides={edited} groups={groups} onChange={setEdited} />
@@ -471,6 +602,33 @@ export const SurfaceEditor = ({
           </button>
         </ToolbarGroup>
         <ToolbarDivider />
+        <ToolbarGroup label="Zoom">
+          <div className="sw-stepper" role="group" aria-label="Zoom">
+            <button
+              type="button"
+              aria-label="Zoom out"
+              onClick={() => canvas.current?.zoomStep(-1)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="min-w-12 px-2 font-mono text-xs tabular-nums"
+              aria-label="Fit to view"
+              aria-pressed={zoom.fitted}
+              onClick={() => canvas.current?.fit()}
+            >
+              {percent(zoom.scale)}
+            </button>
+            <button type="button" aria-label="Zoom in" onClick={() => canvas.current?.zoomStep(1)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </div>
+        </ToolbarGroup>
         <ToolbarGroup label="Device">
           <Select
             label="Device"
@@ -511,8 +669,13 @@ export const SurfaceEditor = ({
           </ToolbarGroup>
         )}
         <ToolbarDivider />
-        {compareOptions.length > 0 && (
-          <CompareMenu active={compareWith} options={compareOptions} onSelect={setCompareWith} />
+        {(actionsEnabled || compareOptions.length > 0) && (
+          <CompareMenu
+            active={compareWith}
+            options={compareOptions}
+            notice={compareNotice}
+            onSelect={setCompareWith}
+          />
         )}
         <button
           type="button"

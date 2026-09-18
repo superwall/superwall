@@ -26,6 +26,7 @@ describe("the CLI's copy of the settings wire", () => {
       on_device_cache: false,
       scroll_enabled: false,
       game_controller_enabled: true,
+      introductory_offer_eligibility: "always_eligible",
       web_checkout_destination: "PAYWALL_APPLE_PAY",
       background_color_hex: "#ffffff",
       dark_background_color_hex: "#0d0f12",

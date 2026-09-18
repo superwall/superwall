@@ -11,7 +11,7 @@ import {
 } from "@superwall/runtime";
 import { DEFAULT_PARAMS, DEFAULT_USER, defaultDevice } from "@superwall/host/defaults";
 import { discoverProject } from "../discover";
-import { firstBinding, readLock } from "../lock";
+import { firstBinding, originOf, readLock, type SurfaceOrigin } from "../lock";
 
 export type ConfigLoader = (file: string) => Promise<PaywallDefinition | undefined>;
 
@@ -26,6 +26,7 @@ export type StudioSurfacePayload = {
   settings: PaywallSettings;
   platforms?: string[];
   paywallId?: string;
+  origin?: SurfaceOrigin;
   editedAt?: string;
 };
 
@@ -73,9 +74,12 @@ export const buildStudioProject = async (
 
       const binding =
         surface.kind === "paywall" ? lock.paywalls[surface.id] : lock.funnels[surface.id];
-      const platforms = declaredPlatforms(definition?.platforms);
-      const platform = normalizePlatform(platforms?.[0] ?? Object.keys(lock.apps)[0]);
+      const bound = Object.keys(lock.apps);
+      const platforms =
+        declaredPlatforms(definition?.platforms) ?? (bound.length > 0 ? bound : undefined);
+      const platform = normalizePlatform(platforms?.[0]);
       const slots = Object.entries(definition?.products ?? {});
+      const origin = originOf(lock, surface.kind, surface.id);
 
       return {
         kind: surface.kind,
@@ -94,6 +98,7 @@ export const buildStudioProject = async (
         settings: paywallSettingsOf(definition),
         ...(platforms === undefined ? {} : { platforms }),
         paywallId: firstBinding(binding)?.paywallId,
+        ...(origin === undefined ? {} : { origin }),
       };
     }),
   );

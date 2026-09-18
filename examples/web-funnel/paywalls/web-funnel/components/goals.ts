@@ -1,9 +1,9 @@
 import { parseAsStringEnum } from "superwall/navigation";
 
 export const GOALS = [
-  { id: "focus", label: "Focus", hint: "Fewer, longer sessions" },
-  { id: "habit", label: "Build a habit", hint: "A little every day" },
-  { id: "catch-up", label: "Catch up", hint: "Work through a backlog" },
+  { id: "focus", label: "goals.focus.label", hint: "goals.focus.hint" },
+  { id: "habit", label: "goals.habit.label", hint: "goals.habit.hint" },
+  { id: "catch-up", label: "goals.catchUp.label", hint: "goals.catchUp.hint" },
 ] as const;
 
 export const goalParser = parseAsStringEnum(GOALS.map((goal) => goal.id));

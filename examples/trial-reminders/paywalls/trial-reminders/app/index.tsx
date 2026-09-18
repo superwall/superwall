@@ -1,9 +1,16 @@
 import * as React from "react";
-import { useHaptics, useProducts, usePurchase, useSuperwallEvent } from "superwall/hooks";
+import {
+  useHaptics,
+  useProducts,
+  usePurchase,
+  useSuperwallEvent,
+  useTranslation,
+} from "superwall/hooks";
 
 export default function Index() {
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
+  const { t } = useTranslation();
   const haptics = useHaptics();
   const [scheduled, setScheduled] = React.useState(false);
 
@@ -18,11 +25,8 @@ export default function Index() {
   return (
     <main className="page">
       <div className="lede">
-        <h1>Try it free</h1>
-        <p>
-          {days ? `${days} days, then it renews.` : "Free for a while, then it renews."} We remind
-          them the day before.
-        </p>
+        <h1>{t("paywall.title")}</h1>
+        <p>{days ? t("paywall.trial", { days }) : t("paywall.trialBare")}</p>
       </div>
 
       <pre className="snippet">
@@ -40,18 +44,20 @@ export default function Index() {
 
       <div className="rows">
         <div className="kv">
-          <span className="kv-key">reminder</span>
-          <span className="kv-value">{scheduled ? "scheduled" : "on trial start"}</span>
+          <span className="kv-key">{t("paywall.reminderKey")}</span>
+          <span className="kv-value">
+            {scheduled ? t("paywall.reminderScheduled") : t("paywall.reminderPending")}
+          </span>
         </div>
         <div className="kv">
-          <span className="kv-key">fires</span>
-          <span className="kv-value">1 day before it ends</span>
+          <span className="kv-key">{t("paywall.firesKey")}</span>
+          <span className="kv-value">{t("paywall.firesValue")}</span>
         </div>
       </div>
 
       <p className="note">
-        Declared in <code>config.ts</code>, scheduled by the SDK when the trial starts. The paywall
-        does not have to be open when it fires.
+        {t("paywall.noteDeclaredIn")} <code>config.ts</code>
+        {t("paywall.noteRest")}
       </p>
 
       <div className="actions">
@@ -63,7 +69,7 @@ export default function Index() {
             purchase("annual");
           }}
         >
-          {days ? `Start ${days}-day trial` : "Start free trial"}
+          {days ? t("paywall.cta", { days }) : t("paywall.ctaBare")}
         </button>
       </div>
     </main>

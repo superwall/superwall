@@ -1,12 +1,39 @@
-import { backgroundOf, type SuperwallConfig } from "@superwall/runtime";
+import {
+  backgroundOf,
+  type SuperwallConfig,
+  type SuperwallDeviceVariables,
+} from "@superwall/runtime";
+import { cutoutOf, idiomOf, platformOf } from "./device";
 
 export const SUPERWALL_GENERATION = 5;
+
+export type DocumentPresentation = "fullscreen" | "modal" | "drawer" | "popup";
+
+const presentationOf = (config: SuperwallConfig | undefined): DocumentPresentation => {
+  const style = config?.presentation?.style;
+  return style === "modal" || style === "drawer" || style === "popup" ? style : "fullscreen";
+};
 
 export const documentAttributes = (
   config: SuperwallConfig | undefined,
 ): Record<string, string> => ({
   "data-sw-generation": String(SUPERWALL_GENERATION),
   "data-sw-scroll": String(config?.scrollEnabled ?? true),
+  "data-sw-presentation": presentationOf(config),
+});
+
+export const HOST_ATTRIBUTE_NAMES = [
+  "data-sw-platform",
+  "data-sw-idiom",
+  "data-sw-cutout",
+] as const;
+
+export const hostAttributes = (
+  device: SuperwallDeviceVariables,
+): Record<(typeof HOST_ATTRIBUTE_NAMES)[number], string | undefined> => ({
+  "data-sw-platform": platformOf(device),
+  "data-sw-idiom": idiomOf(device),
+  "data-sw-cutout": cutoutOf(device.deviceModel),
 });
 
 export const PLATFORM_STYLESHEET_URL = "https://runtime-static.superwall.com/live.css";

@@ -1,17 +1,18 @@
-import { useHaptics } from "superwall/hooks";
+import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export const transition = "fade";
 
 export default function Page() {
   const router = useRouter();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Fade</h1>
-        <p>The new page fades in over the old one, a little quicker than the others.</p>
+        <h1>{t("pages.fade.title")}</h1>
+        <p>{t("pages.fade.body")}</p>
       </div>
 
       <div className="actions">
@@ -23,7 +24,7 @@ export default function Page() {
             router.back();
           }}
         >
-          Back
+          {t("common.back")}
         </button>
       </div>
     </main>

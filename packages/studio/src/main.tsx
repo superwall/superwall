@@ -13,7 +13,11 @@ const loadSource = async (): Promise<StudioSource> => {
     throw new Error(`project data unavailable (${response.status})`);
   }
   const payload = parseProjectPayload(await response.json());
-  return { ...payload, previewUrl: buildPreviewPath, standaloneUrl: surfacePath };
+  return {
+    ...payload,
+    previewUrl: buildPreviewPath,
+    standaloneUrl: (surface) => `/preview${surfacePath(surface)}`,
+  };
 };
 
 const Failure = ({ error }: { error: unknown }) => (

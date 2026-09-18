@@ -12,6 +12,7 @@ import {
   purchaseOnWeb,
   reportCompletedCheckout,
   reprefetch,
+  resolutionOf,
   watchCompletedCheckouts,
   type PaywallSession,
 } from "../../src/checkout/flow";
@@ -32,6 +33,7 @@ const stripeProduct = (reference: string, index: number) => ({
 
 type SessionOverrides = {
   checkout?: SuperwallCheckoutConfig;
+  postPurchase?: import("@superwall/runtime").SuperwallPostPurchase;
   sdkVersionPadded?: string;
   publicApiKey?: string;
   references?: string[];
@@ -43,6 +45,7 @@ type SessionOverrides = {
 
 const fakeSession = ({
   checkout,
+  postPurchase,
   sdkVersionPadded,
   publicApiKey = "pk_test",
   references = ["primary", "secondary"],
@@ -72,7 +75,7 @@ const fakeSession = ({
           products.map((product) => [product.reference, product]),
         ),
         introductoryOffer: { eligible: false },
-        config: { checkout },
+        config: { checkout, postPurchase },
         paywall,
         experiment,
       }) as never,
@@ -523,6 +526,141 @@ describe("reporting a completed purchase", () => {
     checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
     await flushMicrotasks();
     expect(postMessage).toHaveBeenCalledOnce();
+  });
+});
+
+describe("a checkout completed inside the Web SDK", () => {
+  type Holder = typeof window & { webPaywallCtrl?: { props?: { clientSurface?: unknown } } };
+  afterEach(() => {
+    delete (window as Holder).webPaywallCtrl;
+  });
+
+  it("self-claims the redemption first and hands the SDK the entitlements token", async () => {
+    (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
+    const { session, postMessage } = fakeSession({ sdkVersionPadded: "004.014.000" });
+    const claim = vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue("ent_1");
+    vi.stubGlobal("fetch", vi.fn());
+
+    await reportCompletedCheckout(session, { ...embedded, postPurchaseBehavior: "GRANT_ACCESS" });
+
+    expect(claim).toHaveBeenCalledWith("ctx_1");
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "stripe_checkout_complete",
+        entitlements_token: "ent_1",
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("skips the claim for behaviors that do not bind the entitlement", async () => {
+    (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
+    const { session, postMessage } = fakeSession({ sdkVersionPadded: "004.014.000" });
+    const claim = vi.spyOn(sessionsFor(session), "completeWebapp");
+    vi.stubGlobal("fetch", vi.fn());
+
+    await reportCompletedCheckout(session, { ...embedded, postPurchaseBehavior: "REDEEM" });
+
+    expect(claim).not.toHaveBeenCalled();
+    expect(postMessage.mock.calls[0]?.[0]).not.toHaveProperty("entitlements_token");
+    vi.unstubAllGlobals();
+  });
+
+  it("still tells the SDK when the claim fails", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
+    const { session, postMessage } = fakeSession({ sdkVersionPadded: "004.014.000" });
+    vi.spyOn(sessionsFor(session), "completeWebapp").mockRejectedValue(new Error("nope"));
+    vi.stubGlobal("fetch", vi.fn());
+
+    await reportCompletedCheckout(session, embedded);
+
+    expect(error).toHaveBeenCalledWith(
+      "Completing the Web SDK checkout failed:",
+      expect.any(Error),
+    );
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ event_name: "stripe_checkout_complete" }),
+    );
+    expect(postMessage.mock.calls[0]?.[0]).not.toHaveProperty("entitlements_token");
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("resolutionOf", () => {
+  it("maps the post-purchase choice to what the web host reads", () => {
+    expect(resolutionOf(undefined)).toBeUndefined();
+    expect(resolutionOf("dismiss")).toBeUndefined();
+    expect(resolutionOf("stay")).toEqual({ type: "paywall" });
+    expect(resolutionOf("redeem")).toEqual({ type: "redeem" });
+    expect(resolutionOf({ redirect: "https://app.example.com/welcome" })).toEqual({
+      type: "redirect",
+      url: "https://app.example.com/welcome",
+    });
+  });
+});
+
+describe("post-purchase and metadata on a completed checkout", () => {
+  it("carries the config's post-purchase resolution to the SDK", async () => {
+    const { session, postMessage } = fakeSession({
+      sdkVersionPadded: "004.014.000",
+      postPurchase: "redeem",
+    });
+    vi.stubGlobal("fetch", vi.fn());
+
+    await reportCompletedCheckout(session, embedded);
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "stripe_checkout_complete",
+        post_purchase_resolution: { type: "redeem" },
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("writes the purchase's metadata onto the Stripe object before the SDK acts", async () => {
+    const { session } = fakeSession({ sdkVersionPadded: "004.014.000", checkout: "sheet" });
+    const attach = vi.spyOn(sessionsFor(session), "attachMetadata").mockResolvedValue(undefined);
+    vi.spyOn(sessionsFor(session), "begin").mockResolvedValue(embedded);
+    vi.stubGlobal("fetch", vi.fn());
+    const stop = watchCompletedCheckouts(session);
+
+    const outcome = purchaseOnWeb(session, "primary", "sheet", {
+      stripeMetadata: { quiz_session: "sess_1" },
+    });
+    // Let begin() resolve and openEmbeddedSheet subscribe before the sheet reports in.
+    await flushMicrotasks();
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+    checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
+    await expect(outcome).resolves.toBe("completed");
+    await flushMicrotasks();
+
+    expect(attach).toHaveBeenCalledWith("ctx_1", { quiz_session: "sess_1" });
+    stop();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the purchase when writing metadata fails", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { session } = fakeSession({ sdkVersionPadded: "004.014.000", checkout: "sheet" });
+    vi.spyOn(sessionsFor(session), "attachMetadata").mockRejectedValue(new Error("nope"));
+    vi.spyOn(sessionsFor(session), "begin").mockResolvedValue(embedded);
+    vi.stubGlobal("fetch", vi.fn());
+    const stop = watchCompletedCheckouts(session);
+
+    const outcome = purchaseOnWeb(session, "primary", "sheet", {
+      stripeMetadata: { plan: "annual" },
+    });
+    await flushMicrotasks();
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+    checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
+    await expect(outcome).resolves.toBe("completed");
+    await flushMicrotasks();
+
+    expect(error).toHaveBeenCalledWith("Attaching checkout metadata failed:", expect.any(Error));
+    stop();
+    vi.unstubAllGlobals();
   });
 });
 

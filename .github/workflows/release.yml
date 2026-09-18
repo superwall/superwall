@@ -150,6 +150,24 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Move next past a stable release
+        if: steps.npm.outputs.done != 'true' && steps.ver.outputs.dist_tag == 'latest' && steps.ver.outputs.dry_run == 'false'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          [ -n "$NPM_TOKEN" ] && export NODE_AUTH_TOKEN="$NPM_TOKEN"
+          VERSION='${{ steps.ver.outputs.version }}'
+          for name in $PACKAGES; do
+            pkg=$(node -p "require('./packages/$name/package.json').name")
+            current=$(npm view "$pkg" dist-tags.next 2>/dev/null || true)
+            if [ -z "$current" ] || [ -n "$(npx -y semver -r ">$current" "$VERSION")" ]; then
+              echo "$pkg: next $current -> $VERSION"
+              npm dist-tag add "$pkg@$VERSION" next
+            else
+              echo "$pkg: next stays at $current (newer than $VERSION)"
+            fi
+          done
+
       - name: Commit version stamp to main
         if: steps.npm.outputs.done != 'true' && steps.ver.outputs.dry_run == 'false'
         run: |

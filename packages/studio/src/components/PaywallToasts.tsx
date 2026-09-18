@@ -47,7 +47,7 @@ const ICON: Partial<Record<PaywallMessageName, () => React.ReactElement>> = {
 };
 
 const Pill = ({ children }: React.PropsWithChildren) => (
-  <span className="bg-accent/15 text-accent px-1.5 py-px font-mono text-xs whitespace-nowrap">
+  <span className="bg-accent/15 text-accent px-1.5 py-px font-mono text-xs break-all">
     {children}
   </span>
 );
@@ -68,12 +68,14 @@ const Toast = ({
 }>) => {
   const Icon = ICON[action] ?? InfoCircleIcon;
   return (
-    <div className="bg-panel font-sans w-[344px] rounded border border-cream/15 p-3">
+    <div className="bg-panel font-sans w-[344px] max-w-[calc(100vw-32px)] rounded border border-cream/15 p-3">
       <div className="grid grid-cols-[14px_1fr] items-start gap-x-2.5">
         <span className={`flex h-5 items-center justify-center ${TINT[tone]}`}>
           <Icon />
         </span>
-        <span className="text-[0.8125rem] leading-5 font-medium text-cream">{children}</span>
+        <span className="min-w-0 text-[0.8125rem] leading-5 font-medium break-words text-cream">
+          {children}
+        </span>
         {actions && <div className="col-start-2 mt-2.5 flex justify-end gap-2">{actions}</div>}
       </div>
     </div>

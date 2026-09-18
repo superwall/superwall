@@ -55,6 +55,7 @@ export interface PaywallSettings {
   on_device_cache: boolean;
   scroll_enabled: boolean;
   game_controller_enabled: boolean;
+  introductory_offer_eligibility?: "automatic" | "always_eligible" | "always_ineligible";
   web_checkout_destination?: "EXTERNAL" | "PAYWALL_EMBEDDED" | "PAYWALL_APPLE_PAY";
   background_color_hex?: string;
   dark_background_color_hex?: string;

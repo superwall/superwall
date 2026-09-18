@@ -19,8 +19,8 @@ test("this test run itself is telemetry-disabled via NODE_TEST_CONTEXT", () => {
 test("events are anonymous: uuid distinct_id, enum props, no person profile", () => {
   setTelemetryTags({ framework: "expo", driver: "claude" });
   const event = buildEvent(
-    "workflow finished",
-    { workflow: "integrate", status: "success", duration_ms: 1200 },
+    "command finished",
+    { command: "integrate", status: "success", duration_ms: 1200 },
     "3e37f5f0-0000-4000-8000-000000000000",
   ) as {
     event: string;
@@ -28,7 +28,7 @@ test("events are anonymous: uuid distinct_id, enum props, no person profile", ()
     properties: Record<string, unknown>;
   };
 
-  assert.equal(event.event, "workflow finished");
+  assert.equal(event.event, "command finished");
   assert.equal(event.distinct_id, "3e37f5f0-0000-4000-8000-000000000000");
   assert.equal(event.properties.$process_person_profile, false);
   assert.equal(event.properties.framework, "expo");

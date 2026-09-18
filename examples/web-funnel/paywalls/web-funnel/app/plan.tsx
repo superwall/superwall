@@ -1,5 +1,11 @@
 import * as React from "react";
-import { useHaptics, useProducts, usePurchase, type ProductReference } from "superwall/hooks";
+import {
+  useHaptics,
+  useProducts,
+  usePurchase,
+  useTranslation,
+  type ProductReference,
+} from "superwall/hooks";
 import { useQueryState, useRouter } from "superwall/navigation";
 import { goalParser } from "../components/goals";
 
@@ -7,6 +13,7 @@ export default function Plan() {
   const router = useRouter();
   const { getProduct } = useProducts();
   const { purchase, prefetch } = usePurchase();
+  const { t } = useTranslation();
   const haptics = useHaptics();
   const [goal] = useQueryState("goal", goalParser);
 
@@ -33,22 +40,22 @@ export default function Plan() {
           router.back();
         }}
       >
-        Back
+        {t("common.back")}
       </button>
 
       <div className="lede">
-        <h1>Go Pro</h1>
+        <h1>{t("plan.title")}</h1>
         <p>
-          {goal ? `A plan for ${goal.replace("-", " ")}. ` : ""}
-          Payment happens right here — the sheet opens over this page.
+          {goal ? `${t("plan.forGoal", { goal: goal.replace("-", " ") })} ` : ""}
+          {t("plan.body")}
         </p>
       </div>
 
       <div className="plans">
         {(
           [
-            { id: "monthly", label: "Monthly", product: monthly },
-            { id: "pro", label: "Pro", product: pro },
+            { id: "monthly", label: "plan.monthly", product: monthly },
+            { id: "pro", label: "plan.pro", product: pro },
           ] as const
         ).map((plan) => (
           <button
@@ -61,8 +68,8 @@ export default function Plan() {
               setReference(plan.id);
             }}
           >
-            <span className="plan-label">{plan.label}</span>
-            <span className="plan-price">{plan.product?.variables.price ?? "—"}</span>
+            <span className="plan-label">{t(plan.label)}</span>
+            <span className="plan-price">{plan.product?.variables.price ?? t("plan.empty")}</span>
           </button>
         ))}
       </div>
@@ -76,7 +83,9 @@ export default function Plan() {
             purchase(reference);
           }}
         >
-          {selected?.variables.price ? `Subscribe · ${selected.variables.price}` : "Subscribe"}
+          {selected?.variables.price
+            ? t("plan.cta", { price: selected.variables.price })
+            : t("plan.ctaBare")}
         </button>
       </div>
     </main>

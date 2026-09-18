@@ -233,15 +233,36 @@ export function createStudioActions(
         const bound = bindings === undefined ? undefined : Object.values(bindings)[0];
         if (!bound) return {};
         const client = await ensureApi();
+        const id = encodeURIComponent(bound.paywallId);
         const paywall = await client.get<{
           paywall_url?: string | null;
+          version?: number;
           status?: string;
           updated_at?: string;
           identifier?: string;
-        }>(`/v2/paywalls/${encodeURIComponent(bound.paywallId)}`);
+        }>(`/v2/paywalls/${id}`);
+        const live =
+          typeof paywall.paywall_url === "string" && typeof paywall.version === "number"
+            ? [{ version: paywall.version, url: paywall.paywall_url, live: true }]
+            : [];
+        const listed = await client
+          .get<{
+            data?: { version: number; url: string; live?: boolean; created_at?: string }[];
+          }>(`/v2/paywalls/${id}/versions`)
+          .then(
+            (response) => ({
+              versions: (response.data ?? []).map((entry) => ({
+                version: entry.version,
+                url: entry.url,
+                live: entry.live === true,
+                pushedAt: entry.created_at,
+              })),
+            }),
+            (error: unknown) => ({ versions: live, unreachable: reason(error) }),
+          );
         return {
           paywallId: bound.paywallId,
-          liveUrl: paywall.paywall_url ?? undefined,
+          ...listed,
           active: paywall.status === "active",
           updatedAt: paywall.updated_at,
           identifier: paywall.identifier,

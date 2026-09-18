@@ -28,8 +28,7 @@
     "LICENSE",
     "package.json",
     "prompts",
-    "README.md",
-    "skills"
+    "README.md"
   ],
   "type": "module",
   "exports": {
@@ -43,17 +42,19 @@
     }
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && tsx scripts/vendor-skills.ts",
     "watch": "tsdown --watch",
     "regen:asc": "tsx scripts/regen-asc-index.ts",
+    "skills:vendor": "tsx scripts/vendor-skills.ts",
+    "skills:ensure": "test -f dist/skills/superwall/SKILL.md || tsx scripts/vendor-skills.ts",
     "dev": "bun bin.ts",
-    "test": "tsx --test --import ./tests/setup.ts $(rg --files tests -g '*.test.ts')",
+    "test": "bun run skills:ensure && tsx --test --import ./tests/setup.ts $(rg --files tests -g '*.test.ts')",
     "link:global": "tsdown && bun link",
     "typecheck": "tsc --noEmit",
     "prepack": "bun run build",
     "prepublishOnly": "bun run typecheck && bun run test",
     "test:run": "tsx --test $(rg --files tests -g '*.test.ts')",
-    "test:coverage": "tsx --test --import ./tests/setup.ts --experimental-test-coverage --test-coverage-lines=85 --test-coverage-branches=88 --test-coverage-functions=85 $(rg --files tests -g '*.test.ts')",
+    "test:coverage": "bun run skills:ensure && tsx --test --import ./tests/setup.ts --experimental-test-coverage --test-coverage-lines=85 --test-coverage-branches=88 --test-coverage-functions=85 $(rg --files tests -g '*.test.ts')",
     "clean": "rm -rf dist"
   },
   "dependencies": {

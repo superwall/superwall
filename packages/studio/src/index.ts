@@ -44,9 +44,11 @@ export type {
   StudioActionName,
   StudioActionProgress,
   StudioActionResult,
+  StudioPresentation,
   StudioSource,
   StudioStatus,
   StudioSurface,
   StudioSurfaceKind,
+  StudioVersion,
 } from "./lib/surfaces";
 export type { SampleDefaults, VariableOverrides } from "./lib/variables";

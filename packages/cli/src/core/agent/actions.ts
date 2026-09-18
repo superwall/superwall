@@ -7,6 +7,7 @@ import { loadBundledSkill } from "./skills";
 /** Skill reference file per framework, so an agent only sees its own platform's docs. */
 export const FRAMEWORK_REF: Partial<Record<Integration, string>> = {
   [Integration.swift]: "ios",
+  [Integration.android]: "android",
   [Integration.expo]: "expo",
   [Integration.reactNative]: "react-native",
   [Integration.flutter]: "flutter",

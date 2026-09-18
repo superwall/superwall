@@ -16,6 +16,15 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
             type: "string",
             describe: "Start from a public example by name, e.g. --example with-rive",
           },
+          from: {
+            type: "string",
+            describe:
+              "Rebuild an existing dashboard paywall as code: scaffold its config.ts (products, presentation, settings) and a migration brief from the paywall id",
+          },
+          app: {
+            type: "string",
+            describe: "Connect this Superwall app by id instead of detecting or asking",
+          },
           yes: {
             type: "boolean",
             alias: "y",
@@ -33,7 +42,9 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
           },
         })
         .example("$0 create", "Set up superwall/ in the current app")
-        .example("$0 create --example with-rive", "Start from an example"),
+        .example("$0 create --example with-rive", "Start from an example")
+        .example("$0 create --from 65920", "Rebuild dashboard paywall 65920 as code")
+        .example("$0 create --app 52518", "Connect a specific Superwall app"),
     (argv) => {
       return import("@/commands/paywalls/create").then((m) => m.runCreate(argv));
     },
@@ -56,6 +67,11 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
             describe: "Preferred port (falls back to the next free one)",
           },
           host: { type: "string", default: "0.0.0.0", describe: "Host to bind" },
+          open: {
+            type: "string",
+            hidden: true,
+            describe: "Open the browser at this studio path once the server is up",
+          },
         }),
     (argv) => {
       return import("@/commands/paywalls/dev").then((m) => m.runDev(argv));
@@ -77,7 +93,7 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
             type: "array",
             string: true,
             describe:
-              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web, flutter, react_native",
+              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web",
           },
           rename: {
             type: "array",
@@ -114,7 +130,7 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
             type: "array",
             string: true,
             describe:
-              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web, flutter, react_native",
+              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web",
           },
           version: {
             type: "number",
@@ -142,7 +158,7 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
             type: "array",
             string: true,
             describe:
-              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web, flutter, react_native",
+              "Limit to these platforms (repeatable, or comma-separated) - ios, android, web",
           },
           rename: {
             type: "array",

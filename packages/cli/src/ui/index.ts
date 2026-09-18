@@ -54,6 +54,7 @@ export const ui: Renderer = {
   multiselect: (o) => active.multiselect(o),
   confirm: (o) => active.confirm(o),
   text: (o) => active.text(o),
+  onInterrupt: (listener) => active.onInterrupt?.(listener) ?? (() => {}),
 };
 
 export type {

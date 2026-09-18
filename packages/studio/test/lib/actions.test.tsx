@@ -42,7 +42,10 @@ afterEach(() => {
 describe("studio actions", () => {
   it("ships with the selected action and reports the result", async () => {
     const fetchMock = mockFetch({
-      status: { paywallId: "208540", liveUrl: "https://runtime.test/v5.html" },
+      status: {
+        paywallId: "208540",
+        versions: [{ version: 5, url: "https://runtime.test/v5.html", live: true }],
+      },
       action: { ok: true, version: 6, live: false },
     });
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
@@ -100,20 +103,30 @@ describe("studio actions", () => {
     expect(actionCalls()).toHaveLength(1);
   });
 
-  it("compare picks the live version from its menu and splits the stage", async () => {
-    mockFetch({ status: { paywallId: "208540", liveUrl: "https://runtime.test/v5.html" } });
+  it("compare lists every pushed version and splits the stage on the chosen one", async () => {
+    mockFetch({
+      status: {
+        paywallId: "208540",
+        versions: [
+          { version: 5, url: "https://runtime.test/v5.html", live: true },
+          { version: 4, url: "https://runtime.test/v4.html", live: false },
+        ],
+      },
+    });
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
     render(<StudioApp source={source} />);
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Compare/ })).toBeDefined());
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-    fireEvent.click(screen.getByText("Live version"));
+    await waitFor(() => expect(screen.getByText("v4")).toBeDefined());
+    expect(screen.getByText("v5 · live")).toBeDefined();
+    fireEvent.click(screen.getByText("v4"));
 
-    expect(screen.getByText("Live")).toBeDefined();
+    expect(screen.getByText("v4")).toBeDefined();
     expect(screen.getByText("Local")).toBeDefined();
     await waitFor(() => {
-      const live = screen.getAllByTitle("plus-upgrade live").at(-1);
-      expect(live?.getAttribute("src")).toContain("https://runtime.test/v5.html");
+      const pushed = screen.getAllByTitle("plus-upgrade v4").at(-1);
+      expect(pushed?.getAttribute("src")).toContain("https://runtime.test/v4.html");
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
@@ -143,62 +156,16 @@ describe("studio actions", () => {
     expect(pane?.getAttribute("src")).toContain("/preview/paywall/win-back");
   });
 
-  it("compare without anything live shows the placeholder", async () => {
-    mockFetch({ status: {} });
+  it("compare with nothing pushed still opens and says so, never a phantom live row", async () => {
+    mockFetch({ status: { paywallId: "208540", versions: [] } });
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
     render(<StudioApp source={source} />);
 
+    await waitFor(() => expect(screen.getByRole("button", { name: /Compare/ })).toBeDefined());
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-    fireEvent.click(screen.getByText("Live version"));
-    expect(screen.getByText(/Nothing live yet/)).toBeDefined();
-  });
-
-  it("the placeholder is exactly the size of the device frame beside it", async () => {
-    mockFetch({ status: {} });
-    window.history.replaceState({}, "", "/paywall/plus-upgrade");
-    render(<StudioApp source={source} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-    fireEvent.click(screen.getByText("Live version"));
-
-    const frame = screen.getByTestId("device-frame");
-    const placeholder = screen.getByTestId("device-placeholder");
-
-    expect(placeholder.style.width).toBe(frame.style.width);
-    expect(placeholder.style.height).toBe(frame.style.height);
-    expect(placeholder.style.width).not.toBe("");
-  });
-
-  it("the placeholder follows the device frame when the hardware changes", async () => {
-    mockFetch({ status: {} });
-    window.history.replaceState({}, "", "/paywall/plus-upgrade");
-    render(<StudioApp source={source} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-    fireEvent.click(screen.getByText("Live version"));
-
-    const before = screen.getByTestId("device-frame").style.width;
-    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "ipad-pro-11" } });
-
-    const frame = screen.getByTestId("device-frame");
-    const placeholder = screen.getByTestId("device-placeholder");
-    expect(frame.style.width).not.toBe(before);
-    expect(placeholder.style.width).toBe(frame.style.width);
-    expect(placeholder.style.height).toBe(frame.style.height);
-  });
-
-  it("centers the placeholder copy on both axes", async () => {
-    mockFetch({ status: {} });
-    window.history.replaceState({}, "", "/paywall/plus-upgrade");
-    render(<StudioApp source={source} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-    fireEvent.click(screen.getByText("Live version"));
-
-    const placeholder = screen.getByTestId("device-placeholder");
-    for (const token of ["flex", "items-center", "justify-center", "text-center"]) {
-      expect(placeholder.className).toContain(token);
-    }
+    expect(screen.getByText("No pushed versions or other paywalls here.")).toBeDefined();
+    expect(screen.queryByText(/live/i)).toBeNull();
+    expect(screen.getByText("Off")).toBeDefined();
   });
 
   it("hides ship and compare entirely when nothing can be compared", () => {
@@ -216,7 +183,7 @@ describe("home cards", () => {
     mockFetch({
       status: {
         paywallId: "208540",
-        liveUrl: "https://r.test/a.html",
+        versions: [{ version: 1, url: "https://r.test/a.html", live: true }],
         active: true,
         updatedAt: new Date(Date.now() - 2 * 3600_000).toISOString(),
       },

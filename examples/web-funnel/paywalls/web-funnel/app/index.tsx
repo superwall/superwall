@@ -1,15 +1,16 @@
-import { useHaptics } from "superwall/hooks";
+import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export default function Index() {
   const router = useRouter();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Read more, faster</h1>
-        <p>Two questions, then your plan. This whole funnel is one paywall</p>
+        <h1>{t("index.title")}</h1>
+        <p>{t("index.subtitle")}</p>
       </div>
 
       <div className="actions">
@@ -21,7 +22,7 @@ export default function Index() {
             router.push("goal");
           }}
         >
-          Get started
+          {t("index.cta")}
         </button>
       </div>
     </main>

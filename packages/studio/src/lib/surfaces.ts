@@ -1,4 +1,7 @@
+import type { StudioPresentation } from "./presentation";
 import type { SampleDefaults } from "./variables";
+
+export type { StudioPresentation } from "./presentation";
 
 export type {
   AppScheme,
@@ -7,6 +10,7 @@ export type {
   StudioActionProgress,
   StudioActionResult,
   StudioStatus,
+  StudioVersion,
 } from "./contract";
 
 export type StudioSurfaceKind = "paywall" | "funnel";
@@ -20,13 +24,47 @@ export type StudioSurface = {
   routes: string[];
   locales: string[];
   platforms?: string[];
+  presentation?: StudioPresentation;
   paywallId?: string;
   paywallIdentifier?: string;
+  origin?: StudioOrigin;
 };
+
+export type StudioScreenFramework =
+  | "swiftui"
+  | "uikit"
+  | "compose"
+  | "android-views"
+  | "react-native"
+  | "flutter";
+
+export type StudioOrigin =
+  | { paywallId: string; url: string }
+  | { path: string; framework: StudioScreenFramework; screenshot?: string };
+
+export const SCREEN_FRAMEWORK_LABEL: Record<StudioScreenFramework, string> = {
+  swiftui: "SwiftUI",
+  uikit: "UIKit",
+  compose: "Jetpack Compose",
+  "android-views": "Android Views",
+  "react-native": "React Native",
+  flutter: "Flutter",
+};
+
+export const isScreenOrigin = (
+  origin: StudioOrigin,
+): origin is Extract<StudioOrigin, { path: string }> => "path" in origin;
+
+export const hasOriginal = (surface: StudioSurface): boolean =>
+  surface.origin !== undefined &&
+  (!isScreenOrigin(surface.origin) || surface.origin.screenshot !== undefined);
 
 export type PreviewUrlBuilder = (surface: StudioSurface) => string;
 
-export type CompareTarget = { type: "live" } | { type: "surface"; surface: StudioSurface };
+export type CompareTarget =
+  | { type: "version"; version: number }
+  | { type: "surface"; surface: StudioSurface }
+  | { type: "origin" };
 
 export type StudioSource = {
   scheme?: string;

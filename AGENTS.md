@@ -88,7 +88,29 @@ self-describing npm project — clone it, install, `superwall dev`:
   `--rename <old>=<new>` flag on push/publish is the non-interactive escape. A
   binding no rename claims is offered for removal interactively (lock-only —
   the paywall keeps serving, and restoring the directory re-binds it); a
-  non-interactive run never mutates the lock without consent.
+  non-interactive run never mutates the lock without consent. The lock's
+  optional `origins` section (`"paywall/<id>": { paywallId, url }`) is
+  written by `superwall create --from <paywall-id>` — the dashboard
+  (editor) paywall a surface was rebuilt from and the document it serves.
+  It is never a binding (both lock readers keep it apart from
+  `paywalls`/`funnels`); the framework passes it to the studio as
+  `origin`, which offers it as **Compare › Original**, a view-only pane
+  (the editor runtime does not speak the studio's host protocol). The
+  deterministic half of a migration — `config.ts` from the API row plus
+  the `paywall`/`paywall_language` records of the editor store embedded in
+  the served document (`vike_pageContext`), and a `MIGRATION.md` brief with
+  the inventory — is `packages/cli/src/core/paywalls/project/origin.ts`;
+  the rebuild is the framework skill's `migrate-from-editor.md`. The same
+  section also holds native-screen origins
+  (`{ path, framework, screenshot? }`, written by `superwall migrate
+--screen <path>`): `packages/cli/src/core/paywalls/screen.ts` is the
+  scanner (string literals, assets, product ids and actions per language,
+  the candidate ranking, `config.ts` and the brief), the screenshot the
+  CLI captures from a booted simulator is `paywalls/<id>/original.png`,
+  served by the preview server at `/__studio/original/<kind>/<id>` and
+  shown by the studio as an image pane; the rebuild playbook is the
+  framework skill's `references/migrate-from-native.md` with one
+  `references/native/<framework>.md` per source framework.
 - Identity is the path. No name fields, no registration, and user projects
   never contain vite configs, index.html, or build tooling — the framework
   owns bundling. `@/…` aliases the `superwall/` directory.
@@ -119,7 +141,7 @@ The stack, bottom to top — each layer depends only on the one below it:
     decoding for `accept64`
   - `src/config/` — the `SuperwallConfig` contract a running paywall reads,
     one file per concern (`products`, `checkout`, `presentation`,
-    `background`, `notifications`, `localization`). Push-time concerns (the
+    `background`, `insets`, `notifications`, `localization`). Push-time concerns (the
     settings wire, document attributes) live in the framework, not here.
   - `src/localization/` — `locale.ts` (resolution), `catalog.ts` (`t()`),
     `periods.ts` (the editor's period translation table from
@@ -252,7 +274,46 @@ The stack, bottom to top — each layer depends only on the one below it:
     (`renderDocument`, `data-sw-*` semantics) and the platform layer the
     runtime wraps it in (`injectPlatformLayer`). The build and the preview
     server both render through it, so local and published are the same
-    document. Nothing else may enter it.
+    document. Nothing else may enter it. It owns both kinds of `data-sw-*`
+    attribute: `documentAttributes` (static, from `config.ts` — generation,
+    scroll, presentation — rendered into the HTML and reasserted by the
+    provider) and `hostAttributes` (live, from the device the host reports —
+    platform, idiom, cutout — stamped by the provider, absent when the host
+    has said nothing, never guessed).
+  - `src/device.ts` — what the framework knows about devices from the
+    variables a host sends: `platformOf`, `idiomOf`, `cutoutOf` (the iPhone
+    model tables). The checkout sheet's corner radius and the inset floors
+    both derive from it; nothing else keeps a model list.
+  - `src/provider/insets.css` — the inset system. The router wraps the
+    whole paywall in `[data-sw-root]` (`navigation/routes.css`), a flex
+    column at `100dvh` padded by `--sw-inset-*`, with `[data-sw-content]`
+    inside it as the positioned containing block for layout chrome, so
+    layouts and pages are inside the safe area by default, an absolute
+    `top: 0` in a layout is the top of the inset area, and
+    `--sw-routes-height` defaults to `auto`. `[data-sw-routes]` then
+    reaches back out under the insets with negative margins and each
+    `[data-sw-route]` (the scroll container) carries them as padding
+    (`--sw-page-inset-*`, = the insets), so pages scroll edge to edge
+    like a native scroll view with a content inset and a sticky footer
+    sticks above the home indicator; a layout with its own footer below
+    the pages sets `--sw-page-inset-bottom: 0`. `--sw-bleed` /
+    `--sw-page-bleed` are the negative insets for overlays that must
+    cover the bars.
+    `config.insets` (runtime `config/insets.ts`, `insetsOf`) is written
+    inline on `<html>` by the provider; an edge it leaves at `"safe-area"`
+    falls through to the stylesheet, where `--sw-inset-*` defaults to
+    `--sw-safe-area-inset-*` = `max(env(safe-area-inset-*),
+--sw-safe-area-floor-*)`, and the floors key on the `data-sw-*`
+    attributes above (iOS cutout/idiom/orientation, Android's status bar,
+    the presentation style). Fixed chrome that means to sit over the bars
+    reads `--sw-safe-area-inset-*`, never `--sw-inset-*`. Every rule has
+    bare `:root` specificity (`:root:where([…])`) and lands before the
+    paywall's stylesheet so a paywall's own `:root` declaration wins. The
+    floors are minimums per device class, never exact values, so a real
+    `env()` is never shrunk. Android's come from the SDK's layout: a
+    fullscreen paywall is drawn under the status bar, and the SDK margins
+    the webview above the navigation bar itself, while Android WebView
+    reports no `env()` for either.
   - `src/build/` — `superwall/build`: one surface → one self-contained,
     content-addressed HTML snapshot. `index.ts` drives vite; `entry.ts`
     generates the entry a surface mounts, `assets.ts` collects and
@@ -281,7 +342,10 @@ The stack, bottom to top — each layer depends only on the one below it:
   hard-depends on a framework version, and commands always run against the
   project's lockfile. It owns **no bin** — it exports `main()`, and the
   framework's `superwall` bin (prefer-local launcher + tsx + project `.env`)
-  starts it. Dependency direction: framework → cli for the bin, cli →
+  starts it. The launcher registers tsx against the superwall project's own
+  `tsconfig.json` (or none), never the host app's: an app's `paths` (the
+  dashboard maps `@superwall/studio/*` onto a vendored `.d.ts`) would
+  otherwise redirect the CLI's imports. Dependency direction: framework → cli for the bin, cli →
   framework only dynamically at command runtime. This package is **excluded
   from oxfmt/oxlint** (it keeps its own conventions — see its `AGENTS.md`)
   and is consumed **built** (tsdown → `dist/`; root `postinstall` builds it).

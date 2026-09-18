@@ -250,15 +250,6 @@ export const PaywallRouter = ({
     };
   }, [entries, top]);
 
-  React.useEffect(
-    () =>
-      session.on("back_button_input", () => {
-        if (router.canGoBack()) router.back();
-        else session.close();
-      }),
-    [session, router],
-  );
-
   React.useEffect(() => {
     if (nav.sync === "skip") return;
     store.set({ [NAV_KEY]: serializeStack(nav.entries) }, nav.sync);
@@ -408,7 +399,9 @@ export const PaywallRouter = ({
   return (
     <QueryStoreContext.Provider value={store}>
       <RouterContext.Provider value={router}>
-        {Layout ? <Layout>{stack}</Layout> : stack}
+        <div data-sw-root="">
+          <div data-sw-content="">{Layout ? <Layout>{stack}</Layout> : stack}</div>
+        </div>
       </RouterContext.Provider>
     </QueryStoreContext.Provider>
   );

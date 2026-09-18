@@ -1,25 +1,24 @@
-import { useHaptics, useProducts, usePurchase } from "superwall/hooks";
+import { useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export default function Index() {
   const router = useRouter();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   const annual = getProduct("annual");
+  const price = annual?.variables.price;
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Go Pro</h1>
-        <p>Close the store sheet without buying and see what happens.</p>
+        <h1>{t("paywall.title")}</h1>
+        <p>{t("paywall.subtitle")}</p>
       </div>
 
-      <p className="note">
-        Most people who open a store sheet close it. Catching that is worth more than anything else
-        on this page.
-      </p>
+      <p className="note">{t("paywall.note")}</p>
 
       <div className="actions">
         <button
@@ -33,7 +32,7 @@ export default function Index() {
             }
           }}
         >
-          {annual?.variables.price ? `Subscribe · ${annual.variables.price}` : "Subscribe"}
+          {price ? t("paywall.cta", { price }) : t("paywall.ctaBare")}
         </button>
       </div>
     </main>

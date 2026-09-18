@@ -8,11 +8,56 @@ export type SurfaceBinding = {
 
 export type SurfaceBindings = Record<string, SurfaceBinding>;
 
+export type PaywallOrigin = {
+  paywallId: string;
+  url: string;
+};
+
+export type ScreenOrigin = {
+  path: string;
+  framework: "swiftui" | "uikit" | "compose" | "android-views" | "react-native" | "flutter";
+  screenshot?: string;
+};
+
+export type SurfaceOrigin = PaywallOrigin | ScreenOrigin;
+
+export const isScreenOrigin = (origin: SurfaceOrigin): origin is ScreenOrigin => "path" in origin;
+
+const isFileName = (value: unknown): value is string =>
+  typeof value === "string" && value !== "" && !/[\\/]/.test(value) && !value.startsWith(".");
+
+const SCREEN_FRAMEWORKS: ReadonlySet<string> = new Set([
+  "swiftui",
+  "uikit",
+  "compose",
+  "android-views",
+  "react-native",
+  "flutter",
+]);
+
+const readOrigin = (candidate: Record<string, unknown>): SurfaceOrigin | undefined => {
+  if (typeof candidate.paywallId === "string" && typeof candidate.url === "string") {
+    return { paywallId: candidate.paywallId, url: candidate.url };
+  }
+  if (
+    typeof candidate.path === "string" &&
+    typeof candidate.framework === "string" &&
+    SCREEN_FRAMEWORKS.has(candidate.framework)
+  ) {
+    const framework = candidate.framework as ScreenOrigin["framework"];
+    return isFileName(candidate.screenshot)
+      ? { path: candidate.path, framework, screenshot: candidate.screenshot }
+      : { path: candidate.path, framework };
+  }
+  return undefined;
+};
+
 export type LockFile = {
   version: 1;
   apps: Record<string, string>;
   paywalls: Record<string, SurfaceBindings>;
   funnels: Record<string, SurfaceBindings>;
+  origins?: Record<string, SurfaceOrigin>;
 };
 
 const emptyLock = (): LockFile => ({ version: 1, apps: {}, paywalls: {}, funnels: {} });
@@ -53,8 +98,23 @@ export const parseLock = (parsed: unknown): LockFile | undefined => {
   }
   lock.paywalls = readSection(parsed.paywalls);
   lock.funnels = readSection(parsed.funnels);
+  if (isRecord(parsed.origins)) {
+    const origins: Record<string, SurfaceOrigin> = {};
+    for (const [key, candidate] of Object.entries(parsed.origins)) {
+      if (!isRecord(candidate)) continue;
+      const origin = readOrigin(candidate);
+      if (origin) origins[key] = origin;
+    }
+    if (Object.keys(origins).length > 0) lock.origins = origins;
+  }
   return lock;
 };
+
+export const originOf = (
+  lock: LockFile,
+  kind: "paywall" | "funnel",
+  surfaceId: string,
+): SurfaceOrigin | undefined => lock.origins?.[`${kind}/${surfaceId}`];
 
 export const readLock = (superwallDir: string): LockFile => {
   const file = path.join(superwallDir, "superwall.lock");

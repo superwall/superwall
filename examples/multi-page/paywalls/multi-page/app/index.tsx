@@ -1,15 +1,16 @@
-import { useHaptics } from "superwall/hooks";
+import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export default function Index() {
   const router = useRouter();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
     <main className="page page--chromed">
       <div className="lede">
-        <h1>Meet Pro</h1>
-        <p>Three screens in one paywall. Every file in app/ is a screen.</p>
+        <h1>{t("index.title")}</h1>
+        <p>{t("index.subtitle")}</p>
       </div>
 
       <pre className="tree">
@@ -17,19 +18,20 @@ export default function Index() {
         {"├── "}
         <b>index.tsx</b>
         {"     "}
-        <i>you are here</i>
+        <i>{t("index.tree.here")}</i>
         {"\n├── "}
         <b>features.tsx</b>
         {"\n├── "}
         <b>plans.tsx</b>
         {"\n└── "}
         <b>layout.tsx</b>
-        {"    the chrome above and below"}
+        {"    "}
+        {t("index.tree.layout")}
       </pre>
 
       <p>
-        The filename is the route name — <code>router.push("features")</code>. No config, no
-        registry, and all three ship in one snapshot.
+        {t("index.route.before")} <code>router.push("features")</code>
+        {t("index.route.after")}
       </p>
 
       <div className="actions">
@@ -41,7 +43,7 @@ export default function Index() {
             router.push("features");
           }}
         >
-          See what you get
+          {t("index.cta")}
         </button>
       </div>
     </main>

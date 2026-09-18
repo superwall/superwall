@@ -6,10 +6,17 @@ export type StudioActionResult =
 
 export type StudioActionProgress = (step: string, state: "start" | "done") => void;
 
+export type StudioVersion = {
+  version: number;
+  url: string;
+  live: boolean;
+  pushedAt?: string;
+};
+
 export type StudioStatus = {
   paywallId?: string;
   identifier?: string;
-  liveUrl?: string;
+  versions?: StudioVersion[];
   active?: boolean;
   updatedAt?: string;
   unreachable?: string;

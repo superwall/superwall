@@ -124,8 +124,8 @@ editor. What the library gives a host:
   controls for the User, Device, Params and Products groups the SDK reports.
   Override changes hot-swap: the next frame loads hidden and crossfades, so
   nothing ever flashes white. Shipping happens here too: an action menu runs
-  Push, Publish and Promote, and a Compare menu diffs the preview against
-  the live paywall.
+  Push, Publish and Promote, and a Compare menu splits the stage against any
+  pushed version of the paywall (the live one marked) or another local one.
 
 ## Design
 

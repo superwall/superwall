@@ -36,13 +36,21 @@ const Row = ({
   </button>
 );
 
+const Heading = ({ children }: React.PropsWithChildren) => (
+  <span className="block px-3 pt-2 pb-1 text-[0.6875rem] tracking-wide text-cream/45 uppercase">
+    {children}
+  </span>
+);
+
 export const CompareMenu = ({
   active,
   options,
+  notice,
   onSelect,
 }: {
   active: CompareTarget | undefined;
   options: CompareOption[];
+  notice?: string;
   onSelect: (target: CompareTarget | undefined) => void;
 }) => {
   const [open, setOpen] = React.useState(false);
@@ -64,7 +72,11 @@ export const CompareMenu = ({
 
   const activeKey =
     active &&
-    (active.type === "live" ? "live" : `surface:${active.surface.kind}/${active.surface.id}`);
+    (active.type === "version"
+      ? `version:${active.version}`
+      : active.type === "origin"
+        ? "origin"
+        : `surface:${active.surface.kind}/${active.surface.id}`);
 
   const choose = (target: CompareTarget | undefined) => {
     setOpen(false);
@@ -72,12 +84,22 @@ export const CompareMenu = ({
   };
 
   const needle = query.trim().toLowerCase();
-  const live = options.filter((option) => option.key === "live");
-  const paywalls = options
-    .filter((option) => option.key !== "live")
-    .filter(
-      (option) => needle === "" || `${option.label} ${option.hint}`.toLowerCase().includes(needle),
-    );
+  const matches = (option: CompareOption) =>
+    needle === "" || `${option.label} ${option.hint}`.toLowerCase().includes(needle);
+  const origins = options.filter((option) => option.target.type === "origin").filter(matches);
+  const versions = options.filter((option) => option.target.type === "version").filter(matches);
+  const paywalls = options.filter((option) => option.target.type === "surface").filter(matches);
+  const grouped = [origins, versions, paywalls].filter((group) => group.length > 0).length > 1;
+  const rows = (group: CompareOption[]) =>
+    group.map((option) => (
+      <Row
+        key={option.key}
+        label={option.label}
+        hint={option.hint}
+        selected={option.key === activeKey}
+        onSelect={() => choose(option.target)}
+      />
+    ));
 
   return (
     <div className="relative flex" ref={menuRef}>
@@ -93,46 +115,43 @@ export const CompareMenu = ({
       </button>
 
       {open && (
-        <div className="bg-bar absolute bottom-full left-0 z-20 mb-1 flex w-72 flex-col overflow-hidden rounded border border-cream/20">
+        <div className="bg-bar absolute bottom-full left-0 z-20 mb-[calc(0.5rem+2px)] flex w-72 flex-col overflow-hidden rounded border border-cream/20">
           <div className="p-2">
             <input
               className="sw-input"
               type="search"
               value={query}
-              placeholder="Search paywalls"
-              aria-label="Search paywalls"
+              placeholder="Search versions and paywalls"
+              aria-label="Search versions and paywalls"
               onChange={(event) => setQuery(event.target.value)}
             />
           </div>
 
           <div className="max-h-64 overflow-y-auto">
-            {paywalls.length === 0 ? (
+            {origins.length + versions.length + paywalls.length === 0 ? (
               <span className="block px-3 pt-2 pb-4 text-[0.8125rem] text-cream/45">
-                {needle === "" ? "No other paywalls here." : `Nothing matches “${query.trim()}”.`}
+                {needle === ""
+                  ? "No pushed versions or other paywalls here."
+                  : `Nothing matches “${query.trim()}”.`}
               </span>
             ) : (
-              paywalls.map((option) => (
-                <Row
-                  key={option.key}
-                  label={option.label}
-                  hint={option.hint}
-                  selected={option.key === activeKey}
-                  onSelect={() => choose(option.target)}
-                />
-              ))
+              <>
+                {grouped && origins.length > 0 && <Heading>Rebuilt from</Heading>}
+                {rows(origins)}
+                {grouped && versions.length > 0 && <Heading>Versions</Heading>}
+                {rows(versions)}
+                {grouped && paywalls.length > 0 && <Heading>Paywalls</Heading>}
+                {rows(paywalls)}
+              </>
             )}
           </div>
 
           <div className="flex flex-col border-t border-cream/10">
-            {live.map((option) => (
-              <Row
-                key={option.key}
-                label={option.label}
-                hint={option.hint}
-                selected={option.key === activeKey}
-                onSelect={() => choose(option.target)}
-              />
-            ))}
+            {notice && (
+              <span className="block px-3 pt-2 text-xs text-cream/55" role="status">
+                {notice}
+              </span>
+            )}
             <Row
               label="Off"
               hint="A single preview"

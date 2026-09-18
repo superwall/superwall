@@ -36,7 +36,7 @@ a reply; everything in its snapshot arrived from a host.
 | Directory           | Owns                                                                                                                                                                        |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/bridge/`       | The wire: transport detection (`?platform=android`, `?transport=editor`, else WebKit), `detectSuperwallHost`, base64 batch decoding for `accept64`                          |
-| `src/config/`       | The `SuperwallConfig` contract a running paywall reads, one file per concern (products, checkout, presentation, background, notifications, localization)                    |
+| `src/config/`       | The `SuperwallConfig` contract a running paywall reads, one file per concern (products, checkout, presentation, background, insets, notifications, localization)            |
 | `src/localization/` | Locale resolution, the `t()` catalog, and `periods.ts` — the editor's period translation table, copied verbatim, with its lookup code trimmed of unreachable branches       |
 | `src/products/`     | The product model, merging of `products` + `template_variables`, and derived variables (localized `period`/`periodly`, `trialPeriodEndDate`)                                |
 | `src/session/`      | `createSuperwallSession`: outgoing message builders, purchase and request trackers, trial reminders, the incoming reducer, and the state `window.app.getAllState()` returns |
@@ -81,6 +81,12 @@ yourself (tests, tools), or `transportKind` to force one.
 
 The paywall runs no timer of its own: the SDK owns purchase timing.
 
+What happens after a completed purchase is `config.postPurchase` (`"dismiss"`,
+`"stay"`, or the web-only `"redeem"` / `{ redirect }`), overridable per call
+with `purchase(ref, { postPurchase })`; natively it becomes `should_dismiss`
+on the purchase message. `purchase(ref, { stripeMetadata })` is carried to web
+checkout by the framework and ignored by store purchases.
+
 A transaction is attributed to a pending purchase by reference, then by store
 identifier, then, for a bare transaction, to the only pending purchase.
 
@@ -90,6 +96,16 @@ identifier, then, for a bare transaction, to the only pending purchase.
 `snapshot.restore` (`started`, `completed`, `failed`) and the `restore_start`,
 `restore_complete`, `restore_fail` events. iOS reports all three; Android
 reports only `restore_fail`.
+
+### User attributes
+
+`setUserAttributes({ email: "ada@example.com", plan: "pro" })` sends
+`user_attribute_updated` — the wire the editor's "Set User Attribute" action
+uses, so every host already merges and persists it — and applies the same
+merge to `snapshot.user` (and `getAllState().user`) immediately. Hosts never
+send variables back after an attribute update, so without the local merge the
+paywall would keep reading the user as it was before its own action. Values
+travel as strings; an empty object sends nothing.
 
 ### Introductory offers
 

@@ -69,4 +69,5 @@ export interface Renderer {
   multiselect: (o: MultiSelectOpts) => Promise<string[] | null>;
   confirm: (o: { message: string; initial?: boolean }) => Promise<boolean | null>;
   text: (o: TextOpts) => Promise<string | null>;
+  onInterrupt?: (listener: () => void) => () => void;
 }

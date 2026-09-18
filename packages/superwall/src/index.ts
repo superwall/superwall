@@ -8,6 +8,8 @@ export type {
   SuperwallEventMap,
   SuperwallEventName,
   SuperwallExperiment,
+  SuperwallInsetSide,
+  SuperwallInsetsConfig,
   SuperwallKnownProductVariables,
   SuperwallLocalizationConfig,
   SuperwallMessages,

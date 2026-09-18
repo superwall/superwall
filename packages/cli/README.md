@@ -56,6 +56,9 @@ instead of running it — paste it into any agent.
 
 ```bash
 superwall create      # start a paywalls project — minimal, or any public example
+superwall create --from {ID}   # rebuild a dashboard paywall as code: its config.ts, a migration brief, Compare › Original in the studio
+superwall migrate {ID}         # …then rebuild its pages with your coding agent, or copy the prompt (--skill prints it)
+superwall migrate --screen App/UpdateRequiredView.swift   # rebuild a native screen (Swift, Kotlin, RN, Flutter) as a Superwall surface (no path: pick from candidates)
 superwall dev         # open the studio and preview everything live
 superwall push        # build and push immutable versions (production untouched)
 superwall promote     # point production at a pushed version
@@ -76,7 +79,9 @@ to begin from any example in the
 then looks at the app around it: if the Superwall SDK is already configured,
 it finds your app by its API key and binds pushes to it; otherwise it can log
 you in, pick an app, or create one on the spot. `--yes` accepts the defaults;
-`--no-install` and `--no-connect` skip those steps.
+`--no-install` and `--no-connect` skip those steps, and `--app <id>` connects a
+specific Superwall app (the dashboard's **Copy Prompt** passes it) instead of
+detecting or asking.
 
 ### A project is a directory
 
@@ -340,9 +345,12 @@ already knows, so it gets a paywall right on the first try.
 
 ## Telemetry
 
-The CLI sends fully anonymous usage events (which workflow ran and whether it
-succeeded — never emails, IDs, file paths, SQL, prompts, or error messages).
-Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1`.
+The CLI sends fully anonymous usage events for every command (which command
+and subcommand ran, whether it succeeded, how long it took, and flags like
+`--json` or `--dry-run` — never emails, IDs, file paths, SQL, prompts, API
+paths, or error messages). Events carry a random per-machine id that is never
+linked to your account. Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or
+`DO_NOT_TRACK=1`.
 
 ## Package layout
 
@@ -360,7 +368,7 @@ packages/cli/
 │   ├── core/             api client, auth, project detection, paywall
 │   │                     binding + lock, agent runners, telemetry, skills sync
 │   └── ui/               the renderer: human output, --json envelopes, prompts
-├── skills/               the bundled playbooks integrate/migrate/review run
+├── dist/skills/          the playbooks integrate/migrate/review run, bundled from superwall/skills at build
 └── tests/                mirrors src/
 ```
 

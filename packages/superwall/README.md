@@ -52,6 +52,7 @@ instead of running it — paste it into any agent.
 
 ```bash
 superwall create      # start a paywalls project — minimal, or any public example
+superwall create --from 65920   # rebuild a dashboard paywall as code (config.ts, a migration brief, Compare › Original)
 superwall dev         # open the studio and preview everything live
 superwall push        # build and push immutable versions (production untouched)
 superwall promote     # point production at a pushed version
@@ -72,7 +73,9 @@ to begin from any example in the
 then looks at the app around it: if the Superwall SDK is already configured,
 it finds your app by its API key and binds pushes to it; otherwise it can log
 you in, pick an app, or create one on the spot. `--yes` accepts the defaults;
-`--no-install` and `--no-connect` skip those steps.
+`--no-install` and `--no-connect` skip those steps, and `--app <id>` connects a
+specific Superwall app (the dashboard's **Copy Prompt** passes it) instead of
+detecting or asking.
 
 ### A project is a directory
 
@@ -153,10 +156,51 @@ abandoned | failed`, never throws for flow outcomes; with `checkout:
 sheet), `useDiscount` (`await redeem(code)` resolves with the verdict, Stripe's coupon
 under Stripe's own field names, and the discounted price per product;
 `onDropped` fires if checkout later refuses the code, and a host can redeem one
-for the paywall with `redeem_discount`), `useActions`,
-`useHaptics`, `useColorScheme`, `useTranslation`, `useIntroductoryOffer`,
-`useDevice` / `useUser` / `useVariables`, `useLocalResource`,
-`useSuperwallEvent`, `useGameController`.
+for the paywall with `redeem_discount`), `useActions` (close, restore, open
+URLs and deep links, custom placements, permissions, callbacks, store review,
+and `setUserAttributes` — the host SDK persists the attributes and the
+paywall's own `useUser()` sees them at once), `useCheckoutRedemption`
+(finishes a `postPurchase: "stay"` web checkout — `completed`, `redeem`,
+`redirect`), `useHaptics`, `useColorScheme`, `useTranslation`,
+`useIntroductoryOffer`, `useDevice` / `useUser` / `useVariables`,
+`useLocalResource`, `useSuperwallEvent`, `useGameController`.
+
+Web checkout is made for one shopper: a `user.email` becomes the Stripe
+session's `customer_email` (shown in the sheet, not editable there) and a
+`user.stripe_customer_id` pins the customer, both read when the session is
+created. Setting either later — a funnel capturing the email with
+`setUserAttributes({ email })`, or a host sending fresher variables — drops
+every cached session and prefetches again, so the sheet never opens with an
+empty email once one is known.
+
+Once a purchase completes, `postPurchase` (in `config.ts`, or per
+`purchase()` call) decides what happens: `"dismiss"` (the default),
+`"stay"` to keep the paywall in control, and on the web `"redeem"` or
+`{ redirect: url }`. Pass `stripeMetadata` to `purchase()` to write key/values
+onto the Stripe subscription. `checkout: { managedPayments }` and
+`introductoryOfferEligibility` round out the config.
+
+### Insets
+
+The paywall is inset from the screen edges by default: the router wraps the
+layout and pages in `[data-sw-root]`, padded by
+`--sw-inset-top|right|bottom|left`, so nothing a paywall renders starts
+under the status bar, cutout or home indicator, and `[data-sw-content]`
+inside it is what layout chrome positions against, so `position: absolute;
+top: 4px` in a layout is 4px below the bar. `insets` in `config.ts`
+picks the padding — `"safe-area"` (default), `"none"`, pixels, a CSS
+length, or one value per edge — and the provider writes it inline on
+`<html>`. The safe area itself is `--sw-safe-area-inset-*`: the host's
+`env(safe-area-inset-*)` where it reports one, else a floor for the device
+and presentation the host described (59px above a Dynamic Island, 44px
+above a notch, 24px under Android's status bar, 34px over a home
+indicator, 0 at the top of a modal or drawer, 0 everywhere on the web).
+Fixed chrome on a full-bleed paywall reads those. The provider stamps
+`data-sw-platform`, `data-sw-idiom` and `data-sw-cutout` on `<html>` from
+the device the host reports, the document carries `data-sw-presentation`
+from `config.ts`, and `provider/insets.css` turns those into the floors.
+Every framework rule has bare-`:root` specificity and comes first, so a
+paywall's own `:root` declaration of any of the three variable layers wins.
 
 ### Navigation
 

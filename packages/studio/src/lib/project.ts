@@ -1,4 +1,10 @@
-import type { StudioSurface, StudioSurfaceKind } from "./surfaces";
+import { parsePresentation } from "./presentation";
+import type {
+  StudioOrigin,
+  StudioScreenFramework,
+  StudioSurface,
+  StudioSurfaceKind,
+} from "./surfaces";
 import type { SampleDefaults } from "./variables";
 
 export type StudioProjectPayload = {
@@ -28,6 +34,10 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
   const kind: StudioSurfaceKind | undefined =
     value.kind === "paywall" || value.kind === "funnel" ? value.kind : undefined;
   if (!kind || typeof value.id !== "string") return undefined;
+  const presentation = parsePresentation(
+    isRecord(value.settings) ? value.settings.presentation_style : undefined,
+  );
+  const origin = parseOrigin(value.origin);
   return {
     kind,
     id: value.id,
@@ -36,8 +46,40 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
     products: isStringRecord(value.products) ? value.products : {},
     locales: isStringArray(value.locales) ? value.locales : [],
     ...(isStringArray(value.platforms) ? { platforms: value.platforms } : {}),
+    ...(presentation === undefined ? {} : { presentation }),
     paywallId: typeof value.paywallId === "string" ? value.paywallId : undefined,
+    ...(origin === undefined ? {} : { origin }),
   };
+};
+
+const isFileName = (value: unknown): value is string =>
+  typeof value === "string" && value !== "" && !/[\\/]/.test(value) && !value.startsWith(".");
+
+const SCREEN_FRAMEWORKS: ReadonlySet<string> = new Set([
+  "swiftui",
+  "uikit",
+  "compose",
+  "android-views",
+  "react-native",
+  "flutter",
+]);
+
+const parseOrigin = (value: unknown): StudioOrigin | undefined => {
+  if (!isRecord(value)) return undefined;
+  if (typeof value.paywallId === "string" && typeof value.url === "string") {
+    return { paywallId: value.paywallId, url: value.url };
+  }
+  if (
+    typeof value.path === "string" &&
+    typeof value.framework === "string" &&
+    SCREEN_FRAMEWORKS.has(value.framework)
+  ) {
+    const framework = value.framework as StudioScreenFramework;
+    return isFileName(value.screenshot)
+      ? { path: value.path, framework, screenshot: value.screenshot }
+      : { path: value.path, framework };
+  }
+  return undefined;
 };
 
 export const parseProjectPayload = (data: unknown): StudioProjectPayload => {

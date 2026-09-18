@@ -3,6 +3,7 @@ import { createSessionCache, type SessionCache } from "./cache";
 import { sessionBody } from "../api/body";
 import {
   asString,
+  field,
   readCheckoutSession,
   readCheckoutStatus,
   readDiscountValidation,
@@ -39,6 +40,11 @@ export type CheckoutSessions = {
   status(checkoutContextId: string): Promise<CheckoutStatus>;
   redeemDiscount(code: string): Promise<DiscountValidationResult>;
   clearDiscount(): void;
+  attachMetadata(
+    checkoutContextId: string,
+    metadata: Readonly<Record<string, string>>,
+  ): Promise<void>;
+  completeWebapp(checkoutContextId: string): Promise<string | undefined>;
   invalidate(): void;
 };
 
@@ -202,6 +208,22 @@ export const createCheckoutSessions = (
     },
     clearDiscount: () => {
       if (discounts.clear()) invalidate();
+    },
+    attachMetadata: async (checkoutContextId, metadata) => {
+      if (Object.keys(metadata).length === 0) return;
+      await fetchWithRetry(subscriptionsApiUrl("checkout/session/custom-metadata"), {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ checkoutContextId, metadata, timing: "post_purchase" }),
+      });
+    },
+    completeWebapp: async (checkoutContextId) => {
+      const response = await fetchWithRetry(
+        subscriptionsApiUrl("checkout/session/complete-webapp"),
+        { method: "POST", headers: headers(), body: JSON.stringify({ checkoutContextId }) },
+      );
+      const token = field(await response.json(), "entitlementsToken");
+      return typeof token === "string" && token !== "" ? token : undefined;
     },
     invalidate,
   };

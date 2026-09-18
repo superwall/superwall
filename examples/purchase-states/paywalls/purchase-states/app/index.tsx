@@ -5,6 +5,7 @@ import {
   useProducts,
   usePurchase,
   useSuperwallEvent,
+  useTranslation,
 } from "superwall/hooks";
 
 type Entry = { name: string; detail?: string };
@@ -13,6 +14,7 @@ export default function Index() {
   const { restore } = useActions();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   const [log, setLog] = React.useState<Entry[]>([]);
@@ -20,28 +22,29 @@ export default function Index() {
 
   useSuperwallEvent("transaction_complete", () => {
     haptics.success();
-    add({ name: "transaction_complete", detail: "Bought or restored." });
+    add({ name: "transaction_complete", detail: t("log.purchased") });
   });
   useSuperwallEvent("transaction_abandon", () => {
-    add({ name: "transaction_abandon", detail: "Closed the sheet." });
+    add({ name: "transaction_abandon", detail: t("log.abandoned") });
   });
   useSuperwallEvent("freeTrial_start", () => {
     haptics.success();
-    add({ name: "freeTrial_start", detail: "Trial started." });
+    add({ name: "freeTrial_start", detail: t("log.trialStarted") });
   });
 
   const annual = getProduct("annual");
+  const price = annual?.variables.price;
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Purchase states</h1>
-        <p>Get the outcome of a purchase and act on it. Pick the result in the studio.</p>
+        <h1>{t("paywall.title")}</h1>
+        <p>{t("paywall.subtitle")}</p>
       </div>
 
       <div className="log">
         {log.length === 0 ? (
-          <span className="log-empty">Nothing yet.</span>
+          <span className="log-empty">{t("log.empty")}</span>
         ) : (
           log.map((entry, index) => (
             <div className="log-row" key={`${entry.name}-${index}`}>
@@ -53,9 +56,14 @@ export default function Index() {
       </div>
 
       <p className="note">
-        <code>purchase()</code> and <code>restore()</code> each resolve with the outcome of that
-        call. Events fire for anything the SDK reports — a restore announces itself as{" "}
-        <code>transaction_restore</code>, never <code>transaction_complete</code>.
+        <code>purchase()</code>
+        {t("note.and")}
+        <code>restore()</code>
+        {t("note.resolve")}
+        <code>transaction_restore</code>
+        {t("note.never")}
+        <code>transaction_complete</code>
+        {t("note.end")}
       </p>
 
       <div className="actions">
@@ -68,12 +76,12 @@ export default function Index() {
               if (result.status === "failed") haptics.error();
               add({
                 name: `purchase() → ${result.status}`,
-                detail: "What the call resolved with.",
+                detail: t("log.resolved"),
               });
             });
           }}
         >
-          {annual?.variables.price ? `Subscribe · ${annual.variables.price}` : "Subscribe"}
+          {price ? t("paywall.cta", { price }) : t("paywall.ctaBare")}
         </button>
         <button
           type="button"
@@ -83,11 +91,11 @@ export default function Index() {
             const result = await restore();
             add({
               name: `restore_${result.status}`,
-              detail: result.status === "restored" ? "Restored." : "Nothing to restore.",
+              detail: result.status === "restored" ? t("log.restored") : t("log.nothingToRestore"),
             });
           }}
         >
-          Restore purchases
+          {t("paywall.restore")}
         </button>
       </div>
     </main>

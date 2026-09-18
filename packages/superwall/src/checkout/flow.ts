@@ -1,4 +1,4 @@
-import type { SuperwallSession } from "@superwall/runtime";
+import type { SuperwallPostPurchase, SuperwallSession } from "@superwall/runtime";
 import { checkoutModeOf, checkoutPrefetchOf, detectSuperwallHost } from "@superwall/runtime";
 import { createApplePay, type ApplePay, type ApplePayOutcome } from "./applePay";
 import { asString, field } from "./api/decode";
@@ -7,15 +7,18 @@ import { subscriptionsApiUrl } from "./api/url";
 import { checkoutEvents } from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
 import { sdkHostsCheckoutInPaywall, sdkRedeemsCheckout } from "./host/sdk";
+import { bindsEntitlement, hostedInWebSdk } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
 import type {
   CheckoutMode,
   DiscountValidationResult,
   EmbeddedCheckoutSession,
+  PostCheckoutResolution,
   PostPurchaseBehavior,
   PurchaseOutcome,
   RedirectCheckoutSession,
+  WebPurchaseOptions,
 } from "./types";
 
 export type CompletedCheckout = {
@@ -23,6 +26,37 @@ export type CompletedCheckout = {
   checkoutContextId: string;
   checkoutSessionId: string | null;
   postPurchaseBehavior?: PostPurchaseBehavior;
+};
+
+const purchaseOptionsByPaywall = new WeakMap<object, Map<string, WebPurchaseOptions>>();
+
+const rememberPurchaseOptions = (
+  paywall: PaywallSession,
+  referenceName: string,
+  options: WebPurchaseOptions,
+) => {
+  const existing = purchaseOptionsByPaywall.get(paywall) ?? new Map<string, WebPurchaseOptions>();
+  existing.set(referenceName, options);
+  purchaseOptionsByPaywall.set(paywall, existing);
+};
+
+const takePurchaseOptions = (
+  paywall: PaywallSession,
+  referenceName: string,
+): WebPurchaseOptions => {
+  const options = purchaseOptionsByPaywall.get(paywall);
+  const taken = options?.get(referenceName) ?? {};
+  options?.delete(referenceName);
+  return taken;
+};
+
+export const resolutionOf = (
+  postPurchase: SuperwallPostPurchase | undefined,
+): PostCheckoutResolution | undefined => {
+  if (postPurchase === undefined || postPurchase === "dismiss") return undefined;
+  if (postPurchase === "stay") return { type: "paywall" };
+  if (postPurchase === "redeem") return { type: "redeem" };
+  return { type: "redirect", url: postPurchase.redirect };
 };
 
 const APPLE_PAY_PREFETCH_LIMIT = 10;
@@ -184,7 +218,35 @@ export const reportCompletedCheckout = async (
 ): Promise<void> => {
   const host = hostFor(paywall);
   const context = contextFor(paywall, session.referenceName, session.checkoutContextId);
-  host.completed(context, session.checkoutSessionId, session.postPurchaseBehavior);
+  const options = takePurchaseOptions(paywall, session.referenceName);
+
+  if (options.stripeMetadata) {
+    try {
+      await sessionsFor(paywall).attachMetadata(session.checkoutContextId, options.stripeMetadata);
+    } catch (error) {
+      console.error("Attaching checkout metadata failed:", error);
+    }
+  }
+
+  let entitlementsToken: string | undefined;
+  if (hostedInWebSdk() && bindsEntitlement(session.postPurchaseBehavior)) {
+    try {
+      entitlementsToken = await sessionsFor(paywall).completeWebapp(session.checkoutContextId);
+    } catch (error) {
+      console.error("Completing the Web SDK checkout failed:", error);
+    }
+  }
+
+  const resolution = resolutionOf(
+    options.postPurchase ?? paywall.getSnapshot().config?.postPurchase,
+  );
+  host.completed(
+    context,
+    session.checkoutSessionId,
+    session.postPurchaseBehavior,
+    resolution,
+    entitlementsToken,
+  );
 
   if (sdkRedeemsCheckout(paywall.getSnapshot())) return;
   if (redemptionUrl !== undefined) {
@@ -329,9 +391,11 @@ export const purchaseOnWeb = async (
   paywall: PaywallSession,
   referenceName: string,
   requested: CheckoutMode,
+  options: WebPurchaseOptions = {},
 ): Promise<PurchaseOutcome> => {
   const sessions = sessionsFor(paywall);
   const mode = sdkHostsCheckoutInPaywall(paywall.getSnapshot()) ? requested : "external";
+  rememberPurchaseOptions(paywall, referenceName, options);
   try {
     if (mode === "applePay") {
       const outcome = await purchaseWithApplePay(paywall, referenceName);

@@ -3,7 +3,6 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { promisify } from "node:util";
 import pc from "picocolors";
-import { defineCommand } from "@/command";
 import {
   createApplication,
   listApplications,
@@ -24,7 +23,18 @@ import { requirePlatform } from "@/core/paywalls/binding/apps";
 import { writeApp } from "@/core/paywalls/project/lock";
 import { projectPackageName } from "@/core/paywalls/project/scaffold";
 import { LoginRequiredError, requireApi } from "@/core/paywalls/project/session";
-import { writeTemplate } from "@/core/paywalls/project/template";
+import {
+  isSuperwallProject,
+  migrationFor,
+  offerMigration,
+  projectDirOf,
+  scaffoldFromPaywall,
+  type PaywallMigration,
+} from "@/core/paywalls/migration";
+import { slugOf } from "@/core/paywalls/project/origin";
+import { starterConfig, writeSurfaceFiles, writeTemplate } from "@/core/paywalls/project/template";
+import { defineCommand, type CommandContext } from "@/command";
+import { askStudio, migrationNextSteps, startStudio } from "./open-studio";
 import { gitAvailable } from "@/core/paywalls/source/git";
 import { detectExisting, type ExistingIntegration } from "@/core/project/existing";
 import { scanProject, type DetectedApp } from "@/core/project/scan";
@@ -37,8 +47,11 @@ const APP_PLATFORMS = ["ios", "android", "flutter", "react_native", "web"] as co
 
 export function alreadyAProject(root: string): string | undefined {
   const target = path.join(root, "superwall");
-  if (fs.existsSync(target) && fs.readdirSync(target).length > 0) {
-    return `\`${target}\` already exists — run \`superwall dev\` to open it.`;
+  if (isSuperwallProject(target)) {
+    return `\`${target}\` is already a superwall project — run \`superwall dev\` to open it.`;
+  }
+  if (fs.existsSync(path.join(target, "package.json"))) {
+    return `\`${target}\` already has a package.json that isn't a superwall project — move it aside first.`;
   }
   for (const marker of ["superwall.config.ts", "superwall.lock"]) {
     if (fs.existsSync(path.join(root, marker))) {
@@ -199,8 +212,24 @@ async function connectApp(
   root: string,
   target: string,
   detected: { app: DetectedApp; existing: ExistingIntegration } | undefined,
+  appId: string | undefined,
 ): Promise<void> {
   const api = await requireApi(interactive);
+
+  if (appId !== undefined) {
+    const apps = await listApplications(api);
+    const app = apps.find((candidate) => String(candidate.id) === appId);
+    if (app === undefined) {
+      throw new Error(
+        `No app with id \`${appId}\` in this account — run \`superwall apps\` to list them.`,
+      );
+    }
+    writeApp(target, requirePlatform(app), String(app.id));
+    ui.success(
+      `Pushes go to \`${app.name ?? app.id}\` — saved in superwall.lock, so commit that file.`,
+    );
+    return;
+  }
 
   if (detected?.existing.apiKey) {
     const scope = await resolveScopeFromKey(api, detected.existing.apiKey).catch(() => null);
@@ -260,6 +289,80 @@ async function connectApp(
   );
 }
 
+const uniqueSurfaceId = (superwallDir: string, slug: string): string => {
+  let candidate = slug;
+  for (let n = 2; fs.existsSync(path.join(superwallDir, "paywalls", candidate)); n += 1) {
+    candidate = `${slug}-${n}`;
+  }
+  return candidate;
+};
+
+async function addSurface(context: CommandContext<"none">, superwallDir: string): Promise<void> {
+  const { argv, interactive, ui } = context;
+  const where = path.relative(process.cwd(), superwallDir) || ".";
+  if (typeof argv.example === "string") {
+    throw new Error(
+      `\`${where}\` is already a superwall project — an example is a whole project, so start it in an empty directory.`,
+    );
+  }
+  if (argv.app !== undefined) {
+    throw new Error(
+      `\`${where}\` is already connected — its apps live in superwall.lock; drop \`--app\`.`,
+    );
+  }
+  const from =
+    typeof argv.from === "string" || typeof argv.from === "number" ? String(argv.from) : undefined;
+
+  if (from !== undefined) {
+    const api = await requireApi(interactive);
+    const origin = await scaffoldFromPaywall(ui, api, {
+      root: process.cwd(),
+      target: superwallDir,
+      paywallId: from,
+      newProject: false,
+    });
+    const migration = migrationFor(superwallDir, origin.id);
+    const rebuilt =
+      migration !== undefined && interactive && argv.yes !== true
+        ? await offerMigration(ui, interactive, migration)
+        : "later";
+    const opening =
+      rebuilt === "agent" &&
+      migration !== undefined &&
+      (await askStudio(ui, interactive, migration.surfaceId));
+    ui.step("Next steps");
+    ui.list({
+      items: migrationNextSteps(opening, where, from, rebuilt).map((label) => ({ label })),
+    });
+    if (opening && migration !== undefined) await startStudio(superwallDir, migration.surfaceId);
+    return;
+  }
+
+  const asked =
+    interactive && argv.yes !== true
+      ? await ui.text({
+          message: "What is the paywall called?",
+          initialValue: "Pro",
+          validate: (value) => (value.trim() === "" ? "Give the paywall a name." : undefined),
+        })
+      : "Pro";
+  if (asked === null) return;
+  const name = asked.trim();
+  const id = uniqueSurfaceId(superwallDir, slugOf(name));
+  writeSurfaceFiles(superwallDir, id, starterConfig(name));
+  ui.step(`Created ${where}/paywalls/${id} from the minimal template`);
+  ui.step("Next steps");
+  ui.list({
+    items: [
+      {
+        label: `paywalls/${id}/config.ts`,
+        children: [{ label: "Point the product slot at a product that exists on your dashboard" }],
+      },
+      { label: "superwall dev", children: [{ label: "Open the studio and build the pages" }] },
+    ],
+  });
+}
+
 export const runCreate = defineCommand({
   name: "create",
   output: "human",
@@ -269,14 +372,52 @@ export const runCreate = defineCommand({
     ui.intro(`Superwall ${pc.dim("create")}`);
 
     const root = path.resolve(typeof argv.dir === "string" ? argv.dir : process.cwd());
+    const existing = projectDirOf(root);
+    if (existing !== undefined) {
+      await addSurface(context, existing);
+      return;
+    }
     const problem = alreadyAProject(root);
     if (problem !== undefined) throw new Error(problem);
     const target = path.join(root, "superwall");
+    const appId =
+      typeof argv.app === "string" || typeof argv.app === "number" ? String(argv.app) : undefined;
+    if (appId !== undefined && argv.connect === false) {
+      throw new Error("`--app` connects the project to that app — drop `--no-connect`.");
+    }
 
     const detection = detectHostApp(root);
 
+    const from =
+      typeof argv.from === "string" || typeof argv.from === "number" ? String(argv.from) : undefined;
     let example = typeof argv.example === "string" ? argv.example : undefined;
-    if (example === undefined && interactive && argv.yes !== true) {
+    if (from !== undefined && example !== undefined) {
+      throw new Error("`--from` rebuilds a dashboard paywall as the starter — drop `--example`.");
+    }
+    if (from !== undefined && argv.connect === false) {
+      throw new Error("`--from` connects the project to the paywall's app — drop `--no-connect`.");
+    }
+
+    let originAppId: string | undefined;
+    let originBound = false;
+    let migration: PaywallMigration | undefined;
+    if (from !== undefined) {
+      const api = await requireApi(interactive);
+      const origin = await scaffoldFromPaywall(ui, api, {
+        root,
+        target,
+        paywallId: from,
+        newProject: true,
+      });
+      if (origin.applicationId !== undefined && origin.platform !== undefined) {
+        originBound = true;
+      } else {
+        originAppId = origin.applicationId;
+      }
+      migration = migrationFor(target, origin.id);
+    }
+
+    if (from === undefined && example === undefined && interactive && argv.yes !== true) {
       const start = await ui.select({
         message: "Start from",
         options: [
@@ -307,7 +448,8 @@ export const runCreate = defineCommand({
       }
     }
 
-    if (example === undefined) {
+    if (from !== undefined) {
+    } else if (example === undefined) {
       writeTemplate(target, projectPackageName(root));
       ui.step("Created superwall/ from the minimal template");
     } else {
@@ -330,9 +472,9 @@ export const runCreate = defineCommand({
     }
 
     const connect =
-      argv.connect === false
+      argv.connect === false || originBound
         ? false
-        : interactive && argv.yes !== true
+        : interactive && argv.yes !== true && appId === undefined && from === undefined
           ? await ui.confirm({
               message: "Connect your Superwall account now? (Recommended)",
               initial: true,
@@ -340,8 +482,9 @@ export const runCreate = defineCommand({
           : true;
     if (connect === true) {
       try {
-        await connectApp(ui, interactive, root, target, detected);
+        await connectApp(ui, interactive, root, target, detected, appId ?? originAppId);
       } catch (error) {
+        if (appId !== undefined) throw error;
         if (error instanceof LoginRequiredError) {
           ui.info("Not signed in — the first `superwall push` will connect you.");
         } else {
@@ -357,24 +500,40 @@ export const runCreate = defineCommand({
 
     await initGit(ui, root);
 
+    const rebuilt =
+      migration !== undefined && interactive && argv.yes !== true
+        ? await offerMigration(ui, interactive, migration)
+        : "later";
+    const opening =
+      rebuilt === "agent" &&
+      migration !== undefined &&
+      (await askStudio(ui, interactive, migration.surfaceId));
+
+    const integrate = detected?.existing.fullyIntegrated
+      ? []
+      : [
+          {
+            label: "superwall integrate",
+            children: [{ label: "Set up the SDK in your app" }],
+          },
+        ];
+        
+    const dev = installed
+      ? `cd superwall && ${devCommand(manager)}`
+      : `cd superwall && ${manager} install && ${devCommand(manager)}`;
+
     ui.step("Next steps");
     ui.list({
-      items: [
-        {
-          label: installed
-            ? `cd superwall && ${devCommand(manager)}`
-            : `cd superwall && ${manager} install && ${devCommand(manager)}`,
-          children: [{ label: "Open the studio" }],
-        },
-        ...(detected?.existing.fullyIntegrated
-          ? []
+      items:
+        from === undefined
+          ? [{ label: dev, children: [{ label: "Open the studio" }] }, ...integrate]
           : [
-              {
-                label: "superwall integrate",
-                children: [{ label: "Set up the SDK in your app" }],
-              },
-            ]),
-      ],
+              ...migrationNextSteps(opening, "superwall", from, rebuilt).map((label) => ({
+                label,
+              })),
+              ...integrate,
+            ],
     });
+    if (opening && migration !== undefined) await startStudio(target, migration.surfaceId);
   },
 });

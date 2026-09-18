@@ -1,21 +1,19 @@
-import { useHaptics } from "superwall/hooks";
+import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 
 export const transition = "zoom";
 
 export default function Page() {
   const router = useRouter();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Custom</h1>
-        <p>This one is a page zoom, written in CSS by this example.</p>
-        <p>
-          Allows any custom CSS animation you write. We expose enter, recede, return and leave, so
-          you control how pages enter and exit in both directions.
-        </p>
+        <h1>{t("pages.zoom.title")}</h1>
+        <p>{t("pages.zoom.body")}</p>
+        <p>{t("pages.zoom.detail")}</p>
       </div>
 
       <div className="actions">
@@ -27,7 +25,7 @@ export default function Page() {
             router.back();
           }}
         >
-          Back
+          {t("common.back")}
         </button>
       </div>
     </main>

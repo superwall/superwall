@@ -1,28 +1,29 @@
+import { useTranslation } from "superwall/hooks";
+
 export default function Index() {
+  const { t } = useTranslation();
+
   return (
     <main className="page">
       <div className="lede">
-        <h1>Custom fonts</h1>
-        <p>
-          Use any typeface you like. The file lives in this project and the build takes care of
-          serving it.
-        </p>
+        <h1>{t("paywall.title")}</h1>
+        <p>{t("paywall.subtitle")}</p>
       </div>
 
       <div className="rows">
         <div className="kv">
-          <span className="kv-key">headline &amp; body</span>
-          <span className="kv-value">Manrope, from assets/</span>
+          <span className="kv-key">{t("paywall.headline.key")}</span>
+          <span className="kv-value">{t("paywall.headline.value")}</span>
         </div>
         <div className="kv">
-          <span className="kv-key">mono</span>
-          <span className="kv-value">Roboto Mono, from a stylesheet</span>
+          <span className="kv-key">{t("paywall.mono.key")}</span>
+          <span className="kv-value">{t("paywall.mono.value")}</span>
         </div>
       </div>
 
       <p className="note">
-        Drop any font in <code>assets/</code> and point an <code>@font-face</code> at it. The build
-        uploads it to our CDN and rewrites the URL for you — nothing to host, nothing to configure.
+        {t("paywall.note.before")} <code>assets/</code> {t("paywall.note.between")}{" "}
+        <code>@font-face</code> {t("paywall.note.after")}
       </p>
     </main>
   );

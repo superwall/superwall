@@ -1,4 +1,4 @@
-import { useHaptics } from "superwall/hooks";
+import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter, type RouteName, type Transition } from "superwall/navigation";
 
 const TRANSITIONS: {
@@ -11,45 +11,53 @@ const TRANSITIONS: {
   {
     route: "push",
     transition: "push",
-    name: "Push",
-    tag: "Default",
-    blurb: "The native iOS push.",
+    name: "choices.push.name",
+    tag: "choices.push.tag",
+    blurb: "choices.push.blurb",
   },
-  { route: "slide", transition: "slide", name: "Slide", blurb: "Both pages travel together." },
+  {
+    route: "slide",
+    transition: "slide",
+    name: "choices.slide.name",
+    blurb: "choices.slide.blurb",
+  },
   {
     route: "fade",
     transition: "fade",
-    name: "Fade",
-    blurb: "The new page fades in over the old one.",
+    name: "choices.fade.name",
+    blurb: "choices.fade.blurb",
   },
   {
     route: "shift",
     transition: "shift",
-    name: "Shift",
-    tag: "Funnels",
-    blurb: "The new page fades in as it drifts into place.",
+    name: "choices.shift.name",
+    tag: "choices.shift.tag",
+    blurb: "choices.shift.blurb",
   },
-  { route: "none", transition: "none", name: "None", blurb: "No animation at all." },
+  {
+    route: "none",
+    transition: "none",
+    name: "choices.none.name",
+    blurb: "choices.none.blurb",
+  },
   {
     route: "zoom",
     transition: "zoom",
-    name: "Custom",
-    blurb: "Any CSS animation you write yourself.",
+    name: "choices.zoom.name",
+    blurb: "choices.zoom.blurb",
   },
 ];
 
 export default function Index() {
   const router = useRouter();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>Transitions</h1>
-        <p>
-          Multi-page paywalls move between pages with a transition. Five are built in, and you can
-          define your own in CSS.
-        </p>
+        <h1>{t("index.title")}</h1>
+        <p>{t("index.subtitle")}</p>
       </div>
 
       <div className="choices">
@@ -64,10 +72,10 @@ export default function Index() {
             }}
           >
             <span className="choice-head">
-              <span className="choice-name">{entry.name}</span>
-              {entry.tag && <span className="choice-tag">({entry.tag})</span>}
+              <span className="choice-name">{t(entry.name)}</span>
+              {entry.tag && <span className="choice-tag">({t(entry.tag)})</span>}
             </span>
-            <span className="choice-blurb">{entry.blurb}</span>
+            <span className="choice-blurb">{t(entry.blurb)}</span>
           </button>
         ))}
       </div>

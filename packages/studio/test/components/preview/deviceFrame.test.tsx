@@ -1,8 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHostState, recordingDelegate, type HostState } from "@superwall/host";
-import { DeviceFrame } from "../../../src/components/preview/DeviceFrame";
+import { DeviceFrame, DevicePlaceholder } from "../../../src/components/preview/DeviceFrame";
 import { deviceById } from "../../../src/lib/devices";
 
 /**
@@ -30,9 +29,8 @@ const Harness = ({
   reloadKey?: number;
   hostState?: HostState;
 }) => {
-  const stageRef = React.useRef<HTMLDivElement>(null);
   return (
-    <div ref={stageRef}>
+    <div>
       <DeviceFrame
         width={device.width}
         height={device.height}
@@ -40,7 +38,6 @@ const Harness = ({
         src={src}
         hostState={hostState}
         delegate={recordingDelegate()}
-        stageRef={stageRef}
         reloadKey={reloadKey}
       />
     </div>
@@ -200,5 +197,105 @@ describe("DeviceFrame as a host", () => {
     });
 
     expect(post).not.toHaveBeenCalled();
+  });
+});
+
+const Stage = ({ width, height }: { width: number; height: number }) => (
+  <div>
+    <DeviceFrame
+      width={width}
+      height={height}
+      title="preview"
+      src="/preview/paywall/a"
+      hostState={initialState}
+      delegate={recordingDelegate()}
+    />
+    <DevicePlaceholder width={width} height={height}>
+      Nothing here
+    </DevicePlaceholder>
+  </div>
+);
+
+describe("DeviceFrame presentation", () => {
+  it("gives a drawer paywall only the drawer's own viewport, over a backdrop", () => {
+    render(
+      <DeviceFrame
+        width={device.width}
+        height={device.height}
+        title="preview"
+        src="/preview/paywall/a"
+        hostState={initialState}
+        delegate={recordingDelegate()}
+        presentation={{ style: "drawer", height: 50, cornerRadius: 24 }}
+      />,
+    );
+    const frame = frames()[0];
+    expect(frame.getAttribute("width")).toBe(String(device.width));
+    expect(frame.getAttribute("height")).toBe(String(Math.round(device.height * 0.5)));
+    expect(screen.getByTestId("presentation-backdrop")).toBeDefined();
+    const page = screen.getByTestId("presentation-page");
+    expect(page.style.top).toBe(`${device.height - Math.round(device.height * 0.5)}px`);
+    expect(page.style.borderRadius).toBe("24px 24px 0px 0px");
+  });
+
+  it("lays the frame out at its logical size, leaving zoom to the canvas", () => {
+    render(<Harness src="/preview/paywall/a" />);
+    const frame = screen.getByTestId("device-frame");
+    expect(frame.style.width).toBe(`${device.width}px`);
+    expect(frame.style.height).toBe(`${device.height}px`);
+    expect(frames()[0].style.transform).toBe("");
+  });
+
+  it("gives a fullscreen paywall the whole device and no backdrop", () => {
+    render(<Harness src="/preview/paywall/a" />);
+    expect(frames()[0].getAttribute("height")).toBe(String(device.height));
+    expect(screen.queryByTestId("presentation-backdrop")).toBeNull();
+    expect(screen.queryByTestId("navigation-bar")).toBeNull();
+  });
+
+  it("keeps an Android paywall above the navigation bar, as the SDK does, except in landscape", () => {
+    const pixel = deviceById("pixel-10");
+    const props = {
+      title: "preview",
+      src: "/preview/paywall/a",
+      hostState: initialState,
+      delegate: recordingDelegate(),
+      chrome: pixel.chrome,
+    };
+    const view = render(<DeviceFrame {...props} width={pixel.width} height={pixel.height} />);
+    expect(frames()[0].getAttribute("height")).toBe(String(pixel.height - 24));
+    expect(screen.getByTestId("navigation-bar").style.height).toBe("24px");
+    view.unmount();
+
+    render(<DeviceFrame {...props} width={pixel.height} height={pixel.width} landscape />);
+    expect(frames()[0].getAttribute("height")).toBe(String(pixel.width));
+    expect(screen.queryByTestId("navigation-bar")).toBeNull();
+  });
+});
+
+describe("DevicePlaceholder beside a DeviceFrame", () => {
+  it("is exactly the size of the frame, and follows it when the hardware changes", () => {
+    const view = render(<Stage width={device.width} height={device.height} />);
+    const frame = screen.getByTestId("device-frame");
+    const placeholder = screen.getByTestId("device-placeholder");
+    expect(placeholder.style.width).toBe(frame.style.width);
+    expect(placeholder.style.height).toBe(frame.style.height);
+    expect(placeholder.style.width).not.toBe("");
+
+    const before = frame.style.width;
+    const ipad = deviceById("ipad-pro-11");
+    view.rerender(<Stage width={ipad.width} height={ipad.height} />);
+    expect(screen.getByTestId("device-frame").style.width).not.toBe(before);
+    expect(screen.getByTestId("device-placeholder").style.width).toBe(
+      screen.getByTestId("device-frame").style.width,
+    );
+  });
+
+  it("centers the placeholder copy on both axes", () => {
+    render(<Stage width={device.width} height={device.height} />);
+    const placeholder = screen.getByTestId("device-placeholder");
+    for (const token of ["flex", "items-center", "justify-center", "text-center"]) {
+      expect(placeholder.className).toContain(token);
+    }
   });
 });

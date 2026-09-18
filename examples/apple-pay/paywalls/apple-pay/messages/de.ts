@@ -32,4 +32,9 @@ export default {
     applied: "Code {code} aktiv",
     save: "{amount} sparen",
   },
-};
+  close: "Schließen",
+  footer: {
+    builtWith: "Erstellt mit",
+    superwall: "Superwall",
+  },
+} as const;

@@ -15,13 +15,19 @@
 export type SuperwallCheckoutMode = "external" | "sheet" | "applePay";
 
 /**
- * The mode alone, or the object form to steer prefetching: `prefetch` names
- * the Stripe product warmed on paywall open (default: the first Stripe
- * product), `false` disables automatic prefetch.
+ * The mode alone, or the object form to steer it:
+ *
+ * - `prefetch` names the Stripe product warmed on paywall open (default: the
+ *   first Stripe product); `false` disables automatic prefetch.
+ * - `managedPayments` overrides the account's Stripe managed-payments
+ *   setting for this paywall: `true` forces it on, `false` forces it off.
+ *   Omitted, the account setting applies.
  */
 export type SuperwallCheckoutConfig<TReference extends string = string> =
   | SuperwallCheckoutMode
-  | { mode: SuperwallCheckoutMode; prefetch?: TReference | false };
+  | { mode: SuperwallCheckoutMode; prefetch?: TReference | false; managedPayments?: boolean };
+
+export type SuperwallManagedPaymentsOverride = "USE_MANAGED_PAYMENTS" | "USE_DEFAULT_PAYMENTS";
 
 export const checkoutModeOf = (
   checkout: SuperwallCheckoutConfig | undefined,
@@ -30,3 +36,11 @@ export const checkoutModeOf = (
 export const checkoutPrefetchOf = (
   checkout: SuperwallCheckoutConfig | undefined,
 ): string | false | undefined => (typeof checkout === "object" ? checkout.prefetch : undefined);
+
+export const checkoutManagedPaymentsOf = (
+  checkout: SuperwallCheckoutConfig | undefined,
+): SuperwallManagedPaymentsOverride | undefined => {
+  const override = typeof checkout === "object" ? checkout.managedPayments : undefined;
+  if (override === undefined) return undefined;
+  return override ? "USE_MANAGED_PAYMENTS" : "USE_DEFAULT_PAYMENTS";
+};

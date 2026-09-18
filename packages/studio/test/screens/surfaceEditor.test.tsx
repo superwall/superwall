@@ -195,6 +195,102 @@ describe("SurfaceEditor hosting a published paywall", () => {
     if (compared instanceof HTMLIFrameElement) expect(compared.src).toContain("v13.html");
   });
 
+  it("offers the dashboard paywall a surface was rebuilt from, served as it is today", () => {
+    const rebuilt: StudioSurface = {
+      ...live,
+      origin: { paywallId: "65920", url: "https://runtime.example/doc/abc" },
+    };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [pushed, rebuilt] }}
+        surface={rebuilt}
+        samples={{}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /compare/i }));
+    expect(screen.getByText("Rebuilt from")).toBeTruthy();
+    fireEvent.click(screen.getByText("Original"));
+
+    const compared = screen.getByTitle(`${rebuilt.id} original`);
+    expect(compared).toBeInstanceOf(HTMLIFrameElement);
+    if (compared instanceof HTMLIFrameElement) {
+      expect(compared.src).toBe("https://runtime.example/doc/abc");
+    }
+  });
+
+  it("opens straight onto the original when the URL asks for it", () => {
+    const rebuilt: StudioSurface = {
+      ...live,
+      origin: { paywallId: "65920", url: "https://runtime.example/doc/abc" },
+    };
+    window.history.replaceState({}, "", `/paywall/${rebuilt.id}?compare=origin`);
+    const view = renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [pushed, rebuilt] }}
+        surface={rebuilt}
+        samples={{}}
+      />,
+    );
+    expect(screen.getByTitle(`${rebuilt.id} original`)).toBeInstanceOf(HTMLIFrameElement);
+    view.unmount();
+
+    window.history.replaceState({}, "", `/paywall/${live.id}?compare=origin`);
+    renderEditor(<SurfaceEditor source={source} surface={live} samples={{}} />);
+    expect(screen.queryByTitle(`${live.id} original`)).toBeNull();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("shows a native screen's simulator screenshot as the original, and offers nothing without one", () => {
+    const shot: StudioSurface = {
+      ...live,
+      id: "update-required",
+      origin: {
+        path: "../App/UpdateRequiredView.swift",
+        framework: "swiftui",
+        screenshot: "original.png",
+      },
+    };
+    window.history.replaceState({}, "", `/paywall/${shot.id}?compare=origin`);
+    const view = renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [pushed, shot] }}
+        surface={shot}
+        samples={{}}
+      />,
+    );
+    const image = screen.getByTitle(`${shot.id} original`);
+    expect(image).toBeInstanceOf(HTMLImageElement);
+    if (image instanceof HTMLImageElement) {
+      expect(image.getAttribute("src")).toBe("/__studio/original/paywall/update-required");
+      expect(image.getAttribute("alt")).toBe(`${shot.id} original`);
+      fireEvent.error(image);
+    }
+    expect(screen.getByText(/screenshot is missing/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /compare/i }));
+    expect(
+      screen.getByText(/SwiftUI screen \.\.\/App\/UpdateRequiredView.swift, as captured/),
+    ).toBeTruthy();
+    view.unmount();
+
+    const bare: StudioSurface = {
+      ...live,
+      id: "rate-us",
+      origin: { path: "src/RateUs.tsx", framework: "react-native" },
+    };
+    window.history.replaceState({}, "", `/paywall/${bare.id}?compare=origin`);
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [pushed, bare] }}
+        surface={bare}
+        samples={{}}
+      />,
+    );
+    expect(screen.queryByTitle(`${bare.id} original`)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /compare/i }));
+    expect(screen.queryByText("Original")).toBeNull();
+    window.history.replaceState({}, "", "/");
+  });
+
   it("puts the host's own controls in the top bar and keeps standalone preview local", () => {
     renderEditor(
       <SurfaceEditor
@@ -377,7 +473,94 @@ describe("SurfaceEditor's smaller states", () => {
     expect((width as HTMLInputElement).value).toBe("3000");
   });
 
-  it("says why it cannot show the live version to compare against", async () => {
+  it("resizes the responsive frame by dragging its edges, and only in responsive mode", async () => {
+    class TestPointerEvent extends MouseEvent {
+      pointerId: number;
+      pointerType: string;
+      constructor(type: string, init: PointerEventInit = {}) {
+        super(type, init);
+        this.pointerId = init.pointerId ?? 0;
+        this.pointerType = init.pointerType ?? "mouse";
+      }
+    }
+    vi.stubGlobal("PointerEvent", TestPointerEvent);
+    renderEditor(
+      <SurfaceEditor
+        source={{ title: "chatgpt", surfaces: [local], previewUrl: () => "/preview" }}
+        surface={local}
+        samples={{}}
+      />,
+    );
+    expect(screen.queryByTestId("resize-bottom-right")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "responsive" } });
+    const corner = screen.getByTestId("resize-bottom-right");
+    corner.setPointerCapture = () => {};
+    fireEvent.pointerDown(corner, { pointerId: 1, clientX: 0, clientY: 0, button: 0, buttons: 1 });
+    fireEvent.pointerMove(corner, { pointerId: 1, clientX: 27, clientY: -52, buttons: 1 });
+    fireEvent.pointerUp(corner, { pointerId: 1 });
+
+    expect((screen.getByLabelText("Preview width") as HTMLInputElement).value).toBe("420");
+    expect((screen.getByLabelText("Preview height") as HTMLInputElement).value).toBe("800");
+  });
+
+  it("shows a web-only paywall as a bare viewport on the picked device, reporting web", async () => {
+    const web: StudioSurface = { ...live, platforms: ["web"] };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [web], previewUrl: () => "/preview" }}
+        surface={web}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+
+    expect((screen.getByLabelText("Device") as HTMLSelectElement).value).toBe("iphone-17");
+    expect(screen.queryByTestId("device-chrome")).toBeNull();
+    expect(parseFloat(screen.getByTestId("device-frame").style.borderRadius)).toBe(0);
+    expect(preview().getAttribute("width")).toBe("402");
+    expect(preview().getAttribute("height")).toBe(String(874 - 64 - 84));
+    const host = hostOf(preview());
+    host.ping();
+    expect(host.sent()[0]?.[0]).toMatchObject({
+      variables: { device: { platform: "web", deviceModel: "iPhone18,3" } },
+    });
+  });
+
+  it("puts zoom in the toolbar: step buttons, and the percentage fits", async () => {
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [live], previewUrl: () => "/preview" }}
+        surface={live}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    const fitButton = () => screen.getByRole("button", { name: "Fit to view" });
+    expect(fitButton().getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(fitButton().getAttribute("aria-pressed")).toBe("false");
+    expect(fitButton().textContent).toMatch(/\d+%/);
+
+    fireEvent.click(fitButton());
+    expect(fitButton().getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Fit" })).toBeNull();
+  });
+
+  it("keeps the phone's own chrome for a native paywall", async () => {
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [live], previewUrl: () => "/preview" }}
+        surface={live}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    expect(screen.getByTestId("device-chrome")).toBeDefined();
+  });
+
+  it("says why it cannot list the pushed versions to compare against", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -404,8 +587,10 @@ describe("SurfaceEditor's smaller states", () => {
     await act(async () => {});
 
     fireEvent.click(screen.getByRole("button", { name: /compare/i }));
-    fireEvent.click(screen.getByText(/live/i));
 
-    expect(screen.getByText(/Couldn't read the live version — not logged in/)).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain(
+      "Couldn't read the pushed versions — not logged in",
+    );
+    expect(screen.queryByText(/live/i)).toBeNull();
   });
 });

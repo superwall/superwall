@@ -1,24 +1,34 @@
-import { useHaptics, useProducts, usePurchase, useIntroductoryOffer } from "superwall/hooks";
+import {
+  useHaptics,
+  useProducts,
+  usePurchase,
+  useIntroductoryOffer,
+  useTranslation,
+} from "superwall/hooks";
 
 export default function Index() {
   const { eligible } = useIntroductoryOffer();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   const annual = getProduct("annual");
   const days = annual?.variables.trialPeriodDays;
+  const price = annual?.variables.price;
 
   return (
     <main className="page">
       <div className="lede">
-        <h1>{eligible ? "Start free" : "Go Pro"}</h1>
+        <h1>{eligible ? t("paywall.titleEligible") : t("paywall.titleIneligible")}</h1>
         <p>
           {eligible
             ? days
-              ? `${days} days free, then ${annual?.variables.price ?? "the annual price"}.`
-              : "Your trial is on the house."
-            : "You have used your trial. Subscribe to keep going."}
+              ? price
+                ? t("paywall.trial", { days, price })
+                : t("paywall.trialBare", { days })
+              : t("paywall.trialUnknown")
+            : t("paywall.ineligible")}
         </p>
       </div>
 
@@ -29,13 +39,11 @@ export default function Index() {
         </div>
         <div className="kv">
           <span className="kv-key">trialPeriodDays</span>
-          <span className="kv-value">{days ?? "—"}</span>
+          <span className="kv-value">{days ?? t("paywall.empty")}</span>
         </div>
       </div>
 
-      <p className="note">
-        The store decides who gets a trial, not you. Toggle Intro offer in the footer to see both.
-      </p>
+      <p className="note">{t("paywall.hint")}</p>
 
       <div className="actions">
         <button
@@ -46,7 +54,7 @@ export default function Index() {
             purchase("annual");
           }}
         >
-          {eligible ? "Start free trial" : (annual?.variables.price ?? "Subscribe")}
+          {eligible ? t("paywall.ctaTrial") : (price ?? t("paywall.ctaBare"))}
         </button>
       </div>
     </main>

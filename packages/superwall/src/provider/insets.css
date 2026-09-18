@@ -1,0 +1,95 @@
+:root {
+  --sw-safe-area-floor-top: 0px;
+  --sw-safe-area-floor-right: 0px;
+  --sw-safe-area-floor-bottom: 0px;
+  --sw-safe-area-floor-left: 0px;
+
+  --sw-safe-area-inset-top: max(env(safe-area-inset-top, 0px), var(--sw-safe-area-floor-top));
+  --sw-safe-area-inset-right: max(env(safe-area-inset-right, 0px), var(--sw-safe-area-floor-right));
+  --sw-safe-area-inset-bottom: max(
+    env(safe-area-inset-bottom, 0px),
+    var(--sw-safe-area-floor-bottom)
+  );
+  --sw-safe-area-inset-left: max(env(safe-area-inset-left, 0px), var(--sw-safe-area-floor-left));
+
+  --sw-inset-top: var(--sw-safe-area-inset-top);
+  --sw-inset-right: var(--sw-safe-area-inset-right);
+  --sw-inset-bottom: var(--sw-safe-area-inset-bottom);
+  --sw-inset-left: var(--sw-safe-area-inset-left);
+
+  --sw-page-inset-top: var(--sw-inset-top);
+  --sw-page-inset-right: var(--sw-inset-right);
+  --sw-page-inset-bottom: var(--sw-inset-bottom);
+  --sw-page-inset-left: var(--sw-inset-left);
+
+  --sw-bleed: calc(-1 * var(--sw-inset-top)) calc(-1 * var(--sw-inset-right))
+    calc(-1 * var(--sw-inset-bottom)) calc(-1 * var(--sw-inset-left));
+  --sw-page-bleed: calc(-1 * var(--sw-page-inset-top)) calc(-1 * var(--sw-page-inset-right))
+    calc(-1 * var(--sw-page-inset-bottom)) calc(-1 * var(--sw-page-inset-left));
+}
+
+:root:where([data-sw-platform="ios"]) {
+  --sw-safe-area-floor-top: 20px;
+}
+
+:root:where([data-sw-platform="ios"][data-sw-cutout="notch"]) {
+  --sw-safe-area-floor-top: 44px;
+  --sw-safe-area-floor-bottom: 34px;
+}
+
+:root:where([data-sw-platform="ios"][data-sw-cutout="island"]) {
+  --sw-safe-area-floor-top: 59px;
+  --sw-safe-area-floor-bottom: 34px;
+}
+
+:root:where([data-sw-platform="ios"][data-sw-idiom="tablet"]) {
+  --sw-safe-area-floor-top: 24px;
+  --sw-safe-area-floor-bottom: 20px;
+}
+
+:root:where([data-sw-platform="ios"][data-sw-idiom="desktop"]) {
+  --sw-safe-area-floor-top: 0px;
+  --sw-safe-area-floor-bottom: 0px;
+}
+
+@media (orientation: landscape) {
+  :root:where([data-sw-platform="ios"][data-sw-cutout="notch"]) {
+    --sw-safe-area-floor-top: 0px;
+    --sw-safe-area-floor-right: 44px;
+    --sw-safe-area-floor-bottom: 21px;
+    --sw-safe-area-floor-left: 44px;
+  }
+
+  :root:where([data-sw-platform="ios"][data-sw-cutout="island"]) {
+    --sw-safe-area-floor-top: 0px;
+    --sw-safe-area-floor-right: 59px;
+    --sw-safe-area-floor-bottom: 21px;
+    --sw-safe-area-floor-left: 59px;
+  }
+}
+
+:root:where([data-sw-platform="ios"][data-sw-presentation="modal"]),
+:root:where([data-sw-platform="ios"][data-sw-presentation="drawer"]) {
+  --sw-safe-area-floor-top: 0px;
+}
+
+:root:where([data-sw-platform="ios"][data-sw-idiom="tablet"][data-sw-presentation="modal"]),
+:root:where([data-sw-platform="ios"][data-sw-idiom="tablet"][data-sw-presentation="drawer"]) {
+  --sw-safe-area-floor-bottom: 0px;
+}
+
+:root:where([data-sw-platform="android"]) {
+  --sw-safe-area-floor-top: 24px;
+}
+
+:root:where([data-sw-platform="android"][data-sw-presentation="modal"]),
+:root:where([data-sw-platform="android"][data-sw-presentation="drawer"]) {
+  --sw-safe-area-floor-top: 0px;
+}
+
+:root:where([data-sw-presentation="popup"]) {
+  --sw-safe-area-floor-top: 0px;
+  --sw-safe-area-floor-right: 0px;
+  --sw-safe-area-floor-bottom: 0px;
+  --sw-safe-area-floor-left: 0px;
+}

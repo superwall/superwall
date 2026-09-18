@@ -1,4 +1,8 @@
-import type { SuperwallProduct, SuperwallRuntimeSnapshot } from "@superwall/runtime";
+import {
+  checkoutManagedPaymentsOf,
+  type SuperwallProduct,
+  type SuperwallRuntimeSnapshot,
+} from "@superwall/runtime";
 import { asNumber, asString } from "./decode";
 import type { CheckoutMode } from "../types";
 
@@ -67,6 +71,7 @@ export const sessionBody = ({
 }: SessionBodyOptions) => {
   const { device, user, params } = snapshot;
   const variables = product.variables;
+  const managedPayments = checkoutManagedPaymentsOf(snapshot.config?.checkout);
 
   return {
     currencyCode: "USD",
@@ -103,6 +108,7 @@ export const sessionBody = ({
         placementParams: params,
       },
       identity: identityOf(snapshot),
+      ...(managedPayments === undefined ? {} : { paywallManagedPaymentsOverride: managedPayments }),
       device: {
         appInstallDate: asString(device.appInstallDate) || undefined,
         publicApiKey: asString(device.publicApiKey),

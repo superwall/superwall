@@ -13,7 +13,12 @@ const surface = (id: string): StudioSurface => ({
 });
 
 const options = (count: number): CompareOption[] => [
-  { key: "live", label: "Live version", hint: "What SDKs receive today", target: { type: "live" } },
+  {
+    key: "version:5",
+    label: "v5 · live",
+    hint: "What SDKs receive today",
+    target: { type: "version", version: 5 },
+  },
   ...Array.from({ length: count }, (_, index) => {
     const id = `paywall-${index}`;
     return {
@@ -33,13 +38,13 @@ const open = (props: Partial<React.ComponentProps<typeof CompareMenu>> = {}) => 
 };
 
 describe("CompareMenu", () => {
-  it("pins live and off below the paywalls, so they never scroll away", () => {
+  it("pins off below the list, so it never scrolls away", () => {
     open({ options: options(200) });
 
     const groups = document.querySelectorAll(".bg-bar > div");
     const pinned = within(groups[groups.length - 1] as HTMLElement);
-    expect(pinned.getByText("Live version")).toBeDefined();
     expect(pinned.getByText("Off")).toBeDefined();
+    expect(pinned.queryByText("v5 · live")).toBeNull();
     expect(pinned.queryByText("paywall/paywall-0")).toBeNull();
 
     // the search sits above everything, and only the paywalls scroll
@@ -54,22 +59,45 @@ describe("CompareMenu", () => {
     expect(document.querySelectorAll(".overflow-y-auto")).toHaveLength(1);
   });
 
-  it("filters the paywalls by search, leaving off and live reachable", () => {
+  it("groups versions above paywalls, and drops the headings when one group is empty", () => {
+    open();
+    expect(screen.getByText("Versions")).toBeDefined();
+    expect(screen.getByText("Paywalls")).toBeDefined();
+    const labels = [...document.querySelectorAll(".overflow-y-auto button")].map(
+      (button) => button.querySelector("span span")?.textContent,
+    );
+    expect(labels[0]).toBe("v5 · live");
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search versions and paywalls" }), {
+      target: { value: "v5" },
+    });
+    expect(screen.queryByText("Versions")).toBeNull();
+    expect(screen.queryByText("Paywalls")).toBeNull();
+    expect(screen.getByText("v5 · live")).toBeDefined();
+  });
+
+  it("filters versions and paywalls by search, leaving off reachable", () => {
     open();
 
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search paywalls" }), {
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search versions and paywalls" }), {
       target: { value: "paywall-2" },
     });
 
     expect(screen.getByText("paywall/paywall-2")).toBeDefined();
     expect(screen.queryByText("paywall/paywall-0")).toBeNull();
+    expect(screen.queryByText("v5 · live")).toBeNull();
     expect(screen.getByText("Off")).toBeDefined();
-    expect(screen.getByText("Live version")).toBeDefined();
+  });
+
+  it("carries the reason pushed versions could not be read, instead of listing none silently", () => {
+    open({ options: options(1), notice: "Couldn't read the pushed versions — connection refused" });
+    expect(screen.getByRole("status").textContent).toContain("connection refused");
+    expect(screen.getByText("Off")).toBeDefined();
   });
 
   it("says so when a search matches nothing, rather than showing an empty menu", () => {
     open();
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search paywalls" }), {
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search versions and paywalls" }), {
       target: { value: "nope" },
     });
 
@@ -81,18 +109,16 @@ describe("CompareMenu", () => {
 
     const list = document.querySelector(".overflow-y-auto");
     expect(list?.className).toContain("max-h-64");
-    expect(list?.querySelectorAll("button")).toHaveLength(200);
+    expect(list?.querySelectorAll("button")).toHaveLength(201);
   });
 
   it("marks what is being compared beside its name, and switching back off is one click", () => {
-    const onSelect = open({ active: { type: "live" } });
+    const onSelect = open({ active: { type: "version", version: 5 } });
 
-    const liveRow = screen.getByText("Live version").closest("button") as HTMLElement;
+    const liveRow = screen.getByText("v5 · live").closest("button") as HTMLElement;
     expect(liveRow.getAttribute("aria-current")).toBe("true");
     // the dot rides on the title row, not in a column of its own
-    expect(
-      screen.getByText("Live version").parentElement?.querySelector(".bg-accent"),
-    ).toBeTruthy();
+    expect(screen.getByText("v5 · live").parentElement?.querySelector(".bg-accent")).toBeTruthy();
 
     fireEvent.click(screen.getByText("Off"));
     expect(onSelect).toHaveBeenCalledWith(undefined);
@@ -100,14 +126,15 @@ describe("CompareMenu", () => {
 
   it("forgets the search when reopened, so the list is never mysteriously short", () => {
     open();
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search paywalls" }), {
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search versions and paywalls" }), {
       target: { value: "paywall-2" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
 
     expect(
-      (screen.getByRole("searchbox", { name: "Search paywalls" }) as HTMLInputElement).value,
+      (screen.getByRole("searchbox", { name: "Search versions and paywalls" }) as HTMLInputElement)
+        .value,
     ).toBe("");
     expect(screen.getByText("paywall/paywall-0")).toBeDefined();
   });

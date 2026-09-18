@@ -1,6 +1,19 @@
+import type { SuperwallPostPurchase } from "@superwall/runtime";
+
 export type CheckoutMode = "sheet" | "external" | "applePay";
 
 export type PostPurchaseBehavior = "GRANT_ACCESS" | "REDIRECT" | "REDEEM" | "CUSTOM";
+
+export type PostCheckoutResolution =
+  | { type: "default" }
+  | { type: "redeem" }
+  | { type: "redirect"; url: string }
+  | { type: "paywall" };
+
+export type WebPurchaseOptions = {
+  postPurchase?: SuperwallPostPurchase;
+  stripeMetadata?: Readonly<Record<string, string>>;
+};
 
 export type SessionScope = "default" | "apple-pay";
 

@@ -3,64 +3,26 @@ import type { HostDelegate, HostState } from "@superwall/host";
 import { DeviceChrome } from "./DeviceChrome";
 import { HostedIframe } from "./HostedIframe";
 import type { DeviceChromeSpec } from "../../lib/devices";
-
-const FRAME_MARGIN = 96;
+import { presentationRect, type StudioPresentation } from "../../lib/presentation";
 
 const SWAP_DELAY_MS = 250;
-
-const useFitScale = (
-  container: React.RefObject<HTMLElement | null>,
-  width: number,
-  height: number,
-): number => {
-  const [scale, setScale] = React.useState(1);
-
-  React.useLayoutEffect(() => {
-    const element = container.current;
-    if (!element) return undefined;
-
-    const fit = () => {
-      const available = element.getBoundingClientRect();
-      const next = Math.min(
-        1,
-        (available.width - FRAME_MARGIN) / width,
-        (available.height - FRAME_MARGIN) / height,
-      );
-      setScale(Math.max(0.1, next));
-    };
-
-    fit();
-    if (typeof ResizeObserver === "undefined") return undefined;
-    const observer = new ResizeObserver(fit);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [container, width, height]);
-
-  return scale;
-};
 
 export const DevicePlaceholder = ({
   width,
   height,
-  stageRef,
   children,
 }: React.PropsWithChildren<{
   width: number;
   height: number;
-  stageRef: React.RefObject<HTMLElement | null>;
-}>) => {
-  const scale = useFitScale(stageRef, width, height);
-
-  return (
-    <div
-      className="flex flex-none items-center justify-center overflow-hidden border border-dashed border-cream/20 p-6 text-center text-sm text-cream/55"
-      data-testid="device-placeholder"
-      style={{ width: width * scale, height: height * scale }}
-    >
-      {children}
-    </div>
-  );
-};
+}>) => (
+  <div
+    className="flex flex-none items-center justify-center overflow-hidden border border-dashed border-cream/20 p-6 text-center text-sm text-cream/55"
+    data-testid="device-placeholder"
+    style={{ width, height }}
+  >
+    {children}
+  </div>
+);
 
 type Frame = {
   src: string;
@@ -75,9 +37,9 @@ export const DeviceFrame = ({
   src,
   hostState,
   delegate,
-  stageRef,
   reloadKey = 0,
   chrome,
+  presentation,
   landscape = false,
   theme = "light",
 }: {
@@ -87,14 +49,12 @@ export const DeviceFrame = ({
   src: string;
   hostState: HostState;
   delegate: HostDelegate;
-  stageRef: React.RefObject<HTMLElement | null>;
   reloadKey?: number;
   chrome?: DeviceChromeSpec;
+  presentation?: StudioPresentation;
   landscape?: boolean;
   theme?: "light" | "dark";
 }) => {
-  const scale = useFitScale(stageRef, width, height);
-
   const generation = React.useRef(0);
   const [frames, setFrames] = React.useState<Frame[]>([{ src, generation: 0, ready: true }]);
 
@@ -122,7 +82,16 @@ export const DeviceFrame = ({
 
   const visible = frames.findLast((frame) => frame.ready);
 
-  const radius = chrome ? chrome.radius * scale : 0;
+  const sheet = presentationRect(presentation, { width, height });
+  const navigationBar = landscape ? 0 : (chrome?.navigationBarHeight ?? 0);
+  const page = sheet ?? {
+    x: 0,
+    y: 0,
+    width,
+    height: height - navigationBar,
+    radius: { top: 0, bottom: 0 },
+  };
+  const dark = theme === "dark";
 
   return (
     <div
@@ -130,31 +99,71 @@ export const DeviceFrame = ({
         chrome ? "shadow-[0_0_0_1px] shadow-cream/25" : "border border-cream/20"
       }`}
       data-testid="device-frame"
-      style={{ width: width * scale, height: height * scale, borderRadius: radius }}
+      style={{ width, height, borderRadius: chrome?.radius ?? 0 }}
     >
-      {frames.map((frame) => (
-        <HostedIframe
-          key={frame.generation}
-          hostState={hostState}
-          delegate={delegate}
-          className={`absolute inset-0 origin-top-left border-0 bg-white transition-opacity duration-150 ${
-            frame === visible ? "opacity-100" : "opacity-0"
-          }`}
-          title={title}
-          src={frame.src}
-          width={width}
-          height={height}
-          style={{ transform: `scale(${scale})` }}
-          onLoad={() => {
-            if (!frame.ready) commit(frame.generation);
-          }}
-        />
-      ))}
-      {chrome && (
+      {sheet && (
         <div
-          className="pointer-events-none absolute inset-0 origin-top-left"
-          style={{ width, height, transform: `scale(${scale})` }}
+          className="absolute inset-0"
+          data-testid="presentation-backdrop"
+          style={{
+            background: dark
+              ? "repeating-linear-gradient(-45deg, #1c1f26 0 7px, #171a20 7px 20px)"
+              : "repeating-linear-gradient(-45deg, #e3e3e3 0 7px, #ededed 7px 20px)",
+          }}
         >
+          {sheet.underlay && (
+            <div
+              className="absolute left-1/2 -translate-x-1/2"
+              style={{
+                top: sheet.y - 12,
+                width: Math.round(width * 0.92),
+                height: 30,
+                borderRadius: "20px 20px 0 0",
+                background: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.3)",
+              }}
+            />
+          )}
+        </div>
+      )}
+      <div
+        className="absolute overflow-hidden"
+        data-testid="presentation-page"
+        style={{
+          left: page.x,
+          top: page.y,
+          width: page.width,
+          height: page.height,
+          borderRadius: `${page.radius.top}px ${page.radius.top}px ${page.radius.bottom}px ${page.radius.bottom}px`,
+          boxShadow: sheet ? "0 0 40px rgba(0,0,0,0.25)" : undefined,
+        }}
+      >
+        {frames.map((frame) => (
+          <HostedIframe
+            key={frame.generation}
+            hostState={hostState}
+            delegate={delegate}
+            className={`absolute inset-0 border-0 bg-white transition-opacity duration-150 ${
+              frame === visible ? "opacity-100" : "opacity-0"
+            }`}
+            title={title}
+            src={frame.src}
+            width={page.width}
+            height={page.height}
+            onLoad={() => {
+              if (!frame.ready) commit(frame.generation);
+            }}
+          />
+        ))}
+      </div>
+      {navigationBar > 0 && !sheet && (
+        <div
+          className="absolute inset-x-0 bottom-0"
+          data-testid="navigation-bar"
+          style={{ height: navigationBar, background: dark ? "#000000" : "#ffffff" }}
+        />
+      )}
+      {chrome && (
+        <div className="pointer-events-none absolute inset-0" style={{ width, height }}>
           <DeviceChrome
             spec={chrome}
             width={width}

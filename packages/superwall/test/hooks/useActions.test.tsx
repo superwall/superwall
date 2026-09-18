@@ -1,7 +1,7 @@
 import { act } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TOutgoingMessage } from "@superwall/runtime";
-import { useActions } from "../../src/hooks";
+import { useActions, useUser } from "../../src/hooks";
 import { flush, renderWithProvider } from "../helpers";
 
 describe("useActions", () => {
@@ -20,5 +20,23 @@ describe("useActions", () => {
     expect(onOutgoing).toHaveBeenCalledWith(
       expect.objectContaining({ event_name: "open_url_external", url: "https://superwall.com" }),
     );
+  });
+
+  it("sets user attributes on the host and on the paywall's own user record", async () => {
+    const onOutgoing = vi.fn<(message: TOutgoingMessage) => void>();
+    const { result } = renderWithProvider(() => ({ actions: useActions(), user: useUser() }), {
+      host: { onOutgoing, user: { firstName: "Ada" } },
+    });
+    await flush();
+
+    act(() => {
+      result.current.actions.setUserAttributes({ email: "ada@example.com" });
+    });
+
+    expect(onOutgoing).toHaveBeenCalledWith({
+      event_name: "user_attribute_updated",
+      attributes: [{ key: "email", value: "ada@example.com" }],
+    });
+    expect(result.current.user).toEqual({ firstName: "Ada", email: "ada@example.com" });
   });
 });

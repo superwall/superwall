@@ -74,4 +74,15 @@ describe("hostStateFor", () => {
       deviceModel: "iPad14,1",
     });
   });
+
+  it("never hands the paywall a public API key, so a Stripe purchase asks the studio", () => {
+    expect(defaults.device).toHaveProperty("publicApiKey");
+    expect(state(inputs()).device).not.toHaveProperty("publicApiKey");
+    expect(
+      state(inputs({ samples: { device: { publicApiKey: "pk_live_app" } } })).device,
+    ).not.toHaveProperty("publicApiKey");
+    expect(
+      state(inputs({ edited: { device: { publicApiKey: "pk_typed_in" } } })).device,
+    ).not.toHaveProperty("publicApiKey");
+  });
 });

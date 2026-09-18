@@ -8,6 +8,41 @@ export interface SurfaceBinding {
 
 export type SurfaceBindings = Record<string, SurfaceBinding>;
 
+export interface PaywallOrigin {
+  paywallId: string;
+  url: string;
+}
+
+export type ScreenFramework = "swiftui" | "uikit" | "compose" | "android-views" | "react-native" | "flutter";
+
+export interface ScreenOrigin {
+  path: string;
+  framework: ScreenFramework;
+  screenshot?: string;
+}
+
+export type SurfaceOrigin = PaywallOrigin | ScreenOrigin;
+
+export const isScreenOrigin = (origin: SurfaceOrigin): origin is ScreenOrigin => "path" in origin;
+
+const isFileName = (value: unknown): value is string =>
+  typeof value === "string" && value !== "" && !/[\\/]/.test(value) && !value.startsWith(".");
+
+const SCREEN_FRAMEWORKS: ReadonlySet<string> = new Set(["swiftui", "uikit", "compose", "android-views", "react-native", "flutter"]);
+
+const readOrigin = (candidate: Record<string, unknown>): SurfaceOrigin | undefined => {
+  if (typeof candidate.paywallId === "string" && typeof candidate.url === "string") {
+    return { paywallId: candidate.paywallId, url: candidate.url };
+  }
+  if (typeof candidate.path === "string" && typeof candidate.framework === "string" && SCREEN_FRAMEWORKS.has(candidate.framework)) {
+    const framework = candidate.framework as ScreenFramework;
+    return isFileName(candidate.screenshot)
+      ? { path: candidate.path, framework, screenshot: candidate.screenshot }
+      : { path: candidate.path, framework };
+  }
+  return undefined;
+};
+
 const EXPLAINER =
   "Commit this file: it binds each paywall to its dashboard entry, per app, so every machine and CI push to the same place. Managed by the Superwall CLI.";
 
@@ -16,11 +51,25 @@ export interface LockFile {
   apps: Record<string, string>;
   paywalls: Record<string, SurfaceBindings>;
   funnels: Record<string, SurfaceBindings>;
+  origins?: Record<string, SurfaceOrigin>;
 }
 
 export type SurfaceKind = "paywall" | "funnel";
 
 const emptyLock = (): LockFile => ({ version: 1, apps: {}, paywalls: {}, funnels: {} });
+
+export const originKey = (kind: SurfaceKind, surfaceId: string): string => `${kind}/${surfaceId}`;
+
+const readOrigins = (value: unknown): Record<string, SurfaceOrigin> | undefined => {
+  if (!isRecord(value)) return undefined;
+  const origins: Record<string, SurfaceOrigin> = {};
+  for (const [key, candidate] of Object.entries(value)) {
+    if (!isRecord(candidate)) continue;
+    const origin = readOrigin(candidate);
+    if (origin) origins[key] = origin;
+  }
+  return Object.keys(origins).length > 0 ? origins : undefined;
+};
 
 const lockPath = (superwallDir: string) => path.join(superwallDir, "superwall.lock");
 
@@ -63,6 +112,8 @@ export function readLock(superwallDir: string): LockFile {
     }
     lock.paywalls = readSection(parsed.paywalls);
     lock.funnels = readSection(parsed.funnels);
+    const origins = readOrigins(parsed.origins);
+    if (origins) lock.origins = origins;
     return lock;
   } catch {
   }
@@ -76,8 +127,20 @@ function writeLock(superwallDir: string, lock: LockFile): void {
     apps: lock.apps,
     paywalls: lock.paywalls,
     funnels: lock.funnels,
+    ...(lock.origins && Object.keys(lock.origins).length > 0 ? { origins: lock.origins } : {}),
   };
   fs.writeFileSync(lockPath(superwallDir), `${JSON.stringify(annotated, null, 2)}\n`);
+}
+
+export function writeOrigin(
+  superwallDir: string,
+  kind: SurfaceKind,
+  surfaceId: string,
+  origin: SurfaceOrigin,
+): void {
+  const lock = readLock(superwallDir);
+  lock.origins = { ...lock.origins, [originKey(kind, surfaceId)]: origin };
+  writeLock(superwallDir, lock);
 }
 
 const sectionOf = (lock: LockFile, kind: SurfaceKind) =>

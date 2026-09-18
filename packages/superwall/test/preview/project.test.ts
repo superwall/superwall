@@ -78,6 +78,87 @@ describe("buildStudioProject", () => {
     expect(surface.locales).toEqual(["de", "en", "es"]);
   });
 
+  it("carries the paywall a surface was rebuilt from, when the lock records one", async () => {
+    const root = scaffold({
+      "superwall/paywalls/rebuilt/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/rebuilt/config.ts": JSON.stringify({}),
+      "superwall/paywalls/fresh/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/fresh/config.ts": JSON.stringify({}),
+      "superwall/superwall.lock": JSON.stringify({
+        version: 1,
+        apps: {},
+        paywalls: {},
+        funnels: {},
+        origins: {
+          "paywall/rebuilt": { paywallId: "65920", url: "https://runtime.example/doc/abc" },
+          "paywall/broken": { paywallId: 1 },
+          "paywall/fresh": 5,
+        },
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    const surfaces = Object.fromEntries(payload.surfaces.map((surface) => [surface.id, surface]));
+    expect(surfaces.rebuilt?.origin).toEqual({
+      paywallId: "65920",
+      url: "https://runtime.example/doc/abc",
+    });
+    expect(surfaces.fresh).not.toHaveProperty("origin");
+  });
+
+  it("carries the native screen a surface was rebuilt from, screenshot included", async () => {
+    const root = scaffold({
+      "superwall/paywalls/update-required/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/update-required/config.ts": JSON.stringify({}),
+      "superwall/paywalls/rate-us/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/rate-us/config.ts": JSON.stringify({}),
+      "superwall/superwall.lock": JSON.stringify({
+        version: 1,
+        apps: {},
+        paywalls: {},
+        funnels: {},
+        origins: {
+          "paywall/update-required": {
+            path: "../App/UpdateRequiredView.swift",
+            framework: "swiftui",
+            screenshot: "original.png",
+          },
+          "paywall/rate-us": { path: "src/RateUs.tsx", framework: "react-native", screenshot: 1 },
+          "paywall/odd": { path: "x.kt", framework: "kotlin" },
+        },
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    const surfaces = Object.fromEntries(payload.surfaces.map((surface) => [surface.id, surface]));
+    expect(surfaces["update-required"]?.origin).toEqual({
+      path: "../App/UpdateRequiredView.swift",
+      framework: "swiftui",
+      screenshot: "original.png",
+    });
+    expect(surfaces["rate-us"]?.origin).toEqual({
+      path: "src/RateUs.tsx",
+      framework: "react-native",
+    });
+  });
+
+  it("ignores an origins section with nothing usable in it", async () => {
+    const root = scaffold({
+      "superwall/paywalls/fresh/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/fresh/config.ts": JSON.stringify({}),
+      "superwall/superwall.lock": JSON.stringify({
+        version: 1,
+        apps: {},
+        paywalls: {},
+        funnels: {},
+        origins: { "paywall/fresh": { url: "https://runtime.example/doc/abc" } },
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    expect(payload.surfaces[0]).not.toHaveProperty("origin");
+  });
+
   it("keeps a surface listed when its config.ts is broken", async () => {
     const root = scaffold({
       "superwall/paywalls/broken/app/index.tsx": "export default () => null\n",
@@ -217,5 +298,27 @@ describe("per-platform products in the studio payload", () => {
 
     const payload = await buildStudioProject(root, jsonLoader);
     expect(payload.surfaces[0]?.products).toEqual({ annual: "pro_year_play" });
+  });
+
+  it("tells the studio the platforms the lock binds when the config names none", async () => {
+    const root = scaffold({
+      "superwall/paywalls/site/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/site/config.ts": JSON.stringify({ products: { annual: "pro_year" } }),
+      "superwall/superwall.lock": JSON.stringify({
+        version: 1,
+        apps: { web: "52518" },
+        paywalls: {},
+        funnels: {},
+      }),
+    });
+
+    const payload = await buildStudioProject(root, jsonLoader);
+    expect(payload.surfaces[0]?.platforms).toEqual(["web"]);
+
+    const unbound = scaffold({
+      "superwall/paywalls/site/app/index.tsx": "export default () => null\n",
+      "superwall/paywalls/site/config.ts": JSON.stringify({ products: { annual: "pro_year" } }),
+    });
+    expect((await buildStudioProject(unbound, jsonLoader)).surfaces[0]?.platforms).toBeUndefined();
   });
 });

@@ -24,3 +24,21 @@ describe("definePaywall", () => {
     expect(paywall.products).toEqual({ go: "sku_go" });
   });
 });
+
+describe("postPurchase narrows to what the platforms can act on", () => {
+  it("allows the web values only where a web checkout can run", () => {
+    definePaywall({ checkout: "sheet", postPurchase: "redeem" });
+    definePaywall({
+      checkout: "sheet",
+      platforms: ["ios", "web"],
+      postPurchase: { redirect: "https://x" },
+    });
+    definePaywall({ postPurchase: "stay" });
+    definePaywall({ checkout: "sheet", platforms: ["ios"], postPurchase: "stay" });
+    // @ts-expect-error — no checkout, nowhere to redeem
+    definePaywall({ postPurchase: "redeem" });
+    // @ts-expect-error — checkout declared, but this paywall never ships to the web
+    definePaywall({ checkout: "sheet", platforms: ["ios", "android"], postPurchase: "redeem" });
+    expect(true).toBe(true);
+  });
+});

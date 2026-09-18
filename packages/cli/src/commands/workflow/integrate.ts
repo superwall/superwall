@@ -44,7 +44,6 @@ import { runCampaignsAndPlacements } from "./integrate/campaigns";
 export const runIntegrate = defineCommand({
   name: "integrate",
   auth: "optional",
-  telemetry: "workflow",
   run: runPipeline,
 });
 
@@ -52,7 +51,6 @@ export function runActionCommand(action: ActionId): DefinedCommand<"optional"> {
   return defineCommand({
     name: action,
     auth: "optional",
-    telemetry: "workflow",
     run: (ctx) => runFlow(ctx, action),
   });
 }

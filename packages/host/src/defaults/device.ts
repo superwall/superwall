@@ -6,7 +6,7 @@ const MINUTE_MS = 60 * 1000;
 export const DEFAULT_TIMEZONE_OFFSET = -18000;
 
 export const DEFAULT_DEVICE = {
-  publicApiKey: "pk_8d21d5122bb23839a2de6c8c76975e74f85b43ab4476c039",
+  publicApiKey: "pk_3f9c2a71e4b8d05c6a1f7e9b2d4c8a6e0f5b3d7c9a1e4f68",
   platform: "iOS",
   appUserId: "44dd573cd1e849a6997a5eaf98298e47",
   aliases: ["$SuperwallAlias:00EB5C40-68A7-4778-B634-F3714D2010B9"],

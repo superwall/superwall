@@ -64,13 +64,21 @@ describe("purchase outcomes", () => {
     expect(session.getSnapshot().lastPurchaseFailure).toBeUndefined();
   });
 
-  it("passes dismissal through from the call or the config, else leaves it to the SDK", () => {
-    const { session, transport } = createSession({ dismissOnPurchase: false });
-    session.purchase("primary");
-    expect(transport.outgoing.at(-1)).toMatchObject({ should_dismiss: false });
-    session.purchase("primary", { shouldDismiss: true });
-    expect(transport.outgoing.at(-1)).toMatchObject({ should_dismiss: true });
+  it("reads dismissal from postPurchase — stay keeps the paywall, the rest dismiss", () => {
+    const stay = createSession({ postPurchase: "stay" });
+    stay.session.purchase("primary");
+    expect(stay.transport.outgoing.at(-1)).toMatchObject({ should_dismiss: false });
 
+    const redeem = createSession({ postPurchase: "redeem" });
+    redeem.session.purchase("primary");
+    expect(redeem.transport.outgoing.at(-1)).toMatchObject({ should_dismiss: true });
+
+    // A per-call postPurchase overrides the config's.
+    const { session, transport } = createSession({ postPurchase: "dismiss" });
+    session.purchase("primary", { postPurchase: "stay" });
+    expect(transport.outgoing.at(-1)).toMatchObject({ should_dismiss: false });
+
+    // Nothing chosen anywhere: the flag is omitted and the SDK keeps its default.
     const bare = createSession();
     bare.session.purchase("primary");
     expect(bare.transport.outgoing.at(-1)).not.toHaveProperty("should_dismiss");

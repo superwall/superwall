@@ -6,14 +6,21 @@ import {
   useProducts,
   usePurchase,
   useSuperwallSnapshot,
+  useTranslation,
 } from "superwall/hooks";
 
-const FEATURES = ["Unlimited projects", "Advanced stats", "Priority support", "Early features"];
+const FEATURES = [
+  "paywall.features.projects",
+  "paywall.features.stats",
+  "paywall.features.support",
+  "paywall.features.early",
+];
 
 export default function Index() {
   const { restore } = useActions();
   const { getProduct } = useProducts();
   const { purchase } = usePurchase();
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   /**
@@ -47,14 +54,12 @@ export default function Index() {
         animate={opened ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
         transition={{ duration: 0.45, ease: "easeOut" }}
       >
-        <h1>Go Pro</h1>
-        <p>Animated with Motion — the list staggers in, the button reacts to touch.</p>
+        <h1>{t("paywall.title")}</h1>
+        <p>{t("paywall.subtitle")}</p>
       </motion.div>
 
       <p className="note">
-        These animations start on the <code>paywall_open</code> event rather than on mount —
-        paywalls preload hidden, so a mount-timed animation has already played by the time anyone
-        sees the page.
+        {t("paywall.noteBefore")} <code>paywall_open</code> {t("paywall.noteAfter")}
       </p>
 
       <ul className="features">
@@ -65,7 +70,7 @@ export default function Index() {
             animate={opened ? { opacity: 1, x: 0 } : { opacity: 0, x: -12 }}
             transition={{ delay: 0.15 + index * 0.08, duration: 0.35, ease: "easeOut" }}
           >
-            {feature}
+            {t(feature)}
           </motion.li>
         ))}
       </ul>
@@ -73,7 +78,7 @@ export default function Index() {
       {raw !== undefined && (
         <div className="price">
           <motion.span>{shown}</motion.span>
-          <span className="price-period"> / year</span>
+          <span className="price-period"> {t("paywall.perYear")}</span>
         </div>
       )}
 
@@ -87,7 +92,7 @@ export default function Index() {
             purchase("annual");
           }}
         >
-          Subscribe
+          {t("paywall.cta")}
         </motion.button>
         <button
           type="button"
@@ -97,7 +102,7 @@ export default function Index() {
             restore();
           }}
         >
-          Restore purchases
+          {t("paywall.restore")}
         </button>
       </div>
     </main>

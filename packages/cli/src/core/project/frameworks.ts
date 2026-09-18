@@ -16,6 +16,13 @@ export const frameworkByIntegration: Record<Integration, Framework> = {
     sdkPackage: "https://github.com/superwall/Superwall-iOS",
     docsUrl: "https://superwall.com/docs/ios/quickstart/install",
   },
+  [Integration.android]: {
+    integration: Integration.android,
+    name: "Android (Kotlin)",
+    supported: true,
+    sdkPackage: "com.superwall.sdk:superwall-android",
+    docsUrl: "https://superwall.com/docs/android/quickstart/install",
+  },
   [Integration.expo]: {
     integration: Integration.expo,
     name: "Expo (React Native)",
