@@ -9,6 +9,7 @@ export interface SkillsSync {
   cliVersion: string;
   syncedAt: string;
   sourceSha?: string;
+  ref?: string;
 }
 
 export interface OnboardedApp {

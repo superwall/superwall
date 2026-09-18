@@ -2,7 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { actionById, FRAMEWORK_REF } from "@/core/agent/actions";
 import { Integration } from "@/environment";
-import { checkSkillsSync, loadBundledSkill } from "@/core/agent/skills";
+import {
+  SKILLS_INSTALL_SOURCE,
+  SKILLS_REF,
+  checkSkillsSync,
+  knownSkills,
+  loadBundledSkill,
+} from "@/core/agent/skills";
 
 test("review uses the broad setup skill rather than the placement skill", () => {
   const body = loadBundledSkill("superwall-review", "ios");
@@ -45,18 +51,40 @@ test("skills sync: stale on missing/changed CLI version, fresh within a day, ver
   const day = 24 * 60 * 60 * 1000;
   const at = (ms: number) => new Date(ms).toISOString();
 
-  assert.equal(checkSkillsSync(undefined, "1.0.0", now), "stale");
-  const fresh = { cliVersion: "1.0.0", syncedAt: at(now - 60_000), sourceSha: "abc" };
-  assert.equal(checkSkillsSync(fresh, "1.0.0", now), "fresh");
-  assert.equal(checkSkillsSync(fresh, "1.1.0", now), "stale");
+  assert.equal(checkSkillsSync(undefined, "1.0.0", "main", now), "stale");
+  const fresh = { cliVersion: "1.0.0", syncedAt: at(now - 60_000), sourceSha: "abc", ref: "main" };
+  assert.equal(checkSkillsSync(fresh, "1.0.0", "main", now), "fresh");
+  assert.equal(checkSkillsSync(fresh, "1.1.0", "main", now), "stale");
+  assert.equal(checkSkillsSync(fresh, "1.0.0", "next", now), "stale");
   assert.equal(
-    checkSkillsSync({ cliVersion: "1.0.0", syncedAt: at(now - 2 * day) }, "1.0.0", now),
+    checkSkillsSync({ cliVersion: "1.0.0", syncedAt: at(now - 2 * day), ref: "main" }, "1.0.0", "main", now),
     "verify",
   );
   assert.equal(
-    checkSkillsSync({ cliVersion: "1.0.0", syncedAt: "garbage" }, "1.0.0", now),
+    checkSkillsSync({ cliVersion: "1.0.0", syncedAt: "garbage", ref: "main" }, "1.0.0", "main", now),
     "stale",
   );
+});
+
+test("the skills source follows the channel", () => {
+  const original = process.env.SUPERWALL_CHANNEL;
+  try {
+    delete process.env.SUPERWALL_CHANNEL;
+    assert.equal(SKILLS_REF(), "main");
+    assert.equal(SKILLS_INSTALL_SOURCE(), "superwall/skills");
+    assert.deepEqual(
+      knownSkills().map((s) => s.name).filter((n) => /framework|paywall-migrate|screen-migrate/.test(n)),
+      [],
+    );
+    process.env.SUPERWALL_CHANNEL = "nightly";
+    assert.equal(SKILLS_REF(), "main");
+    process.env.SUPERWALL_CHANNEL = "next";
+    assert.equal(SKILLS_REF(), "next");
+    assert.equal(SKILLS_INSTALL_SOURCE(), "https://github.com/superwall/skills/tree/next");
+    assert.ok(knownSkills().some((s) => s.name === "superwall-framework"));
+  } finally {
+    process.env.SUPERWALL_CHANNEL = original;
+  }
 });
 
 test("missing bundled references fail closed", () => {

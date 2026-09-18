@@ -24,9 +24,27 @@ test("a dry run prints the npx commands it would run and installs nothing", asyn
 
   const commands = result.said("info").filter((line) => line.startsWith("npx"));
   assert.equal(commands.length, 2);
-  assert.match(commands[0] ?? "", /--copy$/);
-  assert.match(commands[1] ?? "", /^npx -y skills@latest add superwall\/skills --global --yes/);
+  assert.match(commands[0] ?? "", /--skill superwall superwall-framework --copy$/);
+  assert.match(
+    commands[1] ?? "",
+    /^npx -y skills@latest add https:\/\/github\.com\/superwall\/skills\/tree\/next --global --yes/,
+  );
   assert.match(result.said("spinner.stop").join(), /Dry run/);
+});
+
+test("off the next channel the public skills come from the repo's main branch", async () => {
+  useHome();
+  useFetch([{ match: GITHUB, body: [] }]);
+  const channel = process.env.SUPERWALL_CHANNEL;
+  delete process.env.SUPERWALL_CHANNEL;
+  try {
+    const result = await run(runSkills.definition, { argv: { dryRun: true } });
+    const commands = result.said("info").filter((line) => line.startsWith("npx"));
+    assert.match(commands[0] ?? "", /--skill superwall --copy$/);
+    assert.match(commands[1] ?? "", /^npx -y skills@latest add superwall\/skills --global --yes/);
+  } finally {
+    process.env.SUPERWALL_CHANNEL = channel;
+  }
 });
 
 test("named skills are installed by name, not all of them", async () => {

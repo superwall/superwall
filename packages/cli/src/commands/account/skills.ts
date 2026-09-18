@@ -2,7 +2,7 @@ import { ui } from "@/ui";
 import { withSpinner } from "@/ui/spinner";
 import { defineCommand } from "@/command";
 import {
-  SUPERWALL_SKILLS_SOURCE,
+  SKILLS_INSTALL_SOURCE,
   fetchPublicSkills,
   skillsOutOfDate,
   syncSkills,
@@ -30,11 +30,11 @@ export const runSkills = defineCommand({
 
     if (!skills && !dryRun && interactive) {
       const available = await withSpinner(
-        `Fetching skills from ${SUPERWALL_SKILLS_SOURCE}`,
+        `Fetching skills from ${SKILLS_INSTALL_SOURCE()}`,
         fetchPublicSkills,
       );
       const picked = await ui.multiselect({
-        message: `Which skills from ${SUPERWALL_SKILLS_SOURCE}? (installs globally)`,
+        message: `Which skills from ${SKILLS_INSTALL_SOURCE()}? (installs globally)`,
         options: available.map((s) => ({
           value: s.name,
           label: s.name,
@@ -48,9 +48,9 @@ export const runSkills = defineCommand({
       }
       skills = picked.length === available.length ? undefined : picked;
     } else if (skills?.length) {
-      ui.info(`Installing \`${skills.join("`, `")}\` from ${SUPERWALL_SKILLS_SOURCE}`);
+      ui.info(`Installing \`${skills.join("`, `")}\` from ${SKILLS_INSTALL_SOURCE()}`);
     } else {
-      ui.info(`Installing every skill from ${SUPERWALL_SKILLS_SOURCE}`);
+      ui.info(`Installing every skill from ${SKILLS_INSTALL_SOURCE()}`);
     }
 
     const spin = ui.spinner();

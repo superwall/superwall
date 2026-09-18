@@ -7,6 +7,21 @@ export const DASHBOARD_URL = "https://superwall.com/dashboard";
 
 export const ENV_API_KEY = "SUPERWALL_API_KEY";
 
+export const CHANNELS = {
+  latest: { skillsRef: "main" },
+  next: { skillsRef: "next" },
+} as const;
+
+export type Channel = keyof typeof CHANNELS;
+
+const isChannel = (value: string | undefined): value is Channel =>
+  value !== undefined && value in CHANNELS;
+
+export const CHANNEL = (): Channel => {
+  const value = process.env.SUPERWALL_CHANNEL?.trim();
+  return isChannel(value) ? value : "latest";
+};
+
 export const AGENT_SKILLS_DIR = (): string =>
   process.env.SUPERWALL_AGENT_SKILLS_DIR ?? join(homedir(), ".agents", "skills");
 

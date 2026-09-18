@@ -1,13 +1,14 @@
 import pc from "picocolors";
-import { VERSION } from "@/environment";
+import { CHANNEL, VERSION } from "@/environment";
 
 export function printHelp(): void {
   const pad = (cmd: string) => `  ${cmd.padEnd(30)}`;
   const row = (cmd: string, desc: string) => `${pad(cmd)}${desc}`;
   const head = (title: string) => pc.bold(`${title}:`);
+  const next = CHANNEL() === "next";
   process.stdout.write(
     [
-      `${pc.bold("Superwall CLI")} ${pc.dim(`v${VERSION}`)}`,
+      `${pc.bold("Superwall CLI")} ${pc.dim(`v${VERSION}`)}${next ? pc.dim(" · next channel") : ""}`,
       "",
       pc.bold("Usage:"),
       "  superwall [command]",
@@ -15,26 +16,34 @@ export function printHelp(): void {
       head("Workflow commands"),
       row("integrate", "Set up Superwall in your app (agent-driven)"),
       row("migrate", "Migrate from RevenueCat / Adapty / Qonversion"),
-      row("migrate <paywall-id>", "Rebuild a dashboard paywall as code with your agent"),
-      row("migrate --screen <path>", "Rebuild a native screen as a Superwall surface"),
+      ...(next
+        ? [
+            row("migrate <paywall-id>", "Rebuild a dashboard paywall as code with your agent"),
+            row("migrate --screen <path>", "Rebuild a native screen as a Superwall surface"),
+          ]
+        : []),
       row("review [--fix]", "Audit an existing Superwall setup; --fix repairs issues"),
       pc.dim(
         "                                  Each takes --skill to print the playbook instead of running.",
       ),
       "",
-      head("Paywalls & funnels"),
-      row("create [dir]", "Set up paywalls in your app - creates superwall/ inside it"),
-      row("dev [dir..]", "Host the studio: browse and preview your paywalls and funnels"),
-      row("push [dir]", "Build and push your paywalls and funnels as immutable versions"),
-      row("promote [dir]", "Point production at a pushed version"),
-      row("publish [dir]", "Push and promote in one step"),
-      pc.dim(
-        "                                  push and publish take -m <note> to record why, in the source commit.",
-      ),
-      pc.dim(
-        "                                  All three take --platform <p> when the project pushes to several platforms.",
-      ),
-      "",
+      ...(next
+        ? [
+            head("Paywalls & funnels"),
+            row("create [dir]", "Set up paywalls in your app - creates superwall/ inside it"),
+            row("dev [dir..]", "Host the studio: browse and preview your paywalls and funnels"),
+            row("push [dir]", "Build and push your paywalls and funnels as immutable versions"),
+            row("promote [dir]", "Point production at a pushed version"),
+            row("publish [dir]", "Push and promote in one step"),
+            pc.dim(
+              "                                  push and publish take -m <note> to record why, in the source commit.",
+            ),
+            pc.dim(
+              "                                  All three take --platform <p> when the project pushes to several platforms.",
+            ),
+            "",
+          ]
+        : []),
       head("Resource commands"),
       row("bootstrap", "Complete account tree: projects, apps, campaigns, and products"),
       row("apps", "Projects and platform apps (list, create, use)"),

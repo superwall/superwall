@@ -1,12 +1,35 @@
 import { existsSync, readFileSync } from "node:fs";
-import { AGENT_SKILLS_DIR, VERSION } from "@/environment";
+import { AGENT_SKILLS_DIR, CHANNEL, CHANNELS, VERSION, type Channel } from "@/environment";
 import { track } from "@/core/telemetry";
 import { ui } from "@/ui";
 import { packagedDir } from "@/packaged";
 import { getSkillsSync, setSkillsSync, type SkillsSync } from "@/core/state/config";
 import { spawnStream } from "./drivers/spawn";
 
-export const VENDORED_SKILLS = ["superwall", "superwall-framework"] as const;
+export const SUPERWALL_SKILLS_SOURCE = "superwall/skills";
+
+export const skillsRefFor = (channel: Channel): string => CHANNELS[channel].skillsRef;
+
+export const SKILLS_REF = (): string => skillsRefFor(CHANNEL());
+
+export const skillsInstallSourceFor = (channel: Channel): string =>
+  channel === "latest"
+    ? SUPERWALL_SKILLS_SOURCE
+    : `https://github.com/${SUPERWALL_SKILLS_SOURCE}/tree/${skillsRefFor(channel)}`;
+
+export const SKILLS_INSTALL_SOURCE = (): string => skillsInstallSourceFor(CHANNEL());
+
+export const VENDORED_SKILLS: Record<string, Channel> = {
+  superwall: "latest",
+  "superwall-framework": "next",
+};
+
+const onChannel = (channel: Channel): boolean => channel === "latest" || channel === CHANNEL();
+
+export const bundledSkillsForChannel = (): string[] =>
+  Object.entries(VENDORED_SKILLS)
+    .filter(([, channel]) => onChannel(channel))
+    .map(([name]) => name);
 
 export type BundledSkillId =
   | "superwall-integrate"
@@ -72,48 +95,52 @@ function stripFrontmatter(md: string): string {
   return md;
 }
 
-export const SUPERWALL_SKILLS_SOURCE = "superwall/skills";
-
 export interface SkillInfo {
   name: string;
   summary: string;
 }
 
-export const KNOWN_SKILLS: SkillInfo[] = [
+const KNOWN_SKILLS: Array<SkillInfo & { channel: Channel }> = [
   {
     name: "superwall",
     summary: "Resources, ClickHouse SQL analytics, docs, SDK triage, and dashboard links",
+    channel: "latest",
   },
   {
     name: "superwall-editor",
     summary: "Build and edit live paywalls, onboarding, and web2app flows from the CLI",
+    channel: "latest",
   },
   {
     name: "superwall-framework",
     summary: "Paywalls, funnels and any updatable screen as React mini-apps with the framework",
+    channel: "next",
   },
-  { name: "superwall-integrate", summary: "Install and configure the SDK in an app for the first time" },
-  { name: "superwall-placements", summary: "Add or audit placements at feature gates and route them to campaigns" },
-  { name: "superwall-dashboard", summary: "Create the entitlements, products and campaigns a placement needs" },
-  { name: "superwall-review", summary: "Audit an existing Superwall setup end to end" },
-  { name: "superwall-migrate", summary: "Move an app off RevenueCat, Adapty or Qonversion" },
-  { name: "superwall-paywall-migrate", summary: "Rebuild a dashboard paywall as a framework paywall" },
-  { name: "superwall-screen-migrate", summary: "Rebuild a native screen as a framework surface" },
+  { name: "superwall-integrate", summary: "Install and configure the SDK in an app for the first time", channel: "latest" },
+  { name: "superwall-placements", summary: "Add or audit placements at feature gates and route them to campaigns", channel: "latest" },
+  { name: "superwall-dashboard", summary: "Create the entitlements, products and campaigns a placement needs", channel: "latest" },
+  { name: "superwall-review", summary: "Audit an existing Superwall setup end to end", channel: "latest" },
+  { name: "superwall-migrate", summary: "Move an app off RevenueCat, Adapty or Qonversion", channel: "latest" },
+  { name: "superwall-paywall-migrate", summary: "Rebuild a dashboard paywall as a framework paywall", channel: "next" },
+  { name: "superwall-screen-migrate", summary: "Rebuild a native screen as a framework surface", channel: "next" },
 ];
+
+export const knownSkills = (): SkillInfo[] =>
+  KNOWN_SKILLS.filter((skill) => onChannel(skill.channel)).map(({ name, summary }) => ({ name, summary }));
 
 export async function fetchPublicSkills(): Promise<SkillInfo[]> {
   try {
     const res = await fetch(
-      `https://api.github.com/repos/${SUPERWALL_SKILLS_SOURCE}/contents/skills`,
+      `https://api.github.com/repos/${SUPERWALL_SKILLS_SOURCE}/contents/skills?ref=${SKILLS_REF()}`,
       {
         headers: { accept: "application/vnd.github+json" },
         signal: AbortSignal.timeout(6000),
       },
     );
-    if (!res.ok) return KNOWN_SKILLS;
+    if (!res.ok) return knownSkills();
     const entries = (await res.json()) as Array<{ name: string; type: string }>;
     const dirs = entries.filter((e) => e.type === "dir").map((e) => e.name);
-    if (dirs.length === 0) return KNOWN_SKILLS;
+    if (dirs.length === 0) return knownSkills();
     const skills = await Promise.all(
       dirs.map(
         async (name): Promise<SkillInfo> => ({
@@ -127,14 +154,14 @@ export async function fetchPublicSkills(): Promise<SkillInfo[]> {
       a.name === "superwall" ? -1 : b.name === "superwall" ? 1 : a.name.localeCompare(b.name),
     );
   } catch {
-    return KNOWN_SKILLS;
+    return knownSkills();
   }
 }
 
 async function fetchSkillSummary(name: string): Promise<string> {
   try {
     const res = await fetch(
-      `https://raw.githubusercontent.com/${SUPERWALL_SKILLS_SOURCE}/main/skills/${name}/SKILL.md`,
+      `https://raw.githubusercontent.com/${SUPERWALL_SKILLS_SOURCE}/${SKILLS_REF()}/skills/${name}/SKILL.md`,
       { signal: AbortSignal.timeout(6000) },
     );
     if (!res.ok) return "";
@@ -162,7 +189,7 @@ export interface InstallSkillsResult {
 export async function installPublicSkills(
   opts: InstallSkillsOptions = {},
 ): Promise<InstallSkillsResult> {
-  const args = ["-y", "skills@latest", "add", SUPERWALL_SKILLS_SOURCE, "--global", "--yes"];
+  const args = ["-y", "skills@latest", "add", SKILLS_INSTALL_SOURCE(), "--global", "--yes"];
   if (opts.skills?.length) args.push("--skill", ...opts.skills);
   else args.push("--skill", "*");
   return runInstall(args, opts);
@@ -173,7 +200,17 @@ export async function installBundledSkills(
   opts: InstallSkillsOptions = {},
 ): Promise<InstallSkillsResult> {
   return runInstall(
-    ["-y", "skills@latest", "add", bundledSkillsDir(), "--global", "--yes", "--copy"],
+    [
+      "-y",
+      "skills@latest",
+      "add",
+      bundledSkillsDir(),
+      "--global",
+      "--yes",
+      "--skill",
+      ...bundledSkillsForChannel(),
+      "--copy",
+    ],
     opts,
   );
 }
@@ -204,9 +241,10 @@ export type SkillsSyncCheck = "stale" | "fresh" | "verify";
 export function checkSkillsSync(
   sync: SkillsSync | undefined,
   cliVersion: string,
+  ref: string,
   now: number,
 ): SkillsSyncCheck {
-  if (!sync || sync.cliVersion !== cliVersion) return "stale";
+  if (!sync || sync.cliVersion !== cliVersion || sync.ref !== ref) return "stale";
   const syncedAt = Date.parse(sync.syncedAt);
   if (!Number.isFinite(syncedAt)) return "stale";
   return now - syncedAt > SHA_CHECK_INTERVAL_MS ? "verify" : "fresh";
@@ -215,7 +253,7 @@ export function checkSkillsSync(
 async function fetchSourceSha(): Promise<string | null> {
   try {
     const res = await fetch(
-      `https://api.github.com/repos/${SUPERWALL_SKILLS_SOURCE}/commits/main`,
+      `https://api.github.com/repos/${SUPERWALL_SKILLS_SOURCE}/commits/${SKILLS_REF()}`,
       {
         headers: { accept: "application/vnd.github+json" },
         signal: AbortSignal.timeout(6000),
@@ -231,7 +269,7 @@ async function fetchSourceSha(): Promise<string | null> {
 
 export async function skillsOutOfDate(): Promise<boolean> {
   const sync = getSkillsSync();
-  const check = checkSkillsSync(sync, VERSION, Date.now());
+  const check = checkSkillsSync(sync, VERSION, SKILLS_REF(), Date.now());
   if (check === "stale") return true;
   if (check === "fresh" || !sync) return false;
   const head = await fetchSourceSha();
@@ -262,6 +300,7 @@ export async function syncSkills(
         cliVersion: VERSION,
         syncedAt: new Date().toISOString(),
         sourceSha: (await fetchSourceSha()) ?? undefined,
+        ref: SKILLS_REF(),
       });
   }
   return { ok, commands: [bundled.command, pub.command] };

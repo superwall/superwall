@@ -30,16 +30,40 @@ All agent-facing expertise lives in the public
 [superwall/skills](https://github.com/superwall/skills) repo; nothing
 skill-shaped is source in this package. `bun run build` bundles its
 `superwall` and `superwall-framework` skills into `dist/skills/`
-(`scripts/vendor-skills.ts`, `VENDORED_SKILLS` in `src/core/agent/skills.ts`)
-from `main`, or from a local checkout with
+(`scripts/vendor-skills.ts`, `VENDORED_SKILLS` in `src/core/agent/skills.ts`
+maps each skill to the channel it ships on, and `CHANNELS` in
+`src/environment.ts` maps each channel to its branch of the skills repo:
+`superwall` is on `latest` (branch `main`), `superwall-framework` on `next`
+(branch `next`) while the framework is in private beta), or
+from a local checkout with
 `bun run skills:vendor --from ../../../skills` (or `SUPERWALL_SKILLS_DIR=…
-bun run build`; `SUPERWALL_SKILLS_REF=<branch>` bundles another branch) while iterating; `bun run test` bundles first when
-`dist/skills` is missing. The build fails, on purpose, when `main` lacks a
+bun run build`; `SUPERWALL_SKILLS_REF=<branch>` bundles every skill from one
+branch) while iterating; `bun run test` bundles first when
+`dist/skills` is missing. The build fails, on purpose, when a branch lacks a
 skill the CLI composes: push the skills repo first. At run time the CLI reads
 each playbook from the live copy `superwall login` installed for the user's
 agents (`AGENT_SKILLS_DIR`, `~/.agents/skills`) when it is there and falls
 back to `dist/skills`, so `--skill` and headless runs use the same text an
-agent reads on its own. The workflow playbooks are nested inside those skills
+agent reads on its own.
+
+**Channels.** `SUPERWALL_CHANNEL` (`CHANNEL()` in `src/environment.ts`, the
+only reader) names a key of `CHANNELS`, `latest` unless set to a known one;
+`CHANNELS` is the single definition of what a channel is (today: which
+skills branch it reads). Skills declare the channel they ship on; commands
+that exist only on a channel check `CHANNEL()` where they register. On
+`next` the framework
+commands (`create`/`dev`/`push`/`promote`/`publish`, `migrate <paywall-id>`,
+`migrate --screen`) register and appear in `printHelp()`, and every skills
+source (`npx skills add`, the picker listing, the staleness SHA) points at the
+skills repo's `next` branch instead of `main`, and the bundled copy installed
+at login includes `superwall-framework`; off it only the skills bundled from
+`main` are installed (`bundledSkillsForChannel()`), and the commands do not
+exist: unknown command, not hidden. `superwall create` writes
+`SUPERWALL_CHANNEL=next` into the project's `.env` (write-if-absent) so a
+project stays on the channel for every later command and agent. Tests run
+with the channel set (`tests/setup.ts`); `tests/cli/channel.test.ts` covers
+both states. Nothing framework-shaped may leak to the `latest` surface: no
+help row, no skill name, no playbook sentence. The workflow playbooks are nested inside those skills
 (`superwall/workflows/<job>/playbook.md` + one file per framework or provider,
 `superwall-framework/references/migrate-from-*.md` + `native/<framework>.md`),
 and `PLAYBOOKS` maps each `BundledSkillId` to its path. `superwall login`

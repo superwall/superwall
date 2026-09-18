@@ -27,8 +27,8 @@ test("every bundled campaign creation supplies a placement and requests JSON", (
 
 test("the bundled skills match VENDORED_SKILLS exactly", () => {
   const dirs = fg.sync("dist/skills/*/SKILL.md").map((file) => file.split("/")[2]!).sort();
-  assert.deepEqual(dirs, [...VENDORED_SKILLS].sort());
-  for (const name of VENDORED_SKILLS) {
+  assert.deepEqual(dirs, Object.keys(VENDORED_SKILLS).sort());
+  for (const name of Object.keys(VENDORED_SKILLS)) {
     assert.match(readFileSync(`dist/skills/${name}/SKILL.md`, "utf8"), new RegExp(`^name: ${name}$`, "m"));
   }
   for (const [id, { playbook, refs }] of Object.entries(PLAYBOOKS)) {

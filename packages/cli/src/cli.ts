@@ -1,7 +1,7 @@
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import pc from "picocolors";
-import { VERSION } from "@/environment";
+import { CHANNEL, VERSION } from "@/environment";
 import { writeJson } from "@/output";
 import { registerAccountCommands } from "@/cli/account";
 import { printHelp } from "@/cli/help";
@@ -40,7 +40,7 @@ export async function run(): Promise<void> {
   cli = registerAccountCommands(cli);
   cli = registerPlatformCommands(cli);
   cli = registerResourceCommands(cli);
-  cli = registerPaywallCommands(cli);
+  if (CHANNEL() === "next") cli = registerPaywallCommands(cli);
 
   await cli
     .command(

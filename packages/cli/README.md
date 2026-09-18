@@ -343,6 +343,15 @@ asking. The framework itself is built to be written by agents: a plain npm
 project, file-based routes, ordinary React state — conventions an agent
 already knows, so it gets a paywall right on the first try.
 
+## Channels
+
+Set `SUPERWALL_CHANNEL=next` to opt into experimental and beta features:
+commands that are not in the stable set yet, and the matching agent skills
+from the `next` branch of the skills repo. Everything else is unchanged.
+Put it in a project's `.env` (the CLI loads `superwall/.env` and `.env` from
+the current directory) to keep that project on the channel, or export it in
+your shell. Unset it to go back to the stable set.
+
 ## Telemetry
 
 The CLI sends fully anonymous usage events for every command (which command

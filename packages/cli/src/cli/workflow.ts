@@ -1,5 +1,18 @@
 import type { Argv } from "yargs";
+import { CHANNEL } from "@/environment";
 import { apiKeyOption, dryRunOption, installDirOption, skillOption } from "./options";
+
+const migrateNextOptions = {
+  screen: {
+    type: "string",
+    describe:
+      "A SwiftUI, UIKit, Kotlin (Compose or Views), React Native or Flutter file to rebuild as a Superwall screen (no path: pick from likely candidates)",
+  },
+  screenshot: {
+    type: "string",
+    describe: "A screenshot of the native screen, shown as Compare › Original in the studio",
+  },
+} as const;
 
 export const registerWorkflowCommands = <T>(cli: Argv<T>): Argv<T> =>
   cli
@@ -46,32 +59,29 @@ export const registerWorkflowCommands = <T>(cli: Argv<T>): Argv<T> =>
     },
   )
   .command(
-    "migrate [paywall]",
-    "Migrate from RevenueCat / Adapty / Qonversion, or rebuild a dashboard paywall or a native screen as code",
-    (y) =>
-      y
+    CHANNEL() === "next" ? "migrate [paywall]" : "migrate",
+    CHANNEL() === "next"
+      ? "Migrate from RevenueCat / Adapty / Qonversion, or rebuild a dashboard paywall or a native screen as code"
+      : "Migrate from RevenueCat / Adapty / Qonversion",
+    (y) => {
+      const base = y
+        .options({
+          ...installDirOption,
+          "dry-run": { type: "boolean", describe: "Plan without changes" },
+          ...skillOption,
+        })
+        .example("$0 migrate", "Move this app off RevenueCat / Adapty / Qonversion");
+      if (CHANNEL() !== "next") return base;
+      return base
         .positional("paywall", {
           type: "string",
           describe:
             "A dashboard paywall id: scaffold it as code (if not already) and rebuild its pages with your agent, or copy the prompt",
         })
-        .options({
-          ...installDirOption,
-          "dry-run": { type: "boolean", describe: "Plan without changes" },
-          ...skillOption,
-          screen: {
-            type: "string",
-            describe:
-              "A SwiftUI, UIKit, Kotlin (Compose or Views), React Native or Flutter file to rebuild as a Superwall screen (no path: pick from likely candidates)",
-          },
-          screenshot: {
-            type: "string",
-            describe: "A screenshot of the native screen, shown as Compare › Original in the studio",
-          },
-        })
-        .example("$0 migrate", "Move this app off RevenueCat / Adapty / Qonversion")
+        .options(migrateNextOptions)
         .example("$0 migrate 65920", "Rebuild dashboard paywall 65920 as code")
-        .example("$0 migrate --screen App/UpdateRequiredView.swift", "Rebuild a native screen as a Superwall surface"),
+        .example("$0 migrate --screen App/UpdateRequiredView.swift", "Rebuild a native screen as a Superwall surface");
+    },
     (argv) => {
       if (argv.skill && argv.paywall === undefined && argv.screen === undefined)
         return import("@/commands/workflow/print-skill").then((m) => m.runPrintSkill("migrate")(argv));

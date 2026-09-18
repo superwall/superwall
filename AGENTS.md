@@ -22,7 +22,12 @@ This repo carries no user documentation of its own. The framework's docs live
 in [superwall/docs](https://github.com/superwall/docs) under
 `content/docs/framework/`, and the agent playbook in
 [superwall/skills](https://github.com/superwall/skills) under
-`skills/superwall-framework/` (`SKILL.md` + `references/`). Both are
+`skills/superwall-framework/` (`SKILL.md` + `references/`) — on that repo's
+`next` branch while the framework is in private beta; `main` is the public
+skill set and must carry nothing framework-shaped, a check on every pull
+request to `main` enforces it, and `main` is merged into `next` on every push
+so the two only differ by the framework. The CLI selects the branch with
+`SUPERWALL_CHANNEL=next`, which also unlocks the framework commands. Both are
 conventionally checked out beside this repository (`../docs`, `../skills`) —
 find them there rather than assuming an absolute path. A change here that
 alters behavior, a command, a flag, a config key, an error message, or a file
