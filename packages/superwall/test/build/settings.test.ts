@@ -110,9 +110,11 @@ describe("allowedHostsWire", () => {
   });
 
   it("only ever sends https origins", () => {
-    expect(allowedHostsWire(["api.example.com", "https://cdn.example.com"])!.every((o) =>
-      o.startsWith("https://"),
-    )).toBe(true);
+    expect(
+      allowedHostsWire(["api.example.com", "https://cdn.example.com"])!.every((o) =>
+        o.startsWith("https://"),
+      ),
+    ).toBe(true);
     expect(() => allowedHostsWire(["http://api.example.com"])).toThrow(
       /http:\/\/ are not accepted/,
     );
