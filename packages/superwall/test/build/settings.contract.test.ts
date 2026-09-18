@@ -30,6 +30,7 @@ describe("the CLI's copy of the settings wire", () => {
       web_checkout_destination: "PAYWALL_APPLE_PAY",
       background_color_hex: "#ffffff",
       dark_background_color_hex: "#0d0f12",
+      allowed_hosts: ["https://api.example.com"],
     };
     const theirs: Required<CliPaywallSettings> = full;
 
