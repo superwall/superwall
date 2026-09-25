@@ -4,6 +4,7 @@ import { EditorTransport } from "./editor";
 import type { ITransport } from "./shared";
 import { WebKitTransport } from "./webkit";
 import { WebSdkTransport, webSdkHostOrigin } from "./web";
+import { WebSdkEvents } from "./web-events";
 
 export const buildTransport = (kind: TransportKind): ITransport => {
   switch (kind) {
@@ -14,7 +15,11 @@ export const buildTransport = (kind: TransportKind): ITransport => {
     case TransportKind.EditorIframe:
       return new EditorTransport({ targetWindow: window.parent, targetOrigin: "*" });
     case TransportKind.WebSdk:
-      return new WebSdkTransport({ hostWindow: window.parent, hostOrigin: webSdkHostOrigin() });
+      return new WebSdkTransport({
+        hostWindow: window.parent,
+        hostOrigin: webSdkHostOrigin(),
+        events: WebSdkEvents.fromLocation(),
+      });
   }
 };
 
@@ -35,5 +40,11 @@ export {
   webSdkHostOrigin,
   type WebSdkTransportOptions,
 } from "./web";
+export {
+  WebSdkEvents,
+  webSdkEventsInit,
+  type WebSdkCollector,
+  type WebSdkEventsInit,
+} from "./web-events";
 export { decodeBase64Utf8, decodeIncomingMessages } from "./base64";
 export { TransportKind } from "./kind";

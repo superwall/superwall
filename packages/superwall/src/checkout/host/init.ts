@@ -31,8 +31,6 @@ export const webSdkInit = (hash: string = window.location.hash): WebSdkInit | nu
 
 const textOf = (value: unknown): string => (typeof value === "string" ? value : "");
 
-/** The placement that presented the paywall: the native SDKs' `event_name`
- *  param, else the one the Web SDK names in its init payload. */
 export const presentingPlacement = (
   params: Record<string, unknown>,
 ): { name: string; eventId: string } => {

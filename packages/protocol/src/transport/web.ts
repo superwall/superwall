@@ -1,6 +1,7 @@
 import type { TIncomingMessage, TOutgoingMessage } from "../messages";
 import { decodeIncomingMessages } from "./base64";
 import { createTransportLogger, type ITransport, type TIncomingHandler } from "./shared";
+import type { WebSdkEvents } from "./web-events";
 
 const log = createTransportLogger("Web");
 
@@ -15,6 +16,7 @@ export type WebSdkTransportOptions = {
   hostWindow: Window;
   /** The page framing the paywall; messages from any other origin are dropped. */
   hostOrigin: string;
+  events?: WebSdkEvents | null;
 };
 
 type Accept64Envelope = { channel: typeof WEB_SDK_ACCEPT64_CHANNEL; payload: string };
@@ -33,15 +35,18 @@ const isAccept64 = (data: unknown): data is Accept64Envelope =>
 export class WebSdkTransport implements ITransport {
   private readonly hostWindow: Window;
   private readonly hostOrigin: string;
+  private readonly events: WebSdkEvents | null;
   private handlers: TIncomingHandler[] = [];
   private listener: ((event: MessageEvent) => void) | undefined;
 
-  constructor({ hostWindow, hostOrigin }: WebSdkTransportOptions) {
+  constructor({ hostWindow, hostOrigin, events }: WebSdkTransportOptions) {
     this.hostWindow = hostWindow;
     this.hostOrigin = hostOrigin;
+    this.events = events ?? null;
   }
 
   postMessage(message: TOutgoingMessage): void {
+    this.events?.observe(message);
     this.hostWindow.postMessage({ version: 1, payload: { events: [message] } }, this.hostOrigin);
     log.info("Sent message to the Web SDK via postMessage");
   }

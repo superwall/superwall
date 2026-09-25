@@ -90,7 +90,7 @@ export const buildSnapshot = async (
 
   const { definition, config } = await loadSurfaceConfig(surface);
   const products = resolveProductIds(config, surface, platform);
-  const settings = paywallSettingsOf(config);
+  const settings = paywallSettingsOf(config, platform);
   const locales = localesOf(project, surface, definition);
 
   fs.writeFileSync(

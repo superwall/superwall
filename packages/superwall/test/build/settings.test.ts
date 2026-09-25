@@ -147,6 +147,16 @@ describe("paywallSettingsOf", () => {
     expect(paywallSettingsOf({ allowedHosts: [] })).not.toHaveProperty("allowed_hosts");
   });
 
+  it("lets a web build reach the paywall web API for its events, with or without checkout", () => {
+    expect(paywallSettingsOf({}, "web")).toMatchObject({
+      allowed_hosts: ["https://web-api.superwall.app"],
+    });
+    expect(paywallSettingsOf({ allowedHosts: ["api.example.com"] }, "web")).toMatchObject({
+      allowed_hosts: ["https://api.example.com", "https://web-api.superwall.app"],
+    });
+    expect(paywallSettingsOf({}, "ios")).not.toHaveProperty("allowed_hosts");
+  });
+
   it("stamps the introductory-offer override only when the config sets one", () => {
     expect(paywallSettingsOf({ introductoryOfferEligibility: "eligible" })).toMatchObject({
       introductory_offer_eligibility: "always_eligible",
