@@ -41,11 +41,20 @@ const FLAT_PREFIXES = [
 const matchesPrefix = (deviceModel: string, prefixes: readonly string[]): boolean =>
   prefixes.some((prefix) => deviceModel.startsWith(prefix));
 
-export const platformOf = (device: SuperwallDeviceVariables): DevicePlatform | undefined => {
-  const platform = device.platform?.toLowerCase();
-  if (platform === "ios" || platform === "android" || platform === "web") return platform;
+const normalizePlatform = (value: unknown): DevicePlatform | undefined => {
+  const platform = typeof value === "string" ? value.toLowerCase() : undefined;
+  if (platform === "ios" || platform === "macos") return "ios";
+  if (platform === "android" || platform === "web") return platform;
   return undefined;
 };
+
+const announcedPlatform = (): DevicePlatform | undefined => {
+  if (typeof window === "undefined") return undefined;
+  return normalizePlatform(new URLSearchParams(window.location.search).get("platform"));
+};
+
+export const platformOf = (device: SuperwallDeviceVariables): DevicePlatform | undefined =>
+  normalizePlatform(device.platform) ?? announcedPlatform();
 
 export const idiomOf = (device: SuperwallDeviceVariables): DeviceIdiom | undefined => {
   const interfaceType = device.interfaceType?.toLowerCase();

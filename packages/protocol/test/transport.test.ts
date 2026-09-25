@@ -6,6 +6,9 @@ import {
   MessageDirection,
   TransportKind,
   unwrap,
+  WEB_SDK_ACCEPT64_CHANNEL,
+  WebSdkTransport,
+  webSdkHostOrigin,
   wrap,
   type TIncomingMessage,
   type TOutgoingMessage,
@@ -233,5 +236,81 @@ describe("Editor transport", () => {
     transport.stopListening(); // idempotent
     dispatchWrapped(wrap(incoming, MessageDirection.ToPaywall));
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+const HOST = "https://app.example.com";
+const accept64 = (events: unknown[]) => ({
+  version: 1,
+  channel: WEB_SDK_ACCEPT64_CHANNEL,
+  payload: btoa(JSON.stringify(events)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
+});
+const deliver = (data: unknown, source: unknown, origin = HOST) =>
+  window.dispatchEvent(new MessageEvent("message", { data, origin, source: source as Window }));
+
+describe("Web SDK transport", () => {
+  const listening = () => {
+    const host = { postMessage: vi.fn() };
+    const transport = new WebSdkTransport({
+      hostWindow: host as unknown as Window,
+      hostOrigin: HOST,
+    });
+    const handler = vi.fn();
+    transport.addListener(handler);
+    transport.startListening();
+    return { host, transport, handler };
+  };
+
+  it("posts plain objects in the v1 envelope to the host's origin", () => {
+    const { host, transport } = listening();
+
+    transport.postMessage(outgoing);
+
+    expect(host.postMessage).toHaveBeenCalledWith(
+      { version: 1, payload: { events: [outgoing] } },
+      HOST,
+    );
+    transport.stopListening();
+  });
+
+  it("decodes the SDK's base64url accept64 batches into incoming messages", () => {
+    const { host, transport, handler } = listening();
+
+    deliver(accept64([incoming, { event_name: "products", products: [] }]), host);
+
+    expect(handler.mock.calls.map(([message]) => message)).toEqual([
+      incoming,
+      { event_name: "products", products: [] },
+    ]);
+    transport.stopListening();
+  });
+
+  it("ignores messages from another window, another origin or another channel", () => {
+    const { host, transport, handler } = listening();
+
+    deliver(accept64([incoming]), window);
+    deliver(accept64([incoming]), host, "https://evil.example.com");
+    deliver({ channel: "something.else", payload: "e30" }, host);
+    deliver("not an object", host);
+
+    expect(handler).not.toHaveBeenCalled();
+    transport.stopListening();
+  });
+
+  it("stops dispatching once it stops listening", () => {
+    const { host, transport, handler } = listening();
+    transport.stopListening();
+
+    deliver(accept64([incoming]), host);
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("pins the host origin from the host_origin the SDK stamps on the URL", () => {
+    expect(webSdkHostOrigin("?host_origin=http%3A%2F%2Flocalhost%3A5175&transport=web")).toBe(
+      "http://localhost:5175",
+    );
+    expect(webSdkHostOrigin("?transport=web")).toBe("*");
+    expect(webSdkHostOrigin("?host_origin=not-a-url")).toBe("*");
   });
 });

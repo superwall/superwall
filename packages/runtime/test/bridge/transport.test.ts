@@ -13,6 +13,12 @@ describe("detectRuntimeTransportKind", () => {
     );
   });
 
+  it("selects the Web SDK via the transport query param", () => {
+    expect(detectRuntimeTransportKind({ search: "?platform=web&transport=web" })).toBe(
+      TransportKind.WebSdk,
+    );
+  });
+
   it("defaults to WebKit", () => {
     expect(detectRuntimeTransportKind({ search: "" })).toBe(TransportKind.WebKitPostMessage);
     expect(detectRuntimeTransportKind({ search: "?foo=bar" })).toBe(

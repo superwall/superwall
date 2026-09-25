@@ -13,6 +13,7 @@ export const detectRuntimeTransportKind = (
   const params = new URLSearchParams(options.search ?? window.location.search);
   if (params.get("platform") === "android") return TransportKind.Android;
   if (params.get("transport") === "editor") return TransportKind.EditorIframe;
+  if (params.get("transport") === "web") return TransportKind.WebSdk;
   return TransportKind.WebKitPostMessage;
 };
 

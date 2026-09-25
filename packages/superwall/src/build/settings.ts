@@ -144,10 +144,17 @@ export const allowedHostsWire = (
   return origins.length === 0 ? undefined : origins;
 };
 
+export const PAYWALL_WEB_API_HOST = "web-api.superwall.app";
+
+const surfaceHostsOf = (config: SuperwallConfig | undefined) =>
+  checkoutModeOf(config?.checkout) === undefined
+    ? config?.allowedHosts
+    : [...(config?.allowedHosts ?? []), PAYWALL_WEB_API_HOST];
+
 export const paywallSettingsOf = (config: SuperwallConfig | undefined): PaywallSettings => {
   const background = backgroundOf(config?.background);
   const destination = webCheckoutDestinationOf(config?.checkout);
-  const allowedHosts = allowedHostsWire(config?.allowedHosts);
+  const allowedHosts = allowedHostsWire(surfaceHostsOf(config));
   return {
     presentation_style: presentationStyleWire(config?.presentation),
     feature_gating: config?.featureGating === "gated" ? "gated" : "non_gated",

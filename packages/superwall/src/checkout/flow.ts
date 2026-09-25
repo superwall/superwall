@@ -248,6 +248,11 @@ export const reportCompletedCheckout = async (
     entitlementsToken,
   );
 
+  if (hostedInWebSdk()) {
+    host.postCheckoutCompleted(context, session.postPurchaseBehavior, entitlementsToken);
+    return;
+  }
+
   if (sdkRedeemsCheckout(paywall.getSnapshot())) return;
   if (redemptionUrl !== undefined) {
     host.redeem(redemptionUrl);

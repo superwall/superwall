@@ -7,6 +7,7 @@ const TRANSPORT_COLORS: Record<string, string> = {
   WebKit: "#9C27B0",
   Android: "#4CAF50",
   Editor: "#2196F3",
+  Web: "#00BCD4",
   Transport: "#FF9800",
 };
 

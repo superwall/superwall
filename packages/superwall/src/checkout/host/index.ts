@@ -74,6 +74,18 @@ export const hostEvents = (post: (message: HostMessage) => void) => ({
       ...(postPurchaseBehavior ? { post_purchase_behavior: postPurchaseBehavior } : {}),
       ...(entitlementsToken ? { entitlements_token: entitlementsToken } : {}),
     }),
+  postCheckoutCompleted: (
+    ctx: HostContext,
+    postPurchaseBehavior?: PostPurchaseBehavior,
+    entitlementsToken?: string,
+  ) =>
+    post({
+      event_name: "post_checkout_complete",
+      checkout_context_id: ctx.checkoutContextId,
+      product_identifier: ctx.productIdentifier,
+      ...(postPurchaseBehavior ? { post_purchase_behavior: postPurchaseBehavior } : {}),
+      ...(entitlementsToken ? { entitlements_token: entitlementsToken } : {}),
+    }),
   openHostedPage: (url: string) => post({ event_name: "open_url_external", url }),
   redeem: (link: string) => post({ event_name: "open_deep_link", link }),
   redemption: (code: string, result: DiscountValidationResult) =>

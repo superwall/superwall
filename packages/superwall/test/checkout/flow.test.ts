@@ -566,6 +566,30 @@ describe("a checkout completed inside the Web SDK", () => {
     vi.unstubAllGlobals();
   });
 
+  it("finishes with post_checkout_complete and never redeems through the backend", async () => {
+    (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
+    const { session, postMessage } = fakeSession({ sdkVersionPadded: "000.002.009" });
+    vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue("ent_1");
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+
+    await reportCompletedCheckout(session, { ...embedded, postPurchaseBehavior: "GRANT_ACCESS" });
+
+    expect(postMessage.mock.calls.map(([message]) => message.event_name)).toEqual([
+      "stripe_checkout_complete",
+      "post_checkout_complete",
+    ]);
+    expect(postMessage).toHaveBeenLastCalledWith({
+      event_name: "post_checkout_complete",
+      checkout_context_id: "ctx_1",
+      product_identifier: expect.any(String),
+      post_purchase_behavior: "GRANT_ACCESS",
+      entitlements_token: "ent_1",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it("still tells the SDK when the claim fails", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
