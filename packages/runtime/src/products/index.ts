@@ -85,3 +85,8 @@ export {
   productVariablesFromTemplateVariables,
 } from "./merge";
 export { createProductDeriver, trialPeriodEndDate } from "./derive";
+export {
+  catalogProductVariables,
+  type SuperwallCatalogPrice,
+  type SuperwallCatalogProduct,
+} from "./catalog";

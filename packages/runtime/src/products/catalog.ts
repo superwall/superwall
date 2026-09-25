@@ -1,13 +1,18 @@
-export interface DashboardPrice {
+/** A price as Superwall's catalog serves it: minor units and an ISO currency. */
+export interface SuperwallCatalogPrice {
   amount?: number;
   currency?: string;
 }
 
-export interface DashboardProduct {
+/**
+ * A product as Superwall's catalog serves it — the dashboard's products API and
+ * the subscriptions API's public `products` list share this shape.
+ */
+export interface SuperwallCatalogProduct {
   identifier?: string;
-  price?: DashboardPrice | null;
-  trial_price?: DashboardPrice | null;
-  monthly_billing_plan_price?: DashboardPrice | null;
+  price?: SuperwallCatalogPrice | null;
+  trial_price?: SuperwallCatalogPrice | null;
+  monthly_billing_plan_price?: SuperwallCatalogPrice | null;
   subscription?: {
     period?: string;
     period_count?: number;
@@ -78,7 +83,14 @@ const periodCounts = (period: string, count: number): Record<string, number> | u
   };
 };
 
-export const productVariables = (product: DashboardProduct): Record<string, unknown> => {
+/**
+ * The product variables a native SDK derives from its store (`price`,
+ * `periodly`, `monthlyPrice`, …), built from a catalog product instead: for
+ * hosts with no store to ask, such as the Web SDK selling a Stripe price.
+ */
+export const catalogProductVariables = (
+  product: SuperwallCatalogProduct,
+): Record<string, unknown> => {
   const variables: Record<string, unknown> = {};
   if (product.identifier) variables.identifier = product.identifier;
 

@@ -8,9 +8,22 @@ describe("platformOf", () => {
     expect(platformOf({ platform: "web" })).toBe("web");
   });
 
+  it("reads an iPad app on a Mac as the iOS host", () => {
+    expect(platformOf({ platform: "macOS" })).toBe("ios");
+  });
+
   it("names nothing for a host it does not know", () => {
     expect(platformOf({})).toBeUndefined();
     expect(platformOf({ platform: "visionOS" })).toBeUndefined();
+  });
+
+  it("reads the platform the host stamped on the URL until the host reports one", () => {
+    window.history.replaceState(null, "", "/?platform=web&transport=web");
+    expect(platformOf({})).toBe("web");
+    expect(platformOf({ platform: "iOS" })).toBe("ios");
+    window.history.replaceState(null, "", "/?platform=visionOS");
+    expect(platformOf({})).toBeUndefined();
+    window.history.replaceState(null, "", "/");
   });
 });
 

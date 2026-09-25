@@ -41,11 +41,27 @@ const FLAT_PREFIXES = [
 const matchesPrefix = (deviceModel: string, prefixes: readonly string[]): boolean =>
   prefixes.some((prefix) => deviceModel.startsWith(prefix));
 
-export const platformOf = (device: SuperwallDeviceVariables): DevicePlatform | undefined => {
-  const platform = device.platform?.toLowerCase();
-  if (platform === "ios" || platform === "android" || platform === "web") return platform;
+const normalizePlatform = (value: unknown): DevicePlatform | undefined => {
+  const platform = typeof value === "string" ? value.toLowerCase() : undefined;
+  if (platform === "ios" || platform === "macos") return "ios";
+  if (platform === "android" || platform === "web") return platform;
   return undefined;
 };
+
+const announcedPlatform = (): DevicePlatform | undefined => {
+  if (typeof window === "undefined") return undefined;
+  return normalizePlatform(new URLSearchParams(window.location.search).get("platform"));
+};
+
+/**
+ * The host SDK's platform. The device record is empty until the host's first
+ * `template_variables`, so until then this reads the platform the host
+ * stamped on the paywall URL (the Web SDK sets `?platform=web`); a paywall can
+ * branch on it from its first render. The iOS SDK reports `macOS` for an iPad
+ * app on a Mac, which is still the iOS host.
+ */
+export const platformOf = (device: SuperwallDeviceVariables): DevicePlatform | undefined =>
+  normalizePlatform(device.platform) ?? announcedPlatform();
 
 export const idiomOf = (device: SuperwallDeviceVariables): DeviceIdiom | undefined => {
   const interfaceType = device.interfaceType?.toLowerCase();

@@ -287,6 +287,21 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
     accept: (messages) => {
       for (const message of messages) transport.accept(message);
     },
+    supplyProducts: (supplied) => {
+      const known = new Map(raw.map((product) => [product.reference, product]));
+      const missing = supplied.filter(
+        ({ reference }) => Object.keys(known.get(reference)?.variables ?? {}).length === 0,
+      );
+      if (missing.length === 0) return;
+      raw = mergeProductVariables(
+        mergeIncomingProducts(
+          raw,
+          missing.map(({ reference, productId }) => ({ product: reference, productId })),
+        ),
+        new Map(missing.map(({ reference, variables }) => [reference, variables])),
+      );
+      commit({});
+    },
     accept64: (message) => {
       let decoded: TIncomingMessage[];
       try {

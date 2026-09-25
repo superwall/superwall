@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { SuperwallRuntimeSnapshot } from "@superwall/runtime";
 import { sdkHostsCheckoutInPaywall, sdkRedeemsCheckout } from "../../../src/checkout/host/sdk";
 
@@ -31,5 +31,17 @@ describe("sdkRedeemsCheckout", () => {
     expect(sdkRedeemsCheckout(on("004.013.999"))).toBe(false);
     expect(sdkRedeemsCheckout(on("004.010.008"))).toBe(false);
     expect(sdkRedeemsCheckout(on())).toBe(false);
+  });
+});
+
+describe("inside the Web SDK", () => {
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("hosts the sheet and needs no redemption, whatever version the Web SDK reports", () => {
+    window.history.replaceState(null, "", "/?client_surface=web-sdk");
+    expect(sdkHostsCheckoutInPaywall(on("000.002.009"))).toBe(true);
+    expect(sdkRedeemsCheckout(on("000.002.009"))).toBe(true);
   });
 });

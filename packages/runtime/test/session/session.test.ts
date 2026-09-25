@@ -64,6 +64,43 @@ describe("products", () => {
     });
   });
 
+  it("takes products the paywall supplied itself, without touching the host's variables", () => {
+    const { session, transport } = createSession();
+    transport.accept({
+      event_name: "template_variables",
+      variables: { device: { platform: "Web" } },
+    });
+
+    session.supplyProducts([
+      { reference: "primary", productId: "live:price_1:no-trial", variables: { price: "$49.99" } },
+    ]);
+
+    expect(session.getSnapshot().device).toEqual({ platform: "Web" });
+    expect(session.getSnapshot().productsByReference.primary).toMatchObject({
+      productId: "live:price_1:no-trial",
+      variables: { price: "$49.99" },
+    });
+  });
+
+  it("never overwrites variables the host already sent", () => {
+    const { session, transport } = createSession();
+    transport.accept({
+      event_name: "products",
+      products: [{ product: "primary", productId: "pro_3999_year" }],
+    });
+    transport.accept({
+      event_name: "template_variables",
+      variables: { products: [{ primary: { price: "$39.99" } }] },
+    });
+    const before = session.getSnapshot();
+
+    session.supplyProducts([
+      { reference: "primary", productId: "live:price_1:no-trial", variables: { price: "$49.99" } },
+    ]);
+
+    expect(session.getSnapshot()).toBe(before);
+  });
+
   it("keeps template variables without products from touching the product list", () => {
     const { session, transport } = createSession();
     const before = session.getSnapshot().products;

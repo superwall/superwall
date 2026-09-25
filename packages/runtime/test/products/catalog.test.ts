@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { productVariables } from "../../src/lib/products";
+import { catalogProductVariables } from "../../src/products/catalog";
 
-describe("productVariables", () => {
+describe("catalogProductVariables", () => {
   it("derives the variables a paywall reads from what Superwall knows", () => {
-    const variables = productVariables({
+    const variables = catalogProductVariables({
       identifier: "pro_5999_year",
       price: { amount: 5999, currency: "USD" },
       subscription: { period: "year", period_count: 1, trial_period_days: 7 },
@@ -25,12 +25,12 @@ describe("productVariables", () => {
   });
 
   it("invents nothing the dashboard cannot answer for", () => {
-    expect(productVariables({ identifier: "lifetime" })).toEqual({ identifier: "lifetime" });
-    expect(productVariables({})).toEqual({});
+    expect(catalogProductVariables({ identifier: "lifetime" })).toEqual({ identifier: "lifetime" });
+    expect(catalogProductVariables({})).toEqual({});
   });
 
   it("a product with no subscription keeps its price and gains no period", () => {
-    const variables = productVariables({
+    const variables = catalogProductVariables({
       identifier: "coins_100",
       price: { amount: 299, currency: "EUR" },
     });
@@ -44,7 +44,7 @@ describe("productVariables", () => {
   });
 
   it("a monthly product derives its yearly equivalent, not the other way round", () => {
-    const variables = productVariables({
+    const variables = catalogProductVariables({
       identifier: "pro_999_month",
       price: { amount: 999, currency: "USD" },
       subscription: { period: "month", period_count: 1 },
@@ -56,7 +56,7 @@ describe("productVariables", () => {
   });
 
   it("answers every period unit, the way the dashboard's engine does", () => {
-    const yearly = productVariables({
+    const yearly = catalogProductVariables({
       price: { amount: 5999, currency: "USD" },
       subscription: { period: "year", period_count: 1 },
     });
@@ -67,7 +67,7 @@ describe("productVariables", () => {
       periodYears: 1,
     });
 
-    const monthly = productVariables({
+    const monthly = catalogProductVariables({
       price: { amount: 999, currency: "USD" },
       subscription: { period: "month", period_count: 1 },
     });
@@ -78,7 +78,7 @@ describe("productVariables", () => {
       periodYears: 0,
     });
 
-    const weekly = productVariables({
+    const weekly = catalogProductVariables({
       price: { amount: 299, currency: "USD" },
       subscription: { period: "week", period_count: 2 },
     });
@@ -89,7 +89,7 @@ describe("productVariables", () => {
       periodYears: 0,
     });
 
-    const quarterly = productVariables({
+    const quarterly = catalogProductVariables({
       price: { amount: 2999, currency: "USD" },
       subscription: { period: "month", period_count: 3 },
     });
@@ -100,7 +100,7 @@ describe("productVariables", () => {
       periodYears: 0,
     });
 
-    const daily = productVariables({
+    const daily = catalogProductVariables({
       price: { amount: 99, currency: "USD" },
       subscription: { period: "day", period_count: 10 },
     });
@@ -113,7 +113,7 @@ describe("productVariables", () => {
   });
 
   it("a period it has never heard of gains no counts rather than wrong ones", () => {
-    const variables = productVariables({
+    const variables = catalogProductVariables({
       price: { amount: 100, currency: "USD" },
       subscription: { period: "fortnight", period_count: 1 },
     });
@@ -124,7 +124,7 @@ describe("productVariables", () => {
   });
 
   it("falls back to a symbol when the currency is unknown to Intl", () => {
-    const variables = productVariables({
+    const variables = catalogProductVariables({
       identifier: "odd",
       price: { amount: 100, currency: "ZZZ" },
     });
