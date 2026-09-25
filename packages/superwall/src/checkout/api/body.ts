@@ -3,6 +3,7 @@ import {
   type SuperwallProduct,
   type SuperwallRuntimeSnapshot,
 } from "@superwall/runtime";
+import { presentingPlacement } from "../host/init";
 import { asNumber, asString } from "./decode";
 import type { CheckoutMode } from "../types";
 
@@ -72,6 +73,7 @@ export const sessionBody = ({
   const { device, user, params } = snapshot;
   const variables = product.variables;
   const managedPayments = checkoutManagedPaymentsOf(snapshot.config?.checkout);
+  const placement = presentingPlacement(params);
 
   return {
     currencyCode: "USD",
@@ -100,8 +102,8 @@ export const sessionBody = ({
         isFreeTrialAvailable: snapshot.introductoryOffer.eligible === true,
         presentedBy: "placement",
         presentationSourceType: "register",
-        presentedByEventName: asString(params.event_name),
-        presentedByEventId: asString(params.event_id) || crypto.randomUUID(),
+        presentedByEventName: placement.name,
+        presentedByEventId: placement.eventId || crypto.randomUUID(),
         presentedByEventTimestamp: new Date().toISOString(),
       },
       placementParams: {
