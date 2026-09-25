@@ -52,12 +52,47 @@ export const resolveProductVariables = async (
   });
 };
 
+const CACHE_PREFIX = "sw:product-variables:";
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+const cacheKeyOf = (init: WebSdkInit, config: SuperwallConfig | undefined) =>
+  `${CACHE_PREFIX}${init.apiBase}|${stripeSlotsOf(config)
+    .map(([reference, id]) => `${reference}=${id}`)
+    .join(",")}`;
+
+/**
+ * The last answer for these exact slots, so a paywall opened again shows its
+ * prices on the first frame instead of after a round trip. Best effort: a
+ * storage the browser refuses is simply not used.
+ */
+export const readCachedProductVariables = (
+  key: string,
+  now: number = Date.now(),
+): SuperwallSuppliedProduct[] | null => {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(key) ?? "null");
+    const at = field(stored, "at");
+    const products = field(stored, "products");
+    if (typeof at !== "number" || now - at > CACHE_TTL_MS || !Array.isArray(products)) return null;
+    return products as SuperwallSuppliedProduct[];
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedProductVariables = (key: string, products: SuperwallSuppliedProduct[]) => {
+  try {
+    localStorage.setItem(key, JSON.stringify({ at: Date.now(), products }));
+  } catch {}
+};
+
 /**
  * A native SDK prices every product from its store and sends the variables in
  * `template_variables`. The Web SDK sends none for a headless paywall, so
  * inside it the paywall resolves its Stripe products' variables itself,
- * exactly as paywall.js does, and supplies them to the session. Variables a
- * host did send are never replaced.
+ * exactly as paywall.js does, and supplies them to the session. The last
+ * answer is kept for a day and shown first while a fresh one is fetched
+ * (stale-while-revalidate). Variables a host did send are never replaced.
  */
 export const useProductVariables = () => {
   const session = useSuperwallSession();
@@ -69,8 +104,14 @@ export const useProductVariables = () => {
     const init = webSdkInit();
     if (!init) return;
     asked.current = true;
+    const key = cacheKeyOf(init, config);
+    const cached = readCachedProductVariables(key);
+    if (cached) session.supplyProducts(cached);
     resolveProductVariables(init, config)
-      .then((products) => session.supplyProducts(products))
+      .then((products) => {
+        if (products.length > 0) writeCachedProductVariables(key, products);
+        session.supplyProducts(products);
+      })
       .catch((error: unknown) => {
         console.warn("Error resolving product variables", error);
       });

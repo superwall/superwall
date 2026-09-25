@@ -82,6 +82,29 @@ describe("products", () => {
     });
   });
 
+  it("refreshes what it supplied, but stops once the host sends its own", () => {
+    const { session, transport } = createSession();
+    const supply = (price: string) =>
+      session.supplyProducts([
+        { reference: "primary", productId: "live:price_1:no-trial", variables: { price } },
+      ]);
+
+    supply("$49.99");
+    supply("$44.99");
+    expect(session.getSnapshot().productsByReference.primary?.variables).toEqual({
+      price: "$44.99",
+    });
+
+    transport.accept({
+      event_name: "template_variables",
+      variables: { products: [{ primary: { price: "$39.99" } }] },
+    });
+    supply("$29.99");
+    expect(session.getSnapshot().productsByReference.primary?.variables).toEqual({
+      price: "$39.99",
+    });
+  });
+
   it("never overwrites variables the host already sent", () => {
     const { session, transport } = createSession();
     transport.accept({

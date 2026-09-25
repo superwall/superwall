@@ -176,8 +176,9 @@ export interface SuperwallSession<out TProduct extends SuperwallProduct = Superw
   /**
    * Products the paywall resolved itself, for a host that sends none (the Web
    * SDK has no store to price a Stripe product with). Merged by reference the
-   * way the host's `products` and `template_variables` are, and never
-   * overwriting variables the host already sent.
+   * way the host's `products` and `template_variables` are. A later supply
+   * refreshes what an earlier one supplied (a cached answer, then the live
+   * one); variables the host sent are never overwritten.
    */
   supplyProducts: (products: readonly SuperwallSuppliedProduct[]) => void;
   close: () => void;

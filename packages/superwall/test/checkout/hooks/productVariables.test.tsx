@@ -3,6 +3,7 @@ import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SuperwallProvider, type SuperwallSession } from "../../../src";
 import {
+  readCachedProductVariables,
   resolveProductVariables,
   useProductVariables,
 } from "../../../src/checkout/hooks/useProductVariables";
@@ -48,6 +49,7 @@ const render = (host: HostProps = { products: [], device: { platform: "Web" } })
 afterEach(() => {
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
+  localStorage.clear();
 });
 
 describe("resolveProductVariables", () => {
@@ -100,5 +102,48 @@ describe("useProductVariables", () => {
     await flush();
 
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("the product variables cache", () => {
+  it("shows the last answer first, then the live one, and keeps the live one", async () => {
+    window.history.replaceState(null, "", `/?client_surface=web-sdk${hashOf(init)}`);
+    const key = `sw:product-variables:${init.apiBase}|primary=test:price_1:no-trial`;
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        at: Date.now(),
+        products: [
+          {
+            reference: "primary",
+            productId: "test:price_1:no-trial",
+            variables: { price: "$39.99" },
+          },
+        ],
+      }),
+    );
+    let answer: (response: Response) => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>((resolve) => (answer = resolve))),
+    );
+
+    const { result } = render();
+    await flush();
+    expect(result.current.getSnapshot().productsByReference.primary?.variables).toEqual({
+      price: "$39.99",
+    });
+
+    answer(Response.json({ products: { "stripe|test:price_1:no-trial": variables } }));
+    await flush();
+    await flush();
+    expect(result.current.getSnapshot().productsByReference.primary?.variables).toEqual(variables);
+    expect(readCachedProductVariables(key)?.[0]?.variables).toEqual(variables);
+  });
+
+  it("ignores an answer older than a day", () => {
+    const key = "sw:product-variables:old";
+    localStorage.setItem(key, JSON.stringify({ at: 0, products: [] }));
+    expect(readCachedProductVariables(key, 24 * 60 * 60 * 1000 + 1)).toBeNull();
   });
 });
