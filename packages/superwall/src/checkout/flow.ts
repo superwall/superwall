@@ -7,6 +7,7 @@ import { subscriptionsApiUrl } from "./api/url";
 import { checkoutEvents } from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
 import { sdkHostsCheckoutInPaywall, sdkRedeemsCheckout } from "./host/sdk";
+import { presentingPlacement } from "./host/init";
 import { bindsEntitlement, hostedInWebSdk } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
@@ -102,13 +103,13 @@ export const contextFor = (
 ): HostContext => {
   const snapshot = paywall.getSnapshot();
   const product = snapshot.productsByReference[referenceName];
-  const eventName = snapshot.params.event_name;
+  const eventName = presentingPlacement(snapshot.params).name;
   return {
     checkoutContextId,
     productIdentifier: product?.productId ?? "",
     paywallIdentifier: snapshot.paywall?.identifier,
     experimentVariantId: snapshot.experiment?.variantId,
-    ...(typeof eventName === "string" ? { presentedByEventName: eventName } : {}),
+    ...(eventName ? { presentedByEventName: eventName } : {}),
   };
 };
 
