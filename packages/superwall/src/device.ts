@@ -53,13 +53,6 @@ const announcedPlatform = (): DevicePlatform | undefined => {
   return normalizePlatform(new URLSearchParams(window.location.search).get("platform"));
 };
 
-/**
- * The host SDK's platform. The device record is empty until the host's first
- * `template_variables`, so until then this reads the platform the host
- * stamped on the paywall URL (the Web SDK sets `?platform=web`); a paywall can
- * branch on it from its first render. The iOS SDK reports `macOS` for an iPad
- * app on a Mac, which is still the iOS host.
- */
 export const platformOf = (device: SuperwallDeviceVariables): DevicePlatform | undefined =>
   normalizePlatform(device.platform) ?? announcedPlatform();
 

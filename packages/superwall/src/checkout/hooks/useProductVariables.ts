@@ -21,13 +21,6 @@ const stripeSlotsOf = (config: SuperwallConfig | undefined): Array<[string, stri
       : [];
   });
 
-/**
- * The same call paywall.js makes when the Web SDK asks it to
- * (`resolveVariables`): `POST {apiBase}/api/products/variables` with the
- * store-prefixed product ids, authorized by the placement session token.
- * The server answers every product variable (price, periods, trial,
- * locale) keyed by that id.
- */
 export const resolveProductVariables = async (
   init: WebSdkInit,
   config: SuperwallConfig | undefined,
@@ -60,11 +53,6 @@ const cacheKeyOf = (init: WebSdkInit, config: SuperwallConfig | undefined) =>
     .map(([reference, id]) => `${reference}=${id}`)
     .join(",")}`;
 
-/**
- * The last answer for these exact slots, so a paywall opened again shows its
- * prices on the first frame instead of after a round trip. Best effort: a
- * storage the browser refuses is simply not used.
- */
 export const readCachedProductVariables = (
   key: string,
   now: number = Date.now(),
@@ -86,14 +74,6 @@ const writeCachedProductVariables = (key: string, products: SuperwallSuppliedPro
   } catch {}
 };
 
-/**
- * A native SDK prices every product from its store and sends the variables in
- * `template_variables`. The Web SDK sends none for a headless paywall, so
- * inside it the paywall resolves its Stripe products' variables itself,
- * exactly as paywall.js does, and supplies them to the session. The last
- * answer is kept for a day and shown first while a fresh one is fetched
- * (stale-while-revalidate). Variables a host did send are never replaced.
- */
 export const useProductVariables = () => {
   const session = useSuperwallSession();
   const { config } = useSuperwallSnapshot();
