@@ -144,10 +144,23 @@ export const allowedHostsWire = (
   return origins.length === 0 ? undefined : origins;
 };
 
+/**
+ * Inside the Web SDK the paywall resolves its Stripe products' variables from
+ * Superwall's paywall web API (`useProductVariables`), a host the platform's
+ * default policy does not cover, so a surface that sells on the web reaches
+ * it without having to name it.
+ */
+export const PAYWALL_WEB_API_HOST = "web-api.superwall.app";
+
+const surfaceHostsOf = (config: SuperwallConfig | undefined) =>
+  checkoutModeOf(config?.checkout) === undefined
+    ? config?.allowedHosts
+    : [...(config?.allowedHosts ?? []), PAYWALL_WEB_API_HOST];
+
 export const paywallSettingsOf = (config: SuperwallConfig | undefined): PaywallSettings => {
   const background = backgroundOf(config?.background);
   const destination = webCheckoutDestinationOf(config?.checkout);
-  const allowedHosts = allowedHostsWire(config?.allowedHosts);
+  const allowedHosts = allowedHostsWire(surfaceHostsOf(config));
   return {
     presentation_style: presentationStyleWire(config?.presentation),
     feature_gating: config?.featureGating === "gated" ? "gated" : "non_gated",

@@ -2,14 +2,14 @@ import { LoadingOverlay } from "./sheet/LoadingOverlay";
 import { Sheet } from "./sheet/Sheet";
 import { SheetProvider } from "./sheet/state";
 import { useAutoPrefetch } from "./hooks/useAutoPrefetch";
-import { useCatalogProducts } from "./hooks/useCatalogProducts";
 import { useCheckoutCompletion } from "./hooks/useCheckoutCompletion";
 import { useHostDiscount } from "./hooks/useHostDiscount";
 import { useIdentityRefresh } from "./hooks/useIdentityRefresh";
+import { useProductVariables } from "./hooks/useProductVariables";
 import { useWebCheckoutBridge } from "./hooks/useWebCheckoutBridge";
 
 const HostDriven = () => {
-  useCatalogProducts();
+  useProductVariables();
   useAutoPrefetch();
   useIdentityRefresh();
   useCheckoutCompletion();
