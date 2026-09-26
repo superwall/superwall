@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cutoutOf, idiomOf, platformOf } from "../src/device";
 
 describe("platformOf", () => {
@@ -24,6 +24,17 @@ describe("platformOf", () => {
     window.history.replaceState(null, "", "/?platform=visionOS");
     expect(platformOf({})).toBeUndefined();
     window.history.replaceState(null, "", "/");
+  });
+});
+
+describe("platformOf outside a browser", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("names nothing when there is no page to read the platform from", () => {
+    vi.stubGlobal("window", undefined);
+    expect(platformOf({})).toBeUndefined();
   });
 });
 

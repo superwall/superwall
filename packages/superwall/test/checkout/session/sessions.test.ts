@@ -88,6 +88,18 @@ describe("createCheckoutSessions.completeWebapp", () => {
     expect(init.headers).toMatchObject({ Authorization: "Bearer pk_test" });
   });
 
+  it("leaves the claim out when the backend does not say", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ entitlementsToken: "ent_1" }))),
+    );
+    const sessions = createCheckoutSessions(() => snapshot());
+    await expect(sessions.completeWebapp("ctx_1")).resolves.toEqual({
+      entitlementsToken: "ent_1",
+      redemptionCodes: [],
+    });
+  });
+
   it("returns only what the backend answered", async () => {
     vi.stubGlobal(
       "fetch",
