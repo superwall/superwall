@@ -79,6 +79,20 @@ describe("resolveProductVariables", () => {
     expect(await resolveProductVariables(init, { ...testConfig, products: {} })).toEqual([]);
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("supplies nothing for a slot the answer leaves out", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ products: {} })),
+    );
+    expect(await resolveProductVariables(init, webConfig)).toEqual([]);
+  });
+
+  it("asks nothing without a config", async () => {
+    const fetch = stubVariables();
+    expect(await resolveProductVariables(init, undefined)).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
 
 describe("useProductVariables", () => {
@@ -94,6 +108,31 @@ describe("useProductVariables", () => {
       productId: "test:price_1:no-trial",
       variables,
     });
+  });
+
+  it("keeps the paywall up when the variables cannot be resolved", async () => {
+    window.history.replaceState(null, "", `/?client_surface=web-sdk${hashOf(init)}`);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("no", { status: 500 })),
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { result } = render();
+    await flush();
+    await flush();
+
+    expect(warn).toHaveBeenCalledWith("Error resolving product variables", expect.any(Error));
+    expect(result.current.getSnapshot().productsByReference.primary?.variables).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it("waits for the SDK's init payload before pricing", async () => {
+    window.history.replaceState(null, "", "/?client_surface=web-sdk");
+    const fetch = stubVariables();
+    render();
+    await flush();
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("leaves a native host's products alone", async () => {
@@ -145,5 +184,25 @@ describe("the product variables cache", () => {
     const key = "sw:product-variables:old";
     localStorage.setItem(key, JSON.stringify({ at: 0, products: [] }));
     expect(readCachedProductVariables(key, 24 * 60 * 60 * 1000 + 1)).toBeNull();
+  });
+
+  it("still prices the paywall when the answer cannot be stored", async () => {
+    window.history.replaceState(null, "", `/?client_surface=web-sdk${hashOf(init)}`);
+    stubVariables();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    const { result } = render();
+    await flush();
+    await flush();
+
+    expect(result.current.getSnapshot().productsByReference.primary?.variables).toEqual(variables);
+    vi.restoreAllMocks();
+  });
+
+  it("ignores an entry it cannot read", () => {
+    const key = "sw:product-variables:broken";
+    localStorage.setItem(key, "{not json");
+    expect(readCachedProductVariables(key)).toBeNull();
   });
 });
