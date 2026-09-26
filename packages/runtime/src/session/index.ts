@@ -53,7 +53,6 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
   const restores = createRestoreTracker();
   const requests = createRequestTracker();
   const derive = createProductDeriver();
-  const suppliedReferences = new Set<string>();
 
   let raw: readonly SuperwallProduct[] = [];
   let localeOverride: string | undefined;
@@ -185,7 +184,6 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
         break;
       case "template_variables": {
         const variables = productVariablesFromTemplateVariables(message.variables);
-        for (const reference of variables.keys()) suppliedReferences.delete(reference);
         if (variables.size > 0) raw = mergeProductVariables(raw, variables);
         break;
       }
@@ -288,24 +286,6 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
     postMessage: post,
     accept: (messages) => {
       for (const message of messages) transport.accept(message);
-    },
-    supplyProducts: (supplied) => {
-      const known = new Map(raw.map((product) => [product.reference, product]));
-      const missing = supplied.filter(
-        ({ reference }) =>
-          suppliedReferences.has(reference) ||
-          Object.keys(known.get(reference)?.variables ?? {}).length === 0,
-      );
-      for (const { reference } of missing) suppliedReferences.add(reference);
-      if (missing.length === 0) return;
-      raw = mergeProductVariables(
-        mergeIncomingProducts(
-          raw,
-          missing.map(({ reference, productId }) => ({ product: reference, productId })),
-        ),
-        new Map(missing.map(({ reference, variables }) => [reference, variables])),
-      );
-      commit({});
     },
     accept64: (message) => {
       let decoded: TIncomingMessage[];

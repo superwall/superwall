@@ -19,6 +19,7 @@ import type {
   PostPurchaseBehavior,
   PurchaseOutcome,
   RedirectCheckoutSession,
+  WebappCompletion,
   WebPurchaseOptions,
 } from "./types";
 
@@ -229,10 +230,10 @@ export const reportCompletedCheckout = async (
     }
   }
 
-  let entitlementsToken: string | undefined;
+  let completion: WebappCompletion | undefined;
   if (hostedInWebSdk() && bindsEntitlement(session.postPurchaseBehavior)) {
     try {
-      entitlementsToken = await sessionsFor(paywall).completeWebapp(session.checkoutContextId);
+      completion = await sessionsFor(paywall).completeWebapp(session.checkoutContextId);
     } catch (error) {
       console.error("Completing the Web SDK checkout failed:", error);
     }
@@ -246,13 +247,8 @@ export const reportCompletedCheckout = async (
     session.checkoutSessionId,
     session.postPurchaseBehavior,
     resolution,
-    entitlementsToken,
+    completion,
   );
-
-  if (hostedInWebSdk()) {
-    host.postCheckoutCompleted(context, session.postPurchaseBehavior, entitlementsToken);
-    return;
-  }
 
   if (sdkRedeemsCheckout(paywall.getSnapshot())) return;
   if (redemptionUrl !== undefined) {

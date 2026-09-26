@@ -9,6 +9,7 @@ const ping = z.object({
   version: z.string().optional(),
   fonts: z.array(z.object({ family: z.string() })).optional(),
   page_styles: z.array(z.unknown()),
+  host_controlled: z.boolean().optional(),
 });
 
 const close = z.object({ event_name: z.literal("close") });
@@ -140,8 +141,12 @@ const postCheckoutResolution = z.union([
   z.object({ type: z.literal("paywall") }),
 ]);
 
+const redemptionCode = z.object({ code: z.string(), claimed: z.boolean() });
+
 const stripeCheckoutComplete = z.object({
   event_name: z.literal("stripe_checkout_complete"),
+  claimed: z.boolean().optional(),
+  redemption_codes: z.array(redemptionCode).optional(),
   sw_checkout_id: z.string().nullish(),
   checkout_context_id: z.string(),
   product_identifier: z.string(),

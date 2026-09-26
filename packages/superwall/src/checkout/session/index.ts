@@ -19,6 +19,7 @@ import type {
   CustomerIdentity,
   DiscountValidationResult,
   SessionScope,
+  WebappCompletion,
 } from "../types";
 
 export const MAX_DISCOUNT_PRODUCTS = 20;
@@ -44,7 +45,7 @@ export type CheckoutSessions = {
     checkoutContextId: string,
     metadata: Readonly<Record<string, string>>,
   ): Promise<void>;
-  completeWebapp(checkoutContextId: string): Promise<string | undefined>;
+  completeWebapp(checkoutContextId: string): Promise<WebappCompletion>;
   invalidate(): void;
 };
 
@@ -222,8 +223,23 @@ export const createCheckoutSessions = (
         subscriptionsApiUrl("checkout/session/complete-webapp"),
         { method: "POST", headers: headers(), body: JSON.stringify({ checkoutContextId }) },
       );
-      const token = field(await response.json(), "entitlementsToken");
-      return typeof token === "string" && token !== "" ? token : undefined;
+      const body: unknown = await response.json();
+      const text = (key: string) => {
+        const value = field(body, key);
+        return typeof value === "string" && value !== "" ? value : undefined;
+      };
+      const claimedCode = text("claimedRedemptionCode");
+      const unclaimedCode = text("redemptionCode");
+      const claimed = field(body, "claimed");
+      const entitlementsToken = text("entitlementsToken");
+      return {
+        ...(entitlementsToken ? { entitlementsToken } : {}),
+        ...(typeof claimed === "boolean" ? { claimed } : {}),
+        redemptionCodes: [
+          ...(claimedCode ? [{ code: claimedCode, claimed: true }] : []),
+          ...(unclaimedCode ? [{ code: unclaimedCode, claimed: false }] : []),
+        ],
+      };
     },
     invalidate,
   };

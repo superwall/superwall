@@ -273,6 +273,19 @@ describe("Web SDK transport", () => {
     transport.stopListening();
   });
 
+  it("asks the SDK to host it on ping, as the web paywall app's controller hosts paywall.js", () => {
+    const { host, transport } = listening();
+    const ping: TOutgoingMessage = { event_name: "ping", substitutions: [], page_styles: [] };
+
+    transport.postMessage(ping);
+
+    expect(host.postMessage).toHaveBeenCalledWith(
+      { version: 1, payload: { events: [{ ...ping, host_controlled: true }] } },
+      HOST,
+    );
+    transport.stopListening();
+  });
+
   it("decodes the SDK's base64url accept64 batches into incoming messages", () => {
     const { host, transport, handler } = listening();
 
@@ -293,6 +306,38 @@ describe("Web SDK transport", () => {
     deliver({ channel: "something.else", payload: "e30" }, host);
     deliver("not an object", host);
 
+    expect(handler).not.toHaveBeenCalled();
+    transport.stopListening();
+  });
+
+  it("drops a batch it cannot decode, and a batch that is not a list", () => {
+    const { host, transport, handler } = listening();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    deliver({ channel: WEB_SDK_ACCEPT64_CHANNEL, payload: "%%%" }, host);
+    deliver({ channel: WEB_SDK_ACCEPT64_CHANNEL, payload: btoa(JSON.stringify({ a: 1 })) }, host);
+
+    expect(error).toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+    transport.stopListening();
+  });
+
+  it("listens once however often it is started, and takes nothing while it is not listening", () => {
+    const host = { postMessage: vi.fn() };
+    const transport = new WebSdkTransport({
+      hostWindow: host as unknown as Window,
+      hostOrigin: HOST,
+    });
+    const handler = vi.fn();
+    transport.addListener(handler);
+    const add = vi.spyOn(window, "addEventListener");
+
+    transport.stopListening();
+    transport.accept(incoming);
+    transport.startListening();
+    transport.startListening();
+
+    expect(add.mock.calls.filter(([type]) => type === "message")).toHaveLength(1);
     expect(handler).not.toHaveBeenCalled();
     transport.stopListening();
   });

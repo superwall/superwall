@@ -1,44 +1,28 @@
 import { decodeBase64Utf8 } from "@superwall/runtime";
 import { asString, field } from "../api/decode";
 
-export type WebSdkInit = {
-  apiBase: string;
-  placementSessionToken: string;
-  presentedByEventName?: string;
-  presentedByEventId?: string;
-};
+export type WebSdkPlacement = { name: string; eventId: string };
 
-export const webSdkInit = (hash: string = window.location.hash): WebSdkInit | null => {
-  if (!hash.startsWith("#init=")) return null;
+export const webSdkPlacement = (hash: string = window.location.hash): WebSdkPlacement => {
+  if (!hash.startsWith("#init=")) return { name: "", eventId: "" };
   try {
     const payload: unknown = JSON.parse(decodeBase64Utf8(hash.slice("#init=".length)));
-    const apiBase = asString(field(payload, "apiBase"));
-    const placementSessionToken = asString(field(payload, "placementSessionToken"));
-    if (!apiBase || !placementSessionToken) return null;
     const presentment = field(field(payload, "checkoutContext"), "presentment");
-    const presentedByEventName = asString(field(presentment, "presentedByEventName"));
-    const presentedByEventId = asString(field(presentment, "presentedByEventId"));
     return {
-      apiBase,
-      placementSessionToken,
-      ...(presentedByEventName ? { presentedByEventName } : {}),
-      ...(presentedByEventId ? { presentedByEventId } : {}),
+      name: asString(field(presentment, "presentedByEventName")),
+      eventId: asString(field(presentment, "presentedByEventId")),
     };
   } catch {
-    return null;
+    return { name: "", eventId: "" };
   }
 };
 
 const textOf = (value: unknown): string => (typeof value === "string" ? value : "");
 
-/** The placement that presented the paywall: the native SDKs' `event_name`
- *  param, else the one the Web SDK names in its init payload. */
-export const presentingPlacement = (
-  params: Record<string, unknown>,
-): { name: string; eventId: string } => {
-  const init = webSdkInit();
+export const presentingPlacement = (params: Record<string, unknown>): WebSdkPlacement => {
+  const web = webSdkPlacement();
   return {
-    name: textOf(params.event_name) || init?.presentedByEventName || "",
-    eventId: asString(params.event_id) || init?.presentedByEventId || "",
+    name: textOf(params.event_name) || web.name,
+    eventId: asString(params.event_id) || web.eventId,
   };
 };
