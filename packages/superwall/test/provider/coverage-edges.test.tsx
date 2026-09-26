@@ -130,6 +130,19 @@ describe("host attributes on the document", () => {
   });
 });
 
+describe("web2app body on a web host", () => {
+  it("marks the body web2app for a web host and clears it for a native one", async () => {
+    const web = renderWithProvider(() => null, { host: { device: { platform: "web" } } });
+    await flush();
+    expect(document.body.classList.contains("web2app")).toBe(true);
+    web.unmount();
+
+    renderWithProvider(() => null, { host: { device: { platform: "iOS" } } });
+    await flush();
+    expect(document.body.classList.contains("web2app")).toBe(false);
+  });
+});
+
 describe("insets on the document", () => {
   it("writes configured insets as --sw-inset-* and leaves safe-area edges to the stylesheet", async () => {
     const style = document.documentElement.style;

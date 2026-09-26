@@ -132,6 +132,10 @@ const HostAttributes = (): null => {
       if (value === undefined) root.removeAttribute(name);
       else root.setAttribute(name, value);
     }
+    // The platform stylesheet pins `cursor: default` on everything outside a
+    // web2app body. A web host (the Web SDK's frame) has to opt in itself: the
+    // host page cannot reach this cross-origin document.
+    document.body.classList.toggle("web2app", attributes["data-sw-platform"] === "web");
   }, [device]);
 
   return null;
