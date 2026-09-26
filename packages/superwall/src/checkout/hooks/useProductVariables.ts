@@ -82,7 +82,7 @@ export const useProductVariables = () => {
   React.useEffect(() => {
     if (asked.current || !hostedInWebSdk()) return;
     const init = webSdkInit();
-    if (!init) return;
+    if (!init || init.hostedBySdk) return;
     asked.current = true;
     const key = cacheKeyOf(init, config);
     const cached = readCachedProductVariables(key);

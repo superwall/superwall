@@ -2,6 +2,14 @@ import type { SuperwallPostPurchase } from "@superwall/runtime";
 
 export type CheckoutMode = "sheet" | "external" | "applePay";
 
+export type RedemptionCode = { code: string; claimed: boolean };
+
+export type WebappCompletion = {
+  entitlementsToken?: string;
+  claimed?: boolean;
+  redemptionCodes: RedemptionCode[];
+};
+
 export type PostPurchaseBehavior = "GRANT_ACCESS" | "REDIRECT" | "REDEEM" | "CUSTOM";
 
 export type PostCheckoutResolution =

@@ -6,6 +6,7 @@ export type WebSdkInit = {
   placementSessionToken: string;
   presentedByEventName?: string;
   presentedByEventId?: string;
+  hostedBySdk?: boolean;
 };
 
 export const webSdkInit = (hash: string = window.location.hash): WebSdkInit | null => {
@@ -23,6 +24,7 @@ export const webSdkInit = (hash: string = window.location.hash): WebSdkInit | nu
       placementSessionToken,
       ...(presentedByEventName ? { presentedByEventName } : {}),
       ...(presentedByEventId ? { presentedByEventId } : {}),
+      ...(field(payload, "hostsFrameworkPaywalls") === true ? { hostedBySdk: true } : {}),
     };
   } catch {
     return null;

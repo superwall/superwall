@@ -54,3 +54,11 @@ describe("webSdkInit placement", () => {
     expect(presentingPlacement({})).toEqual({ name: "", eventId: "" });
   });
 });
+
+describe("webSdkInit hosting", () => {
+  it("knows when the SDK hosts the paywall", () => {
+    const base = { apiBase: "https://web-api.superwall.app", placementSessionToken: "pk_web" };
+    expect(webSdkInit(hashOf({ ...base, hostsFrameworkPaywalls: true }))?.hostedBySdk).toBe(true);
+    expect(webSdkInit(hashOf(base))).not.toHaveProperty("hostedBySdk");
+  });
+});

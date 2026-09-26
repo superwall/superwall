@@ -96,6 +96,19 @@ describe("useProductVariables", () => {
     });
   });
 
+  it("leaves pricing to an SDK that hosts the paywall", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      `/?client_surface=web-sdk${hashOf({ ...init, hostsFrameworkPaywalls: true })}`,
+    );
+    const fetch = stubVariables();
+    render();
+    await flush();
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("leaves a native host's products alone", async () => {
     const fetch = stubVariables();
     render({ products: [], device: { platform: "iOS" } });

@@ -1,5 +1,5 @@
 import type { TIncomingMessage, TOutgoingMessage } from "../messages";
-import { decodeIncomingMessages } from "./base64";
+import { decodeBase64Utf8, decodeIncomingMessages } from "./base64";
 import { createTransportLogger, type ITransport, type TIncomingHandler } from "./shared";
 import type { WebSdkEvents } from "./web-events";
 
@@ -17,6 +17,7 @@ export type WebSdkTransportOptions = {
   /** The page framing the paywall; messages from any other origin are dropped. */
   hostOrigin: string;
   events?: WebSdkEvents | null;
+  hosted?: boolean;
 };
 
 type Accept64Envelope = { channel: typeof WEB_SDK_ACCEPT64_CHANNEL; payload: string };
@@ -36,18 +37,24 @@ export class WebSdkTransport implements ITransport {
   private readonly hostWindow: Window;
   private readonly hostOrigin: string;
   private readonly events: WebSdkEvents | null;
+  private readonly hosted: boolean;
   private handlers: TIncomingHandler[] = [];
   private listener: ((event: MessageEvent) => void) | undefined;
 
-  constructor({ hostWindow, hostOrigin, events }: WebSdkTransportOptions) {
+  constructor({ hostWindow, hostOrigin, events, hosted }: WebSdkTransportOptions) {
     this.hostWindow = hostWindow;
     this.hostOrigin = hostOrigin;
     this.events = events ?? null;
+    this.hosted = hosted ?? false;
   }
 
   postMessage(message: TOutgoingMessage): void {
     this.events?.observe(message);
-    this.hostWindow.postMessage({ version: 1, payload: { events: [message] } }, this.hostOrigin);
+    const sent =
+      this.hosted && message.event_name === "ping"
+        ? { ...message, host_controlled: true }
+        : message;
+    this.hostWindow.postMessage({ version: 1, payload: { events: [sent] } }, this.hostOrigin);
     log.info("Sent message to the Web SDK via postMessage");
   }
 
@@ -93,5 +100,19 @@ export const webSdkHostOrigin = (search: string = window.location.search): strin
     return new URL(origin).origin;
   } catch {
     return "*";
+  }
+};
+
+export const webSdkHostsPaywall = (hash: string = window.location.hash): boolean => {
+  if (!hash.startsWith("#init=")) return false;
+  try {
+    const payload: unknown = JSON.parse(decodeBase64Utf8(hash.slice("#init=".length)));
+    return (
+      typeof payload === "object" &&
+      payload !== null &&
+      (payload as { hostsFrameworkPaywalls?: unknown }).hostsFrameworkPaywalls === true
+    );
+  } catch {
+    return false;
   }
 };

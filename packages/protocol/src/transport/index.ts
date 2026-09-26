@@ -3,7 +3,7 @@ import { AndroidTransport } from "./android";
 import { EditorTransport } from "./editor";
 import type { ITransport } from "./shared";
 import { WebKitTransport } from "./webkit";
-import { WebSdkTransport, webSdkHostOrigin } from "./web";
+import { WebSdkTransport, webSdkHostOrigin, webSdkHostsPaywall } from "./web";
 import { WebSdkEvents } from "./web-events";
 
 export const buildTransport = (kind: TransportKind): ITransport => {
@@ -14,12 +14,15 @@ export const buildTransport = (kind: TransportKind): ITransport => {
       return new WebKitTransport();
     case TransportKind.EditorIframe:
       return new EditorTransport({ targetWindow: window.parent, targetOrigin: "*" });
-    case TransportKind.WebSdk:
+    case TransportKind.WebSdk: {
+      const hosted = webSdkHostsPaywall();
       return new WebSdkTransport({
         hostWindow: window.parent,
         hostOrigin: webSdkHostOrigin(),
-        events: WebSdkEvents.fromLocation(),
+        events: hosted ? null : WebSdkEvents.fromLocation(),
+        hosted,
       });
+    }
   }
 };
 
@@ -38,6 +41,7 @@ export {
   WEB_SDK_ACCEPT64_CHANNEL,
   WebSdkTransport,
   webSdkHostOrigin,
+  webSdkHostsPaywall,
   type WebSdkTransportOptions,
 } from "./web";
 export {

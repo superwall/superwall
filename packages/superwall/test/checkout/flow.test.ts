@@ -529,16 +529,23 @@ describe("reporting a completed purchase", () => {
   });
 });
 
+const COMPLETION = {
+  entitlementsToken: "ent_1",
+  claimed: true,
+  redemptionCodes: [{ code: "redemption_1", claimed: true }],
+};
+
 describe("a checkout completed inside the Web SDK", () => {
   type Holder = typeof window & { webPaywallCtrl?: { props?: { clientSurface?: unknown } } };
   afterEach(() => {
     delete (window as Holder).webPaywallCtrl;
+    window.location.hash = "";
   });
 
   it("self-claims the redemption first and hands the SDK the entitlements token", async () => {
     (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
     const { session, postMessage } = fakeSession({ sdkVersionPadded: "004.014.000" });
-    const claim = vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue("ent_1");
+    const claim = vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue(COMPLETION);
     vi.stubGlobal("fetch", vi.fn());
 
     await reportCompletedCheckout(session, { ...embedded, postPurchaseBehavior: "GRANT_ACCESS" });
@@ -569,7 +576,7 @@ describe("a checkout completed inside the Web SDK", () => {
   it("finishes with post_checkout_complete and never redeems through the backend", async () => {
     (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
     const { session, postMessage } = fakeSession({ sdkVersionPadded: "000.002.009" });
-    vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue("ent_1");
+    vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue(COMPLETION);
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
 
@@ -584,9 +591,38 @@ describe("a checkout completed inside the Web SDK", () => {
       checkout_context_id: "ctx_1",
       product_identifier: expect.any(String),
       post_purchase_behavior: "GRANT_ACCESS",
+      claimed: true,
+      redemption_codes: [{ code: "redemption_1", claimed: true }],
       entitlements_token: "ent_1",
     });
     expect(fetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("leaves post_checkout_complete to an SDK that hosts the paywall, handing it the claim on the completion", async () => {
+    (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
+    const init = {
+      apiBase: "https://api.test",
+      placementSessionToken: "pk",
+      hostsFrameworkPaywalls: true,
+    };
+    window.location.hash = `#init=${btoa(JSON.stringify(init))}`;
+    const { session, postMessage } = fakeSession({ sdkVersionPadded: "000.003.001" });
+    vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue(COMPLETION);
+    vi.stubGlobal("fetch", vi.fn());
+
+    await reportCompletedCheckout(session, { ...embedded, postPurchaseBehavior: "GRANT_ACCESS" });
+
+    expect(postMessage.mock.calls.map(([message]) => message.event_name)).toEqual([
+      "stripe_checkout_complete",
+    ]);
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        claimed: true,
+        redemption_codes: [{ code: "redemption_1", claimed: true }],
+        entitlements_token: "ent_1",
+      }),
+    );
     vi.unstubAllGlobals();
   });
 

@@ -3,6 +3,7 @@ import type {
   DiscountValidationResult,
   PostCheckoutResolution,
   PostPurchaseBehavior,
+  WebappCompletion,
 } from "../types";
 
 type HostMessage = Parameters<SuperwallSession["postMessage"]>[0];
@@ -16,6 +17,12 @@ export type HostContext = {
 };
 
 export type HostEvents = ReturnType<typeof hostEvents>;
+
+const completionFields = (completion: WebappCompletion | undefined) => ({
+  ...(completion?.claimed === undefined ? {} : { claimed: completion.claimed }),
+  ...(completion?.redemptionCodes.length ? { redemption_codes: completion.redemptionCodes } : {}),
+  ...(completion?.entitlementsToken ? { entitlements_token: completion.entitlementsToken } : {}),
+});
 
 export const hostEvents = (post: (message: HostMessage) => void) => ({
   prefetched: (ctx: HostContext) =>
@@ -63,7 +70,7 @@ export const hostEvents = (post: (message: HostMessage) => void) => ({
     checkoutSessionId: string | null,
     postPurchaseBehavior?: PostPurchaseBehavior,
     resolution?: PostCheckoutResolution,
-    entitlementsToken?: string,
+    completion?: WebappCompletion,
   ) =>
     post({
       event_name: "stripe_checkout_complete",
@@ -72,19 +79,19 @@ export const hostEvents = (post: (message: HostMessage) => void) => ({
       product_identifier: ctx.productIdentifier,
       ...(resolution ? { post_purchase_resolution: resolution } : {}),
       ...(postPurchaseBehavior ? { post_purchase_behavior: postPurchaseBehavior } : {}),
-      ...(entitlementsToken ? { entitlements_token: entitlementsToken } : {}),
+      ...completionFields(completion),
     }),
   postCheckoutCompleted: (
     ctx: HostContext,
     postPurchaseBehavior?: PostPurchaseBehavior,
-    entitlementsToken?: string,
+    completion?: WebappCompletion,
   ) =>
     post({
       event_name: "post_checkout_complete",
       checkout_context_id: ctx.checkoutContextId,
       product_identifier: ctx.productIdentifier,
       ...(postPurchaseBehavior ? { post_purchase_behavior: postPurchaseBehavior } : {}),
-      ...(entitlementsToken ? { entitlements_token: entitlementsToken } : {}),
+      ...completionFields(completion),
     }),
   openHostedPage: (url: string) => post({ event_name: "open_url_external", url }),
   redeem: (link: string) => post({ event_name: "open_deep_link", link }),

@@ -7,7 +7,7 @@ import { subscriptionsApiUrl } from "./api/url";
 import { checkoutEvents } from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
 import { sdkHostsCheckoutInPaywall, sdkRedeemsCheckout } from "./host/sdk";
-import { presentingPlacement } from "./host/init";
+import { presentingPlacement, webSdkInit } from "./host/init";
 import { bindsEntitlement, hostedInWebSdk } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
@@ -19,6 +19,7 @@ import type {
   PostPurchaseBehavior,
   PurchaseOutcome,
   RedirectCheckoutSession,
+  WebappCompletion,
   WebPurchaseOptions,
 } from "./types";
 
@@ -229,10 +230,10 @@ export const reportCompletedCheckout = async (
     }
   }
 
-  let entitlementsToken: string | undefined;
+  let completion: WebappCompletion | undefined;
   if (hostedInWebSdk() && bindsEntitlement(session.postPurchaseBehavior)) {
     try {
-      entitlementsToken = await sessionsFor(paywall).completeWebapp(session.checkoutContextId);
+      completion = await sessionsFor(paywall).completeWebapp(session.checkoutContextId);
     } catch (error) {
       console.error("Completing the Web SDK checkout failed:", error);
     }
@@ -246,11 +247,13 @@ export const reportCompletedCheckout = async (
     session.checkoutSessionId,
     session.postPurchaseBehavior,
     resolution,
-    entitlementsToken,
+    completion,
   );
 
   if (hostedInWebSdk()) {
-    host.postCheckoutCompleted(context, session.postPurchaseBehavior, entitlementsToken);
+    if (!webSdkInit()?.hostedBySdk) {
+      host.postCheckoutCompleted(context, session.postPurchaseBehavior, completion);
+    }
     return;
   }
 

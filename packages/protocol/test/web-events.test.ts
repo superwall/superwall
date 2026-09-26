@@ -5,6 +5,7 @@ import {
   TransportKind,
   WebSdkEvents,
   webSdkEventsInit,
+  webSdkHostsPaywall,
   WebSdkTransport,
   type TOutgoingMessage,
   type WebSdkEventsInit,
@@ -447,5 +448,55 @@ describe("Web SDK transport events", () => {
     transport.postMessage({ event_name: "close" });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a paywall the Web SDK hosts", () => {
+  it("knows from the init payload whether the SDK hosts it", () => {
+    expect(webSdkHostsPaywall(hashOf({ ...PAYLOAD, hostsFrameworkPaywalls: true }))).toBe(true);
+    expect(webSdkHostsPaywall(hashOf(PAYLOAD))).toBe(false);
+    expect(webSdkHostsPaywall(hashOf(null))).toBe(false);
+    expect(webSdkHostsPaywall("#init=not-json")).toBe(false);
+    expect(webSdkHostsPaywall("")).toBe(false);
+    window.location.hash = hashOf({ hostsFrameworkPaywalls: true });
+    expect(webSdkHostsPaywall()).toBe(true);
+  });
+
+  it("asks the SDK to host it on ping and reports nothing itself", () => {
+    window.location.hash = hashOf({ ...PAYLOAD, hostsFrameworkPaywalls: true });
+    const parent = vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
+    const transport = buildTransport(TransportKind.WebSdk);
+
+    transport.postMessage({
+      event_name: "ping",
+      substitutions: [],
+      page_styles: [],
+    } as TOutgoingMessage);
+    transport.postMessage({ event_name: "close" });
+
+    expect(
+      parent.mock.calls.map(
+        ([message]) => (message as { payload: { events: unknown[] } }).payload.events[0],
+      ),
+    ).toEqual([
+      { event_name: "ping", substitutions: [], page_styles: [], host_controlled: true },
+      { event_name: "close" },
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not ask to be hosted when the SDK cannot", () => {
+    const parent = vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
+    const transport = new WebSdkTransport({ hostWindow: window.parent, hostOrigin: "*" });
+
+    transport.postMessage({
+      event_name: "ping",
+      substitutions: [],
+      page_styles: [],
+    } as TOutgoingMessage);
+
+    expect(
+      (parent.mock.calls[0]![0] as { payload: { events: unknown[] } }).payload.events[0],
+    ).not.toHaveProperty("host_controlled");
   });
 });
