@@ -5,11 +5,9 @@ import { useAutoPrefetch } from "./hooks/useAutoPrefetch";
 import { useCheckoutCompletion } from "./hooks/useCheckoutCompletion";
 import { useHostDiscount } from "./hooks/useHostDiscount";
 import { useIdentityRefresh } from "./hooks/useIdentityRefresh";
-import { useProductVariables } from "./hooks/useProductVariables";
 import { useWebCheckoutBridge } from "./hooks/useWebCheckoutBridge";
 
 const HostDriven = () => {
-  useProductVariables();
   useAutoPrefetch();
   useIdentityRefresh();
   useCheckoutCompletion();

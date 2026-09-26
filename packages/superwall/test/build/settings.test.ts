@@ -238,7 +238,6 @@ describe("paywallSettingsOf", () => {
       }),
     ).toSorted();
     expect(keys).toEqual([
-      "allowed_hosts",
       "background_color_hex",
       "dark_background_color_hex",
       "feature_gating",
@@ -248,20 +247,5 @@ describe("paywallSettingsOf", () => {
       "scroll_enabled",
       "web_checkout_destination",
     ]);
-  });
-});
-
-describe("paywallSettingsOf allowed hosts", () => {
-  it("lets a surface that sells on the web reach the paywall web API", () => {
-    expect(paywallSettingsOf({ checkout: "sheet" }).allowed_hosts).toEqual([
-      "https://web-api.superwall.app",
-    ]);
-    expect(
-      paywallSettingsOf({ checkout: "sheet", allowedHosts: ["api.example.com"] }).allowed_hosts,
-    ).toEqual(["https://api.example.com", "https://web-api.superwall.app"]);
-  });
-
-  it("adds nothing for a native-only surface", () => {
-    expect(paywallSettingsOf({}).allowed_hosts).toBeUndefined();
   });
 });

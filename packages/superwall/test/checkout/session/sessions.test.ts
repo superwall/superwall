@@ -57,14 +57,30 @@ afterEach(() => {
 });
 
 describe("createCheckoutSessions.completeWebapp", () => {
-  it("self-claims the redemption and returns the entitlements token", async () => {
+  it("self-claims the redemption and returns the token, the claim and both codes", async () => {
     const fetchMock = vi.fn(
-      async () => new Response(JSON.stringify({ status: "completed", entitlementsToken: "ent_1" })),
+      async () =>
+        new Response(
+          JSON.stringify({
+            status: "completed",
+            entitlementsToken: "ent_1",
+            claimed: true,
+            claimedRedemptionCode: "redemption_claimed",
+            redemptionCode: "redemption_spare",
+          }),
+        ),
     );
     vi.stubGlobal("fetch", fetchMock);
     const sessions = createCheckoutSessions(() => snapshot());
 
-    await expect(sessions.completeWebapp("ctx_1")).resolves.toBe("ent_1");
+    await expect(sessions.completeWebapp("ctx_1")).resolves.toEqual({
+      entitlementsToken: "ent_1",
+      claimed: true,
+      redemptionCodes: [
+        { code: "redemption_claimed", claimed: true },
+        { code: "redemption_spare", claimed: false },
+      ],
+    });
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain("checkout/session/complete-webapp");
@@ -72,13 +88,28 @@ describe("createCheckoutSessions.completeWebapp", () => {
     expect(init.headers).toMatchObject({ Authorization: "Bearer pk_test" });
   });
 
-  it("returns nothing when the backend issued no token", async () => {
+  it("leaves the claim out when the backend does not say", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ claimed: true }))),
+      vi.fn(async () => new Response(JSON.stringify({ entitlementsToken: "ent_1" }))),
     );
     const sessions = createCheckoutSessions(() => snapshot());
-    await expect(sessions.completeWebapp("ctx_1")).resolves.toBeUndefined();
+    await expect(sessions.completeWebapp("ctx_1")).resolves.toEqual({
+      entitlementsToken: "ent_1",
+      redemptionCodes: [],
+    });
+  });
+
+  it("returns only what the backend answered", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ claimed: false, entitlementsToken: "" }))),
+    );
+    const sessions = createCheckoutSessions(() => snapshot());
+    await expect(sessions.completeWebapp("ctx_1")).resolves.toEqual({
+      claimed: false,
+      redemptionCodes: [],
+    });
   });
 });
 

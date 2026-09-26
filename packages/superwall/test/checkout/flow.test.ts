@@ -529,6 +529,12 @@ describe("reporting a completed purchase", () => {
   });
 });
 
+const COMPLETION = {
+  entitlementsToken: "ent_1",
+  claimed: true,
+  redemptionCodes: [{ code: "redemption_1", claimed: true }],
+};
+
 describe("a checkout completed inside the Web SDK", () => {
   type Holder = typeof window & { webPaywallCtrl?: { props?: { clientSurface?: unknown } } };
   afterEach(() => {
@@ -538,7 +544,7 @@ describe("a checkout completed inside the Web SDK", () => {
   it("self-claims the redemption first and hands the SDK the entitlements token", async () => {
     (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
     const { session, postMessage } = fakeSession({ sdkVersionPadded: "004.014.000" });
-    const claim = vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue("ent_1");
+    const claim = vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue(COMPLETION);
     vi.stubGlobal("fetch", vi.fn());
 
     await reportCompletedCheckout(session, { ...embedded, postPurchaseBehavior: "GRANT_ACCESS" });
@@ -566,10 +572,10 @@ describe("a checkout completed inside the Web SDK", () => {
     vi.unstubAllGlobals();
   });
 
-  it("finishes with post_checkout_complete and never redeems through the backend", async () => {
+  it("hands its host the claim on stripe_checkout_complete and leaves the rest to it", async () => {
     (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
     const { session, postMessage } = fakeSession({ sdkVersionPadded: "000.002.009" });
-    vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue("ent_1");
+    vi.spyOn(sessionsFor(session), "completeWebapp").mockResolvedValue(COMPLETION);
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
 
@@ -577,15 +583,17 @@ describe("a checkout completed inside the Web SDK", () => {
 
     expect(postMessage.mock.calls.map(([message]) => message.event_name)).toEqual([
       "stripe_checkout_complete",
-      "post_checkout_complete",
     ]);
-    expect(postMessage).toHaveBeenLastCalledWith({
-      event_name: "post_checkout_complete",
-      checkout_context_id: "ctx_1",
-      product_identifier: expect.any(String),
-      post_purchase_behavior: "GRANT_ACCESS",
-      entitlements_token: "ent_1",
-    });
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "stripe_checkout_complete",
+        checkout_context_id: "ctx_1",
+        post_purchase_behavior: "GRANT_ACCESS",
+        claimed: true,
+        redemption_codes: [{ code: "redemption_1", claimed: true }],
+        entitlements_token: "ent_1",
+      }),
+    );
     expect(fetch).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });

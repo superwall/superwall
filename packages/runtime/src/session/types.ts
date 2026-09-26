@@ -12,11 +12,7 @@ import type {
 } from "@superwall/protocol";
 import type { SuperwallConfig, SuperwallPostPurchase } from "../config";
 import type { SuperwallTranslateValues } from "../localization";
-import type {
-  SuperwallProduct,
-  SuperwallProductInput,
-  SuperwallProductVariables,
-} from "../products";
+import type { SuperwallProduct, SuperwallProductInput } from "../products";
 import type { Outgoing, PageViewInput } from "./outgoing";
 import type { CallbackBehavior } from "./requests";
 import type {
@@ -153,12 +149,6 @@ export type SuperwallSessionOptions = {
 
 export type SuperwallUserAttributes = Readonly<Record<string, string | number | boolean>>;
 
-export type SuperwallSuppliedProduct = {
-  reference: string;
-  productId: string;
-  variables: SuperwallProductVariables;
-};
-
 export interface SuperwallSession<out TProduct extends SuperwallProduct = SuperwallProduct> {
   on: <E extends SuperwallEventName>(
     event: E,
@@ -173,7 +163,6 @@ export interface SuperwallSession<out TProduct extends SuperwallProduct = Superw
   postMessage: (message: TOutgoingMessage) => void;
   accept: (messages: TIncomingMessage[]) => void;
   accept64: (message: string) => void;
-  supplyProducts: (products: readonly SuperwallSuppliedProduct[]) => void;
   close: () => void;
   restore: () => Promise<SuperwallRestoreResult>;
   openUrl: (url: string, options?: { browserType?: "payment_sheet" }) => void;

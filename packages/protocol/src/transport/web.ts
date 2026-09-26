@@ -42,7 +42,8 @@ export class WebSdkTransport implements ITransport {
   }
 
   postMessage(message: TOutgoingMessage): void {
-    this.hostWindow.postMessage({ version: 1, payload: { events: [message] } }, this.hostOrigin);
+    const sent = message.event_name === "ping" ? { ...message, host_controlled: true } : message;
+    this.hostWindow.postMessage({ version: 1, payload: { events: [sent] } }, this.hostOrigin);
     log.info("Sent message to the Web SDK via postMessage");
   }
 

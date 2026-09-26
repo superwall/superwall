@@ -7,6 +7,7 @@ import { subscriptionsApiUrl } from "./api/url";
 import { checkoutEvents } from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
 import { sdkHostsCheckoutInPaywall, sdkRedeemsCheckout } from "./host/sdk";
+import { presentingPlacement } from "./host/init";
 import { bindsEntitlement, hostedInWebSdk } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
@@ -18,6 +19,7 @@ import type {
   PostPurchaseBehavior,
   PurchaseOutcome,
   RedirectCheckoutSession,
+  WebappCompletion,
   WebPurchaseOptions,
 } from "./types";
 
@@ -102,13 +104,13 @@ export const contextFor = (
 ): HostContext => {
   const snapshot = paywall.getSnapshot();
   const product = snapshot.productsByReference[referenceName];
-  const eventName = snapshot.params.event_name;
+  const eventName = presentingPlacement(snapshot.params).name;
   return {
     checkoutContextId,
     productIdentifier: product?.productId ?? "",
     paywallIdentifier: snapshot.paywall?.identifier,
     experimentVariantId: snapshot.experiment?.variantId,
-    ...(typeof eventName === "string" ? { presentedByEventName: eventName } : {}),
+    ...(eventName ? { presentedByEventName: eventName } : {}),
   };
 };
 
@@ -228,10 +230,10 @@ export const reportCompletedCheckout = async (
     }
   }
 
-  let entitlementsToken: string | undefined;
+  let completion: WebappCompletion | undefined;
   if (hostedInWebSdk() && bindsEntitlement(session.postPurchaseBehavior)) {
     try {
-      entitlementsToken = await sessionsFor(paywall).completeWebapp(session.checkoutContextId);
+      completion = await sessionsFor(paywall).completeWebapp(session.checkoutContextId);
     } catch (error) {
       console.error("Completing the Web SDK checkout failed:", error);
     }
@@ -245,13 +247,8 @@ export const reportCompletedCheckout = async (
     session.checkoutSessionId,
     session.postPurchaseBehavior,
     resolution,
-    entitlementsToken,
+    completion,
   );
-
-  if (hostedInWebSdk()) {
-    host.postCheckoutCompleted(context, session.postPurchaseBehavior, entitlementsToken);
-    return;
-  }
 
   if (sdkRedeemsCheckout(paywall.getSnapshot())) return;
   if (redemptionUrl !== undefined) {
