@@ -124,6 +124,15 @@ export const PreviewOnDevice = ({
               <button className="sw-btn" type="button" onClick={() => setOpen(false)}>
                 Done
               </button>
+              {link.status === "ready" ? (
+                <a className="sw-btn" href={link.url} target="_blank" rel="noopener noreferrer">
+                  Preview
+                </a>
+              ) : (
+                <button className="sw-btn" type="button" disabled>
+                  Preview
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -34,6 +34,9 @@ describe("previewing a surface on a device", () => {
     expect(link.textContent).toBe(
       `myapp://?superwall_dev=${encodeURIComponent(window.location.origin)}&superwall_dev_surface=pro`,
     );
+    expect(screen.getByRole("link", { name: "Preview" }).getAttribute("href")).toBe(
+      link.textContent,
+    );
   });
 
   it("uses the address a phone can reach, not the one the studio is open on", async () => {
@@ -57,6 +60,13 @@ describe("previewing a surface on a device", () => {
       expect(screen.getByText("https://dash.example/preview?sat=token")).toBeTruthy(),
     );
     expect(previewLink).toHaveBeenCalledWith(surface);
+    const preview = screen.getByRole("link", { name: "Preview" });
+    expect(preview.getAttribute("href")).toBe("https://dash.example/preview?sat=token");
+    expect(preview.getAttribute("target")).toBe("_blank");
+    expect(preview.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(preview.previousElementSibling).toBe(screen.getByRole("button", { name: "Done" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("says so rather than showing a broken code when the host cannot build one", async () => {
@@ -64,6 +74,10 @@ describe("previewing a surface on a device", () => {
     openDialog();
 
     expect(await screen.findByText(/cannot open paywalls on a device/)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Preview" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Preview" })[1]?.hasAttribute("disabled")).toBe(
+      true,
+    );
   });
 
   it("asks for the URL scheme when the project has not declared one", async () => {
