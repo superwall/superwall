@@ -72,16 +72,17 @@ const mount = (
 
 const mountWithFrame = () => {
   setUp({ width: 1000, height: 800 }, { width: 400, height: 800 });
-  render(
+  const view = render(
     <Canvas fitKey="a">
       <iframe title="paywall" src="about:blank" />
     </Canvas>,
   );
   const layer = screen.getByTestId("canvas-content");
-  const frame = screen.getByTitle("paywall") as HTMLIFrameElement;
+  const frame = screen.getByTitle("paywall");
+  if (!(frame instanceof HTMLIFrameElement)) throw new Error("paywall is not an iframe");
   const target = frame.contentWindow;
   if (!target) throw new Error("iframe without a window");
-  return { layer, frame, target };
+  return { view, layer, frame, target };
 };
 
 const transformOf = (layer: HTMLElement) => {
@@ -269,6 +270,56 @@ describe("Canvas", () => {
     });
     expect(wheel.defaultPrevented).toBe(true);
     expect(transformOf(layer).y).toBeCloseTo(before.y - 40);
+  });
+
+  it("unmounts after a preview becomes cross-origin without accessing its window", () => {
+    const { view, target } = mountWithFrame();
+    const remove = vi.spyOn(target, "removeEventListener").mockImplementation(() => {
+      throw new DOMException("Cross-origin window", "SecurityError");
+    });
+    try {
+      expect(() => view.unmount()).not.toThrow();
+      expect(remove).not.toHaveBeenCalled();
+    } finally {
+      remove.mockRestore();
+    }
+  });
+
+  it("handles a cross-origin load and repeated cleanup without accessing the old window", () => {
+    const { view, frame, target } = mountWithFrame();
+    const errors: ErrorEvent[] = [];
+    const onError = (event: ErrorEvent) => {
+      errors.push(event);
+      event.preventDefault();
+    };
+    window.addEventListener("error", onError);
+    const remove = vi.spyOn(target, "removeEventListener").mockImplementation(() => {
+      throw new DOMException("Cross-origin window", "SecurityError");
+    });
+    vi.spyOn(frame, "contentDocument", "get").mockReturnValue(null);
+    try {
+      fireEvent.load(frame);
+      fireEvent.load(frame);
+      expect(errors).toEqual([]);
+      expect(() => view.unmount()).not.toThrow();
+      expect(remove).not.toHaveBeenCalled();
+    } finally {
+      remove.mockRestore();
+      window.removeEventListener("error", onError);
+    }
+  });
+
+  it("removes the pending drag click suppression when a frame reloads", () => {
+    const { frame, target } = mountWithFrame();
+    act(() => {
+      target.dispatchEvent(new TestPointerEvent("pointerdown", { button: 1, screenX: 10 }));
+      target.dispatchEvent(new TestPointerEvent("pointermove", { screenX: 40 }));
+      target.dispatchEvent(new TestPointerEvent("pointerup", { button: 1 }));
+    });
+    fireEvent.load(frame);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    target.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(false);
   });
 
   it("leaves the wheel to a paywall that scrolls at all, even at its ends, and pans over one that cannot", () => {
