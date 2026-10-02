@@ -250,6 +250,8 @@ export const Canvas = ({
       attached.delete(frame);
       const target = sameOriginWindow(frame);
       if (!target) return;
+      const controller = new AbortController();
+      const { signal } = controller;
       const onWheel = (event: WheelEvent) => {
         if (isZoomGesture(event)) {
           const rect = frame.getBoundingClientRect();
@@ -299,22 +301,16 @@ export const Canvas = ({
         if (press?.panning) {
           setDragging(false);
           grab(false);
-          target.addEventListener("click", swallow, { capture: true, once: true });
+          target.addEventListener("click", swallow, { capture: true, once: true, signal });
         }
         press = null;
       };
-      target.addEventListener("wheel", onWheel, { passive: false });
-      target.addEventListener("pointerdown", onPointerDown);
-      target.addEventListener("pointermove", onPointerMove);
-      target.addEventListener("pointerup", onPointerUp);
-      target.addEventListener("pointercancel", onPointerUp);
-      attached.set(frame, () => {
-        target.removeEventListener("wheel", onWheel);
-        target.removeEventListener("pointerdown", onPointerDown);
-        target.removeEventListener("pointermove", onPointerMove);
-        target.removeEventListener("pointerup", onPointerUp);
-        target.removeEventListener("pointercancel", onPointerUp);
-      });
+      target.addEventListener("wheel", onWheel, { passive: false, signal });
+      target.addEventListener("pointerdown", onPointerDown, { signal });
+      target.addEventListener("pointermove", onPointerMove, { signal });
+      target.addEventListener("pointerup", onPointerUp, { signal });
+      target.addEventListener("pointercancel", onPointerUp, { signal });
+      attached.set(frame, () => controller.abort());
     };
     const onLoad = (event: Event) => {
       if (event.target instanceof HTMLIFrameElement) attach(event.target);
