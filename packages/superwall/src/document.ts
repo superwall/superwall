@@ -36,7 +36,13 @@ export const hostAttributes = (
   "data-sw-cutout": cutoutOf(device.deviceModel),
 });
 
-export const PLATFORM_STYLESHEET_URL = "https://runtime-static.superwall.com/live.css";
+/**
+ * The platform stylesheet a preview links. Published paywalls link their own
+ * runtime's versioned copy; a preview has no runtime version, so it links this
+ * stable URL, which the API redirects to the stylesheet of the runtime it
+ * currently bakes with — the file a paywall pushed now would get.
+ */
+export const PLATFORM_STYLESHEET_URL = "https://api.superwall.com/runtime/live.css";
 
 export const ROUTE_ASSETS_ID = "sw-route-assets";
 
