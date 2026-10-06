@@ -73,7 +73,7 @@ export function printHelp(): void {
       row("skills", "Install or update the Superwall agent skills"),
       row("doctor", "Check the health of your integration"),
       row("upgrade", "Update the CLI to the latest version"),
-      row("feedback", "Send feedback about the CLI to the Superwall team"),
+      row("feedback", "Report a bug or send feedback to the Superwall team"),
       "",
       pc.bold("Flags:"),
       row("--json", "Machine-readable output"),
