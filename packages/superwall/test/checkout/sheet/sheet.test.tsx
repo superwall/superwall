@@ -256,17 +256,17 @@ describe("the sheet's chrome", () => {
       startLoading();
       await Promise.resolve();
     });
-    const overlay = document.querySelector('[aria-hidden="false"]');
-    expect(overlay).not.toBeNull();
-    expect(overlay?.getAttribute("style")).toContain("visibility: visible");
+    const overlay = document.querySelector(".sw-loader");
+    expect(overlay?.getAttribute("data-state")).toBe("active");
+    expect(overlay?.getAttribute("aria-hidden")).toBe("false");
+    expect(overlay?.querySelector(".sw-loader-hud .sw-loader-spinner")).not.toBeNull();
 
     await act(async () => {
       stopLoading();
       await Promise.resolve();
     });
-    expect(document.querySelector('[aria-hidden="true"]')?.getAttribute("style")).toContain(
-      "visibility: hidden",
-    );
+    expect(overlay?.getAttribute("data-state")).toBe("inactive");
+    expect(overlay?.getAttribute("aria-hidden")).toBe("true");
   });
 });
 

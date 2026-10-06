@@ -9,3 +9,4 @@ coverage/
 .claude/
 examples/*/superwall.lock
 .release/
+.kanna/

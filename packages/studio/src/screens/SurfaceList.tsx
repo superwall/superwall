@@ -1,4 +1,7 @@
 import * as React from "react";
+import { EmptyState } from "../components/EmptyState";
+import { AlertTriangleIcon, AppWindowIcon, SearchIcon } from "../components/icons";
+import { InlineCode } from "../components/InlineCode";
 import { OpenInApp } from "../components/OpenInApp";
 import { SurfaceCard } from "../components/SurfaceCard";
 import { TopBar } from "../components/chrome/TopBar";
@@ -75,97 +78,143 @@ export const SurfaceList = ({
         surfaces: all.filter(
           (surface) =>
             needle === "" ||
-            `${surface.project ?? ""} ${surface.id}`.toLowerCase().includes(needle),
+            `${surface.project ?? ""} ${surface.id} ${surface.label ?? ""}`
+              .toLowerCase()
+              .includes(needle),
         ),
       };
     })
     .filter((section) => section.all.length > 0);
 
+  const clear = (kind: string) => setQueries((current) => ({ ...current, [kind]: "" }));
+
   return (
     <>
       <TopBar
-        title={source.title}
-        inset
         label={device ? "Preview" : undefined}
         actions={
           device ? <OpenInApp origin={window.location.origin} scheme={source.scheme} /> : undefined
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-3 pt-6 pb-16 sm:px-6 sm:pt-10" ref={scroller}>
-        <div className="mx-auto max-w-[1080px]">
+      <div className="flex-1 overflow-y-auto" ref={scroller}>
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 p-3 sm:p-6 lg:p-10">
+          <header className="flex flex-col gap-0.5">
+            <h1 className="m-0 text-2xl font-medium">{source.title}</h1>
+            {!device && (
+              <p className="m-0 text-base text-fg-secondary">
+                Previews run against a real SDK host, and you choose the outcomes. Edit files under{" "}
+                <InlineCode>superwall/</InlineCode> and they update live.
+              </p>
+            )}
+          </header>
+
           {source.diagnostics && source.diagnostics.length > 0 && (
-            <div className="border-red bg-red/10 mb-6 rounded border-l-2 px-4 py-3 text-[0.8125rem] whitespace-pre-wrap">
-              {source.diagnostics.join("\n")}
+            <div
+              className="flex gap-2 rounded-sm border border-destructive/32 bg-destructive/8 py-3 ps-[calc(--spacing(3)-1px)] pe-3 text-sm text-destructive-foreground"
+              role="alert"
+            >
+              <span className="flex h-5 flex-none items-center">
+                <AlertTriangleIcon />
+              </span>
+              <span className="min-w-0 whitespace-pre-wrap text-destructive-foreground/80">
+                {source.diagnostics.join("\n")}
+              </span>
             </div>
           )}
 
           {sections.map((section) => (
-            <section key={section.kind} className="mt-10 first:mt-0">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="text-[1.0625rem] font-medium">{section.label}</span>
-                <span className="text-[0.8125rem] text-cream/55 tabular-nums">
-                  {section.surfaces.length}
-                </span>
+            <section
+              key={section.kind}
+              className="overflow-hidden rounded-sm border border-border bg-card"
+              aria-label={section.label}
+            >
+              <div className="flex min-h-12 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border py-2.5 ps-4 pe-2.5">
+                <h2 className="m-0 flex flex-1 items-center gap-1.5 text-sm font-medium tracking-normal whitespace-nowrap">
+                  {section.label}
+                  <span className="font-normal text-fg-tertiary tabular-nums">
+                    {section.surfaces.length}
+                  </span>
+                </h2>
                 {section.all.length > 1 && (
-                  <input
-                    className="sw-input ml-auto w-48"
-                    type="search"
-                    value={queries[section.kind] ?? ""}
-                    placeholder={`Search ${section.label.toLowerCase()}`}
-                    aria-label={`Search ${section.label.toLowerCase()}`}
-                    onChange={(event) =>
-                      setQueries((current) => ({ ...current, [section.kind]: event.target.value }))
-                    }
-                  />
+                  <label className="relative flex w-full items-center sm:w-56">
+                    <SearchIcon className="icon-tertiary pointer-events-none absolute left-[calc(--spacing(2.5)-1px)]" />
+                    <input
+                      className="sw-input sw-input--sm ps-8"
+                      type="search"
+                      value={queries[section.kind] ?? ""}
+                      placeholder={`Search ${section.label.toLowerCase()}`}
+                      aria-label={`Search ${section.label.toLowerCase()}`}
+                      onChange={(event) =>
+                        setQueries((current) => ({
+                          ...current,
+                          [section.kind]: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] sm:gap-6">
-                {section.surfaces.map((surface) => (
-                  <SurfaceCard
-                    key={surfacePath(surface)}
-                    surface={surface}
-                    status={statuses[surfacePath(surface)]}
-                    previewSrc={source.previewUrl(surface)}
-                    hostState={hostStateFor({
-                      surface,
-                      defaults,
-                      sourceSamples: source.samples,
-                      samples: {},
-                      theme: "light",
-                      edited: {},
-                    })}
-                    onOpen={() => onOpen(surface)}
-                    href={device ? surfacePath(surface) : undefined}
-                  />
-                ))}
-              </div>
-              {section.surfaces.length === 0 && (
-                <span className="block text-[0.8125rem] text-cream/45">
-                  {`Nothing matches “${(queries[section.kind] ?? "").trim()}”.`}
-                </span>
+              {section.surfaces.length > 0 ? (
+                <div className="-me-px -mb-px grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+                  {section.surfaces.map((surface) => {
+                    const preview = device ? source.standaloneUrl?.(surface) : undefined;
+                    return (
+                      <SurfaceCard
+                        key={surfacePath(surface)}
+                        surface={surface}
+                        status={statuses[surfacePath(surface)]}
+                        previewSrc={source.previewUrl(surface)}
+                        hostState={hostStateFor({
+                          surface,
+                          defaults,
+                          sourceSamples: source.samples,
+                          samples: {},
+                          theme: "light",
+                          edited: {},
+                        })}
+                        onOpen={() =>
+                          preview === undefined ? onOpen(surface) : window.location.assign(preview)
+                        }
+                        href={preview ?? (device ? surfacePath(surface) : undefined)}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={<SearchIcon />}
+                  title={`No ${section.label.toLowerCase()} match “${(queries[section.kind] ?? "").trim()}”`}
+                  actions={
+                    <button
+                      type="button"
+                      className="sw-btn sw-btn--sm"
+                      onClick={() => clear(section.kind)}
+                    >
+                      Clear search
+                    </button>
+                  }
+                />
               )}
             </section>
           ))}
 
           {source.surfaces.length === 0 && (
-            <div className="rounded border border-dashed border-cream/20 p-12 text-center text-cream/55">
-              No paywalls yet — create{" "}
-              <code className="font-mono text-[0.8125rem] text-cream">
-                superwall/paywalls/&lt;id&gt;/app/page.tsx
-              </code>{" "}
-              and it appears here.
+            <div className="rounded-sm border border-border bg-card">
+              <EmptyState
+                icon={<AppWindowIcon />}
+                title="No paywalls yet"
+                description={
+                  <>
+                    Create <InlineCode>superwall/paywalls/&lt;id&gt;/app/page.tsx</InlineCode> and
+                    it appears here.
+                  </>
+                }
+              />
             </div>
           )}
         </div>
       </div>
-
-      {!device && (
-        <footer className="bg-bar flex h-11 flex-none items-center justify-center border-t border-cream/10 text-xs text-cream/55">
-          Previews run against a real SDK host — you choose the outcomes. Edit files under
-          superwall/ and they update live.
-        </footer>
-      )}
     </>
   );
 };

@@ -16,7 +16,7 @@ export const DevicePlaceholder = ({
   height: number;
 }>) => (
   <div
-    className="flex flex-none items-center justify-center overflow-hidden border border-dashed border-cream/20 p-6 text-center text-sm text-cream/55"
+    className="flex flex-none items-center justify-center overflow-hidden rounded-sm bg-background p-6 text-center text-sm text-fg-secondary outline outline-foreground/20"
     data-testid="device-placeholder"
     style={{ width, height }}
   >
@@ -95,11 +95,9 @@ export const DeviceFrame = ({
 
   return (
     <div
-      className={`bg-panel relative flex-none overflow-hidden ${
-        chrome ? "shadow-[0_0_0_1px] shadow-cream/25" : "border border-cream/20"
-      }`}
+      className="relative flex-none overflow-hidden bg-background outline outline-foreground/20"
       data-testid="device-frame"
-      style={{ width, height, borderRadius: chrome?.radius ?? 0 }}
+      style={{ width, height, borderRadius: chrome?.radius ?? 3 }}
     >
       {sheet && (
         <div
@@ -142,7 +140,7 @@ export const DeviceFrame = ({
             key={frame.generation}
             hostState={hostState}
             delegate={delegate}
-            className={`absolute inset-0 border-0 bg-white transition-opacity duration-150 ${
+            className={`absolute inset-0 border-0 bg-white transition-opacity duration-hover ${
               frame === visible ? "opacity-100" : "opacity-0"
             }`}
             title={title}

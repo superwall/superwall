@@ -85,7 +85,7 @@ describe("the overview", () => {
 
     const search = screen.getByRole("searchbox", { name: "Search paywalls" });
     fireEvent.change(search, { target: { value: "wink" } });
-    expect(screen.getByText(/Nothing matches/)).toBeDefined();
+    expect(screen.getByText("No paywalls match “wink”")).toBeDefined();
 
     fireEvent.change(search, { target: { value: "winback" } });
     expect(screen.getByText("winback")).toBeDefined();
@@ -174,7 +174,7 @@ describe("StudioApp", () => {
     expect(screen.getByText("Paywalls")).toBeDefined();
     expect(screen.getByText("Funnels")).toBeDefined();
     expect(screen.getByText("plus-upgrade")).toBeDefined();
-    expect(screen.getByText("· ios · android")).toBeDefined();
+    expect(document.body.textContent).toContain("iOS · Android");
     expect(screen.getByText("onboarding")).toBeDefined();
     const card = screen.getByText("plus-upgrade").closest("a");
     expect(card?.getAttribute("href")).toBe("/paywall/plus-upgrade");
@@ -457,13 +457,21 @@ describe("a product Superwall has no record of", () => {
 });
 
 describe("device mode", () => {
-  it("titles the bar Preview and opens cards in the hosted editor, like everywhere else", () => {
+  it("opens cards on the standalone preview, the paywall itself on the phone", () => {
     window.history.replaceState({}, "", "/device");
     render(<StudioApp source={source} mode="device" />);
 
     expect(screen.getByText("Preview")).toBeDefined();
     expect(screen.queryByText("Studio")).toBeNull();
     expect(screen.queryByText(/simulated SDK host/)).toBeNull();
+
+    const card = screen.getByText("plus-upgrade").closest("a");
+    expect(card?.getAttribute("href")).toBe("/preview/paywall/plus-upgrade");
+  });
+
+  it("falls back to the editor when the source has no standalone preview", () => {
+    window.history.replaceState({}, "", "/device");
+    render(<StudioApp source={{ ...source, standaloneUrl: undefined }} mode="device" />);
 
     const card = screen.getByText("plus-upgrade").closest("a");
     expect(card?.getAttribute("href")).toBe("/paywall/plus-upgrade");
@@ -486,7 +494,7 @@ describe("device mode", () => {
     render(<StudioApp source={source} mode="device" />);
 
     expect(screen.queryByLabelText("Edit app URL scheme")).toBeNull();
-    fireEvent.click(screen.getByText("Open In App"));
+    fireEvent.click(screen.getByText("Open in app"));
 
     expect(prompt).toHaveBeenCalledOnce();
     expect(assign).toHaveBeenCalledWith(
@@ -503,7 +511,7 @@ describe("device mode", () => {
     window.localStorage.clear();
     render(<StudioApp source={{ ...source, scheme: "detectedapp" }} mode="device" />);
 
-    const link = screen.getByText("Open In App").closest("a");
+    const link = screen.getByText("Open in app").closest("a");
     expect(link?.getAttribute("href")).toBe(
       `detectedapp://?superwall_dev=${encodeURIComponent(window.location.origin)}`,
     );
@@ -518,7 +526,7 @@ describe("device mode", () => {
 
     fireEvent.click(screen.getByLabelText("Edit app URL scheme"));
     expect(prompt).toHaveBeenCalledWith(expect.any(String), "wrongapp");
-    expect(screen.getByText("Open In App").closest("a")?.getAttribute("href")).toBe(
+    expect(screen.getByText("Open in app").closest("a")?.getAttribute("href")).toBe(
       `rightapp://?superwall_dev=${encodeURIComponent(window.location.origin)}`,
     );
     vi.restoreAllMocks();

@@ -1,5 +1,7 @@
 import * as React from "react";
-import { ChevronDownIcon } from "../icons";
+import { ChevronDownIcon, SpinnerIcon } from "../icons";
+import { Tooltip } from "../Tooltip";
+import { MenuItem, MenuPopup, useDismiss } from "./Menu";
 import {
   ACTION_STEPS,
   STEP_LABELS,
@@ -29,11 +31,11 @@ export type ActionProgress = {
   error?: string;
 };
 
-const StepGlyph = ({ state }: { state: StudioStepState }) => {
-  if (state === "active") return <span className="bg-accent h-2 w-2 rounded-full animate-pulse" />;
-  if (state === "done") return <span className="bg-accent h-2 w-2 rounded-full" />;
-  if (state === "failed") return <span className="bg-red h-2 w-2 rounded-full" />;
-  return <span className="bg-cream/55 h-2 w-2 rounded-full" />;
+const DOT: Record<StudioStepState, string> = {
+  active: "bg-primary motion-safe:animate-pulse",
+  done: "bg-primary",
+  failed: "bg-destructive",
+  pending: "bg-fg-muted",
 };
 
 const ProgressPanel = ({ progress }: { progress: ActionProgress }) => {
@@ -42,48 +44,45 @@ const ProgressPanel = ({ progress }: { progress: ActionProgress }) => {
   const failed = progress.error !== undefined;
 
   return (
-    <div className="w-64">
-      <div className="border-b border-cream/10 px-3 py-2.5">
-        <div className="text-[0.8125rem] font-medium">
+    <div className="flex w-72 max-w-full flex-col">
+      <div className="flex flex-col gap-2 p-3">
+        <span className="-mt-1 text-sm font-medium">
           {failed
             ? `${labelFor(progress.action)} failed`
             : done === steps.length
               ? `${labelFor(progress.action)} complete`
               : runningLabel[progress.action]}
-        </div>
-        <div className="mt-2 h-0.5 w-full bg-cream/10">
-          <div
-            className={`h-full transition-[width] duration-300 ease-out ${failed ? "bg-red" : "bg-accent"}`}
+        </span>
+        <span className="block h-1 w-full overflow-hidden rounded-sm bg-muted">
+          <span
+            className={`block h-full transition-[width] duration-move ease-out ${failed ? "bg-destructive" : "bg-primary"}`}
             style={{ width: `${(done / steps.length) * 100}%` }}
           />
-        </div>
+        </span>
       </div>
-      <ul className="m-0 list-none px-3 py-2">
+      <ul className="m-0 flex list-none flex-col border-t border-border p-1">
         {steps.map((step, index) => {
           const state = progress.steps[step] ?? "pending";
           return (
-            <li key={step} className="flex items-center gap-2.5 py-1.5">
-              <span
-                className={`w-4 font-mono text-[0.625rem] tabular-nums ${
-                  state === "pending" ? "text-cream/25" : "text-cream/55"
-                }`}
-              >
+            <li key={step} className="flex items-center gap-2 px-2.5 py-1">
+              <span className="w-4 text-xs text-fg-muted tabular-nums">
                 {String(index + 1).padStart(2, "0")}
               </span>
               <span
-                className={`flex-1 text-[0.8125rem] ${
-                  state === "pending" ? "text-cream/40" : "text-cream"
-                }`}
+                className={`flex-1 text-sm ${state === "pending" ? "text-fg-tertiary" : "text-foreground"}`}
               >
                 {STEP_LABELS[step]}
               </span>
-              <StepGlyph state={state} />
+              <span className={`size-2 flex-none rounded-full ${DOT[state]}`} />
             </li>
           );
         })}
       </ul>
       {progress.error && (
-        <div className="text-red border-t border-cream/10 px-3 py-2.5 text-xs whitespace-pre-wrap">
+        <div
+          className="border-t border-border p-3 text-xs whitespace-pre-wrap text-destructive-foreground"
+          role="alert"
+        >
           {progress.error}
         </div>
       )}
@@ -113,61 +112,60 @@ export const ActionMenu = ({
     ACTION_STEPS[progress.action].some((step) => progress.steps[step] !== "done");
   const showPanel = progress !== undefined;
 
-  React.useEffect(() => {
-    if (!open) return undefined;
-    const close = (event: MouseEvent) => {
-      if (menuRef.current && !event.composedPath().includes(menuRef.current)) setOpen(false);
-    };
-    window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
-  }, [open]);
+  const popupRef = React.useRef<HTMLDivElement>(null);
+  const dismissRefs = React.useMemo(() => [menuRef, popupRef], []);
+  useDismiss(dismissRefs, open, () => setOpen(false));
 
   return (
     <div className="relative flex" ref={menuRef}>
-      <button
-        type="button"
-        className="sw-btn sw-btn--primary rounded-r-none disabled:cursor-not-allowed disabled:opacity-40"
-        disabled={busy}
-        title={blocked}
-        onClick={() => (stopped ? onBlocked?.() : onRun(selected))}
-      >
-        {busy ? runningLabel[progress.action] : labelFor(selected)}
-      </button>
-      <button
-        type="button"
-        className="sw-btn sw-btn--primary -ml-px w-6 rounded-l-none !px-0 disabled:cursor-not-allowed disabled:opacity-40"
-        aria-label="Choose action"
-        aria-expanded={open}
-        title={blocked}
-        disabled={busy}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <ChevronDownIcon />
-      </button>
+      <Tooltip hint={blocked}>
+        <span className="flex">
+          <button
+            type="button"
+            className="sw-btn sw-btn--sm sw-btn--primary rounded-e-none border-e-0"
+            disabled={busy}
+            aria-busy={busy || undefined}
+            onClick={() => (stopped ? onBlocked?.() : onRun(selected))}
+          >
+            {busy && <SpinnerIcon />}
+            {busy ? runningLabel[progress.action] : labelFor(selected)}
+          </button>
+          <span aria-hidden="true" className="w-px bg-primary-foreground/24" />
+          <button
+            type="button"
+            className="sw-btn sw-btn--sm sw-btn--icon sw-btn--primary rounded-s-none border-s-0"
+            aria-label="Choose action"
+            aria-expanded={open}
+            aria-busy={busy || undefined}
+            disabled={busy}
+            onClick={() => setOpen((value) => !value)}
+          >
+            <ChevronDownIcon />
+          </button>
+        </span>
+      </Tooltip>
 
       {(showPanel || open) && (
-        <div className="bg-bar absolute top-full right-0 z-20 mt-[calc(0.5rem+2px)] overflow-hidden rounded border border-cream/20">
+        <MenuPopup popupRef={popupRef} anchor={menuRef} side="bottom" align="end">
           {showPanel ? (
             <ProgressPanel progress={progress} />
           ) : (
-            <div className="w-64">
+            <div className="flex w-max flex-col p-1">
               {ACTIONS.map((action) => (
-                <button
+                <MenuItem
                   key={action.name}
-                  type="button"
-                  className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors hover:bg-cream/5"
-                  onClick={() => {
+                  label={action.label}
+                  hint={action.hint}
+                  selected={action.name === selected}
+                  onSelect={() => {
                     setSelected(action.name);
                     setOpen(false);
                   }}
-                >
-                  <span className="text-[0.8125rem] font-medium">{action.label}</span>
-                  <span className="text-xs text-cream/55">{action.hint}</span>
-                </button>
+                />
               ))}
             </div>
           )}
-        </div>
+        </MenuPopup>
       )}
     </div>
   );

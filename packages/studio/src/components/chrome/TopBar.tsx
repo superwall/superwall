@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useStudioHome } from "../../lib/studio-host";
+import { ControlSizeContext } from "../controls";
 
 const CLEARANCE = 16;
 
@@ -19,12 +20,10 @@ export const titleFits = (bar: HTMLElement, title: HTMLElement) => {
 export const TopBar = ({
   title,
   actions,
-  inset = false,
   label = "Studio",
 }: {
-  title: string;
+  title?: string;
   actions?: React.ReactNode;
-  inset?: boolean;
   label?: string;
 }) => {
   const home = useStudioHome();
@@ -44,13 +43,10 @@ export const TopBar = ({
   }, [bar, titleElement, title, actions]);
 
   return (
-    <header className="relative z-20 flex h-11 flex-none items-center border-b border-cream/10 bg-ink">
-      <div
-        className={`relative flex h-full w-full items-center px-3 ${inset ? "mx-auto max-w-[1080px] sm:px-0" : ""}`}
-        ref={setBar}
-      >
+    <header className="relative z-20 flex h-12 flex-none items-center border-b border-border bg-background">
+      <div className="relative flex h-full w-full items-center ps-4 pe-2.5" ref={setBar}>
         <a
-          className="flex items-center gap-3 text-[0.9375rem] font-semibold tracking-[0.01em]"
+          className="relative flex items-center gap-4 text-sm before:pointer-events-none before:absolute before:-inset-x-1 before:-inset-y-0.5 before:rounded-sm before:border before:border-transparent before:transition-colors before:duration-hover focus-visible:before:border-primary"
           href={home.href}
           onClick={(event) => {
             if (event.button !== 0) return;
@@ -59,20 +55,24 @@ export const TopBar = ({
             home.navigate();
           }}
         >
-          <span className="whitespace-nowrap">
-            <em className="text-accent not-italic">$UPER</em>WALL
+          <span className="font-semibold whitespace-nowrap">
+            <span className="text-primary">$UPER</span>WALL
           </span>
-          <span className="h-4 w-px bg-cream/20" />
-          <span className="font-normal">{label}</span>
+          <span className="h-4 w-px bg-border max-sm:hidden" />
+          <span className="text-fg-secondary max-sm:hidden">{label}</span>
         </a>
-        <span
-          className={`absolute left-1/2 -translate-x-1/2 text-sm font-medium whitespace-nowrap ${fits ? "" : "invisible"}`}
-          aria-hidden={fits ? undefined : true}
-          ref={setTitleElement}
-        >
-          {title}
-        </span>
-        <div className="ml-auto flex items-center gap-2">{actions}</div>
+        {title !== undefined && (
+          <span
+            className={`absolute left-1/2 -translate-x-1/2 text-sm font-medium whitespace-nowrap ${fits ? "" : "invisible"}`}
+            aria-hidden={fits ? undefined : true}
+            ref={setTitleElement}
+          >
+            {title}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <ControlSizeContext.Provider value="sm">{actions}</ControlSizeContext.Provider>
+        </div>
       </div>
     </header>
   );

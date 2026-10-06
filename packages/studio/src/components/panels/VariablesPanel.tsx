@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Switch } from "../controls";
 import { ChevronDownIcon } from "../icons";
 import type { VariableOverrides } from "../../lib/variables";
 
@@ -15,7 +16,7 @@ const GROUPS: { key: VariableGroup; label: string; blurb: string }[] = [
   { key: "user", label: "User", blurb: "Attributes your app sets" },
   { key: "device", label: "Device", blurb: "Platform, locale, OS — the SDK fills these in" },
   { key: "params", label: "Params", blurb: "Passed in at the placement" },
-  { key: "products", label: "Products", blurb: "Store data for this paywall's products" },
+  { key: "products", label: "Products", blurb: "Store data for this paywall’s products" },
 ];
 
 const display = (value: unknown): string =>
@@ -47,13 +48,13 @@ const Row = ({
   const current = overridden ? override : row.value;
 
   return (
-    <div className="flex flex-col gap-1 py-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="truncate font-mono text-[11px] text-cream/70">{row.path}</span>
+    <div className="flex flex-col gap-2">
+      <div className="flex min-h-5 items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium text-fg-tertiary">{row.path}</span>
         {overridden && (
           <button
             type="button"
-            className="shrink-0 text-[11px] text-cream/40 hover:text-cream"
+            className="sw-btn sw-btn--plain shrink-0 text-xs"
             aria-label={`Reset ${row.path}`}
             onClick={() => onChange(undefined)}
           >
@@ -63,18 +64,11 @@ const Row = ({
       </div>
       {typeof current === "boolean" ? (
         <span className="flex h-7 items-center">
-          <button
-            type="button"
-            className="sw-switch"
-            role="switch"
-            aria-checked={current}
-            aria-label={row.path}
-            onClick={() => onChange(!current)}
-          />
+          <Switch label={row.path} checked={current} onChange={(checked) => onChange(checked)} />
         </span>
       ) : (
         <input
-          className="sw-input w-full"
+          className="sw-input sw-input--sm"
           aria-label={row.path}
           value={display(current)}
           placeholder={display(row.value)}
@@ -101,53 +95,67 @@ const Group = ({
   overrideOf: (path: string) => unknown;
   onChange: (path: string, value: unknown) => void;
 }) => {
-  const [open, setOpen] = React.useState(false);
+  const [state, setState] = React.useState<"closed" | "open" | "closing">("closed");
+  const open = state === "open";
   const overridden = rows.filter((row) => overrideOf(row.path) !== undefined).length;
 
   return (
-    <section className="border-b border-cream/10 last:border-b-0">
+    <section className="border-b border-border">
       <button
         type="button"
-        className="flex w-full items-center gap-2 py-3 text-left"
+        className="group relative flex w-full items-center gap-4 px-4 py-2.5 text-left transition-colors duration-hover before:pointer-events-none before:absolute before:inset-0 before:border before:border-transparent before:transition-colors before:duration-hover hover:bg-foreground/3 focus-visible:before:border-primary"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setState((current) => (current === "open" ? "closing" : "open"))}
       >
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="flex items-baseline gap-2">
-            <span className="text-[0.8125rem] font-medium text-cream">{label}</span>
-            <span className="text-xs text-cream/40">
-              {overridden > 0 ? (
-                <span className="text-accent">{`${overridden} set`}</span>
-              ) : (
-                rows.length || null
-              )}
-            </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            {label}
+            {overridden > 0 ? (
+              <span className="font-normal text-primary tabular-nums">{`${overridden} set`}</span>
+            ) : (
+              rows.length > 0 && (
+                <span className="font-normal text-fg-tertiary tabular-nums">{rows.length}</span>
+              )
+            )}
           </span>
-          <span className="truncate text-xs text-cream/55">{blurb}</span>
+          <span className="truncate text-xs/4 text-fg-tertiary">{blurb}</span>
         </span>
-        <span
-          className={`ml-auto shrink-0 text-cream/40 transition-transform ${open ? "" : "-rotate-90"}`}
-          aria-hidden="true"
-        >
-          <ChevronDownIcon />
-        </span>
+        <ChevronDownIcon
+          className={`icon-tertiary transition-disclosure group-hover:filter-none ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
-      {open &&
-        (rows.length === 0 ? (
-          <span className="block pb-3 text-xs text-cream/35">Nothing here for this paywall.</span>
-        ) : (
-          <div className="flex flex-col pb-2">
-            {rows.map((row) => (
-              <Row
-                key={row.path}
-                row={row}
-                override={overrideOf(row.path)}
-                onChange={(value) => onChange(row.path, value)}
-              />
-            ))}
+      {state !== "closed" && (
+        <div
+          className={`grid transition-[grid-template-rows,opacity] duration-move ease-out starting:grid-rows-[0fr] starting:opacity-0 ${
+            open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          }`}
+          aria-hidden={open ? undefined : true}
+          inert={!open}
+          onTransitionEnd={(event) => {
+            if (event.target === event.currentTarget && state === "closing") setState("closed");
+          }}
+        >
+          <div className="min-h-0 overflow-hidden">
+            {rows.length === 0 ? (
+              <span className="block px-4 pb-4 text-xs text-fg-tertiary">
+                Nothing here for this paywall.
+              </span>
+            ) : (
+              <div className="flex flex-col gap-3 px-4 pt-1 pb-4">
+                {rows.map((row) => (
+                  <Row
+                    key={row.path}
+                    row={row}
+                    override={overrideOf(row.path)}
+                    onChange={(value) => onChange(row.path, value)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        ))}
+        </div>
+      )}
     </section>
   );
 };

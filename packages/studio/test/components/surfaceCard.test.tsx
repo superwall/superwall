@@ -109,12 +109,11 @@ describe("SurfaceCard", () => {
   it("names the project a surface belongs to, and the platforms it pushes to", () => {
     widthOf(0);
 
-    card({
+    const { container } = card({
       surface: { ...surface, project: "chatgpt", platforms: ["ios", "android"] },
     });
 
-    expect(screen.getByText("chatgpt/")).toBeTruthy();
-    expect(screen.getByText("· ios · android")).toBeTruthy();
+    expect(container.textContent).toContain("chatgpt · iOS · Android");
   });
 
   it("says when a surface was last edited, or that it has never been published", () => {

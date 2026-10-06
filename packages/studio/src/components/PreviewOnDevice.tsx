@@ -1,5 +1,7 @@
 import * as React from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { Dialog } from "./Dialog";
+import { ExternalIcon, QrCodeIcon, SpinnerIcon } from "./icons";
 import { useStudioMode } from "../lib/studio-host";
 import { devServerLink, readScheme, storeScheme } from "../lib/scheme";
 import type { StudioSource, StudioSurface } from "../lib/surfaces";
@@ -10,7 +12,7 @@ type LinkState =
   | { status: "unavailable"; reason: string };
 
 const askForScheme = (initial: string): string | undefined => {
-  const answer = window.prompt("Your app's URL scheme, so this can open it:", initial);
+  const answer = window.prompt("Your app’s URL scheme, so this can open it:", initial);
   const trimmed = answer?.trim();
   if (trimmed === undefined || trimmed === "") return undefined;
   storeScheme(trimmed);
@@ -37,7 +39,7 @@ export const PreviewOnDevice = ({
     if (hosted) {
       const build = source.previewLink;
       if (build === undefined) {
-        setLink({ status: "unavailable", reason: "This studio cannot open paywalls on a device." });
+        setLink({ status: "unavailable", reason: "This studio can’t open paywalls on a device." });
         return;
       }
       let cancelled = false;
@@ -56,7 +58,7 @@ export const PreviewOnDevice = ({
     }
 
     if (scheme === undefined) {
-      setLink({ status: "unavailable", reason: "Set your app's URL scheme to build a link." });
+      setLink({ status: "unavailable", reason: "Set your app’s URL scheme to build a link." });
       return;
     }
 
@@ -68,47 +70,27 @@ export const PreviewOnDevice = ({
 
   return (
     <>
-      <button className="sw-btn" type="button" onClick={() => setOpen(true)}>
-        Preview
+      <button
+        className="sw-btn sw-btn--sm max-sm:w-7 max-sm:px-0"
+        type="button"
+        aria-label="Preview"
+        onClick={() => setOpen(true)}
+      >
+        <QrCodeIcon />
+        <span className="max-sm:hidden">Preview</span>
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-6"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Preview on a device"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="bg-bar flex w-[22rem] max-w-full flex-col items-center gap-4 rounded border border-cream/10 p-6 text-center"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex flex-col gap-1">
-              <span className="text-[0.9375rem] font-medium">Preview on a device</span>
-              <span className="text-[0.8125rem] text-cream/55">
-                {hosted
-                  ? "Scan with the device that has your app installed. It opens the live paywall in the SDK's debugger."
-                  : "Scan with the device that has your app installed. It opens this paywall against this machine's dev server."}
-              </span>
-            </div>
-
-            {link.status === "ready" ? (
-              <>
-                <div className="bg-cream rounded p-3">
-                  <QRCodeSVG value={link.url} size={192} />
-                </div>
-                <code className="max-w-full font-mono text-[0.6875rem] break-all text-cream/55">
-                  {link.url}
-                </code>
-              </>
-            ) : (
-              <div className="flex size-[216px] flex-none items-center justify-center rounded border border-cream/20 px-6 text-center text-[0.8125rem] text-cream/55">
-                {link.status === "loading" ? "Building a link…" : link.reason}
-              </div>
-            )}
-
-            <div className="flex items-center gap-2">
+        <Dialog
+          title="Preview on a device"
+          description={
+            hosted
+              ? "Scan with the device that has your app installed. It opens the live paywall in the SDK’s debugger."
+              : "Scan with the device that has your app installed. It opens this paywall against this machine’s dev server."
+          }
+          onClose={() => setOpen(false)}
+          footer={
+            <>
               {!hosted && (
                 <button
                   className="sw-btn"
@@ -124,9 +106,45 @@ export const PreviewOnDevice = ({
               <button className="sw-btn" type="button" onClick={() => setOpen(false)}>
                 Done
               </button>
-            </div>
+              {link.status === "ready" && (
+                <a
+                  className="sw-btn sw-btn--primary"
+                  href={link.url}
+                  {...(hosted ? { target: "_blank", rel: "noreferrer" } : {})}
+                >
+                  <ExternalIcon />
+                  {hosted ? "Open preview" : "Open in app"}
+                </a>
+              )}
+            </>
+          }
+        >
+          <div className="flex flex-col items-center gap-3 py-2">
+            {link.status === "ready" ? (
+              <>
+                <div className="rounded-sm bg-foreground p-3">
+                  <QRCodeSVG value={link.url} size={192} />
+                </div>
+                {!hosted && (
+                  <span className="max-w-full text-center text-xs break-all text-fg-tertiary">
+                    {link.url}
+                  </span>
+                )}
+              </>
+            ) : (
+              <div className="flex size-54 flex-none flex-col items-center justify-center gap-2 rounded-sm border border-border bg-card px-6 text-center text-xs text-fg-tertiary">
+                {link.status === "loading" ? (
+                  <>
+                    <SpinnerIcon />
+                    Building a link…
+                  </>
+                ) : (
+                  link.reason
+                )}
+              </div>
+            )}
           </div>
-        </div>
+        </Dialog>
       )}
     </>
   );

@@ -41,14 +41,14 @@ describe("CompareMenu", () => {
   it("pins off below the list, so it never scrolls away", () => {
     open({ options: options(200) });
 
-    const groups = document.querySelectorAll(".bg-bar > div");
+    const groups = document.querySelectorAll("[data-menu-popup] > div");
     const pinned = within(groups[groups.length - 1] as HTMLElement);
     expect(pinned.getByText("Off")).toBeDefined();
     expect(pinned.queryByText("v5 · live")).toBeNull();
     expect(pinned.queryByText("paywall/paywall-0")).toBeNull();
 
     // the search sits above everything, and only the paywalls scroll
-    const order = [...document.querySelectorAll(".bg-bar > div")].map((el) =>
+    const order = [...document.querySelectorAll("[data-menu-popup] > *")].map((el) =>
       el.querySelector("input")
         ? "search"
         : el.className.includes("overflow-y-auto")
@@ -101,7 +101,7 @@ describe("CompareMenu", () => {
       target: { value: "nope" },
     });
 
-    expect(screen.getByText(/Nothing matches/)).toBeDefined();
+    expect(screen.getByText("No versions or paywalls match “nope”")).toBeDefined();
   });
 
   it("scrolls the paywalls instead of growing without limit", () => {
@@ -112,13 +112,12 @@ describe("CompareMenu", () => {
     expect(list?.querySelectorAll("button")).toHaveLength(201);
   });
 
-  it("marks what is being compared beside its name, and switching back off is one click", () => {
+  it("checks what is being compared at the row's end, and switching back off is one click", () => {
     const onSelect = open({ active: { type: "version", version: 5 } });
 
     const liveRow = screen.getByText("v5 · live").closest("button") as HTMLElement;
     expect(liveRow.getAttribute("aria-current")).toBe("true");
-    // the dot rides on the title row, not in a column of its own
-    expect(screen.getByText("v5 · live").parentElement?.querySelector(".bg-accent")).toBeTruthy();
+    expect(liveRow.lastElementChild?.matches("svg.text-primary")).toBe(true);
 
     fireEvent.click(screen.getByText("Off"));
     expect(onSelect).toHaveBeenCalledWith(undefined);

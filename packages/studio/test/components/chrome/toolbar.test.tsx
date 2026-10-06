@@ -43,7 +43,7 @@ const mount = () => {
       <span>c</span>
     </Toolbar>,
   );
-  const toolbar = view.container.firstElementChild as HTMLElement;
+  const toolbar = view.container.firstElementChild?.firstElementChild as HTMLElement;
   const dividers = () =>
     [...toolbar.querySelectorAll("[data-toolbar-divider]")].map((divider) =>
       divider.hasAttribute("data-orphan"),

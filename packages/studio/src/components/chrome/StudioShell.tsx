@@ -5,7 +5,7 @@ export const StudioShell = ({
   position = "fixed",
 }: React.PropsWithChildren<{ position?: "fixed" | "absolute" }>) => (
   <div
-    className={`sw-studio bg-ink text-cream ${position} inset-0 flex flex-col font-sans text-[0.9375rem] tracking-[-0.01em] antialiased`}
+    className={`sw-studio bg-background text-foreground ${position} inset-0 flex flex-col font-sans text-base antialiased`}
   >
     {children}
   </div>

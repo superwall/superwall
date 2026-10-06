@@ -1,8 +1,51 @@
 @import "tailwindcss";
+@import "./scroll-fade.css";
 
-@theme {
-  /* One restrained corner at every scale, so a control's size never changes
-     the visual language. Genuinely circular shapes stay 9999px. */
+@source inline("m-0 m-auto text-cream text-cream/55 text-[0.6875rem] text-[0.8125rem] font-mono");
+
+@custom-variant hover {
+  @media (hover: hover) {
+    &:hover:not(:disabled, [aria-disabled="true"], [data-disabled]) {
+      @slot;
+    }
+  }
+}
+
+@theme inline {
+  --font-sans:
+    "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.125rem;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --color-cream: var(--cream);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-popover: var(--popover);
+  --color-muted: var(--muted);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-tertiary: var(--fg-tertiary);
+  --color-fg-muted: var(--fg-muted);
+  --color-muted-foreground: var(--fg-tertiary);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-scrim: var(--scrim);
+
   --radius: 3px;
   --radius-xs: 3px;
   --radius-sm: 3px;
@@ -11,42 +54,112 @@
   --radius-xl: 3px;
   --radius-2xl: 3px;
   --radius-3xl: 3px;
+  --radius-4xl: 3px;
 
-  /* Structure is one hairline everywhere; controls carry a slightly stronger
-     edge because they hold a shape of their own. */
-  --hairline: color-mix(in srgb, var(--color-cream) 10%, transparent);
-  --edge: color-mix(in srgb, var(--color-cream) 18%, transparent);
+  --shadow: 0 0 #0000;
+  --shadow-inner: inset 0 0 #0000;
+  --drop-shadow: 0 0 #0000;
+  --shadow-2xs: 0 0 #0000;
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+  --shadow-xl: 0 0 #0000;
+  --shadow-2xl: 0 0 #0000;
+  --inset-shadow-2xs: inset 0 0 #0000;
+  --inset-shadow-xs: inset 0 0 #0000;
+  --inset-shadow-sm: inset 0 0 #0000;
+  --drop-shadow-xs: 0 0 #0000;
+  --drop-shadow-sm: 0 0 #0000;
+  --drop-shadow-md: 0 0 #0000;
+  --drop-shadow-lg: 0 0 #0000;
+  --drop-shadow-xl: 0 0 #0000;
+  --drop-shadow-2xl: 0 0 #0000;
+  --text-shadow-2xs: 0 0 #0000;
+  --text-shadow-xs: 0 0 #0000;
+  --text-shadow-sm: 0 0 #0000;
+  --text-shadow-md: 0 0 #0000;
+  --text-shadow-lg: 0 0 #0000;
+}
 
-  --color-ink: #1a1918;
-  --color-bar: #211f1d;
-  --color-panel: #242220;
-  --color-cream: #fdfef6;
-  --color-accent: #46d7d4;
-  --color-red: #ff7474;
-  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+@theme static {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --transition-duration-hover: 150ms;
+  --transition-duration-popup: 150ms;
+  --transition-duration-move: 200ms;
+  --transition-duration-dialog: 200ms;
+  --transition-duration-sheet: 250ms;
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@utility icon-tertiary {
+  color: var(--foreground);
+  filter: opacity(0.55);
+}
+
+@utility transition-disclosure {
+  transition-property: rotate, transform, color, filter;
+  transition-duration:
+    var(--transition-duration-move), var(--transition-duration-move),
+    var(--transition-duration-hover), var(--transition-duration-hover);
+  transition-timing-function: var(--ease-out);
 }
 
 @layer base {
+  :root,
+  :host {
+    --tint-h: 262;
+    --tint-c: 0.0055;
+    --border-alpha: 10%;
+    --cream: #fdfef6;
+    --ink: #0c0b0a;
+
+    --background: oklch(0.16 calc(var(--tint-c) * 0.7) var(--tint-h));
+    --card: oklch(0.195 var(--tint-c) var(--tint-h));
+    --popover: oklch(0.215 calc(var(--tint-c) * 1.25) var(--tint-h));
+    --muted: oklch(0.25 calc(var(--tint-c) * 0.6) var(--tint-h));
+    --secondary: oklch(0.29 calc(var(--tint-c) * 0.6) var(--tint-h));
+    --accent: oklch(0.86 calc(var(--tint-c) * 0.6) var(--tint-h) / 0.08);
+    --foreground: var(--cream);
+    --fg-secondary: color-mix(in oklch, var(--foreground) 70%, transparent);
+    --fg-tertiary: color-mix(in oklch, var(--foreground) 55%, transparent);
+    --fg-muted: color-mix(in oklch, var(--foreground) 45%, transparent);
+    --border: color-mix(in oklch, var(--foreground) var(--border-alpha), transparent);
+    --primary: #46d7d4;
+    --primary-foreground: var(--ink);
+    --destructive: #ee6d2e;
+    --destructive-foreground: #f3996d;
+    --success: #9fd947;
+    --success-foreground: #b7e375;
+    --warning: #ffc459;
+    --warning-foreground: #ffd07a;
+    --info: #7c97dd;
+    --info-foreground: #b4c4eb;
+    --scrim: color-mix(in oklch, var(--ink) 45%, transparent);
+  }
+
   .sw-studio {
     color-scheme: dark;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   .sw-studio ::selection {
-    background: color-mix(in srgb, var(--color-accent) 50%, transparent);
+    background: color-mix(in oklch, var(--primary) 20%, transparent);
+    color: var(--primary);
   }
 
   .sw-studio :focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -2px;
-  }
-
-  .sw-studio button {
-    cursor: pointer;
+    outline: none;
   }
 
   .sw-studio,
   .sw-studio * {
+    border-color: var(--border);
     scrollbar-width: none;
   }
 
@@ -56,199 +169,257 @@
     height: 0;
     display: none;
   }
-}
 
-@layer components {
-  .sw-btn {
-    border-radius: var(--radius);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    height: 30px;
-    padding: 0 12px;
-    border: 1px solid var(--edge);
-    background: transparent;
-    color: var(--color-cream);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    white-space: nowrap;
-    transition: background-color 150ms ease;
+  .sw-studio
+    :where(
+      button,
+      select,
+      summary,
+      label[for],
+      [role="button"],
+      [role="switch"],
+      [role="option"],
+      [role="menuitem"],
+      [role="menuitemradio"],
+      [role="link"]
+    ):not(:disabled, [aria-disabled="true"], [data-disabled]) {
+    cursor: pointer;
   }
 
-  .sw-btn:hover:not(:disabled):not(.sw-btn--blocked) {
-    background: color-mix(in srgb, var(--color-cream) 5%, transparent);
-  }
-
-  .sw-btn:disabled,
-  .sw-btn--blocked {
-    opacity: 0.4;
+  .sw-studio
+    :where(button, input, select, textarea, a, [role="button"], [role="switch"]):where(
+      :disabled,
+      [aria-disabled="true"],
+      [data-disabled]
+    ) {
     cursor: not-allowed;
   }
 
-  .sw-btn--primary {
-    background: var(--color-cream);
-    border-color: var(--color-cream);
-    color: var(--color-ink);
+  .sw-studio :where(svg, .icon-tertiary) {
+    transition-property: filter;
+    transition-duration: var(--transition-duration-hover);
+    transition-timing-function: var(--ease-out);
   }
 
-  .sw-btn--primary:hover:not(:disabled):not(.sw-btn--blocked) {
-    background: color-mix(in srgb, var(--color-cream) 85%, transparent);
+  .sw-studio :where(code, kbd, pre, samp) {
+    font-family: var(--font-mono);
+  }
+
+  .sw-studio :where(strong, b) {
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .sw-studio :where(h1, h2, h3, h4) {
+    font-weight: var(--font-weight-medium);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sw-studio *,
+    .sw-studio ::before,
+    .sw-studio ::after {
+      transition-property:
+        color, background-color, border-color, outline-color, text-decoration-color, fill, stroke,
+        opacity, filter !important;
+    }
+  }
+}
+
+@layer components {
+  .sw-icon {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .sw-spinner {
+    flex: none;
+    width: 14px;
+    height: 14px;
+  }
+
+  .sw-spinner rect {
+    fill: currentColor;
+    stroke: none;
+    opacity: 0.26;
+    animation: sw-spinner-spoke 0.8s linear infinite;
+  }
+
+  .sw-btn {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    height: 32px;
+    padding: 0 11px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    white-space: nowrap;
+    outline: none;
+    transition-property: color, background-color, border-color;
+    transition-duration: var(--transition-duration-hover);
+    transition-timing-function: var(--ease-out);
+  }
+
+  .sw-btn svg {
+    margin: 0 -1px;
+    pointer-events: none;
+  }
+
+  .sw-btn > .sw-icon,
+  .sw-btn > .sw-spinner {
+    width: 14px;
+    height: 14px;
+  }
+
+  .sw-btn > .sw-icon:not(.icon-tertiary) {
+    opacity: 0.8;
+  }
+
+  .sw-btn--sm {
+    height: 28px;
+    padding: 0 9px;
+  }
+
+  .sw-btn--xs {
+    gap: 7px;
+    height: 24px;
+    padding: 0 7px;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
   }
 
   .sw-btn--icon {
-    width: 30px;
+    width: 32px;
     padding: 0;
   }
 
-  .sw-icon,
-  .sw-btn svg,
-  .sw-segmented svg {
-    width: 14px;
-    height: 14px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 1.5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .sw-chip {
-    border-radius: var(--radius);
-    display: inline-flex;
-    align-items: center;
-    height: 20px;
-    padding: 0 7px;
-    border: 1px solid var(--edge);
-    color: var(--color-cream);
-    white-space: nowrap;
-  }
-
-  .sw-tool-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: color-mix(in srgb, var(--color-cream) 55%, transparent);
-    white-space: nowrap;
-  }
-
-  .sw-tool-label--key {
-    font-family: var(--font-mono);
-    letter-spacing: 0.04em;
-    font-size: 11px;
-  }
-
-  .sw-select {
-    border-radius: var(--radius);
-    appearance: none;
-    cursor: pointer;
-    height: 30px;
-    padding: 0 24px 0 9px;
-    border: 1px solid var(--edge);
-    background:
-      linear-gradient(
-          45deg,
-          transparent 50%,
-          color-mix(in srgb, var(--color-cream) 55%, transparent) 50%
-        )
-        calc(100% - 13px) 55% / 4px 4px no-repeat,
-      linear-gradient(
-          135deg,
-          color-mix(in srgb, var(--color-cream) 55%, transparent) 50%,
-          transparent 50%
-        )
-        calc(100% - 9px) 55% / 4px 4px no-repeat;
-    background-color: transparent;
-    color: var(--color-cream);
-    font: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
-  }
-
-  .sw-select option {
-    background: var(--color-bar);
-  }
-
-  .sw-segmented {
-    border-radius: var(--radius);
-    display: inline-flex;
-    border: 1px solid var(--edge);
-    height: 30px;
-  }
-
-  .sw-segmented button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 11px;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: color-mix(in srgb, var(--color-cream) 55%, transparent);
-    transition:
-      background-color 150ms ease,
-      color 150ms ease;
-  }
-
-  .sw-segmented button + button {
-    border-left: 1px solid var(--edge);
-  }
-
-  .sw-segmented button:first-child {
-    border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px);
-  }
-
-  .sw-segmented button:last-child {
-    border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0;
-  }
-
-  .sw-segmented button[aria-pressed="true"] {
-    background: var(--color-cream);
-    color: var(--color-ink);
-  }
-
-  .sw-stepper {
-    border-radius: var(--radius);
-    display: inline-flex;
-    border: 1px solid var(--edge);
-    height: 30px;
-  }
-
-  .sw-stepper button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--color-cream);
-    transition: background-color 150ms ease;
-  }
-
-  .sw-stepper button:hover {
-    background: color-mix(in srgb, var(--color-cream) 5%, transparent);
-  }
-
-  .sw-stepper button + button {
-    border-left: 1px solid var(--edge);
-  }
-
-  .sw-stepper > button:first-child,
-  .sw-stepper > button:last-child {
+  .sw-btn--icon.sw-btn--sm {
     width: 28px;
   }
 
-  .sw-stepper > button:first-child {
-    border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px);
+  .sw-btn--icon > .sw-icon,
+  .sw-btn--icon > .sw-spinner {
+    width: 16px;
+    height: 16px;
   }
 
-  .sw-stepper > button:last-child {
-    border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0;
+  .sw-btn:is(:hover, [aria-pressed="true"], [aria-expanded="true"]):not(
+      :disabled,
+      [aria-disabled="true"]
+    ) {
+    border-color: color-mix(in oklch, var(--foreground) 20%, transparent);
+    background-color: var(--accent);
   }
 
-  .sw-stepper svg {
-    width: 14px;
-    height: 14px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 1.5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+  .sw-btn--primary {
+    border-color: var(--primary);
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .sw-btn--primary:is(:hover, [aria-expanded="true"]):not(:disabled, [aria-disabled="true"]) {
+    border-color: color-mix(in oklch, var(--primary) 90%, transparent);
+    background-color: color-mix(in oklch, var(--primary) 90%, transparent);
+  }
+
+  .sw-btn--ghost {
+    border-color: transparent;
+    color: var(--fg-secondary);
+  }
+
+  .sw-btn--ghost > .sw-icon {
+    color: var(--foreground);
+    filter: opacity(0.55);
+  }
+
+  .sw-btn--ghost > .sw-icon:not(.icon-tertiary) {
+    opacity: 1;
+  }
+
+  .sw-btn--ghost:is(:hover, [aria-pressed="true"], [aria-expanded="true"]):not(
+      :disabled,
+      [aria-disabled="true"]
+    ) {
+    border-color: transparent;
+    background-color: var(--accent);
+    color: var(--foreground);
+  }
+
+  .sw-btn--ghost:is(:hover, [aria-pressed="true"], [aria-expanded="true"]):not(
+      :disabled,
+      [aria-disabled="true"]
+    )
+    > .sw-icon {
+    filter: none;
+  }
+
+  .sw-btn--plain {
+    height: auto;
+    padding: 0;
+    border-width: 0;
+    color: var(--fg-secondary);
+  }
+
+  .sw-btn--plain:is(:hover):not(:disabled, [aria-disabled="true"]) {
+    background-color: transparent;
+    color: var(--foreground);
+  }
+
+  .sw-btn--plain::before {
+    content: "";
+    position: absolute;
+    inset: -2px -4px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    pointer-events: none;
+    transition: border-color var(--transition-duration-hover) var(--ease-out);
+  }
+
+  .sw-btn--plain:focus-visible::before {
+    border-color: var(--primary);
+  }
+
+  .sw-btn:focus-visible {
+    border-color: var(--primary);
+  }
+
+  .sw-btn--primary:focus-visible {
+    border-color: var(--foreground);
+  }
+
+  .sw-btn:disabled:not([aria-busy="true"]),
+  .sw-btn[aria-disabled="true"]:not([aria-busy="true"]) {
+    opacity: 0.5;
+  }
+
+  .sw-btn[aria-busy="true"] {
+    cursor: progress;
+  }
+
+  .sw-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--foreground);
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
   }
 
   input[type="search"]::-webkit-search-cancel-button,
@@ -261,44 +432,71 @@
   }
 
   .sw-input {
-    border-radius: var(--radius);
-    height: 30px;
-    padding: 0 9px;
-    border: 1px solid var(--edge);
-    background: transparent;
-    color: var(--color-cream);
-    font: inherit;
-    font-size: 0.8125rem;
     width: 100%;
+    min-width: 0;
+    height: 32px;
+    padding: 0 11px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--foreground);
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    outline: none;
+    transition: border-color var(--transition-duration-hover) var(--ease-out);
   }
 
-  .sw-switch {
-    position: relative;
-    width: 34px;
-    height: 19px;
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--color-cream) 18%, transparent);
-    transition: background-color 150ms ease;
-    flex: none;
+  .sw-input::placeholder {
+    color: var(--fg-muted);
   }
 
-  .sw-switch[aria-checked="true"] {
-    background: var(--color-accent);
+  .sw-input:focus-visible {
+    border-color: var(--primary);
   }
 
-  .sw-switch::after {
-    content: "";
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 13px;
-    height: 13px;
-    border-radius: 9999px;
-    background: var(--color-ink);
-    transition: transform 150ms ease;
+  .sw-input--sm {
+    height: 28px;
+    padding: 0 9px;
   }
 
-  .sw-switch[aria-checked="true"]::after {
-    transform: translateX(15px);
+  .sw-select {
+    appearance: none;
+    width: 100%;
+    min-width: 9rem;
+    height: 32px;
+    padding: 0 33px 0 11px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--foreground);
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    outline: none;
+  }
+
+  .sw-select:focus-visible {
+    border-color: var(--primary);
+  }
+
+  .sw-select--sm {
+    height: 28px;
+    padding: 0 31px 0 9px;
+  }
+
+  .sw-select option {
+    background: var(--popover);
+    color: var(--foreground);
+  }
+}
+
+@keyframes sw-spinner-spoke {
+  0% {
+    opacity: 0.855;
+  }
+  51.25%,
+  100% {
+    opacity: 0.26;
   }
 }
