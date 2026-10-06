@@ -32,6 +32,7 @@ export function printHelp(): void {
             head("Paywalls & funnels"),
             row("create [dir]", "Set up paywalls in your app - creates superwall/ inside it"),
             row("dev [dir..]", "Host the studio: browse and preview your paywalls and funnels"),
+            row("build [dir]", "Build the snapshot documents a push would version, without pushing"),
             row("push [dir]", "Build and push your paywalls and funnels as immutable versions"),
             row("promote [dir]", "Point production at a pushed version"),
             row("publish [dir]", "Push and promote in one step"),
@@ -39,7 +40,7 @@ export function printHelp(): void {
               "                                  push and publish take -m <note> to record why, in the source commit.",
             ),
             pc.dim(
-              "                                  All three take --platform <p> when the project pushes to several platforms.",
+              "                                  All four take --platform <p> when the project pushes to several platforms.",
             ),
             "",
           ]

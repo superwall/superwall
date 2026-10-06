@@ -190,6 +190,12 @@ device, user and eligibility, and asks you for every purchase, restore,
 permission and callback outcome. Product data is read from Superwall, never
 invented, and the same build runs unchanged inside a real SDK webview.
 
+### Build
+
+`superwall build` writes the same single-file HTML document a push would
+version — `superwall/.superwall/build/<kind>/<id>/[<platform>/]index.html` —
+and stops there, no login needed. `--id`, `--platform`, `--out`, `--json`.
+
 ### Push, promote, publish
 
 Git semantics on purpose: **push saves, promote ships.** Every push builds

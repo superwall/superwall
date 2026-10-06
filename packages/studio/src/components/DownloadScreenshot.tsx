@@ -1,5 +1,5 @@
 import * as React from "react";
-import { SpinnerIcon } from "./icons";
+import { DownloadIcon, SpinnerIcon } from "./icons";
 import { Tooltip } from "./Tooltip";
 import { fetchScreenshot } from "../lib/actions";
 import { notify } from "../lib/notify";
@@ -16,7 +16,7 @@ type Shot =
 const HINTS: Record<Exclude<Shot["status"], "ready">, string> = {
   checking: "Looking for a screenshot…",
   none: "This paywall has no live version yet. Screenshots are captured from the published document, so promote a pushed version before downloading one.",
-  unreachable: "Couldn't reach the screenshot service.",
+  unreachable: "Couldn’t reach the screenshot service.",
 };
 
 const open = (href: string, download?: string) => {
@@ -88,12 +88,12 @@ export const DownloadScreenshot = ({
     } catch (error: unknown) {
       if (hosted) {
         open(shot.url);
-        notify("Opened the screenshot in a new tab — save it from there.");
+        notify("Opened the screenshot in a new tab", { description: "Save it from there." });
       } else {
-        notify(
-          `Couldn't download the screenshot — ${error instanceof Error ? error.message : String(error)}`,
-          "warning",
-        );
+        notify("Couldn’t download screenshot", {
+          tone: "warning",
+          description: error instanceof Error ? error.message : String(error),
+        });
       }
     } finally {
       setSaving(false);
@@ -101,9 +101,10 @@ export const DownloadScreenshot = ({
   };
 
   const blocked = shot.status !== "ready" || saving;
-  const hint =
-    saving || shot.status === "ready"
-      ? undefined
+  const hint = saving
+    ? undefined
+    : shot.status === "ready"
+      ? "Download screenshot"
       : shot.status === "unreachable"
         ? shot.reason
         : HINTS[shot.status];
@@ -111,22 +112,14 @@ export const DownloadScreenshot = ({
   return (
     <Tooltip hint={hint}>
       <button
-        className={`sw-btn sw-btn--icon${blocked ? " sw-btn--blocked" : ""}`}
+        className="sw-btn sw-btn--sm sw-btn--icon sw-btn--ghost"
         type="button"
         aria-label="Download screenshot"
         aria-disabled={blocked}
         aria-busy={saving || undefined}
         onClick={() => void save()}
       >
-        {saving ? (
-          <SpinnerIcon />
-        ) : (
-          <svg className="sw-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3v12" />
-            <path d="m7 10 5 5 5-5" />
-            <path d="M5 21h14" />
-          </svg>
-        )}
+        {saving ? <SpinnerIcon /> : <DownloadIcon />}
       </button>
     </Tooltip>
   );

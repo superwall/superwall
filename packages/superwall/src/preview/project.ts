@@ -18,6 +18,7 @@ export type ConfigLoader = (file: string) => Promise<PaywallDefinition | undefin
 export type StudioSurfacePayload = {
   kind: "paywall" | "funnel";
   id: string;
+  label?: string;
   project?: string;
   routes: string[];
   locales: string[];
@@ -81,9 +82,12 @@ export const buildStudioProject = async (
       const slots = Object.entries(definition?.products ?? {});
       const origin = originOf(lock, surface.kind, surface.id);
 
+      const label = typeof definition?.name === "string" ? definition.name.trim() : "";
+
       return {
         kind: surface.kind,
         id: surface.id,
+        ...(label === "" ? {} : { label }),
         routes: surface.routes.map((route) => route.name),
         locales: localesOf(project, surface, definition),
         products: Object.fromEntries(

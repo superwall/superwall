@@ -1,5 +1,13 @@
 import * as React from "react";
-import { ColumnsIcon } from "../icons";
+import { ColumnsIcon, SearchIcon } from "../icons";
+import {
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  useDismiss,
+  usePopupAlign,
+} from "./Menu";
 import type { CompareTarget } from "../../lib/surfaces";
 
 export type CompareOption = {
@@ -8,39 +16,6 @@ export type CompareOption = {
   hint: string;
   target: CompareTarget;
 };
-
-const Row = ({
-  label,
-  hint,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  hint: string;
-  selected: boolean;
-  onSelect: () => void;
-}) => (
-  <button
-    type="button"
-    className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors hover:bg-cream/5"
-    aria-current={selected || undefined}
-    onClick={onSelect}
-  >
-    <span className="flex max-w-full items-center gap-1.5 text-[0.8125rem] font-medium">
-      <span className="truncate">{label}</span>
-      {selected && (
-        <span className="bg-accent size-[5px] shrink-0 rounded-full" aria-hidden="true" />
-      )}
-    </span>
-    <span className="max-w-full truncate text-xs text-cream/55">{hint}</span>
-  </button>
-);
-
-const Heading = ({ children }: React.PropsWithChildren) => (
-  <span className="block px-3 pt-2 pb-1 text-[0.6875rem] tracking-wide text-cream/45 uppercase">
-    {children}
-  </span>
-);
 
 export const CompareMenu = ({
   active,
@@ -57,14 +32,10 @@ export const CompareMenu = ({
   const [query, setQuery] = React.useState("");
   const menuRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    if (!open) return undefined;
-    const close = (event: MouseEvent) => {
-      if (menuRef.current && !event.composedPath().includes(menuRef.current)) setOpen(false);
-    };
-    window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
-  }, [open]);
+  const popupRef = React.useRef<HTMLDivElement>(null);
+  const dismissRefs = React.useMemo(() => [menuRef, popupRef], []);
+  useDismiss(dismissRefs, open, () => setOpen(false));
+  const align = usePopupAlign(menuRef, open);
 
   React.useEffect(() => {
     if (!open) setQuery("");
@@ -89,10 +60,9 @@ export const CompareMenu = ({
   const origins = options.filter((option) => option.target.type === "origin").filter(matches);
   const versions = options.filter((option) => option.target.type === "version").filter(matches);
   const paywalls = options.filter((option) => option.target.type === "surface").filter(matches);
-  const grouped = [origins, versions, paywalls].filter((group) => group.length > 0).length > 1;
   const rows = (group: CompareOption[]) =>
     group.map((option) => (
-      <Row
+      <MenuItem
         key={option.key}
         label={option.label}
         hint={option.hint}
@@ -100,6 +70,12 @@ export const CompareMenu = ({
         onSelect={() => choose(option.target)}
       />
     ));
+  const groups = [
+    { label: "Rebuilt from", options: origins },
+    { label: "Versions", options: versions },
+    { label: "Paywalls", options: paywalls },
+  ].filter((group) => group.options.length > 0);
+  const grouped = groups.length > 1;
 
   return (
     <div className="relative flex" ref={menuRef}>
@@ -115,51 +91,56 @@ export const CompareMenu = ({
       </button>
 
       {open && (
-        <div className="bg-bar absolute bottom-full left-0 z-20 mb-[calc(0.5rem+2px)] flex w-72 flex-col overflow-hidden rounded border border-cream/20">
-          <div className="p-2">
+        <MenuPopup popupRef={popupRef} anchor={menuRef} side="top" align={align} className="w-72">
+          <label className="flex items-center gap-2.5 border-b border-border ps-3 pe-2.5">
+            <SearchIcon className="icon-tertiary" />
             <input
-              className="sw-input"
+              className="h-9 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-fg-muted"
               type="search"
               value={query}
               placeholder="Search versions and paywalls"
               aria-label="Search versions and paywalls"
               onChange={(event) => setQuery(event.target.value)}
             />
-          </div>
+          </label>
 
-          <div className="max-h-64 overflow-y-auto">
-            {origins.length + versions.length + paywalls.length === 0 ? (
-              <span className="block px-3 pt-2 pb-4 text-[0.8125rem] text-cream/45">
+          <div
+            className="flex max-h-64 scroll-fade flex-col gap-1.5 overflow-y-auto p-1"
+            data-menu-list=""
+          >
+            {groups.length === 0 ? (
+              <span className="block px-2.5 py-1 text-sm text-fg-tertiary">
                 {needle === ""
-                  ? "No pushed versions or other paywalls here."
-                  : `Nothing matches “${query.trim()}”.`}
+                  ? "No pushed versions or other paywalls"
+                  : `No versions or paywalls match “${query.trim()}”`}
               </span>
             ) : (
-              <>
-                {grouped && origins.length > 0 && <Heading>Rebuilt from</Heading>}
-                {rows(origins)}
-                {grouped && versions.length > 0 && <Heading>Versions</Heading>}
-                {rows(versions)}
-                {grouped && paywalls.length > 0 && <Heading>Paywalls</Heading>}
-                {rows(paywalls)}
-              </>
+              groups.map((group) => (
+                <div key={group.label} className="flex flex-col">
+                  {grouped && <MenuGroupLabel>{group.label}</MenuGroupLabel>}
+                  {rows(group.options)}
+                </div>
+              ))
             )}
           </div>
 
-          <div className="flex flex-col border-t border-cream/10">
+          <div className="flex flex-col border-t border-border p-1">
             {notice && (
-              <span className="block px-3 pt-2 text-xs text-cream/55" role="status">
-                {notice}
-              </span>
+              <>
+                <span className="block px-2.5 py-1.5 text-xs text-fg-secondary" role="status">
+                  {notice}
+                </span>
+                <MenuSeparator />
+              </>
             )}
-            <Row
+            <MenuItem
               label="Off"
               hint="A single preview"
               selected={active === undefined}
               onSelect={() => choose(undefined)}
             />
           </div>
-        </div>
+        </MenuPopup>
       )}
     </div>
   );

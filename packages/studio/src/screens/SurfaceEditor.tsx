@@ -16,13 +16,17 @@ import { DownloadScreenshot } from "../components/DownloadScreenshot";
 import { PreviewOnDevice } from "../components/PreviewOnDevice";
 import { Segmented, Select, Switch } from "../components/controls";
 import {
+  AlertTriangleIcon,
   ExternalIcon,
+  MinusIcon,
   MoonIcon,
+  PlusIcon,
   RotateDeviceIcon,
   RotateIcon,
   SlidersIcon,
   SunIcon,
 } from "../components/icons";
+import { Tooltip } from "../components/Tooltip";
 import { SidePanel } from "../components/panels/SidePanel";
 import { Toolbar, ToolbarDivider, ToolbarGroup } from "../components/chrome/Toolbar";
 import { TopBar } from "../components/chrome/TopBar";
@@ -65,6 +69,9 @@ import {
 import { timeAgo } from "../lib/time";
 import { type VariableOverrides } from "../lib/variables";
 
+const STEPPER =
+  "flex w-8 items-center justify-center outline-none transition-colors duration-hover hover:bg-accent focus-visible:bg-accent hover:[&>svg]:filter-none focus-visible:[&>svg]:filter-none";
+
 const clampSize = (value: number, fallback: number): number =>
   Number.isFinite(value) ? Math.min(3000, Math.max(200, Math.round(value))) : fallback;
 
@@ -90,7 +97,7 @@ const SizeInput = ({
 
   return (
     <input
-      className="sw-input w-16 text-center"
+      className="sw-input w-16 text-center tabular-nums"
       type="number"
       aria-label={label}
       value={draft}
@@ -145,7 +152,7 @@ const StagePane = ({
     <div className="flex flex-none flex-col gap-2">
       {label && (
         <span
-          className="origin-bottom-left text-xs whitespace-nowrap text-cream/55"
+          className="origin-bottom-left text-xs whitespace-nowrap text-fg-tertiary"
           style={{ transform: `scale(${1 / scale})` }}
         >
           {label}
@@ -366,7 +373,7 @@ export const SurfaceEditor = ({
       .filter((option) => option.target.surface !== surface),
   ];
   const compareNotice = status.unreachable
-    ? `Couldn't read the pushed versions — ${status.unreachable}`
+    ? `Couldn’t read the pushed versions — ${status.unreachable}`
     : undefined;
   const compared =
     compareWith?.type === "version"
@@ -391,7 +398,7 @@ export const SurfaceEditor = ({
             title: `${surface.id} original`,
             empty:
               surface.origin && isScreenOrigin(surface.origin)
-                ? "The original's screenshot is missing — capture it again with `superwall migrate --screen <path> --screenshot <file>`."
+                ? "The original’s screenshot is missing — capture it again with `superwall migrate --screen <path> --screenshot <file>`."
                 : "This paywall was not rebuilt from a dashboard paywall or a native screen.",
           }
         : {
@@ -454,31 +461,37 @@ export const SurfaceEditor = ({
         />
       )}
       <TopBar
-        title={`${surface.project ?? source.title} / ${surface.id}${
-          surface.label ? ` · ${surface.label}` : ""
+        title={`${surface.project ?? source.title} / ${surface.label ?? surface.id}${
+          surface.label ? ` · ${surface.id}` : ""
         }`}
         actions={
           <>
             {actions}
-            <button
-              type="button"
-              className="sw-btn sw-btn--icon"
-              aria-label="Reload preview"
-              onClick={() => setReloadKey((key) => key + 1)}
-            >
-              <RotateIcon />
-            </button>
-            {source.standaloneUrl && (
-              <button
-                type="button"
-                className="sw-btn sw-btn--icon"
-                aria-label="Open preview"
-                onClick={openPreview}
-              >
-                <ExternalIcon />
-              </button>
-            )}
-            <DownloadScreenshot source={source} surface={surface} />
+            <span className="flex items-center gap-0.5">
+              <Tooltip hint="Reload preview">
+                <button
+                  type="button"
+                  className="sw-btn sw-btn--sm sw-btn--icon sw-btn--ghost"
+                  aria-label="Reload preview"
+                  onClick={() => setReloadKey((key) => key + 1)}
+                >
+                  <RotateIcon />
+                </button>
+              </Tooltip>
+              {source.standaloneUrl && (
+                <Tooltip hint="Open preview">
+                  <button
+                    type="button"
+                    className="sw-btn sw-btn--sm sw-btn--icon sw-btn--ghost"
+                    aria-label="Open preview"
+                    onClick={openPreview}
+                  >
+                    <ExternalIcon />
+                  </button>
+                </Tooltip>
+              )}
+              <DownloadScreenshot source={source} surface={surface} />
+            </span>
             <PreviewOnDevice source={source} surface={surface} />
             {actionsEnabled && (
               <ActionMenu
@@ -500,9 +513,13 @@ export const SurfaceEditor = ({
       {unverified && (
         <div
           role="status"
-          className="relative z-10 flex-none border-b border-cream/10 bg-[color-mix(in_srgb,var(--color-red)_10%,var(--color-ink))] px-4 py-1.5 text-[0.8125rem] text-cream/75"
+          className="relative z-10 flex flex-none items-center gap-2 border-b border-border bg-warning/8 px-4 py-2 text-sm text-warning-foreground"
         >
-          Couldn't check this paywall's products — {unverified}
+          <AlertTriangleIcon />
+          <span className="min-w-0 truncate">
+            Couldn’t check this paywall’s products{" "}
+            <span className="text-warning-foreground/80">· {unverified}</span>
+          </span>
         </div>
       )}
 
@@ -581,51 +598,60 @@ export const SurfaceEditor = ({
             label="Theme"
             value={theme}
             options={[
-              { value: "light", label: <SunIcon /> },
-              { value: "dark", label: <MoonIcon /> },
+              { value: "light", label: <SunIcon />, name: "Light" },
+              { value: "dark", label: <MoonIcon />, name: "Dark" },
             ]}
             onChange={setTheme}
           />
-          <button
-            type="button"
-            className="sw-btn sw-btn--icon"
-            aria-label="Rotate device"
-            aria-pressed={landscape}
-            title={landscape ? "Back to portrait" : "Rotate to landscape"}
-            onClick={() => setLandscape((value) => !value)}
+          <Tooltip
+            side="top"
+            align="center"
+            hint={landscape ? "Back to portrait" : "Rotate to landscape"}
           >
-            <span
-              className={`flex transition-transform duration-200 ${landscape ? "-rotate-90" : ""}`}
+            <button
+              type="button"
+              className="sw-btn sw-btn--icon"
+              aria-label="Rotate device"
+              aria-pressed={landscape}
+              onClick={() => setLandscape((value) => !value)}
             >
-              <RotateDeviceIcon />
-            </span>
-          </button>
+              <RotateDeviceIcon
+                className={`transition-disclosure ${landscape ? "-rotate-90" : ""}`}
+              />
+            </button>
+          </Tooltip>
         </ToolbarGroup>
         <ToolbarDivider />
         <ToolbarGroup label="Zoom">
-          <div className="sw-stepper" role="group" aria-label="Zoom">
+          <div
+            className="flex h-8 flex-none overflow-hidden rounded-sm border border-border transition-colors duration-hover has-[:focus-visible]:border-primary"
+            role="group"
+            aria-label="Zoom"
+          >
             <button
               type="button"
+              className={STEPPER}
               aria-label="Zoom out"
               onClick={() => canvas.current?.zoomStep(-1)}
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 12h14" />
-              </svg>
+              <MinusIcon className="icon-tertiary" />
             </button>
             <button
               type="button"
-              className="min-w-12 px-2 font-mono text-xs tabular-nums"
+              className="min-w-14 border-x border-border px-2 text-sm tabular-nums outline-none transition-colors duration-hover hover:bg-accent focus-visible:bg-accent"
               aria-label="Fit to view"
               aria-pressed={zoom.fitted}
               onClick={() => canvas.current?.fit()}
             >
               {percent(zoom.scale)}
             </button>
-            <button type="button" aria-label="Zoom in" onClick={() => canvas.current?.zoomStep(1)}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
+            <button
+              type="button"
+              className={STEPPER}
+              aria-label="Zoom in"
+              onClick={() => canvas.current?.zoomStep(1)}
+            >
+              <PlusIcon className="icon-tertiary" />
             </button>
           </div>
         </ToolbarGroup>
@@ -646,7 +672,7 @@ export const SurfaceEditor = ({
                 value={frame.width}
                 onCommit={(width) => setSize((current) => ({ ...current, width }))}
               />
-              <span className="text-cream/55">×</span>
+              <span className="text-fg-tertiary">×</span>
               <SizeInput
                 label="Preview height"
                 value={frame.height}
@@ -685,7 +711,7 @@ export const SurfaceEditor = ({
         >
           <SlidersIcon />
           Variables
-          {overrideCount > 0 && <span className="text-accent">{overrideCount}</span>}
+          {overrideCount > 0 && <span className="text-primary tabular-nums">{overrideCount}</span>}
         </button>
       </Toolbar>
     </>

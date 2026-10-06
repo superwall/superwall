@@ -1,85 +1,104 @@
 import * as React from "react";
 import { isLoading, subscribeLoading } from "../loading";
 
-const SPINNER = `<svg width="32" height="32" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-<svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-	<!-- Top -->
-	<path fill-rule="evenodd" clip-rule="evenodd" d="M22 1.375C20.4812 1.375 19.25 2.60622 19.25 4.125V12.375C19.25 13.8938 20.4812 15.125 22 15.125C23.5188 15.125 24.75 13.8938 24.75 12.375V4.125C24.75 2.60622 23.5188 1.375 22 1.375Z" fill="white">
-		<animate attributeName="fill-opacity" values="1;0.9;0.8;0.7;0.6;0.5;0.35;0.2;1" dur="0.8s" repeatCount="indefinite" begin="0s"/>
-	</path>
-	<!-- Top-right -->
-	<path fill-rule="evenodd" clip-rule="evenodd" d="M36.5841 7.41593C35.5101 6.34198 33.7689 6.34198 32.695 7.41593L26.8614 13.2496C25.7874 14.3235 25.7874 16.0647 26.8614 17.1386C27.9353 18.2126 29.6765 18.2126 30.7504 17.1386L36.5841 11.305C37.658 10.2311 37.658 8.48987 36.5841 7.41593Z" fill="white">
-		<animate attributeName="fill-opacity" values="0.2;1;0.9;0.8;0.7;0.6;0.5;0.35;0.2" dur="0.8s" repeatCount="indefinite" begin="0s"/>
-	</path>
-	<!-- Right -->
-	<path fill-rule="evenodd" clip-rule="evenodd" d="M39.875 19.25C41.3938 19.25 42.625 20.4812 42.625 22C42.625 23.5188 41.3938 24.75 39.875 24.75H31.625C30.1062 24.75 28.875 23.5188 28.875 22C28.875 20.4812 30.1062 19.25 31.625 19.25H39.875Z" fill="white">
-		<animate attributeName="fill-opacity" values="0.35;0.2;1;0.9;0.8;0.7;0.6;0.5;0.35" dur="0.8s" repeatCount="indefinite" begin="0s"/>
-	</path>
-	<!-- Bottom-right -->
-	<path fill-rule="evenodd" clip-rule="evenodd" d="M36.5841 36.5841C37.658 35.5101 37.658 33.7689 36.5841 32.695L30.7504 26.8614C29.6765 25.7874 27.9353 25.7874 26.8614 26.8614C25.7874 27.9353 25.7874 29.6765 26.8614 30.7504L32.695 36.5841C33.7689 37.658 35.5101 37.658 36.5841 36.5841Z" fill="white">
-		<animate attributeName="fill-opacity" values="0.5;0.35;0.2;1;0.9;0.8;0.7;0.6;0.5" dur="0.8s" repeatCount="indefinite" begin="0s"/>
-	</path>
-	<!-- Bottom -->
-	<path fill-rule="evenodd" clip-rule="evenodd" d="M19.25 31.625C19.25 30.1062 20.4812 28.875 22 28.875C23.5188 28.875 24.75 30.1062 24.75 31.625V39.875C24.75 41.3938 23.5188 42.625 22 42.625C20.4812 42.625 19.25 41.3938 19.25 39.875V31.625Z" fill="white">
-		<animate attributeName="fill-opacity" values="0.6;0.5;0.35;0.2;1;0.9;0.8;0.7;0.6" dur="0.8s" repeatCount="indefinite" begin="0s"/>
-	</path>
-	<!-- Bottom-left -->
-	<path fill-rule="evenodd" clip-rule="evenodd" d="M17.1387 26.8614C16.0647 25.7874 14.3235 25.7874 13.2496 26.8614L7.41594 32.695C6.34199 33.769 6.34199 35.5102 7.41594 36.5841C8.48988 37.658 10.2311 37.658 11.305 36.5841L17.1387 30.7505C18.2126 29.6765 18.2126 27.9353 17.1387 26.8614Z" fill="white">
-		<animate attributeName="fill-opacity" values="0.7;0.6;0.5;0.35;0.2;1;0.9;0.8;0.7" dur="0.8s" repeatCount="indefinite" begin="0s"/>
-	</path>
-	<!-- Left -->
-	<path fill-rule="evenodd" clip-rule="evenodd" d="M12.375 19.25C13.8938 19.25 15.125 20.4812 15.125 22C15.125 23.5188 13.8938 24.75 12.375 24.75H4.125C2.60622 24.75 1.375 23.5188 1.375 22C1.375 20.4812 2.60622 19.25 4.125 19.25H12.375Z" fill="white">
-		<animate attributeName="fill-opacity" values="0.8;0.7;0.6;0.5;0.35;0.2;1;0.9;0.8" dur="0.8s" repeatCount="indefinite" begin="0s"/>
-	</path>
-	<!-- Top-left -->
-	<path fill-rule="evenodd" clip-rule="evenodd" d="M17.1387 17.1386C18.2126 16.0647 18.2126 14.3235 17.1387 13.2495L11.305 7.41589C10.2311 6.34195 8.48988 6.34195 7.41594 7.41589C6.342 8.48984 6.342 10.231 7.41594 11.305L13.2496 17.1386C14.3235 18.2126 16.0647 18.2126 17.1387 17.1386Z" fill="white">
-		<animate attributeName="fill-opacity" values="0.9;0.8;0.7;0.6;0.5;0.35;0.2;1;0.9" dur="0.8s" repeatCount="indefinite" begin="0s"/>
-	</path>
-</svg>
-</svg>`;
+const SPINNER = `<svg class="sw-loader-spinner" width="37" height="37" viewBox="0 0 37 37" aria-hidden="true"><rect class="sw-loader-spoke" x="15.975" y="0.99" width="5.05" height="12.02" rx="2.525" fill="white" transform="rotate(0 18.5 18.5)" style="animation-delay:-0.800s"/><rect class="sw-loader-spoke" x="15.975" y="0.99" width="5.05" height="12.02" rx="2.525" fill="white" transform="rotate(45 18.5 18.5)" style="animation-delay:-0.700s"/><rect class="sw-loader-spoke" x="15.975" y="0.99" width="5.05" height="12.02" rx="2.525" fill="white" transform="rotate(90 18.5 18.5)" style="animation-delay:-0.600s"/><rect class="sw-loader-spoke" x="15.975" y="0.99" width="5.05" height="12.02" rx="2.525" fill="white" transform="rotate(135 18.5 18.5)" style="animation-delay:-0.400s"/><rect class="sw-loader-spoke" x="15.975" y="0.99" width="5.05" height="12.02" rx="2.525" fill="white" transform="rotate(180 18.5 18.5)" style="animation-delay:-0.400s"/><rect class="sw-loader-spoke" x="15.975" y="0.99" width="5.05" height="12.02" rx="2.525" fill="white" transform="rotate(225 18.5 18.5)" style="animation-delay:-0.300s"/><rect class="sw-loader-spoke" x="15.975" y="0.99" width="5.05" height="12.02" rx="2.525" fill="white" transform="rotate(270 18.5 18.5)" style="animation-delay:-0.200s"/><rect class="sw-loader-spoke" x="15.975" y="0.99" width="5.05" height="12.02" rx="2.525" fill="white" transform="rotate(315 18.5 18.5)" style="animation-delay:-0.100s"/></svg>`;
+
+const STYLE = `
+.sw-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: none;
+  visibility: hidden;
+  transition: visibility 0s linear 300ms;
+}
+.sw-loader[data-state="active"] {
+  pointer-events: all;
+  visibility: visible;
+  transition: visibility 0s;
+}
+.sw-loader-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2575);
+  opacity: 0;
+  transition: opacity 350ms cubic-bezier(0.42, 0, 0.58, 1);
+}
+.sw-loader[data-state="active"] .sw-loader-dim {
+  opacity: 1;
+}
+.sw-loader-hud {
+  position: relative;
+  display: flex;
+  padding: 20px;
+  width: 77px;
+  height: 77px;
+  box-sizing: border-box;
+  clip-path: path("M 38.5 0 c 17.552 0 26.328 0 32.076 5.314 a 20 20 0 0 1 1.11 1.11 c 5.314 5.748 5.314 14.524 5.314 32.076 L 77 38.5 c 0 17.552 0 26.328 -5.314 32.076 a 20 20 0 0 1 -1.11 1.11 c -5.748 5.314 -14.524 5.314 -32.076 5.314 L 38.5 77 c -17.552 0 -26.328 0 -32.076 -5.314 a 20 20 0 0 1 -1.11 -1.11 c -5.314 -5.748 -5.314 -14.524 -5.314 -32.076 L 0 38.5 c 0 -17.552 0 -26.328 5.314 -32.076 a 20 20 0 0 1 1.11 -1.11 c 5.748 -5.314 14.524 -5.314 32.076 -5.314 Z");
+  background-color: rgba(0, 0, 0, 0.2775);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  opacity: 0;
+  transform: scale(0.05);
+  transition: opacity 350ms cubic-bezier(0.35, 0.35, 0.45, 1), transform 700ms cubic-bezier(0.25, 1.05, 0.4, 1);
+  transition: opacity 350ms linear(0.0000 0%, 0.0096 5%, 0.0391 10%, 0.0884 15%, 0.1567 20%, 0.2416 25%, 0.3397 30%, 0.4457 35%, 0.5536 40%, 0.6570 45%, 0.7500 50%, 0.8283 55%, 0.8899 60%, 0.9347 65%, 0.9649 70%, 0.9833 75%, 0.9933 80%, 0.9980 85%, 0.9996 90%, 1.0000 95%, 1.0000 100%), transform 700ms linear(0.0000 0%, 0.0519 2.857%, 0.1758 5.714%, 0.3328 8.571%, 0.4954 11.43%, 0.6459 14.29%, 0.7743 17.14%, 0.8764 20%, 0.9523 22.86%, 1.0045 25.71%, 1.0367 28.57%, 1.0533 31.43%, 1.0586 34.29%, 1.0563 37.14%, 1.0494 40%, 1.0403 42.86%, 1.0308 45.71%, 1.0218 48.57%, 1.0141 51.43%, 1.0079 54.29%, 1.0033 57.14%, 1.0000 60%, 0.9980 62.86%, 0.9969 65.71%, 0.9966 68.57%, 0.9967 71.43%, 0.9970 74.29%, 0.9976 77.14%, 0.9981 80%, 0.9987 82.86%, 0.9991 85.71%, 0.9995 88.57%, 0.9998 91.43%, 1.0000 94.29%, 1.0001 97.14%, 1 100%);
+  will-change: transform, opacity;
+}
+.sw-loader[data-state="active"] .sw-loader-hud {
+  transition: opacity 350ms cubic-bezier(0.55, 0, 0.65, 1), transform 700ms cubic-bezier(0.25, 1.05, 0.4, 1);
+  transition: opacity 350ms linear(0.0000 0%, 0.0000 5%, 0.0004 10%, 0.0020 15%, 0.0067 20%, 0.0167 25%, 0.0351 30%, 0.0653 35%, 0.1101 40%, 0.1717 45%, 0.2500 50%, 0.3430 55%, 0.4464 60%, 0.5543 65%, 0.6603 70%, 0.7584 75%, 0.8433 80%, 0.9116 85%, 0.9609 90%, 0.9904 95%, 1.0000 100%), transform 700ms linear(0.0000 0%, 0.0519 2.857%, 0.1758 5.714%, 0.3328 8.571%, 0.4954 11.43%, 0.6459 14.29%, 0.7743 17.14%, 0.8764 20%, 0.9523 22.86%, 1.0045 25.71%, 1.0367 28.57%, 1.0533 31.43%, 1.0586 34.29%, 1.0563 37.14%, 1.0494 40%, 1.0403 42.86%, 1.0308 45.71%, 1.0218 48.57%, 1.0141 51.43%, 1.0079 54.29%, 1.0033 57.14%, 1.0000 60%, 0.9980 62.86%, 0.9969 65.71%, 0.9966 68.57%, 0.9967 71.43%, 0.9970 74.29%, 0.9976 77.14%, 0.9981 80%, 0.9987 82.86%, 0.9991 85.71%, 0.9995 88.57%, 0.9998 91.43%, 1.0000 94.29%, 1.0001 97.14%, 1 100%);
+  opacity: 1;
+  transform: none;
+}
+.sw-loader .sw-loader-spinner {
+  display: block;
+  transform: translate(-0.667px, -0.667px);
+}
+.sw-loader .sw-loader-spoke {
+  opacity: 0.26;
+  animation: sw-loader-spoke 0.8s linear infinite;
+  animation-play-state: paused;
+}
+.sw-loader[data-state="active"] .sw-loader-spoke {
+  animation-play-state: running;
+}
+@keyframes sw-loader-spoke {
+  0% { opacity: 0.855; }
+  51.25%, 100% { opacity: 0.26; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sw-loader-hud {
+    transform: none;
+  }
+}
+`;
 
 /**
- * The v4 checkout loader, React-owned: same dimmed backdrop, same blurred
- * pill, same animated Superwall spinner — rendered by `SuperwallCheckout`
- * instead of injected into the DOM, and driven by the `loading` primitive.
+ * The checkout loader, matching the iOS SDK's purchase overlay frame for
+ * frame: a 25% dim, and a dark blurred box with the large activity indicator
+ * that springs in from a dot while turning half a turn, and springs back out.
  */
 export const LoadingOverlay = () => {
   const loading = React.useSyncExternalStore(subscribeLoading, isLoading, () => false);
 
   return (
     <div
+      className="sw-loader"
+      data-state={loading ? "active" : "inactive"}
+      role="progressbar"
       aria-hidden={!loading}
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        zIndex: 999999,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        cursor: "default",
-        userSelect: "none",
-        opacity: loading ? 1 : 0,
-        visibility: loading ? "visible" : "hidden",
-        pointerEvents: loading ? "all" : "none",
-        transition: loading
-          ? "opacity 0.2s ease, visibility 0s"
-          : "opacity 0.2s ease, visibility 0s linear 0.2s",
-      }}
+      aria-busy={loading}
     >
-      <div
-        style={{
-          background: "rgba(0, 0, 0, 0.3)",
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(8px)",
-          padding: 20,
-          borderRadius: 20,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-        dangerouslySetInnerHTML={{ __html: SPINNER }}
-      />
+      <style>{STYLE}</style>
+      <div className="sw-loader-dim" />
+      <div className="sw-loader-hud" dangerouslySetInnerHTML={{ __html: SPINNER }} />
     </div>
   );
 };

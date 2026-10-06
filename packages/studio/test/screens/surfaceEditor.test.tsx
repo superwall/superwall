@@ -84,7 +84,7 @@ describe("SurfaceEditor hosting a published paywall", () => {
     expect(url.searchParams.get("transport")).toBe("editor");
     expect(url.searchParams.has("sw_preview")).toBe(false);
     expect(url.searchParams.has("theme")).toBe(false);
-    expect(screen.getByText("Plus Upgrade / plus-upgrade · v12 · live")).toBeTruthy();
+    expect(screen.getByText("Plus Upgrade / v12 · live · plus-upgrade")).toBeTruthy();
   });
 
   it("answers the paywall's ping with the version's products and identity", () => {
@@ -517,7 +517,7 @@ describe("SurfaceEditor's smaller states", () => {
 
     expect((screen.getByLabelText("Device") as HTMLSelectElement).value).toBe("iphone-17");
     expect(screen.queryByTestId("device-chrome")).toBeNull();
-    expect(parseFloat(screen.getByTestId("device-frame").style.borderRadius)).toBe(0);
+    expect(parseFloat(screen.getByTestId("device-frame").style.borderRadius)).toBe(3);
     expect(preview().getAttribute("width")).toBe("402");
     expect(preview().getAttribute("height")).toBe(String(874 - 64 - 84));
     const host = hostOf(preview());
@@ -589,7 +589,7 @@ describe("SurfaceEditor's smaller states", () => {
     fireEvent.click(screen.getByRole("button", { name: /compare/i }));
 
     expect(screen.getByRole("status").textContent).toContain(
-      "Couldn't read the pushed versions — not logged in",
+      "Couldn’t read the pushed versions — not logged in",
     );
     expect(screen.queryByText(/live/i)).toBeNull();
   });

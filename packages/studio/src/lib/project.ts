@@ -42,6 +42,7 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
     kind,
     id: value.id,
     ...(typeof value.project === "string" ? { project: value.project } : {}),
+    ...(typeof value.label === "string" && value.label !== "" ? { label: value.label } : {}),
     routes: isStringArray(value.routes) ? value.routes : [],
     products: isStringRecord(value.products) ? value.products : {},
     locales: isStringArray(value.locales) ? value.locales : [],

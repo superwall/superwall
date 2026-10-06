@@ -1,9 +1,12 @@
 import * as React from "react";
 import { silentDelegate, type HostState } from "@superwall/host";
+import { Badge } from "./controls";
 import { HostedIframe } from "./preview/HostedIframe";
 import { surfacePath } from "../lib/preview";
 import { timeAgo } from "../lib/time";
 import type { StudioStatus, StudioSurface } from "../lib/surfaces";
+
+const PLATFORM_LABEL: Record<string, string> = { ios: "iOS", android: "Android", web: "Web" };
 
 const PREVIEW_WIDTH = 390;
 const PREVIEW_HEIGHT = 844;
@@ -45,9 +48,17 @@ export const SurfaceCard = ({
   const scale = width > 0 ? width / PREVIEW_WIDTH : 0;
   const delegate = React.useMemo(silentDelegate, []);
 
+  const meta = [
+    surface.label === undefined
+      ? surface.project
+      : `${surface.project ? `${surface.project}/` : ""}${surface.id}`,
+    ...(surface.platforms ?? []).map((platform) => PLATFORM_LABEL[platform] ?? platform),
+    status && (status.updatedAt ? `Edited ${timeAgo(status.updatedAt)}` : "Not published"),
+  ].filter((part): part is string => Boolean(part));
+
   return (
     <a
-      className="group block"
+      className="group relative flex min-w-0 flex-col gap-3 border-e border-b border-border p-4 outline-none transition-colors duration-hover before:pointer-events-none before:absolute before:inset-0 before:border before:border-transparent before:transition-colors before:duration-hover hover:bg-foreground/3 focus-visible:before:border-primary"
       href={href ?? surfacePath(surface)}
       onClick={(event) => {
         if (event.metaKey || event.ctrlKey) return;
@@ -56,7 +67,7 @@ export const SurfaceCard = ({
       }}
     >
       <div
-        className="bg-panel relative aspect-[390/844] overflow-hidden rounded border border-cream/20 transition-colors group-hover:border-cream/35"
+        className="relative aspect-[390/844] overflow-hidden rounded-sm border border-border bg-card"
         ref={previewRef}
       >
         {scale > 0 && (
@@ -74,24 +85,29 @@ export const SurfaceCard = ({
           />
         )}
       </div>
-      <div className="flex items-center justify-between gap-2 pt-2.5">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium">
-            {surface.project && <span className="text-cream/45">{surface.project}/</span>}
-            {surface.id}
-            {surface.platforms && surface.platforms.length > 0 && (
-              <span className="text-cream/45"> · {surface.platforms.join(" · ")}</span>
-            )}
+      <div className="flex min-w-0 flex-col">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {surface.label ?? surface.id}
           </span>
-          {status && (
-            <span className="text-xs text-cream/55">
-              {status.updatedAt ? `Edited ${timeAgo(status.updatedAt)}` : "Not published"}
-            </span>
+          {status?.paywallId && (
+            <Badge variant={status.active ? "success" : "outline"}>
+              {status.active ? "Active" : "Inactive"}
+            </Badge>
           )}
-        </div>
-        {status?.paywallId && (
-          <span className={`text-xs ${status.active ? "text-accent" : "text-cream/55"}`}>
-            {status.active ? "Active" : "Inactive"}
+        </span>
+        {meta.length > 0 && (
+          <span className="truncate text-xs/4 text-fg-tertiary">
+            {meta.map((part, index) => (
+              <React.Fragment key={index}>
+                {index > 0 && (
+                  <span className="text-fg-muted" aria-hidden="true">
+                    {" · "}
+                  </span>
+                )}
+                {part}
+              </React.Fragment>
+            ))}
           </span>
         )}
       </div>

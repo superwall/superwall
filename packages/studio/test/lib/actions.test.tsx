@@ -163,7 +163,7 @@ describe("studio actions", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Compare/ })).toBeDefined());
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-    expect(screen.getByText("No pushed versions or other paywalls here.")).toBeDefined();
+    expect(screen.getByText("No pushed versions or other paywalls")).toBeDefined();
     expect(screen.queryByText(/live/i)).toBeNull();
     expect(screen.getByText("Off")).toBeDefined();
   });

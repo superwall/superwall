@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreviewOnDevice } from "../../src/components/PreviewOnDevice";
 import { StudioHostProvider, type StudioMode } from "../../src/lib/studio-host";
@@ -53,9 +53,9 @@ describe("previewing a surface on a device", () => {
     mount("hosted", sourceWith({ previewLink }));
     openDialog();
 
-    await waitFor(() =>
-      expect(screen.getByText("https://dash.example/preview?sat=token")).toBeTruthy(),
-    );
+    const open = await screen.findByRole("link", { name: "Open preview" });
+    expect(open.getAttribute("href")).toBe("https://dash.example/preview?sat=token");
+    expect(screen.queryByText("https://dash.example/preview?sat=token")).toBeNull();
     expect(previewLink).toHaveBeenCalledWith(surface);
   });
 
@@ -63,14 +63,14 @@ describe("previewing a surface on a device", () => {
     mount("hosted", sourceWith());
     openDialog();
 
-    expect(await screen.findByText(/cannot open paywalls on a device/)).toBeTruthy();
+    expect(await screen.findByText(/can’t open paywalls on a device/)).toBeTruthy();
   });
 
   it("asks for the URL scheme when the project has not declared one", async () => {
     mount("local", sourceWith());
     openDialog();
 
-    expect(await screen.findByText(/Set your app's URL scheme/)).toBeTruthy();
+    expect(await screen.findByText(/Set your app’s URL scheme/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Set URL scheme" })).toBeTruthy();
   });
 
@@ -85,5 +85,26 @@ describe("previewing a surface on a device", () => {
     expect(link.textContent).toContain("superwall_dev=");
     expect(window.localStorage.getItem("superwall-device-scheme")).toBe("typed");
     prompt.mockRestore();
+  });
+
+  it("closes from Done, from Escape, and from a click on the backdrop", () => {
+    mount("local", sourceWith({ scheme: "myapp" }));
+    const dialog = () => screen.queryByRole("dialog", { name: "Preview on a device" });
+
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(dialog()).toBeNull();
+
+    openDialog();
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(dialog()).not.toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(dialog()).toBeNull();
+
+    openDialog();
+    fireEvent.mouseDown(dialog()!);
+    expect(dialog()).not.toBeNull();
+    fireEvent.mouseDown(dialog()!.parentElement!);
+    expect(dialog()).toBeNull();
   });
 });

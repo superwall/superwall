@@ -36,22 +36,24 @@ export const Toolbar = ({ children }: React.PropsWithChildren) => {
   }, [toolbar, children]);
 
   return (
-    <div
-      className="bg-bar z-10 flex min-h-14 flex-none flex-wrap items-center justify-center gap-3 border-t border-cream/10 px-4 py-2.5"
-      ref={setToolbar}
-    >
-      {children}
+    <div className="z-10 flex-none border-t border-border bg-background">
+      <div
+        className="flex min-h-14 items-center justify-center-safe gap-4 px-4 py-3 max-sm:scroll-fade-x max-sm:overflow-x-auto sm:flex-wrap [&>*]:flex-none"
+        ref={setToolbar}
+      >
+        {children}
+      </div>
     </div>
   );
 };
 
 export const ToolbarGroup = ({ label, children }: React.PropsWithChildren<{ label: string }>) => (
-  <div className="flex items-center gap-2.5">
-    <span className="sw-tool-label">{label}</span>
+  <div className="flex items-center gap-2">
+    <span className="text-xs font-medium whitespace-nowrap text-fg-tertiary">{label}</span>
     {children}
   </div>
 );
 
 export const ToolbarDivider = () => (
-  <span className="h-6 w-px bg-cream/10 data-[orphan]:invisible" data-toolbar-divider="" />
+  <span className="h-4 w-px bg-border data-[orphan]:invisible" data-toolbar-divider="" />
 );

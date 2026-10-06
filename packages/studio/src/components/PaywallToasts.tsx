@@ -7,28 +7,30 @@ import {
   BoltIcon,
   CartIcon,
   CheckCircleIcon,
-  CloseIcon,
   ExternalIcon,
   InfoCircleIcon,
   RotateIcon,
   StarIcon,
   UserIcon,
+  XIcon,
+  type IconComponent,
 } from "./icons";
+import { InlineCode } from "./InlineCode";
 import { noticeFor, type EventNotice, type PaywallMessageName } from "../lib/notices";
 
 const TINT: Record<EventNotice["tone"], string> = {
-  info: "text-cream/45",
-  success: "text-accent",
-  warning: "text-red",
+  info: "text-info",
+  success: "text-success",
+  warning: "text-warning",
 };
 
-const ICON: Partial<Record<PaywallMessageName, () => React.ReactElement>> = {
+const ICON: Partial<Record<PaywallMessageName, IconComponent>> = {
   purchase: CartIcon,
   transaction_complete: CheckCircleIcon,
   freeTrial_start: CheckCircleIcon,
   transaction_abandon: AlertTriangleIcon,
   transaction_fail: AlertTriangleIcon,
-  close: CloseIcon,
+  close: XIcon,
   restore: RotateIcon,
   restore_complete: CheckCircleIcon,
   restore_fail: AlertTriangleIcon,
@@ -46,16 +48,32 @@ const ICON: Partial<Record<PaywallMessageName, () => React.ReactElement>> = {
   user_attribute_updated: UserIcon,
 };
 
-const Pill = ({ children }: React.PropsWithChildren) => (
-  <span className="bg-accent/15 text-accent px-1.5 py-px font-mono text-xs break-all">
-    {children}
-  </span>
+export const ToastCard = ({
+  icon: Icon,
+  tone,
+  children,
+  description,
+  actions,
+}: React.PropsWithChildren<{
+  icon: IconComponent;
+  tone: EventNotice["tone"];
+  description?: React.ReactNode;
+  actions?: React.ReactNode;
+}>) => (
+  <div className="w-90 max-w-[calc(100vw-2rem)] rounded-sm border border-border bg-popover py-3 ps-[calc(--spacing(3)-1px)] pe-3 font-sans text-sm text-foreground">
+    <div className="grid grid-cols-[0.875rem_1fr] items-start gap-x-2">
+      <span className={`flex h-5 items-center justify-center ${TINT[tone]}`}>
+        <Icon />
+      </span>
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="font-medium break-words">{children}</span>
+        {description && <span className="break-words text-fg-secondary">{description}</span>}
+      </span>
+      {actions && <div className="col-start-2 mt-2 flex justify-end gap-2">{actions}</div>}
+    </div>
+  </div>
 );
 
-/**
- * The icon sits in a box the height of one line of title text, so it centres on
- * the first line whatever the message wraps to.
- */
 const Toast = ({
   action,
   tone,
@@ -65,30 +83,19 @@ const Toast = ({
   action: PaywallMessageName;
   tone: EventNotice["tone"];
   actions?: React.ReactNode;
-}>) => {
-  const Icon = ICON[action] ?? InfoCircleIcon;
-  return (
-    <div className="bg-panel font-sans w-[344px] max-w-[calc(100vw-32px)] rounded border border-cream/15 p-3">
-      <div className="grid grid-cols-[14px_1fr] items-start gap-x-2.5">
-        <span className={`flex h-5 items-center justify-center ${TINT[tone]}`}>
-          <Icon />
-        </span>
-        <span className="min-w-0 text-[0.8125rem] leading-5 font-medium break-words text-cream">
-          {children}
-        </span>
-        {actions && <div className="col-start-2 mt-2.5 flex justify-end gap-2">{actions}</div>}
-      </div>
-    </div>
-  );
-};
+}>) => (
+  <ToastCard icon={ICON[action] ?? InfoCircleIcon} tone={tone} actions={actions}>
+    {children}
+  </ToastCard>
+);
 
 const Notice = ({ notice }: { notice: EventNotice }) => (
   <Toast action={notice.action} tone={notice.tone}>
-    Tap triggered a <Pill>{notice.action}</Pill>
+    Tap triggered a <InlineCode>{notice.action}</InlineCode>
     {notice.subject ? (
       <>
         {" for "}
-        <Pill>{notice.subject}</Pill>
+        <InlineCode>{notice.subject}</InlineCode>
       </>
     ) : (
       " action"
@@ -108,7 +115,7 @@ type Choice<T> = {
 
 const Outcome = <T,>({ choice, subject }: { choice: Choice<T>; subject: string }) => (
   <Toast action={choice.action} tone={choice.tone}>
-    <Pill>{subject}</Pill> {choice.done}
+    <InlineCode>{subject}</InlineCode> {choice.done}
   </Toast>
 );
 
@@ -132,14 +139,14 @@ const Ask = <T,>({
       <button
         key={choice.label}
         type="button"
-        className={choice.primary ? "sw-btn sw-btn--primary" : "sw-btn"}
+        className={choice.primary ? "sw-btn sw-btn--xs sw-btn--primary" : "sw-btn sw-btn--xs"}
         onClick={() => onAnswer(choice)}
       >
         {choice.label}
       </button>
     ))}
   >
-    Tap triggered a <Pill>{verb}</Pill> for <Pill>{subject}</Pill>.
+    Tap triggered a <InlineCode>{verb}</InlineCode> for <InlineCode>{subject}</InlineCode>.
   </Toast>
 );
 
@@ -277,8 +284,8 @@ export const PaywallToasts = ({
     <Toaster
       position="top-center"
       swipeDirections={["top"]}
-      offset={raised ? 84 : 52}
-      gap={8}
+      offset={raised ? 101 : 64}
+      gap={12}
       visibleToasts={3}
       style={{ zIndex: 5 }}
       toastOptions={{ unstyled: true, classNames: { toast: "w-full" } }}

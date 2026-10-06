@@ -1,5 +1,9 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
+import { StudioShell } from "./components/chrome/StudioShell";
+import { EmptyState } from "./components/EmptyState";
+import { AlertTriangleIcon } from "./components/icons";
+import { InlineCode } from "./components/InlineCode";
 import { buildPreviewPath, surfacePath } from "./lib/preview";
 import { parseProjectPayload } from "./lib/project";
 import { StudioApp } from "./StudioApp";
@@ -21,16 +25,22 @@ const loadSource = async (): Promise<StudioSource> => {
 };
 
 const Failure = ({ error }: { error: unknown }) => (
-  <div className="bg-ink text-cream fixed inset-0 flex font-sans antialiased">
-    <div className="m-auto flex flex-col items-center gap-3 text-center text-sm text-cream/55">
-      <span className="sw-chip font-mono text-[0.6875rem]">studio</span>
-      <p className="m-0">{String(error)}</p>
-      <p className="m-0 text-cream/55">
-        Is <code className="font-mono text-[0.8125rem] text-cream">superwall dev</code> running in a
-        project directory?
-      </p>
+  <StudioShell>
+    <div className="m-auto">
+      <EmptyState
+        size="lg"
+        tone="destructive"
+        icon={<AlertTriangleIcon />}
+        title="Couldn’t load the studio"
+        description={
+          <>
+            {String(error)}. Is <InlineCode>superwall dev</InlineCode> running in a project
+            directory?
+          </>
+        }
+      />
     </div>
-  </div>
+  </StudioShell>
 );
 
 const root = createRoot(document.getElementById("root")!);

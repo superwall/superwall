@@ -85,7 +85,7 @@ describe("downloading a paywall's screenshot", () => {
     fireEvent.click(button());
     await waitFor(() => expect(button().getAttribute("aria-busy")).toBe("true"));
     expect(blocked()).toBe(true);
-    expect(button().querySelector(".animate-spin")).not.toBeNull();
+    expect(button().querySelector(".sw-spinner")).not.toBeNull();
     fireEvent.mouseEnter(button().parentElement!);
     expect(screen.queryByRole("tooltip")).toBeNull();
 
@@ -95,7 +95,7 @@ describe("downloading a paywall's screenshot", () => {
     await waitFor(() => expect(clicked).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(blocked()).toBe(false));
     expect(button().getAttribute("aria-busy")).toBeNull();
-    expect(button().querySelector(".animate-spin")).toBeNull();
+    expect(button().querySelector(".sw-spinner")).toBeNull();
   });
 
   it("says so and re-enables itself when the dev server cannot hand the file over", async () => {

@@ -78,6 +78,39 @@ export const registerPaywallCommands = <T>(cli: Argv<T>): Argv<T> =>
     },
   )
   .command(
+    "build [dir]",
+    "Build your paywalls into the snapshot documents a push would version, without pushing",
+    (y) =>
+      y
+        .positional("dir", { type: "string", describe: "Project directory (default: cwd)" })
+        .options({
+          id: {
+            type: "array",
+            string: true,
+            describe: "Limit to these paywalls or funnels by id (repeatable, or comma-separated)",
+          },
+          platform: {
+            type: "array",
+            string: true,
+            describe:
+              "Build for these platforms (repeatable, or comma-separated) - ios, android, web. Default: one platform-neutral document",
+          },
+          out: {
+            type: "string",
+            describe: "Directory to write into (default: superwall/.superwall/build)",
+          },
+          json: {
+            type: "boolean",
+            describe: "Print the built files as JSON",
+          },
+        })
+        .example("$0 build --id plus-upgrade --platform ios", "Build one paywall for iOS")
+        .example("$0 build --json", "Build everything and list the files as JSON"),
+    (argv) => {
+      return import("@/commands/paywalls/build").then((m) => m.runBuild(argv));
+    },
+  )
+  .command(
     "push [dir]",
     "Build and push your paywalls as immutable versions (production untouched)",
     (y) =>
