@@ -6,6 +6,7 @@ export default {
     ctaBare: "Subscribe",
     restore: "Restore purchases",
     close: "Close",
+    failed: "The purchase didn't go through. Try again.",
   },
   log: {
     empty: "Nothing yet.",
@@ -14,7 +15,7 @@ export default {
     trialStarted: "Trial started.",
     resolved: "What the call resolved with.",
     restored: "Restored.",
-    nothingToRestore: "Nothing to restore.",
+    nothingToRestore: "Nothing to restore, or the store didn't answer.",
   },
   note: {
     and: " and ",

@@ -19,13 +19,14 @@
 import { flushSync } from "react-dom";
 import type { Handoff } from "../flow";
 import { decodedCopy, imageSize, isImageReady, releaseDecoded } from "./imageReady";
-import { colorFace, fillFace, glideAt, lerp, morph, MORPH_STEPS, photoFace, roundness } from "./morphFrame";
+import { colorFace, fillFace, glideAt, lerp, morph, MORPH_STEPS, motionBlur, photoFace, roundness } from "./morphFrame";
 import type { Box, Face } from "./morphFrame";
 
 export type HandoffName = Handoff | "plain";
 export type HandoffDirection = "next" | "back";
 
 const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
+const EASE_IN_OUT = "cubic-bezier(0.77, 0, 0.175, 1)";
 
 let lastInput: "pointer" | "keyboard" = "pointer";
 let listening = false;
@@ -48,6 +49,7 @@ type Point = { x: number; y: number };
 
 const q = (root: ParentNode | null, selector: string) => root?.querySelector<HTMLElement>(selector) ?? null;
 const qa = (root: ParentNode | null, selector: string) => Array.from(root?.querySelectorAll<HTMLElement>(selector) ?? []);
+const centre = (r: DOMRect): Point => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 /** An <img> that hasn't loaded has no height yet: nothing to morph into. */
 const loaded = (img: HTMLImageElement | null): boolean => img !== null && img.complete && img.naturalWidth > 0;
 
@@ -85,6 +87,9 @@ let clones: HTMLElement[] = [];
 // Elements of the leaving page hidden while a copy stands in for them; restored when the copies go
 // (the page stays mounted, and comes back when the user goes back).
 let hidden: HTMLElement[] = [];
+// Animations on the leaving page's own elements that must not outlive the hand-off (the page stays
+// mounted and comes back on Back): held at their end frame until the copies go, then cancelled.
+let parked: Animation[] = [];
 // The progress fill whose CSS transition is paused while an answer carries the bar.
 let heldFill: HTMLElement | null = null;
 
@@ -94,13 +99,16 @@ function releaseFill() {
 }
 
 function settlePrevious() {
-  running.forEach((a) => a.finish());
+  // A cancelled (parked) animation is idle: finishing it would replay its end frame.
+  running.forEach((a) => a.playState !== "idle" && a.finish());
   running = [];
   handovers = [];
   clones.forEach((c) => c.remove());
   clones = [];
   hidden.forEach((el) => (el.style.visibility = ""));
   hidden = [];
+  parked.forEach((a) => a.cancel());
+  parked = [];
   releaseDecoded();
   releaseFill();
 }
@@ -172,6 +180,13 @@ function animate(el: Element | null | undefined, keyframes: Keyframe[], options:
   const animation = el.animate(keyframes, { fill: "both", easing: EASE_OUT, ...options });
   running.push(animation);
   if (keyframes === REVEAL_UNDER_COPY || el.closest("[data-handoff-clone]")) handovers.push(animation);
+  return animation;
+}
+
+/** `animate` for a live element of the leaving page: held at its end until the hand-off is over, then released. */
+function park(el: Element | null | undefined, keyframes: Keyframe[], options: KeyframeAnimationOptions) {
+  const animation = animate(el, keyframes, { ...options, fill: "forwards" });
+  if (animation) parked.push(animation);
 }
 
 /**
@@ -433,9 +448,10 @@ export function runHandoff({
   const oldBackdropRect = oldBackdrop?.getBoundingClientRect();
   const backdropColor = oldBackdrop ? getComputedStyle(oldBackdrop).backgroundColor : "";
   // Answers become progress, except where they open into the next page's image or statement colour.
-  const intoScene = handoff === "picture" || handoff === "flood";
+  const intoImage = handoff === "picture" || handoff === "connect";
+  const intoScene = intoImage || handoff === "flood";
   // Faces are captured before the page changes (the photo's first, so it gets the decoded image).
-  const photoFaceBack: Face | null = !forward && handoff === "picture" && oldImage instanceof HTMLImageElement ? photoFace(oldImage) : null;
+  const photoFaceBack: Face | null = !forward && intoImage && oldImage instanceof HTMLImageElement ? photoFace(oldImage) : null;
   const answerFace: Face | null = forward && intoScene && oldSelected && oldSelectedRect ? fillFace(oldSelected, oldSelectedRect) : null;
 
   const fill = q(document, "[data-progress-fill]");
@@ -483,6 +499,8 @@ export function runHandoff({
         handovers = [];
         hidden.forEach((el) => (el.style.visibility = ""));
         hidden = [];
+        parked.forEach((a) => a.cancel());
+        parked = [];
         releaseDecoded();
         releaseFill();
       });
@@ -508,7 +526,8 @@ export function runHandoff({
   }
 
   switch (handoff) {
-    case "picture": {
+    case "picture":
+    case "connect": {
       if (forward) {
         const photoKnown = newImage instanceof HTMLImageElement && (loaded(newImage) || isImageReady(newImage.getAttribute("src") ?? ""));
         if (!(answerFace && oldSelectedRect && newImage && photoKnown)) {
@@ -525,6 +544,25 @@ export function runHandoff({
         const laidOut = newImage.getBoundingClientRect();
         const size = imageSize(newImage.getAttribute("src") ?? "");
         const r = laidOut.height >= 1 || !size ? laidOut : new DOMRect(laidOut.left, laidOut.top, laidOut.width, (laidOut.width * size.height) / size.width);
+        if (handoff === "connect") {
+          // Connect: the other answers gather into the chosen one (never below 95%) as it becomes the
+          // photo. They are the leaving page's live elements (motion.css leaves them alone for this).
+          const a = centre(oldSelectedRect);
+          const chosen = oldOptions.indexOf(oldSelected as HTMLElement);
+          oldOptions.forEach((el, k) => {
+            if (el === oldSelected) return;
+            const c = centre(el.getBoundingClientRect());
+            park(
+              el,
+              [
+                { transform: "none", opacity: 1, filter: "blur(0px)", easing: EASE_IN_OUT },
+                { offset: 0.35, transform: `translate3d(${a.x - c.x}px, ${a.y - c.y}px, 0) scale(0.95)`, opacity: 0, filter: `blur(${motionBlur(5)}px)` },
+                { transform: `translate3d(${a.x - c.x}px, ${a.y - c.y}px, 0) scale(0.95)`, opacity: 0, filter: `blur(${motionBlur(5)}px)` },
+              ],
+              { duration: TRANSFORM_MS, easing: "linear", delay: Math.abs(k - chosen) * 30 },
+            );
+          });
+        }
         const m = playMorph({
           from: { rect: oldSelectedRect, radius: oldSelectedRect.height / 2 },
           to: { rect: r, radius: PHOTO_RADIUS },
@@ -550,6 +588,30 @@ export function runHandoff({
         });
         qa(m.faces.to, "span").forEach((label) => animate(label, labelBack, { duration: TRANSFORM_MS, easing: "linear" }));
         animate(newSelected, REVEAL_UNDER_COPY, { duration: TRANSFORM_MS, easing: "linear", fill: "backwards" });
+
+        if (handoff === "connect") {
+          // Every answer went into the photo, so every answer comes back out of it, from where the
+          // frame is when they start (60% of the way, on the same clock).
+          const k = glideAt(0.6);
+          const from = {
+            x: lerp(oldImageRect.left + oldImageRect.width / 2, r.left + r.width / 2, k),
+            y: lerp(oldImageRect.top + oldImageRect.height / 2, r.top + r.height / 2, k),
+          };
+          qa(page, "[data-flow-option]").forEach((el, i) => {
+            if (el === newSelected) return;
+            el.dataset.morph = "";
+            const c = centre(el.getBoundingClientRect());
+            animate(
+              el,
+              [
+                { transform: `translate3d(${from.x - c.x}px, ${from.y - c.y}px, 0) scale(0.95)`, opacity: 0, filter: `blur(${motionBlur(5)}px)` },
+                { offset: 0.55 + i * 0.04, transform: `translate3d(${from.x - c.x}px, ${from.y - c.y}px, 0) scale(0.95)`, opacity: 0, filter: `blur(${motionBlur(5)}px)`, easing: EASE_IN_OUT },
+                { transform: "none", opacity: 1, filter: "blur(0px)" },
+              ],
+              { duration: TRANSFORM_MS, easing: "linear", fill: "backwards" },
+            );
+          });
+        }
       }
       break;
     }

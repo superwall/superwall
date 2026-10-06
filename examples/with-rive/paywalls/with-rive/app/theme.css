@@ -1,20 +1,48 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Roboto+Mono:wght@400..500&display=swap");
 
+/*
+ * Superwall's application register (DESIGN.md), on a surface. Flat and quiet:
+ * one cool-grey OKLCH ramp in dark, cream paper in light, one border, a
+ * four-step text ladder, Manrope with Roboto Mono for code, one 3px corner,
+ * no shadows, one fixed teal accent. Both modes are defined in every branch;
+ * the SDK stamps `dark` on <html>.
+ */
 :root {
-  --bg: #fdfef6;
-  --surface: #f6f7ef;
-  --elevated: #fff;
-  --fg: #0c0b0a;
+  --tint-h: 262;
+  --tint-c: 0.0055;
+  --border-alpha: 10%;
+  --cream: #fdfef6;
+  --ink: #0c0b0a;
+
+  --bg: var(--cream);
+  --fg: var(--ink);
+  --surface: color-mix(in oklab, var(--fg) 3%, var(--bg));
+  --raised: color-mix(in oklab, var(--fg) 7%, var(--bg));
+  --muted: color-mix(in oklab, var(--fg) 6%, var(--bg));
+  --secondary: color-mix(in oklab, var(--fg) 10%, var(--bg));
+  --wash: color-mix(in oklab, var(--fg) 5%, transparent);
+
+  --fg-secondary: color-mix(in oklab, var(--fg) 70%, transparent);
+  --fg-tertiary: color-mix(in oklab, var(--fg) 55%, transparent);
+  --fg-muted: color-mix(in oklab, var(--fg) 45%, transparent);
+  --border: color-mix(in oklab, var(--fg) var(--border-alpha), transparent);
+
+  /* The one accent, fixed in both modes: the primary fill, the selected edge, the focused edge. */
   --accent: #46d7d4;
+  --accent-ink: var(--ink);
+  --destructive: #ee6d2e;
+  --destructive-ink: #712f1a;
+  --success: #9fd947;
+  --success-ink: #5f822b;
 
-  --fg-body: color-mix(in srgb, var(--fg) 70%, transparent);
-  --fg-muted: color-mix(in srgb, var(--fg) 55%, transparent);
-  --fg-caption: color-mix(in srgb, var(--fg) 50%, transparent);
-  --border: color-mix(in srgb, var(--fg) 12%, transparent);
-  --wash: color-mix(in srgb, var(--fg) 5%, transparent);
+  --radius: 3px;
+  --sans: Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --sans: Manrope, ui-sans-serif, system-ui, sans-serif;
-  --mono: "Roboto Mono", ui-monospace, monospace;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-hover: 150ms;
 
   --sw-background: var(--bg);
   --sw-page-inset-bottom: 0px;
@@ -22,15 +50,24 @@
 }
 
 :root.dark {
-  --bg: #1c1b19;
-  --surface: #232220;
-  --elevated: #2a2926;
-  --fg: #fdfef6;
+  --bg: oklch(0.16 calc(var(--tint-c) * 0.7) var(--tint-h));
+  --fg: var(--cream);
+  --surface: oklch(0.195 var(--tint-c) var(--tint-h));
+  --raised: oklch(0.215 calc(var(--tint-c) * 1.25) var(--tint-h));
+  --muted: oklch(0.25 calc(var(--tint-c) * 0.6) var(--tint-h));
+  --secondary: oklch(0.29 calc(var(--tint-c) * 0.6) var(--tint-h));
+  --wash: oklch(0.86 calc(var(--tint-c) * 0.6) var(--tint-h) / 0.08);
+  --destructive-ink: #f3996d;
+  --success-ink: #b7e375;
   color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -43,6 +80,9 @@ body {
   line-height: 1.5;
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 h1,
@@ -50,6 +90,7 @@ h2,
 h3 {
   margin: 0;
   font-weight: 500;
+  text-wrap: balance;
 }
 
 h1 {
@@ -72,12 +113,32 @@ h3 {
 
 p {
   margin: 0;
-  color: var(--fg-body);
+  color: var(--fg-secondary);
+}
+
+strong {
+  font-weight: 600;
 }
 
 code {
   font-family: var(--mono);
   font-size: 0.8125rem;
+}
+
+/* Every control: a 3px corner, no tap flash, press feedback on the finger, hover only for a real pointer. */
+button,
+[role="button"],
+[role="radio"],
+[role="switch"] {
+  border-radius: var(--radius);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+:focus-visible {
+  outline: none;
 }
 
 .shell {
@@ -94,7 +155,7 @@ code {
   width: 100%;
   max-width: 44rem;
   margin: 0 auto;
-  padding: 16px 20px 24px;
+  padding: 16px 20px 0;
 }
 
 .lede {
@@ -103,12 +164,16 @@ code {
   gap: 10px;
 }
 
+/* The primary action is pinned: the page scrolls under it, the content fades out behind it. */
 .actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-top: auto;
-  padding-top: 20px;
+  padding: 20px 0 16px;
+  background: linear-gradient(to bottom, transparent, var(--bg) 20px);
 }
 
 .button {
@@ -116,27 +181,31 @@ code {
   width: 100%;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
+  min-height: 52px;
   border: 1px solid var(--border);
   background: transparent;
   padding: 0 16px;
   color: var(--fg);
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
   transition:
-    background-color 150ms ease,
-    border-color 150ms ease;
+    transform 200ms var(--ease-out),
+    background-color var(--duration-hover) var(--ease-out),
+    border-color var(--duration-hover) var(--ease-out);
 }
 
-.button:hover {
-  background: var(--wash);
+.button:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
 }
 
-.button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+@media (hover: hover) and (pointer: fine) {
+  .button:hover:not(:disabled) {
+    background: var(--wash);
+    border-color: color-mix(in oklab, var(--fg) 20%, transparent);
+  }
 }
 
 .button:disabled {
@@ -145,62 +214,75 @@ code {
 }
 
 .button--primary {
-  border-color: var(--fg);
-  background: var(--fg);
-  color: var(--bg);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
-.button--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--fg) 85%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .button--primary:hover:not(:disabled) {
+    border-color: color-mix(in oklab, var(--accent) 90%, transparent);
+    background: color-mix(in oklab, var(--accent) 90%, transparent);
+  }
 }
 
 .link {
   align-self: center;
   border: 0;
   background: none;
-  padding: 8px;
-  color: var(--fg-muted);
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--fg-tertiary);
   font: inherit;
   font-size: 0.8125rem;
   cursor: pointer;
+  transition:
+    transform 200ms var(--ease-out),
+    color var(--duration-hover) var(--ease-out);
 }
 
-.link:hover {
-  color: var(--fg);
+.link:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
 }
 
-.link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+@media (hover: hover) and (pointer: fine) {
+  .link:hover {
+    color: var(--fg);
+  }
 }
 
+/* iOS close: a small circle at the top-right, 44px to the finger. */
 .close {
   position: absolute;
   top: 4px;
-  right: 16px;
+  right: 10px;
   z-index: 10;
   display: flex;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   align-items: center;
   justify-content: center;
   border: 0;
+  border-radius: 999px;
   background: none;
   padding: 0;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: 1.25rem;
-  line-height: 1;
+  color: var(--fg-tertiary);
   cursor: pointer;
+  transition:
+    transform 200ms var(--ease-out),
+    color var(--duration-hover) var(--ease-out);
 }
 
-.close:hover {
-  color: var(--fg);
+.close:active {
+  transform: scale(0.92);
+  transition-duration: 80ms;
 }
 
-.close:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+@media (hover: hover) and (pointer: fine) {
+  .close:hover {
+    color: var(--fg);
+  }
 }
 
 .built {
@@ -210,133 +292,81 @@ code {
   justify-content: center;
   gap: 6px;
   border-top: 1px solid var(--border);
-  padding: 14px 20px;
-  font-size: 0.75rem;
-  color: var(--fg-caption);
+  padding: 4px 20px;
+  font-size: 0.8125rem;
+  color: var(--fg-tertiary);
 }
 
+/* The Superwall wordmark (components/Wordmark.tsx): "$UPER" in the accent, "WALL" in the foreground; 44px to the finger. */
 .wordmark {
+  --logo-primary: var(--accent);
+  --logo-secondary: var(--fg);
+  display: flex;
+  min-height: 44px;
+  align-items: center;
   border: 0;
   background: transparent;
-  padding: 0;
+  padding: 0 4px;
   color: var(--fg);
-  font: inherit;
-  font-weight: 600;
-  letter-spacing: 0.01em;
   cursor: pointer;
+  transition: transform 200ms var(--ease-out);
 }
 
-.wordmark:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.wordmark:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
 }
 
-.wordmark-accent {
-  color: var(--accent);
+.wordmark-art {
+  display: block;
+  height: 13px;
+  width: auto;
 }
 
+/* Reduced motion is gentler, not none: colour and opacity still explain what happened; nothing moves. */
 @media (prefers-reduced-motion: reduce) {
-  * {
-    transition-duration: 1ms !important;
+  *,
+  ::before,
+  ::after {
+    transition-property: color, background-color, border-color, opacity !important;
+    animation-duration: 1ms !important;
   }
 }
 
-.log {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.log-empty {
-  padding: 14px 16px;
+/* A failed purchase or restore: one quiet line above the button, colour only — the button stays enabled. */
+.notice {
+  margin: 0;
+  color: var(--fg-tertiary);
   font-size: 0.8125rem;
-  color: var(--fg-caption);
-}
-
-.log-row {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  border-bottom: 1px solid var(--border);
-  padding: 10px 16px;
-}
-
-.log-row:last-child {
-  border-bottom: 0;
-}
-
-.log-name {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.log-detail {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.8125rem;
-  color: var(--fg-muted);
+  text-align: center;
   overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .note {
   border-left: 2px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
   padding: 12px 14px;
   font-size: 0.8125rem;
-  color: var(--fg-body);
+  color: var(--fg-secondary);
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-}
-
-.rows {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-}
-
-.rows > * {
-  border-bottom: 1px solid var(--border);
-}
-
-.rows > *:last-child {
-  border-bottom: 0;
-}
-
-.kv {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-}
-
-.kv-key {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  color: var(--fg-muted);
-}
-
-.kv-value {
-  font-size: 0.8125rem;
-  overflow-wrap: anywhere;
-  text-align: right;
-}
-
+/* One Rive file in a card: the canvas box keeps its own ratio, the card keeps the 3px corner. */
 .art {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .art-stage {
+  position: relative;
   overflow: hidden;
   border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .art-stage canvas,
@@ -346,16 +376,30 @@ code {
   height: 100%;
 }
 
+/* The canvas is the control: no long-press sheet, no text selection, scroll still passes through. */
+.art-stage canvas {
+  position: absolute;
+  inset: 0;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
 .art-tap {
+  position: absolute;
+  inset: 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
   padding: 0;
   cursor: pointer;
+  transition: transform 200ms var(--ease-out);
 }
 
-.art-tap:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+.art-tap:active {
+  transform: scale(0.98);
+  transition-duration: 80ms;
 }
 
 .art-foot {
@@ -367,15 +411,24 @@ code {
 }
 
 .art-title {
+  min-width: 0;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .art-hint {
+  flex-shrink: 0;
   font-size: 0.8125rem;
-  color: var(--fg-muted);
+  color: var(--fg-tertiary);
 }
 
+/* The range input is the one control that moves under the finger, so its thumb is the press feedback. */
 .art-slider {
-  margin: 0 14px 16px;
+  width: auto;
+  min-height: 44px;
+  margin: 0 14px 8px;
   accent-color: var(--accent);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  cursor: pointer;
 }

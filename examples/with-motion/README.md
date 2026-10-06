@@ -1,7 +1,7 @@
 # with-motion
 
-In-page animation with [Motion](https://motion.dev) — entrances, a price that
-counts up, a button that responds to touch.
+In-page animation with [Motion](https://motion.dev) — entrances gated on the
+paywall opening, and a price that counts up to the store's figure.
 
 ```bash
 superwall create --example with-motion
@@ -21,9 +21,9 @@ renders undefined, and publishing stays disabled.
 const opened = useSuperwallSnapshot().paywall !== undefined;
 
 <motion.li
-  initial={{ opacity: 0, x: -12 }}
-  animate={opened ? { opacity: 1, x: 0 } : { opacity: 0, x: -12 }}
-  transition={{ delay: 0.15 + index * 0.08 }}
+  initial={{ opacity: 0, transform: "translateX(-12px)" }}
+  animate={opened ? { opacity: 1, transform: "translateX(0px)" } : { opacity: 0, transform: "translateX(-12px)" }}
+  transition={{ delay: 0.1 + index * 0.05, duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
 >;
 ```
 
@@ -41,12 +41,24 @@ moving _between_ pages stays the router's job (`router.push` with a
 transition). Keeping that line means spamming navigation can never fight your
 component animations.
 
-**Animate to real data.** The price counts up to `variables.rawPrice` — a
-number from the store — and only renders once it exists, so the animation can
-never land on a made-up figure.
+**Animate the `transform` string, not `x` / `y`.** A string transform is
+handed to the compositor; the shorthands are composed on the main thread,
+which is busy pricing products and loading fonts exactly while the entrance
+plays. Rows follow 50ms apart on the same ease-out curve the stylesheet uses,
+once, 300–450ms. Under `prefers-reduced-motion` (`useReducedMotion`) the
+same entrance becomes a cross-fade: nothing travels, the opacity still
+explains what appeared.
 
-**`whileTap` earns its keep on a CTA.** A 0.98 scale on press is feedback the
-whole hand notices, and it costs one prop.
+**Animate to real data.** The price counts up to `variables.rawPrice` — a
+number from the store — formatted in the store's `currencyCode` and `locale`
+while it moves, in `tabular-nums` so the digits hold still, and lands on the
+store's own `price` string. It only renders once both exist, so the animation
+can never land on a made-up figure.
+
+**Press feedback is CSS, not Motion.** The CTA's `:active` scale comes from the
+stylesheet (80ms in, 200ms out) like every other control on the page; one
+owner for the press, and a transition that runs off the main thread. Motion
+is reserved for what CSS cannot do: the gated stagger and the count-up.
 
 ## Next
 

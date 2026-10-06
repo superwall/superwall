@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { useDiscount, useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
+import {
+  useActions,
+  useDiscount,
+  useHaptics,
+  useProducts,
+  usePurchase,
+  useTranslation,
+} from "superwall/hooks";
 import type { AppliedDiscount, DiscountedProduct } from "superwall/hooks";
 
 const PLANS = [
@@ -8,22 +15,27 @@ const PLANS = [
   { reference: "monthly", label: "plans.monthly", note: "plans.monthlyNote" },
 ] as const;
 
-type PlanReference = (typeof PLANS)[number]["reference"];
+type Plan = (typeof PLANS)[number];
+type PlanReference = Plan["reference"];
 
 /**
  * "15% off forever", "$5 off on your first payment" — assembled here, from
  * this paywall's own message catalog and Stripe's coupon fields, because the
- * hook hands over the parts rather than a sentence in one language.
+ * hook hands over the parts rather than a sentence in one language. Nothing
+ * is said about the amount until the store has priced it.
  */
 const describeDiscount = (
   discount: AppliedDiscount,
   product: DiscountedProduct | undefined,
   t: (key: string, values?: Record<string, string | number>) => string,
-): string => {
+): string | undefined => {
   const amount =
     discount.percentOff != null
       ? t("discount.percentOff", { percent: discount.percentOff })
-      : t("discount.amountOff", { amount: product?.savingsPrice ?? "" });
+      : product?.savingsPrice
+        ? t("discount.amountOff", { amount: product.savingsPrice })
+        : undefined;
+  if (!amount) return undefined;
   const duration =
     discount.duration === "repeating"
       ? t("discount.repeating", { months: discount.durationInMonths ?? 0 })
@@ -32,13 +44,16 @@ const describeDiscount = (
 };
 
 export default function Index() {
+  const { restore } = useActions();
   const { getProduct } = useProducts();
-  const { purchase, isPurchasing } = usePurchase();
+  const { purchase } = usePurchase();
   const haptics = useHaptics();
 
   const [selected, setSelected] = useState<PlanReference>("trial");
   const [code, setCode] = useState("");
-  const [codeError, setCodeError] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState<string>();
+  // One line of copy for an outcome worth saying; nothing for an abandoned sheet.
+  const [notice, setNotice] = useState<string>();
 
   const { t } = useTranslation();
   const { redeem, clear, applied, isRedeeming, getDiscountedProduct } = useDiscount({
@@ -46,9 +61,11 @@ export default function Index() {
   });
 
   const applyCode = async () => {
-    setCodeError(null);
+    if (isRedeeming) return;
+    setCodeError(undefined);
     const result = await redeem(code);
     if (result.valid) {
+      haptics.success();
       setCode("");
       return;
     }
@@ -72,6 +89,17 @@ export default function Index() {
     return discounted?.applies ? discounted.price : undefined;
   };
 
+  // The intro plan names its price in the label; until the store supplies one it says what it is instead.
+  const labelFor = (plan: Plan) => {
+    if (plan.reference !== "intro") return t(plan.label);
+    const price = getProduct("intro")?.variables.price;
+    return price ? t("plans.intro", { price }) : t("plans.introBare");
+  };
+
+  const description = applied
+    ? describeDiscount(applied.discount, getDiscountedProduct(selected), t)
+    : undefined;
+
   return (
     <main className="page">
       <div className="lede">
@@ -79,27 +107,28 @@ export default function Index() {
         <p>{t("subtitle")}</p>
       </div>
 
-      <div className="plans">
+      <div className="plans" role="radiogroup" aria-label={t("plans.label")}>
         {PLANS.map((plan) => {
           const original = strikethroughFor(plan.reference);
           return (
             <button
               key={plan.reference}
               type="button"
-              className={`plan${selected === plan.reference ? " plan--selected" : ""}`}
-              aria-pressed={selected === plan.reference}
+              className="plan"
+              role="radio"
+              aria-checked={selected === plan.reference}
               onClick={() => {
-                haptics.light();
+                haptics.selection();
                 setSelected(plan.reference);
               }}
             >
               <span className="plan-label">
-                {t(plan.label, { price: getProduct(plan.reference)?.variables.price ?? "" })}
+                {labelFor(plan)}
                 <span className="plan-note">{t(plan.note)}</span>
               </span>
               <span className="plan-price">
                 {original ? <s className="plan-was">{original}</s> : null}
-                {priceFor(plan.reference) ?? "—"}
+                {priceFor(plan.reference) ?? t("plans.empty")}
               </span>
             </button>
           );
@@ -108,12 +137,12 @@ export default function Index() {
 
       <div className="promo">
         {applied ? (
-          <p className="promo-applied">
+          <p className="promo-applied" role="status">
             <strong>{t("discount.applied", { code: applied.code })}</strong>
-            {` · ${describeDiscount(applied.discount, getDiscountedProduct(selected), t)}`}
+            {description ? ` · ${description}` : null}
             <button
               type="button"
-              className="link"
+              className="link promo-remove"
               onClick={() => {
                 haptics.light();
                 clear();
@@ -133,32 +162,63 @@ export default function Index() {
           >
             <input
               className="promo-input"
+              type="text"
               value={code}
               onChange={(event) => setCode(event.target.value)}
               placeholder={t("promo.placeholder")}
               aria-label={t("promo.placeholder")}
+              autoComplete="off"
               autoCapitalize="characters"
               autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="go"
             />
-            <button type="submit" className="button button--ghost" disabled={isRedeeming || !code}>
+            <button type="submit" className="button" disabled={!code}>
               {isRedeeming ? t("promo.applying") : t("promo.apply")}
             </button>
           </form>
         )}
-        {codeError ? <p className="promo-error">{codeError}</p> : null}
+        {codeError ? (
+          <p className="promo-error" role="status">
+            {codeError}
+          </p>
+        ) : null}
       </div>
 
       <div className="actions">
+        {notice ? (
+          <p className="notice" role="status">
+            {notice}
+          </p>
+        ) : null}
         <button
           type="button"
           className="button button--primary"
-          disabled={isPurchasing}
-          onClick={() => {
+          onClick={async () => {
             haptics.light();
-            void purchase(selected);
+            setNotice(undefined);
+            // Never a loading state: the Apple Pay sheet is the feedback and the SDK owns it.
+            const result = await purchase(selected);
+            if (result.status === "completed") haptics.success(); // the SDK finishes the checkout
+            else if (result.status === "failed") setNotice(t("purchase.failed")); // the button stays enabled
+            // abandoned: the shopper closed the sheet — nothing changes, nothing is said
           }}
         >
-          {isPurchasing ? t("purchase.working") : t("purchase.continue")}
+          {t("purchase.continue")}
+        </button>
+        <button
+          type="button"
+          className="link"
+          onClick={async () => {
+            haptics.light();
+            setNotice(undefined);
+            // "Nothing to restore" and a store error both resolve `failed`; the copy covers both.
+            const result = await restore();
+            if (result.status === "restored") haptics.success();
+            setNotice(result.status === "restored" ? t("restore.restored") : t("restore.failed"));
+          }}
+        >
+          {t("purchase.restore")}
         </button>
       </div>
     </main>

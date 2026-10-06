@@ -1,25 +1,130 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Roboto+Mono:wght@400..500&display=swap");
 @import "tailwindcss";
 
+/*
+ * Superwall's application register, as a Tailwind v4 theme. Flat and quiet:
+ * one cool-grey OKLCH ramp in dark, cream paper in light, one border, a
+ * four-step text ladder, Manrope with Roboto Mono for code, one 3px corner,
+ * no shadows, one fixed teal accent. Every token becomes a utility
+ * (`bg-bg`, `text-fg-tertiary`, `rounded-sm`); the dark branch below
+ * re-points the same variables, so no utility needs a `dark:` twin.
+ */
 @theme {
-  --color-bg: #fdfef6;
-  --color-surface: #f6f7ef;
-  --color-fg: #0c0b0a;
+  --color-cream: #fdfef6;
+  --color-ink: #0c0b0a;
+
+  --color-bg: var(--color-cream);
+  --color-fg: var(--color-ink);
+  --color-surface: color-mix(in oklab, var(--color-fg) 3%, var(--color-bg));
+  --color-raised: color-mix(in oklab, var(--color-fg) 7%, var(--color-bg));
+  --color-muted: color-mix(in oklab, var(--color-fg) 6%, var(--color-bg));
+  --color-secondary: color-mix(in oklab, var(--color-fg) 10%, var(--color-bg));
+  --color-wash: color-mix(in oklab, var(--color-fg) 5%, transparent);
+
+  --color-fg-secondary: color-mix(in oklab, var(--color-fg) 70%, transparent);
+  --color-fg-tertiary: color-mix(in oklab, var(--color-fg) 55%, transparent);
+  --color-fg-muted: color-mix(in oklab, var(--color-fg) 45%, transparent);
+  --color-border: color-mix(in oklab, var(--color-fg) 10%, transparent);
+
+  /* The one accent, fixed in both modes: the primary fill, the selected edge. */
   --color-accent: #46d7d4;
-  --font-sans: Manrope, ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Roboto Mono", ui-monospace, monospace;
+  --color-accent-hover: color-mix(in oklab, var(--color-accent) 90%, transparent);
+  --color-accent-ink: var(--color-ink);
+  --color-destructive: #ee6d2e;
+  --color-destructive-ink: #712f1a;
+  --color-success: #9fd947;
+  --color-success-ink: #5f822b;
+
+  --font-sans: Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.125rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5;
+  --text-display: clamp(2rem, 7vw, 2.5rem);
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.03em;
+  --tracking-body: -0.01em;
+
+  /* One 3px corner: every step of the scale is the same corner. */
+  --radius-xs: 3px;
+  --radius-sm: 3px;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 3px;
+  --radius-2xl: 3px;
+  --radius-3xl: 3px;
+  --radius-4xl: 3px;
+
+  /* No shadows: pinned to a transparent shadow, never `none`, so shadows and rings still compose. */
+  --shadow-2xs: 0 0 #0000;
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+  --shadow-xl: 0 0 #0000;
+  --shadow-2xl: 0 0 #0000;
+  --inset-shadow-2xs: 0 0 #0000;
+  --inset-shadow-xs: 0 0 #0000;
+  --inset-shadow-sm: 0 0 #0000;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-hover: 150ms;
 }
 
 /* The provider stamps `dark` on <html>; Tailwind's variant follows it. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* A webview fakes a hover on the first tap, so `hover:` speaks only to a real pointer. */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 :root {
+  --tint-h: 262;
+  --tint-c: 0.0055;
   --sw-background: var(--color-bg);
   --sw-page-inset-bottom: 0px;
+  color-scheme: light;
 }
 
 :root.dark {
-  --color-bg: #1c1b19;
-  --color-surface: #232220;
-  --color-fg: #fdfef6;
+  --color-bg: oklch(0.16 calc(var(--tint-c) * 0.7) var(--tint-h));
+  --color-fg: var(--color-cream);
+  --color-surface: oklch(0.195 var(--tint-c) var(--tint-h));
+  --color-raised: oklch(0.215 calc(var(--tint-c) * 1.25) var(--tint-h));
+  --color-muted: oklch(0.25 calc(var(--tint-c) * 0.6) var(--tint-h));
+  --color-secondary: oklch(0.29 calc(var(--tint-c) * 0.6) var(--tint-h));
+  --color-wash: oklch(0.86 calc(var(--tint-c) * 0.6) var(--tint-h) / 0.08);
+  --color-destructive-ink: #f3996d;
+  --color-success-ink: #b7e375;
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* A native paywall: tap-driven controls draw no focus ring. */
+  :focus-visible {
+    outline: none;
+  }
+
+  /* Reduced motion is gentler, not none: colour and opacity still explain what happened; nothing moves. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      transition-property: color, background-color, border-color, opacity !important;
+      animation-duration: 1ms !important;
+    }
+  }
 }

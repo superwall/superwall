@@ -23,6 +23,12 @@ const result = await purchase("annual");
 result.status; // "completed" | "abandoned" | "failed"
 ```
 
+Each outcome gets exactly one reaction: `completed` is a success haptic (the
+SDK dismisses), `failed` is a notice from the catalog with the button left
+enabled, `abandoned` is nothing. The button never shows a loading state — the
+store sheet is the feedback. `restore()` is awaited the same way; its `failed`
+covers both "nothing to restore" and a store error, so the copy says both.
+
 **Events fire for anything the SDK reports**, whoever started it:
 
 ```tsx

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Fit, Layout, RuntimeLoader, useRive, useStateMachineInput } from "@rive-app/react-canvas";
 import riveWasm from "@rive-app/canvas/rive.wasm?url";
+import { useIsFocused } from "superwall/navigation";
 
 // Rive fetches its WebAssembly engine at runtime and defaults to unpkg, with
 // jsdelivr behind it. A published paywall can reach neither: serve-time CSP
@@ -17,6 +18,9 @@ RuntimeLoader.setWasmFallbackUrl(null);
  * Machines and inputs are named per file — ask the runtime rather than
  * guessing, because naming one that does not exist renders a canvas that
  * simply never responds.
+ *
+ * The canvas sits in a box with its own ratio (`ratio`, a CSS `aspect-ratio`),
+ * so the art crops the same way at 320px and on a tablet.
  */
 export const RiveArt = ({
   src,
@@ -25,7 +29,7 @@ export const RiveArt = ({
   stateMachine,
   input,
   control,
-  height = 220,
+  ratio = "16 / 9",
   onChange,
 }: {
   src: string;
@@ -34,7 +38,7 @@ export const RiveArt = ({
   stateMachine: string;
   input?: string;
   control: "tap" | "self" | "slider";
-  height?: number;
+  ratio?: string;
   onChange?: () => void;
 }) => {
   const { rive, RiveComponent } = useRive({
@@ -43,6 +47,15 @@ export const RiveArt = ({
     stateMachines: stateMachine,
     layout: new Layout({ fit: Fit.Cover }),
   });
+
+  // A state machine advances every frame for as long as it plays, covered or
+  // not. Pause it while another page sits over this one and resume on return.
+  const focused = useIsFocused();
+  React.useEffect(() => {
+    if (!rive) return;
+    if (focused) rive.play();
+    else rive.pause();
+  }, [rive, focused]);
 
   const [level, setLevel] = React.useState(0);
 
@@ -57,7 +70,7 @@ export const RiveArt = ({
 
   return (
     <section className="art">
-      <div className="art-stage" style={{ height }}>
+      <div className="art-stage" style={{ aspectRatio: ratio }}>
         {control === "tap" ? (
           <button
             type="button"

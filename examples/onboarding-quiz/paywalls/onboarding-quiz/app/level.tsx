@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 import { answers, type Level } from "../components/answers";
@@ -7,8 +8,12 @@ export default function Page() {
   const { t } = useTranslation();
   const haptics = useHaptics();
 
+  // The chosen card turns teal on the same frame as the haptic, then the router moves on.
+  const [chosen, setChosen] = useState(answers.level);
+
   const choose = (value: Level) => {
     haptics.selection();
+    setChosen(value);
     answers.level = value;
     router.push("time");
   };
@@ -22,15 +27,30 @@ export default function Page() {
       </div>
 
       <div className="choices">
-        <button type="button" className="choice" onClick={() => choose("new")}>
+        <button
+          type="button"
+          className="choice"
+          aria-pressed={chosen === "new"}
+          onClick={() => choose("new")}
+        >
           <span className="choice-name">{t("level.new.name")}</span>
           <span className="choice-hint">{t("level.new.hint")}</span>
         </button>
-        <button type="button" className="choice" onClick={() => choose("returning")}>
+        <button
+          type="button"
+          className="choice"
+          aria-pressed={chosen === "returning"}
+          onClick={() => choose("returning")}
+        >
           <span className="choice-name">{t("level.returning.name")}</span>
           <span className="choice-hint">{t("level.returning.hint")}</span>
         </button>
-        <button type="button" className="choice" onClick={() => choose("regular")}>
+        <button
+          type="button"
+          className="choice"
+          aria-pressed={chosen === "regular"}
+          onClick={() => choose("regular")}
+        >
           <span className="choice-name">{t("level.regular.name")}</span>
           <span className="choice-hint">{t("level.regular.hint")}</span>
         </button>

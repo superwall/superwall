@@ -5,6 +5,14 @@ export default definePaywall({
   name: "Pro — Onboarding Quiz",
 
   /**
+   * The page background in both schemes, so the host paints the native backdrop
+   * and the loading state to match: no flash before the first frame, no white
+   * on scroll bounce. The same values as `--bg` in theme.css — the dark one is
+   * the OKLCH canvas, `oklch(0.16 0.00385 262)`, as a hex.
+   */
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
+
+  /**
    * The products this paywall sells, as `reference: "store identifier"`.
    *
    * The identifiers below are placeholders — replace them with products that

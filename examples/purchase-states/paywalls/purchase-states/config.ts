@@ -5,6 +5,13 @@ export default definePaywall({
   name: "Pro — Purchase States",
 
   /**
+   * What the host paints behind the paywall, in both schemes. `--sw-background`
+   * in theme.css paints the routes; this is what shows when an iOS scroll
+   * rubber-bands past the content, so the two must match.
+   */
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
+
+  /**
    * The products this paywall sells, as `reference: "store identifier"`.
    *
    * The identifiers below are placeholders — replace them with products that

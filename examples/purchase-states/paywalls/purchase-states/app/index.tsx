@@ -18,17 +18,18 @@ export default function Index() {
   const haptics = useHaptics();
 
   const [log, setLog] = React.useState<Entry[]>([]);
+  const [notice, setNotice] = React.useState<string>();
   const add = React.useCallback((entry: Entry) => setLog((all) => [entry, ...all]), []);
 
+  // Events only log here: the haptic belongs to the awaited result below, so a
+  // restore (which also arrives as transaction_complete) is not felt twice.
   useSuperwallEvent("transaction_complete", () => {
-    haptics.success();
     add({ name: "transaction_complete", detail: t("log.purchased") });
   });
   useSuperwallEvent("transaction_abandon", () => {
     add({ name: "transaction_abandon", detail: t("log.abandoned") });
   });
   useSuperwallEvent("freeTrial_start", () => {
-    haptics.success();
     add({ name: "freeTrial_start", detail: t("log.trialStarted") });
   });
 
@@ -67,18 +68,23 @@ export default function Index() {
       </p>
 
       <div className="actions">
+        {notice ? (
+          <p className="notice" role="status">
+            {notice}
+          </p>
+        ) : null}
         <button
           type="button"
           className="button button--primary"
-          onClick={() => {
+          onClick={async () => {
             haptics.light();
-            void purchase("annual").then((result) => {
-              if (result.status === "failed") haptics.error();
-              add({
-                name: `purchase() → ${result.status}`,
-                detail: t("log.resolved"),
-              });
-            });
+            setNotice(undefined);
+            // Never a loading state here: the store sheet is the feedback.
+            const result = await purchase("annual");
+            add({ name: `purchase() → ${result.status}`, detail: t("log.resolved") });
+            if (result.status === "completed") haptics.success(); // the SDK dismisses (postPurchase)
+            else if (result.status === "failed") setNotice(t("paywall.failed")); // iOS only; say so, keep the button
+            // abandoned: the user closed the store sheet — nothing changes, nothing is said
           }}
         >
           {price ? t("paywall.cta", { price }) : t("paywall.ctaBare")}
@@ -88,7 +94,10 @@ export default function Index() {
           className="link"
           onClick={async () => {
             haptics.light();
+            setNotice(undefined);
+            // "Nothing to restore" and a store error both resolve `failed`; the copy covers both.
             const result = await restore();
+            if (result.status === "restored") haptics.success();
             add({
               name: `restore_${result.status}`,
               detail: result.status === "restored" ? t("log.restored") : t("log.nothingToRestore"),

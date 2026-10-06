@@ -5,6 +5,13 @@ export default definePaywall({
   name: "Pro — Motion",
 
   /**
+   * The page background in both schemes. `--sw-background` in theme.css paints
+   * the routes; this is what the SDK paints on <html> and behind the loading
+   * state, so a scroll bounce past the end of the page never flashes white.
+   */
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
+
+  /**
    * The products this paywall sells, as `reference: "store identifier"`.
    *
    * The identifiers below are placeholders — replace them with products that

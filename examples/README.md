@@ -21,7 +21,10 @@ The studio groups by project and the routes gain a project segment
 directory name). With a single project the URLs are unprefixed.
 
 They teach **functionality, not design**. Styling is deliberately plain so the
-mechanism is the thing you read.
+mechanism is the thing you read: every `theme.css` starts with the same
+sheet `superwall create` writes (cream paper in light, one cool-grey ramp in
+dark, Manrope, one 3px corner, one teal accent, press feedback on every
+control), and only the rules the example needs follow it.
 
 ## Fundamentals
 
@@ -48,6 +51,7 @@ mechanism is the thing you read.
 | [`abandonment-offer`](./abandonment-offer) | `purchase()` resolves abandoned — push a last-chance offer           |
 | [`trial-reminders`](./trial-reminders)     | a local notification scheduled when the trial starts                 |
 | [`web-funnel`](./web-funnel)               | selling on the web: steps, then Stripe checkout in the page          |
+| [`apple-pay`](./apple-pay)                 | Apple Pay on the web, trials quoted to the sheet, a promo code       |
 
 ## The host
 

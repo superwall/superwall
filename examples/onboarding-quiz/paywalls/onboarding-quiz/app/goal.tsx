@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
 import { answers, type Goal } from "../components/answers";
@@ -7,8 +8,12 @@ export default function Page() {
   const { t } = useTranslation();
   const haptics = useHaptics();
 
+  // The chosen card turns teal on the same frame as the haptic, then the router moves on.
+  const [chosen, setChosen] = useState(answers.goal);
+
   const choose = (value: Goal) => {
     haptics.selection();
+    setChosen(value);
     answers.goal = value;
     router.push("level");
   };
@@ -22,15 +27,30 @@ export default function Page() {
       </div>
 
       <div className="choices">
-        <button type="button" className="choice" onClick={() => choose("lose")}>
+        <button
+          type="button"
+          className="choice"
+          aria-pressed={chosen === "lose"}
+          onClick={() => choose("lose")}
+        >
           <span className="choice-name">{t("goal.lose.name")}</span>
           <span className="choice-hint">{t("goal.lose.hint")}</span>
         </button>
-        <button type="button" className="choice" onClick={() => choose("build")}>
+        <button
+          type="button"
+          className="choice"
+          aria-pressed={chosen === "build"}
+          onClick={() => choose("build")}
+        >
           <span className="choice-name">{t("goal.build.name")}</span>
           <span className="choice-hint">{t("goal.build.hint")}</span>
         </button>
-        <button type="button" className="choice" onClick={() => choose("endure")}>
+        <button
+          type="button"
+          className="choice"
+          aria-pressed={chosen === "endure"}
+          onClick={() => choose("endure")}
+        >
           <span className="choice-name">{t("goal.endure.name")}</span>
           <span className="choice-hint">{t("goal.endure.hint")}</span>
         </button>

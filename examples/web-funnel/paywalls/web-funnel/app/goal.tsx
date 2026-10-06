@@ -34,7 +34,7 @@ export default function Goal() {
               className="choice"
               aria-pressed={goal === entry.id}
               onClick={() => {
-                haptics.light();
+                haptics.selection();
                 setGoal(entry.id);
                 router.push("plan");
               }}

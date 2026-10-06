@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useActions, useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
 
 export default function Index() {
@@ -6,6 +7,9 @@ export default function Index() {
   const { purchase } = usePurchase();
   const { t } = useTranslation();
   const haptics = useHaptics();
+
+  // One line of copy for an outcome worth saying; nothing for an abandoned sheet.
+  const [notice, setNotice] = React.useState<string>();
 
   const monthly = getProduct("monthly");
   const price = monthly?.variables.price;
@@ -18,12 +22,22 @@ export default function Index() {
       </div>
 
       <div className="actions">
+        {notice ? (
+          <p className="notice" role="status">
+            {notice}
+          </p>
+        ) : null}
         <button
           type="button"
           className="button button--primary"
-          onClick={() => {
+          onClick={async () => {
             haptics.light();
-            purchase("monthly");
+            setNotice(undefined);
+            // Never a loading state: the store sheet is the feedback and the SDK owns it.
+            const result = await purchase("monthly");
+            if (result.status === "completed") haptics.success(); // the SDK dismisses the paywall
+            else if (result.status === "failed") setNotice(t("purchase.failed")); // iOS only; the button stays enabled
+            // abandoned: the user closed the sheet — nothing changes, nothing is said
           }}
         >
           {price ? t("paywall.cta", { price }) : t("paywall.ctaBare")}
@@ -31,9 +45,13 @@ export default function Index() {
         <button
           type="button"
           className="link"
-          onClick={() => {
+          onClick={async () => {
             haptics.light();
-            restore();
+            setNotice(undefined);
+            // "Nothing to restore" and a store error both resolve `failed`; the copy covers both.
+            const result = await restore();
+            if (result.status === "restored") haptics.success();
+            setNotice(result.status === "restored" ? t("restore.restored") : t("restore.failed"));
           }}
         >
           {t("paywall.restore")}

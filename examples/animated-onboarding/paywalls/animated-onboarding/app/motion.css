@@ -15,13 +15,16 @@
  * the statement's colour) are the script's (handoffs.ts), which marks their destinations data-morph
  * and keeps their entrances off.
  *
+ * The whole catalog is here (sixteen hand-offs, handoffs.md), not only the six this flow uses:
+ * name one on a page and it plays, forward and back.
+ *
  * Only transform and opacity animate. Entrances use fill-mode backwards so press and selection
  * styles own an element once it has landed.
  */
 
 @media (prefers-reduced-motion: no-preference) {
   [data-sw-route][data-sw-transition^="story-"] {
-    --story-ms: 700ms;
+    --story-ms: 800ms;
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
     --in-ms: 420ms;
@@ -34,7 +37,11 @@
     --stagger: 40ms;
     --img-lead: 120ms;
     --btn-lead: 180ms;
-    --out-ms: 240ms;
+    /* The leaving page's default: up and out, quick, on the same ease-out as everything else. */
+    --out-ms: 180ms;
+    --out-y: -12px;
+    --out-scale: 1;
+    --out-ease: var(--ease-out);
   }
 
   /* The layer itself holds still for the hand-off; the router reads this as the transition's length. */
@@ -44,11 +51,25 @@
     animation-timing-function: linear;
   }
 
-  [data-sw-route][data-sw-transition="story-begin"],
-  [data-sw-route][data-sw-transition="story-flood"],
-  [data-sw-route][data-sw-transition="story-absorb"],
-  [data-sw-route][data-sw-transition="story-finish"] {
+  /* How long each hand-off needs its two pages on screen together (the longest exit or entrance, with its delays). */
+  [data-sw-route]:is([data-sw-transition="story-begin"], [data-sw-transition="story-flood"], [data-sw-transition="story-absorb"]) {
     --story-ms: 1100ms;
+  }
+
+  [data-sw-route]:is([data-sw-transition="story-inward"], [data-sw-transition="story-fade"], [data-sw-transition="story-slip"]) {
+    --story-ms: 1000ms;
+  }
+
+  [data-sw-route]:is([data-sw-transition="story-gone"], [data-sw-transition="story-settle"], [data-sw-transition="story-finish"]) {
+    --story-ms: 1300ms;
+  }
+
+  [data-sw-route][data-sw-transition="story-jolt"] {
+    --story-ms: 500ms;
+  }
+
+  [data-sw-route][data-sw-transition="story-cadence"] {
+    --story-ms: 900ms;
   }
 
   @keyframes story-hold {
@@ -71,7 +92,20 @@
   @keyframes story-out {
     to {
       opacity: 0;
-      transform: translate3d(0, var(--out-y, -10px), 0);
+      transform: translate3d(0, var(--out-y), 0) scale(var(--out-scale));
+    }
+  }
+
+  /* The welcome tips back like a card and is gone: the model A → nothing, physics. */
+  @keyframes story-tip-back {
+    from {
+      opacity: 1;
+      transform: perspective(900px) rotateX(0deg);
+    }
+
+    to {
+      opacity: 0;
+      transform: perspective(900px) translate3d(0, -20px, 0) rotateX(22deg) scale(0.97);
     }
   }
 
@@ -118,30 +152,170 @@
     animation-delay: calc(var(--in-delay) + var(--btn-lead));
   }
 
-  /* ---- the leaving page: its parts drift up and out, the chosen answer and the backdrop stay for the script ---- */
+  /* ---- the leaving page, going forward: as one, up and out (the default), unless the hand-off takes it apart ---- */
 
-  [data-sw-phase="recede"] [data-flow-page] :is([data-flow-line], [data-flow-option]:not([data-selected]), [data-flow-image], [data-next-button]),
-  [data-sw-phase="leave"] [data-flow-page] :is([data-flow-line], [data-flow-option], [data-flow-image], [data-next-button]) {
-    animation: story-out var(--out-ms) var(--ease-in-out) forwards;
+  [data-sw-phase="recede"] [data-flow-page] {
+    animation: story-out var(--out-ms) var(--out-ease) forwards;
   }
 
-  /* Going forward the chosen answer is carried by the script (into the bar, the photo, the colour), which hides the live one under its copy; this is the fallback when it has nowhere to go. */
-  [data-sw-phase="recede"] [data-flow-page] [data-flow-option][data-selected] {
-    animation: story-out var(--out-ms) var(--ease-in-out) 60ms forwards;
+  [data-sw-transition="story-begin"][data-sw-phase="recede"] [data-flow-page] {
+    animation: story-tip-back 320ms var(--ease-in-out) forwards;
+    transform-origin: 50% 100%;
+  }
+
+  /* Big picture → looking back inward: it shrinks away. */
+  [data-sw-transition="story-inward"][data-sw-phase="recede"] [data-flow-page] {
+    --out-ms: 320ms;
+    --out-y: 8px;
+    --out-scale: 0.92;
+  }
+
+  /* Forgotten: it drifts off, further and slower. */
+  [data-sw-transition="story-slip"][data-sw-phase="recede"] [data-flow-page] {
+    --out-ms: 380ms;
+    --out-y: -28px;
+  }
+
+  /* Fade to nothing. */
+  [data-sw-transition="story-gone"][data-sw-phase="recede"] [data-flow-page] {
+    --out-ms: 300ms;
     --out-y: 0px;
+    --out-scale: 0.98;
   }
 
-  /* The statement's words leave before its colour collapses into the bar. */
-  [data-sw-transition="story-absorb"][data-sw-phase="recede"] [data-flow-page] [data-flow-line] {
+  /* Re-explaining: back over the same ground, so it goes down and the next comes from above. */
+  [data-sw-transition="story-again"][data-sw-phase="recede"] [data-flow-page] {
+    --out-ms: 200ms;
+    --out-y: 14px;
+  }
+
+  /* Tension: a cut. */
+  [data-sw-transition="story-jolt"][data-sw-phase="recede"] [data-flow-page] {
+    --out-ms: 120ms;
+    --out-y: 0px;
+    --out-scale: 0.98;
+  }
+
+  /* Settles down. */
+  [data-sw-transition="story-settle"][data-sw-phase="recede"] [data-flow-page] {
+    --out-ms: 320ms;
+    --out-y: 20px;
+  }
+
+  [data-sw-transition="story-finish"][data-sw-phase="recede"] [data-flow-page] {
+    --out-ms: 220ms;
+  }
+
+  /*
+   * Taken apart: these hand-offs carry one part of the page onward (the chosen answer into the
+   * photo or the colour, the colour into the bar), or leave its parts on their own beats, so the
+   * page itself stays put under the script's copies and each part has its own exit.
+   */
+  [data-sw-phase="recede"]:is(
+      [data-sw-transition="story-picture"],
+      [data-sw-transition="story-connect"],
+      [data-sw-transition="story-flood"],
+      [data-sw-transition="story-absorb"],
+      [data-sw-transition="story-fade"],
+      [data-sw-transition="story-blank"],
+      [data-sw-transition="story-cadence"]
+    )
+    [data-flow-page] {
+    animation: none;
+  }
+
+  /* The lines and the other answers lift while the chosen one opens into the next page. */
+  [data-sw-phase="recede"]:is([data-sw-transition="story-picture"], [data-sw-transition="story-connect"], [data-sw-transition="story-flood"])
+    [data-flow-page]
+    :is([data-flow-line], [data-next-button], [data-flow-image]),
+  [data-sw-transition="story-picture"][data-sw-phase="recede"] [data-flow-page] [data-flow-option]:not([data-selected]),
+  [data-sw-transition="story-flood"][data-sw-phase="recede"] [data-flow-page] [data-flow-option]:not([data-selected]) {
+    animation: story-out 180ms var(--out-ease) forwards;
+    --out-y: -10px;
+  }
+
+  /* Connect: the other answers gather into the chosen one, in script (handoffs.ts); nothing here touches them. */
+
+  /* The statement's words leave one by one, above the colour that is about to collapse into the bar. */
+  [data-sw-transition="story-absorb"][data-sw-phase="recede"] [data-flow-page] :is([data-flow-line], [data-next-button]) {
+    animation: story-out 180ms var(--out-ease) forwards;
+    --out-y: -10px;
+  }
+
+  [data-sw-transition="story-absorb"][data-sw-phase="recede"] [data-flow-page] :is([data-flow-line], [data-next-button]):nth-child(2) {
+    animation-delay: 40ms;
+  }
+
+  [data-sw-transition="story-absorb"][data-sw-phase="recede"] [data-flow-page] :is([data-flow-line], [data-next-button]):nth-child(3) {
+    animation-delay: 80ms;
+  }
+
+  /* Memories fading: the answers leave one by one, each a little further than the last. */
+  [data-sw-transition="story-fade"][data-sw-phase="recede"] [data-flow-page] :is([data-flow-line], [data-flow-image], [data-next-button]) {
+    animation: story-out 200ms var(--out-ease) forwards;
+    --out-y: -8px;
+  }
+
+  [data-sw-transition="story-fade"][data-sw-phase="recede"] [data-flow-page] [data-flow-option] {
+    animation: story-out 220ms var(--out-ease) 40ms forwards;
     --out-y: -6px;
-    animation-duration: 180ms;
+  }
+
+  [data-sw-transition="story-fade"][data-sw-phase="recede"] [data-flow-page] [data-flow-option]:nth-child(2) {
+    animation-delay: 100ms;
+    --out-y: -9px;
+  }
+
+  [data-sw-transition="story-fade"][data-sw-phase="recede"] [data-flow-page] [data-flow-option]:nth-child(3) {
+    animation-delay: 160ms;
+    --out-y: -12px;
+  }
+
+  [data-sw-transition="story-fade"][data-sw-phase="recede"] [data-flow-page] [data-flow-option]:nth-child(4) {
+    animation-delay: 220ms;
+    --out-y: -15px;
+  }
+
+  /* The mind goes blank: the photo lifts first, the words a beat later. */
+  [data-sw-transition="story-blank"][data-sw-phase="recede"] [data-flow-page] [data-flow-image] {
+    animation: story-out 200ms var(--out-ease) forwards;
+    --out-y: -16px;
+  }
+
+  [data-sw-transition="story-blank"][data-sw-phase="recede"] [data-flow-page] :is([data-flow-line], [data-flow-option], [data-next-button]) {
+    animation: story-out 160ms var(--out-ease) 60ms forwards;
+    --out-y: -8px;
+  }
+
+  /* The answers leave on an even beat, 50ms apart, linear: a pattern forms. */
+  [data-sw-transition="story-cadence"][data-sw-phase="recede"] [data-flow-page] :is([data-flow-line], [data-flow-image], [data-next-button]) {
+    animation: story-out 160ms var(--out-ease) forwards;
+    --out-y: -8px;
+  }
+
+  [data-sw-transition="story-cadence"][data-sw-phase="recede"] [data-flow-page] [data-flow-option] {
+    animation: story-out 160ms linear forwards;
+    --out-y: -10px;
+  }
+
+  [data-sw-transition="story-cadence"][data-sw-phase="recede"] [data-flow-page] [data-flow-option]:nth-child(2) {
+    animation-delay: 50ms;
+  }
+
+  [data-sw-transition="story-cadence"][data-sw-phase="recede"] [data-flow-page] [data-flow-option]:nth-child(3) {
+    animation-delay: 100ms;
+  }
+
+  [data-sw-transition="story-cadence"][data-sw-phase="recede"] [data-flow-page] [data-flow-option]:nth-child(4) {
+    animation-delay: 150ms;
   }
 
   /* ---- transform destinations: they arrive as the transform of something on the previous page ---- */
 
   [data-flow-page] [data-morph],
-  [data-sw-transition="story-picture"][data-sw-phase="enter"] [data-flow-page] [data-flow-image],
+  :is([data-sw-transition="story-picture"], [data-sw-transition="story-connect"])[data-sw-phase="enter"] [data-flow-page] [data-flow-image],
   [data-sw-transition="story-picture"][data-sw-phase="return"] [data-flow-page] [data-flow-option][data-selected],
+  [data-sw-transition="story-connect"][data-sw-phase="return"] [data-flow-page] [data-flow-option],
   [data-sw-transition="story-flood"][data-sw-phase="enter"] [data-flow-page] [data-flow-backdrop],
   [data-sw-transition="story-flood"][data-sw-phase="return"] [data-flow-page] [data-flow-option][data-selected],
   [data-sw-transition="story-absorb"][data-sw-phase="return"] [data-flow-page] [data-flow-backdrop],
@@ -150,7 +324,7 @@
     animation: none;
   }
 
-  /* ---- hand-offs, arriving forward ---- */
+  /* ---- hand-offs, arriving forward (the catalog's entrance overrides) ---- */
 
   /* The cover gives way; the first question takes its time. */
   [data-sw-transition="story-begin"][data-sw-phase="enter"] {
@@ -158,8 +332,68 @@
     --in-ms: 520ms;
   }
 
-  [data-sw-transition="story-picture"][data-sw-phase="enter"] {
+  :is([data-sw-transition="story-picture"], [data-sw-transition="story-connect"])[data-sw-phase="enter"] {
     --in-delay: 120ms;
+  }
+
+  /* Big picture → looking back inward: from further down, slower. */
+  [data-sw-transition="story-inward"][data-sw-phase="enter"] {
+    --in-delay: 160ms;
+    --in-ms: 600ms;
+    --in-y: 24px;
+  }
+
+  /* Arrives in place, softly, after the old page drifted off. */
+  [data-sw-transition="story-slip"][data-sw-phase="enter"] {
+    --in-delay: 180ms;
+    --in-ms: 560ms;
+    --in-y: 0px;
+    --in-scale: 0.98;
+  }
+
+  [data-sw-transition="story-fade"][data-sw-phase="enter"] {
+    --in-delay: 260ms;
+  }
+
+  /* Fade to nothing, a beat of emptiness, then it settles in. */
+  [data-sw-transition="story-gone"][data-sw-phase="enter"] {
+    --in-delay: 420ms;
+    --in-ms: 600ms;
+    --in-y: 0px;
+    --in-scale: 1.03;
+  }
+
+  [data-sw-transition="story-blank"][data-sw-phase="enter"] {
+    --in-delay: 160ms;
+  }
+
+  /* Re-explaining: back over the same ground, so it comes from above. */
+  [data-sw-transition="story-again"][data-sw-phase="enter"] {
+    --in-delay: 100ms;
+    --in-y: -16px;
+  }
+
+  /* Tension: faster cuts. */
+  [data-sw-transition="story-jolt"][data-sw-phase="enter"] {
+    --in-delay: 40ms;
+    --in-ms: 240ms;
+    --in-y: 0px;
+    --in-scale: 0.96;
+    --line-gap: 30ms;
+    --opt-lead: 40ms;
+    --stagger: 25ms;
+  }
+
+  /* Answers arrive on an even beat. */
+  [data-sw-transition="story-cadence"][data-sw-phase="enter"] {
+    --in-delay: 140ms;
+    --stagger: 70ms;
+  }
+
+  [data-sw-transition="story-cadence"][data-sw-phase="enter"] [data-flow-page] [data-flow-option] {
+    --in-y: 0px;
+    --in-scale: 0.94;
+    animation-timing-function: var(--ease-in-out);
   }
 
   /*
@@ -178,14 +412,19 @@
     --in-delay: 200ms;
   }
 
+  /* The calmest moment: slow, low, on a wide beat. */
+  [data-sw-transition="story-settle"][data-sw-phase="enter"] {
+    --in-delay: 200ms;
+    --in-ms: 680ms;
+    --in-y: 10px;
+    --stagger: 70ms;
+  }
+
   /* The bar fills its last stretch and holds for a beat, then gives way to the last page. */
   [data-sw-transition="story-finish"][data-sw-phase="enter"] {
     --in-delay: 380ms;
+    --img-lead: 180ms;
     --btn-lead: 320ms;
-  }
-
-  [data-sw-route][data-sw-transition="story-finish"] {
-    --story-ms: 1200ms;
   }
 
   /* ---- back: the reverse path, quicker, from above ---- */
@@ -194,6 +433,7 @@
     --in-delay: 60ms;
     --in-ms: 300ms;
     --in-y: -10px;
+    --in-scale: 1;
     --line-gap: 40ms;
     --opt-lead: 60ms;
     --stagger: 25ms;
@@ -201,14 +441,32 @@
     --btn-lead: 100ms;
   }
 
-  [data-sw-phase="leave"] [data-flow-page] {
-    --out-y: 10px;
+  /* Going back over "again": the previous page rises from below. */
+  [data-sw-transition="story-again"][data-sw-phase="return"] {
+    --in-y: 10px;
   }
 
-  /* The statement's backdrop is carried out by the script going back; its words just go. */
-  [data-sw-transition="story-flood"][data-sw-phase="leave"] [data-flow-page] [data-flow-backdrop] {
-    animation: story-out var(--out-ms) var(--ease-in-out) forwards;
-    --out-y: 0px;
+  /* The leaving page goes the way it came, quicker: down and out as one (its carried part, if any, is under the script's copy). */
+  [data-sw-phase="leave"] [data-flow-page] {
+    animation: story-out 160ms var(--out-ease) forwards;
+    --out-y: 12px;
+    --out-scale: 1;
+  }
+
+  [data-sw-transition="story-again"][data-sw-phase="leave"] [data-flow-page] {
+    --out-y: -12px;
+  }
+
+  /* Back out of a photo: the photo is the morph (the script hides it), the words go on their own. */
+  :is([data-sw-transition="story-picture"], [data-sw-transition="story-connect"])[data-sw-phase="leave"] [data-flow-page] {
+    animation: none;
+  }
+
+  :is([data-sw-transition="story-picture"], [data-sw-transition="story-connect"])[data-sw-phase="leave"]
+    [data-flow-page]
+    :is([data-flow-line], [data-next-button], [data-flow-option]) {
+    animation: story-out 150ms var(--out-ease) forwards;
+    --out-y: 12px;
   }
 }
 

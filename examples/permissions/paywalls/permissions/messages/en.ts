@@ -16,8 +16,15 @@ export default {
     tracking: "Tracking",
   },
   log: {
+    label: "Answers",
     empty: "Nothing asked yet.",
-    line: "{name} → {status}",
+  },
+  status: {
+    granted: "Granted",
+    denied: "Denied",
+    unsupported: "Unsupported",
+    success: "Succeeded",
+    failure: "Failed",
   },
   callbacks: {
     title: "Callbacks",

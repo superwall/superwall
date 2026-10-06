@@ -9,9 +9,9 @@ export default {
     subtitle: "The answer goes in the URL, so it survives a reload or a switch to another browser.",
   },
   goals: {
-    focus: { label: "Focus", hint: "Fewer, longer sessions" },
-    habit: { label: "Build a habit", hint: "A little every day" },
-    catchUp: { label: "Catch up", hint: "Work through a backlog" },
+    focus: { label: "Focus", hint: "Fewer, longer sessions", phrase: "focus" },
+    habit: { label: "Build a habit", hint: "A little every day", phrase: "building a habit" },
+    catchUp: { label: "Catch up", hint: "Work through a backlog", phrase: "catching up" },
   },
   plan: {
     title: "Go Pro",
@@ -22,6 +22,7 @@ export default {
     empty: "—",
     cta: "Subscribe · {price}",
     ctaBare: "Subscribe",
+    failed: "The payment didn't go through. Try again.",
   },
   common: {
     back: "Back",

@@ -53,14 +53,15 @@ that layer is what every page paints on:
 
 ```css
 :root {
-  --dim: 0.85; /* the page dims to this, and the scrim fills the difference */
-  --scrim: #000;
+  --dim: 0.45; /* the scrim's share of ink, and how far the page behind lets it through */
 }
 ```
 
-One number drives both. The scrim is the page colour already multiplied by it —
-the same operation `brightness()` performs — on the framework's own duration and
-curve, so the two darken in step instead of drifting apart mid-movement.
+One number drives both. The scrim is ink mixed over the page colour at `--dim`;
+the page behind drops to `1 - --dim` opacity, so it shows the same scrim through
+itself and lands on the same shade as the gap around it — transform and opacity
+only, nothing filtered. Both run on the framework's own duration and curve, so
+they darken in step instead of drifting apart mid-movement.
 
 **One offer, not two.** Abandoning the discount as well leaves them where they
 are — a second sheet would be nagging.

@@ -52,6 +52,10 @@ intro and settles, and `Remember Start SM`, which holds its state from the first
 frame. Naming one that does not exist leaves a blank canvas and no error at
 all.
 
+**A state machine runs every frame, so pause it when the page is covered.**
+`RiveArt` reads `useIsFocused()` and calls `rive.pause()` while another route
+sits over this one, `rive.play()` when it returns.
+
 **A `.riv` is always hosted**, whatever it weighs — uploaded by content hash and
 fetched at runtime, so it costs nothing in the snapshot.
 

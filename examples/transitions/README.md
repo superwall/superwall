@@ -52,12 +52,20 @@ about. It stamps `data-sw-transition="zoom"` on the route plus a
 | `return` | coming forward again as you go back |
 
 ```css
+[data-sw-route][data-sw-transition="zoom"][data-sw-phase] {
+  animation-duration: 400ms;
+  animation-timing-function: var(--ease-out);
+}
 [data-sw-transition="zoom"][data-sw-phase="enter"]  { animation-name: zoom-enter }
 [data-sw-transition="zoom"][data-sw-phase="recede"] { animation-name: zoom-recede }
 
-@keyframes zoom-enter  { from { opacity: 0; transform: scale(0.85) } }
-@keyframes zoom-recede { to   { opacity: 0; transform: scale(1.15) } }
+@keyframes zoom-enter  { from { opacity: 0; transform: scale(0.92) } }
+@keyframes zoom-recede { to   { opacity: 0; transform: scale(1.06) } }
 ```
+
+Leave the duration and easing out and the route inherits the router's defaults
+(500ms on its own curve); set them on the three-attribute selector above to
+own them. Keep the keyframes to `transform` and `opacity` only.
 
 The phase attribute disappears the moment a transition ends, so a rule can never
 leak outside its own transition — there is no "is it finished" check to forget.

@@ -16,7 +16,7 @@ export default definePaywall({
    * this is what the framework writes on <html>, which iOS shows when a scroll
    * rubber-bands past the end. Keep them identical (theme.css).
    */
-  background: { light: "#fdfef6", dark: "#1c1b19" },
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
 
   /**
    * The last page offers the plan. The identifier is a placeholder — point it

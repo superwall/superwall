@@ -75,10 +75,10 @@ of the story CSS applies.
 | --- | --- |
 | `components/flow.ts` | the routes, each one's hand-off, its progress fraction and its image |
 | `components/motion/useStoryRouter.ts` | `router.push` / `back` wrapped in the hand-off, waiting for the destination's image |
-| `components/motion/handoffs.ts` | the engine: answer → bar, back out of the bar, picture, flood, absorb |
+| `components/motion/handoffs.ts` | the engine: answer → bar, back out of the bar, picture, connect, flood, absorb |
 | `components/motion/morphFrame.ts` | the one-geometry morph: frame, faces, the critically damped clock |
 | `components/motion/imageReady.ts` | decoded images kept warm, for Safari |
-| `app/motion.css` | the exits and entrances, keyed on the router's phases |
+| `app/motion.css` | the exits and entrances, keyed on the router's phases: the whole sixteen-hand-off catalog, not only the six this flow names |
 
 The direction behind it (what to move, what never to, what was tried and
 rejected) is the `animate-onboarding` skill in

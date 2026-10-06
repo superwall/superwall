@@ -4,6 +4,9 @@ export default definePaywall({
   /** What this paywall is called on Superwall. Defaults to the directory name. */
   name: "Pro — Transition Gallery",
 
+  /** The page background in both schemes, so the host never flashes white behind a scroll bounce. */
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
+
   /**
    * The products this paywall sells, as `reference: "store identifier"`.
    *

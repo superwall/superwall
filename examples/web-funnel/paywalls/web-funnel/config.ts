@@ -3,6 +3,9 @@ import { definePaywall } from "superwall/config";
 export default definePaywall({
   name: "Web Funnel",
 
+  /** The page background per scheme — what <html> shows when a scroll bounces past the content. Matches `--bg` in theme.css. */
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
+
   /**
    * How steps move. `shift` is the funnel transition: the next step fades in
    * as it drifts into place, and the one it replaces is simply gone.

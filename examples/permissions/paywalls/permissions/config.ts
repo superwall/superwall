@@ -4,6 +4,9 @@ export default definePaywall({
   /** What this paywall is called on Superwall. Defaults to the directory name. */
   name: "Pro — Permissions",
 
+  /** The page background per scheme — what the host paints behind the paywall and under a scroll bounce. Matches `--bg` in theme.css. */
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
+
   /**
    * The products this paywall sells, as `reference: "store identifier"`.
    *

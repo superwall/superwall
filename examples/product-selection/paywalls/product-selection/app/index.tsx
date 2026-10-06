@@ -12,6 +12,7 @@ export default function Index() {
   const haptics = useHaptics();
 
   const [selected, setSelected] = React.useState<(typeof PLANS)[number]>("annual");
+  const [notice, setNotice] = React.useState<string>();
   const priced = PLANS.some((reference) => getProduct(reference)?.variables.price);
 
   return (
@@ -55,12 +56,22 @@ export default function Index() {
       )}
 
       <div className="actions">
+        {notice && (
+          <p className="notice" role="status">
+            {notice}
+          </p>
+        )}
+        {/* purchase() resolves completed | abandoned | failed; the button never shows a loading state — the store sheet is the feedback. */}
         <button
           type="button"
           className="button button--primary"
-          onClick={() => {
+          onClick={async () => {
             haptics.light();
-            purchase(selected);
+            setNotice(undefined);
+            const result = await purchase(selected);
+            if (result.status === "completed") haptics.success();
+            else if (result.status === "failed") setNotice(t("purchase.failed"));
+            // abandoned: the user closed the store sheet — nothing changes, nothing is said
           }}
         >
           {t("paywall.continue")}
@@ -68,9 +79,12 @@ export default function Index() {
         <button
           type="button"
           className="link"
-          onClick={() => {
+          onClick={async () => {
             haptics.light();
-            restore();
+            setNotice(undefined);
+            const result = await restore();
+            if (result.status === "restored") haptics.success();
+            setNotice(result.status === "restored" ? t("restore.restored") : t("restore.failed"));
           }}
         >
           {t("paywall.restore")}

@@ -12,6 +12,10 @@ import sprout from "../assets/sprout.svg";
  */
 export type Route = "index" | "goal" | "nights" | "statement" | "tried" | "insight" | "done";
 
+/**
+ * The catalog (handoffs.md). This flow uses six; the rest are built too
+ * (motion.css, handoffs.ts), so a page can name any of them.
+ */
 export type Handoff =
   /** welcome → first question: the welcome tips back like a card; the bar draws in */
   | "begin"
@@ -23,8 +27,28 @@ export type Handoff =
   | "absorb"
   /** question → explainer: the chosen answer becomes the hero image */
   | "picture"
+  /** question → explainer: the other answers gather into the chosen one as it becomes the hero image */
+  | "connect"
   /** explainer → done: the bar completes and hands over */
-  | "finish";
+  | "finish"
+  /** big picture → looking inward: the old page shrinks away, the next rises from further down, slower */
+  | "inward"
+  /** forgotten: the old page drifts off, the next arrives in place, softly */
+  | "slip"
+  /** memories fading: the answers leave one by one, each further than the last */
+  | "fade"
+  /** fade to nothing, a beat of emptiness, then the next settles in */
+  | "gone"
+  /** the mind goes blank: the photo lifts first, the words a beat later */
+  | "blank"
+  /** re-explaining: back over the same ground, so the next comes from above */
+  | "again"
+  /** tension: faster cuts */
+  | "jolt"
+  /** the answers leave and arrive on an even beat: a pattern forms */
+  | "cadence"
+  /** the calmest moment: slow, low, on a wide beat */
+  | "settle";
 
 export const HANDOFF: Record<Exclude<Route, "index">, Handoff> = {
   goal: "begin",

@@ -17,6 +17,16 @@ export default {
       after:
         "at it. The build uploads it to our CDN and rewrites the URL for you — nothing to host, nothing to configure.",
     },
+    cta: "Subscribe · {price}",
+    ctaBare: "Subscribe",
+    restore: "Restore purchases",
+  },
+  purchase: {
+    failed: "That didn't go through. Try again.",
+  },
+  restore: {
+    restored: "Purchases restored.",
+    failed: "Nothing to restore, or the store didn't answer. Try again.",
   },
   common: {
     close: "Close",

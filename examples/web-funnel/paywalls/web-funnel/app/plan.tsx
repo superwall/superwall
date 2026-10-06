@@ -1,13 +1,13 @@
 import * as React from "react";
-import {
-  useHaptics,
-  useProducts,
-  usePurchase,
-  useTranslation,
-  type ProductReference,
-} from "superwall/hooks";
-import { useQueryState, useRouter } from "superwall/navigation";
-import { goalParser } from "../components/goals";
+import { useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
+import { parseAsStringEnum, useQueryState, useRouter } from "superwall/navigation";
+import { GOALS, goalParser } from "../components/goals";
+
+// The plan is a selection on a web funnel, so it lives in the URL like the
+// goal does: a reload or a trip through hosted checkout lands back on the
+// plan that was picked. `withDefault` keeps the key out of the URL until it
+// changes.
+const planParser = parseAsStringEnum(["monthly", "pro"]).withDefault("monthly");
 
 export default function Plan() {
   const router = useRouter();
@@ -16,13 +16,15 @@ export default function Plan() {
   const { t } = useTranslation();
   const haptics = useHaptics();
   const [goal] = useQueryState("goal", goalParser);
+  const [notice, setNotice] = React.useState<string>();
 
   // Typed against the config: naming a product this paywall does not declare
   // is a compile error, not an undefined price on someone's phone.
-  const [reference, setReference] = React.useState<ProductReference>("monthly");
+  const [reference, setReference] = useQueryState("plan", planParser);
   const monthly = getProduct("monthly");
   const pro = getProduct("pro");
   const selected = getProduct(reference);
+  const chosen = GOALS.find((entry) => entry.id === goal);
 
   // Warm the checkout for the plan on screen: the session is fetched and
   // Stripe's sheet pre-renders hidden, so Subscribe opens it instantly.
@@ -46,7 +48,7 @@ export default function Plan() {
       <div className="lede">
         <h1>{t("plan.title")}</h1>
         <p>
-          {goal ? `${t("plan.forGoal", { goal: goal.replace("-", " ") })} ` : ""}
+          {chosen ? `${t("plan.forGoal", { goal: t(chosen.phrase) })} ` : ""}
           {t("plan.body")}
         </p>
       </div>
@@ -64,7 +66,7 @@ export default function Plan() {
             className="plan"
             aria-pressed={reference === plan.id}
             onClick={() => {
-              haptics.light();
+              haptics.selection();
               setReference(plan.id);
             }}
           >
@@ -75,12 +77,22 @@ export default function Plan() {
       </div>
 
       <div className="actions">
+        {notice ? (
+          <p className="notice" role="status">
+            {notice}
+          </p>
+        ) : null}
+        {/* purchase() resolves completed | abandoned | failed; the button never shows a loading state — the sheet is the feedback. */}
         <button
           type="button"
           className="button button--primary"
-          onClick={() => {
+          onClick={async () => {
             haptics.light();
-            purchase(reference);
+            setNotice(undefined);
+            const result = await purchase(reference);
+            if (result.status === "completed") haptics.success();
+            else if (result.status === "failed") setNotice(t("plan.failed"));
+            // abandoned: the sheet was closed — nothing changes, nothing is said
           }}
         >
           {selected?.variables.price

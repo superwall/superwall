@@ -4,6 +4,9 @@ export default definePaywall({
   /** What this paywall is called on Superwall. Defaults to the directory name. */
   name: "Pro — Abandonment Offer",
 
+  /** The page colour per scheme, so the native backdrop and scroll bounce match `--bg`. */
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
+
   /**
    * The products this paywall sells, as `reference: "store identifier"`.
    *

@@ -32,7 +32,7 @@ same on every paywall you ship — the close button, restore purchases — go in
 the shared one and get translated once:
 
 ```
-messages/fr.ts                        common.close, common.restore
+messages/fr.ts                        common.close, common.restore, restore.restored, restore.failed, purchase.failed, footer.*
 paywalls/localization/messages/fr.ts  paywall.title, paywall.cta, …
 ```
 

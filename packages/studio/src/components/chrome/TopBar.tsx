@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useStudioHome } from "../../lib/studio-host";
 import { ControlSizeContext } from "../controls";
+import { SuperwallLogo } from "../SuperwallLogo";
 
 const CLEARANCE = 16;
 
@@ -55,9 +56,7 @@ export const TopBar = ({
             home.navigate();
           }}
         >
-          <span className="font-semibold whitespace-nowrap">
-            <span className="text-primary">$UPER</span>WALL
-          </span>
+          <SuperwallLogo className="flex whitespace-nowrap" />
           <span className="h-4 w-px bg-border max-sm:hidden" />
           <span className="text-fg-secondary max-sm:hidden">{label}</span>
         </a>

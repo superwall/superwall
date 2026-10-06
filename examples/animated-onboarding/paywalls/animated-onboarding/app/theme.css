@@ -1,33 +1,64 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300..800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Roboto+Mono:wght@400..500&display=swap");
 
+/*
+ * Superwall's application register (DESIGN.md), on a surface. Flat and quiet:
+ * one cool-grey OKLCH ramp in dark, cream paper in light, one border, a
+ * four-step text ladder, Manrope with Roboto Mono for code, one 3px corner,
+ * no shadows, one fixed teal accent. Both modes are defined in every branch;
+ * the SDK stamps `dark` on <html>.
+ */
 :root {
-  --bg: #fdfef6;
-  --fg: #1c1b19;
-  --accent: #5b6cf0;
-  --accent-ink: #fdfef6;
+  --tint-h: 262;
+  --tint-c: 0.0055;
+  --border-alpha: 10%;
+  --cream: #fdfef6;
+  --ink: #0c0b0a;
 
-  --fg-body: color-mix(in srgb, var(--fg) 70%, transparent);
-  --fg-muted: color-mix(in srgb, var(--fg) 50%, transparent);
-  --border: color-mix(in srgb, var(--fg) 12%, transparent);
-  --wash: color-mix(in srgb, var(--fg) 6%, transparent);
-  /* The answer capsule's colour, and so the statement's flood: one and the same. */
-  --capsule: color-mix(in srgb, var(--accent) 14%, var(--bg));
-  --capsule-selected: var(--accent);
+  --bg: var(--cream);
+  --fg: var(--ink);
+  --surface: color-mix(in oklab, var(--fg) 3%, var(--bg));
+  --raised: color-mix(in oklab, var(--fg) 7%, var(--bg));
+  --muted: color-mix(in oklab, var(--fg) 6%, var(--bg));
+  --secondary: color-mix(in oklab, var(--fg) 10%, var(--bg));
+  --wash: color-mix(in oklab, var(--fg) 5%, transparent);
 
-  --sans: Manrope, ui-sans-serif, system-ui, sans-serif;
+  --fg-secondary: color-mix(in oklab, var(--fg) 70%, transparent);
+  --fg-tertiary: color-mix(in oklab, var(--fg) 55%, transparent);
+  --fg-muted: color-mix(in oklab, var(--fg) 45%, transparent);
+  --border: color-mix(in oklab, var(--fg) var(--border-alpha), transparent);
+
+  /* The one accent, fixed in both modes: the primary fill, the selected edge, the focused edge. */
+  --accent: #46d7d4;
+  --accent-ink: var(--ink);
+  --destructive: #ee6d2e;
+  --destructive-ink: #712f1a;
+  --success: #9fd947;
+  --success-ink: #5f822b;
+
+  --radius: 3px;
+  --sans: Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-hover: 150ms;
 
-  /* What the router paints behind every page: the same as config.ts background. */
   --sw-background: var(--bg);
+  --sw-page-inset-bottom: 0px;
   color-scheme: light;
 }
 
 :root.dark {
-  --bg: #1c1b19;
-  --fg: #fdfef6;
-  --accent: #8d9bff;
-  --accent-ink: #1c1b19;
-  --capsule: color-mix(in srgb, var(--accent) 18%, var(--bg));
+  --bg: oklch(0.16 calc(var(--tint-c) * 0.7) var(--tint-h));
+  --fg: var(--cream);
+  --surface: oklch(0.195 var(--tint-c) var(--tint-h));
+  --raised: oklch(0.215 calc(var(--tint-c) * 1.25) var(--tint-h));
+  --muted: oklch(0.25 calc(var(--tint-c) * 0.6) var(--tint-h));
+  --secondary: oklch(0.29 calc(var(--tint-c) * 0.6) var(--tint-h));
+  --wash: oklch(0.86 calc(var(--tint-c) * 0.6) var(--tint-h) / 0.08);
+  --destructive-ink: #f3996d;
+  --success-ink: #b7e375;
   color-scheme: dark;
 }
 
@@ -35,41 +66,301 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--sans);
-  font-size: 1rem;
+  font-size: 0.9375rem;
+  font-weight: 400;
   line-height: 1.5;
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 h1,
-p {
+h2,
+h3 {
   margin: 0;
-}
-
-h1 {
-  font-size: clamp(1.75rem, 6.5vw, 2.25rem);
-  font-weight: 600;
-  line-height: 1.12;
-  letter-spacing: -0.03em;
+  font-weight: 500;
   text-wrap: balance;
 }
 
+h1 {
+  font-size: clamp(2rem, 7vw, 2.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+h2 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+h3 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+
 p {
-  color: var(--fg-body);
+  margin: 0;
+  color: var(--fg-secondary);
+}
+
+strong {
+  font-weight: 600;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+}
+
+/* Every control: a 3px corner, no tap flash, press feedback on the finger, hover only for a real pointer. */
+button,
+[role="button"],
+[role="radio"],
+[role="switch"] {
+  border-radius: var(--radius);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+:focus-visible {
+  outline: none;
+}
+
+.shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.page {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 16px 20px 0;
+}
+
+.lede {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* The primary action is pinned: the page scrolls under it, the content fades out behind it. */
+.actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding: 20px 0 16px;
+  background: linear-gradient(to bottom, transparent, var(--bg) 20px);
+}
+
+.button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  border: 1px solid var(--border);
+  background: transparent;
+  padding: 0 16px;
+  color: var(--fg);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    transform 200ms var(--ease-out),
+    background-color var(--duration-hover) var(--ease-out),
+    border-color var(--duration-hover) var(--ease-out);
+}
+
+.button:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .button:hover:not(:disabled) {
+    background: var(--wash);
+    border-color: color-mix(in oklab, var(--fg) 20%, transparent);
+  }
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.button--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .button--primary:hover:not(:disabled) {
+    border-color: color-mix(in oklab, var(--accent) 90%, transparent);
+    background: color-mix(in oklab, var(--accent) 90%, transparent);
+  }
+}
+
+.link {
+  align-self: center;
+  border: 0;
+  background: none;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--fg-tertiary);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition:
+    transform 200ms var(--ease-out),
+    color var(--duration-hover) var(--ease-out);
+}
+
+.link:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link:hover {
+    color: var(--fg);
+  }
+}
+
+/* iOS close: a small circle at the top-right, 44px to the finger. */
+.close {
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  padding: 0;
+  color: var(--fg-tertiary);
+  cursor: pointer;
+  transition:
+    transform 200ms var(--ease-out),
+    color var(--duration-hover) var(--ease-out);
+}
+
+.close:active {
+  transform: scale(0.92);
+  transition-duration: 80ms;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .close:hover {
+    color: var(--fg);
+  }
+}
+
+.built {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding: 4px 20px;
+  font-size: 0.8125rem;
+  color: var(--fg-tertiary);
+}
+
+/* The Superwall wordmark (components/Wordmark.tsx): "$UPER" in the accent, "WALL" in the foreground; 44px to the finger. */
+.wordmark {
+  --logo-primary: var(--accent);
+  --logo-secondary: var(--fg);
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+  color: var(--fg);
+  cursor: pointer;
+  transition: transform 200ms var(--ease-out);
+}
+
+.wordmark:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+.wordmark-art {
+  display: block;
+  height: 13px;
+  width: auto;
+}
+
+/* Reduced motion is gentler, not none: colour and opacity still explain what happened; nothing moves. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-property: color, background-color, border-color, opacity !important;
+    animation-duration: 1ms !important;
+  }
+}
+
+/*
+ * ---- animated-onboarding: what the hand-offs need from the theme ----
+ *
+ * The answers are pills by design (the engine morphs them from `radius: height / 2`), the hero
+ * keeps its 20px corner (handoffs.ts PHOTO_RADIUS reads it), and the chosen answer, the
+ * statement's flood and the progress bar are one colour: the accent.
+ */
+
+:root {
+  /* The resting answer capsule: the accent, faint. The chosen one is the accent itself, and so is the flood and the bar. */
+  --capsule: color-mix(in oklab, var(--accent) 14%, var(--bg));
+  --capsule-selected: var(--accent);
+}
+
+:root.dark {
+  --capsule: color-mix(in oklab, var(--accent) 18%, var(--bg));
+}
+
+/* Long statements: a step under the base's display size. */
+h1 {
+  font-size: clamp(1.75rem, 6.5vw, 2.25rem);
+  line-height: 1.12;
 }
 
 /* ---- the shell: chrome above the pages, the motion layer over everything ---- */
 
 .shell {
   position: relative;
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
 }
 
 .chrome {
@@ -94,16 +385,24 @@ p {
   align-items: center;
   justify-content: center;
   border: 0;
+  border-radius: 999px;
   background: none;
   padding: 0;
   color: var(--fg);
   cursor: pointer;
   pointer-events: auto;
+  transition: transform 200ms var(--ease-out);
 }
 
-.chrome-button:focus-visible {
-  border-radius: 999px;
-  outline: 2px solid var(--accent);
+.chrome-button:active {
+  transform: scale(0.92);
+  transition-duration: 80ms;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chrome-button:hover {
+    color: var(--fg-secondary);
+  }
 }
 
 .progress {
@@ -145,95 +444,41 @@ p {
 
 .page {
   position: relative;
-  display: flex;
-  min-height: 100%;
-  flex-direction: column;
   gap: 20px;
-  width: 100%;
   max-width: 28rem;
-  margin: 0 auto;
-  /* Below the chrome. */
-  padding: 64px 20px 20px;
+  /* Below the chrome; the sticky .actions owns the bottom. */
+  padding: 64px 20px 0;
 }
 
 .page--cover {
   padding-top: 52px;
 }
 
-.lede {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .lede--done {
   margin-top: auto;
 }
 
+/* A kicker is the label role, not an eyebrow: small, medium, tertiary. */
 .eyebrow {
-  color: var(--fg-muted);
+  color: var(--fg-tertiary);
   font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 500;
 }
 
+/* Decorative: no save-image sheet on a long press, no drag ghost. */
 .hero {
   display: block;
   width: 100%;
   height: auto;
   border-radius: 20px;
   background: var(--capsule);
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .actions {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
-  margin-top: auto;
-  padding-top: 20px;
-}
-
-.button {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: center;
-  min-height: 52px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--wash);
-  padding: 0 20px;
-  color: var(--fg);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 160ms var(--ease-out);
-}
-
-.button:active {
-  transform: scale(0.98);
-}
-
-.button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.button--primary {
-  background: var(--fg);
-  color: var(--bg);
-}
-
-.link {
-  align-self: center;
-  border: 0;
-  background: none;
-  padding: 12px;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: 0.875rem;
-  cursor: pointer;
 }
 
 /* ---- answers ---- */
@@ -252,26 +497,33 @@ p {
   border: 0;
   border-radius: 999px;
   background: var(--capsule);
-  padding: 0 22px;
+  padding: 12px 22px;
   color: var(--fg);
   font: inherit;
+  font-size: 1rem;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
+  /* Selection changes colour instantly; only transform and opacity move. */
   transition:
-    background-color 160ms var(--ease-out),
-    color 160ms var(--ease-out),
     opacity 200ms var(--ease-out),
-    transform 160ms var(--ease-out);
+    transform 200ms var(--ease-out);
 }
 
 .choice:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
+  transition-duration: 200ms, 80ms;
 }
 
-.choice:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+@media (hover: hover) and (pointer: fine) {
+  .choice:hover:not([data-selected]) {
+    background: color-mix(in oklab, var(--accent) 22%, var(--bg));
+  }
+}
+
+.choice-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .choice[data-selected] {
@@ -308,9 +560,23 @@ p {
   opacity: 0.8;
 }
 
+/* The pinned action fades the page out behind it: on the flood, into the flood's colour. */
+.page--statement .actions {
+  background: linear-gradient(to bottom, transparent, var(--capsule-selected) 20px);
+}
+
+/* On the accent, the primary inverts: ink fill, accent text. */
 .page--statement .button--primary {
+  border-color: var(--accent-ink);
   background: var(--accent-ink);
   color: var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .page--statement .button--primary:hover:not(:disabled) {
+    border-color: color-mix(in oklab, var(--accent-ink) 90%, transparent);
+    background: color-mix(in oklab, var(--accent-ink) 90%, transparent);
+  }
 }
 
 [data-tone="inverse"] .chrome-button {
@@ -318,7 +584,7 @@ p {
 }
 
 [data-tone="inverse"] .progress-track {
-  background: color-mix(in srgb, var(--accent-ink) 30%, transparent);
+  background: color-mix(in oklab, var(--accent-ink) 30%, transparent);
 }
 
 [data-tone="inverse"] .progress-fill {
@@ -329,11 +595,14 @@ p {
  * Arriving by a hand-off, the colour comes in with the morph, so the chrome waits for it before
  * switching (it's covered until then anyway: 504ms, the transform's length).
  */
-[data-tone="inverse"] .chrome-button,
-[data-tone="inverse"] .progress-track {
+[data-tone="inverse"] .chrome-button {
   transition:
-    color 160ms var(--ease-out) 504ms,
-    background-color 160ms var(--ease-out) 504ms;
+    transform 200ms var(--ease-out),
+    color 160ms var(--ease-out) 504ms;
+}
+
+[data-tone="inverse"] .progress-track {
+  transition: background-color 160ms var(--ease-out) 504ms;
 }
 
 [data-tone="inverse"] .progress-fill {

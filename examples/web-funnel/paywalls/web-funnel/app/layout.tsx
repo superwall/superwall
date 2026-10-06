@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { useActions, useHaptics, useTranslation } from "superwall/hooks";
+import { Wordmark } from "../components/Wordmark";
 import "./theme.css";
 
 export default function Layout({ children }: PropsWithChildren) {
@@ -21,7 +22,7 @@ export default function Layout({ children }: PropsWithChildren) {
             openUrl("https://superwall.com");
           }}
         >
-          <span className="wordmark-accent">$UPER</span>WALL
+          <Wordmark />
         </button>
       </footer>
     </div>

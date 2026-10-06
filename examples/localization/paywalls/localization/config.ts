@@ -5,6 +5,13 @@ export default definePaywall({
   name: "Pro — Localized",
 
   /**
+   * What the host paints behind the paywall, per scheme. `--sw-background` in
+   * theme.css paints the routes; this is what shows when an iOS scroll
+   * rubber-bands past the content, so the two carry the same colours.
+   */
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
+
+  /**
    * Message catalogs are discovered by filename — `messages/fr.ts` is French,
    * no registration needed. `defaultLocale` is what `t()` falls back to when
    * the device asks for a language this paywall does not carry.

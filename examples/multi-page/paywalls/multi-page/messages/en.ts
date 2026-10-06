@@ -29,6 +29,9 @@ export default {
     ctaBare: "Subscribe",
     restore: "Restore purchases",
     startOver: "Start over",
+    purchaseFailed: "The purchase didn't go through. Try again.",
+    restored: "Your purchases are back.",
+    restoreFailed: "Nothing to restore on this account, or the store didn't answer.",
   },
   chrome: {
     back: "Back",

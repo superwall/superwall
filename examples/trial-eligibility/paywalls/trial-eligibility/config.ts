@@ -5,6 +5,13 @@ export default definePaywall({
   name: "Pro — Trial Eligibility",
 
   /**
+   * The page background per scheme, the same colors as `--bg` in theme.css.
+   * `--sw-background` paints the routes; this paints `<html>`, which is what
+   * shows when an iOS scroll rubber-bands past the end of the content.
+   */
+  background: { light: "#fdfef6", dark: "#0c0d0f" },
+
+  /**
    * The products this paywall sells, as `reference: "store identifier"`.
    *
    * The identifiers below are placeholders — replace them with products that

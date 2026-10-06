@@ -35,8 +35,14 @@ and the SDK owns it — a native paywall does not grey its own button out.
 `usePurchase()` exposes `isPurchasing` for the cases that genuinely need it; a
 buy button is not one of them.
 
-**`restore()` is fire-and-forget.** There is no restore-result event; a
-successful restore surfaces as `transaction_complete` or a dismissed paywall.
+**`purchase()` resolves with the outcome.** `completed` gets a success haptic
+(the SDK dismisses the paywall), `failed` gets one line of copy with the
+button still enabled, and `abandoned` — the user closed the sheet — says
+nothing.
+
+**`restore()` is awaited.** It resolves `{ status: "restored" | "failed" }`;
+"nothing to restore" is not distinguishable from a store error, so the failed
+copy covers both.
 
 ## Next
 

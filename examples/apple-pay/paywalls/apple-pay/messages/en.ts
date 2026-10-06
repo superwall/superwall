@@ -2,12 +2,15 @@ export default {
   title: "Go Pro",
   subtitle: "Pay with Apple Pay in two taps. Cancel any time.",
   plans: {
+    label: "Plans",
     trial: "3-day free trial",
     trialNote: "then billed monthly",
     intro: "3 days for {price}",
+    introBare: "3 days at an intro price",
     introNote: "then billed monthly",
     monthly: "Monthly",
     monthlyNote: "billed every month",
+    empty: "—",
   },
   promo: {
     placeholder: "Promo code",
@@ -21,7 +24,12 @@ export default {
   },
   purchase: {
     continue: "Continue",
-    working: "One moment…",
+    restore: "Restore purchases",
+    failed: "That didn't go through. Try again.",
+  },
+  restore: {
+    restored: "Purchases restored.",
+    failed: "Nothing to restore, or the store didn't answer. Try again.",
   },
   discount: {
     percentOff: "{percent}% off",
@@ -30,9 +38,10 @@ export default {
     repeating: "for {months} months",
     forever: "forever",
     applied: "Code {code} applied",
-    save: "Save {amount}",
   },
-  close: "Close",
+  common: {
+    close: "Close",
+  },
   footer: {
     builtWith: "Built with",
     superwall: "Superwall",

@@ -23,8 +23,15 @@ selected plan" — it is `useState`, and `purchase(selected)` takes the referenc
 ```tsx
 const [selected, setSelected] = React.useState("annual");
 …
-<button onClick={() => purchase(selected)}>Continue</button>
+const result = await purchase(selected);
+if (result.status === "completed") haptics.success();
+else if (result.status === "failed") setNotice(t("purchase.failed"));
 ```
+
+`purchase()` resolves `completed | abandoned | failed` rather than throwing;
+the button never shows a loading state, because the store sheet is the
+feedback. `restore()` is awaited the same way and both of its outcomes get a
+line of copy — "nothing to restore" is not distinguishable from a store error.
 
 **One product can show two prices.** The annual plan renders its own price and
 its monthly equivalent, both from the store rather than arithmetic:
