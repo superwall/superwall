@@ -137,6 +137,16 @@ describe("CompareMenu", () => {
     ).toBe("");
     expect(screen.getByText("paywall/paywall-0")).toBeDefined();
   });
+
+  it("closes on Escape, and only on Escape", () => {
+    open();
+    const popup = () => document.querySelector("[data-menu-popup]");
+
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(popup()).not.toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(popup()).toBeNull();
+  });
 });
 
 describe("inside a shadow root", () => {

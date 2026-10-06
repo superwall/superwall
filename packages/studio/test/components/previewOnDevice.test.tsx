@@ -86,4 +86,25 @@ describe("previewing a surface on a device", () => {
     expect(window.localStorage.getItem("superwall-device-scheme")).toBe("typed");
     prompt.mockRestore();
   });
+
+  it("closes from Done, from Escape, and from a click on the backdrop", () => {
+    mount("local", sourceWith({ scheme: "myapp" }));
+    const dialog = () => screen.queryByRole("dialog", { name: "Preview on a device" });
+
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(dialog()).toBeNull();
+
+    openDialog();
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(dialog()).not.toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(dialog()).toBeNull();
+
+    openDialog();
+    fireEvent.mouseDown(dialog()!);
+    expect(dialog()).not.toBeNull();
+    fireEvent.mouseDown(dialog()!.parentElement!);
+    expect(dialog()).toBeNull();
+  });
 });
