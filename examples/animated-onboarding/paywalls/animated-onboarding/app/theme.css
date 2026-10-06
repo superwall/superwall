@@ -1,0 +1,343 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300..800&display=swap");
+
+:root {
+  --bg: #fdfef6;
+  --fg: #1c1b19;
+  --accent: #5b6cf0;
+  --accent-ink: #fdfef6;
+
+  --fg-body: color-mix(in srgb, var(--fg) 70%, transparent);
+  --fg-muted: color-mix(in srgb, var(--fg) 50%, transparent);
+  --border: color-mix(in srgb, var(--fg) 12%, transparent);
+  --wash: color-mix(in srgb, var(--fg) 6%, transparent);
+  /* The answer capsule's colour, and so the statement's flood: one and the same. */
+  --capsule: color-mix(in srgb, var(--accent) 14%, var(--bg));
+  --capsule-selected: var(--accent);
+
+  --sans: Manrope, ui-sans-serif, system-ui, sans-serif;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* What the router paints behind every page: the same as config.ts background. */
+  --sw-background: var(--bg);
+  color-scheme: light;
+}
+
+:root.dark {
+  --bg: #1c1b19;
+  --fg: #fdfef6;
+  --accent: #8d9bff;
+  --accent-ink: #1c1b19;
+  --capsule: color-mix(in srgb, var(--accent) 18%, var(--bg));
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(1.75rem, 6.5vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+p {
+  color: var(--fg-body);
+}
+
+/* ---- the shell: chrome above the pages, the motion layer over everything ---- */
+
+.shell {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.chrome {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 12px;
+  pointer-events: none;
+}
+
+.chrome-button {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--fg);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.chrome-button:focus-visible {
+  border-radius: 999px;
+  outline: 2px solid var(--accent);
+}
+
+.progress {
+  flex: 1 1 auto;
+  padding: 0 8px;
+  transition: opacity 240ms var(--ease-out);
+}
+
+.progress--hidden {
+  opacity: 0;
+}
+
+.progress-track {
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--wash);
+}
+
+/* Moves by transform only; the engine drives it during a flight. */
+.progress-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: transform 520ms var(--ease-out);
+}
+
+/* The engine pins every travelling copy in here, at coordinates relative to this box. */
+.motion-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ---- pages ---- */
+
+.page {
+  position: relative;
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+  /* Below the chrome. */
+  padding: 64px 20px 20px;
+}
+
+.page--cover {
+  padding-top: 52px;
+}
+
+.lede {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lede--done {
+  margin-top: auto;
+}
+
+.eyebrow {
+  color: var(--fg-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hero {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 20px;
+  background: var(--capsule);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 20px;
+}
+
+.button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--wash);
+  padding: 0 20px;
+  color: var(--fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 160ms var(--ease-out);
+}
+
+.button:active {
+  transform: scale(0.98);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.button--primary {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.link {
+  align-self: center;
+  border: 0;
+  background: none;
+  padding: 12px;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+/* ---- answers ---- */
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choice {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--capsule);
+  padding: 0 22px;
+  color: var(--fg);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    opacity 200ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+
+.choice:active {
+  transform: scale(0.98);
+}
+
+.choice:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.choice[data-selected] {
+  background: var(--capsule-selected);
+  color: var(--accent-ink);
+}
+
+/* The tap was heard: the chosen answer stays lit while the others step back. */
+.choice[data-committing]:not([data-selected]) {
+  opacity: 0.4;
+}
+
+/* ---- the statement: the answer's colour fills the screen, the chrome inverts onto it ---- */
+
+.page--statement {
+  justify-content: center;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--capsule-selected);
+}
+
+.lede--statement,
+.lede--statement p,
+.lede--statement .eyebrow {
+  color: var(--accent-ink);
+}
+
+.lede--statement p,
+.lede--statement .eyebrow {
+  opacity: 0.8;
+}
+
+.page--statement .button--primary {
+  background: var(--accent-ink);
+  color: var(--accent);
+}
+
+[data-tone="inverse"] .chrome-button {
+  color: var(--accent-ink);
+}
+
+[data-tone="inverse"] .progress-track {
+  background: color-mix(in srgb, var(--accent-ink) 30%, transparent);
+}
+
+[data-tone="inverse"] .progress-fill {
+  background: var(--accent-ink);
+}
+
+/*
+ * Arriving by a hand-off, the colour comes in with the morph, so the chrome waits for it before
+ * switching (it's covered until then anyway: 504ms, the transform's length).
+ */
+[data-tone="inverse"] .chrome-button,
+[data-tone="inverse"] .progress-track {
+  transition:
+    color 160ms var(--ease-out) 504ms,
+    background-color 160ms var(--ease-out) 504ms;
+}
+
+[data-tone="inverse"] .progress-fill {
+  transition:
+    transform 520ms var(--ease-out),
+    background-color 160ms var(--ease-out) 504ms;
+}
