@@ -61,7 +61,8 @@ export default function Plan() {
             setNotice(undefined);
             // Never a loading state: the store sheet is the feedback and the SDK owns it.
             const result = await purchase("annual");
-            if (result.status === "completed") haptics.success(); // the SDK dismisses the paywall
+            if (result.status === "completed")
+              haptics.success(); // the SDK dismisses the paywall
             else if (result.status === "failed") setNotice(t("purchase.failed")); // iOS only; the button stays enabled
             // abandoned: the user closed the sheet — nothing changes, nothing is said
           }}

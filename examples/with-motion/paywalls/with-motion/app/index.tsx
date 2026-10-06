@@ -64,10 +64,15 @@ export default function Index() {
     try {
       return new Intl.NumberFormat(
         locale,
-        currency ? { style: "currency", currency } : { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+        currency
+          ? { style: "currency", currency }
+          : { minimumFractionDigits: 2, maximumFractionDigits: 2 },
       );
     } catch {
-      return new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return new Intl.NumberFormat(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
     }
   }, [locale, currency]);
   const counting = useTransform(price, (value) => format.format(value));
@@ -97,7 +102,9 @@ export default function Index() {
       <motion.div
         className="lede"
         initial={{ opacity: 0, transform: rise }}
-        animate={opened ? { opacity: 1, transform: "translateY(0px)" } : { opacity: 0, transform: rise }}
+        animate={
+          opened ? { opacity: 1, transform: "translateY(0px)" } : { opacity: 0, transform: rise }
+        }
         transition={{ duration: 0.4, ease: EASE_OUT }}
       >
         <h1>{t("paywall.title")}</h1>
@@ -113,7 +120,11 @@ export default function Index() {
           <motion.li
             key={feature}
             initial={{ opacity: 0, transform: slide }}
-            animate={opened ? { opacity: 1, transform: "translateX(0px)" } : { opacity: 0, transform: slide }}
+            animate={
+              opened
+                ? { opacity: 1, transform: "translateX(0px)" }
+                : { opacity: 0, transform: slide }
+            }
             transition={{ delay: 0.1 + index * 0.05, duration: 0.35, ease: EASE_OUT }}
           >
             {t(feature)}
@@ -142,7 +153,8 @@ export default function Index() {
             setNotice(undefined);
             // Never a loading state here: the store sheet is the feedback and the SDK owns it.
             const result = await purchase("annual");
-            if (result.status === "completed") haptics.success(); // the SDK dismisses (postPurchase)
+            if (result.status === "completed")
+              haptics.success(); // the SDK dismisses (postPurchase)
             else if (result.status === "failed") setNotice(t("purchase.failed")); // iOS only; the button stays enabled
             // abandoned: the user closed the sheet — nothing changes, nothing is said
           }}

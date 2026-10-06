@@ -82,7 +82,8 @@ export default function Index() {
             // Never a loading state here: the store sheet is the feedback.
             const result = await purchase("annual");
             add({ name: `purchase() → ${result.status}`, detail: t("log.resolved") });
-            if (result.status === "completed") haptics.success(); // the SDK dismisses (postPurchase)
+            if (result.status === "completed")
+              haptics.success(); // the SDK dismisses (postPurchase)
             else if (result.status === "failed") setNotice(t("paywall.failed")); // iOS only; say so, keep the button
             // abandoned: the user closed the store sheet — nothing changes, nothing is said
           }}

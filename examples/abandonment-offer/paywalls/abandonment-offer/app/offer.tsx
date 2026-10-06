@@ -38,7 +38,8 @@ export default function Offer() {
             haptics.light();
             setNotice(undefined);
             const result = await purchase("discount");
-            if (result.status === "completed") haptics.success(); // the SDK dismisses the paywall
+            if (result.status === "completed")
+              haptics.success(); // the SDK dismisses the paywall
             else if (result.status === "failed") setNotice(t("purchase.failed")); // iOS only; the button stays enabled
             // abandoned: one offer, not two — a second sheet would be nagging
           }}

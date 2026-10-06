@@ -8,7 +8,8 @@ export default {
   },
   restore: {
     restored: "Käufe wiederhergestellt.",
-    failed: "Nichts wiederherzustellen, oder der Store hat nicht geantwortet. Bitte erneut versuchen.",
+    failed:
+      "Nichts wiederherzustellen, oder der Store hat nicht geantwortet. Bitte erneut versuchen.",
   },
   footer: {
     builtWith: "Erstellt mit",

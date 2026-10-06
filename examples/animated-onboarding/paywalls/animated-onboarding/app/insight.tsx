@@ -12,7 +12,14 @@ export default function Insight() {
 
   return (
     <main className="page" data-flow-page="">
-      <img className="hero" data-flow-image="" src={IMAGE.insight} width={IMAGE_SIZE.width} height={IMAGE_SIZE.height} alt={t("insight.imageAlt")} />
+      <img
+        className="hero"
+        data-flow-image=""
+        src={IMAGE.insight}
+        width={IMAGE_SIZE.width}
+        height={IMAGE_SIZE.height}
+        alt={t("insight.imageAlt")}
+      />
 
       <div className="lede">
         <span className="eyebrow" data-flow-line="">

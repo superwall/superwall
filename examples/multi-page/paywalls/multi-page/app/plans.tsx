@@ -46,7 +46,9 @@ export default function Plans() {
             setNotice(null);
             // "Nothing to restore" and a store error both land as `failed`; the copy covers both.
             const result = await restore();
-            setNotice(result.status === "restored" ? t("plans.restored") : t("plans.restoreFailed"));
+            setNotice(
+              result.status === "restored" ? t("plans.restored") : t("plans.restoreFailed"),
+            );
           }}
         >
           {t("plans.restore")}

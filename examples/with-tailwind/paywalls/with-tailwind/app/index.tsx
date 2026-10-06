@@ -48,7 +48,10 @@ export default function Index() {
       {/* The primary action is pinned: the page scrolls under it, the content fades out behind it. */}
       <div className="sticky bottom-0 mt-auto flex flex-col gap-2 bg-[linear-gradient(to_bottom,transparent,var(--color-bg)_20px)] pt-5 pb-4">
         {notice ? (
-          <p role="status" className="wrap-anywhere text-center text-xs text-fg-tertiary select-text">
+          <p
+            role="status"
+            className="wrap-anywhere text-center text-xs text-fg-tertiary select-text"
+          >
             {notice}
           </p>
         ) : null}
@@ -60,7 +63,8 @@ export default function Index() {
             setNotice(undefined);
             // Never a loading state: the store sheet is the feedback and the SDK owns it.
             const result = await purchase("annual");
-            if (result.status === "completed") haptics.success(); // the SDK dismisses the paywall
+            if (result.status === "completed")
+              haptics.success(); // the SDK dismisses the paywall
             else if (result.status === "failed") setNotice(t("purchase.failed")); // iOS only; the button stays enabled
             // abandoned: the user closed the sheet — nothing changes, nothing is said
           }}

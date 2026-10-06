@@ -199,7 +199,8 @@ export default function Index() {
             setNotice(undefined);
             // Never a loading state: the Apple Pay sheet is the feedback and the SDK owns it.
             const result = await purchase(selected);
-            if (result.status === "completed") haptics.success(); // the SDK finishes the checkout
+            if (result.status === "completed")
+              haptics.success(); // the SDK finishes the checkout
             else if (result.status === "failed") setNotice(t("purchase.failed")); // the button stays enabled
             // abandoned: the shopper closed the sheet — nothing changes, nothing is said
           }}

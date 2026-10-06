@@ -1,7 +1,8 @@
 export default {
   paywall: {
     title: "Go Pro",
-    subtitle: "Animated with Motion — the list staggers in, the price counts up to the store's figure.",
+    subtitle:
+      "Animated with Motion — the list staggers in, the price counts up to the store's figure.",
     noteBefore: "These animations start on the",
     noteAfter:
       "event rather than on mount — paywalls preload hidden, so a mount-timed animation has already played by the time anyone sees the page.",

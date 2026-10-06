@@ -35,11 +35,11 @@ control), and only the rules the example needs follow it.
 
 ## Navigation
 
-| example                                | teaches                                                        |
-| -------------------------------------- | -------------------------------------------------------------- |
-| [`multi-page`](./multi-page)           | `router.push/back`, the route stack, `layout.tsx`              |
-| [`transitions`](./transitions)         | a button per transition — the five built-ins plus a custom one |
-| [`onboarding-quiz`](./onboarding-quiz) | answers decide where you land; the router carries no state     |
+| example                                        | teaches                                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`multi-page`](./multi-page)                   | `router.push/back`, the route stack, `layout.tsx`                               |
+| [`transitions`](./transitions)                 | a button per transition — the five built-ins plus a custom one                  |
+| [`onboarding-quiz`](./onboarding-quiz)         | answers decide where you land; the router carries no state                      |
 | [`animated-onboarding`](./animated-onboarding) | every hand-off choreographed: the answer becomes the bar, the photo, the colour |
 
 ## Purchases

@@ -60,7 +60,8 @@ export default function Index() {
             haptics.light();
             setNotice(undefined);
             const result = await purchase("annual");
-            if (result.status === "completed") haptics.success(); // the SDK dismisses (postPurchase)
+            if (result.status === "completed")
+              haptics.success(); // the SDK dismisses (postPurchase)
             else if (result.status === "failed") setNotice(t("purchase.failed")); // iOS only; the button stays
             // abandoned: the store sheet was closed — nothing changes, nothing is said
           }}

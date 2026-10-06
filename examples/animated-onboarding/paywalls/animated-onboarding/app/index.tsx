@@ -17,7 +17,14 @@ export default function Index() {
 
   return (
     <main className="page page--cover" data-flow-page="" data-opened={opened ? "" : undefined}>
-      <img className="hero" data-flow-image="" src={IMAGE.index} width={IMAGE_SIZE.width} height={IMAGE_SIZE.height} alt={t("index.imageAlt")} />
+      <img
+        className="hero"
+        data-flow-image=""
+        src={IMAGE.index}
+        width={IMAGE_SIZE.width}
+        height={IMAGE_SIZE.height}
+        alt={t("index.imageAlt")}
+      />
 
       <div className="lede">
         <h1 data-flow-line="">{t("index.title")}</h1>

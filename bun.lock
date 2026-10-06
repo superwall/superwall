@@ -22,6 +22,19 @@
         "typescript": "5.8.3",
       },
     },
+    "examples/animated-onboarding": {
+      "name": "animated-onboarding",
+      "dependencies": {
+        "react": "19.1.0",
+        "react-dom": "19.1.0",
+        "superwall": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/react": "^19.1.0",
+        "@types/react-dom": "^19.1.0",
+        "typescript": "5.8.3",
+      },
+    },
     "examples/apple-pay": {
       "name": "apple-pay",
       "dependencies": {
@@ -263,7 +276,7 @@
     },
     "packages/cli": {
       "name": "@superwall/cli",
-      "version": "1.3.0-beta.4",
+      "version": "1.6.1",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "0.3.201",
         "@superwall/studio": "workspace:*",
@@ -289,7 +302,7 @@
     },
     "packages/host": {
       "name": "@superwall/host",
-      "version": "1.3.0-beta.4",
+      "version": "1.6.1",
       "dependencies": {
         "@superwall/protocol": "workspace:*",
       },
@@ -302,7 +315,7 @@
     },
     "packages/protocol": {
       "name": "@superwall/protocol",
-      "version": "1.3.0-beta.4",
+      "version": "1.6.1",
       "dependencies": {
         "zod": "3.25.76",
       },
@@ -315,7 +328,7 @@
     },
     "packages/runtime": {
       "name": "@superwall/runtime",
-      "version": "1.3.0-beta.4",
+      "version": "1.6.1",
       "dependencies": {
         "@superwall/protocol": "workspace:*",
       },
@@ -330,7 +343,7 @@
     },
     "packages/studio": {
       "name": "@superwall/studio",
-      "version": "1.3.0-beta.4",
+      "version": "1.6.1",
       "dependencies": {
         "@superwall/host": "workspace:*",
         "qrcode.react": "^4.2.0",
@@ -358,7 +371,7 @@
     },
     "packages/superwall": {
       "name": "superwall",
-      "version": "1.3.0-beta.4",
+      "version": "1.6.1",
       "bin": {
         "superwall": "./bin/superwall.js",
         "sw": "./bin/superwall.js",
@@ -807,6 +820,8 @@
     "ajv": ["ajv@8.20.0", "", { "dependencies": { "fast-deep-equal": "^3.1.3", "fast-uri": "^3.0.1", "json-schema-traverse": "^1.0.0", "require-from-string": "^2.0.2" } }, "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA=="],
 
     "ajv-formats": ["ajv-formats@3.0.1", "", { "dependencies": { "ajv": "^8.0.0" } }, "sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ=="],
+
+    "animated-onboarding": ["animated-onboarding@workspace:examples/animated-onboarding"],
 
     "ansi-escapes": ["ansi-escapes@7.3.0", "", { "dependencies": { "environment": "^1.0.0" } }, "sha512-BvU8nYgGQBxcmMuEeUEmNTvrMVjJNSH7RgW24vXexN4Ven6qCvy4TntnvlnwnMLTVlcRQQdbRY8NKnaIoeWDNg=="],
 
@@ -1477,6 +1492,10 @@
     "abandonment-offer/@types/react": ["@types/react@19.2.17", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw=="],
 
     "abandonment-offer/react": ["react@19.1.0", "", {}, "sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg=="],
+
+    "animated-onboarding/@types/react": ["@types/react@19.2.17", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw=="],
+
+    "animated-onboarding/react": ["react@19.1.0", "", {}, "sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg=="],
 
     "apple-pay/@types/react": ["@types/react@19.2.17", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw=="],
 

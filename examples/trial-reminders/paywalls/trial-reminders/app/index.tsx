@@ -29,7 +29,9 @@ export default function Index() {
 
   const annual = getProduct("annual");
   // Variables arrive as strings on device; coerce before counting.
-  const days = annual?.variables.trialPeriodDays ? Number(annual.variables.trialPeriodDays) : undefined;
+  const days = annual?.variables.trialPeriodDays
+    ? Number(annual.variables.trialPeriodDays)
+    : undefined;
 
   return (
     <main className="page">
@@ -90,7 +92,8 @@ export default function Index() {
             // Never a loading state: the store sheet is the feedback and the SDK owns it.
             // The reminder is the SDK's job once the trial starts — nothing to schedule here.
             const result = await purchase("annual");
-            if (result.status === "completed") haptics.success(); // the SDK dismisses the paywall
+            if (result.status === "completed")
+              haptics.success(); // the SDK dismisses the paywall
             else if (result.status === "failed") setNotice(t("purchase.failed")); // iOS only; the button stays enabled
             // abandoned: the user closed the sheet — nothing changes, nothing is said
           }}

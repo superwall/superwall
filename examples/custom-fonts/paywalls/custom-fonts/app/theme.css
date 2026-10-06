@@ -49,7 +49,8 @@
   --success-ink: #5f822b;
 
   --radius: 3px;
-  --sans: Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sans:
+    Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -348,7 +349,9 @@ button,
 
 /* The lesson: the self-hosted file above replaces the base's Manrope. */
 :root {
-  --sans: "Manrope Custom", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sans:
+    "Manrope Custom", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
 }
 
 .rows {
