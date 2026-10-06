@@ -1,9 +1,21 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { toast } from "sonner";
+import { afterEach, describe, expect, it } from "vitest";
 import type { HostDelegate } from "@superwall/host";
 import { createStudioDelegate, PaywallToasts } from "../../src/components/PaywallToasts";
 
 const product = { reference: "annual", productId: "pro_5999_year", variables: {} };
+
+// sonner removes a dismissed toast 200ms later from a timer of its own. A test
+// that ends inside that window leaves the timer to fire after jsdom is torn
+// down ("window is not defined", seen on slow CI runners), so every test ends
+// by dismissing its toasts and letting that timer run while the DOM still exists.
+afterEach(async () => {
+  await act(async () => {
+    toast.dismiss();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  });
+});
 
 const mount = () => {
   const delegate: HostDelegate = createStudioDelegate();
