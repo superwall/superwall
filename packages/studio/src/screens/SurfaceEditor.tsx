@@ -35,7 +35,6 @@ import {
   type VariableGroups,
   type VariableRow,
 } from "../components/panels/VariablesPanel";
-import { fetchStatus, runAction } from "../lib/actions";
 import {
   chromeFor,
   DEFAULT_DEVICE_ID,
@@ -51,9 +50,9 @@ import {
 import { hostStateFor, previewDevice, studioDefaults } from "../lib/host";
 import { percent } from "../lib/canvas";
 import { hostedUrl, originalUrl } from "../lib/preview";
+import { latestVersion, liveVersion } from "../lib/promotion";
 import { ACTION_STEPS, type StudioActionStep, type StudioStepState } from "../lib/steps";
 import {
-  hasActions,
   hasOriginal,
   isScreenOrigin,
   SCREEN_FRAMEWORK_LABEL,
@@ -236,32 +235,36 @@ export const SurfaceEditor = ({
   const canvas = React.useRef<CanvasHandle>(null);
   const [zoom, setZoom] = React.useState<CanvasZoom>({ scale: 1, fitted: true });
   const [status, setStatus] = React.useState<StudioStatus>({});
+  const [picked, setPicked] = React.useState<number | undefined>(undefined);
   const [progress, setProgress] = React.useState<ActionProgress | undefined>(undefined);
   const dismissTimer = React.useRef<number | undefined>(undefined);
   React.useEffect(() => () => window.clearTimeout(dismissTimer.current), []);
 
-  const actionsEnabled = hasActions(source);
+  const shipping = source.actions;
   const delegate = useStudioDelegate();
   const defaults = React.useMemo(studioDefaults, [surface]);
 
   const locales = surface.locales;
 
   React.useEffect(() => {
-    if (!actionsEnabled) return;
+    if (!shipping) return;
     let cancelled = false;
-    fetchStatus(surface).then((value) => {
+    setPicked(undefined);
+    shipping.status(surface).then((value) => {
       if (!cancelled) setStatus(value);
     });
     return () => {
       cancelled = true;
     };
-  }, [actionsEnabled, surface]);
+  }, [shipping, surface]);
 
   const ship = async (action: StudioActionName) => {
+    if (!shipping) return;
     window.clearTimeout(dismissTimer.current);
     setProgress({ action, steps: {} });
 
-    const result = await runAction(surface, action, (step, state) => {
+    const version = action === "promote" ? (surface.version ?? picked) : undefined;
+    const result = await shipping.run(surface, { action, version }, (step, state) => {
       setProgress((current) =>
         current?.action === action
           ? {
@@ -277,7 +280,8 @@ export const SurfaceEditor = ({
         ACTION_STEPS[action].map((step) => [step, "done"]),
       ) as Partial<Record<StudioActionStep, StudioStepState>>;
       setProgress({ action, steps });
-      setStatus(await fetchStatus(surface));
+      setPicked(undefined);
+      setStatus(await shipping.status(surface));
       dismissTimer.current = window.setTimeout(() => setProgress(undefined), 1600);
     } else {
       setProgress((current) => {
@@ -337,7 +341,13 @@ export const SurfaceEditor = ({
   const chrome = responsive ? undefined : chromeFor(device, web);
   const previewSrc = source.previewUrl(surface);
   const versions = status.versions ?? [];
-  const versionLabel = (entry: StudioVersion) => `v${entry.version}${entry.live ? " · live" : ""}`;
+  const promotion = {
+    target: surface.version ?? picked ?? latestVersion(versions),
+    live: liveVersion(versions),
+    versions,
+    pick: surface.version === undefined ? setPicked : shipping?.pick,
+  };
+  const versionLabel = (entry: StudioVersion) => `v${entry.version}${entry.live ? " · Live" : ""}`;
   const pushedHint = (entry: StudioVersion) => {
     if (entry.live) return "What SDKs receive today";
     const ago = entry.pushedAt ? timeAgo(entry.pushedAt) : undefined;
@@ -493,8 +503,10 @@ export const SurfaceEditor = ({
               <DownloadScreenshot source={source} surface={surface} />
             </span>
             <PreviewOnDevice source={source} surface={surface} />
-            {actionsEnabled && (
+            {shipping && (
               <ActionMenu
+                offered={shipping.offered}
+                promotion={promotion}
                 progress={progress}
                 blocked={
                   shippable
@@ -695,7 +707,7 @@ export const SurfaceEditor = ({
           </ToolbarGroup>
         )}
         <ToolbarDivider />
-        {(actionsEnabled || compareOptions.length > 0) && (
+        {(shipping || compareOptions.length > 0) && (
           <CompareMenu
             active={compareWith}
             options={compareOptions}

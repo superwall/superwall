@@ -1,23 +1,26 @@
 import { surfacePath } from "./preview";
 import type {
   Samples,
-  StudioActionName,
+  StudioActionProgress,
+  StudioActionRequest,
   StudioActionResult,
+  StudioActions,
   StudioStatus,
   StudioSurface,
 } from "./surfaces";
 
 export const runAction = async (
   surface: StudioSurface,
-  action: StudioActionName,
-  onStep?: (step: string, state: "start" | "done") => void,
+  request: StudioActionRequest,
+  onStep?: StudioActionProgress,
 ): Promise<StudioActionResult> => {
   try {
     const response = await fetch("/__studio/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action,
+        action: request.action,
+        version: request.version,
         kind: surface.kind,
         id: surface.id,
         project: surface.project,
@@ -66,6 +69,12 @@ export const fetchStatus = async (surface: StudioSurface): Promise<StudioStatus>
   } catch (error) {
     return { unreachable: error instanceof Error ? error.message : String(error) };
   }
+};
+
+export const devServerActions: StudioActions = {
+  offered: ["push", "promote", "publish"],
+  run: runAction,
+  status: fetchStatus,
 };
 
 export const fetchScreenshot = async (surface: StudioSurface): Promise<string | undefined> => {

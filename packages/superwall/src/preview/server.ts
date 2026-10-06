@@ -100,6 +100,7 @@ export type StudioActions = {
     action: StudioActionName,
     surface: DiscoveredSurface,
     onProgress?: StudioActionProgress,
+    options?: { version?: number },
   ): Promise<StudioActionResult>;
   status(surface: DiscoveredSurface): Promise<StudioStatus>;
 };
@@ -237,8 +238,11 @@ const previewPlugin = (
               } else if (!studio) {
                 line({ result: { ok: false, error: "Actions need `superwall dev`." } });
               } else {
-                const result = await studio.run(action, surface, (step, state) =>
-                  line({ step, state }),
+                const result = await studio.run(
+                  action,
+                  surface,
+                  (step, state) => line({ step, state }),
+                  { version: request.version },
                 );
                 line({ result });
               }

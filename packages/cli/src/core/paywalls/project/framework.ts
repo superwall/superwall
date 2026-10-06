@@ -103,6 +103,7 @@ export interface StudioActions {
     action: StudioActionName,
     surface: FrameworkSurface,
     onProgress?: StudioActionProgress,
+    options?: { version?: number },
   ): Promise<StudioActionResult>;
   status(surface: FrameworkSurface): Promise<StudioStatus>;
 }

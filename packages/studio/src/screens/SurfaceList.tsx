@@ -5,13 +5,7 @@ import { InlineCode } from "../components/InlineCode";
 import { OpenInApp } from "../components/OpenInApp";
 import { SurfaceCard } from "../components/SurfaceCard";
 import { TopBar } from "../components/chrome/TopBar";
-import { fetchStatus } from "../lib/actions";
-import {
-  hasActions,
-  type StudioSource,
-  type StudioStatus,
-  type StudioSurface,
-} from "../lib/surfaces";
+import { type StudioSource, type StudioStatus, type StudioSurface } from "../lib/surfaces";
 import { hostStateFor, studioDefaults } from "../lib/host";
 import { surfacePath } from "../lib/preview";
 import { useStudioMode } from "../lib/studio-host";
@@ -26,7 +20,7 @@ export const SurfaceList = ({
   onOpen: (surface: StudioSurface) => void;
 }) => {
   const device = useStudioMode() === "device";
-  const actions = hasActions(source);
+  const actions = source.actions;
   const [statuses, setStatuses] = React.useState<Record<string, StudioStatus>>({});
   const defaults = React.useMemo(studioDefaults, [source]);
 
@@ -34,7 +28,7 @@ export const SurfaceList = ({
     if (!actions) return;
     let cancelled = false;
     for (const surface of source.surfaces) {
-      void fetchStatus(surface).then((status) => {
+      void actions.status(surface).then((status) => {
         if (cancelled) return;
         setStatuses((current) => ({ ...current, [surfacePath(surface)]: status }));
       });

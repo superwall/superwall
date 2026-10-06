@@ -48,7 +48,9 @@ packages/studio/
 │   ├── lib/              project.ts (wire-format parser, untrusted JSON,
 │   │                     cast-free), preview.ts (preview URL builder),
 │   │                     devices.ts (viewport + mock-device catalog),
-│   │                     actions.ts, events.ts, time.ts, types.ts
+│   │                     actions.ts (the dev server's shipping seam),
+│   │                     promotion.ts (promote vs roll back), steps.ts,
+│   │                     events.ts, time.ts, types.ts
 │   └── styles.css        tailwind @theme tokens + stateful primitives
 └── dist/                 built by the workspace postinstall: the app, and
                           the library under dist/lib/
@@ -57,10 +59,12 @@ packages/studio/
 ## Data seam
 
 Everything renders from a `StudioSource` — `{ title, surfaces, diagnostics?,
-samples?, previewUrl, capabilities? }`. Locally that's
+samples?, previewUrl, actions? }`. Locally that's
 `/__studio/project.json` (the dev server evaluates configs server-side and
-ships sample device/user/params/product data alongside). A hosted studio
-swaps the fetch, nothing else. `previewUrl(surface)` decides what the preview
+ships sample device/user/params/product data alongside) plus
+`devServerActions`, the `/__studio/action` and `/__studio/status`
+implementation of the shipping seam. A hosted studio swaps the fetch and the
+seam, nothing else. `previewUrl(surface)` decides what the preview
 iframes load: `/preview/<kind>/<id>` mounts locally, published snapshot URLs
 in the dashboard. Both carry `?transport=editor`, which makes the paywall
 talk to its parent window, and the studio is that parent.
@@ -91,10 +95,21 @@ editor. What the library gives a host:
   `StudioSurface` from the paywall and version records; the studio hosts the
   snapshot from them. `hostStateFor` and `hostPatch` are exported for a host
   that wants to drive a `DeviceFrame` itself.
-- One `StudioSurface` per version, told apart by `label` (`"v12 · live"`);
-  `StudioSource.compareHint` names what the compare menu offers, and
-  `SurfaceEditor`'s `actions` slot takes the host's own controls (a version
-  switcher, say). With no `capabilities`, there is no push/promote UI.
+- One `StudioSurface` per version, told apart by `label` (`"v12 · Live"`)
+  and carrying its `version`; `StudioSource.compareHint` names what the
+  compare menu offers, and `SurfaceEditor`'s `actions` slot takes the host's
+  own controls (a version switcher, say).
+- `StudioSource.actions` is the shipping seam: `offered` names the actions
+  the host can run (`push`, `promote`, `publish`), `run(surface, { action,
+version? }, onStep)` performs one and streams its steps, `status(surface)`
+  lists the pushed versions with the live one marked. With none, there is no
+  push/promote UI. The pushed versions sit in a picker at the start of the
+  action button group, and the studio labels the button **Promote** or
+  **Roll back** by where the picked version sits against the live one
+  (`promotionDirection`). A host that can only promote (the dashboard, which
+  has no project on disk) offers `["promote"]` and a `pick` that switches the
+  surface, so the menu collapses to the picker and one button; the local
+  studio keeps its own pick and sends a `version` only when one was chosen.
 - `StudioShell` (`position="absolute"` when the host owns the viewport) is
   the ink stage every screen expects, and it carries the `sw-studio` class
   the stylesheet scopes its base rules to.
@@ -124,8 +139,10 @@ editor. What the library gives a host:
   controls for the User, Device, Params and Products groups the SDK reports.
   Override changes hot-swap: the next frame loads hidden and crossfades, so
   nothing ever flashes white. Shipping happens here too: an action menu runs
-  Push, Publish and Promote, and a Compare menu splits the stage against any
-  pushed version of the paywall (the live one marked) or another local one.
+  Push, Publish and Promote beside a picker of the pushed versions, reading
+  **Roll back** when the picked one is older than what is live, and a Compare
+  menu splits the stage against any pushed version of the paywall (the live one
+  marked) or another local one.
 
 ## Design
 

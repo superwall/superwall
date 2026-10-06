@@ -346,6 +346,51 @@ test("promote from the studio links without creating and never builds", async ()
   assert.ok(!api.calls.includes("POST /v2/paywalls/208540/versions"));
 });
 
+test("promote carries the version the studio picked, and only that", async () => {
+  const api = await startApi();
+  const project = boundProject();
+
+  const result = await createStudioActions(framework, project).run(
+    "promote",
+    surface,
+    undefined,
+    { version: 5 },
+  );
+
+  assert.deepEqual(result, { ok: true, version: 7, live: true });
+  assert.deepEqual(JSON.parse(api.bodies["/v2/paywalls/208540/promote"] ?? "{}"), { version: 5 });
+
+  await createStudioActions(framework, project).run("promote", surface);
+  assert.deepEqual(JSON.parse(api.bodies["/v2/paywalls/208540/promote"] ?? "{}"), {});
+});
+
+test("a picked version refuses a surface on several platforms, naming the CLI flag", async () => {
+  const api = await startApi();
+  const project = boundProject();
+  writeApp(project.superwallDir, "android", "43");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "208541" });
+  const declaring: Framework = {
+    ...framework,
+    studioProject: async () => ({
+      surfaces: [{ kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["ios", "android"] }],
+    }),
+  };
+
+  const result = await createStudioActions(declaring, project).run(
+    "promote",
+    surface,
+    undefined,
+    { version: 5 },
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(result.error, /v5 targets one paywall/);
+    assert.match(result.error, /--platform <platform> --version 5/);
+  }
+  assert.ok(!api.calls.some((call) => call.includes("/promote")));
+});
+
 test("promoting a surface that was never pushed explains itself instead of creating one", async () => {
   await startApi();
   const project = scaffold();

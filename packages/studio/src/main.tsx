@@ -4,6 +4,7 @@ import { StudioShell } from "./components/chrome/StudioShell";
 import { EmptyState } from "./components/EmptyState";
 import { AlertTriangleIcon } from "./components/icons";
 import { InlineCode } from "./components/InlineCode";
+import { devServerActions } from "./lib/actions";
 import { buildPreviewPath, surfacePath } from "./lib/preview";
 import { parseProjectPayload } from "./lib/project";
 import { StudioApp } from "./StudioApp";
@@ -16,9 +17,10 @@ const loadSource = async (): Promise<StudioSource> => {
   if (!response.ok) {
     throw new Error(`project data unavailable (${response.status})`);
   }
-  const payload = parseProjectPayload(await response.json());
+  const { capabilities, ...payload } = parseProjectPayload(await response.json());
   return {
     ...payload,
+    ...(capabilities.actions ? { actions: devServerActions } : {}),
     previewUrl: buildPreviewPath,
     standaloneUrl: (surface) => `/preview${surfacePath(surface)}`,
   };

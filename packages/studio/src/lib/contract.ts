@@ -1,5 +1,7 @@
 export type StudioActionName = "push" | "promote" | "publish";
 
+export type StudioActionRequest = { action: StudioActionName; version?: number };
+
 export type StudioActionResult =
   | { ok: true; version: number; live: boolean }
   | { ok: false; error: string };

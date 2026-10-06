@@ -10,6 +10,7 @@ const renderEditor = (element: React.ReactElement<React.ComponentProps<typeof Su
       {element}
     </StudioHostProvider>,
   );
+import { devServerActions } from "../../src/lib/actions";
 import { snapshotPreviewUrl } from "../../src/lib/preview";
 import type { StudioSource, StudioSurface } from "../../src/lib/surfaces";
 
@@ -21,7 +22,7 @@ import type { StudioSource, StudioSurface } from "../../src/lib/surfaces";
 const live: StudioSurface = {
   kind: "paywall",
   id: "plus-upgrade",
-  label: "v12 · live",
+  label: "v12 · Live",
   routes: [],
   locales: [],
   products: { annual: "pro_5999_year" },
@@ -84,7 +85,7 @@ describe("SurfaceEditor hosting a published paywall", () => {
     expect(url.searchParams.get("transport")).toBe("editor");
     expect(url.searchParams.has("sw_preview")).toBe(false);
     expect(url.searchParams.has("theme")).toBe(false);
-    expect(screen.getByText("Plus Upgrade / v12 · live · plus-upgrade")).toBeTruthy();
+    expect(screen.getByText("Plus Upgrade / v12 · Live · plus-upgrade")).toBeTruthy();
   });
 
   it("answers the paywall's ping with the version's products and identity", () => {
@@ -186,7 +187,7 @@ describe("SurfaceEditor hosting a published paywall", () => {
     renderEditor(<SurfaceEditor source={source} surface={live} samples={{}} />);
     fireEvent.click(screen.getByRole("button", { name: /compare/i }));
     expect(screen.getByText("Published snapshot")).toBeTruthy();
-    expect(screen.queryByText("v12 · live")).toBeNull();
+    expect(screen.queryByText("v12 · Live")).toBeNull();
     fireEvent.click(screen.getByText("v13"));
 
     expect(preview().src).toContain("v12.html");
@@ -317,7 +318,7 @@ describe("SurfaceEditor shipping a local surface", () => {
   const shippable: StudioSource = {
     title: "chatgpt",
     surfaces: [local],
-    capabilities: { actions: true },
+    actions: devServerActions,
     previewUrl: () => "/preview/paywall/plus-upgrade?transport=editor",
     standaloneUrl: () => "/paywall/plus-upgrade",
   };
@@ -577,7 +578,7 @@ describe("SurfaceEditor's smaller states", () => {
         source={{
           title: "chatgpt",
           surfaces: [local],
-          capabilities: { actions: true },
+          actions: devServerActions,
           previewUrl: () => "/preview",
         }}
         surface={local}
@@ -592,5 +593,187 @@ describe("SurfaceEditor's smaller states", () => {
       "Couldn’t read the pushed versions — not logged in",
     );
     expect(screen.queryByText(/live/i)).toBeNull();
+  });
+});
+
+describe("SurfaceEditor promoting and rolling back", () => {
+  const local: StudioSurface = {
+    kind: "paywall",
+    id: "plus-upgrade",
+    routes: ["index"],
+    locales: ["en"],
+    products: {},
+  };
+
+  const versions = [
+    { version: 13, url: "https://cdn.test/13.html", live: false },
+    { version: 12, url: "https://cdn.test/12.html", live: true },
+    { version: 11, url: "https://cdn.test/11.html", live: false },
+  ];
+
+  const devServer = (result: unknown) =>
+    vi.fn(async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/__studio/status/")) {
+        return { ok: true, json: async () => ({ paywallId: "208540", versions }) } as Response;
+      }
+      void init;
+      const lines = [
+        JSON.stringify({ step: "link", state: "done" }),
+        JSON.stringify({ step: "promote", state: "done" }),
+        JSON.stringify({ result }),
+      ].join("\n");
+      return { ok: true, body: new Response(lines).body, json: async () => result } as Response;
+    });
+
+  const actionBodies = (fetchMock: ReturnType<typeof vi.fn>) =>
+    fetchMock.mock.calls
+      .filter(([input]) => String(input).includes("/__studio/action"))
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>);
+
+  const shippable: StudioSource = {
+    title: "chatgpt",
+    surfaces: [local],
+    actions: devServerActions,
+    previewUrl: () => "/preview/paywall/plus-upgrade?transport=editor",
+  };
+
+  it("promotes the latest push by default, sending no version so every platform takes its own", async () => {
+    const fetchMock = devServer({ ok: true, version: 13, live: true });
+    vi.stubGlobal("fetch", fetchMock);
+    renderEditor(<SurfaceEditor source={shippable} surface={local} samples={{}} />);
+    await act(async () => {});
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
+    expect(screen.getByText("Make v13 live, replacing v12")).toBeDefined();
+    fireEvent.click(screen.getByText("Promote"));
+    fireEvent.click(screen.getByRole("button", { name: "Promote" }));
+    await act(async () => {});
+
+    expect(actionBodies(fetchMock)).toEqual([
+      { action: "promote", kind: "paywall", id: "plus-upgrade" },
+    ]);
+  });
+
+  it("rolls back to a picked older version, and sends exactly that version", async () => {
+    const fetchMock = devServer({ ok: true, version: 11, live: true });
+    vi.stubGlobal("fetch", fetchMock);
+    renderEditor(<SurfaceEditor source={shippable} surface={local} samples={{}} />);
+    await act(async () => {});
+
+    fireEvent.click(screen.getByRole("button", { name: "Version" }));
+    fireEvent.click(screen.getByText("v11"));
+    const button = screen.getByRole("button", { name: "Roll back" });
+    fireEvent.click(button);
+    await act(async () => {});
+
+    expect(actionBodies(fetchMock)).toEqual([
+      { action: "promote", version: 11, kind: "paywall", id: "plus-upgrade" },
+    ]);
+    expect(screen.getByText("Roll back complete")).toBeDefined();
+  });
+
+  it("forgets the pick when the surface changes", async () => {
+    vi.stubGlobal("fetch", devServer({ ok: true, version: 11, live: true }));
+    const other: StudioSurface = { ...local, id: "win-back" };
+    const view = renderEditor(
+      <SurfaceEditor
+        source={{ ...shippable, surfaces: [local, other] }}
+        surface={local}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "Version" }));
+    fireEvent.click(screen.getByText("v11"));
+    expect(screen.getByRole("button", { name: "Roll back" })).toBeDefined();
+
+    view.rerender(
+      <StudioHostProvider mode="local" home={{ href: "/", navigate: () => {} }}>
+        <SurfaceEditor
+          source={{ ...shippable, surfaces: [local, other] }}
+          surface={other}
+          samples={{}}
+        />
+      </StudioHostProvider>,
+    );
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: "Promote" })).toBeDefined();
+  });
+
+  describe("hosted by the dashboard", () => {
+    const olderSurface: StudioSurface = { ...live, label: "v11", version: 11 };
+    const liveSurface: StudioSurface = { ...live, version: 12 };
+    const newerSurface: StudioSurface = { ...pushed, version: 13 };
+
+    const pick = vi.fn();
+    const hosted = (run: ReturnType<typeof vi.fn>): StudioSource => ({
+      ...source,
+      surfaces: [newerSurface, liveSurface, olderSurface],
+      actions: {
+        offered: ["promote"],
+        run,
+        status: async () => ({ paywallId: "208540", versions }),
+        pick,
+      },
+    });
+
+    it("offers Roll back on a version older than the live one, and runs it with that version", async () => {
+      const run = vi.fn(async () => ({ ok: true as const, version: 11, live: true }));
+      renderEditor(<SurfaceEditor source={hosted(run)} surface={olderSurface} samples={{}} />);
+      await act(async () => {});
+
+      expect(screen.queryByRole("button", { name: "Choose action" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Push" })).toBeNull();
+      const picker = screen.getByRole("button", { name: "Version" });
+      expect(picker.textContent).toBe("v11");
+      fireEvent.click(picker);
+      fireEvent.click(screen.getByText("v13"));
+      expect(pick).toHaveBeenCalledWith(13);
+      fireEvent.click(screen.getByRole("button", { name: "Roll back" }));
+      await act(async () => {});
+
+      expect(run).toHaveBeenCalledWith(
+        olderSurface,
+        { action: "promote", version: 11 },
+        expect.any(Function),
+      );
+    });
+
+    it("offers Promote on a version newer than the live one", async () => {
+      const run = vi.fn(async () => ({ ok: true as const, version: 13, live: true }));
+      renderEditor(<SurfaceEditor source={hosted(run)} surface={newerSurface} samples={{}} />);
+      await act(async () => {});
+
+      fireEvent.click(screen.getByRole("button", { name: "Promote" }));
+      await act(async () => {});
+      expect(run).toHaveBeenCalledWith(
+        newerSurface,
+        { action: "promote", version: 13 },
+        expect.any(Function),
+      );
+    });
+
+    it("refuses to promote the version that is already live", async () => {
+      const run = vi.fn();
+      renderEditor(<SurfaceEditor source={hosted(run)} surface={liveSurface} samples={{}} />);
+      await act(async () => {});
+
+      const button = screen.getByRole("button", { name: "Promote" });
+      expect(button.hasAttribute("disabled")).toBe(true);
+      fireEvent.click(button);
+      expect(run).not.toHaveBeenCalled();
+    });
+
+    it("shows the host's failure in the panel", async () => {
+      const run = vi.fn(async () => ({ ok: false as const, error: "paywalls:write is missing" }));
+      renderEditor(<SurfaceEditor source={hosted(run)} surface={olderSurface} samples={{}} />);
+      await act(async () => {});
+
+      fireEvent.click(screen.getByRole("button", { name: "Roll back" }));
+      await act(async () => {});
+      expect(screen.getByText("Roll back failed")).toBeDefined();
+      expect(screen.getByRole("alert").textContent).toBe("paywalls:write is missing");
+    });
   });
 });

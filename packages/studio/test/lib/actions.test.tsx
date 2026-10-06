@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runAction } from "../../src/lib/actions";
+import { devServerActions, runAction } from "../../src/lib/actions";
 import { buildPreviewPath } from "../../src/lib/preview";
 import { StudioApp } from "../../src/StudioApp";
 import type { StudioSource } from "../../src/lib/surfaces";
@@ -18,7 +18,7 @@ const source: StudioSource = {
   ],
   diagnostics: [],
   previewUrl: buildPreviewPath,
-  capabilities: { actions: true },
+  actions: devServerActions,
 };
 
 const jsonResponse = (value: unknown) =>
@@ -118,11 +118,11 @@ describe("studio actions", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: /Compare/ })).toBeDefined());
     fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-    await waitFor(() => expect(screen.getByText("v4")).toBeDefined());
-    expect(screen.getByText("v5 · live")).toBeDefined();
-    fireEvent.click(screen.getByText("v4"));
+    const popup = () => within(document.querySelector("[data-menu-popup]") as HTMLElement);
+    await waitFor(() => expect(popup().getByText("v4")).toBeDefined());
+    expect(popup().getByText("v5 · Live")).toBeDefined();
+    fireEvent.click(popup().getByText("v4"));
 
-    expect(screen.getByText("v4")).toBeDefined();
     expect(screen.getByText("Local")).toBeDefined();
     await waitFor(() => {
       const pushed = screen.getAllByTitle("plus-upgrade v4").at(-1);
@@ -139,7 +139,7 @@ describe("studio actions", () => {
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
     const twoSurfaces: StudioSource = {
       ...source,
-      capabilities: { actions: false },
+      actions: undefined,
       surfaces: [
         ...source.surfaces,
         { kind: "paywall", id: "win-back", routes: ["/"], locales: ["en"] },
@@ -171,7 +171,7 @@ describe("studio actions", () => {
   it("hides ship and compare entirely when nothing can be compared", () => {
     mockFetch({});
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
-    render(<StudioApp source={{ ...source, capabilities: { actions: false } }} />);
+    render(<StudioApp source={{ ...source, actions: undefined }} />);
 
     expect(screen.queryByRole("button", { name: "Push" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Compare/ })).toBeNull();
@@ -233,7 +233,7 @@ describe("runAction streaming", () => {
     const steps: string[] = [];
     const result = await runAction(
       { kind: "paywall", id: "plus-upgrade", routes: [], locales: [] },
-      "push",
+      { action: "push" },
       (step, state) => steps.push(`${step}:${state}`),
     );
 
@@ -271,7 +271,7 @@ describe("runAction framing", () => {
     );
 
     const steps: string[] = [];
-    const result = await runAction(surface, "publish", (step, state) =>
+    const result = await runAction(surface, { action: "publish" }, (step, state) =>
       steps.push(`${step}:${state}`),
     );
 
@@ -287,7 +287,7 @@ describe("runAction framing", () => {
     );
 
     const steps: string[] = [];
-    const result = await runAction(surface, "push", (step, state) =>
+    const result = await runAction(surface, { action: "push" }, (step, state) =>
       steps.push(`${step}:${state}`),
     );
 
@@ -298,7 +298,7 @@ describe("runAction framing", () => {
   it("reports a stream that ends without a result rather than hanging", async () => {
     withBody(streamOf('{"step":"build","state":"start"}\n'));
 
-    const result = await runAction(surface, "push");
+    const result = await runAction(surface, { action: "push" });
     expect(result).toEqual({ ok: false, error: "The dev server closed without a result." });
   });
 
@@ -316,7 +316,7 @@ describe("runAction framing", () => {
       ),
     );
 
-    expect(await runAction(surface, "push")).toEqual({
+    expect(await runAction(surface, { action: "push" })).toEqual({
       ok: false,
       error: "Actions need `superwall dev`.",
     });
@@ -330,7 +330,7 @@ describe("runAction framing", () => {
       }),
     );
 
-    expect(await runAction(surface, "push")).toEqual({
+    expect(await runAction(surface, { action: "push" })).toEqual({
       ok: false,
       error: "dev server went away",
     });
@@ -339,7 +339,7 @@ describe("runAction framing", () => {
   it("a malformed line fails the action rather than being silently skipped", async () => {
     withBody(streamOf("{ not json }\n"));
 
-    const result = await runAction(surface, "push");
+    const result = await runAction(surface, { action: "push" });
     expect(result.ok).toBe(false);
   });
 });

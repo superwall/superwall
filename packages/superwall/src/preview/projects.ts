@@ -135,12 +135,20 @@ export type ActionRequest = {
   project: string | undefined;
   kind: string;
   id: string;
+  version: number | undefined;
 };
 
+const field = (value: unknown, key: string): unknown =>
+  typeof value === "object" && value !== null && key in value ? Reflect.get(value, key) : undefined;
+
 const stringField = (value: unknown, key: string): string | undefined => {
-  if (typeof value !== "object" || value === null || !(key in value)) return undefined;
-  const found = Reflect.get(value, key);
+  const found = field(value, key);
   return typeof found === "string" ? found : undefined;
+};
+
+const versionField = (value: unknown, key: string): number | undefined => {
+  const found = field(value, key);
+  return typeof found === "number" && Number.isInteger(found) && found >= 0 ? found : undefined;
 };
 
 export const readActionRequest = (body: string): ActionRequest => {
@@ -150,5 +158,6 @@ export const readActionRequest = (body: string): ActionRequest => {
     project: stringField(parsed, "project"),
     kind: stringField(parsed, "kind") ?? "",
     id: stringField(parsed, "id") ?? "",
+    version: versionField(parsed, "version"),
   };
 };

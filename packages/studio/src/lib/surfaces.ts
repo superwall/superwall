@@ -1,3 +1,10 @@
+import type {
+  StudioActionName,
+  StudioActionProgress,
+  StudioActionRequest,
+  StudioActionResult,
+  StudioStatus,
+} from "./contract";
 import type { StudioPresentation } from "./presentation";
 import type { SampleDefaults } from "./variables";
 
@@ -8,6 +15,7 @@ export type {
   Samples,
   StudioActionName,
   StudioActionProgress,
+  StudioActionRequest,
   StudioActionResult,
   StudioStatus,
   StudioVersion,
@@ -20,6 +28,7 @@ export type StudioSurface = {
   id: string;
   project?: string;
   label?: string;
+  version?: number;
   products?: Record<string, string>;
   routes: string[];
   locales: string[];
@@ -66,6 +75,17 @@ export type CompareTarget =
   | { type: "surface"; surface: StudioSurface }
   | { type: "origin" };
 
+export type StudioActions = {
+  offered: readonly StudioActionName[];
+  run(
+    surface: StudioSurface,
+    request: StudioActionRequest,
+    onStep?: StudioActionProgress,
+  ): Promise<StudioActionResult>;
+  status(surface: StudioSurface): Promise<StudioStatus>;
+  pick?(version: number): void;
+};
+
 export type StudioSource = {
   scheme?: string;
   networkOrigin?: string;
@@ -75,10 +95,10 @@ export type StudioSource = {
   samples?: SampleDefaults;
   previewUrl: PreviewUrlBuilder;
   standaloneUrl?: PreviewUrlBuilder;
-  capabilities?: { actions: boolean };
+  actions?: StudioActions;
   previewLink?: (surface: StudioSurface) => Promise<string>;
   screenshotUrl?: (surface: StudioSurface) => Promise<string | undefined>;
   compareHint?: string;
 };
 
-export const hasActions = (source: StudioSource): boolean => source.capabilities?.actions === true;
+export const hasActions = (source: StudioSource): boolean => source.actions !== undefined;

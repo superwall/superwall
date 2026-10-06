@@ -15,7 +15,7 @@ const surface = (id: string): StudioSurface => ({
 const options = (count: number): CompareOption[] => [
   {
     key: "version:5",
-    label: "v5 · live",
+    label: "v5 · Live",
     hint: "What SDKs receive today",
     target: { type: "version", version: 5 },
   },
@@ -44,7 +44,7 @@ describe("CompareMenu", () => {
     const groups = document.querySelectorAll("[data-menu-popup] > div");
     const pinned = within(groups[groups.length - 1] as HTMLElement);
     expect(pinned.getByText("Off")).toBeDefined();
-    expect(pinned.queryByText("v5 · live")).toBeNull();
+    expect(pinned.queryByText("v5 · Live")).toBeNull();
     expect(pinned.queryByText("paywall/paywall-0")).toBeNull();
 
     // the search sits above everything, and only the paywalls scroll
@@ -66,14 +66,14 @@ describe("CompareMenu", () => {
     const labels = [...document.querySelectorAll(".overflow-y-auto button")].map(
       (button) => button.querySelector("span span")?.textContent,
     );
-    expect(labels[0]).toBe("v5 · live");
+    expect(labels[0]).toBe("v5 · Live");
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search versions and paywalls" }), {
       target: { value: "v5" },
     });
     expect(screen.queryByText("Versions")).toBeNull();
     expect(screen.queryByText("Paywalls")).toBeNull();
-    expect(screen.getByText("v5 · live")).toBeDefined();
+    expect(screen.getByText("v5 · Live")).toBeDefined();
   });
 
   it("filters versions and paywalls by search, leaving off reachable", () => {
@@ -85,7 +85,7 @@ describe("CompareMenu", () => {
 
     expect(screen.getByText("paywall/paywall-2")).toBeDefined();
     expect(screen.queryByText("paywall/paywall-0")).toBeNull();
-    expect(screen.queryByText("v5 · live")).toBeNull();
+    expect(screen.queryByText("v5 · Live")).toBeNull();
     expect(screen.getByText("Off")).toBeDefined();
   });
 
@@ -115,7 +115,7 @@ describe("CompareMenu", () => {
   it("checks what is being compared at the row's end, and switching back off is one click", () => {
     const onSelect = open({ active: { type: "version", version: 5 } });
 
-    const liveRow = screen.getByText("v5 · live").closest("button") as HTMLElement;
+    const liveRow = screen.getByText("v5 · Live").closest("button") as HTMLElement;
     expect(liveRow.getAttribute("aria-current")).toBe("true");
     expect(liveRow.lastElementChild?.matches("svg.text-primary")).toBe(true);
 

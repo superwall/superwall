@@ -371,12 +371,19 @@ state, delegate })` answers the handshake, streams variables as a patch, and
   iframe's `contentWindow` and sends `hostPatch(sent, next)` diffs as state
   changes.
   - **Two hosts mount it**, and the seam between them is one type,
-    `StudioSource` (title, `StudioSurface[]`, `previewUrl(surface)`):
-    `superwall dev` supplies surfaces discovered on disk and previews
-    `/preview/{kind}/{id}?transport=editor`, while the dashboard
-    (`../pwn/apps/web2`) supplies pushed versions and previews the immutable CDN
-    snapshot. Same component, same protocol, same paywall bytes — only the
-    surface list and the URL differ.
+    `StudioSource` (title, `StudioSurface[]`, `previewUrl(surface)`, and the
+    optional `actions` shipping seam: which of push/promote/publish the host
+    offers, `run` and `status`): `superwall dev` supplies surfaces discovered
+    on disk, previews `/preview/{kind}/{id}?transport=editor` and ships
+    through `devServerActions` (`/__studio/action`), while the dashboard
+    (`../pwn/apps/web2`) supplies pushed versions, previews the immutable CDN
+    snapshot and offers promote alone over its own API client. Same
+    component, same protocol, same paywall bytes — only the surface list, the
+    URL and the seam differ. The promote button's label is the studio's
+    (`lib/promotion.ts`): **Promote** when the target version is newer than
+    the live one, **Roll back** when older, from `status`'s version list and
+    the surface's `version` (hosted) or the version picked in the menu
+    (local).
   - Anything the **hosted** studio needs has to travel through the push
     payload, because the dashboard has no access to the repo. That is why a
     pushed version carries `locales` (and why the device manifest carries

@@ -109,7 +109,7 @@ export function createStudioActions(
       }
     },
 
-    async run(action, surface, onProgress = () => {}) {
+    async run(action, surface, onProgress = () => {}, options = {}) {
       const step = async <T>(name: string, work: () => Promise<T>): Promise<T> => {
         onProgress(name, "start");
         const value = await work();
@@ -126,6 +126,14 @@ export function createStudioActions(
         });
 
         if (action === "promote") {
+          const requested = options.version;
+          if (requested !== undefined && targets.length > 1) {
+            throw new Error(
+              `v${requested} targets one paywall — \`${surface.id}\` is pushed to ${targets
+                .map((target) => target.platform)
+                .join(", ")}; run \`superwall promote --id ${surface.id} --platform <platform> --version ${requested}\` instead.`,
+            );
+          }
           let version = 0;
           for (const target of targets) {
             const binding = await resolveBinding({
@@ -137,7 +145,7 @@ export function createStudioActions(
               create: false,
             });
             const promoted = await step("promote", () =>
-              promotePaywallVersion(client, binding.paywallId),
+              promotePaywallVersion(client, binding.paywallId, { version: requested }),
             );
             version = promoted.version;
           }

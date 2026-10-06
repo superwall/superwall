@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
+import { devServerActions } from "../src/lib/actions";
 import { buildPreviewPath, surfacePath } from "../src/lib/preview";
 import { StudioApp } from "../src/StudioApp";
 import type { StudioSource } from "../src/lib/surfaces";
@@ -48,7 +49,7 @@ const shippable: StudioSource = {
     user: { subscriptionStatus: "INACTIVE" },
     params: { event_name: "campaign_trigger", $is_feature_gatable: false },
   },
-  capabilities: { actions: true },
+  actions: devServerActions,
   previewUrl: buildPreviewPath,
   standaloneUrl: (surface) => `/preview${surfacePath(surface)}`,
 };
@@ -66,7 +67,7 @@ const hostOf = (frame: HTMLElement | undefined) => {
     });
 };
 
-const source: StudioSource = { ...shippable, capabilities: undefined };
+const source: StudioSource = { ...shippable, actions: undefined };
 
 describe("the overview", () => {
   const many = {

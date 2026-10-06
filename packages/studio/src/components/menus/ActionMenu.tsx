@@ -1,29 +1,38 @@
 import * as React from "react";
-import { ChevronDownIcon, SpinnerIcon } from "../icons";
+import { ChevronDownIcon, ChevronsUpDownIcon, SpinnerIcon } from "../icons";
+import { timeAgo } from "../../lib/time";
 import { Tooltip } from "../Tooltip";
 import { MenuItem, MenuPopup, useDismiss } from "./Menu";
 import {
   ACTION_STEPS,
-  STEP_LABELS,
+  stepLabel,
   type StudioActionStep,
   type StudioStepState,
 } from "../../lib/steps";
-import { type StudioActionName } from "../../lib/surfaces";
+import {
+  PROMOTION_LABEL,
+  promotionBlocker,
+  promotionDirection,
+  promotionHint,
+  type Promotion,
+  type PromotionDirection,
+} from "../../lib/promotion";
+import { type StudioActionName, type StudioVersion } from "../../lib/surfaces";
 
-const ACTIONS: readonly { name: StudioActionName; label: string; hint: string }[] = [
-  { name: "push", label: "Push", hint: "New version, nothing live changes" },
-  { name: "promote", label: "Promote", hint: "Make the latest push live" },
-  { name: "publish", label: "Publish", hint: "Push and make it live" },
-];
-
-const labelFor = (name: StudioActionName): string =>
-  ACTIONS.find((action) => action.name === name)?.label ?? name;
-
-const runningLabel: Record<StudioActionName, string> = {
-  push: "Pushing…",
-  publish: "Publishing…",
-  promote: "Promoting…",
+const HINTS: Record<Exclude<StudioActionName, "promote">, string> = {
+  push: "New version, nothing live changes",
+  publish: "Push and make it live",
 };
+
+const labelFor = (name: StudioActionName, direction: PromotionDirection): string =>
+  name === "push" ? "Push" : name === "publish" ? "Publish" : PROMOTION_LABEL[direction].label;
+
+const runningLabel = (name: StudioActionName, direction: PromotionDirection): string =>
+  name === "push"
+    ? "Pushing…"
+    : name === "publish"
+      ? "Publishing…"
+      : PROMOTION_LABEL[direction].running;
 
 export type ActionProgress = {
   action: StudioActionName;
@@ -31,14 +40,21 @@ export type ActionProgress = {
   error?: string;
 };
 
-const DOT: Record<StudioStepState, string> = {
-  active: "bg-primary motion-safe:animate-pulse",
+const DOT: Record<Exclude<StudioStepState, "active">, string> = {
   done: "bg-primary",
   failed: "bg-destructive",
   pending: "bg-fg-muted",
 };
 
-const ProgressPanel = ({ progress }: { progress: ActionProgress }) => {
+const ProgressPanel = ({
+  progress,
+  direction,
+  target,
+}: {
+  progress: ActionProgress;
+  direction: PromotionDirection;
+  target: number | undefined;
+}) => {
   const steps = ACTION_STEPS[progress.action];
   const done = steps.filter((step) => progress.steps[step] === "done").length;
   const failed = progress.error !== undefined;
@@ -48,10 +64,10 @@ const ProgressPanel = ({ progress }: { progress: ActionProgress }) => {
       <div className="flex flex-col gap-2 p-3">
         <span className="-mt-1 text-sm font-medium">
           {failed
-            ? `${labelFor(progress.action)} failed`
+            ? `${labelFor(progress.action, direction)} failed`
             : done === steps.length
-              ? `${labelFor(progress.action)} complete`
-              : runningLabel[progress.action]}
+              ? `${labelFor(progress.action, direction)} complete`
+              : runningLabel(progress.action, direction)}
         </span>
         <span className="block h-1 w-full overflow-hidden rounded-sm bg-muted">
           <span
@@ -71,9 +87,15 @@ const ProgressPanel = ({ progress }: { progress: ActionProgress }) => {
               <span
                 className={`flex-1 text-sm ${state === "pending" ? "text-fg-tertiary" : "text-foreground"}`}
               >
-                {STEP_LABELS[step]}
+                {stepLabel(step, progress.action === "promote" ? direction : "promote", target)}
               </span>
-              <span className={`size-2 flex-none rounded-full ${DOT[state]}`} />
+              {state === "active" ? (
+                <span className="flex size-4 flex-none items-center justify-center text-primary">
+                  <SpinnerIcon />
+                </span>
+              ) : (
+                <span className={`size-2 flex-none rounded-full ${DOT[state]}`} />
+              )}
             </li>
           );
         })}
@@ -90,22 +112,98 @@ const ProgressPanel = ({ progress }: { progress: ActionProgress }) => {
   );
 };
 
+const versionLabel = (entry: StudioVersion): string =>
+  `v${entry.version}${entry.live ? " · Live" : ""}`;
+
+const versionHint = (entry: StudioVersion): string => {
+  if (entry.live) return "What SDKs receive today";
+  const ago = entry.pushedAt ? timeAgo(entry.pushedAt) : undefined;
+  return ago ? `Pushed ${ago}` : "Pushed snapshot";
+};
+
+const SEGMENT = "sw-btn sw-btn--sm sw-btn--primary";
+
+const VersionMenu = ({
+  versions,
+  target,
+  disabled,
+  onPick,
+}: {
+  versions: readonly StudioVersion[];
+  target: number | undefined;
+  disabled: boolean;
+  onPick: (version: number) => void;
+}) => {
+  const [open, setOpen] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  const popupRef = React.useRef<HTMLDivElement>(null);
+  const dismissRefs = React.useMemo(() => [menuRef, popupRef], []);
+  useDismiss(dismissRefs, open, () => setOpen(false));
+  const current = versions.find((entry) => entry.version === target);
+
+  return (
+    <div className="relative flex" ref={menuRef}>
+      <button
+        type="button"
+        className="sw-btn sw-btn--sm"
+        aria-label="Version"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {current ? versionLabel(current) : `v${target}`}
+        <ChevronsUpDownIcon className="icon-tertiary" />
+      </button>
+      {open && (
+        <MenuPopup popupRef={popupRef} anchor={menuRef} side="bottom" align="end" className="w-56">
+          <div className="flex max-h-64 scroll-fade flex-col overflow-y-auto p-1" data-menu-list="">
+            {versions.map((entry) => (
+              <MenuItem
+                key={entry.version}
+                label={versionLabel(entry)}
+                hint={versionHint(entry)}
+                selected={entry.version === target}
+                onSelect={() => {
+                  setOpen(false);
+                  onPick(entry.version);
+                }}
+              />
+            ))}
+          </div>
+        </MenuPopup>
+      )}
+    </div>
+  );
+};
+
 export const ActionMenu = ({
+  offered,
+  promotion,
   progress,
   blocked,
   onRun,
   onBlocked,
 }: {
+  offered: readonly StudioActionName[];
+  promotion: Promotion;
   progress: ActionProgress | undefined;
   blocked?: string;
   onRun: (action: StudioActionName) => void;
   onBlocked?: () => void;
 }) => {
-  const [selected, setSelected] = React.useState<StudioActionName>("push");
+  const [selected, setSelected] = React.useState<StudioActionName>(offered[0] ?? "push");
   const [open, setOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
 
-  const stopped = blocked !== undefined;
+  const direction = promotionDirection(promotion.target, promotion.live);
+  const [run, setRun] = React.useState({ direction, target: promotion.target });
+  const ordered = [...promotion.versions].sort((a, b) => b.version - a.version);
+  const pick = promotion.pick;
+  const picker = pick !== undefined && ordered.length > 0;
+  const chooser = offered.length > 1;
+
+  const stop = selected === "promote" ? promotionBlocker(promotion) : blocked;
+  const stopped = stop !== undefined;
   const busy =
     progress !== undefined &&
     progress.error === undefined &&
@@ -116,57 +214,85 @@ export const ActionMenu = ({
   const dismissRefs = React.useMemo(() => [menuRef, popupRef], []);
   useDismiss(dismissRefs, open, () => setOpen(false));
 
-  return (
-    <div className="relative flex" ref={menuRef}>
-      <Tooltip hint={blocked}>
-        <span className="flex">
-          <button
-            type="button"
-            className="sw-btn sw-btn--sm sw-btn--primary rounded-e-none border-e-0"
-            disabled={busy}
-            aria-busy={busy || undefined}
-            onClick={() => (stopped ? onBlocked?.() : onRun(selected))}
-          >
-            {busy && <SpinnerIcon />}
-            {busy ? runningLabel[progress.action] : labelFor(selected)}
-          </button>
-          <span aria-hidden="true" className="w-px bg-primary-foreground/24" />
-          <button
-            type="button"
-            className="sw-btn sw-btn--sm sw-btn--icon sw-btn--primary rounded-s-none border-s-0"
-            aria-label="Choose action"
-            aria-expanded={open}
-            aria-busy={busy || undefined}
-            disabled={busy}
-            onClick={() => setOpen((value) => !value)}
-          >
-            <ChevronDownIcon />
-          </button>
-        </span>
-      </Tooltip>
+  const start = () => {
+    if (stopped) {
+      if (selected !== "promote") onBlocked?.();
+      return;
+    }
+    setRun({ direction, target: promotion.target });
+    onRun(selected);
+  };
 
-      {(showPanel || open) && (
-        <MenuPopup popupRef={popupRef} anchor={menuRef} side="bottom" align="end">
-          {showPanel ? (
-            <ProgressPanel progress={progress} />
-          ) : (
-            <div className="flex w-max flex-col p-1">
-              {ACTIONS.map((action) => (
-                <MenuItem
-                  key={action.name}
-                  label={action.label}
-                  hint={action.hint}
-                  selected={action.name === selected}
-                  onSelect={() => {
-                    setSelected(action.name);
-                    setOpen(false);
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </MenuPopup>
+  const choose = (action: StudioActionName) => {
+    setSelected(action);
+    setOpen(false);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      {picker && (
+        <VersionMenu
+          versions={ordered}
+          target={promotion.target}
+          disabled={busy}
+          onPick={(version) => {
+            pick(version);
+            if (offered.includes("promote")) setSelected("promote");
+          }}
+        />
       )}
+      <div className="relative flex" ref={menuRef}>
+        <Tooltip hint={stop}>
+          <span className="flex">
+            <button
+              type="button"
+              className={`${SEGMENT} ${chooser ? "rounded-e-none border-e-0" : ""}`}
+              disabled={busy || (stopped && selected === "promote")}
+              aria-busy={busy || undefined}
+              onClick={start}
+            >
+              {busy && <SpinnerIcon />}
+              {busy ? runningLabel(progress.action, run.direction) : labelFor(selected, direction)}
+            </button>
+            {chooser && (
+              <>
+                <span aria-hidden="true" className="w-px bg-primary-foreground/24" />
+                <button
+                  type="button"
+                  className={`${SEGMENT} sw-btn--icon rounded-s-none border-s-0`}
+                  aria-label="Choose action"
+                  aria-expanded={open}
+                  aria-busy={busy || undefined}
+                  disabled={busy}
+                  onClick={() => setOpen((value) => !value)}
+                >
+                  <ChevronDownIcon />
+                </button>
+              </>
+            )}
+          </span>
+        </Tooltip>
+
+        {(showPanel || open) && (
+          <MenuPopup popupRef={popupRef} anchor={menuRef} side="bottom" align="end">
+            {showPanel ? (
+              <ProgressPanel progress={progress} direction={run.direction} target={run.target} />
+            ) : (
+              <div className="flex w-max min-w-56 flex-col p-1">
+                {offered.map((action) => (
+                  <MenuItem
+                    key={action}
+                    label={labelFor(action, direction)}
+                    hint={action === "promote" ? promotionHint(promotion) : HINTS[action]}
+                    selected={action === selected}
+                    onSelect={() => choose(action)}
+                  />
+                ))}
+              </div>
+            )}
+          </MenuPopup>
+        )}
+      </div>
     </div>
   );
 };

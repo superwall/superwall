@@ -182,7 +182,18 @@ describe("readActionRequest", () => {
   it("reads the string fields the studio posts", () => {
     expect(
       readActionRequest('{"action":"push","kind":"paywall","id":"pro","project":"app"}'),
-    ).toEqual({ action: "push", kind: "paywall", id: "pro", project: "app" });
+    ).toEqual({ action: "push", kind: "paywall", id: "pro", project: "app", version: undefined });
+  });
+
+  it("reads the version a promote targets, and only a whole one", () => {
+    const promote = (version: string) =>
+      readActionRequest(`{"action":"promote","kind":"paywall","id":"pro","version":${version}}`)
+        .version;
+    expect(promote("5")).toBe(5);
+    expect(promote("0")).toBe(0);
+    expect(promote('"5"')).toBeUndefined();
+    expect(promote("5.5")).toBeUndefined();
+    expect(promote("-1")).toBeUndefined();
   });
 
   it("treats anything else as an empty request", () => {
@@ -191,12 +202,14 @@ describe("readActionRequest", () => {
       project: undefined,
       kind: "",
       id: "",
+      version: undefined,
     });
     expect(readActionRequest('{"action":1,"kind":null}')).toEqual({
       action: undefined,
       project: undefined,
       kind: "",
       id: "",
+      version: undefined,
     });
   });
 });

@@ -1,4 +1,5 @@
 import type { StudioActionName } from "./contract";
+import type { PromotionDirection } from "./promotion";
 
 export type StudioStepState = "pending" | "active" | "done" | "failed";
 
@@ -10,7 +11,7 @@ export const ACTION_STEPS: Record<StudioActionName, StudioActionStep[]> = {
   promote: ["link", "promote"],
 };
 
-export const STEP_LABELS: Record<StudioActionStep, string> = {
+const STEP_LABELS: Record<StudioActionStep, string> = {
   link: "Find paywall",
   build: "Build snapshot",
   assets: "Sync assets",
@@ -18,3 +19,10 @@ export const STEP_LABELS: Record<StudioActionStep, string> = {
   source: "Push source",
   promote: "Promote to live",
 };
+
+export const stepLabel = (
+  step: StudioActionStep,
+  direction: PromotionDirection,
+  target: number | undefined,
+): string =>
+  step === "promote" && direction === "rollback" ? `Roll back to v${target}` : STEP_LABELS[step];

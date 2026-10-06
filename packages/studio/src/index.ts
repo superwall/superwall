@@ -17,6 +17,13 @@ export { DEFAULT_DEVICE_ID, deviceById, STUDIO_DEVICES } from "./lib/devices";
 export type { StudioDevice } from "./lib/devices";
 export { hostStateFor, studioDefaults } from "./lib/host";
 export { hasActions } from "./lib/surfaces";
+export { devServerActions } from "./lib/actions";
+export {
+  latestVersion,
+  liveVersion,
+  promotionDirection,
+  type PromotionDirection,
+} from "./lib/promotion";
 export { devServerLink } from "./lib/scheme";
 export {
   StudioHostProvider,
@@ -43,7 +50,9 @@ export type {
   Samples,
   StudioActionName,
   StudioActionProgress,
+  StudioActionRequest,
   StudioActionResult,
+  StudioActions,
   StudioPresentation,
   StudioSource,
   StudioStatus,

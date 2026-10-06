@@ -37,8 +37,9 @@ export const StudioApp = ({
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  const shipping = source.actions !== undefined;
   React.useEffect(() => {
-    if (source.capabilities?.actions !== true) return;
+    if (!shipping) return;
     let cancelled = false;
     fetchSamples().then((value) => {
       if (!cancelled) setSamples(value);
@@ -46,7 +47,7 @@ export const StudioApp = ({
     return () => {
       cancelled = true;
     };
-  }, [source.capabilities?.actions]);
+  }, [shipping]);
 
   const homePath = mode === "device" ? "/device" : "/";
 
