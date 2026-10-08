@@ -30,6 +30,56 @@ export function createAscConfig(api: SuperwallApi, c: AscCredentials): Promise<R
   });
 }
 
+export function updateAscConfig(api: SuperwallApi, teamId: string, c: AscCredentials): Promise<Row> {
+  return api.patch<Row>(`${ascBase(api)}/${teamId}`, {
+    key_id: c.keyId,
+    issuer_id: c.issuerId,
+    private_key: c.privateKey,
+    ...(c.accountName ? { account_name: c.accountName } : {}),
+  });
+}
+
+export interface AppRef {
+  projectId: string;
+  applicationId: string;
+}
+
+export interface KeyVerdict {
+  valid: boolean;
+  error: string | null;
+}
+
+const appIntegrations = (app: AppRef): string =>
+  `/v2/projects/${app.projectId}/applications/${app.applicationId}/integrations`;
+
+export function saveAppAscKey(api: SuperwallApi, app: AppRef, c: AscCredentials): Promise<KeyVerdict> {
+  return api.put<KeyVerdict>(`${appIntegrations(app)}/app-store-connect/configuration`, {
+    key_id: c.keyId,
+    issuer_id: c.issuerId,
+    private_key: c.privateKey,
+  });
+}
+
+export function saveAppPurchaseKey(
+  api: SuperwallApi,
+  app: AppRef,
+  c: AscCredentials & { bundleId: string },
+): Promise<KeyVerdict> {
+  return api.put<KeyVerdict>(`${appIntegrations(app)}/in-app-purchase/configuration`, {
+    bundle_id: c.bundleId,
+    key_id: c.keyId,
+    issuer_id: c.issuerId,
+    private_key: c.privateKey,
+  });
+}
+
+export async function getAppNotificationUrl(api: SuperwallApi, app: AppRef): Promise<string> {
+  const res = await api.get<{ url: string }>(
+    `${appIntegrations(app)}/app-store-connect/notification-url`,
+  );
+  return res.url;
+}
+
 export function deleteAscConfig(api: SuperwallApi, teamId: string): Promise<{ success: boolean }> {
   return api.del<{ success: boolean }>(`${ascBase(api)}/${teamId}`);
 }

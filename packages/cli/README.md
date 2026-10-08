@@ -264,7 +264,44 @@ params become query parameters.
 ## App Store Connect
 
 The **entire** App Store Connect API, proxied and signed by Superwall — no
-`.p8` file or JWT to manage locally. Connect your credentials once:
+`.p8` file or JWT to manage locally. Connect an app in one command:
+
+```bash
+superwall setup apple
+```
+
+It signs you in to Apple, creates an App Store Connect API key and an In-App
+Purchase key, saves both on your organization and app, and points the app's
+App Store Server Notifications at Superwall. Your Apple password goes from your
+computer straight to Apple; Superwall never receives it and it is not saved.
+The Apple Account must be an Admin or the Account Holder. If a server
+notification URL is already set on the app, the command leaves it alone and
+exits non-zero.
+
+In a terminal it asks for your Apple Account email, your password (masked) and
+the verification code Apple sends. Type `sms` at the code prompt, or pass
+`--sms`, to get the code by text. Pass `--team <id|name>` when the account is
+on several teams, `--bundle-id <id>` to create the Superwall app from an App
+Store Connect app, and `--dry-run` to sign in and check key access without
+changing anything.
+
+A coding agent can run it for you if you want it to. You decide that by putting
+the password where the agent's shell can read it, as `SUPERWALL_APPLE_PASSWORD`;
+never paste it into a chat. Without a prompt the command runs in two steps,
+because Apple sends the code after the sign-in starts:
+
+```bash
+superwall setup apple --apple-id you@example.com --app <id> --no-interactive   # Apple sends you a code
+superwall setup apple --code 123456 --app <id> --no-interactive                # same flags, within 10 minutes
+```
+
+The first run exits non-zero saying a code is required; give the agent the code
+and it runs the second. Only Apple's pre-verification cookies are kept between
+the two runs, in `~/.superwall/apple-sign-in.json`, for 10 minutes.
+`--apple-password` exists too, but it lands in shell history and the process
+list.
+
+Already have a key? Upload it instead:
 
 ```bash
 superwall asc keys set --key-id <id> --issuer <id> --key-file AuthKey.p8
@@ -377,7 +414,7 @@ packages/cli/
 │   │   ├── account/      login, whoami, orgs, doctor, feedback, skills, upgrade
 │   │   ├── resource/     apps, products, entitlements, campaigns, paywalls, bootstrap
 │   │   ├── workflow/     integrate, migrate, review
-│   │   ├── platform/     get/post/patch/delete, query, asc, asc keys
+│   │   ├── platform/     get/post/patch/delete, query, asc, asc keys, setup apple
 │   │   └── paywalls/     create, dev, push, promote, publish
 │   ├── core/             api client, auth, project detection, paywall
 │   │                     binding + lock, agent runners, telemetry, skills sync

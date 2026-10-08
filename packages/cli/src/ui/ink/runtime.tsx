@@ -102,6 +102,7 @@ export const inkRenderer: Renderer = {
         value: o.initialValue ?? "",
         footer: o.footer,
         transient: o.transient,
+        secret: o.secret,
         validate: o.validate,
         resolve,
       }),

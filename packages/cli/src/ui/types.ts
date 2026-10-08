@@ -28,6 +28,8 @@ export interface TextOpts {
   validate?: (v: string) => string | undefined;
   footer?: string;
   transient?: boolean;
+  /** Echo bullets instead of the typed characters, and keep the value out of the timeline. */
+  secret?: boolean;
 }
 
 export interface ListItem {

@@ -62,6 +62,7 @@ export function printHelp(): void {
       row("asc", "The ASC API via Superwall's signed proxy (no .p8 / JWT)"),
       row("asc docs", "Exact ASC request schema, from Apple's spec (path or search)"),
       row("asc keys", "Manage App Store Connect API keys (list, set, rm)"),
+      row("setup apple", "Sign in to Apple: create both keys, save them, set the webhook"),
       "",
       head("Apple Search Ads commands"),
       row("asa", "The Apple Ads API via Superwall's proxy (campaigns, keywords, reports, ...)"),

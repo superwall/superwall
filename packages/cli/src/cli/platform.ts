@@ -68,6 +68,49 @@ export const registerPlatformCommands = <T>(cli: Argv<T>): Argv<T> =>
     },
   )
   .command(
+    "setup <target>",
+    "Connect a store to Superwall: sign in, create its keys, and point its notifications at Superwall",
+    (y) =>
+      y
+        .positional("target", { type: "string", describe: "apple" })
+        .options({
+          "apple-id": { type: "string", describe: "Apple Account email (or set SUPERWALL_APPLE_ID)" },
+          "apple-password": {
+            type: "string",
+            describe:
+              "Apple Account password; prefer the masked prompt or SUPERWALL_APPLE_PASSWORD to keep it out of shell history and the process list",
+          },
+          code: { type: "string", describe: "Apple verification code, to continue a sign-in started without prompts" },
+          sms: { type: "boolean", describe: "Text the verification code instead of pushing it to trusted devices" },
+          phone: { type: "string", describe: "Trusted phone number to text, if the account has several" },
+          team: { type: "string", describe: "Apple team id or name, if the account is on several" },
+          app: { type: "string", describe: "Superwall app id or name" },
+          project: { type: "string", describe: "Superwall project id" },
+          "bundle-id": { type: "string", describe: "Bundle ID of the App Store Connect app" },
+          "key-role": {
+            type: "string",
+            describe: "Role for the new App Store Connect API key: app_manager (default) or admin",
+          },
+          "skip-team-key": { type: "boolean", describe: "Don't create an App Store Connect API key" },
+          "skip-purchase-key": { type: "boolean", describe: "Don't create an In-App Purchase key" },
+          "skip-webhook": { type: "boolean", describe: "Don't set the server notification URL" },
+          "dry-run": {
+            type: "boolean",
+            describe: "Sign in and check key access without creating or changing anything",
+          },
+        })
+        .example("$0 setup apple", "Sign in and connect an app, with prompts")
+        .example("$0 setup apple --dry-run", "Sign in and check key access; change nothing")
+        .example(
+          "$0 setup apple --apple-id you@example.com --app 123 --no-interactive",
+          "Without prompts: reads SUPERWALL_APPLE_PASSWORD, then stops for Apple's code",
+        )
+        .example("$0 setup apple --code 123456 --app 123 --no-interactive", "Continue with the code"),
+    (argv) => {
+      return import("@/commands/platform/setup").then((m) => m.runSetup(argv));
+    },
+  )
+  .command(
     "asa <target> [action] [value]",
     "Call the Apple Search Ads API through Superwall's proxy (no key or token handling)",
     (y) =>
