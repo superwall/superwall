@@ -1,4 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { AGENT_SKILLS_DIR, CHANNEL, CHANNELS, VERSION, type Channel } from "@/environment";
 import { track } from "@/core/telemetry";
 import { ui } from "@/ui";
@@ -186,13 +188,76 @@ export interface InstallSkillsResult {
   command: string;
 }
 
+// `skills add` parses frontmatter as strict YAML and silently skips a skill whose plain `description:` holds `: `,
+// so the repo is cloned and normalised here and installed from the copy; the URL install is only the fallback.
 export async function installPublicSkills(
   opts: InstallSkillsOptions = {},
 ): Promise<InstallSkillsResult> {
-  const args = ["-y", "skills@latest", "add", SKILLS_INSTALL_SOURCE(), "--global", "--yes"];
-  if (opts.skills?.length) args.push("--skill", ...opts.skills);
-  else args.push("--skill", "*");
-  return runInstall(args, opts);
+  const selection = opts.skills?.length ? ["--skill", ...opts.skills] : ["--skill", "*"];
+  const remote = ["-y", "skills@latest", "add", SKILLS_INSTALL_SOURCE(), "--global", "--yes", ...selection];
+  if (opts.dryRun) return runInstall(remote, opts);
+  const checkout = await clonePublicSkills(opts.cwd);
+  if (!checkout) return runInstall(remote, opts);
+  try {
+    normalizeSkillsDir(join(checkout, "skills"));
+    return await runInstall(
+      ["-y", "skills@latest", "add", join(checkout, "skills"), "--global", "--yes", ...selection, "--copy"],
+      opts,
+    );
+  } finally {
+    rmSync(checkout, { recursive: true, force: true });
+  }
+}
+
+async function clonePublicSkills(cwd?: string): Promise<string | null> {
+  const dir = mkdtempSync(join(tmpdir(), "superwall-skills-"));
+  const { code } = await spawnStream({
+    bin: "git",
+    args: [
+      "clone",
+      "--quiet",
+      "--depth",
+      "1",
+      "--branch",
+      SKILLS_REF(),
+      `https://github.com/${SUPERWALL_SKILLS_SOURCE}.git`,
+      dir,
+    ],
+    cwd: cwd ?? process.cwd(),
+    onStdoutLine: () => {},
+  }).catch(() => ({ code: 1 }));
+  if (code === 0 && existsSync(join(dir, "skills"))) return dir;
+  rmSync(dir, { recursive: true, force: true });
+  return null;
+}
+
+export function normalizeSkillsDir(dir: string): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const file = join(dir, entry.name, "SKILL.md");
+    if (!existsSync(file)) continue;
+    const md = readFileSync(file, "utf8");
+    const normalized = normalizeSkillFrontmatter(md);
+    if (normalized !== md) writeFileSync(file, normalized);
+  }
+}
+
+// Quotes single-line plain values that strict YAML rejects (`: ` or ` #` inside, or a reserved first character).
+export function normalizeSkillFrontmatter(md: string): string {
+  const lines = md.split("\n");
+  if (lines[0]?.trim() !== "---") return md;
+  const end = lines.indexOf("---", 1);
+  if (end < 0) return md;
+  for (let i = 1; i < end; i++) {
+    const match = lines[i]!.match(/^([A-Za-z0-9_-]+):[ \t]+(.+?)\s*$/);
+    if (!match) continue;
+    const [, key, value] = match;
+    if (/^["']/.test(value!) || /^[|>][+-]?\d*$/.test(value!)) continue;
+    if (/: |\s#/.test(value!) || /^[`@%&*!?{}[\],]/.test(value!) || value!.endsWith(":")) {
+      lines[i] = `${key}: ${JSON.stringify(value)}`;
+    }
+  }
+  return lines.join("\n");
 }
 
 // `--copy` so the skills live independently of this package's install path.
