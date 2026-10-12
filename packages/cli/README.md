@@ -247,6 +247,34 @@ Use it for anything you'd build on raw data: ad hoc analysis, custom
 dashboards, scheduled reports, agent workflows. `--json` returns ClickHouse's
 native JSON envelope. Your session needs `data:read` access.
 
+## Bundle paywalls into your app
+
+Ship a paywall or onboarding inside your app binary, so the first launch shows
+it instantly and offline:
+
+```bash
+superwall bundle --placement onboarding --key pk_...
+superwall bundle --paywall halo --app 52518 --out ios/MyApp/Superwall.bundle
+superwall bundle --all
+```
+
+It fetches your static config with the app's public API key (the one the SDK
+uses, so CI needs no login), downloads every paywall the selection can show
+plus the remote images, fonts and videos those paywalls reference, and writes
+`Superwall.bundle`. Add that folder to your app target. The iOS SDK uses it
+only until it has fresher config or a newer paywall, so a stale bundle never
+replaces a dashboard change once the device is online.
+
+Run it in CI before each release build, e.g. in Xcode Cloud's
+`ci_scripts/ci_pre_xcodebuild.sh`:
+
+```bash
+npx -y superwall bundle --placement onboarding --out "$CI_PRIMARY_REPOSITORY_PATH/MyApp/Superwall.bundle"
+```
+
+with `SUPERWALL_PUBLIC_API_KEY` set as an environment variable. Everything in
+the bundle ships in your binary, so the command warns past 20 MB.
+
 ## Call the API
 
 Any Superwall API endpoint, authenticated with your session:

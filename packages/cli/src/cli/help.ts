@@ -53,6 +53,7 @@ export function printHelp(): void {
       row("campaigns", "Campaigns (list, create, placement)"),
       row("paywalls", "Paywalls (list)"),
       row("query [sql]", "Run SQL against your ClickHouse analytics data"),
+      row("bundle", "Bundle paywalls and static config into your app for offline first launch"),
       row("orgs", "Organizations (list, use) - only needed with multiple orgs"),
       "",
       head("API commands"),
