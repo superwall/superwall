@@ -21,6 +21,36 @@ export const registerPlatformCommands = <T>(cli: Argv<T>): Argv<T> =>
     },
   )
   .command(
+    "bundle",
+    "Bundle paywalls and the static config into your app, for first launches and offline",
+    (y) =>
+      y
+        .options({
+          placement: {
+            type: "string",
+            array: true,
+            describe: "Bundle every paywall this placement can show (repeatable)",
+          },
+          paywall: {
+            type: "string",
+            array: true,
+            describe: "Bundle this paywall by identifier or id (repeatable)",
+          },
+          all: { type: "boolean", describe: "Bundle every paywall in the static config" },
+          out: { type: "string", describe: "Output directory (default: ./Superwall.bundle)" },
+          key: {
+            type: "string",
+            describe: "The app's public API key (or SUPERWALL_PUBLIC_API_KEY); no login needed",
+          },
+          app: { type: "string", describe: "Superwall app id, to look the key up when logged in" },
+        })
+        .example("$0 bundle --placement onboarding --key pk_...", "Bundle the onboarding in CI")
+        .example("$0 bundle --paywall halo --app 52518 --out ios/App/Superwall.bundle", "Bundle one paywall"),
+    (argv) => {
+      return import("@/commands/platform/bundle").then((m) => m.runBundle(argv));
+    },
+  )
+  .command(
     "asc <target> [value] [value2]",
     "Call the App Store Connect API through Superwall's signed proxy (no .p8 / JWT needed)",
     (y) =>

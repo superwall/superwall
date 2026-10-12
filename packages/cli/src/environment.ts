@@ -39,6 +39,7 @@ export const AUTH_HOST = (): string => host("SUPERWALL_AUTH_HOST", "https://auth
 export const ASSET_HOST = (): string =>
   host("SUPERWALL_ASSET_HOST", "https://user-content.superwalleditor.com/user-content/hl");
 export const API_HOST = (): string => host("SUPERWALL_API_HOST", "https://api.superwall.com");
+export const SDK_API_HOST = (): string => host("SUPERWALL_SDK_API_HOST", "https://api.superwall.me");
 export const CLI_CLIENT_ID = (): string =>
   host("SUPERWALL_CLI_CLIENT_ID", "client_01KWEWM154D2T28NZAS02B8MWT");
 export const OAUTH_SCOPE = "openid profile email offline_access";
@@ -59,6 +60,11 @@ export enum Integration {
 
 export function apiKeyFromEnv(): string | undefined {
   const v = process.env[ENV_API_KEY];
+  return v && v.trim() ? v.trim() : undefined;
+}
+
+export function publicApiKeyFromEnv(): string | undefined {
+  const v = process.env.SUPERWALL_PUBLIC_API_KEY;
   return v && v.trim() ? v.trim() : undefined;
 }
 
