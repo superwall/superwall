@@ -1,224 +1,27 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import type { CommandDefinition } from "@/command";
-import { setupApple, type AppleSetupDeps } from "@/commands/platform/apple";
+import { setupApple } from "@/commands/platform/apple";
 import { runSetup } from "@/commands/platform/setup";
-import { ApiError, type SuperwallApi } from "@/core/api/client";
+import { ApiError } from "@/core/api/client";
+import { AppleError, type AppleTeam } from "@/core/apple/session";
 import {
-  AppleError,
-  type AppleSession,
-  type AppleTeam,
-  type IrisRequest,
-  type PendingVerification,
-} from "@/core/apple/session";
+  ACME,
+  IOS_APP,
+  OURS,
+  PEM,
+  PENDING,
+  outcome,
+  scenario as appleScenario,
+  type Scenario,
+} from "../../helpers/apple-setup";
 import { run } from "../../helpers/command";
-import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
-
-const PEM = "-----BEGIN PRIVATE KEY-----\nMIGT\n-----END PRIVATE KEY-----\n";
-const OURS = "https://integrations.superwall.com/integrations/app-store-connect/webhook?pk=pk_1";
-const ACME: AppleTeam = { id: 111, issuerId: "issuer-111", name: "Acme Inc" };
-const PENDING: PendingVerification = {
-  appleId: "jane@example.com",
-  serviceKey: "widget",
-  sessionId: "session-1",
-  scnt: "scnt-1",
-  cookies: [],
-};
 
 afterEach(() => {
   process.exitCode = undefined;
 });
 
-interface AppleOptions {
-  twoFactor?: boolean;
-  apps?: Array<{ id: string; attributes: { name: string; bundleId: string } }>;
-  teams?: AppleTeam[];
-  refuse?: Partial<Record<"apiKeys" | "subscriptionKeys", AppleError>>;
-}
-
-function fakeSession(options: AppleOptions, log: string[]): AppleSession {
-  const teams = options.teams ?? [ACME];
-  let current = teams[0]!;
-  return {
-    signIn: async (appleId) => {
-      log.push(`signIn ${appleId}`);
-      return options.twoFactor ? "verification-required" : "signed-in";
-    },
-    requestCode: async (request = {}) => {
-      log.push(`requestCode ${request.sms ? "sms" : "device"}`);
-      return request.sms
-        ? { method: "sms", destination: "•••42", codeLength: 6 }
-        : { method: "device", codeLength: 6 };
-    },
-    submitCode: async (code) => {
-      log.push(`submitCode ${code}`);
-      if (code !== "123456") throw new AppleError("verification", "Incorrect verification code.");
-    },
-    pending: () => PENDING,
-    team: () => current,
-    teams: () => teams,
-    selectTeam: async (id) => {
-      log.push(`selectTeam ${id}`);
-      current = teams.find((team) => team.id === id) ?? current;
-    },
-    iris: async (method: string, path: string, request?: IrisRequest) => {
-      if (path === "/apps") {
-        const apps = options.apps ?? [
-          { id: "555", attributes: { name: "Acme", bundleId: "com.acme.app" } },
-        ];
-        const wanted = request?.query?.["filter[bundleId]"];
-        return { data: wanted ? apps.filter((app) => app.attributes.bundleId === wanted) : apps };
-      }
-      log.push(`iris ${method} ${path}`);
-      const resource = path.split("/")[1] as "apiKeys" | "subscriptionKeys";
-      const refusal = options.refuse?.[resource];
-      if (refusal && method === "POST") throw refusal;
-      if (method === "POST") return { data: { id: resource === "apiKeys" ? "TEAMKEY001" : "IAPKEY0001" } };
-      return { data: { attributes: { privateKey: PEM } } };
-    },
-  };
-}
-
-interface ApiOptions {
-  projects?: unknown[];
-  configs?: unknown[];
-  existing?: Record<string, unknown>;
-  appVerdicts?: Array<{ valid: boolean; error: string | null }>;
-  purchaseVerdict?: { valid: boolean; error: string | null };
-  failOrgSave?: ApiError;
-  createdApps?: unknown[];
-  failRead?: ApiError;
-}
-
-const IOS_APP = { id: 8, name: "Acme", platform: "ios", bundle_id: "com.acme.app" };
-
-function fakeApi(options: ApiOptions = {}) {
-  const requests: Array<{ method: string; path: string; body?: unknown }> = [];
-  const appVerdicts = [...(options.appVerdicts ?? [])];
-  const handle = (method: string, path: string, body?: unknown): unknown => {
-    requests.push({ method, path, ...(body === undefined ? {} : { body }) });
-    if (path === "/v2/organizations/9/app-store-connect") {
-      if (method === "GET") return { data: options.configs ?? [] };
-      if (options.failOrgSave) throw options.failOrgSave;
-      return { team_id: "TEAMID1234" };
-    }
-    if (path === "/v2/organizations/9/app-store-connect/TEAMID1234") return { team_id: "TEAMID1234" };
-    if (path.endsWith("/integrations/app-store-connect/configuration")) {
-      return appVerdicts.shift() ?? { valid: true, error: null };
-    }
-    if (path.endsWith("/integrations/in-app-purchase/configuration")) {
-      return options.purchaseVerdict ?? { valid: true, error: null };
-    }
-    if (path.endsWith("/app-store-connect/notification-url")) return { url: OURS };
-    if (path.includes("/proxy/TEAMID1234/v1/apps/")) {
-      if (method === "GET") {
-        if (options.failRead) throw options.failRead;
-        return { data: { attributes: options.existing ?? {} } };
-      }
-      return {};
-    }
-    if (path === "/v2/projects") return { id: 70 };
-    if (/^\/v2\/projects\/\d+\/applications$/.test(path)) {
-      const projectId = Number(path.split("/")[3]);
-      const sent = body as { name: string; bundle_id: string };
-      return {
-        id: projectId,
-        applications: options.createdApps ?? [
-          { id: 3, name: "Android", platform: "android", bundle_id: sent.bundle_id },
-          { id: 99, name: sent.name, platform: "ios", bundle_id: sent.bundle_id },
-        ],
-      };
-    }
-    throw new Error(`unhandled ${method} ${path}`);
-  };
-  const api: Partial<SuperwallApi> = {
-    org: { id: "9", name: "Org", count: 1 },
-    list: async () => (options.projects ?? [{ id: 5, name: "Main", applications: [IOS_APP] }]) as never[],
-    get: async (path) => handle("GET", path) as never,
-    post: async (path, body) => handle("POST", path, body) as never,
-    put: async (path, body) => handle("PUT", path, body) as never,
-    patch: async (path, body) => handle("PATCH", path, body) as never,
-  };
-  return { api, requests };
-}
-
-interface Scenario {
-  apple?: AppleOptions;
-  api?: ApiOptions;
-  argv?: Record<string, unknown>;
-  credentials?: { appleId?: string; password?: string };
-  stored?: PendingVerification;
-  interactive?: boolean;
-  answers?: { text?: Array<string | null>; select?: Array<string | null> };
-}
-
-async function scenario(options: Scenario = {}) {
-  const log: string[] = [];
-  const sleeps: number[] = [];
-  const files: Record<string, string> = {};
-  const sessions: Array<PendingVerification | undefined> = [];
-  let stored = options.stored;
-  const deps: AppleSetupDeps = {
-    session: (sessionOptions) => {
-      sessions.push(sessionOptions?.pending);
-      return fakeSession(options.apple ?? {}, log);
-    },
-    pending: {
-      load: () => stored,
-      save: (pending) => {
-        stored = pending;
-      },
-      clear: () => {
-        stored = undefined;
-      },
-    },
-    credentials: () => options.credentials ?? { appleId: "jane@example.com", password: "hunter2" },
-    sleep: async (ms) => {
-      sleeps.push(ms);
-    },
-    writeKeyFile: (name, privateKey) => {
-      files[name] = privateKey;
-      return `/tmp/${name}`;
-    },
-  };
-  const { api, requests } = fakeApi(options.api);
-  const calls: RendererCall[] = [];
-  const text = [...(options.answers?.text ?? [])];
-  const select = [...(options.answers?.select ?? [])];
-  const renderer = {
-    ...recordingRenderer(calls),
-    text: async (value: unknown) => (calls.push({ method: "text", value }), text.shift() ?? null),
-    select: async (value: unknown) => (calls.push({ method: "select", value }), select.shift() ?? null),
-  };
-  const definition: CommandDefinition<"required"> = {
-    name: "setup",
-    auth: "required",
-    output: "both",
-    run: (ctx) => setupApple(ctx, deps),
-  };
-  const result = await run(definition, {
-    argv: { target: "apple", ...options.argv },
-    api,
-    interactive: options.interactive ?? false,
-    renderer,
-  });
-  return {
-    result,
-    calls,
-    log,
-    sleeps,
-    files,
-    sessions,
-    requests,
-    pending: () => stored,
-    said: (method: string) =>
-      calls
-        .filter((call) => call.method === method)
-        .map((call) => String(call.value ?? "").replace(/\u001B\[[0-9;]*m/g, "")),
-    wrote: (method: string, fragment: string) =>
-      requests.filter((request) => request.method === method && request.path.includes(fragment)),
-  };
-}
+const scenario = (options: Scenario = {}) =>
+  appleScenario("setup", setupApple, { ...options, argv: { target: "apple", ...options.argv } });
 
 test("connects an app end to end without prompts", async () => {
   const run = await scenario({ argv: { json: true } });
@@ -228,11 +31,11 @@ test("connects an app end to end without prompts", async () => {
     team: ACME,
     app: { id: "8", project_id: "5", name: "Acme", bundle_id: "com.acme.app", created: false },
     steps: {
-      team_key: { status: "done", detail: "TEAMKEY001" },
+      api_key: { status: "done", detail: "TEAMKEY001" },
       purchase_key: { status: "done", detail: "IAPKEY0001" },
-      webhook: { status: "done", detail: "set" },
+      notification_url: { status: "done", detail: "set" },
     },
-    webhook_url: OURS,
+    notification_url: OURS,
     failed: [],
   });
   assert.deepEqual(run.log, [
@@ -242,12 +45,8 @@ test("connects an app end to end without prompts", async () => {
     "iris POST /subscriptionKeys",
     "iris GET /subscriptionKeys/IAPKEY0001",
   ]);
-  assert.deepEqual(run.wrote("POST", "/app-store-connect")[0]?.body, {
-    key_id: "TEAMKEY001",
-    issuer_id: "issuer-111",
-    private_key: PEM,
-    account_name: "Acme Inc",
-  });
+  assert.equal(run.wrote("POST", "/v2/organizations").length, 0);
+  assert.equal(run.wrote("PATCH", "/v2/organizations").length, 0);
   assert.deepEqual(run.wrote("PUT", "/app-store-connect/configuration")[0]?.body, {
     key_id: "TEAMKEY001",
     issuer_id: "issuer-111",
@@ -259,7 +58,13 @@ test("connects an app end to end without prompts", async () => {
     issuer_id: "issuer-111",
     private_key: PEM,
   });
-  assert.equal(run.wrote("PATCH", "/v1/apps/555").length, 1);
+  assert.deepEqual(
+    run.wrote("POST", "/apple-setup/run-step").map((request) => request.body),
+    [
+      { project_id: 5, application_id: 8, step: "check_notification_url" },
+      { project_id: 5, application_id: 8, step: "notification_url" },
+    ],
+  );
   assert.deepEqual(run.files, {});
   assert.deepEqual(
     run.calls.map((call) => call.method),
@@ -432,35 +237,77 @@ test("cancelling a prompt stops before anything is created", async () => {
   assert.deepEqual(code.said("error"), ["Cancelled."]);
 });
 
-test("refuses to replace a server notification URL that is already set", async () => {
+test("refuses to replace a server notification URL another server holds", async () => {
   const theirs = "https://api.revenuecat.com/v1/incoming-webhooks/apple";
-  const run = await scenario({ api: { existing: { subscriptionStatusUrl: theirs } } });
+  const run = await scenario({
+    api: { checks: [outcome("conflict", { production_url: theirs })] },
+  });
   assert.equal(process.exitCode, 1);
-  assert.equal(run.wrote("PATCH", "/v1/apps/555").length, 0);
-  assert.match(run.said("error")[0] ?? "", /already set on this app. Superwall won't replace it/);
+  assert.deepEqual(
+    run.wrote("POST", "/apple-setup/run-step").map((request) => (request.body as { step: string }).step),
+    ["check_notification_url"],
+  );
+  assert.match(run.said("error")[0] ?? "", /another server. Superwall won't replace it/);
   assert.match(run.said("error")[0] ?? "", new RegExp(`Production: ${theirs}`));
+  assert.match(run.said("error")[0] ?? "", /clear it in App Store Connect/);
   assert.match(run.said("report")[0] ?? "", /✗ Server notification URL  not done/);
   assert.match(run.said("warn").at(-1) ?? "", /Partly done/);
 
   process.exitCode = undefined;
   const json = await scenario({
-    api: { existing: { subscriptionStatusUrlForSandbox: theirs } },
+    api: { checks: [outcome("conflict", { sandbox_url: theirs })] },
     argv: { json: true },
   });
   const body = json.result.json as { status: string; failed: string[] };
   assert.equal(body.status, "partial");
-  assert.deepEqual(body.failed, ["webhook"]);
+  assert.deepEqual(body.failed, ["notification_url"]);
 });
 
-test("leaves a URL that already points at Superwall alone", async () => {
+test("leaves a URL Superwall says is already this app's alone, and never asks for the provider", async () => {
+  const run = await scenario({ api: { checks: [outcome("already_set")] }, argv: { json: true } });
+  assert.deepEqual(
+    run.wrote("POST", "/apple-setup/run-step").map((request) => request.body),
+    [{ project_id: 5, application_id: 8, step: "check_notification_url" }],
+  );
+  assert.deepEqual(
+    (run.result.json as { steps: { notification_url: unknown } }).steps.notification_url,
+    { status: "done", detail: "already set" },
+  );
+});
+
+test("waits while Apple has not accepted a new key for the notification URL", async () => {
   const run = await scenario({
-    api: { existing: { subscriptionStatusUrl: OURS, subscriptionStatusUrlForSandbox: OURS } },
+    api: {
+      checks: [
+        outcome("failed", { message: "Apple hasn’t accepted the new key yet.", retryable: true }),
+        outcome("not_set"),
+      ],
+    },
     argv: { json: true },
   });
-  assert.equal(run.wrote("PATCH", "/v1/apps/555").length, 0);
-  assert.deepEqual((run.result.json as { steps: { webhook: unknown } }).steps.webhook, {
+  assert.deepEqual(run.sleeps, [5000]);
+  assert.equal((run.result.json as { status: string }).status, "ok");
+});
+
+test("an app that already has a key gets no second one", async () => {
+  const run = await scenario({
+    api: {
+      saved: {
+        app_store_connect_configuration: { key_id: "OLDKEY0001", issuer_id: "issuer-111", has_private_key: true },
+      },
+    },
+    argv: { json: true },
+  });
+  assert.equal(process.exitCode, undefined);
+  assert.deepEqual(run.log, [
+    "signIn jane@example.com",
+    "iris POST /subscriptionKeys",
+    "iris GET /subscriptionKeys/IAPKEY0001",
+  ]);
+  assert.equal(run.wrote("PUT", "/app-store-connect/configuration").length, 0);
+  assert.deepEqual((run.result.json as { steps: { api_key: unknown } }).steps.api_key, {
     status: "done",
-    detail: "already set",
+    detail: "OLDKEY0001 (already saved)",
   });
 });
 
@@ -475,8 +322,8 @@ test("a refused In-App Purchase key leaves the rest done and exits non-zero", as
     steps: Record<string, { status: string; detail?: string }>;
   };
   assert.deepEqual(body.failed, ["purchase_key"]);
-  assert.equal(body.steps.team_key?.status, "done");
-  assert.equal(body.steps.webhook?.status, "done");
+  assert.equal(body.steps.api_key?.status, "done");
+  assert.equal(body.steps.notification_url?.status, "done");
   assert.match(body.steps.purchase_key?.detail ?? "", /Admin or the Account Holder/);
 });
 
@@ -486,19 +333,22 @@ test("a refused team key explains the limit or the role, and still tries the res
     argv: { json: true },
   });
   const body = limit.result.json as { steps: Record<string, { status: string; detail?: string }> };
-  assert.match(body.steps.team_key?.detail ?? "", /limit of active keys/);
+  assert.match(body.steps.api_key?.detail ?? "", /limit of active keys/);
   assert.equal(body.steps.purchase_key?.status, "done");
-  assert.match(body.steps.webhook?.detail ?? "", /No App Store Connect key is connected/);
 
   process.exitCode = undefined;
   const other = await scenario({
     apple: { refuse: { apiKeys: new AppleError("request", "Server busy", 500) } },
-    api: { configs: [{ team_id: "TEAMID1234", issuer_id: "issuer-111" }] },
+    api: { checks: [outcome("skipped")] },
     argv: { json: true },
   });
   const otherBody = other.result.json as { steps: Record<string, { status: string; detail?: string }> };
-  assert.equal(otherBody.steps.team_key?.detail, "Apple refused: Server busy");
-  assert.equal(otherBody.steps.webhook?.status, "done");
+  assert.equal(otherBody.steps.api_key?.detail, "Apple refused: Server busy");
+  assert.match(otherBody.steps.notification_url?.detail ?? "", /no App Store Connect API key saved/);
+  assert.deepEqual(
+    other.wrote("POST", "/apple-setup/run-step").map((request) => (request.body as { step: string }).step),
+    ["check_notification_url"],
+  );
 });
 
 test("waits for Apple to activate a new key, then keeps it on disk if it never does", async () => {
@@ -519,47 +369,62 @@ test("waits for Apple to activate a new key, then keeps it on disk if it never d
   assert.match(never.said("warn")[0] ?? "", /saved to \/tmp\/SubscriptionKey_IAPKEY0001\.p8/);
 });
 
-test("retries the organization save while Apple still rejects the key", async () => {
+test("a key Superwall cannot save is kept on disk", async () => {
   const run = await scenario({
-    api: { failOrgSave: new ApiError("POST /x", 500, '{"message":"boom"}') },
+    api: { failAppSave: new ApiError("PUT /x", 500, '{"message":"boom"}') },
     argv: { json: true },
   });
   assert.equal(process.exitCode, 1);
   assert.deepEqual(run.files, { "AuthKey_TEAMKEY001.p8": PEM });
   assert.deepEqual(run.sleeps, []);
   const body = run.result.json as { steps: Record<string, { status: string; detail?: string }> };
-  assert.match(body.steps.team_key?.detail ?? "", /Superwall couldn't save the key: boom/);
+  assert.match(body.steps.api_key?.detail ?? "", /Superwall couldn't save the key: boom/);
 });
 
-test("rotates the organization's key when that team is already connected", async () => {
-  const run = await scenario({
-    api: { configs: [{ team_id: "TEAMID1234", issuer_id: "issuer-111" }] },
+test("a notification URL Superwall cannot check is reported, not thrown", async () => {
+  const refused = await scenario({
+    api: { failCheck: new ApiError("POST /x", 409, '{"message":"not allowed"}') },
     argv: { json: true },
   });
-  assert.equal(run.wrote("POST", "/app-store-connect").length, 0);
-  assert.equal(run.wrote("PATCH", "/app-store-connect/TEAMID1234").length, 1);
-});
+  const body = refused.result.json as { steps: Record<string, { detail?: string }> };
+  assert.equal(body.steps.notification_url?.detail, "not allowed");
 
-test("a failed read of the notification URL is reported, not thrown", async () => {
-  const run = await scenario({
-    api: { failRead: new ApiError("GET /x", 409, '{"message":"not allowed"}') },
-    argv: { json: true },
+  process.exitCode = undefined;
+  const old = await scenario({
+    api: { failCheck: new ApiError("POST /x", 400, '{"message":"Expected a step"}') },
   });
-  const body = run.result.json as { steps: Record<string, { detail?: string }> };
-  assert.equal(body.steps.webhook?.detail, "App Store Connect refused: not allowed");
+  assert.equal(process.exitCode, 1);
+  assert.match(old.said("warn")[0] ?? "", /can't check Apple's server notification URL yet/);
+  assert.equal(
+    old.wrote("POST", "/apple-setup/run-step").some(
+      (request) => (request.body as { step: string }).step === "notification_url",
+    ),
+    false,
+  );
+
+  process.exitCode = undefined;
+  const key = await scenario({
+    api: {
+      failCheck: new ApiError(
+        "POST /x",
+        500,
+        '{"message":"Apple setup requires an authenticated user session."}',
+      ),
+    },
+  });
+  assert.match(key.said("warn")[0] ?? "", /for a signed-in person, not an API key/);
 });
 
 test("skip flags leave each step alone", async () => {
   const run = await scenario({
-    api: { configs: [{ team_id: "TEAMID1234", issuer_id: "issuer-111" }] },
-    argv: { json: true, "skip-team-key": true, "skip-purchase-key": true, "skip-webhook": true },
+    argv: { json: true, "skip-api-key": true, "skip-purchase-key": true, "skip-notification-url": true },
   });
   assert.deepEqual(run.log, ["signIn jane@example.com"]);
   assert.equal(run.requests.some((request) => request.method !== "GET"), false);
   assert.deepEqual((run.result.json as { steps: unknown }).steps, {
-    team_key: { status: "skipped" },
+    api_key: { status: "skipped" },
     purchase_key: { status: "skipped" },
-    webhook: { status: "skipped" },
+    notification_url: { status: "skipped" },
   });
 });
 
@@ -596,12 +461,18 @@ test("--dry-run signs in and checks key access without creating anything", async
     apple: { refuse: {} },
     argv: { dryRun: true, json: true },
   });
-  assert.deepEqual(run.result.json, { dryRun: true, team: ACME, access: { team: "ok", purchase: "ok" } });
+  assert.deepEqual(run.result.json, {
+    dryRun: true,
+    team: ACME,
+    access: { api_key: "ok", purchase_key: "ok" },
+  });
   assert.deepEqual(run.log, ["signIn jane@example.com", "iris GET /apiKeys", "iris GET /subscriptionKeys"]);
   assert.equal(run.requests.length, 0);
 
   const human = await scenario({ argv: { dryRun: true } });
-  assert.deepEqual(human.said("report"), ["✓ Team keys  ok\n✓ In-App Purchase keys  ok"]);
+  assert.deepEqual(human.said("report"), [
+    "✓ App Store Connect API key  ok\n✓ In-App Purchase key  ok",
+  ]);
 });
 
 test("rejects an unknown key role before signing in", async () => {

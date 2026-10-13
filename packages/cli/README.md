@@ -270,13 +270,14 @@ The **entire** App Store Connect API, proxied and signed by Superwall — no
 superwall setup apple
 ```
 
-It signs you in to Apple, creates an App Store Connect API key and an In-App
-Purchase key, saves both on your organization and app, and points the app's
-App Store Server Notifications at Superwall. Your Apple password goes from your
-computer straight to Apple; Superwall never receives it and it is not saved.
-The Apple Account must be an Admin or the Account Holder. If a server
-notification URL is already set on the app, the command leaves it alone and
-exits non-zero.
+It signs you in to Apple, creates the App Store Connect API key and the In-App
+Purchase key the app doesn't have yet, saves them on the app, and points the
+app's App Store Server Notifications at Superwall. Your Apple password goes from
+your computer straight to Apple; Superwall never receives it and it is not
+saved. The Apple Account must be an Admin or the Account Holder. It never
+creates a second key of a kind the app already has, never replaces a server
+notification URL that another server holds (it reports it and exits non-zero),
+and never changes the app's revenue provider.
 
 In a terminal it asks for your Apple Account email, your password (masked) and
 the verification code Apple sends. Type `sms` at the code prompt, or pass
@@ -301,11 +302,54 @@ the two runs, in `~/.superwall/apple-sign-in.json`, for 10 minutes.
 `--apple-password` exists too, but it lands in shell history and the process
 list.
 
-Already have a key? Upload it instead:
+Each step is also its own command, so you or an agent can do one thing at a
+time:
 
 ```bash
+superwall asc keys list --app <id>                    # which of the two keys the app has
+superwall asc keys import --app <id>                  # reuse a key your organization already has
+superwall asc keys create api_key --app <id>          # sign in to Apple and create just this key
+superwall asc keys create purchase_key --app <id>
+superwall asc notification-url --app <id>             # this app's Superwall URL
+superwall asc notification-url check --app <id>       # what Apple has, and whose it is
+superwall asc notification-url set --app <id>         # set it where Apple has none
+```
+
+`asc keys import` saves a key only when Apple confirms it for the app's bundle
+ID. `asc keys create` does nothing when the app already has that key; pass
+`--replace` to create another. `asc keys sources` and `asc keys copy <kind>
+--from <app id>` copy one named key from another of your apps, and `asc keys rm
+<kind> --app <id>` removes one from an app. `superwall asc --help` says what
+each command changes, what it never does, and its exit codes.
+
+`asc notification-url set` never replaces a URL another server holds. If
+RevenueCat or your own server receives Apple's notifications today, keep it
+there and have it forward them to the URL `asc notification-url` prints.
+
+Receiving Apple's notifications and choosing which revenue source your
+dashboard counts are separate decisions. The second one is the revenue
+provider:
+
+```bash
+superwall revenue-provider --app <id>                         # what is counted, and what each source sent
+superwall revenue-provider set open_revenue --app <id>        # count the store's own events
+superwall revenue-provider set revenue_cat --app <id>         # count RevenueCat's events
+```
+
+A change asks first in a terminal and needs `--yes` outside one.
+
+Already have a key file? Save it on an app, or on your organization for the
+signed proxy:
+
+```bash
+superwall asc keys set api_key --app <id> --key-id <id> --issuer <id> --key-file AuthKey.p8
 superwall asc keys set --key-id <id> --issuer <id> --key-file AuthKey.p8
 ```
+
+Saving an API key on an app also gives the organization a key for that Apple
+team when it has none. `asc keys set --team <team id>` replaces the
+organization's key for a team, and is refused unless Apple confirms the new key
+belongs to the same team.
 
 Then it's the raw ASC API with the sharp edges filed off, because the CLI is
 **schema-aware**: it keeps a copy of Apple's own OpenAPI spec (fetched on first
@@ -414,7 +458,7 @@ packages/cli/
 │   │   ├── account/      login, whoami, orgs, doctor, feedback, skills, upgrade
 │   │   ├── resource/     apps, products, entitlements, campaigns, paywalls, bootstrap
 │   │   ├── workflow/     integrate, migrate, review
-│   │   ├── platform/     get/post/patch/delete, query, asc, asc keys, setup apple
+│   │   ├── platform/     get/post/patch/delete, query, asc, asc keys, asc notification-url, setup apple, revenue-provider
 │   │   └── paywalls/     create, dev, push, promote, publish
 │   ├── core/             api client, auth, project detection, paywall
 │   │                     binding + lock, agent runners, telemetry, skills sync

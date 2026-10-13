@@ -19,7 +19,9 @@ import {
   triggerBackgroundRefresh,
   writeCachedIndex,
 } from "@/core/api/asc-index";
+import { appleDeps } from "./apple-deps";
 import { runAscKeys } from "./keys";
+import { runNotificationUrl } from "./notification-url";
 
 const VERBS = new Set(["get", "post", "patch", "delete"]);
 
@@ -68,6 +70,7 @@ export const runAsc = defineCommand({
     await requireOrg(ctx.api, ctx.interactive);
 
     if (target === "keys") return runAscKeys(ctx, ctx.api);
+    if (target === "notification-url") return runNotificationUrl(ctx, appleDeps.sleep);
 
     if (VERBS.has(target)) {
       const path = String(ctx.argv.value ?? "");
@@ -141,7 +144,7 @@ export const runAsc = defineCommand({
     }
 
     throw new Error(
-      `Unknown "${target}". Use get|post|patch|delete <path>, a raw path, or: apps | products | subscriptions | iaps | docs | keys`,
+      `Unknown "${target}". Use get|post|patch|delete <path>, a raw path, or: apps | products | subscriptions | iaps | docs | keys | notification-url`,
     );
   },
 });

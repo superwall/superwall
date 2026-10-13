@@ -8,7 +8,7 @@ import {
   getAppNotificationUrl,
   saveAppAscKey,
   saveAppPurchaseKey,
-  updateAscConfig,
+  replaceAscConfig,
 } from "@/core/api/asc";
 import { generateStoreKit } from "@/core/dashboard/storekit";
 import type { Session } from "@/core/auth/storage";
@@ -70,15 +70,16 @@ test("generateStoreKit maps product identifiers into a valid-ish config", () => 
 const APP = { projectId: "5", applicationId: "8" };
 const CREDS = { keyId: "K", issuerId: "I", privateKey: "PEM" };
 
-test("updateAscConfig rotates the key on an existing team", async () => {
+test("replaceAscConfig replaces a team's key and asks for the team check", async () => {
   const rec = record();
-  await updateAscConfig(api, "T1", { ...CREDS, accountName: "Acme" });
+  await replaceAscConfig(api, "T1", { ...CREDS, accountName: "Acme" });
   assert.equal(rec.url, "https://api.example.com/v2/organizations/77/app-store-connect/T1");
   assert.equal(rec.method, "PATCH");
   assert.deepEqual(rec.body, {
     key_id: "K",
     issuer_id: "I",
     private_key: "PEM",
+    validate: true,
     account_name: "Acme",
   });
 });

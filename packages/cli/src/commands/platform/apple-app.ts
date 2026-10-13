@@ -36,11 +36,16 @@ const LISTED_APPS = 8;
 
 const isIos = (app: Application): boolean => (app.platform ?? "").toLowerCase() === "ios";
 
-export async function chooseAppIntent(
+interface IosApp {
+  project: Project;
+  app: Application;
+}
+
+async function iosApps(
   ctx: CommandContext,
   api: SuperwallApi,
   flags: AppFlags,
-): Promise<AppIntent> {
+): Promise<{ scoped: Project[]; candidates: IosApp[]; named?: IosApp }> {
   const projects = await apiCall(ctx, "Loading your apps", () => listProjects(api));
   const scoped = flags.project
     ? projects.filter((project) => String(project.id) === flags.project)
@@ -51,14 +56,62 @@ export async function chooseAppIntent(
   const candidates = scoped.flatMap((project) =>
     (project.applications ?? []).filter(isIos).map((app) => ({ project, app })),
   );
+  if (!flags.app) return { scoped, candidates };
+  const named = candidates.find(
+    ({ app }) => String(app.id) === flags.app || app.name === flags.app,
+  );
+  if (!named) throw new Error(`No iOS app ${flags.app} in this organization.`);
+  return { scoped, candidates, named };
+}
 
-  if (flags.app) {
-    const found = candidates.find(
-      ({ app }) => String(app.id) === flags.app || app.name === flags.app,
+function severalApps(candidates: IosApp[]): Error {
+  const shown = candidates
+    .slice(0, LISTED_APPS)
+    .map(({ app }) => `${app.id} (${app.name ?? "unnamed"})`)
+    .join(", ");
+  const more =
+    candidates.length > LISTED_APPS
+      ? `, and ${candidates.length - LISTED_APPS} more (\`superwall apps\` lists them all)`
+      : "";
+  return new Error(`Several iOS apps found: ${shown}${more}. Pass --app <id>.`);
+}
+
+const appOptions = (candidates: IosApp[]) =>
+  candidates.map(({ app, project }) => ({
+    value: String(app.id),
+    label: app.name ?? String(app.id),
+    hint: app.bundle_id ?? project.name,
+  }));
+
+export async function chooseIosApp(
+  ctx: CommandContext,
+  api: SuperwallApi,
+  flags: AppFlags,
+): Promise<IosApp> {
+  const { candidates, named } = await iosApps(ctx, api, flags);
+  if (named) return named;
+  if (candidates.length === 0) {
+    throw new Error(
+      "There's no iOS app in Superwall yet. Create one with `superwall apps create`, or run `superwall setup apple`.",
     );
-    if (!found) throw new Error(`No iOS app ${flags.app} in this organization.`);
-    return { kind: "existing", ...found };
   }
+  if (candidates.length === 1) return candidates[0]!;
+  if (!ctx.interactive) throw severalApps(candidates);
+  const picked = await ctx.ui.select({
+    message: "Which Superwall app?",
+    options: appOptions(candidates),
+  });
+  if (picked === null) throw new Error("Cancelled.");
+  return candidates.find(({ app }) => String(app.id) === picked)!;
+}
+
+export async function chooseAppIntent(
+  ctx: CommandContext,
+  api: SuperwallApi,
+  flags: AppFlags,
+): Promise<AppIntent> {
+  const { scoped, candidates, named } = await iosApps(ctx, api, flags);
+  if (named) return { kind: "existing", ...named };
 
   const createIn = scoped.length === 1 ? scoped[0] : undefined;
   if (candidates.length === 0) {
@@ -75,26 +128,11 @@ export async function chooseAppIntent(
   }
   if (!ctx.interactive) {
     if (candidates.length === 1) return { kind: "existing", ...candidates[0]! };
-    const shown = candidates
-      .slice(0, LISTED_APPS)
-      .map(({ app }) => `${app.id} (${app.name ?? "unnamed"})`)
-      .join(", ");
-    const more =
-      candidates.length > LISTED_APPS
-        ? `, and ${candidates.length - LISTED_APPS} more (\`superwall apps\` lists them all)`
-        : "";
-    throw new Error(`Several iOS apps found: ${shown}${more}. Pass --app <id>.`);
+    throw severalApps(candidates);
   }
   const picked = await ctx.ui.select({
     message: "Which Superwall app is this for?",
-    options: [
-      ...candidates.map(({ app, project }) => ({
-        value: String(app.id),
-        label: app.name ?? String(app.id),
-        hint: app.bundle_id ?? project.name,
-      })),
-      { value: NEW_APP, label: "Create a new iOS app" },
-    ],
+    options: [...appOptions(candidates), { value: NEW_APP, label: "Create a new iOS app" }],
   });
   if (picked === null) throw new Error("Cancelled.");
   if (picked === NEW_APP) return { kind: "create", project: createIn };

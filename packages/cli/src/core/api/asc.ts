@@ -30,11 +30,12 @@ export function createAscConfig(api: SuperwallApi, c: AscCredentials): Promise<R
   });
 }
 
-export function updateAscConfig(api: SuperwallApi, teamId: string, c: AscCredentials): Promise<Row> {
+export function replaceAscConfig(api: SuperwallApi, teamId: string, c: AscCredentials): Promise<Row> {
   return api.patch<Row>(`${ascBase(api)}/${teamId}`, {
     key_id: c.keyId,
     issuer_id: c.issuerId,
     private_key: c.privateKey,
+    validate: true,
     ...(c.accountName ? { account_name: c.accountName } : {}),
   });
 }
