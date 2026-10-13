@@ -8,7 +8,12 @@ import {
   checkSkillsSync,
   knownSkills,
   loadBundledSkill,
+  normalizeSkillFrontmatter,
+  normalizeSkillsDir,
 } from "@/core/agent/skills";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 test("review uses the broad setup skill rather than the placement skill", () => {
   const body = loadBundledSkill("superwall-review", "ios");
@@ -99,4 +104,54 @@ test("integrate, placements and screen migration carry an Android reference", ()
   assert.match(loadBundledSkill("superwall-placements", ["strategy", "android"]), /# Superwall placements - Android \/ Kotlin/);
   assert.match(loadBundledSkill("superwall-screen-migrate", "android"), /# Android source screens/);
   assert.equal(FRAMEWORK_REF[Integration.android], "android");
+});
+
+const field = (md: string, key: string) => {
+  const raw = md.split("\n").find((line) => line.startsWith(`${key}: `))!.slice(key.length + 2);
+  assert.ok(raw.startsWith('"'), `${key} should be quoted: ${raw}`);
+  return JSON.parse(raw) as string;
+};
+
+test("frontmatter strict YAML rejects is quoted, and keeps its text", () => {
+  const description =
+    "Animate a tap-through onboarding (quiz, survey, web2app flow) so the motion tells the story: each hand-off gets its own choreography";
+  const md = `---\nname: animate-onboarding\ndescription: ${description}\nuser-invocable: true\n---\n\n# Body: untouched\n`;
+  const normalized = normalizeSkillFrontmatter(md);
+  assert.equal(field(normalized, "description"), description);
+  assert.match(normalized, /^---\nname: animate-onboarding\n/);
+  assert.match(normalized, /\nuser-invocable: true\n---\n/);
+  assert.ok(normalized.endsWith("\n# Body: untouched\n"));
+});
+
+test("valid frontmatter and bodies are left exactly as they are", () => {
+  const cases = [
+    `---\nname: wwdc\ndescription: "Use this: quoted already"\n---\nbody`,
+    `---\nname: a\ndescription: plain text, no colon space\n---\nbody`,
+    `---\nname: a\ndescription: |\n  block: text\n---\nbody`,
+    `# no frontmatter: at all`,
+  ];
+  for (const md of cases) assert.equal(normalizeSkillFrontmatter(md), md);
+});
+
+test("values with a comment marker or a reserved first character are quoted", () => {
+  for (const value of ["uses # inside", "`code` first", "@scoped first", "ends with a colon:"]) {
+    const normalized = normalizeSkillFrontmatter(`---\ndescription: ${value}\n---\n`);
+    assert.equal(field(normalized, "description"), value);
+  }
+});
+
+test("a checkout's skills are normalised in place", () => {
+  const root = mkdtempSync(join(tmpdir(), "skills-test-"));
+  try {
+    mkdirSync(join(root, "broken"));
+    mkdirSync(join(root, "fine"));
+    writeFileSync(join(root, "broken", "SKILL.md"), "---\nname: broken\ndescription: one: two\n---\n");
+    writeFileSync(join(root, "fine", "SKILL.md"), "---\nname: fine\ndescription: fine\n---\n");
+    writeFileSync(join(root, "README.md"), "not a skill");
+    normalizeSkillsDir(root);
+    assert.equal(field(readFileSync(join(root, "broken", "SKILL.md"), "utf8"), "description"), "one: two");
+    assert.equal(readFileSync(join(root, "fine", "SKILL.md"), "utf8"), "---\nname: fine\ndescription: fine\n---\n");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
