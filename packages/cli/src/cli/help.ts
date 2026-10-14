@@ -47,7 +47,7 @@ export function printHelp(): void {
         : []),
       head("Resource commands"),
       row("bootstrap", "Complete account tree: projects, apps, campaigns, and products"),
-      row("apps", "Projects and platform apps (list, create, use)"),
+      row("apps", "Projects and platform apps (list, create, use, bundle-id)"),
       row("products", "Products (list, create, storekit)"),
       row("entitlements", "Entitlements (list, create)"),
       row("campaigns", "Campaigns (list, create, placement)"),

@@ -53,12 +53,37 @@ export interface KeyImportResult {
   timed_out: boolean;
 }
 
-export interface NotificationOutcome {
-  status: "set" | "already_set" | "not_set" | "conflict" | "failed" | "skipped";
+/** Whose an environment's URL is, as Superwall decided it. */
+export type NotificationOwner = "this_app" | "superwall_app" | "other" | "none";
+
+export interface NotificationEnvironment {
+  owner: NotificationOwner;
+  url: string | null;
+  token_redacted: boolean;
+  application: { id: number; name: string } | null;
+}
+
+export interface ServerNotifications {
+  url: string;
+  status: "set" | "already_set" | "not_set" | "conflict" | "skipped" | "failed";
   message: string | null;
-  production_url: string | null;
-  sandbox_url: string | null;
-  retryable?: boolean;
+  retryable: boolean;
+  production: NotificationEnvironment | null;
+  sandbox: NotificationEnvironment | null;
+}
+
+export interface BundleIdCandidate {
+  bundle_id: string;
+  production_devices: number;
+  sandbox_devices: number;
+  last_seen_at: string;
+  top_country: string | null;
+}
+
+export interface BundleIdSuggestions {
+  window_days: number;
+  available: boolean;
+  candidates: BundleIdCandidate[];
 }
 
 export class RefusedByApi extends Error {}
@@ -135,56 +160,50 @@ export async function removeAppKey(
   );
 }
 
-const NEEDS_LOGIN = "authenticated user session";
+const serverNotificationsPath = (app: AppRef): string =>
+  `/v2/projects/${app.projectId}/applications/${app.applicationId}/integrations/app-store-connect/notification-url/apple`;
 
-async function notificationStep(
-  api: SuperwallApi,
-  app: AppRef,
-  body: Record<string, unknown>,
-): Promise<NotificationOutcome> {
-  try {
-    const res = await api.post<{ notification_url: NotificationOutcome | null }>(
-      "/internal/v2/onboarding/apple-setup/run-step",
-      {
-        project_id: Number(app.projectId),
-        application_id: Number(app.applicationId),
-        ...body,
-      },
-    );
-    if (!res.notification_url) {
-      throw new RefusedByApi("Superwall didn't say what Apple has for this app. Nothing was changed.");
-    }
-    return res.notification_url;
-  } catch (error) {
-    if (error instanceof ApiError && error.message.includes(NEEDS_LOGIN)) {
-      throw new RefusedByApi(
-        "Superwall only checks or sets Apple's server notification URL for a signed-in person, not an API key. Run `superwall login`, then try again. Nothing was changed.",
-      );
-    }
-    throw error;
-  }
+export function checkServerNotifications(api: SuperwallApi, app: AppRef): Promise<ServerNotifications> {
+  return supported("read Apple's server notification URLs", api, () =>
+    api.get<ServerNotifications>(serverNotificationsPath(app)),
+  );
 }
 
-export async function checkNotificationUrl(api: SuperwallApi, app: AppRef): Promise<NotificationOutcome> {
-  try {
-    return await notificationStep(api, app, { step: "check_notification_url" });
-  } catch (error) {
-    if (error instanceof ApiError && (error.status === 400 || (error.status === 404 && !error.envelope))) {
-      throw new RefusedByApi(
-        `The Superwall API at ${api.host} can't check Apple's server notification URL yet, so the CLI won't set it either. Nothing was changed. Set it in the dashboard or in App Store Connect.`,
-      );
-    }
-    throw error;
-  }
-}
-
-export function writeNotificationUrl(
+export function setServerNotifications(
   api: SuperwallApi,
   app: AppRef,
   options: { setRevenueProvider: boolean },
-): Promise<NotificationOutcome> {
-  return notificationStep(api, app, {
-    step: "notification_url",
-    ...(options.setRevenueProvider ? { set_revenue_provider: true } : {}),
-  });
+): Promise<ServerNotifications> {
+  return supported("set Apple's server notification URLs", api, () =>
+    api.put<ServerNotifications>(
+      serverNotificationsPath(app),
+      options.setRevenueProvider ? { set_revenue_provider: true } : {},
+    ),
+  );
+}
+
+export function getBundleIdSuggestions(
+  api: SuperwallApi,
+  applicationId: string,
+): Promise<BundleIdSuggestions> {
+  return supported("suggest a bundle ID", api, () =>
+    api.get<BundleIdSuggestions>(`/internal/v2/applications/${applicationId}/bundle-id-suggestions`),
+  );
+}
+
+export function saveBundleId(
+  api: SuperwallApi,
+  applicationId: string,
+  input: { bundleId: string; appStoreId?: string; replace: boolean },
+): Promise<{ bundle_id: string; app_store_id: string | null }> {
+  return supported("save a bundle ID", api, () =>
+    api.post<{ bundle_id: string; app_store_id: string | null }>(
+      `/internal/v2/applications/${applicationId}/bundle-id`,
+      {
+        bundle_id: input.bundleId,
+        ...(input.appStoreId ? { app_store_id: input.appStoreId } : {}),
+        ...(input.replace ? { replace: true } : {}),
+      },
+    ),
+  );
 }

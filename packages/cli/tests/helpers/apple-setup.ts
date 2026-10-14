@@ -1,7 +1,7 @@
 import type { CommandContext, CommandDefinition } from "@/command";
 import type { AppleKeyDeps } from "@/commands/platform/apple-keys";
 import type { ApiError, SuperwallApi } from "@/core/api/client";
-import type { NotificationOutcome } from "@/core/api/integrations";
+import type { NotificationEnvironment, ServerNotifications } from "@/core/api/integrations";
 import {
   AppleError,
   type AppleSession,
@@ -24,14 +24,22 @@ export const PENDING: PendingVerification = {
 };
 export const IOS_APP = { id: 8, name: "Acme", platform: "ios", bundle_id: "com.acme.app" };
 
+export const environment = (
+  owner: NotificationEnvironment["owner"],
+  url: string | null = owner === "none" ? null : OURS,
+  application: NotificationEnvironment["application"] = null,
+): NotificationEnvironment => ({ owner, url, token_redacted: false, application });
+
 export const outcome = (
-  status: NotificationOutcome["status"],
-  extra: Partial<NotificationOutcome> = {},
-): NotificationOutcome => ({
+  status: ServerNotifications["status"],
+  extra: Partial<ServerNotifications> = {},
+): ServerNotifications => ({
+  url: OURS,
   status,
   message: null,
-  production_url: null,
-  sandbox_url: null,
+  retryable: false,
+  production: null,
+  sandbox: null,
   ...extra,
 });
 
@@ -92,8 +100,8 @@ export interface ApiOptions {
   purchaseVerdict?: { valid: boolean; error: string | null };
   failAppSave?: ApiError;
   createdApps?: unknown[];
-  checks?: NotificationOutcome[];
-  written?: NotificationOutcome;
+  checks?: ServerNotifications[];
+  written?: ServerNotifications[];
   failCheck?: ApiError;
   routes?: (method: string, path: string, body?: unknown) => unknown;
 }
@@ -102,6 +110,7 @@ export function fakeApi(options: ApiOptions = {}) {
   const requests: Array<{ method: string; path: string; body?: unknown }> = [];
   const appVerdicts = [...(options.appVerdicts ?? [])];
   const checks = [...(options.checks ?? [])];
+  const written = [...(options.written ?? [])];
   const handle = (method: string, path: string, body?: unknown): unknown => {
     requests.push({ method, path, ...(body === undefined ? {} : { body }) });
     const routed = options.routes?.(method, path, body);
@@ -114,13 +123,18 @@ export function fakeApi(options: ApiOptions = {}) {
         ...options.saved,
       };
     }
-    if (path === "/internal/v2/onboarding/apple-setup/run-step") {
-      const step = (body as { step: string }).step;
-      if (step === "check_notification_url") {
-        if (options.failCheck) throw options.failCheck;
-        return { notification_url: checks.shift() ?? outcome("not_set") };
+    if (path.endsWith("/app-store-connect/notification-url/apple")) {
+      if (options.failCheck) throw options.failCheck;
+      if (method === "GET") {
+        return (
+          checks.shift() ??
+          outcome("not_set", { production: environment("none"), sandbox: environment("none") })
+        );
       }
-      return { notification_url: options.written ?? outcome("set") };
+      return (
+        written.shift() ??
+        outcome("set", { production: environment("this_app"), sandbox: environment("this_app") })
+      );
     }
     if (path.endsWith("/integrations/app-store-connect/configuration")) {
       if (options.failAppSave) throw options.failAppSave;

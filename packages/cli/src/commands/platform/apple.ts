@@ -1,7 +1,7 @@
 import type { CommandContext } from "@/command";
 import { requireOrg } from "@/core/account/org";
 import { ApiError } from "@/core/api/client";
-import { getAppNotificationUrl, type AppRef } from "@/core/api/asc";
+import type { AppRef } from "@/core/api/asc";
 import { getIntegrations, RefusedByApi, type AppKeyKind } from "@/core/api/integrations";
 import { blocks } from "@/output";
 import { emitJson } from "@/commands/api-output";
@@ -20,7 +20,7 @@ import {
   type AppleKeyDeps,
   type StepResult,
 } from "./apple-keys";
-import { describeNotificationUrl, ensureNotificationUrl } from "./notification-url";
+import { describeNotificationUrl, ensureNotificationUrl, environmentLines } from "./notification-url";
 
 type Step = AppKeyKind | "notification_url";
 
@@ -92,23 +92,27 @@ export async function setupApple(
   let notificationUrl: string | undefined;
   if (!skip.notification_url) {
     try {
-      notificationUrl = await getAppNotificationUrl(api, appRef);
       const outcome = await ensureNotificationUrl(ctx, deps.sleep, api, appRef, {
         setRevenueProvider: false,
       });
+      notificationUrl = outcome.url;
       if (outcome.status === "set" || outcome.status === "already_set") {
         results.notification_url = {
           status: "done",
           detail: outcome.status === "set" ? "set" : "already set",
         };
       } else {
-        const detail = describeNotificationUrl(outcome);
+        const detail = [describeNotificationUrl(outcome), ...environmentLines(outcome)].join(" ");
         results.notification_url = { status: "failed", detail };
         if (!ctx.json) {
+          const shown = [
+            describeNotificationUrl(outcome),
+            ...environmentLines(outcome).map((line) => `  ${line}`),
+          ].join("\n");
           ctx.ui.error(
             outcome.status === "conflict"
-              ? `${detail}\nApple allows one URL per environment. To switch, clear it in App Store Connect → App Information → App Store Server Notifications, then run this again.`
-              : detail,
+              ? `${shown}\nApple allows one URL per environment. To switch, clear it in App Store Connect → App Information → App Store Server Notifications, then run this again.`
+              : shown,
           );
         }
       }

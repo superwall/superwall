@@ -1,11 +1,12 @@
 import type { Argv } from "yargs";
 import { API_VERBS, RESOURCES } from "./options";
+import { APPS_HELP } from "./platform-help";
 
 export const registerResourceCommands = <T>(input: Argv<T>): Argv<T> => {
   let cli = input;
   const RESOURCE_HELP: Partial<Record<(typeof RESOURCES)[number], string>> = {
     orgs: "Your Superwall organizations (list, use <id|name>)",
-    apps: "Your apps, grouped by project (list, create <name> --platform ios, use <id>)",
+    apps: "Your apps, grouped by project (list, create <name> --platform ios, use <id>, bundle-id [value])",
   };
 
   for (const resource of RESOURCES) {
@@ -17,7 +18,7 @@ export const registerResourceCommands = <T>(input: Argv<T>): Argv<T> => {
           .positional("action", {
             type: "string",
             default: "list",
-            describe: "list | create | placement | use | storekit",
+            describe: "list | create | placement | use | storekit | bundle-id (apps)",
           })
           .positional("value", {
             type: "string",
@@ -70,8 +71,22 @@ export const registerResourceCommands = <T>(input: Argv<T>): Argv<T> => {
               type: "array",
               describe: "Entitlement id(s) to grant (products create)",
             },
+            replace: {
+              type: "boolean",
+              describe: "apps bundle-id: replace a bundle ID the app already has",
+            },
+            yes: {
+              type: "boolean",
+              alias: "y",
+              describe: "apps bundle-id: go ahead without asking when builds would run in test mode",
+            },
+            "app-store-id": {
+              type: "string",
+              describe: "apps bundle-id: the App Store ID too, saved only when the app has none (iOS)",
+            },
             "dry-run": { type: "boolean", describe: "Plan without writing" },
-          }),
+          })
+          .epilogue(resource === "apps" ? APPS_HELP : ""),
       (argv) => {
         return import("@/commands/resource/resource").then((m) => m.runResource(resource)(argv));
       },

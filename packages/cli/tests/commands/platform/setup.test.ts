@@ -10,6 +10,7 @@ import {
   OURS,
   PEM,
   PENDING,
+  environment,
   outcome,
   scenario as appleScenario,
   type Scenario,
@@ -59,11 +60,8 @@ test("connects an app end to end without prompts", async () => {
     private_key: PEM,
   });
   assert.deepEqual(
-    run.wrote("POST", "/apple-setup/run-step").map((request) => request.body),
-    [
-      { project_id: 5, application_id: 8, step: "check_notification_url" },
-      { project_id: 5, application_id: 8, step: "notification_url" },
-    ],
+    run.wrote("PUT", "/notification-url/apple").map((request) => request.body),
+    [{}],
   );
   assert.deepEqual(run.files, {});
   assert.deepEqual(
@@ -240,22 +238,28 @@ test("cancelling a prompt stops before anything is created", async () => {
 test("refuses to replace a server notification URL another server holds", async () => {
   const theirs = "https://api.revenuecat.com/v1/incoming-webhooks/apple";
   const run = await scenario({
-    api: { checks: [outcome("conflict", { production_url: theirs })] },
+    api: {
+      written: [
+        outcome("conflict", { production: environment("other", theirs), sandbox: environment("none") }),
+      ],
+    },
   });
   assert.equal(process.exitCode, 1);
   assert.deepEqual(
-    run.wrote("POST", "/apple-setup/run-step").map((request) => (request.body as { step: string }).step),
-    ["check_notification_url"],
+    run.wrote("PUT", "/notification-url/apple").map((request) => request.body),
+    [{}],
   );
   assert.match(run.said("error")[0] ?? "", /another server. Superwall won't replace it/);
-  assert.match(run.said("error")[0] ?? "", new RegExp(`Production: ${theirs}`));
+  assert.match(run.said("error")[0] ?? "", new RegExp(`Production: another server  ${theirs}`));
   assert.match(run.said("error")[0] ?? "", /clear it in App Store Connect/);
   assert.match(run.said("report")[0] ?? "", /✗ Server notification URL  not done/);
   assert.match(run.said("warn").at(-1) ?? "", /Partly done/);
 
   process.exitCode = undefined;
   const json = await scenario({
-    api: { checks: [outcome("conflict", { sandbox_url: theirs })] },
+    api: {
+      written: [outcome("conflict", { production: environment("none"), sandbox: environment("other", theirs) })],
+    },
     argv: { json: true },
   });
   const body = json.result.json as { status: string; failed: string[] };
@@ -264,10 +268,10 @@ test("refuses to replace a server notification URL another server holds", async 
 });
 
 test("leaves a URL Superwall says is already this app's alone, and never asks for the provider", async () => {
-  const run = await scenario({ api: { checks: [outcome("already_set")] }, argv: { json: true } });
+  const run = await scenario({ api: { written: [outcome("already_set")] }, argv: { json: true } });
   assert.deepEqual(
-    run.wrote("POST", "/apple-setup/run-step").map((request) => request.body),
-    [{ project_id: 5, application_id: 8, step: "check_notification_url" }],
+    run.wrote("PUT", "/notification-url/apple").map((request) => request.body),
+    [{}],
   );
   assert.deepEqual(
     (run.result.json as { steps: { notification_url: unknown } }).steps.notification_url,
@@ -278,9 +282,9 @@ test("leaves a URL Superwall says is already this app's alone, and never asks fo
 test("waits while Apple has not accepted a new key for the notification URL", async () => {
   const run = await scenario({
     api: {
-      checks: [
+      written: [
         outcome("failed", { message: "Apple hasn’t accepted the new key yet.", retryable: true }),
-        outcome("not_set"),
+        outcome("set"),
       ],
     },
     argv: { json: true },
@@ -339,16 +343,18 @@ test("a refused team key explains the limit or the role, and still tries the res
   process.exitCode = undefined;
   const other = await scenario({
     apple: { refuse: { apiKeys: new AppleError("request", "Server busy", 500) } },
-    api: { checks: [outcome("skipped")] },
+    api: {
+      written: [
+        outcome("skipped", {
+          message: "Setting the server notification URL needs the App Store Connect API key.",
+        }),
+      ],
+    },
     argv: { json: true },
   });
   const otherBody = other.result.json as { steps: Record<string, { status: string; detail?: string }> };
   assert.equal(otherBody.steps.api_key?.detail, "Apple refused: Server busy");
-  assert.match(otherBody.steps.notification_url?.detail ?? "", /no App Store Connect API key saved/);
-  assert.deepEqual(
-    other.wrote("POST", "/apple-setup/run-step").map((request) => (request.body as { step: string }).step),
-    ["check_notification_url"],
-  );
+  assert.match(otherBody.steps.notification_url?.detail ?? "", /needs the App Store Connect API key/);
 });
 
 test("waits for Apple to activate a new key, then keeps it on disk if it never does", async () => {
@@ -381,38 +387,18 @@ test("a key Superwall cannot save is kept on disk", async () => {
   assert.match(body.steps.api_key?.detail ?? "", /Superwall couldn't save the key: boom/);
 });
 
-test("a notification URL Superwall cannot check is reported, not thrown", async () => {
+test("a notification URL Superwall cannot set is reported, not thrown", async () => {
   const refused = await scenario({
-    api: { failCheck: new ApiError("POST /x", 409, '{"message":"not allowed"}') },
+    api: { failCheck: new ApiError("PUT /x", 403, '{"message":"not allowed"}') },
     argv: { json: true },
   });
   const body = refused.result.json as { steps: Record<string, { detail?: string }> };
   assert.equal(body.steps.notification_url?.detail, "not allowed");
 
   process.exitCode = undefined;
-  const old = await scenario({
-    api: { failCheck: new ApiError("POST /x", 400, '{"message":"Expected a step"}') },
-  });
+  const old = await scenario({ api: { failCheck: new ApiError("PUT /x", 404, "") } });
   assert.equal(process.exitCode, 1);
-  assert.match(old.said("warn")[0] ?? "", /can't check Apple's server notification URL yet/);
-  assert.equal(
-    old.wrote("POST", "/apple-setup/run-step").some(
-      (request) => (request.body as { step: string }).step === "notification_url",
-    ),
-    false,
-  );
-
-  process.exitCode = undefined;
-  const key = await scenario({
-    api: {
-      failCheck: new ApiError(
-        "POST /x",
-        500,
-        '{"message":"Apple setup requires an authenticated user session."}',
-      ),
-    },
-  });
-  assert.match(key.said("warn")[0] ?? "", /for a signed-in person, not an API key/);
+  assert.match(old.said("warn")[0] ?? "", /can't set Apple's server notification URLs yet/);
 });
 
 test("skip flags leave each step alone", async () => {

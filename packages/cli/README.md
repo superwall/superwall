@@ -232,6 +232,19 @@ superwall bootstrap                       # the whole account tree at a glance
 `--project <id>` / `--app <id>` to scope when you have more than one. Run
 `superwall <command> --help` for every action and flag.
 
+An app's bundle ID (package name on Android) decides which builds the SDK
+treats as that app; any other build runs in test mode. Read it, and the IDs
+the app's SDK reported in the last 30 days, then save one:
+
+```bash
+superwall apps bundle-id --app <id>                  # what is saved, and what the SDK reported
+superwall apps bundle-id com.acme.app --app <id>     # save it
+```
+
+When other IDs had production devices that the new one wouldn't cover, it
+says how many would run in test mode and asks first (`--yes` outside a
+terminal). An ID that is already saved is only replaced with `--replace`.
+
 ## Query your data
 
 Run SQL directly against your organization's ClickHouse analytics data:
@@ -322,9 +335,13 @@ ID. `asc keys create` does nothing when the app already has that key; pass
 <kind> --app <id>` removes one from an app. `superwall asc --help` says what
 each command changes, what it never does, and its exit codes.
 
-`asc notification-url set` never replaces a URL another server holds. If
-RevenueCat or your own server receives Apple's notifications today, keep it
-there and have it forward them to the URL `asc notification-url` prints.
+`asc notification-url check` says for production and sandbox whose URL Apple
+has: this app's, another Superwall app's (named when you can read that app),
+someone else's, or none. `asc notification-url set` never replaces a URL
+another server holds. If RevenueCat or your own server receives Apple's
+notifications today, keep it there and have it forward them to the URL
+`asc notification-url` prints. Both work with a `superwall login` session or
+an API key.
 
 Receiving Apple's notifications and choosing which revenue source your
 dashboard counts are separate decisions. The second one is the revenue

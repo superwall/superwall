@@ -77,30 +77,30 @@ The server notification URL: asc notification-url <action> --app <id>
     Works with an API key. Exit 0.
 
   asc notification-url check --app <id>
-    Asks Apple what it has, with the app's saved api_key, and Superwall
-    says whose it is:
-      already_set  Apple sends to this app's Superwall URL, in either form
-                   Superwall has issued.
-      not_set      Production, sandbox or both are empty, and no other
-                   server holds either.
-      conflict     Another server holds it. production_url and sandbox_url
-                   say which.
-      skipped      The app has no api_key saved, so Apple can't be asked.
-      failed       Apple couldn't be asked. The message says why.
-    Changes nothing. Exit 0 for the first three, 1 for skipped and failed.
+    Asks Apple what it has, with the app's saved api_key, and says for
+    production and sandbox whose URL it is:
+      this_app       this app's Superwall URL, in either form Superwall has
+                     issued
+      superwall_app  another Superwall app's. Named, with its URL, when you
+                     can read that app; otherwise its token reads REDACTED
+      other          someone else's, such as RevenueCat or your own server
+      none           Apple has no URL
+    status is already_set, not_set, conflict, skipped (no api_key or no
+    bundle ID saved) or failed (the message says why).
+    Changes nothing. Exit 0 unless skipped or failed (1).
 
   asc notification-url set --app <id>
-    Checks first, then writes this app's Superwall URL into whichever
-    environment is empty. Never replaces another server's URL: a conflict
-    is reported and left alone (exit 1). To switch, a person clears it in
-    App Store Connect, or forwards from that server to the URL above.
+    Writes this app's Superwall URL into whichever environment is empty.
+    Never replaces another server's or another Superwall app's URL: a
+    conflict is reported and left alone (exit 1). To switch, a person clears
+    it in App Store Connect, or forwards from that server to the URL above.
     Does not change the revenue provider unless --set-revenue-provider is
     passed. Receiving Apple's notifications and choosing which revenue
     source the dashboard counts are separate decisions.
     Exit 0 for set or already_set, 1 otherwise.
 
-  check and set need a \`superwall login\` session. An API key is refused,
-  and nothing changes.`;
+  check and set work with a \`superwall login\` session or an API key with
+  applications:write.`;
 
 export const SETUP_APPLE_HELP = `What it does
   One Apple sign-in, then for one iOS app: creates the App Store Connect
@@ -147,3 +147,27 @@ export const REVENUE_PROVIDER_HELP = `What it is
     one. Without --yes outside a terminal it changes nothing, says what
     would change, and exits 1. --dry-run does the same and exits 0.
     Works for an app on any platform.`;
+
+
+export const APPS_HELP = `An app's bundle ID: apps bundle-id [value] --app <id>
+  The bundle ID (iOS) or package name (Android) decides which builds the SDK
+  treats as this app. A build whose ID is neither it nor starts with it
+  followed by a dot runs in test mode.
+
+  apps bundle-id --app <id>
+    The ID the app has, and the ones its SDK reported in the last 30 days,
+    each with production and sandbox devices, when it was last seen and its
+    most common country. Changes nothing. Exit 0.
+
+  apps bundle-id <value> --app <id>
+    Saves it. Superwall checks the format for the app's platform. When the
+    SDK reported production devices on other IDs that neither equal <value>
+    nor start with "<value>.", it says how many would run in test mode and
+    asks first: a prompt in a terminal, --yes outside one. Without --yes
+    outside a terminal it changes nothing and exits 1.
+    An app that already has a different ID keeps it unless --replace is
+    passed, and replacing also asks first. --app-store-id saves the App
+    Store ID too, only when the app has none. Saving the ID it already has
+    does nothing. --dry-run says what would change.
+    Never guesses an ID and never writes one the person didn't give.
+    Exit 0 when saved or unchanged, 1 otherwise.`
