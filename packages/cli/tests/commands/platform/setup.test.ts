@@ -289,7 +289,7 @@ test("waits while Apple has not accepted a new key for the notification URL", as
     },
     argv: { json: true },
   });
-  assert.deepEqual(run.sleeps, [5000]);
+  assert.deepEqual(run.sleeps, [1000]);
   assert.equal((run.result.json as { status: string }).status, "ok");
 });
 
@@ -362,7 +362,7 @@ test("waits for Apple to activate a new key, then keeps it on disk if it never d
     api: { appVerdicts: [{ valid: false, error: "401" }, { valid: false, error: "401" }] },
     argv: { json: true },
   });
-  assert.deepEqual(slow.sleeps, [2000, 4000]);
+  assert.deepEqual(slow.sleeps, [1000, 2000]);
   assert.equal((slow.result.json as { status: string }).status, "ok");
 
   process.exitCode = undefined;
@@ -370,7 +370,7 @@ test("waits for Apple to activate a new key, then keeps it on disk if it never d
     api: { purchaseVerdict: { valid: false, error: "Invalid key" } },
   });
   assert.equal(process.exitCode, 1);
-  assert.equal(never.sleeps.length, 7);
+  assert.equal(never.sleeps.length, 3);
   assert.deepEqual(never.files, { "SubscriptionKey_IAPKEY0001.p8": PEM });
   assert.match(never.said("warn")[0] ?? "", /saved to \/tmp\/SubscriptionKey_IAPKEY0001\.p8/);
 });

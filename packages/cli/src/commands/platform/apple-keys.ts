@@ -41,7 +41,7 @@ export const KEY_LABEL: Record<AppKeyKind, string> = {
 const KEY_NAME = "Superwall";
 const KEY_FILE: Record<AppKeyKind, string> = { api_key: "AuthKey", purchase_key: "SubscriptionKey" };
 const APPLE_KIND: Record<AppKeyKind, AppleKeyKind> = { api_key: "team", purchase_key: "purchase" };
-const ACTIVATION_DELAYS = [2000, 4000, 6000, 8000, 10_000, 15_000, 15_000];
+const ACTIVATION_DELAYS = [1000, 2000, 3000];
 const ACTIVATION_STATUSES = new Set([400, 401, 403, 422, 502]);
 
 export function text(ctx: CommandContext, name: string): string | undefined {

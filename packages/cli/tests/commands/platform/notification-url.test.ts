@@ -217,11 +217,11 @@ test("waits for a key Apple has only just created, then gives up with its messag
     retryable: true,
   });
   const run1 = await url({ value: "set", app: "8" }, { written: [waiting, waiting, outcome("set")] });
-  assert.deepEqual(run1.sleeps, [5000, 10_000]);
+  assert.deepEqual(run1.sleeps, [1000, 2000]);
   assert.equal(process.exitCode, undefined);
 
-  const never = await url({ value: "check", app: "8" }, { checks: Array(6).fill(waiting) });
-  assert.equal(never.sleeps.length, 5);
+  const never = await url({ value: "check", app: "8" }, { checks: Array(4).fill(waiting) });
+  assert.equal(never.sleeps.length, 3);
   assert.equal(process.exitCode, 1);
   assert.deepEqual(never.result.said("error"), ["Apple hasn’t accepted the new key yet."]);
 });

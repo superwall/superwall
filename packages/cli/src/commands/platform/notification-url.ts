@@ -11,7 +11,7 @@ import { apiCall, emitJson } from "@/commands/api-output";
 import { chooseIosApp } from "./apple-app";
 import { appFlags } from "./apple-keys";
 
-const RETRY_DELAYS = [5000, 10_000, 15_000, 15_000, 15_000];
+const RETRY_DELAYS = [1000, 2000, 3000];
 
 async function settled(
   sleep: (ms: number) => Promise<void>,
