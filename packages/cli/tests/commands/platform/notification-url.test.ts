@@ -220,10 +220,23 @@ test("waits for a key Apple has only just created, then gives up with its messag
   assert.deepEqual(run1.sleeps, [1000, 2000]);
   assert.equal(process.exitCode, undefined);
 
-  const never = await url({ value: "check", app: "8" }, { checks: Array(4).fill(waiting) });
+  const never = await url({ value: "set", app: "8" }, { written: Array(4).fill(waiting) });
   assert.equal(never.sleeps.length, 3);
   assert.equal(process.exitCode, 1);
   assert.deepEqual(never.result.said("error"), ["Apple hasn’t accepted the new key yet."]);
+});
+
+test("check asks once and reports what Apple said, without waiting", async () => {
+  const refused = outcome("failed", {
+    message: "Apple refused the App Store Connect API key saved on this app.",
+  });
+  const once = await url({ value: "check", app: "8" }, { checks: [refused, outcome("already_set")] });
+  assert.deepEqual(once.sleeps, []);
+  assert.deepEqual(once.calls(), [["GET", null]]);
+  assert.equal(process.exitCode, 1);
+  assert.deepEqual(once.result.said("error"), [
+    "Apple refused the App Store Connect API key saved on this app.",
+  ]);
 });
 
 test("an API without these endpoints yet is refused clearly and nothing is written", async () => {

@@ -128,7 +128,7 @@ export async function runNotificationUrl(
   const outcome =
     action === "check"
       ? await apiCall(ctx, "Reading the server notification URL", () =>
-          settled(sleep, () => checkServerNotifications(api, app)),
+          checkServerNotifications(api, app),
         )
       : await ensureNotificationUrl(ctx, sleep, api, app, { setRevenueProvider });
   const ok =
