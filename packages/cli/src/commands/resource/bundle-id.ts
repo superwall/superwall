@@ -50,6 +50,23 @@ async function suggestions(
   }
 }
 
+function exposureLine(exposure: { devices: number; bundleIds: string[] }, windowDays: number): string {
+  return `${exposure.devices} production device${exposure.devices === 1 ? "" : "s"} in the last ${windowDays} days used ${exposure.bundleIds.join(", ")}, and would run in test mode.`;
+}
+
+export async function testModeWarning(
+  ctx: CommandContext,
+  api: SuperwallApi,
+  applicationId: string,
+  bundleId: string,
+): Promise<string | undefined> {
+  const read = await suggestions(ctx, api, applicationId);
+  if (!read?.available) return undefined;
+  const exposure = testModeExposure(bundleId, read.candidates);
+  if (exposure.devices === 0) return undefined;
+  return `Saving the bundle ID ${bundleId}: ${exposureLine(exposure, read.window_days)}`;
+}
+
 function candidateLine(candidate: BundleIdCandidate): string {
   const seen = candidate.last_seen_at.slice(0, 10);
   const country = candidate.top_country ? `, mostly ${candidate.top_country}` : "";
@@ -117,9 +134,7 @@ export async function runBundleId(ctx: CommandContext<"required">): Promise<void
     replacing
       ? `This replaces the ${noun(platform)} ${saved} with ${wanted}. Builds whose ${noun(platform)} is neither ${wanted} nor starts with "${wanted}." will run in test mode.`
       : undefined,
-    exposure && exposure.devices > 0
-      ? `${exposure.devices} production device${exposure.devices === 1 ? "" : "s"} in the last ${read?.window_days ?? 30} days used ${exposure.bundleIds.join(", ")}, and would run in test mode.`
-      : undefined,
+    exposure && exposure.devices > 0 ? exposureLine(exposure, read?.window_days ?? 30) : undefined,
   ].filter((line): line is string => line !== undefined);
 
   if (ctx.dryRun) {

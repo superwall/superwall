@@ -9,7 +9,6 @@ import {
   type Application,
   type Project,
 } from "@/core/api/resources";
-import { blocks } from "@/output";
 import { apiCall } from "@/commands/api-output";
 
 export interface AppFlags {
@@ -27,6 +26,7 @@ export interface ResolvedApp {
   applicationId: string;
   name: string;
   bundleId: string;
+  savedBundleId: string | null;
   ascAppId: string;
   created: boolean;
 }
@@ -223,19 +223,18 @@ export async function resolveApp(
 ): Promise<ResolvedApp> {
   if (intent.kind === "existing") {
     const { app, project } = intent;
-    if (flags.bundleId && app.bundle_id && flags.bundleId !== app.bundle_id) {
-      ctx.output.render(
-        blocks.warning(
-          `Superwall has bundle ID ${app.bundle_id} for ${app.name ?? "this app"}; using ${flags.bundleId} from --bundle-id for Apple.`,
-        ),
-      );
+    const name = app.name ?? String(app.id);
+    const saved = savedBundleId(app);
+    if (flags.bundleId && saved && flags.bundleId !== saved) {
+      throw new Error(differentBundleId(name, String(app.id), saved, flags.bundleId));
     }
-    const chosen = await chooseAppleApp(ctx, session, flags.bundleId ?? app.bundle_id);
+    const chosen = await chooseAppleApp(ctx, session, flags.bundleId ?? saved ?? undefined);
     return {
       projectId: String(project.id),
       applicationId: String(app.id),
-      name: app.name ?? String(app.id),
+      name,
       bundleId: chosen.bundleId,
+      savedBundleId: saved,
       ascAppId: chosen.id,
       created: false,
     };
@@ -260,7 +259,22 @@ export async function resolveApp(
     applicationId: String(created.id),
     name,
     bundleId: chosen.bundleId,
+    savedBundleId: chosen.bundleId,
     ascAppId: chosen.id,
     created: true,
   };
+}
+
+export function savedBundleId(app: Application): string | null {
+  const value = app.bundle_id?.trim();
+  return value ? value : null;
+}
+
+export function differentBundleId(
+  name: string,
+  applicationId: string,
+  saved: string,
+  wanted: string,
+): string {
+  return `\`${name}\` has the bundle ID ${saved} in Superwall, not ${wanted}. Nothing was created or saved. To change it, run \`superwall apps bundle-id ${wanted} --app ${applicationId} --replace\` first, once a person has agreed.`;
 }

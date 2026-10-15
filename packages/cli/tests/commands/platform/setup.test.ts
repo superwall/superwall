@@ -34,6 +34,7 @@ test("connects an app end to end without prompts", async () => {
     steps: {
       api_key: { status: "done", detail: "TEAMKEY001" },
       purchase_key: { status: "done", detail: "IAPKEY0001" },
+      bundle_id: { status: "done", detail: "com.acme.app" },
       notification_url: { status: "done", detail: "set" },
     },
     notification_url: OURS,
@@ -73,7 +74,7 @@ test("connects an app end to end without prompts", async () => {
 test("human output ends with a report and a success line", async () => {
   const run = await scenario();
   assert.deepEqual(run.said("report"), [
-    "✓ App Store Connect API key  TEAMKEY001\n✓ In-App Purchase key  IAPKEY0001\n✓ Server notification URL  set",
+    "✓ App Store Connect API key  TEAMKEY001\n✓ In-App Purchase key  IAPKEY0001\n✓ Bundle ID  com.acme.app\n✓ Server notification URL  set",
   ]);
   assert.deepEqual(run.said("success"), ["Apple is connected for `Acme`."]);
 });
@@ -410,6 +411,7 @@ test("skip flags leave each step alone", async () => {
   assert.deepEqual((run.result.json as { steps: unknown }).steps, {
     api_key: { status: "skipped" },
     purchase_key: { status: "skipped" },
+    bundle_id: { status: "done", detail: "com.acme.app" },
     notification_url: { status: "skipped" },
   });
 });
@@ -620,21 +622,84 @@ test("an app without a bundle id takes it from the flag or from App Store Connec
   assert.match(unknown.said("error")[0] ?? "", /Pass --bundle-id <id>\. This team's apps: com\.acme\.app/);
 });
 
-test("--bundle-id wins over the bundle ID Superwall has for the chosen app, with a warning", async () => {
+test("--bundle-id other than the one Superwall has stops before anything is created", async () => {
   const run = await scenario({
     apple: { apps: [{ id: "777", attributes: { name: "Other", bundleId: "com.acme.other" } }] },
     argv: { app: "8", "bundle-id": "com.acme.other" },
   });
-  assert.equal(process.exitCode, undefined);
-  assert.deepEqual(run.said("warn"), [
-    "Superwall has bundle ID com.acme.app for Acme; using com.acme.other from --bundle-id for Apple.",
+  assert.equal(process.exitCode, 1);
+  assert.deepEqual(run.said("error"), [
+    "`Acme` has the bundle ID com.acme.app in Superwall, not com.acme.other. Nothing was created or saved. To change it, run `superwall apps bundle-id com.acme.other --app 8 --replace` first, once a person has agreed.",
   ]);
+  assert.equal(run.log.filter((line) => line.startsWith("iris POST")).length, 0);
+  assert.equal(run.wrote("PUT", "").length, 0);
+});
+
+const NO_BUNDLE = { projects: [{ id: 5, name: "Main", applications: [{ id: 8, name: "Acme", platform: "ios" }] }] };
+
+test("an app with no bundle ID gets the Apple app's, saved with the In-App Purchase key", async () => {
+  const run = await scenario({ api: NO_BUNDLE, argv: { app: "8", "bundle-id": "com.acme.app", json: true } });
+  assert.equal(process.exitCode, undefined);
   assert.deepEqual(run.wrote("PUT", "/in-app-purchase/configuration")[0]?.body, {
-    bundle_id: "com.acme.other",
+    bundle_id: "com.acme.app",
     key_id: "IAPKEY0001",
     issuer_id: "issuer-111",
     private_key: PEM,
+    set_application_bundle_id: true,
   });
+  assert.equal(run.wrote("POST", "/bundle-id").length, 0);
+  const steps = (run.result.json as { steps: Record<string, unknown> }).steps;
+  assert.deepEqual(steps.bundle_id, { status: "done", detail: "com.acme.app (saved with the key)" });
+  assert.deepEqual(steps.notification_url, { status: "done", detail: "set" });
+});
+
+test("without the In-App Purchase key step, the bundle ID is saved before the notification URL", async () => {
+  const run = await scenario({
+    api: NO_BUNDLE,
+    argv: { app: "8", "bundle-id": "com.acme.app", "skip-purchase-key": true, json: true },
+  });
+  assert.equal(process.exitCode, undefined);
+  const order = run.requests
+    .filter((request) => request.method !== "GET")
+    .map((request) => `${request.method} ${request.path.split("/").slice(-1)[0]}`);
+  assert.ok(order.indexOf("POST bundle-id") >= 0);
+  assert.ok(order.indexOf("POST bundle-id") < order.indexOf("PUT apple"));
+  assert.deepEqual(run.wrote("POST", "/bundle-id")[0]?.body, { bundle_id: "com.acme.app" });
+  assert.equal(run.wrote("PUT", "/in-app-purchase/configuration").length, 0);
+  const steps = (run.result.json as { steps: Record<string, unknown> }).steps;
+  assert.deepEqual(steps.bundle_id, { status: "done", detail: "com.acme.app (saved)" });
+});
+
+test("a bundle ID Superwall refuses to save is reported and the run exits non-zero", async () => {
+  const run = await scenario({
+    api: {
+      ...NO_BUNDLE,
+      saved: {
+        in_app_purchase_configuration: {
+          key_id: "IAPKEY0009",
+          issuer_id: "issuer-111",
+          bundle_id: "com.acme.app",
+          has_private_key: true,
+        },
+      },
+      routes: (method, path) => {
+        if (method === "POST" && path.endsWith("/bundle-id")) {
+          throw new ApiError(
+            "POST /bundle-id",
+            409,
+            '{"message":"This app already has the bundle ID com.acme.old, so it was left as it is."}',
+          );
+        }
+        return undefined;
+      },
+    },
+    argv: { app: "8", "bundle-id": "com.acme.app", json: true },
+  });
+  assert.equal(process.exitCode, 1);
+  const body = run.result.json as { steps: Record<string, { status: string; detail?: string }>; failed: string[] };
+  assert.equal(body.steps.bundle_id?.status, "failed");
+  assert.match(body.steps.bundle_id?.detail ?? "", /already has the bundle ID com\.acme\.old/);
+  assert.ok(body.failed.includes("bundle_id"));
 });
 
 test("setup only knows apple", async () => {

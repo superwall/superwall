@@ -64,13 +64,14 @@ export function saveAppAscKey(api: SuperwallApi, app: AppRef, c: AscCredentials)
 export function saveAppPurchaseKey(
   api: SuperwallApi,
   app: AppRef,
-  c: AscCredentials & { bundleId: string },
+  c: AscCredentials & { bundleId: string; setApplicationBundleId?: boolean },
 ): Promise<KeyVerdict> {
   return api.put<KeyVerdict>(`${appIntegrations(app)}/in-app-purchase/configuration`, {
     bundle_id: c.bundleId,
     key_id: c.keyId,
     issuer_id: c.issuerId,
     private_key: c.privateKey,
+    ...(c.setApplicationBundleId ? { set_application_bundle_id: true } : {}),
   });
 }
 

@@ -261,13 +261,95 @@ test("keys set --app saves a key file on the app, and a rejected key exits non-z
     { value: "set", value2: "purchase_key", app: "8", ...flags },
     { projects: [{ id: 5, applications: [{ id: 8, name: "Acme", platform: "ios" }] }] },
   );
-  assert.deepEqual(bare.said("error"), ["Acme has no bundle ID in Superwall. Pass --bundle-id <id>."]);
+  assert.deepEqual(bare.said("error"), [
+    "`Acme` has no bundle ID in Superwall. Pass --bundle-id <id> to save it with the key, or set it first with `superwall apps bundle-id <id> --app 8`.",
+  ]);
+  assert.equal(bare.wrote("PUT", "").length, 0);
 
   const usage = await keys({ value: "set", app: "8" });
   assert.match(usage.said("error")[0] ?? "", /asc keys set \[api_key \| purchase_key\] --app <id>/);
   const wrongKind = await keys({ value: "set", value2: "team", app: "8", ...flags });
   assert.match(wrongKind.said("error")[0] ?? "", /Usage: superwall asc keys set <api_key \| purchase_key>/);
   assert.equal(wrongKind.wrote("PUT", "").length, 0);
+});
+
+test("keys set purchase_key keeps the key and the app on one bundle ID", async () => {
+  const flags = { "key-id": "K1", issuer: "I1", "key-file": KEY_FILE };
+  const noBundle = { projects: [{ id: 5, applications: [{ id: 8, name: "Acme", platform: "ios" }] }] };
+
+  const both = await keys(
+    { value: "set", value2: "purchase_key", app: "8", "bundle-id": "com.acme.app", ...flags },
+    noBundle,
+  );
+  assert.equal(process.exitCode, undefined);
+  assert.deepEqual(both.wrote("PUT", "/in-app-purchase/configuration")[0]?.body, {
+    bundle_id: "com.acme.app",
+    key_id: "K1",
+    issuer_id: "I1",
+    private_key: "PEM",
+    set_application_bundle_id: true,
+  });
+  assert.deepEqual(both.said("success"), [
+    "In-App Purchase key K1 and the bundle ID com.acme.app saved on `Acme`.",
+  ]);
+
+  const same = await keys({
+    value: "set",
+    value2: "purchase_key",
+    app: "8",
+    "bundle-id": "com.acme.app",
+    ...flags,
+    json: true,
+  });
+  assert.deepEqual(same.wrote("PUT", "/in-app-purchase/configuration")[0]?.body, {
+    bundle_id: "com.acme.app",
+    key_id: "K1",
+    issuer_id: "I1",
+    private_key: "PEM",
+  });
+  assert.equal((same.json() as { bundle_id_saved: boolean }).bundle_id_saved, false);
+
+  const other = await keys({
+    value: "set",
+    value2: "purchase_key",
+    app: "8",
+    "bundle-id": "com.acme.other",
+    ...flags,
+  });
+  assert.equal(process.exitCode, 1);
+  assert.deepEqual(other.said("error"), [
+    "`Acme` has the bundle ID com.acme.app in Superwall, not com.acme.other. Nothing was created or saved. To change it, run `superwall apps bundle-id com.acme.other --app 8 --replace` first, once a person has agreed.",
+  ]);
+  assert.equal(other.wrote("PUT", "").length, 0);
+});
+
+test("keys set purchase_key warns before a new bundle ID puts reported builds in test mode", async () => {
+  const run1 = await keys(
+    {
+      value: "set",
+      value2: "purchase_key",
+      app: "8",
+      "bundle-id": "com.acme.app",
+      "key-id": "K1",
+      issuer: "I1",
+      "key-file": KEY_FILE,
+    },
+    {
+      projects: [{ id: 5, applications: [{ id: 8, name: "Acme", platform: "ios" }] }],
+      candidates: [
+        {
+          bundle_id: "com.acme.lite",
+          production_devices: 40,
+          sandbox_devices: 0,
+          last_seen_at: "2026-10-10T00:00:00Z",
+          top_country: null,
+        },
+      ],
+    },
+  );
+  assert.deepEqual(run1.said("warn"), [
+    "Saving the bundle ID com.acme.app: 40 production devices in the last 30 days used com.acme.lite, and would run in test mode.",
+  ]);
 });
 
 test("keys rm --app removes one kind from the app and says what is untouched", async () => {

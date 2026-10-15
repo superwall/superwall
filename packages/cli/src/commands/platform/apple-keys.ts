@@ -13,6 +13,7 @@ import {
 import { AppleError, type AppleSession, type AppleTeam } from "@/core/apple/session";
 import { blocks } from "@/output";
 import { apiCall, emitJson } from "@/commands/api-output";
+import { testModeWarning } from "@/commands/resource/bundle-id";
 import { chooseIosApp, resolveApp, type AppFlags, type ResolvedApp } from "./apple-app";
 import {
   describeChallenge,
@@ -232,10 +233,15 @@ export async function createAndSaveKey(
 
   const appRef: AppRef = { projectId: app.projectId, applicationId: app.applicationId };
   const credentials = { keyId: key.id, issuerId: key.issuerId, privateKey: key.privateKey };
+  const setApplicationBundleId = kind === "purchase_key" && app.savedBundleId === null;
   const save = (): Promise<KeyVerdict> =>
     kind === "api_key"
       ? saveAppAscKey(api, appRef, credentials)
-      : saveAppPurchaseKey(api, appRef, { ...credentials, bundleId: app.bundleId });
+      : saveAppPurchaseKey(api, appRef, {
+          ...credentials,
+          bundleId: app.bundleId,
+          setApplicationBundleId,
+        });
   let reason: string;
   try {
     const verdict = await untilActive(
@@ -245,7 +251,14 @@ export async function createAndSaveKey(
       save,
       (result) => !result.valid,
     );
-    if (verdict.valid) return { status: "done", detail: key.id };
+    if (verdict.valid) {
+      if (setApplicationBundleId) {
+        ctx.output.render(
+          blocks.info(`Saved the bundle ID ${app.bundleId} on \`${app.name}\` with the key`),
+        );
+      }
+      return { status: "done", detail: key.id };
+    }
     reason = `Apple hasn't accepted the new key yet${verdict.error ? ` (${verdict.error})` : ""}.`;
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
@@ -302,6 +315,10 @@ export async function createAppKey(
   }
 
   const app = await resolveApp(ctx, api, session, { kind: "existing", ...chosen }, flags);
+  if (kind === "purchase_key" && app.savedBundleId === null) {
+    const warning = await testModeWarning(ctx, api, app.applicationId, app.bundleId);
+    if (warning) ctx.output.render(blocks.warning(warning));
+  }
   const result = await createAndSaveKey(ctx, deps, api, session, app, kind, role);
   const created = result.status === "done";
   if (ctx.json) {
@@ -313,6 +330,7 @@ export async function createAppKey(
       replaced: created && existing ? existing.key_id : null,
       team,
       app: { id: app.applicationId, project_id: app.projectId, name: app.name, bundle_id: app.bundleId },
+      ...(kind === "purchase_key" ? { bundle_id_saved: created && app.savedBundleId === null } : {}),
     });
   } else if (created) {
     ctx.ui.success(`${KEY_LABEL[kind]} ${result.detail} created and saved on \`${app.name}\`.`);

@@ -11,7 +11,8 @@ import {
   type KeyImportResult,
 } from "@/core/api/integrations";
 import { apiCall, emitJson } from "@/commands/api-output";
-import { chooseIosApp } from "./apple-app";
+import { testModeWarning } from "@/commands/resource/bundle-id";
+import { chooseIosApp, differentBundleId, savedBundleId } from "./apple-app";
 import { appFlags, KEY_KINDS, KEY_LABEL, keyKind, savedKey, text } from "./apple-keys";
 import type { KeyInput } from "./keys";
 
@@ -19,7 +20,7 @@ interface AppKeyContext {
   ctx: CommandContext<"required">;
   app: AppRef;
   name: string;
-  bundleId: string | undefined;
+  savedBundleId: string | null;
 }
 
 async function target(ctx: CommandContext<"required">): Promise<AppKeyContext> {
@@ -28,8 +29,25 @@ async function target(ctx: CommandContext<"required">): Promise<AppKeyContext> {
     ctx,
     app: { projectId: String(chosen.project.id), applicationId: String(chosen.app.id) },
     name: chosen.app.name ?? String(chosen.app.id),
-    bundleId: text(ctx, "bundle-id") ?? chosen.app.bundle_id,
+    savedBundleId: savedBundleId(chosen.app),
   };
+}
+
+function purchaseKeyBundleId(
+  ctx: CommandContext,
+  { app, name, savedBundleId: saved }: AppKeyContext,
+): { bundleId: string; setApplicationBundleId: boolean } {
+  const wanted = text(ctx, "bundle-id");
+  if (!wanted) {
+    if (saved) return { bundleId: saved, setApplicationBundleId: false };
+    throw new Error(
+      `\`${name}\` has no bundle ID in Superwall. Pass --bundle-id <id> to save it with the key, or set it first with \`superwall apps bundle-id <id> --app ${app.applicationId}\`.`,
+    );
+  }
+  if (saved && saved !== wanted) {
+    throw new Error(differentBundleId(name, app.applicationId, saved, wanted));
+  }
+  return { bundleId: wanted, setApplicationBundleId: saved === null };
 }
 
 function requireKind(ctx: CommandContext, action: string): AppKeyKind {
@@ -66,15 +84,26 @@ export async function listAppKeys(ctx: CommandContext<"required">): Promise<void
 
 export async function setAppKey(ctx: CommandContext<"required">, input: KeyInput): Promise<void> {
   const kind = ctx.argv.value2 === undefined ? "api_key" : requireKind(ctx, "set");
-  const { app, name, bundleId } = await target(ctx);
-  if (kind === "purchase_key" && !bundleId) {
-    throw new Error(`${name} has no bundle ID in Superwall. Pass --bundle-id <id>.`);
-  }
+  const chosen = await target(ctx);
+  const { app, name } = chosen;
+  const bundle = kind === "purchase_key" ? purchaseKeyBundleId(ctx, chosen) : undefined;
   if (ctx.dryRun) {
-    const plan = { dryRun: true, action: "set", kind, application_id: app.applicationId, keyId: input.keyId };
+    const plan = {
+      dryRun: true,
+      action: "set",
+      kind,
+      application_id: app.applicationId,
+      keyId: input.keyId,
+      ...(bundle ? { bundle_id: bundle.bundleId, set_application_bundle_id: bundle.setApplicationBundleId } : {}),
+    };
+    const alsoBundle = bundle?.setApplicationBundleId ? ` and its bundle ID ${bundle.bundleId}` : "";
     return void (ctx.json
       ? emitJson(ctx, plan)
-      : ctx.ui.info(`[dry-run] would save ${KEY_LABEL[kind]} ${input.keyId} on ${name}`));
+      : ctx.ui.info(`[dry-run] would save ${KEY_LABEL[kind]} ${input.keyId}${alsoBundle} on ${name}`));
+  }
+  if (bundle?.setApplicationBundleId) {
+    const warning = await testModeWarning(ctx, ctx.api, app.applicationId, bundle.bundleId);
+    if (warning) ctx.ui.warn(warning);
   }
   const credentials = {
     keyId: input.keyId,
@@ -84,12 +113,22 @@ export async function setAppKey(ctx: CommandContext<"required">, input: KeyInput
   const verdict = await apiCall(ctx, `Saving the ${KEY_LABEL[kind]}`, () =>
     kind === "api_key"
       ? saveAppAscKey(ctx.api, app, credentials)
-      : saveAppPurchaseKey(ctx.api, app, { ...credentials, bundleId: bundleId! }),
+      : saveAppPurchaseKey(ctx.api, app, { ...credentials, ...bundle! }),
   );
   if (ctx.json) {
-    emitJson(ctx, { application_id: app.applicationId, kind, key_id: input.keyId, ...verdict });
+    emitJson(ctx, {
+      application_id: app.applicationId,
+      kind,
+      key_id: input.keyId,
+      ...verdict,
+      ...(bundle ? { bundle_id: bundle.bundleId, bundle_id_saved: verdict.valid && bundle.setApplicationBundleId } : {}),
+    });
   } else if (verdict.valid) {
-    ctx.ui.success(`${KEY_LABEL[kind]} ${input.keyId} saved on \`${name}\`.`);
+    ctx.ui.success(
+      bundle?.setApplicationBundleId
+        ? `${KEY_LABEL[kind]} ${input.keyId} and the bundle ID ${bundle.bundleId} saved on \`${name}\`.`
+        : `${KEY_LABEL[kind]} ${input.keyId} saved on \`${name}\`.`,
+    );
   } else {
     ctx.ui.error(
       `Apple didn't accept ${KEY_LABEL[kind]} ${input.keyId}${verdict.error ? `: ${verdict.error}` : "."}`,

@@ -245,6 +245,13 @@ When other IDs had production devices that the new one wouldn't cover, it
 says how many would run in test mode and asks first (`--yes` outside a
 terminal). An ID that is already saved is only replaced with `--replace`.
 
+`setup apple`, `asc keys create purchase_key` and `asc keys set purchase_key`
+keep the In-App Purchase key and the app on one bundle ID. An app with none
+gets the Apple app's (or the one `--bundle-id` names) saved with the key, both
+or neither, and they say so and how many reported builds would run in test
+mode. An app with a different bundle ID stops before anything is created or
+saved, and points at `apps bundle-id <id> --replace`.
+
 ## Query your data
 
 Run SQL directly against your organization's ClickHouse analytics data:

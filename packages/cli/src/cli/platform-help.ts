@@ -41,7 +41,9 @@ export const ASC_HELP = `An app's Apple keys: asc keys <action> --app <id>
     creates nothing (already_saved, exit 0). --replace creates another and
     saves it; the old key stays valid at Apple.
     The bundle ID is checked on the signed-in team before anything is
-    created.
+    created. An app with no bundle ID gets that one, saved with the
+    purchase_key; one with a different bundle ID than --bundle-id is
+    refused before anything is created.
     The Apple password comes from a masked prompt, SUPERWALL_APPLE_PASSWORD
     or --apple-password. It goes only to Apple and is not saved. Without
     prompts, the first run stops for Apple's verification code
@@ -58,6 +60,10 @@ export const ASC_HELP = `An app's Apple keys: asc keys <action> --app <id>
     Saves a key you hold as a file on the app (api_key when no kind is
     named). Apple is asked first: a key it rejects is not saved. Replaces
     the app's saved key of that kind. Exit 0 saved, 1 rejected.
+    A purchase_key is for the app's bundle ID. When the app has none,
+    --bundle-id <id> is saved on the app with the key, both or neither.
+    A --bundle-id other than the app's is refused: change the app's first
+    with apps bundle-id <id> --replace.
 
   asc keys rm <api_key | purchase_key> --app <id>
     Removes the app's saved key. Nothing is revoked at Apple and the
@@ -109,10 +115,18 @@ export const SETUP_APPLE_HELP = `What it does
   none. It can also create the Superwall app from an App Store Connect
   app. Each step is one of the single commands in \`superwall asc --help\`.
 
+Bundle ID
+  An app with no bundle ID gets the App Store Connect app's: saved with the
+  In-App Purchase key, both or neither, or on its own before the
+  notification URL when that key isn't created. It says how many reported
+  builds would run in test mode.
+
 What it never does
   It never creates a second key of a kind the app already has (reported as
   already saved), never replaces a server notification URL another server
-  holds, never revokes a key, and never changes the revenue provider (see
+  holds, never revokes a key, never replaces an app's different bundle ID (it
+  stops before anything is created and points at apps bundle-id --replace),
+  and never changes the revenue provider (see
   \`superwall revenue-provider --help\`).
 
 Sign-in

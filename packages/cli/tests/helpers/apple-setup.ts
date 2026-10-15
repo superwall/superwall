@@ -1,7 +1,11 @@
 import type { CommandContext, CommandDefinition } from "@/command";
 import type { AppleKeyDeps } from "@/commands/platform/apple-keys";
 import type { ApiError, SuperwallApi } from "@/core/api/client";
-import type { NotificationEnvironment, ServerNotifications } from "@/core/api/integrations";
+import type {
+  BundleIdCandidate,
+  NotificationEnvironment,
+  ServerNotifications,
+} from "@/core/api/integrations";
 import {
   AppleError,
   type AppleSession,
@@ -103,6 +107,7 @@ export interface ApiOptions {
   checks?: ServerNotifications[];
   written?: ServerNotifications[];
   failCheck?: ApiError;
+  candidates?: BundleIdCandidate[];
   routes?: (method: string, path: string, body?: unknown) => unknown;
 }
 
@@ -144,6 +149,13 @@ export function fakeApi(options: ApiOptions = {}) {
       return options.purchaseVerdict ?? { valid: true, error: null };
     }
     if (path.endsWith("/app-store-connect/notification-url")) return { url: OURS };
+    if (path.endsWith("/bundle-id-suggestions")) {
+      return { window_days: 30, available: true, candidates: options.candidates ?? [] };
+    }
+    if (path.endsWith("/bundle-id") && method === "POST") {
+      const sent = body as { bundle_id: string };
+      return { bundle_id: sent.bundle_id, app_store_id: null };
+    }
     if (path === "/v2/projects") return { id: 70 };
     if (/^\/v2\/projects\/\d+\/applications$/.test(path)) {
       const projectId = Number(path.split("/")[3]);

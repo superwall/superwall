@@ -2,9 +2,14 @@ import type { CommandContext } from "@/command";
 import { requireOrg } from "@/core/account/org";
 import { ApiError } from "@/core/api/client";
 import type { AppRef } from "@/core/api/asc";
-import { getIntegrations, RefusedByApi, type AppKeyKind } from "@/core/api/integrations";
+import {
+  getIntegrations,
+  RefusedByApi,
+  saveBundleId,
+  type AppKeyKind,
+} from "@/core/api/integrations";
 import { blocks } from "@/output";
-import { emitJson } from "@/commands/api-output";
+import { apiCall, emitJson } from "@/commands/api-output";
 import { chooseAppIntent, resolveApp, type ResolvedApp } from "./apple-app";
 import {
   appFlags,
@@ -21,15 +26,31 @@ import {
   type StepResult,
 } from "./apple-keys";
 import { describeNotificationUrl, ensureNotificationUrl, environmentLines } from "./notification-url";
+import { testModeWarning } from "@/commands/resource/bundle-id";
 
-type Step = AppKeyKind | "notification_url";
+type Step = AppKeyKind | "bundle_id" | "notification_url";
 
-const STEPS: Step[] = [...KEY_KINDS, "notification_url"];
+const STEPS: Step[] = [...KEY_KINDS, "bundle_id", "notification_url"];
 
 const STEP_LABEL: Record<Step, string> = {
   ...KEY_LABEL,
+  bundle_id: "Bundle ID",
   notification_url: "Server notification URL",
 };
+
+async function saveAppBundleId(ctx: CommandContext<"required">, app: ResolvedApp): Promise<StepResult> {
+  try {
+    await apiCall(ctx, `Saving the bundle ID on ${app.name}`, () =>
+      saveBundleId(ctx.api, app.applicationId, { bundleId: app.bundleId, replace: false }),
+    );
+  } catch (error) {
+    if (!(error instanceof ApiError) && !(error instanceof RefusedByApi)) throw error;
+    ctx.output.render(blocks.warning(`${STEP_LABEL.bundle_id}: ${error.message}`));
+    return { status: "failed", detail: error.message };
+  }
+  ctx.output.render(blocks.info(`Saved the bundle ID ${app.bundleId} on \`${app.name}\``));
+  return { status: "done", detail: `${app.bundleId} (saved)` };
+}
 
 export async function setupApple(
   ctx: CommandContext<"required">,
@@ -40,6 +61,7 @@ export async function setupApple(
   const skip: Record<Step, boolean> = {
     api_key: ctx.argv["skip-api-key"] === true,
     purchase_key: ctx.argv["skip-purchase-key"] === true,
+    bundle_id: false,
     notification_url: ctx.argv["skip-notification-url"] === true,
   };
   const flags = appFlags(ctx);
@@ -77,17 +99,29 @@ export async function setupApple(
   const results: Record<Step, StepResult> = {
     api_key: { status: "skipped" },
     purchase_key: { status: "skipped" },
+    bundle_id: { status: "done", detail: app.bundleId },
     notification_url: { status: "skipped" },
   };
 
+  if (app.savedBundleId === null) {
+    const warning = await testModeWarning(ctx, api, app.applicationId, app.bundleId);
+    if (warning) ctx.output.render(blocks.warning(warning));
+  }
+
   const saved = await getIntegrations(api, app.applicationId);
+  let bundleIdSaved = app.savedBundleId !== null;
   for (const kind of KEY_KINDS) {
     if (skip[kind]) continue;
     const existing = savedKey(saved, kind);
     results[kind] = existing
       ? { status: "done", detail: `${existing.key_id} (already saved)` }
       : await createAndSaveKey(ctx, deps, api, session, app, kind, role);
+    if (kind === "purchase_key" && !existing && results[kind].status === "done" && !bundleIdSaved) {
+      bundleIdSaved = true;
+      results.bundle_id = { status: "done", detail: `${app.bundleId} (saved with the key)` };
+    }
   }
+  if (!bundleIdSaved) results.bundle_id = await saveAppBundleId(ctx, app);
 
   let notificationUrl: string | undefined;
   if (!skip.notification_url) {
