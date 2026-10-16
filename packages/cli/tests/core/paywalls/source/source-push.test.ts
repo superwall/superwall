@@ -8,6 +8,8 @@ import { afterEach, test } from "node:test";
 import { createSuperwallApi } from "@/core/api/client";
 import type { SuperwallApi } from "@/core/api/client";
 import type { SourceFile } from "@/core/paywalls/source/source";
+import { readSourceBase } from "@/core/paywalls/source/base";
+import { SourceConflictError } from "@/core/paywalls/source/git";
 import { pushSource } from "@/core/paywalls/source/source-push";
 
 const dirs: string[] = [];
@@ -97,6 +99,7 @@ async function fakeApi(options: { conflicts?: number; status?: number } = {}): P
 
 const input = (fake: Fake, over: Record<string, unknown> = {}) => ({
   api: fake.api,
+  superwallDir: temp("superwall-project-"),
   paywallId: "208540",
   applicationId: "42",
   version: 7,
@@ -232,4 +235,139 @@ test("nothing generated joins the tree — the manifest is gone", async () => {
     { encoding: "utf8" },
   );
   assert.ok(!tracked.includes(".superwall-manifest.json"));
+});
+
+const tracked = (bare: string): string[] =>
+  execFileSync("git", ["--git-dir", bare, "ls-tree", "-r", "--name-only", "main"], {
+    encoding: "utf8",
+  })
+    .split("\n")
+    .filter(Boolean)
+    .sort();
+
+const blob = (bare: string, file: string): string =>
+  execFileSync("git", ["--git-dir", bare, "show", `main:${file}`], { encoding: "utf8" });
+
+test("a push records the commit it landed as the project's base", async () => {
+  const fake = await fakeApi();
+  const superwallDir = temp("superwall-project-");
+
+  const result = await pushSource(input(fake, { superwallDir }));
+
+  assert.equal(readSourceBase(superwallDir, "org1-app42"), result.commitSha);
+  assert.equal(result.syncedTo, result.commitSha);
+});
+
+test("two projects publishing different paywalls both survive", async () => {
+  const fake = await fakeApi();
+  const alice = temp("superwall-alice-");
+  const bob = temp("superwall-bob-");
+  const shared = file("config.ts", "export default {};\n");
+
+  await pushSource(input(fake, { superwallDir: alice, files: [shared] }));
+  await pushSource(input(fake, { superwallDir: bob, files: [shared] }));
+
+  await pushSource(
+    input(fake, {
+      superwallDir: alice,
+      files: [shared, file("paywalls/a/app/index.tsx", "alice\n")],
+    }),
+  );
+  await pushSource(
+    input(fake, { superwallDir: bob, files: [shared, file("paywalls/b/app/index.tsx", "bob\n")] }),
+  );
+
+  assert.deepEqual(tracked(fake.bare), [
+    "config.ts",
+    "paywalls/a/app/index.tsx",
+    "paywalls/b/app/index.tsx",
+  ]);
+});
+
+test("pushing again after being rebased over a teammate keeps the teammate's paywall", async () => {
+  const fake = await fakeApi();
+  const alice = temp("superwall-alice-");
+  const bob = temp("superwall-bob-");
+  const shared = file("config.ts", "export default {};\n");
+  const bobs = file("paywalls/b/app/index.tsx", "bob\n");
+
+  await pushSource(input(fake, { superwallDir: alice, files: [shared] }));
+  await pushSource(input(fake, { superwallDir: bob, files: [shared] }));
+  await pushSource(input(fake, { superwallDir: bob, files: [shared, bobs] }));
+  // Alice's tree never had Bob's paywall: her base must not move past it.
+  await pushSource(
+    input(fake, { superwallDir: alice, files: [shared, file("paywalls/a/app/index.tsx", "a1\n")] }),
+  );
+  await pushSource(
+    input(fake, { superwallDir: alice, files: [shared, file("paywalls/a/app/index.tsx", "a2\n")] }),
+  );
+
+  assert.deepEqual(tracked(fake.bare), [
+    "config.ts",
+    "paywalls/a/app/index.tsx",
+    "paywalls/b/app/index.tsx",
+  ]);
+  assert.equal(blob(fake.bare, "paywalls/a/app/index.tsx"), "a2\n");
+});
+
+test("a deletion only removes what this project deleted, not what it never saw", async () => {
+  const fake = await fakeApi();
+  const alice = temp("superwall-alice-");
+  const bob = temp("superwall-bob-");
+  const shared = file("config.ts", "export default {};\n");
+  const old = file("paywalls/old/app/index.tsx", "old\n");
+
+  await pushSource(input(fake, { superwallDir: alice, files: [shared, old] }));
+  await pushSource(input(fake, { superwallDir: bob, files: [shared, old] }));
+  await pushSource(
+    input(fake, {
+      superwallDir: alice,
+      files: [shared, old, file("paywalls/new/app/index.tsx", "new\n")],
+    }),
+  );
+  await pushSource(input(fake, { superwallDir: bob, files: [shared] }));
+
+  assert.deepEqual(tracked(fake.bare), ["config.ts", "paywalls/new/app/index.tsx"]);
+});
+
+test("the same file changed two ways is refused, naming it, and nothing lands", async () => {
+  const fake = await fakeApi();
+  const alice = temp("superwall-alice-");
+  const bob = temp("superwall-bob-");
+
+  await pushSource(input(fake, { superwallDir: alice, files: [file("config.ts", "one\n")] }));
+  await pushSource(input(fake, { superwallDir: bob, files: [file("config.ts", "one\n")] }));
+  await pushSource(input(fake, { superwallDir: alice, files: [file("config.ts", "alice\n")] }));
+
+  await assert.rejects(
+    pushSource(input(fake, { superwallDir: bob, files: [file("config.ts", "bob\n")] })),
+    (error: unknown) => error instanceof SourceConflictError && error.files.join() === "config.ts",
+  );
+  assert.equal(blob(fake.bare, "config.ts"), "alice\n");
+});
+
+test("a 409 retry lands on top of the other publish instead of reverting it", async () => {
+  const fake = await fakeApi();
+  const alice = temp("superwall-alice-");
+  const bob = temp("superwall-bob-");
+  const shared = file("config.ts", "export default {};\n");
+
+  await pushSource(input(fake, { superwallDir: alice, files: [shared] }));
+  await pushSource(input(fake, { superwallDir: bob, files: [shared] }));
+  await pushSource(
+    input(fake, {
+      superwallDir: alice,
+      files: [shared, file("paywalls/a/app/index.tsx", "alice\n")],
+    }),
+  );
+  fake.conflicts = 1;
+  await pushSource(
+    input(fake, { superwallDir: bob, files: [shared, file("paywalls/b/app/index.tsx", "bob\n")] }),
+  );
+
+  assert.deepEqual(tracked(fake.bare), [
+    "config.ts",
+    "paywalls/a/app/index.tsx",
+    "paywalls/b/app/index.tsx",
+  ]);
 });

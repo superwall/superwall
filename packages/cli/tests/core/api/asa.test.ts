@@ -7,14 +7,19 @@ import type { Session } from "@/core/auth/storage";
 
 const SESSION: Session = {
   apiKey: "sk_x",
-  orgId: "77",
   host: "https://api.example.com",
   createdAt: "n",
 };
-const api = createSuperwallApi(SESSION);
+const api = createSuperwallApi(SESSION).forOrg("77");
 
-function record(body: unknown = { data: [] }): { url?: string; method?: string; body?: unknown; headers?: Record<string, string> } {
-  const rec: { url?: string; method?: string; body?: unknown; headers?: Record<string, string> } = {};
+function record(body: unknown = { data: [] }): {
+  url?: string;
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+} {
+  const rec: { url?: string; method?: string; body?: unknown; headers?: Record<string, string> } =
+    {};
   globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
     rec.url = String(input);
     rec.method = init.method;
@@ -34,7 +39,10 @@ test("asaUpstreamPath prefixes Apple's version unless already given", () => {
 test("asaProxy targets the org's proxy for the app and forwards the org context", async () => {
   const rec = record();
   await asaProxy(api, "5", "get", "/campaigns?limit=1", undefined, { orgId: "9" });
-  assert.equal(rec.url, "https://api.example.com/v2/organizations/77/apple-search-ads/proxy/5/api/v5/campaigns?limit=1");
+  assert.equal(
+    rec.url,
+    "https://api.example.com/v2/organizations/77/apple-search-ads/proxy/5/api/v5/campaigns?limit=1",
+  );
   assert.equal(rec.method, "GET");
   assert.equal(rec.headers?.["x-ap-context"], "orgId=9");
 
@@ -54,9 +62,9 @@ test("asaProxy targets the org's proxy for the app and forwards the org context"
   await assert.rejects(asaProxy(api, "5", "patch", "/campaigns/1"), /Unsupported method/);
 });
 
-test("asaProxy needs an organization", async () => {
-  const orgless = createSuperwallApi({ ...SESSION, orgId: undefined });
-  await assert.rejects(asaProxy(orgless, "5", "get", "/me"), /No organization selected/);
+test("asaProxy needs the app's account", async () => {
+  const orgless = createSuperwallApi(SESSION);
+  await assert.rejects(asaProxy(orgless, "5", "get", "/me"), /needs the app's account/);
 });
 
 test("listAsaApps flattens iOS apps with their connection state", async () => {

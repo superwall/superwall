@@ -1,10 +1,12 @@
 import { ApiError, type SuperwallApi } from "@/core/api/client";
 import { linkSourceCommit, mintSourceAccess } from "@/core/api/resources";
+import { readSourceBase, writeSourceBase } from "./base";
 import { gitAvailable, pushSourceTree, type DirectPushResult } from "./git";
 import type { SourceFile } from "./source";
 
 export interface SourcePushInput {
   api: SuperwallApi;
+  superwallDir: string;
   paywallId: string;
   applicationId: string;
   version: number;
@@ -32,6 +34,7 @@ export async function pushSource(input: SourcePushInput): Promise<DirectPushResu
     const access = await mintSourceAccess(input.api, input.paywallId);
     const pushed = await pushSourceTree({
       access,
+      base: readSourceBase(input.superwallDir, access.repo),
       files: input.files,
       message: {
         kind: input.kind,
@@ -52,6 +55,7 @@ export async function pushSource(input: SourcePushInput): Promise<DirectPushResu
         commitSha: pushed.commitSha,
         tokenId: access.tokenId,
       });
+      if (pushed.syncedTo) writeSourceBase(input.superwallDir, access.repo, pushed.syncedTo);
       return pushed;
     } catch (error) {
       if (attempt === 0 && worthRetrying(error)) continue;

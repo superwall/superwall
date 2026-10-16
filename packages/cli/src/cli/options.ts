@@ -29,6 +29,6 @@ export const skillOption = {
   },
 };
 
-export const RESOURCES = ["orgs", "apps", "products", "campaigns", "paywalls", "entitlements"] as const;
+export const RESOURCES = ["apps", "products", "campaigns", "paywalls", "entitlements"] as const;
 
 export const API_VERBS = ["get", "post", "patch", "delete"] as const;

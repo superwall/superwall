@@ -1,4 +1,5 @@
 import type { CommandContext } from "@/command";
+import { orgForNewProject } from "@/core/account/org";
 import type { SuperwallApi } from "@/core/api/client";
 import { findApp, listApps, type AppleApp } from "@/core/apple/apps";
 import type { AppleSession } from "@/core/apple/session";
@@ -195,7 +196,10 @@ async function projectForNewApp(
   if (intent.project) return String(intent.project.id);
   const projects = await listProjects(api);
   if (projects.length === 0) {
-    const created = await apiCall(ctx, "Creating a project", () => createProject(api, name));
+    const organizationId = await orgForNewProject(api, ctx.interactive);
+    const created = await apiCall(ctx, "Creating a project", () =>
+      createProject(api, name, organizationId),
+    );
     return String(created.id);
   }
   if (!ctx.interactive) {

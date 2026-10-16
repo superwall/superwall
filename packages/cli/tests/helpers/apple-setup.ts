@@ -156,6 +156,7 @@ export function fakeApi(options: ApiOptions = {}) {
       const sent = body as { bundle_id: string };
       return { bundle_id: sent.bundle_id, app_store_id: null };
     }
+    if (path === "/v2/me/organizations") return { data: [{ id: 9, name: "Org" }] };
     if (path === "/v2/projects") return { id: 70 };
     if (/^\/v2\/projects\/\d+\/applications$/.test(path)) {
       const projectId = Number(path.split("/")[3]);
@@ -171,9 +172,10 @@ export function fakeApi(options: ApiOptions = {}) {
     throw new Error(`unhandled ${method} ${path}`);
   };
   const api: Partial<SuperwallApi> = {
-    org: { id: "9", name: "Org", count: 1 },
+    org: { id: "9" },
+    forOrg: (id: string) => ({ ...(api as SuperwallApi), org: { id } }),
     host: "https://api.example.com",
-    list: async () => (options.projects ?? [{ id: 5, name: "Main", applications: [IOS_APP] }]) as never[],
+    list: async () => (options.projects ?? [{ id: 5, name: "Main", organization_id: 9, applications: [IOS_APP] }]) as never[],
     get: async (path) => handle("GET", path) as never,
     post: async (path, body) => handle("POST", path, body) as never,
     put: async (path, body) => handle("PUT", path, body) as never,

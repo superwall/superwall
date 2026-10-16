@@ -1,5 +1,4 @@
 import type { CommandContext } from "@/command";
-import { requireOrg } from "@/core/account/org";
 import { ApiError } from "@/core/api/client";
 import type { AppRef } from "@/core/api/asc";
 import {
@@ -67,7 +66,6 @@ export async function setupApple(
   const flags = appFlags(ctx);
 
   ctx.output.render(blocks.intro("Set up Apple"));
-  await requireOrg(api, ctx.interactive);
   const intent = ctx.dryRun ? undefined : await chooseAppIntent(ctx, api, flags);
 
   const session = await signIn(ctx, deps, "setup apple");

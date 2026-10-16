@@ -1,5 +1,4 @@
 import { defineCommand } from "@/command";
-import { requireOrg } from "@/core/account/org";
 import {
   getIntegrations,
   setRevenueProvider,
@@ -37,7 +36,6 @@ export const runRevenueProvider = defineCommand({
     if (action === "set" && !wanted) {
       throw new Error("Usage: superwall revenue-provider set <open_revenue | revenue_cat> --app <id>");
     }
-    await requireOrg(api, ctx.interactive);
     const scope = await pickScope(ctx, api, true);
     const applicationId = scope.applicationId;
     if (!applicationId) throw new Error("No app found in this project. Pass --app <id>.");

@@ -21,11 +21,10 @@ import {
 
 const SESSION: Session = {
   apiKey: "sk_x",
-  orgId: "77",
   host: "https://api.example.com",
   createdAt: "n",
 };
-const api = createSuperwallApi(SESSION);
+const api = createSuperwallApi(SESSION).forOrg("77");
 
 interface Call {
   url: string;
@@ -98,11 +97,24 @@ test("buildReport defaults granularity except for search terms", () => {
   const campaigns = buildReport({ start: "2025-01-01", end: "2025-01-31", searchTerms: false });
   assert.equal(campaigns.granularity, "DAILY");
   assert.equal(campaigns.timeZone, "UTC");
-  assert.deepEqual(campaigns.selector, { orderBy: [{ field: "localSpend", sortOrder: "DESCENDING" }] });
-  const terms = buildReport({ start: "2025-01-01", end: "2025-01-31", searchTerms: true, groupBy: "countryOrRegion" });
+  assert.deepEqual(campaigns.selector, {
+    orderBy: [{ field: "localSpend", sortOrder: "DESCENDING" }],
+  });
+  const terms = buildReport({
+    start: "2025-01-01",
+    end: "2025-01-31",
+    searchTerms: true,
+    groupBy: "countryOrRegion",
+  });
   assert.equal("granularity" in terms, false);
   assert.deepEqual(terms.groupBy, ["countryOrRegion"]);
-  const weekly = buildReport({ start: "a", end: "b", searchTerms: true, granularity: "weekly", selector: '{"conditions":[]}' });
+  const weekly = buildReport({
+    start: "a",
+    end: "b",
+    searchTerms: true,
+    granularity: "weekly",
+    selector: '{"conditions":[]}',
+  });
   assert.equal(weekly.granularity, "WEEKLY");
   assert.deepEqual(weekly.selector, { conditions: [] });
   assert.throws(() => buildReport({ start: "a", searchTerms: false }), /--start and --end/);
@@ -121,32 +133,62 @@ test("collectPages walks by totalResults, then by short pages", async () => {
     { data: [3], pagination: { totalResults: 3 } },
   ];
   const seen: number[] = [];
-  const res = await collectPages(async (offset) => {
-    seen.push(offset);
-    return pages.shift() ?? { data: [] };
-  }, 0, 2);
+  const res = await collectPages(
+    async (offset) => {
+      seen.push(offset);
+      return pages.shift() ?? { data: [] };
+    },
+    0,
+    2,
+  );
   assert.deepEqual(res.data, [1, 2, 3]);
   assert.deepEqual(seen, [0, 2]);
 
   const short = await collectPages(async () => ({ data: [1] }), 0, 10);
   assert.deepEqual(short.data, [1]);
   const empty = await collectPages(async () => ({ data: [] }), 4, 10);
-  assert.deepEqual(empty, { data: [], pagination: { totalResults: 0, startIndex: 4, itemsPerPage: 0 } });
+  assert.deepEqual(empty, {
+    data: [],
+    pagination: { totalResults: 0, startIndex: 4, itemsPerPage: 0 },
+  });
 });
 
 test("resolveOperation validates groups, actions and positionals", () => {
-  assert.throws(() => resolveOperation({ group: "nope", action: "list", argv: {}, params: {} }), /Unknown "asa nope"/);
-  assert.throws(() => resolveOperation({ group: "campaigns", action: "fly", argv: {}, params: {} }), /Actions: list/);
-  assert.throws(() => resolveOperation({ group: "campaigns", action: "get", argv: {}, params: {} }), /needs an id/);
-  assert.throws(() => resolveOperation({ group: "apps", action: "get", argv: {}, params: {} }), /adamId/);
-  const { op, scope } = resolveOperation({ group: "apps", action: "get", positional: "42", argv: {}, params: {} });
+  assert.throws(
+    () => resolveOperation({ group: "nope", action: "list", argv: {}, params: {} }),
+    /Unknown "asa nope"/,
+  );
+  assert.throws(
+    () => resolveOperation({ group: "campaigns", action: "fly", argv: {}, params: {} }),
+    /Actions: list/,
+  );
+  assert.throws(
+    () => resolveOperation({ group: "campaigns", action: "get", argv: {}, params: {} }),
+    /needs an id/,
+  );
+  assert.throws(
+    () => resolveOperation({ group: "apps", action: "get", argv: {}, params: {} }),
+    /adamId/,
+  );
+  const { op, scope } = resolveOperation({
+    group: "apps",
+    action: "get",
+    positional: "42",
+    argv: {},
+    params: {},
+  });
   assert.equal(op.path, "/apps/{adamId}");
   assert.equal(scope.adamId, "42");
 });
 
 test("list operations send query params and the org context header", async () => {
   const calls = record();
-  await runAsaOperation(api, "5", { group: "campaigns", action: "list", argv: { limit: 5, fields: "id,name" }, params: {} }, { orgId: "99", currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    { group: "campaigns", action: "list", argv: { limit: 5, fields: "id,name" }, params: {} },
+    { orgId: "99", currency: usd },
+  );
   assert.equal(calls[0]!.url, `${PROXY}/campaigns?fields=id%2Cname&limit=5`);
   assert.equal(calls[0]!.method, "GET");
   assert.equal(calls[0]!.headers["x-ap-context"], "orgId=99");
@@ -158,7 +200,12 @@ test("--all pages a GET list with offset/limit", async () => {
       ? { data: [{ id: 1 }, { id: 2 }], pagination: { totalResults: 3 } }
       : { data: [{ id: 3 }], pagination: { totalResults: 3 } },
   );
-  const res = await runAsaOperation(api, "5", { group: "campaigns", action: "list", argv: { all: true, limit: 2 }, params: {} }, { currency: usd });
+  const res = await runAsaOperation(
+    api,
+    "5",
+    { group: "campaigns", action: "list", argv: { all: true, limit: 2 }, params: {} },
+    { currency: usd },
+  );
   assert.equal(calls.length, 2);
   assert.ok(calls[1]!.url.includes("offset=2"));
   assert.deepEqual(res.response.data, [{ id: 1 }, { id: 2 }, { id: 3 }]);
@@ -174,11 +221,18 @@ test("find sends a selector, and --all re-pages it", async () => {
   const res = await runAsaOperation(
     api,
     "5",
-    { group: "campaigns", action: "find", argv: { field: "status", op: "EQUALS", values: "ENABLED", all: true, limit: 1 }, params: {} },
+    {
+      group: "campaigns",
+      action: "find",
+      argv: { field: "status", op: "EQUALS", values: "ENABLED", all: true, limit: 1 },
+      params: {},
+    },
     { currency: usd },
   );
   assert.equal(calls[0]!.url, `${PROXY}/campaigns/find`);
-  assert.deepEqual((calls[0]!.body as { conditions: unknown }).conditions, [{ field: "status", operator: "EQUALS", values: ["ENABLED"] }]);
+  assert.deepEqual((calls[0]!.body as { conditions: unknown }).conditions, [
+    { field: "status", operator: "EQUALS", values: ["ENABLED"] },
+  ]);
   assert.deepEqual((calls[1]!.body as { pagination: unknown }).pagination, { offset: 1, limit: 1 });
   assert.equal((res.response.data as unknown[]).length, 2);
 });
@@ -191,7 +245,13 @@ test("create builds the body from typed flags, money, lists and -d", async () =>
     {
       group: "campaigns",
       action: "create",
-      argv: { name: "Launch", "adam-id": "123", countries: "US,GB", "daily-budget": "50", status: "ENABLED" },
+      argv: {
+        name: "Launch",
+        "adam-id": "123",
+        countries: "US,GB",
+        "daily-budget": "50",
+        status: "ENABLED",
+      },
       params: { supplySources: ["APPSTORE_SEARCH_RESULTS"] },
     },
     { currency: usd },
@@ -212,7 +272,13 @@ test("update wraps the campaign envelope and --body merges under flags", async (
   await runAsaOperation(
     api,
     "5",
-    { group: "campaigns", action: "update", positional: "8", argv: { status: "PAUSED", body: '{"name":"Old"}' }, params: {} },
+    {
+      group: "campaigns",
+      action: "update",
+      positional: "8",
+      argv: { status: "PAUSED", body: '{"name":"Old"}' },
+      params: {},
+    },
     { currency: usd },
   );
   assert.equal(calls[0]!.method, "PUT");
@@ -223,31 +289,84 @@ test("update wraps the campaign envelope and --body merges under flags", async (
 test("bulk keyword commands send arrays and pick the right delete endpoint", async () => {
   const calls = record(() => ({ data: [] }));
   const scope = { campaign: "1", adgroup: "2" };
-  await runAsaOperation(api, "5", { group: "keywords", action: "create", argv: { ...scope, text: "grammar", "match-type": "EXACT", bid: "1.5" }, params: {} }, { currency: usd });
-  assert.deepEqual(calls[0]!.body, [{ text: "grammar", matchType: "EXACT", bidAmount: { amount: "1.5", currency: "USD" } }]);
+  await runAsaOperation(
+    api,
+    "5",
+    {
+      group: "keywords",
+      action: "create",
+      argv: { ...scope, text: "grammar", "match-type": "EXACT", bid: "1.5" },
+      params: {},
+    },
+    { currency: usd },
+  );
+  assert.deepEqual(calls[0]!.body, [
+    { text: "grammar", matchType: "EXACT", bidAmount: { amount: "1.5", currency: "USD" } },
+  ]);
   assert.ok(calls[0]!.url.endsWith("/targetingkeywords/bulk"));
 
-  await runAsaOperation(api, "5", { group: "keywords", action: "update", positional: "77", argv: { ...scope, status: "PAUSED" }, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    {
+      group: "keywords",
+      action: "update",
+      positional: "77",
+      argv: { ...scope, status: "PAUSED" },
+      params: {},
+    },
+    { currency: usd },
+  );
   assert.deepEqual(calls[1]!.body, [{ status: "PAUSED", id: 77 }]);
   assert.equal(calls[1]!.method, "PUT");
 
-  await runAsaOperation(api, "5", { group: "keywords", action: "update", argv: { ...scope, body: '[{"id":1},{"id":2}]' }, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    {
+      group: "keywords",
+      action: "update",
+      argv: { ...scope, body: '[{"id":1},{"id":2}]' },
+      params: {},
+    },
+    { currency: usd },
+  );
   assert.deepEqual(calls[2]!.body, [{ id: 1 }, { id: 2 }]);
 
-  await runAsaOperation(api, "5", { group: "keywords", action: "delete", positional: "9", argv: scope, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    { group: "keywords", action: "delete", positional: "9", argv: scope, params: {} },
+    { currency: usd },
+  );
   assert.equal(calls[3]!.method, "DELETE");
   assert.ok(calls[3]!.url.endsWith("/targetingkeywords/9"));
 
-  await runAsaOperation(api, "5", { group: "keywords", action: "delete", positional: "9,10", argv: scope, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    { group: "keywords", action: "delete", positional: "9,10", argv: scope, params: {} },
+    { currency: usd },
+  );
   assert.equal(calls[4]!.method, "POST");
   assert.deepEqual(calls[4]!.body, [9, 10]);
 
   await assert.rejects(
-    runAsaOperation(api, "5", { group: "keywords", action: "create", argv: scope, params: {} }, { currency: usd }),
+    runAsaOperation(
+      api,
+      "5",
+      { group: "keywords", action: "create", argv: scope, params: {} },
+      { currency: usd },
+    ),
     /Nothing to send/,
   );
   await assert.rejects(
-    runAsaOperation(api, "5", { group: "keywords", action: "create", argv: { ...scope, body: '"x"' }, params: {} }, { currency: usd }),
+    runAsaOperation(
+      api,
+      "5",
+      { group: "keywords", action: "create", argv: { ...scope, body: '"x"' }, params: {} },
+      { currency: usd },
+    ),
     /JSON array/,
   );
 });
@@ -257,7 +376,18 @@ test("reports post Apple's reporting request to the scoped path", async () => {
   await runAsaOperation(
     api,
     "5",
-    { group: "reports", action: "keywords", argv: { campaign: "1", adgroup: "2", start: "2025-01-01", end: "2025-01-31", "group-by": "countryOrRegion" }, params: {} },
+    {
+      group: "reports",
+      action: "keywords",
+      argv: {
+        campaign: "1",
+        adgroup: "2",
+        start: "2025-01-01",
+        end: "2025-01-31",
+        "group-by": "countryOrRegion",
+      },
+      params: {},
+    },
     { currency: usd },
   );
   assert.equal(calls[0]!.url, `${PROXY}/reports/campaigns/1/adgroups/2/keywords`);
@@ -269,55 +399,138 @@ test("reports post Apple's reporting request to the scoped path", async () => {
 
 test("geo get posts id/entity pairs and needs --entity", async () => {
   const calls = record(() => ({ data: [] }));
-  await runAsaOperation(api, "5", { group: "geo", action: "get", positional: "US|CA|Cupertino", argv: { entity: "Locality" }, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    {
+      group: "geo",
+      action: "get",
+      positional: "US|CA|Cupertino",
+      argv: { entity: "Locality" },
+      params: {},
+    },
+    { currency: usd },
+  );
   assert.deepEqual(calls[0]!.body, [{ id: "US|CA|Cupertino", entity: "Locality" }]);
   await assert.rejects(
-    runAsaOperation(api, "5", { group: "geo", action: "get", positional: "US", argv: {}, params: {} }, { currency: usd }),
+    runAsaOperation(
+      api,
+      "5",
+      { group: "geo", action: "get", positional: "US", argv: {}, params: {} },
+      { currency: usd },
+    ),
     /--entity/,
   );
 });
 
 test("apps search and geo search put the query in the URL", async () => {
   const calls = record();
-  await runAsaOperation(api, "5", { group: "apps", action: "search", positional: "grammar checker", argv: { owned: true }, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    {
+      group: "apps",
+      action: "search",
+      positional: "grammar checker",
+      argv: { owned: true },
+      params: {},
+    },
+    { currency: usd },
+  );
   assert.equal(calls[0]!.url, `${PROXY}/search/apps?query=grammar+checker&returnOwnedApps=true`);
-  await runAsaOperation(api, "5", { group: "geo", action: "search", positional: "New York", argv: { country: "US", entity: "Locality" }, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    {
+      group: "geo",
+      action: "search",
+      positional: "New York",
+      argv: { country: "US", entity: "Locality" },
+      params: {},
+    },
+    { currency: usd },
+  );
   assert.equal(calls[1]!.url, `${PROXY}/search/geo?query=New+York&countrycode=US&entity=Locality`);
   await assert.rejects(
-    runAsaOperation(api, "5", { group: "apps", action: "search", argv: {}, params: {} }, { currency: usd }),
+    runAsaOperation(
+      api,
+      "5",
+      { group: "apps", action: "search", argv: {}, params: {} },
+      { currency: usd },
+    ),
     /search query/,
   );
 });
 
 test("adam-id scoped reads fill the path from the flag or positional", async () => {
   const calls = record();
-  await runAsaOperation(api, "5", { group: "product-pages", action: "list", argv: { "adam-id": "42", states: "VISIBLE" }, params: { extra: "1" } }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    {
+      group: "product-pages",
+      action: "list",
+      argv: { "adam-id": "42", states: "VISIBLE" },
+      params: { extra: "1" },
+    },
+    { currency: usd },
+  );
   assert.equal(calls[0]!.url, `${PROXY}/apps/42/product-pages?states=VISIBLE&extra=1`);
-  await runAsaOperation(api, "5", { group: "apps", action: "eligibility", positional: "42", argv: {}, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    { group: "apps", action: "eligibility", positional: "42", argv: {}, params: {} },
+    { currency: usd },
+  );
   assert.equal(calls[1]!.url, `${PROXY}/apps/42/eligibilities/find`);
   assert.deepEqual(calls[1]!.body, {});
   await assert.rejects(
-    runAsaOperation(api, "5", { group: "product-pages", action: "list", argv: {}, params: { a: { b: 1 } } }, { currency: usd }),
+    runAsaOperation(
+      api,
+      "5",
+      { group: "product-pages", action: "list", argv: {}, params: { a: { b: 1 } } },
+      { currency: usd },
+    ),
     /--adam-id/,
   );
   await assert.rejects(
-    runAsaOperation(api, "5", { group: "product-pages", action: "countries", argv: {}, params: { a: { b: 1 } } }, { currency: usd }),
+    runAsaOperation(
+      api,
+      "5",
+      { group: "product-pages", action: "countries", argv: {}, params: { a: { b: 1 } } },
+      { currency: usd },
+    ),
     /Nested/,
   );
 });
 
 test("delete with no body returns an ok marker when the proxy answers 204", async () => {
   globalThis.fetch = (async () => new Response(null, { status: 204 })) as typeof fetch;
-  const res = await runAsaOperation(api, "5", { group: "campaigns", action: "delete", positional: "3", argv: {}, params: {} }, { currency: usd });
+  const res = await runAsaOperation(
+    api,
+    "5",
+    { group: "campaigns", action: "delete", positional: "3", argv: {}, params: {} },
+    { currency: usd },
+  );
   assert.deepEqual(res.response, { data: null });
   assert.equal(res.path, "/campaigns/3");
 });
 
 test("me and acls are plain reads", async () => {
   const calls = record(() => ({ data: { userId: 1 } }));
-  await runAsaOperation(api, "5", { group: "me", action: "get", argv: {}, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    { group: "me", action: "get", argv: {}, params: {} },
+    { currency: usd },
+  );
   assert.equal(calls[0]!.url, `${PROXY}/me`);
-  await runAsaOperation(api, "5", { group: "acls", action: "list", argv: {}, params: {} }, { currency: usd });
+  await runAsaOperation(
+    api,
+    "5",
+    { group: "acls", action: "list", argv: {}, params: {} },
+    { currency: usd },
+  );
   assert.equal(calls[1]!.url, `${PROXY}/acls`);
 });
 
@@ -329,7 +542,12 @@ test("currencyResolver honours --currency, then the ACL list", async () => {
   assert.equal(await single(), "EUR");
   assert.equal(await single(), "EUR");
 
-  record(() => ({ data: [{ orgId: 1, currency: "EUR" }, { orgId: 2, currency: "USD" }] }));
+  record(() => ({
+    data: [
+      { orgId: 1, currency: "EUR" },
+      { orgId: 2, currency: "USD" },
+    ],
+  }));
   assert.equal(await currencyResolver(api, "5", undefined, "2")(), "USD");
   await assert.rejects(currencyResolver(api, "5", undefined, undefined)(), /several currencies/);
 

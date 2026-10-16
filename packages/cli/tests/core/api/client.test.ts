@@ -6,7 +6,6 @@ import type { Session } from "@/core/auth/storage";
 
 const SESSION: Session = {
   apiKey: "sk_test123",
-  orgId: "1",
   orgName: "Acme",
   host: "https://api.example.com",
   createdAt: "now",
@@ -88,7 +87,13 @@ test("an error envelope renders as its message and nothing else", async () => {
 
   assert.ok(error instanceof ApiError);
   assert.equal(error.message, "No such pushed paywall version: '11111'");
-  for (const noise of ["_tag", "invalid_request_error", "resource_missing", "HTTP 404", "POST /v2"]) {
+  for (const noise of [
+    "_tag",
+    "invalid_request_error",
+    "resource_missing",
+    "HTTP 404",
+    "POST /v2",
+  ]) {
     assert.ok(!error.message.includes(noise), `${noise} leaked into: ${error.message}`);
   }
 });
@@ -222,5 +227,8 @@ test("custom headers can't override the session's authorization", async () => {
   const calls = mockFetch(() => ({ body: {} }));
   const api = createSuperwallApi(SESSION);
   await api.get("/v2/thing", { headers: { authorization: "Bearer stolen" } });
-  assert.equal((calls[0]!.init.headers as Record<string, string>).authorization, "Bearer sk_test123");
+  assert.equal(
+    (calls[0]!.init.headers as Record<string, string>).authorization,
+    "Bearer sk_test123",
+  );
 });

@@ -73,5 +73,4 @@ test("a browser that can't be opened leaves the login polling until it is approv
   assert.equal(polls, 3);
   assert.equal(session.accessToken, "token-1");
   assert.equal(session.userEmail, "new@example.com");
-  assert.equal(session.orgName, "Acme");
 });

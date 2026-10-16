@@ -80,6 +80,16 @@ test("createProduct includes name only when provided", async () => {
   });
 });
 
+test("createProduct sends application_id only when one is given", async () => {
+  const recs = mockFetch(() => ({ id: 1 }));
+  await createProduct(api, SCOPE, "test:price_1:7days-free", { applicationId: "57397" });
+  assert.deepEqual(recs[0]!.body, {
+    project_id: "9",
+    application_id: "57397",
+    identifier: "test:price_1:7days-free",
+  });
+});
+
 test("createCampaign posts placement + holdout audience and requires an app", async () => {
   const recs = mockFetch(() => ({ id: 7 }));
   await createCampaign(api, SCOPE, "My campaign", "onboarding_complete");
@@ -292,7 +302,6 @@ test("versionProducts returns empty for no products", () => {
   assert.deepEqual(versionProducts(undefined), []);
   assert.deepEqual(versionProducts({}), []);
 });
-
 
 test("pushPaywallVersion spreads background and checkout destination from the settings block, only when present", async () => {
   const calls: Record<string, unknown>[] = [];

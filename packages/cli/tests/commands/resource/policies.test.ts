@@ -19,7 +19,6 @@ test("every data command declares authentication and JSON policies centrally", (
     runBootstrap,
     runAsc,
     runQuery,
-    runResource("orgs"),
     runResource("apps"),
     runResource("products"),
     runResource("campaigns"),

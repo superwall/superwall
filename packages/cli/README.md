@@ -29,8 +29,8 @@ package; everything below is what you get.
 session. Where it can't open one (a server, or over SSH), it says so: open the
 URL it prints on any device and approve the code there. In CI, log in without
 a browser: `superwall login --api-key <key>`.
-If your account belongs to more than one organization, pick one with
-`superwall orgs use` (you'll otherwise be asked the first time it matters).
+There are no organizations to pick: `superwall apps list` shows every app you
+can open, grouped by organization, and commands take `--app <id|dashboard link>`.
 Upgrade any time with `superwall upgrade` - the CLI also tells you when a new
 version is out.
 
@@ -209,6 +209,12 @@ records a note in the source commit that rides along with every version, and
 Renames are resolved, never guessed — interactively, or with
 `push --rename old=new` in CI.
 
+A push also saves the project's source to the app's repo. It applies your
+changes on top of whatever teammates have published since your last push
+(the commit it last synced to is in `.superwall/source.json`), so two people
+working on different paywalls never undo each other. If you both changed the
+same file, the push stops and names it rather than overwriting their work.
+
 The full reference — assets, localization, trials, transitions, web
 checkout, troubleshooting — lives at
 [superwall.com/docs/framework](https://superwall.com/docs/framework).
@@ -254,6 +260,11 @@ or neither, and they say so and how many reported builds would run in test
 mode. An app with a different bundle ID stops before anything is created or
 saved, and points at `apps bundle-id <id> --replace`.
 
+Lists stay usable on big accounts: `--search <text>` matches ids, names and
+identifiers, `--limit <n>` caps the rows, and a terminal shows the first 50 with
+a count of the rest (`--json` returns everything unless `--limit` caps it).
+`bootstrap --app <id>` loads one project instead of the whole account.
+
 ## Query your data
 
 Run SQL directly against your organization's ClickHouse analytics data:
@@ -271,7 +282,16 @@ native JSON envelope. Your session needs `data:read` access.
 
 ## Call the API
 
-Any Superwall API endpoint, authenticated with your session:
+`superwall api docs` searches the live API reference, so you can find any
+endpoint and its exact body before calling it (no login needed):
+
+```bash
+superwall api docs variant                    # search by keyword
+superwall api docs /v2/campaigns/123/audiences/9/variants post   # one endpoint in full
+```
+
+Any Superwall API endpoint, authenticated with your session. A request that
+fails names the reference entry to read:
 
 ```bash
 superwall get /v2/products

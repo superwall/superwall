@@ -4,6 +4,9 @@ import * as path from "node:path";
 import type { Session } from "@/core/auth/storage";
 
 const homes: string[] = [];
+// The setup file's scratch home; falling back to the real ~/.superwall would leak a developer's
+// login and update cache into tests.
+const baseline = process.env.SUPERWALL_HOME;
 
 export function useHome(session?: Partial<Session>): string {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-home-"));
@@ -23,6 +26,7 @@ export function useHome(session?: Partial<Session>): string {
 }
 
 export function clearHomes(): void {
-  delete process.env.SUPERWALL_HOME;
+  if (baseline === undefined) delete process.env.SUPERWALL_HOME;
+  else process.env.SUPERWALL_HOME = baseline;
   for (const home of homes.splice(0)) fs.rmSync(home, { recursive: true, force: true });
 }

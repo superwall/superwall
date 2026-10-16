@@ -29,7 +29,7 @@ import { detectDrivers } from "@/core/agent/drivers";
 import { scanProject } from "@/core/project/scan";
 import { detectBilling } from "@/core/project/billing";
 import { detectExisting } from "@/core/project/existing";
-import { loadSession } from "@/core/auth/storage";
+import { loadSession, sessionOrgName } from "@/core/auth/storage";
 import { performLoginWithUi } from "./integrate/app";
 import { runAction } from "@/core/agent/run";
 import { saveReport } from "@/core/state/reports";
@@ -126,7 +126,8 @@ async function runScreenMigrate(ctx: CommandContext, screenArg: string): Promise
   const existingDir = projectDirOf(installDir);
   let file: string | undefined = screenArg === "" ? undefined : path.resolve(screenArg);
   if (file === undefined) {
-    if (argv.skill) throw new Error("`--skill` needs the screen: `superwall migrate --screen <path> --skill`.");
+    if (argv.skill)
+      throw new Error("`--skill` needs the screen: `superwall migrate --screen <path> --skill`.");
     const picked = await pickScreen(ctx);
     if (picked === undefined) return;
     file = path.resolve(installDir, picked);
@@ -151,7 +152,8 @@ async function runScreenMigrate(ctx: CommandContext, screenArg: string): Promise
         `\`${target}\` already has a package.json that isn't a superwall project — move it aside first.`,
       );
     }
-    let screenshot = typeof argv.screenshot === "string" ? path.resolve(argv.screenshot) : undefined;
+    let screenshot =
+      typeof argv.screenshot === "string" ? path.resolve(argv.screenshot) : undefined;
     if (screenshot !== undefined && !fs.existsSync(screenshot)) {
       throw new Error(`No screenshot at \`${argv.screenshot}\`.`);
     }
@@ -267,7 +269,7 @@ export const runMigrate = defineCommand({
     let session = loadSession();
     if (session) {
       ui.success(
-        `Logged in as \`${session.userEmail ?? "you"}\`${session.orgName ? ` · \`${session.orgName}\`` : ""}`,
+        `Logged in as \`${session.userEmail ?? "you"}\`${sessionOrgName(session) ? ` · \`${sessionOrgName(session)}\`` : ""}`,
       );
     } else if (ctx.interactive && !dryRun) {
       session = await performLoginWithUi();

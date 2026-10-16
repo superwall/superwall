@@ -5,9 +5,15 @@ import { APPS_HELP } from "./platform-help";
 export const registerResourceCommands = <T>(input: Argv<T>): Argv<T> => {
   let cli = input;
   const RESOURCE_HELP: Partial<Record<(typeof RESOURCES)[number], string>> = {
-    orgs: "Your Superwall organizations (list, use <id|name>)",
-    apps: "Your apps, grouped by project (list, create <name> --platform ios, use <id>, bundle-id [value])",
+    apps: "Every app you can open, by organization and project (list, create <name> --platform ios, use <id>, bundle-id [value])",
   };
+
+  cli = cli.command(
+    "orgs [action] [value]",
+    false,
+    (y) => y,
+    () => import("@/commands/resource/orgs").then((m) => m.runOrgs()),
+  );
 
   for (const resource of RESOURCES) {
     cli = cli.command(
@@ -30,7 +36,12 @@ export const registerResourceCommands = <T>(input: Argv<T>): Argv<T> => {
           })
           .options({
             project: { type: "string", describe: "Scope to a project id" },
-            app: { type: "string", describe: "Scope to an application id" },
+            app: { type: "string", describe: "Scope to an app (id or dashboard link)" },
+            search: {
+              type: "string",
+              describe: "list: only rows whose id, name or identifier contains this text",
+            },
+            limit: { type: "number", describe: "list: at most this many rows" },
             name: {
               type: "string",
               describe: "Display name (products create)",
@@ -96,10 +107,34 @@ export const registerResourceCommands = <T>(input: Argv<T>): Argv<T> => {
   cli = cli.command(
     "bootstrap",
     "Complete account tree: orgs, projects, apps, campaigns, placements, and products",
-    (y) => y,
+    (y) =>
+      y.options({
+        app: { type: "string", describe: "Only the project of this app (id or dashboard link)" },
+        project: { type: "string", describe: "Only this project" },
+      }),
     (argv) => {
       return import("@/commands/platform/api").then((m) => m.runBootstrap(argv));
     },
+  );
+
+  cli = cli.command(
+    "api <action> [query..]",
+    "Search the Superwall API reference: every endpoint, its parameters and body",
+    (y) =>
+      y
+        .positional("action", { type: "string", describe: "docs" })
+        .positional("query", {
+          type: "string",
+          array: true,
+          describe: "Words to search, or a /v2 path and optionally its method",
+        })
+        .options({ refresh: { type: "boolean", describe: "Fetch the reference again now" } })
+        .example("$0 api docs variant", "Find the endpoints for campaign variants")
+        .example(
+          "$0 api docs /v2/campaigns/{id}/audiences/{audience_id}/variants post",
+          "One endpoint in full",
+        ),
+    (argv) => import("@/commands/platform/api-docs").then((m) => m.runApiDocs(argv)),
   );
 
   for (const verb of API_VERBS) {

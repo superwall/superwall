@@ -4,6 +4,7 @@ import {
   FEEDBACK_KINDS,
   type FeedbackKind,
   linkedApp,
+  organizationOfApp,
   parseContext,
   readAttachments,
   submitFeedback,
@@ -11,6 +12,7 @@ import {
 
 export const runFeedback = defineCommand({
   name: "feedback",
+  auth: "optional",
   output: "both",
   async run(ctx) {
     const { ui, json, interactive, argv } = ctx;
@@ -46,6 +48,7 @@ export const runFeedback = defineCommand({
 
     const context = parseContext(([] as unknown[]).concat(argv.context ?? []).map(String));
     const linked = linkedApp();
+    const applicationId = (argv.app as string | undefined) ?? linked.applicationId;
 
     const via = agent || !interactive ? "agent" : "human";
     const spin = interactive ? ui.spinner() : null;
@@ -58,7 +61,8 @@ export const runFeedback = defineCommand({
         command: (argv.command as string | undefined)?.trim() || undefined,
         agent,
         projectId: (argv.project as string | undefined) ?? linked.projectId,
-        applicationId: (argv.app as string | undefined) ?? linked.applicationId,
+        applicationId,
+        organizationId: await organizationOfApp(ctx.api, applicationId),
         context,
         attachments,
       },

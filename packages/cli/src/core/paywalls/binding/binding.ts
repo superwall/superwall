@@ -21,8 +21,16 @@ export interface ResolvedBinding {
 
 export class BindingError extends Error {}
 
-const describe = (surface: FrameworkSurface): string =>
-  `${surface.kind} \`${surface.id}\``;
+export interface AdoptCandidate {
+  surface: FrameworkSurface;
+  paywallId: string;
+  applicationId: string;
+  platform: string;
+}
+
+export type ConfirmAdopt = (candidate: AdoptCandidate) => Promise<boolean>;
+
+const describe = (surface: FrameworkSurface): string => `${surface.kind} \`${surface.id}\``;
 
 const humanize = (surfaceId: string): string =>
   surfaceId
@@ -39,6 +47,7 @@ export async function resolveBinding(input: {
   surfaces: readonly FrameworkSurface[];
   renamesResolved?: boolean;
   create?: boolean;
+  confirmAdopt?: ConfirmAdopt;
 }): Promise<ResolvedBinding> {
   const { api, superwallDir, surface, app } = input;
   const { platform, applicationId } = app;
@@ -61,6 +70,12 @@ export async function resolveBinding(input: {
 
   const match = matches(await listAppPaywalls(api, applicationId));
   if (match) {
+    await requireAdoption(input.confirmAdopt, {
+      surface,
+      paywallId: match.id,
+      applicationId,
+      platform,
+    });
     writeBinding(superwallDir, surface.kind, surface.id, platform, { paywallId: match.id });
     return { paywallId: match.id, applicationId, platform, source: "matched" };
   }
@@ -100,4 +115,20 @@ export async function resolveBinding(input: {
   });
   writeBinding(superwallDir, surface.kind, surface.id, platform, { paywallId: created.id });
   return { paywallId: created.id, applicationId, platform, source: "created" };
+}
+
+async function requireAdoption(
+  confirm: ConfirmAdopt | undefined,
+  candidate: AdoptCandidate,
+): Promise<void> {
+  if (confirm && (await confirm(candidate))) return;
+  const { surface, paywallId, applicationId, platform } = candidate;
+  const lockLine = `"${surface.id}": { "${platform}": { "paywallId": "${paywallId}" } }`;
+  throw new BindingError(
+    [
+      `App ${applicationId} already has a paywall \`${surface.id}\` (${paywallId}) that superwall.lock doesn't bind, so nothing was pushed.`,
+      `  - It's yours: run \`superwall push\` interactively and confirm, or add ${lockLine} under "${surface.kind === "paywall" ? "paywalls" : "funnels"}" in superwall.lock.`,
+      `  - It isn't: rename the directory, and the next push creates a new paywall.`,
+    ].join("\n"),
+  );
 }
