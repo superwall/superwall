@@ -3,6 +3,7 @@ import { API_HOST } from "@/environment";
 import { ensureSkillsCurrent } from "@/core/agent/skills";
 import { onboardingHooks } from "@/core/account/onboarding";
 import { track } from "@/core/telemetry";
+import { BROWSER_UNAVAILABLE } from "@/core/auth/browser";
 import { loginWithApiKey, performLogin } from "@/core/auth/login";
 import { clearSession, loadSession, type Session } from "@/core/auth/storage";
 import { scanProject } from "@/core/project/scan";
@@ -47,8 +48,9 @@ export const runLogin = defineCommand({
       const session = await performLogin({
         issuer: ctx.argv.host as string | undefined,
         clientId: ctx.argv.clientId as string | undefined,
-        onVerify: ({ url, userCode }) => {
+        onVerify: ({ url, userCode, browserOpened }) => {
           ui.info(`Approve this login in your browser · code \`${userCode}\`\n${url}`);
+          if (!browserOpened) ui.warn(BROWSER_UNAVAILABLE);
           spin.start("Waiting for you to approve in the browser");
         },
         onStatus: (m) => spin.message(m),
