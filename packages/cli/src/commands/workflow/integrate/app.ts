@@ -3,6 +3,7 @@ import { withSpinner } from "@/ui/spinner";
 import { SUPPORTED_LABEL } from "@/core/project/frameworks";
 import { scanProject, type DetectedApp } from "@/core/project/scan";
 import type { ExistingIntegration } from "@/core/project/existing";
+import { BROWSER_UNAVAILABLE } from "@/core/auth/browser";
 import { performLogin, type ProvisionedApp } from "@/core/auth/login";
 import { onboardingHooks } from "@/core/account/onboarding";
 import {
@@ -26,8 +27,9 @@ export async function performLoginWithUi(
   const hooks = onboardingHooks(app);
   try {
     const session = await performLogin({
-      onVerify: ({ url, userCode }) => {
+      onVerify: ({ url, userCode, browserOpened }) => {
         ui.info(`Approve this login in your browser · code \`${userCode}\`\n${url}`);
+        if (!browserOpened) ui.warn(BROWSER_UNAVAILABLE);
         spin.start("Waiting for you to approve in the browser");
       },
       onStatus: (message) => spin.message(message),
