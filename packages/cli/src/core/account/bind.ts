@@ -1,6 +1,6 @@
 import { Integration } from "@/environment";
 import { ui, type Opt } from "@/ui";
-import { requireOrg } from "@/core/account/org";
+import { orgForNewProject } from "@/core/account/org";
 import type { SuperwallApi } from "@/core/api/client";
 import {
   createApplication,
@@ -207,7 +207,7 @@ async function createProjectFlow(
   api: SuperwallApi,
   defaultName: string,
 ): Promise<Project | "back"> {
-  await requireOrg(api, true);
+  const organizationId = await orgForNewProject(api, true);
   const name = await ui.text({
     message: "Name your new project",
     placeholder: defaultName,
@@ -217,7 +217,7 @@ async function createProjectFlow(
   });
   if (name === null) return "back";
   const created = (await loading("Creating project", () =>
-    createProject(api, name.trim()),
+    createProject(api, name.trim(), organizationId),
   )) as Project;
   ui.success(`Created project \`${created.name ?? name.trim()}\``);
   return {

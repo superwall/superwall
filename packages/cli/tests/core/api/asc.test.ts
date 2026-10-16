@@ -15,11 +15,10 @@ import type { Session } from "@/core/auth/storage";
 
 const SESSION: Session = {
   apiKey: "sk_x",
-  orgId: "77",
   host: "https://api.example.com",
   createdAt: "n",
 };
-const api = createSuperwallApi(SESSION);
+const api = createSuperwallApi(SESSION).forOrg("77");
 
 function record(): { url?: string; method?: string; body?: unknown } {
   const rec: { url?: string; method?: string; body?: unknown } = {};

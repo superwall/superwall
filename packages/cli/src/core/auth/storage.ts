@@ -4,12 +4,15 @@ import { join } from "node:path";
 import { SUPERWALL_HOME } from "@/environment";
 import { formatJson } from "@/output";
 
+// An API key belongs to one organization, so its name is worth showing; a browser login reaches
+// every organization the account can open, so it has none.
+export const sessionOrgName = (session: Session | null | undefined): string | undefined =>
+  session?.authMethod === "api_key" ? session.orgName : undefined;
+
 export interface Session {
   authMethod?: "oauth" | "api_key";
   apiKey?: string;
-  orgId?: string;
   orgName?: string;
-  orgCount?: number;
   userEmail?: string;
   host: string;
   createdAt: string;

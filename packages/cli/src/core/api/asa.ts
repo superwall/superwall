@@ -1,12 +1,12 @@
 import type { SuperwallApi } from "./client";
+import { orgIdOf } from "./orgs";
 import { listProjects, type Application, type Project } from "./resources";
 
 export const ASA_API_PREFIX = "/api/v5";
 
 function asaBase(api: SuperwallApi): string {
   const orgId = api.org.id;
-  if (!orgId)
-    throw new Error("No organization selected - run `superwall orgs use <id|name>` first.");
+  if (!orgId) throw new Error("Apple Search Ads needs the app's account - pass --app <id>.");
   return `/v2/organizations/${orgId}/apple-search-ads`;
 }
 
@@ -47,27 +47,34 @@ export interface AsaApp {
   id: string;
   name?: string;
   project?: string;
+  organizationId?: string;
   connected: boolean;
 }
+
+export const toAsaApp = (project: Project, app: Application): AsaApp => {
+  const organizationId = orgIdOf(project);
+  return {
+    id: String(app.id),
+    name: app.name,
+    project: project.name,
+    ...(organizationId ? { organizationId } : {}),
+    connected: app.apple_search_ads_configured === true,
+  };
+};
 
 export async function listAsaApps(api: SuperwallApi): Promise<AsaApp[]> {
   const projects = await listProjects(api);
   return projects.flatMap((project: Project) =>
     (project.applications ?? [])
       .filter((app: Application) => (app.platform ?? "ios").toLowerCase() === "ios")
-      .map((app) => ({
-        id: String(app.id),
-        name: app.name,
-        project: project.name,
-        connected: app.apple_search_ads_configured === true,
-      })),
+      .map((app) => toAsaApp(project, app)),
   );
 }
 
 export function pickAsaApp(apps: AsaApp[], flag: string | undefined): AsaApp {
   if (flag) {
     const app = apps.find((a) => a.id === flag || a.name === flag);
-    if (!app) throw new Error(`No iOS app ${flag} in this organization.`);
+    if (!app) throw new Error(`No iOS app ${flag} that this account can open.`);
     return app;
   }
   const connected = apps.filter((a) => a.connected);

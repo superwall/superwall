@@ -27,6 +27,8 @@ interface FakeRoutes {
 
 const posted: Record<string, unknown>[] = [];
 
+const yes = async () => true;
+
 function fakeApi(routes: FakeRoutes, calls: string[] = []): SuperwallApi {
   const fake = {
     org: { id: undefined, name: undefined, count: 1 },
@@ -99,24 +101,47 @@ test("a binding for one app never answers for another", async () => {
   writeBinding(dir, "paywall", "plus-upgrade", "ios", { paywallId: "208540" });
   const api = fakeApi({ paywalls: { "8": [] }, created: { id: 300 } });
 
-  const resolved = await resolveBinding({ api, superwallDir: dir, surface, app: android, surfaces: [surface] });
+  const resolved = await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface,
+    app: android,
+    surfaces: [surface],
+  });
 
-  assert.deepEqual(resolved, { paywallId: "300", applicationId: "8", platform: "android", source: "created" });
+  assert.deepEqual(resolved, {
+    paywallId: "300",
+    applicationId: "8",
+    platform: "android",
+    source: "created",
+  });
   assert.deepEqual(readLock(dir).paywalls["plus-upgrade"], {
     ios: { paywallId: "208540" },
     android: { paywallId: "300" },
   });
 });
 
-test("an existing headless paywall on the app is matched and locked", async () => {
+test("an existing headless paywall is adopted and locked once confirmed", async () => {
   const dir = scaffold();
   const api = fakeApi({
     paywalls: { "7": [{ id: 208540, identifier: "plus-upgrade", metadata: { headless: "true" } }] },
   });
 
-  const resolved = await resolveBinding({ api, superwallDir: dir, surface, app: ios, surfaces: [surface] });
+  const resolved = await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface,
+    app: ios,
+    surfaces: [surface],
+    confirmAdopt: yes,
+  });
 
-  assert.deepEqual(resolved, { paywallId: "208540", applicationId: "7", platform: "ios", source: "matched" });
+  assert.deepEqual(resolved, {
+    paywallId: "208540",
+    applicationId: "7",
+    platform: "ios",
+    source: "matched",
+  });
   assert.deepEqual(readLock(dir).paywalls["plus-upgrade"], { ios: { paywallId: "208540" } });
 });
 
@@ -129,7 +154,14 @@ test("the match is looked up on the target app, not on whichever app is first", 
     },
   });
 
-  const resolved = await resolveBinding({ api, superwallDir: dir, surface, app: android, surfaces: [surface] });
+  const resolved = await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface,
+    app: android,
+    surfaces: [surface],
+    confirmAdopt: yes,
+  });
   assert.equal(resolved.paywallId, "2");
 });
 
@@ -138,13 +170,24 @@ test("metadata.headlessSurface outranks an identifier match", async () => {
   const api = fakeApi({
     paywalls: {
       "7": [
-        { id: 1, identifier: "other", metadata: { headless: "true", headlessSurface: "plus-upgrade" } },
+        {
+          id: 1,
+          identifier: "other",
+          metadata: { headless: "true", headlessSurface: "plus-upgrade" },
+        },
         { id: 2, identifier: "plus-upgrade", metadata: { headless: "true" } },
       ],
     },
   });
 
-  const resolved = await resolveBinding({ api, superwallDir: dir, surface, app: ios, surfaces: [surface] });
+  const resolved = await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface,
+    app: ios,
+    surfaces: [surface],
+    confirmAdopt: yes,
+  });
   assert.equal(resolved.paywallId, "1");
   assert.equal(resolved.source, "matched");
 });
@@ -153,9 +196,20 @@ test("creates the paywall when nothing matches and locks the result", async () =
   const dir = scaffold();
   const api = fakeApi({ created: { id: 9 } });
 
-  const resolved = await resolveBinding({ api, superwallDir: dir, surface, app: ios, surfaces: [surface] });
+  const resolved = await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface,
+    app: ios,
+    surfaces: [surface],
+  });
 
-  assert.deepEqual(resolved, { paywallId: "9", applicationId: "7", platform: "ios", source: "created" });
+  assert.deepEqual(resolved, {
+    paywallId: "9",
+    applicationId: "7",
+    platform: "ios",
+    source: "created",
+  });
   assert.deepEqual(readLock(dir).paywalls["plus-upgrade"], { ios: { paywallId: "9" } });
   assert.equal(posted[0]?.application_id, "7");
 });
@@ -166,12 +220,22 @@ test("create:false refuses to invent a paywall for an unpushed surface, naming t
   const api = fakeApi({}, calls);
 
   await assert.rejects(
-    resolveBinding({ api, superwallDir: dir, surface, app: ios, surfaces: [surface], create: false }),
+    resolveBinding({
+      api,
+      superwallDir: dir,
+      surface,
+      app: ios,
+      surfaces: [surface],
+      create: false,
+    }),
     (error: Error) =>
       error instanceof BindingError && /never been pushed to `ios`/.test(error.message),
   );
 
-  assert.equal(calls.some((call) => call.startsWith("post")), false);
+  assert.equal(
+    calls.some((call) => call.startsWith("post")),
+    false,
+  );
   assert.deepEqual(readLock(dir).paywalls, {});
 });
 
@@ -194,7 +258,11 @@ test("an archived paywall owning the identifier is explained, not 409'd", async 
   const dir = scaffold();
   const calls: string[] = [];
   const api = fakeApi(
-    { archivedPaywalls: { "7": [{ id: 500, identifier: "plus-upgrade", metadata: { headless: "true" } }] } },
+    {
+      archivedPaywalls: {
+        "7": [{ id: 500, identifier: "plus-upgrade", metadata: { headless: "true" } }],
+      },
+    },
     calls,
   );
 
@@ -205,7 +273,10 @@ test("an archived paywall owning the identifier is explained, not 409'd", async 
       /archived paywall 500 on `ios`/.test(error.message) &&
       /Restore it/.test(error.message),
   );
-  assert.equal(calls.some((call) => call.startsWith("post")), false);
+  assert.equal(
+    calls.some((call) => call.startsWith("post")),
+    false,
+  );
 });
 
 test("an unbound newcomer beside an orphaned binding refuses to create until renames are resolved", async () => {
@@ -234,7 +305,13 @@ test("a funnel binds in its own section, never the paywall one", async () => {
   const funnel: FrameworkSurface = { ...surface, kind: "funnel", id: "onboarding" };
   const api = fakeApi({ created: { id: 77 } });
 
-  const resolved = await resolveBinding({ api, superwallDir: dir, surface: funnel, app: ios, surfaces: [funnel] });
+  const resolved = await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface: funnel,
+    app: ios,
+    surfaces: [funnel],
+  });
 
   assert.equal(resolved.paywallId, "77");
   assert.deepEqual(readLock(dir).funnels.onboarding, { ios: { paywallId: "77" } });
@@ -248,7 +325,13 @@ test("a non-headless paywall sharing the identifier is ignored, not hijacked", a
     created: { id: 2 },
   });
 
-  const resolved = await resolveBinding({ api, superwallDir: dir, surface, app: ios, surfaces: [surface] });
+  const resolved = await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface,
+    app: ios,
+    surfaces: [surface],
+  });
   assert.equal(resolved.source, "created");
   assert.equal(resolved.paywallId, "2");
 });
@@ -268,6 +351,88 @@ test("a created paywall carries the name the config gave it, or the title-cased 
   assert.equal(posted[0]?.name, "Winback — Annual, 3-day trial");
   assert.equal(posted[0]?.identifier, "plus-upgrade");
 
-  await resolveBinding({ api, superwallDir: dir, surface, app: android, name: "   ", surfaces: [surface] });
+  await resolveBinding({
+    api,
+    superwallDir: dir,
+    surface,
+    app: android,
+    name: "   ",
+    surfaces: [surface],
+  });
   assert.equal(posted[1]?.name, "Plus Upgrade");
+});
+
+test("an unbound match is never adopted without a confirmation", async () => {
+  const dir = scaffold();
+  const calls: string[] = [];
+  const api = fakeApi(
+    {
+      paywalls: {
+        "7": [{ id: 274523, identifier: "plus-upgrade", metadata: { headless: "true" } }],
+      },
+    },
+    calls,
+  );
+
+  await assert.rejects(
+    resolveBinding({ api, superwallDir: dir, surface, app: ios, surfaces: [surface] }),
+    (error: unknown) =>
+      error instanceof BindingError &&
+      /App 7 already has a paywall `plus-upgrade` \(274523\)/.test(error.message) &&
+      /"plus-upgrade": \{ "ios": \{ "paywallId": "274523" \} \}/.test(error.message),
+  );
+  assert.deepEqual(readLock(dir).paywalls, {});
+  assert.ok(!calls.some((call) => call.startsWith("post")));
+});
+
+test("a declined adoption binds nothing and creates nothing", async () => {
+  const dir = scaffold();
+  const calls: string[] = [];
+  const seen: unknown[] = [];
+  const api = fakeApi(
+    {
+      paywalls: {
+        "7": [{ id: 274523, identifier: "plus-upgrade", metadata: { headless: "true" } }],
+      },
+    },
+    calls,
+  );
+
+  await assert.rejects(
+    resolveBinding({
+      api,
+      superwallDir: dir,
+      surface,
+      app: ios,
+      surfaces: [surface],
+      confirmAdopt: async (candidate) => {
+        seen.push(candidate);
+        return false;
+      },
+    }),
+    BindingError,
+  );
+  assert.deepEqual(seen, [{ surface, paywallId: "274523", applicationId: "7", platform: "ios" }]);
+  assert.deepEqual(readLock(dir).paywalls, {});
+  assert.ok(!calls.some((call) => call.startsWith("post")));
+});
+
+test("promote never adopts an unbound match without a confirmation either", async () => {
+  const dir = scaffold();
+  const api = fakeApi({
+    paywalls: { "7": [{ id: 274523, identifier: "plus-upgrade", metadata: { headless: "true" } }] },
+  });
+
+  await assert.rejects(
+    resolveBinding({
+      api,
+      superwallDir: dir,
+      surface,
+      app: ios,
+      surfaces: [surface],
+      create: false,
+    }),
+    BindingError,
+  );
+  assert.deepEqual(readLock(dir).paywalls, {});
 });

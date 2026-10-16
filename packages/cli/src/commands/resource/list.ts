@@ -3,15 +3,16 @@ import { blocks } from "@/output";
 import type { SuperwallApi } from "@/core/api/client";
 import {
   isAppScoped,
-  listOrganizations,
   listProjects,
   listResource,
   platformLabel,
   rowName,
-  titleCase,
   RESOURCES,
+  type Project,
   type ResourceName,
 } from "@/core/api/resources";
+import { appNotFound, findApplication } from "@/core/api/lookup";
+import { listOrgGroups } from "@/core/api/orgs";
 import { getDefaultApp, setDefaultApp } from "@/core/state/config";
 import { apiCall } from "@/commands/api-output";
 import { chooseApp, pickProject, pickScope, type PickedScope } from "./scope";
@@ -23,131 +24,117 @@ export async function list(
 ): Promise<void> {
   const { json } = context;
 
-  if (resource === "orgs") {
-    const organizations = await apiCall(context, "Loading organizations", () =>
-      listOrganizations(api),
-    );
-    if (json) return context.output.data(organizations);
-    context.output.render(
-      blocks.step(count(organizations.length, "organization")),
-      blocks.list({
-        items: organizations.map((organization) => {
-          const label = rowName(organization);
-          return {
-            label,
-            badge: titleCase(String(organization.role ?? "")),
-            meta: secondaryId(label, organization.id),
-          };
-        }),
-        empty: "No organizations.",
-      }),
-    );
-    return;
-  }
-
   if (resource === "projects" || resource === "apps") {
-    const projects = await apiCall(context, "Loading projects", () => listProjects(api));
-    if (json) return context.output.data(projects);
-    context.output.render(
-      blocks.step(`${count(projects.length, "project")}${orgLabel(api)}`),
-      blocks.list({
-        items: projects.map((project) => ({
-          label: project.name ?? String(project.id),
-          meta: String(project.id),
-          children: (project.applications ?? []).map((app) => ({
-            badge: platformLabel(app.platform),
-            label: app.bundle_id ?? app.name ?? "",
-            meta: app.public_api_key ? `pk_…${app.public_api_key.slice(-4)}` : "(no key)",
+    const query = searchOf(context);
+    const groups = (await apiCall(context, "Loading projects", () => listOrgGroups(api)))
+      .map((group) => ({ ...group, projects: matchingProjects(group.projects, query) }))
+      .filter((group) => !query || group.projects.length > 0);
+    if (json) {
+      return context.output.data(
+        groups.flatMap(({ projects, ...organization }) =>
+          projects.map((project) => (organization.id ? { ...project, organization } : project)),
+        ),
+      );
+    }
+    const projects = groups.flatMap((group) => group.projects);
+    if (projects.length === 0) {
+      return context.output.render(
+        blocks.list({
+          items: [],
+          empty: query
+            ? `No project or app matches "${query}".`
+            : "No projects yet - run `superwall apps create <name> --platform ios`.",
+        }),
+      );
+    }
+    for (const group of groups) {
+      const heading =
+        groups.length > 1
+          ? `\`${group.name ?? `Organization ${group.id}`}\`${group.member ? "" : " (not a member)"} · ${count(group.projects.length, "project")}`
+          : count(group.projects.length, "project");
+      context.output.render(
+        blocks.step(heading),
+        blocks.list({
+          items: group.projects.map((project) => ({
+            label: project.name ?? String(project.id),
+            meta: String(project.id),
+            children: (project.applications ?? []).map((app) => ({
+              badge: platformLabel(app.platform),
+              label: app.bundle_id ?? app.name ?? "",
+              meta: `${app.id}${app.public_api_key ? `  pk_…${app.public_api_key.slice(-4)}` : ""}`,
+            })),
           })),
-        })),
-        empty: "No projects yet - run `superwall apps create <name> --platform ios`.",
-      }),
-    );
+        }),
+      );
+    }
     return;
   }
 
   const scope = await pickScope(context, api, isAppScoped(resource as keyof typeof RESOURCES));
-  const rows = await apiCall(context, `Loading ${resource}`, () =>
+  const all = await apiCall(context, `Loading ${resource}`, () =>
     listResource(api, resource, scope),
   );
-  if (json) return context.output.data(rows);
+  const query = searchOf(context);
+  const matched = query ? all.filter((row) => rowMatches(row, query)) : all;
+  const limit = limitOf(context);
+  if (json) return context.output.data(limit === undefined ? matched : matched.slice(0, limit));
+
+  const shown = matched.slice(0, limit ?? RICH_ROWS);
+  const noun = resource.replace(/s$/, "");
+  const heading = query
+    ? `${count(matched.length, noun)} matching "${query}", of ${all.length}`
+    : count(all.length, noun);
   context.output.render(
-    blocks.step(`${count(rows.length, resource.replace(/s$/, ""))}${scopeLabel(resource, scope)}`),
+    blocks.step(`${heading}${scopeLabel(resource, scope)}`),
     blocks.list({
-      items: rows.map((row) => {
+      items: shown.map((row) => {
         const label = rowName(row);
-        return { label, meta: secondaryId(label, row.id) };
+        const identifier = typeof row.identifier === "string" ? row.identifier : undefined;
+        const ids = [
+          identifier && identifier !== label ? identifier : undefined,
+          secondaryId(label, row.id),
+        ];
+        return { label, meta: ids.filter(Boolean).join("  ") || undefined };
       }),
-      empty: `No ${resource} yet.`,
+      empty: query ? `No ${resource} match "${query}".` : `No ${resource} yet.`,
     }),
   );
+  if (matched.length > shown.length) {
+    context.ui.info(
+      `…${matched.length - shown.length} more. Narrow with --search <text>, or pass --limit <n> or --json for all.`,
+    );
+  }
 }
 
 export async function useApp(context: CommandContext, api: SuperwallApi): Promise<void> {
   const projects = await apiCall(context, "Loading projects", () => listProjects(api));
-  const project = await pickProject(context, projects);
-  const apps = project.applications ?? [];
-  if (apps.length === 0) {
-    throw new Error(`${project.name ?? project.id} has no apps yet.`);
-  }
-
   const target = context.argv.value as string | undefined;
   let app;
+  let projectId: string;
   if (target) {
-    app = apps.find((candidate) => String(candidate.id) === target || candidate.name === target);
-    if (!app) {
-      throw new Error(`No app ${target} in ${project.name ?? project.id}.`);
-    }
+    const found = await apiCall(context, "Finding the app", () =>
+      findApplication(api, target, projects),
+    );
+    if (!found) throw appNotFound(target);
+    app = found.app;
+    projectId = String(found.project.id);
   } else if (!context.interactive) {
-    throw new Error("Specify an app: superwall apps use <id|name>");
+    throw new Error("Specify an app: superwall apps use <id|name|dashboard link>");
   } else {
+    const project = await pickProject(context, api, projects);
+    const apps = project.applications ?? [];
+    if (apps.length === 0) throw new Error(`${project.name ?? project.id} has no apps yet.`);
+    projectId = String(project.id);
     const current =
-      apps.find((candidate) => String(candidate.id) === getDefaultApp(String(project.id))) ??
-      apps[0]!;
+      apps.find((candidate) => String(candidate.id) === getDefaultApp(projectId)) ?? apps[0]!;
     app = await chooseApp(context, apps, current);
   }
 
-  setDefaultApp(String(project.id), String(app.id));
+  setDefaultApp(projectId, String(app.id));
   if (context.json) return context.output.data(app);
   context.ui.success(
     `Default app set to \`${app.name ?? app.id}\` (${platformLabel(app.platform)})`,
   );
-}
-
-export async function useOrg(context: CommandContext, api: SuperwallApi): Promise<void> {
-  const organizations = await apiCall(context, "Loading organizations", () =>
-    listOrganizations(api),
-  );
-  if (organizations.length === 0) {
-    throw new Error("Your account has no organizations.");
-  }
-
-  const target = context.argv.value as string | undefined;
-  let org;
-  if (target) {
-    org = organizations.find(
-      (candidate) => String(candidate.id) === target || rowName(candidate) === target,
-    );
-    if (!org) throw new Error(`No organization ${target}.`);
-  } else if (!context.interactive) {
-    throw new Error("Specify an organization: superwall orgs use <id|name>");
-  } else {
-    const sel = await context.ui.select({
-      message: "Which organization?",
-      options: organizations.map((candidate) => ({
-        value: String(candidate.id),
-        label: rowName(candidate),
-        hint: titleCase(String(candidate.role ?? "")),
-      })),
-      initialValue: api.org.id,
-    });
-    if (sel === null) return;
-    org = organizations.find((candidate) => String(candidate.id) === sel)!;
-  }
-
-  api.setOrg({ id: String(org.id), name: rowName(org) });
-  if (context.json) return context.output.data(org);
-  context.ui.success(`Organization set to \`${rowName(org)}\`.`);
 }
 
 function secondaryId(label: string, id: unknown): string | undefined {
@@ -159,10 +146,6 @@ function count(value: number, noun: string): string {
   return `${value} ${noun}${value === 1 ? "" : "s"}`;
 }
 
-function orgLabel(api: SuperwallApi): string {
-  return api.org.count > 1 && api.org.name ? ` in \`${api.org.name}\`` : "";
-}
-
 function scopeLabel(resource: ResourceName, scope: PickedScope): string {
   const parts: string[] = [];
   if (scope.projectCount > 1 && scope.projectName) {
@@ -172,4 +155,44 @@ function scopeLabel(resource: ResourceName, scope: PickedScope): string {
     parts.push(`${scope.appName} (${platformLabel(scope.appPlatform)})`);
   }
   return parts.length ? ` in \`${parts.join(" · ")}\`` : "";
+}
+
+const RICH_ROWS = 50;
+
+function searchOf(context: CommandContext): string | undefined {
+  const value = context.argv.search;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function limitOf(context: CommandContext): number | undefined {
+  const value = context.argv.limit;
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1) throw new Error("--limit takes a whole number above 0.");
+  return n;
+}
+
+const SEARCHED_FIELDS = ["id", "name", "identifier", "bundle_id", "description", "public_api_key"];
+
+export function rowMatches(row: Record<string, unknown>, query: string): boolean {
+  const needle = query.toLowerCase();
+  return SEARCHED_FIELDS.some((field) => {
+    const value = row[field];
+    return (
+      (typeof value === "string" || typeof value === "number") &&
+      String(value).toLowerCase().includes(needle)
+    );
+  });
+}
+
+// A project that matches keeps all its apps; otherwise only its matching apps are shown.
+export function matchingProjects<P extends Project>(projects: P[], query: string | undefined): P[] {
+  if (!query) return projects;
+  return projects.flatMap((project) => {
+    if (rowMatches(project as unknown as Record<string, unknown>, query)) return [project];
+    const apps = (project.applications ?? []).filter((app) =>
+      rowMatches(app as unknown as Record<string, unknown>, query),
+    );
+    return apps.length ? [{ ...project, applications: apps }] : [];
+  });
 }

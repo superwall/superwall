@@ -1,5 +1,9 @@
 import pc from "picocolors";
 import { defineCommand, type DefinedCommand } from "@/command";
+import { listOrgGroups, orgIdOf } from "@/core/api/orgs";
+import { appNotFound, findApplication, findProject } from "@/core/api/lookup";
+import { ApiError } from "@/core/api/client";
+import { findOperations, loadApiIndex } from "@/core/api/api-docs";
 import type { SuperwallApi } from "@/core/api/client";
 import {
   listOrganizations,
@@ -39,6 +43,10 @@ export function runApi(verb: ApiVerb): DefinedCommand<"required"> {
           case "patch":
             return ctx.api.patch(path, params);
         }
+      }).catch(async (error: unknown) => {
+        if (!(error instanceof ApiError) || error.status >= 500 || error.status === 401)
+          throw error;
+        throw new Error(`${error.message}\n${await referenceHint(verb, path)}`, { cause: error });
       });
       return emitJson(ctx, res ?? { ok: true });
     },
@@ -64,11 +72,14 @@ export const runBootstrap = defineCommand({
   interaction: "none",
   output: "both",
   async run(ctx) {
-    const tree = await apiCall(ctx, "Loading your account", () => buildAccountTree(ctx.api));
+    const only = {
+      app: ctx.argv.app as string | undefined,
+      project: ctx.argv.project as string | undefined,
+    };
+    const tree = await apiCall(ctx, "Loading your account", () => buildAccountTree(ctx.api, only));
     if (ctx.json) return emitJson(ctx, tree);
 
-    const who = [ctx.api.userEmail, ctx.api.org.name].filter(Boolean).join(" · ");
-    if (who) ctx.ui.step(who);
+    if (ctx.api.userEmail) ctx.ui.step(ctx.api.userEmail);
     const text = tree.organizations.flatMap((org) => renderTree([orgNode(org)])).join("\n");
     ctx.output.text(text);
   },
@@ -87,44 +98,78 @@ interface AppTree extends Application {
   paywalls: Row[];
 }
 
-async function buildAccountTree(api: SuperwallApi): Promise<{ organizations: OrgTree[] }> {
-  const orgs = await listOrganizations(api);
-  const orgList = orgs.length > 0 ? orgs : [{ id: api.org.id, name: api.org.name } as Row];
-  // The orgs endpoint can return an empty name - backfill the session's.
-  for (const org of orgList) {
-    if (!org.name && String(org.id ?? "") === api.org.id) org.name = api.org.name;
+const BOOTSTRAP_CONCURRENCY = 8;
+
+async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>) {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      out[index] = await fn(items[index]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+const orEmpty = (rows: Promise<Row[]>): Promise<Row[]> =>
+  rows.catch((error: unknown) => {
+    if (error instanceof ApiError && [403, 404].includes(error.status)) return [];
+    throw error;
+  });
+
+async function buildAccountTree(
+  api: SuperwallApi,
+  only: { app?: string; project?: string } = {},
+): Promise<{ organizations: OrgTree[] }> {
+  let scoped: Project | undefined;
+  if (only.app || only.project) {
+    scoped = only.app
+      ? (await findApplication(api, only.app))?.project
+      : await findProject(api, only.project!);
+    if (!scoped) {
+      throw only.app
+        ? appNotFound(only.app)
+        : new Error(`No project ${only.project} that this account can open.`);
+    }
+  }
+  let groups = await listOrgGroups(api);
+  if (scoped) {
+    const orgId = orgIdOf(scoped) ?? "";
+    const group = groups.find((candidate) => candidate.id === orgId) ?? {
+      id: orgId,
+      member: false,
+    };
+    groups = [{ ...group, projects: [scoped] }];
   }
 
-  const organizations = await Promise.all(
-    orgList.map(async (org): Promise<OrgTree> => {
-      const projects =
-        String(org.id ?? "") === api.org.id
-          ? await listProjects(api)
-          : await api.list<Project>(`/v2/projects?organization_id=${org.id}`);
-
-      const full = await Promise.all(
-        projects.map(async (p): Promise<ProjectTree> => {
-          const scope = { projectId: String(p.id) };
-          const [products, entitlements, apps] = await Promise.all([
-            listResource(api, "products", scope),
-            listResource(api, "entitlements", scope),
-            Promise.all(
-              (p.applications ?? []).map(async (a): Promise<AppTree> => {
-                const appScope = { ...scope, applicationId: String(a.id) };
-                const [campaigns, paywalls] = await Promise.all([
-                  listResource(api, "campaigns", appScope),
-                  listResource(api, "paywalls", appScope),
-                ]);
-                return { ...a, campaigns, paywalls };
-              }),
-            ),
-          ]);
-          return { ...p, products, entitlements, applications_full: apps };
-        }),
-      );
-      return { ...org, projects: full };
-    }),
-  );
+  const organizations: OrgTree[] = [];
+  for (const { projects, ...org } of groups) {
+    const full = await mapLimit(
+      projects,
+      BOOTSTRAP_CONCURRENCY,
+      async (p): Promise<ProjectTree> => {
+        const scope = { projectId: String(p.id) };
+        const [products, entitlements, apps] = await Promise.all([
+          orEmpty(listResource(api, "products", scope)),
+          orEmpty(listResource(api, "entitlements", scope)),
+          Promise.all(
+            (p.applications ?? []).map(async (a): Promise<AppTree> => {
+              const appScope = { ...scope, applicationId: String(a.id) };
+              const [campaigns, paywalls] = await Promise.all([
+                orEmpty(listResource(api, "campaigns", appScope)),
+                orEmpty(listResource(api, "paywalls", appScope)),
+              ]);
+              return { ...a, campaigns, paywalls };
+            }),
+          ),
+        ]);
+        return { ...p, products, entitlements, applications_full: apps };
+      },
+    );
+    organizations.push({ ...org, projects: full });
+  }
   return { organizations };
 }
 
@@ -150,7 +195,7 @@ const group = (name: string, rows: Row[], child: (r: Row) => TreeNode): TreeNode
 
 function orgNode(org: OrgTree): TreeNode {
   return {
-    label: `${pc.bold(rowName(org))}  ${id(org)}${org.role ? pc.dim(` · ${titleCase(String(org.role))}`) : ""}`,
+    label: `${pc.bold(rowName(org))}  ${id(org)}${org.member === false ? pc.dim(" · not a member") : ""}`,
     children: org.projects.map(projectNode),
   };
 }
@@ -209,4 +254,19 @@ function campaignNode(c: Row): TreeNode {
       label: `${String(p.event_name ?? p.id)}${p.enabled === false ? pc.dim(" · disabled") : ""}`,
     })),
   };
+}
+
+export async function referenceHint(verb: string, path: string): Promise<string> {
+  const index = await loadApiIndex().catch(() => undefined);
+  if (!index) return "The API reference: superwall api docs <words>";
+  const ops = findOperations(index, path);
+  const same = ops.find((op) => op.method === verb.toUpperCase());
+  if (same) return `Its parameters and body: superwall api docs ${same.path} ${verb}`;
+  if (ops.length) {
+    return `${path} takes ${ops.map((op) => op.method).join(", ")}, not ${verb.toUpperCase()}: superwall api docs ${ops[0]!.path}`;
+  }
+  const words = path
+    .split(/[/?]/)
+    .filter((part) => part && !/^v\d+$/.test(part) && !/^\d+$/.test(part));
+  return `No endpoint has this path. Search the reference: superwall api docs ${words.slice(-2).join(" ")}`;
 }

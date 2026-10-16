@@ -1,24 +1,28 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createSuperwallApi } from "@/core/api/client";
 import type { SuperwallApi } from "@/core/api/client";
-import { requireOrg } from "@/core/account/org";
+import { orgForNewProject } from "@/core/account/org";
 import type { Session } from "@/core/auth/storage";
+import { restoreFetch, useFetch } from "../../helpers/fetch";
+import { clearHomes, useHome } from "../../helpers/home";
 
-// Keep setOrg's saveSession away from the real ~/.superwall.
-process.env.HOME = mkdtempSync(join(tmpdir(), "sw-org-test-"));
+// Hooks would leak into other files under Bun, so each test cleans up after itself.
+const isolated = (body: () => Promise<void>) => async () => {
+  useHome();
+  try {
+    await body();
+  } finally {
+    restoreFetch();
+    clearHomes();
+  }
+};
 
 function apiWithOrgs(
   orgs: Array<{ id: number; name: string }> | null,
   session: Partial<Session> = {},
 ): SuperwallApi {
-  globalThis.fetch = (async () =>
-    new Response(JSON.stringify({ data: orgs }), {
-      status: 200,
-    })) as typeof fetch;
+  useFetch([{ match: "/v2/me/organizations", body: { data: orgs } }]);
   return createSuperwallApi({
     apiKey: "sk_x",
     host: "https://api.example.com",
@@ -27,37 +31,32 @@ function apiWithOrgs(
   });
 }
 
-test("requireOrg returns the session org without fetching", async () => {
-  globalThis.fetch = (async () => {
-    throw new Error("should not fetch");
-  }) as typeof fetch;
-  const api = createSuperwallApi({
-    apiKey: "sk_x",
-    orgId: "42",
-    orgName: "Acme",
-    host: "https://api.example.com",
-    createdAt: "n",
-  });
-  assert.deepEqual(await requireOrg(api, false), { id: "42", name: "Acme" });
-});
+test(
+  "a new project goes to the only organization without asking",
+  isolated(async () => {
+    const api = apiWithOrgs([{ id: 7, name: "Solo Inc" }]);
+    assert.equal(await orgForNewProject(api, false), "7");
+  }),
+);
 
-test("requireOrg auto-picks and persists a sole org", async () => {
-  const api = apiWithOrgs([{ id: 7, name: "Solo Inc" }]);
-  const org = await requireOrg(api, false);
-  assert.deepEqual(org, { id: "7", name: "Solo Inc" });
-  assert.equal(api.org.id, "7");
-});
+test(
+  "with several organizations and no prompt, a new project is refused with what to do",
+  isolated(async () => {
+    const api = apiWithOrgs([
+      { id: 1, name: "A" },
+      { id: 2, name: "B" },
+    ]);
+    await assert.rejects(
+      () => orgForNewProject(api, false),
+      /belong to 2 organizations[\s\S]*run this interactively[\s\S]*--project <id>/,
+    );
+  }),
+);
 
-test("requireOrg with multiple orgs and no prompt points at orgs use", async () => {
-  const api = apiWithOrgs([
-    { id: 1, name: "A" },
-    { id: 2, name: "B" },
-  ]);
-  await assert.rejects(() => requireOrg(api, false), /orgs use/);
-  assert.equal(api.org.id, undefined);
-});
-
-test("requireOrg with no orgs points at login", async () => {
-  const api = apiWithOrgs([]);
-  await assert.rejects(() => requireOrg(api, false), /superwall login/);
-});
+test(
+  "an account with no organization is sent to login",
+  isolated(async () => {
+    const api = apiWithOrgs([]);
+    await assert.rejects(() => orgForNewProject(api, false), /superwall login/);
+  }),
+);

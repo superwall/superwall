@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { defineCommand, type CommandContext } from "@/command";
-import { requireOrg } from "@/core/account/org";
+import { pickOrganization } from "@/commands/resource/scope";
 import { apiCall } from "@/commands/api-output";
 
 export const runQuery = defineCommand({
@@ -9,8 +9,6 @@ export const runQuery = defineCommand({
   interaction: "none",
   output: "both",
   async run(ctx) {
-    const { id: organizationId } = await requireOrg(ctx.api, ctx.interactive);
-
     const sql = readSql(ctx);
     const params = ctx.json ? "?default_format=JSON" : "";
     if (ctx.json && /\bFORMAT\s+[A-Za-z0-9_]+\s*;?\s*$/i.test(sql)) {
@@ -18,6 +16,7 @@ export const runQuery = defineCommand({
         "Remove the FORMAT clause when using --json; the CLI requests ClickHouse JSON for you.",
       );
     }
+    const organizationId = await pickOrganization(ctx, ctx.api);
 
     if (!ctx.json) ctx.ui.intro("Superwall query");
     const output = await apiCall(ctx, "Querying ClickHouse", () =>

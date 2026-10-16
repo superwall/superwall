@@ -5,7 +5,7 @@ import { onboardingHooks } from "@/core/account/onboarding";
 import { track } from "@/core/telemetry";
 import { BROWSER_UNAVAILABLE } from "@/core/auth/browser";
 import { loginWithApiKey, performLogin } from "@/core/auth/login";
-import { clearSession, loadSession, type Session } from "@/core/auth/storage";
+import { clearSession, loadSession, sessionOrgName, type Session } from "@/core/auth/storage";
 import { scanProject } from "@/core/project/scan";
 
 export const runLogin = defineCommand({
@@ -62,7 +62,7 @@ export const runLogin = defineCommand({
         onProvisioned: hooks.onProvisioned,
       });
       spin.stop(
-        `Logged in as \`${session.userEmail ?? "you"}\`${session.orgName ? ` · \`${session.orgName}\`` : ""}`,
+        `Logged in as \`${session.userEmail ?? "you"}\`${sessionOrgName(session) ? ` · \`${sessionOrgName(session)}\`` : ""}`,
       );
       track("login finished", { status: "success", method: "oauth" });
       // Skill install failures never fail the login; `superwall skills` retries.
@@ -124,7 +124,7 @@ export const runWhoami = defineCommand({
       items: [
         {
           label: s.userEmail ?? "Logged in",
-          meta: s.orgName ? `· ${s.orgName}` : undefined,
+          meta: sessionOrgName(s) ? `· ${sessionOrgName(s)}` : undefined,
           children: [{ label: credential, meta: effectiveHost(s) }],
         },
       ],
@@ -140,11 +140,6 @@ function sessionOutput(session: Session): Record<string, unknown> {
   return {
     authenticated: true,
     user: { email: session.userEmail ?? null },
-    organization: {
-      id: session.orgId ?? null,
-      name: session.orgName ?? null,
-      count: session.orgCount ?? 1,
-    },
     credential: {
       type: session.apiKey ? "api_key" : session.accessToken ? "oauth" : "unknown",
     },

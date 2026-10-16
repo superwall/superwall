@@ -14,6 +14,10 @@ export const registerPlatformCommands = <T>(cli: Argv<T>): Argv<T> =>
         })
         .options({
           file: { type: "string", describe: "Read SQL from a .sql file" },
+          app: {
+            type: "string",
+            describe: "Query the account of this app (id or dashboard link), when your apps span several",
+          },
         })
         .example('$0 query "SHOW TABLES FROM sw"', "Run an inline query")
         .example("$0 query --file report.sql --json", "Run a saved query"),
@@ -66,7 +70,7 @@ export const registerPlatformCommands = <T>(cli: Argv<T>): Argv<T> =>
           app: {
             type: "string",
             describe:
-              "Superwall iOS app id or name. With keys list|set|rm it selects that app's keys instead of the organization's",
+              "Superwall iOS app id, name or dashboard link: whose App Store Connect keys to use. With keys list|set|rm it selects that app's own keys instead of its account's",
           },
           project: { type: "string", describe: "Superwall project id, to narrow --app" },
           "bundle-id": {

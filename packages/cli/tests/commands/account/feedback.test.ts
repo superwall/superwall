@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 test("sends the message an agent passed on the command line", async () => {
-  useHome({ userEmail: "dev@example.com", orgId: "42" });
+  useHome({ userEmail: "dev@example.com" });
   const log = useFetch([{ match: "/capture/", body: { status: 1 } }]);
 
   const result = await run(runFeedback.definition, { argv: { message: "  dev is great  " } });
@@ -87,7 +87,7 @@ test("a refused send is an error, and --json says so as data", async () => {
 });
 
 test("a full agent report carries its title, kind, ids and repro context", async () => {
-  useHome({ userEmail: "dev@example.com", orgId: "42" });
+  useHome({ userEmail: "dev@example.com" });
   const log = useFetch([{ match: "/capture/", body: { status: 1 } }]);
 
   await run(runFeedback.definition, {
@@ -113,5 +113,5 @@ test("a full agent report carries its title, kind, ids and repro context", async
   assert.deepEqual(properties.context, { paywall: "pw_abc", sdk: "expo@3.1.0" });
   assert.equal(properties.agent, "codex");
   assert.equal(properties.via, "agent");
-  assert.equal(properties.org_id, "42");
+  assert.equal(properties.org_id, undefined);
 });

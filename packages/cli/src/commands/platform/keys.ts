@@ -16,12 +16,15 @@ import {
 import { appleDeps } from "./apple-deps";
 import { createAppKey, keyKind, text } from "./apple-keys";
 
-export async function runAscKeys(ctx: CommandContext<"required">, api: SuperwallApi): Promise<void> {
+export async function runAscKeys(
+  ctx: CommandContext<"required">,
+  orgApi: () => Promise<SuperwallApi>,
+): Promise<void> {
   const action = (ctx.argv.value as string | undefined) ?? "list";
   const forApp = text(ctx, "app") !== undefined;
-  if (action === "list") return forApp ? listAppKeys(ctx) : listKeys(ctx, api);
-  if (action === "set") return setKey(ctx, api, forApp);
-  if (action === "rm") return forApp ? removeAppKeyCommand(ctx) : removeKey(ctx, api);
+  if (action === "list") return forApp ? listAppKeys(ctx) : listKeys(ctx, orgApi);
+  if (action === "set") return setKey(ctx, orgApi, forApp);
+  if (action === "rm") return forApp ? removeAppKeyCommand(ctx) : removeKey(ctx, orgApi);
   if (action === "create") return createAppKey(ctx, appleDeps);
   if (action === "sources") return listAppKeySources(ctx);
   if (action === "copy") return copyAppKeyCommand(ctx);
@@ -31,7 +34,11 @@ export async function runAscKeys(ctx: CommandContext<"required">, api: Superwall
   );
 }
 
-async function listKeys(ctx: CommandContext<"required">, api: SuperwallApi): Promise<void> {
+async function listKeys(
+  ctx: CommandContext<"required">,
+  orgApi: () => Promise<SuperwallApi>,
+): Promise<void> {
+  const api = await orgApi();
   const configs = await apiCall(ctx, "Loading credentials", () => listAscConfigs(api));
   if (ctx.json) return emitJson(ctx, configs);
 
@@ -41,7 +48,7 @@ async function listKeys(ctx: CommandContext<"required">, api: SuperwallApi): Pro
       const add = await ctx.ui.confirm({
         message: "Connect an App Store Connect key now?",
       });
-      if (add) return setKey(ctx, api, false);
+      if (add) return setKey(ctx, async () => api, false);
       return;
     }
     ctx.ui.info("Add one: superwall asc keys set --key-id <id> --issuer <id> --key-file <path.p8>");
@@ -54,7 +61,7 @@ async function listKeys(ctx: CommandContext<"required">, api: SuperwallApi): Pro
 
 async function setKey(
   ctx: CommandContext<"required">,
-  api: SuperwallApi,
+  orgApi: () => Promise<SuperwallApi>,
   forApp: boolean,
 ): Promise<void> {
   const input = await resolveKeyInput(ctx, forApp);
@@ -74,6 +81,7 @@ async function setKey(
 
   const privateKey = readFileSync(keyFile, "utf8");
   const credentials = { keyId, issuerId, privateKey, accountName };
+  const api = await orgApi();
   const created = await apiCall(ctx, "Connecting App Store Connect", () =>
     teamId
       ? replaceAscConfig(api, teamId, credentials)
@@ -83,7 +91,10 @@ async function setKey(
   ctx.ui.success(`App Store Connect connected ${created.team_id ?? created.id ?? ""}`);
 }
 
-async function removeKey(ctx: CommandContext, api: SuperwallApi): Promise<void> {
+async function removeKey(
+  ctx: CommandContext,
+  orgApi: () => Promise<SuperwallApi>,
+): Promise<void> {
   const teamId = ctx.argv.value2 as string | undefined;
   if (!teamId) throw new Error("Usage: superwall asc keys rm <team_id>");
   if (keyKind(teamId)) {
@@ -95,6 +106,7 @@ async function removeKey(ctx: CommandContext, api: SuperwallApi): Promise<void> 
       ? emitJson(ctx, plan)
       : ctx.ui.info(`[dry-run] would delete ASC credential ${teamId}`));
   }
+  const api = await orgApi();
   await apiCall(ctx, "Removing credential", () => deleteAscConfig(api, teamId));
   if (ctx.json) return emitJson(ctx, { deleted: true, teamId });
   ctx.ui.success(`Removed App Store Connect credential ${teamId}`);

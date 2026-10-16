@@ -11,8 +11,7 @@ export interface AscCredentials {
 
 function ascBase(api: SuperwallApi): string {
   const orgId = api.org.id;
-  if (!orgId)
-    throw new Error("No organization selected - run `superwall orgs use <id|name>` first.");
+  if (!orgId) throw new Error("App Store Connect needs the app's account - pass --app <id>.");
   return `/v2/organizations/${orgId}/app-store-connect`;
 }
 

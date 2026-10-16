@@ -15,6 +15,7 @@ import { loadFramework } from "@/core/paywalls/project/framework";
 import { requireApi } from "@/core/paywalls/project/session";
 import { collectProjectDeclarations } from "@/core/paywalls/project/types";
 import { ui } from "@/ui";
+import { pickAdoptOption } from "./pick-adopt";
 import { pickApplicationOption } from "./pick-app";
 import { group, projectDir, selectSurfaces, timed, transition } from "./pipeline";
 
@@ -64,7 +65,7 @@ export const runPromote = defineCommand({
 
     let promoted = 0;
     let skipped = 0;
-    
+
     for (const target of targets) {
       let changed = true;
       await group(context, targetLabel(target, multi), async (note) => {
@@ -76,6 +77,7 @@ export const runPromote = defineCommand({
           app: { platform: target.platform, applicationId: target.applicationId },
           surfaces: project.surfaces,
           create: false,
+          confirmAdopt: context.interactive ? pickAdoptOption : undefined,
         });
 
         note("Promoting");

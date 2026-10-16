@@ -1,5 +1,5 @@
 import { defineCommand, type CommandContext } from "@/command";
-import { requireOrg } from "@/core/account/org";
+import { pickOrganization } from "@/commands/resource/scope";
 import type { SuperwallApi } from "@/core/api/client";
 import { ascProxy, listAscConfigs } from "@/core/api/asc";
 import {
@@ -67,10 +67,13 @@ export const runAsc = defineCommand({
       return;
     }
 
-    await requireOrg(ctx.api, ctx.interactive);
-
-    if (target === "keys") return runAscKeys(ctx, ctx.api);
     if (target === "notification-url") return runNotificationUrl(ctx, appleDeps.sleep);
+
+    // App-level key actions name their app; only the account's own keys need its organization.
+    const orgApi = async () => ctx.api.forOrg(await pickOrganization(ctx, ctx.api));
+    if (target === "keys") return runAscKeys(ctx, orgApi);
+
+    const api = await orgApi();
 
     if (VERBS.has(target)) {
       const path = String(ctx.argv.value ?? "");
@@ -92,24 +95,22 @@ export const runAsc = defineCommand({
         }
       }
 
-      const teamId = await resolveTeam(ctx, ctx.api);
+      const teamId = await resolveTeam(ctx, api);
       const res = await apiCall(ctx, `${target.toUpperCase()} ${path}`, () =>
-        ascProxy(ctx.api, teamId, target, path, body),
+        ascProxy(api, teamId, target, path, body),
       );
       return emitJson(ctx, res);
     }
 
-    const teamId = await resolveTeam(ctx, ctx.api);
+    const teamId = await resolveTeam(ctx, api);
 
     if (target.startsWith("/")) {
-      const res = await apiCall(ctx, `GET ${target}`, () =>
-        ascProxy(ctx.api, teamId, "GET", target),
-      );
+      const res = await apiCall(ctx, `GET ${target}`, () => ascProxy(api, teamId, "GET", target));
       return emitJson(ctx, res);
     }
 
     if (target === "apps") {
-      const apps = await apiCall(ctx, "Loading apps", () => listAscApps(ctx.api, teamId));
+      const apps = await apiCall(ctx, "Loading apps", () => listAscApps(api, teamId));
       if (ctx.json) return emitJson(ctx, apps);
       ctx.ui.step(`${apps.length} app${apps.length === 1 ? "" : "s"}`);
       for (const a of apps) ctx.ui.info(`\`${a.name ?? a.id}\`  ${a.bundleId ?? ""}  ${a.id}`);
@@ -121,11 +122,11 @@ export const runAsc = defineCommand({
       if (!appArg) throw new Error(`Usage: superwall asc ${target} <bundle-id | asc-app-id>`);
       const ascAppId = /^\d+$/.test(appArg)
         ? appArg
-        : await apiCall(ctx, "Finding app", () => findAscAppId(ctx.api, teamId, appArg));
+        : await apiCall(ctx, "Finding app", () => findAscAppId(api, teamId, appArg));
       if (!ascAppId) throw new Error(`No App Store Connect app found for "${appArg}".`);
 
       const all = await apiCall(ctx, "Loading products", () =>
-        fetchUnimportedAscProducts(ctx.api, teamId, ascAppId, new Set()),
+        fetchUnimportedAscProducts(api, teamId, ascAppId, new Set()),
       );
       const isSub = (t: string) => t.includes("SUBSCRIPTION") && t !== "NON_RENEWING_SUBSCRIPTION";
       const rows =

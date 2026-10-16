@@ -14,7 +14,7 @@ import {
 import { superwallApi } from "@/core/api/client";
 import type { SuperwallApi } from "@/core/api/client";
 import type { Scope } from "@/core/api/resources";
-import { clearSession, loadSession, type Session } from "@/core/auth/storage";
+import { clearSession, loadSession, sessionOrgName, type Session } from "@/core/auth/storage";
 import { getHostedStatus } from "@/core/agent/hosted";
 import type { AgentDriver } from "@/core/agent/drivers";
 import { ACTIONS, type ActionId } from "@/core/agent/actions";
@@ -62,8 +62,8 @@ export async function recoverUnmatchedScope(
   apiKey: string,
 ): Promise<{ scope: Scope; bundleId?: string } | null> {
   for (;;) {
-    const orgName = loadSession()?.orgName;
-    const orgLabel = orgName ? `\`${orgName}\`` : "your organization";
+    const orgName = sessionOrgName(loadSession());
+    const orgLabel = orgName ? `\`${orgName}\`` : "the apps this account can open";
     ui.error(
       `This project's API key (\`${apiKey}\`) doesn't match any app in ${orgLabel}. You might be logged in to the wrong account.`,
     );

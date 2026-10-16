@@ -1,6 +1,7 @@
 import type { Arguments } from "yargs";
 import type { CommandContext } from "@/command";
-import { requireOrg } from "@/core/account/org";
+import { orgForNewProject } from "@/core/account/org";
+import { boundOrganization } from "./scope";
 import { platformForIntegration } from "@/core/account/bind";
 import { ApiError, type SuperwallApi } from "@/core/api/client";
 import {
@@ -48,13 +49,19 @@ export async function create(
     );
   }
 
-  const scope = await pickScope(context, api, isAppScoped(resource as keyof typeof RESOURCES));
+  const scope = await pickScope(
+    context,
+    api,
+    isAppScoped(resource as keyof typeof RESOURCES) ||
+      (resource === "products" && argv.app !== undefined),
+  );
   if (dryRun) {
     const plan = { dryRun: true, action: "create", resource, value, scope };
     if (json) return context.output.data(plan);
-    ui.info(
-      `[dry-run] would create ${resource.replace(/s$/, "")} "${value}" in ${scope.projectName ?? scope.projectId}`,
-    );
+    const target = scope.applicationId
+      ? `${scope.appName ?? scope.applicationId} (${platformLabel(scope.appPlatform)})`
+      : (scope.projectName ?? scope.projectId);
+    ui.info(`[dry-run] would create ${resource.replace(/s$/, "")} "${value}" in ${target}`);
     return;
   }
 
@@ -143,9 +150,14 @@ async function createApp(
 
   let projectId = target;
   if (!projectId) {
-    await requireOrg(api, context.interactive);
+    const organizationId =
+      (await boundOrganization(context, api)) ?? (await orgForNewProject(api, context.interactive));
     projectId = String(
-      (await apiCall(context, `Creating project "${name}"`, () => createProject(api, name))).id,
+      (
+        await apiCall(context, `Creating project "${name}"`, () =>
+          createProject(api, name, organizationId),
+        )
+      ).id,
     );
   }
   let project: Row & {
@@ -201,7 +213,10 @@ function createOne(
     case "entitlements":
       return createEntitlement(api, scope, value);
     case "products":
-      return createProduct(api, scope, value, productOptsFromArgv(argv));
+      return createProduct(api, scope, value, {
+        ...productOptsFromArgv(argv),
+        ...(scope.applicationId ? { applicationId: scope.applicationId } : {}),
+      });
     case "campaigns": {
       return createCampaign(api, scope, value, String(argv.value2));
     }

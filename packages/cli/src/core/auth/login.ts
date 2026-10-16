@@ -128,9 +128,6 @@ export async function performLogin(opts: LoginOptions = {}): Promise<Session> {
 
   const session: Session = {
     authMethod: "oauth",
-    orgId: org ? String(org.id) : undefined,
-    orgName: org?.name,
-    orgCount: createdNewOrg ? 1 : uniqueOrgs.length,
     userEmail: me?.email,
     host: apiHost,
     createdAt: new Date().toISOString(),
@@ -162,7 +159,6 @@ export async function loginWithApiKey(apiKey: string, apiHost = API_HOST()): Pro
   const session: Session = {
     authMethod: "api_key",
     apiKey: key,
-    orgId: org.id,
     orgName: org.name,
     host: apiHost,
     createdAt: new Date().toISOString(),

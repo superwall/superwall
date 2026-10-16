@@ -1,5 +1,5 @@
 import type { SuperwallApi } from "@/core/api/client";
-import { listProjects } from "@/core/api/resources";
+import { findApplication } from "@/core/api/lookup";
 
 import { productVariables, type DashboardProduct } from "@superwall/studio/products";
 
@@ -23,11 +23,8 @@ export async function projectForApplication(
   api: SuperwallApi,
   applicationId: string,
 ): Promise<string | undefined> {
-  const projects = await listProjects(api).catch(() => []);
-  const owner = projects.find((project) =>
-    (project.applications ?? []).some((app) => String(app.id) === applicationId),
-  );
-  return owner ? String(owner.id) : undefined;
+  const found = await findApplication(api, applicationId).catch(() => undefined);
+  return found ? String(found.project.id) : undefined;
 }
 
 export class MissingProductError extends Error {}

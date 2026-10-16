@@ -9,11 +9,7 @@ import { VERSION } from "@/environment";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
 import { resolveApps } from "@/core/paywalls/binding/apps";
 import { resolveBinding } from "@/core/paywalls/binding/binding";
-import {
-  planTargets,
-  wantedPlatforms,
-  type SurfaceTarget,
-} from "@/core/paywalls/binding/targets";
+import { planTargets, wantedPlatforms, type SurfaceTarget } from "@/core/paywalls/binding/targets";
 import { fetchProducts, projectForApplication } from "@/core/paywalls/products";
 import { readLock } from "@/core/paywalls/project/lock";
 import { collectProjectDeclarations } from "@/core/paywalls/project/types";
@@ -36,8 +32,7 @@ import { pushSource } from "@/core/paywalls/source/source-push";
 
 type Sample = { properties?: Record<string, unknown>; live?: boolean };
 
-const reason = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 const firstApp = (apps: Record<string, string>): string | undefined =>
   apps.ios ?? Object.values(apps)[0];
@@ -82,13 +77,12 @@ export function createStudioActions(
         const client = await ensureApi();
         const apps = await resolveApps({ api: client, superwallDir: project.superwallDir });
         const applicationId = firstApp(apps);
-        if (applicationId === undefined) return { unreachable: "This project is not bound to an app yet." };
+        if (applicationId === undefined)
+          return { unreachable: "This project is not bound to an app yet." };
         const query = `?application_id=${encodeURIComponent(applicationId)}`;
         let unreachable: string | undefined;
         const [device, user, products] = await Promise.all([
-          client
-            .get<Sample>(`/v2/users/device-properties-sample${query}`)
-            .catch(() => undefined),
+          client.get<Sample>(`/v2/users/device-properties-sample${query}`).catch(() => undefined),
           client.get<Sample>(`/v2/users/properties-sample${query}`).catch(() => undefined),
           projectForApplication(client, applicationId)
             .then((projectId) => (projectId ? fetchProducts(client, projectId) : undefined))
@@ -131,7 +125,9 @@ export function createStudioActions(
             throw new Error(
               `v${requested} targets one paywall — \`${surface.id}\` is pushed to ${targets
                 .map((target) => target.platform)
-                .join(", ")}; run \`superwall promote --id ${surface.id} --platform <platform> --version ${requested}\` instead.`,
+                .join(
+                  ", ",
+                )}; run \`superwall promote --id ${surface.id} --platform <platform> --version ${requested}\` instead.`,
             );
           }
           let version = 0;
@@ -187,6 +183,7 @@ export function createStudioActions(
             if (!collected.ok) throw new Error(collected.reason);
             return pushSource({
               api: client,
+              superwallDir: project.superwallDir,
               paywallId: binding.paywallId,
               applicationId: binding.applicationId,
               version: pushed.version,
