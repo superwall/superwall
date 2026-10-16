@@ -1,3 +1,6 @@
+import type { SuperwallApi } from "@/core/api/client";
+import { findApplication } from "@/core/api/lookup";
+import { orgIdOf } from "@/core/api/orgs";
 import { readFileSync } from "node:fs";
 import { arch, release } from "node:os";
 import { basename } from "node:path";
@@ -26,6 +29,7 @@ export interface Feedback {
   agent?: string;
   projectId?: string;
   applicationId?: string;
+  organizationId?: string;
   context: Record<string, string>;
   attachments: FeedbackAttachment[];
 }
@@ -81,7 +85,6 @@ export function buildFeedbackEvent(
   distinctId: string,
   session: {
     userEmail?: string;
-    orgId?: string;
     orgName?: string;
     authMethod?: string;
   } | null,
@@ -99,6 +102,7 @@ export function buildFeedbackEvent(
       command: feedback.command ?? null,
       project_id: feedback.projectId ?? null,
       application_id: feedback.applicationId ?? null,
+      organization_id: feedback.organizationId ?? null,
       context: feedback.context,
       attachments: feedback.attachments,
       via,
@@ -110,7 +114,6 @@ export function buildFeedbackEvent(
       node_version: process.version,
       ci: process.env.CI === "true",
       email: session?.userEmail ?? null,
-      org_id: session?.orgId ?? null,
       org_name: session?.orgName ?? null,
       auth_method: session?.authMethod ?? null,
     },
@@ -131,4 +134,21 @@ export async function submitFeedback(feedback: Feedback, via: FeedbackVia): Prom
   } catch {
     return false;
   }
+}
+
+const ORG_LOOKUP_MS = 3000;
+
+// Best effort: a report never waits long on, or fails because of, finding the app's account.
+export async function organizationOfApp(
+  api: SuperwallApi | undefined,
+  applicationId: string | undefined,
+): Promise<string | undefined> {
+  if (!api || !applicationId) return undefined;
+  const lookup = findApplication(api, applicationId)
+    .then((found) => (found ? orgIdOf(found.project) : undefined))
+    .catch(() => undefined);
+  const timeout = new Promise<undefined>((resolve) => {
+    setTimeout(() => resolve(undefined), ORG_LOOKUP_MS).unref();
+  });
+  return Promise.race([lookup, timeout]);
 }

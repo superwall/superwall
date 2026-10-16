@@ -5,11 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   buildFeedbackEvent,
+  organizationOfApp,
   detectAgent,
   MAX_FILE_CHARS,
   parseContext,
   readAttachments,
 } from "@/core/feedback";
+import type { SuperwallApi } from "@/core/api/client";
 
 test("feedback event carries the report, source, and follow-up contact", () => {
   const event = buildFeedbackEvent(
@@ -26,7 +28,7 @@ test("feedback event carries the report, source, and follow-up contact", () => {
     },
     "agent",
     "3e37f5f0-0000-4000-8000-000000000000",
-    { userEmail: "dev@acme.com", orgId: "42", orgName: "Acme" },
+    { userEmail: "dev@acme.com", orgName: "Acme" },
   ) as {
     event: string;
     distinct_id: string;
@@ -64,7 +66,7 @@ test("feedback event is contact-free when logged out", () => {
     null,
   ) as { properties: Record<string, unknown> };
   assert.equal(event.properties.email, null);
-  assert.equal(event.properties.org_id, null);
+  assert.equal(event.properties.org_id, undefined);
   assert.equal(event.properties.title, null);
   assert.equal(event.properties.application_id, null);
   assert.equal(event.properties.via, "human");
@@ -96,4 +98,48 @@ test("context pairs parse, keeping '=' inside values", () => {
     url: "a?b=c",
   });
   assert.throws(() => parseContext(["paywall"]), /key=value/);
+});
+
+test("feedback names the organization of the app it's about", () => {
+  const event = buildFeedbackEvent(
+    {
+      message: "m",
+      kind: "bug",
+      applicationId: "1022",
+      organizationId: "1",
+      context: {},
+      attachments: [],
+    },
+    "agent",
+    "anon",
+    null,
+  ) as { properties: Record<string, unknown> };
+  assert.equal(event.properties.organization_id, "1");
+});
+
+test("the app's organization is looked up from the app, and never blocks a report", async () => {
+  const api = (get: (path: string) => Promise<unknown>) =>
+    ({
+      list: async () => [{ id: 887, organization_id: 1, applications: [{ id: "1022" }] }],
+      get,
+    }) as unknown as SuperwallApi;
+  assert.equal(
+    await organizationOfApp(
+      api(async () => ({})),
+      "1022",
+    ),
+    "1",
+  );
+  assert.equal(await organizationOfApp(undefined, "1022"), undefined);
+  assert.equal(
+    await organizationOfApp(
+      api(async () => ({})),
+      undefined,
+    ),
+    undefined,
+  );
+  const broken = {
+    list: async () => Promise.reject(new Error("offline")),
+  } as unknown as SuperwallApi;
+  assert.equal(await organizationOfApp(broken, "1022"), undefined);
 });

@@ -81,7 +81,10 @@ export const runDev = defineCommand({
     });
     ui.step([`Studio ${pc.green(url)}`, ...rows].join("\n"));
     if (typeof context.argv.open === "string" && context.argv.open !== "") {
-      openBrowser(`${url}${context.argv.open.replace(/^\//, "")}`);
+      const target = `${url}${context.argv.open.replace(/^\//, "")}`;
+      void openBrowser(target).then((opened) => {
+        if (!opened) ui.warn(`Couldn't open a browser here. Open ${target} yourself.`);
+      });
     }
 
     const network = server.resolvedUrls?.network[0];

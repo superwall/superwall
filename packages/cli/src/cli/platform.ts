@@ -1,4 +1,5 @@
 import type { Argv } from "yargs";
+import { ASC_HELP, REVENUE_PROVIDER_HELP, SETUP_APPLE_HELP } from "./platform-help";
 
 export const registerPlatformCommands = <T>(cli: Argv<T>): Argv<T> =>
   cli
@@ -13,6 +14,10 @@ export const registerPlatformCommands = <T>(cli: Argv<T>): Argv<T> =>
         })
         .options({
           file: { type: "string", describe: "Read SQL from a .sql file" },
+          app: {
+            type: "string",
+            describe: "Query the account of this app (id or dashboard link), when your apps span several",
+          },
         })
         .example('$0 query "SHOW TABLES FROM sw"', "Run an inline query")
         .example("$0 query --file report.sql --json", "Run a saved query"),
@@ -22,22 +27,22 @@ export const registerPlatformCommands = <T>(cli: Argv<T>): Argv<T> =>
   )
   .command(
     "asc <target> [value] [value2]",
-    "Call the App Store Connect API through Superwall's signed proxy (no .p8 / JWT needed)",
+    "The App Store Connect API, an app's Apple keys, and its notification URL",
     (y) =>
       y
         .positional("target", {
           type: "string",
           describe:
-            "get|post|patch|delete, a raw path (/v1/...), or: apps | products | subscriptions | iaps | docs | keys",
+            "get|post|patch|delete, a raw path (/v1/...), or: apps | products | subscriptions | iaps | docs | keys | notification-url",
         })
         .positional("value", {
           type: "string",
           describe:
-            "Path (for a verb), app bundle id / ASC app id (shortcuts), docs path or search, or list|set|rm (keys)",
+            "Path (for a verb), app bundle id / ASC app id (shortcuts), docs path or search, list|set|rm|create|sources|copy|import (keys), or get|check|set (notification-url)",
         })
         .positional("value2", {
           type: "string",
-          describe: "Team id (keys rm)",
+          describe: "Team id (keys rm), or api_key | purchase_key (keys with --app)",
         })
         .options({
           d: {
@@ -47,7 +52,8 @@ export const registerPlatformCommands = <T>(cli: Argv<T>): Argv<T> =>
           },
           team: {
             type: "string",
-            describe: "ASC team id (if the org has more than one connected)",
+            describe:
+              "Apple team id. Proxy calls: which connected team. keys set: replace that team's organization key. keys create: which team to create the key on (id or name)",
           },
           force: {
             type: "boolean",
@@ -61,10 +67,115 @@ export const registerPlatformCommands = <T>(cli: Argv<T>): Argv<T> =>
             describe: "Path to the .p8 key file (keys set)",
           },
           name: { type: "string", describe: "Account name (keys set)" },
+          app: {
+            type: "string",
+            describe:
+              "Superwall iOS app id, name or dashboard link: whose App Store Connect keys to use. With keys list|set|rm it selects that app's own keys instead of its account's",
+          },
+          project: { type: "string", describe: "Superwall project id, to narrow --app" },
+          "bundle-id": {
+            type: "string",
+            describe: "Bundle ID to use at Apple when it differs from the one Superwall has (keys create, keys set purchase_key)",
+          },
+          from: { type: "string", describe: "Superwall app id to copy a key from (keys copy)" },
+          "allow-unconfirmed": {
+            type: "boolean",
+            describe:
+              "keys copy: save an API key although Apple couldn't confirm its team owns this app. A person's decision",
+          },
+          replace: {
+            type: "boolean",
+            describe: "keys create: create a key although the app already has one of that kind, and save the new one",
+          },
+          "set-revenue-provider": {
+            type: "boolean",
+            describe:
+              "notification-url set: also make the store the app's revenue provider. Left out, the provider is not touched",
+          },
+          "apple-id": { type: "string", describe: "Apple Account email (keys create), or set SUPERWALL_APPLE_ID" },
+          "apple-password": {
+            type: "string",
+            describe:
+              "Apple Account password (keys create); prefer the masked prompt or SUPERWALL_APPLE_PASSWORD to keep it out of shell history and the process list",
+          },
+          code: { type: "string", describe: "Apple verification code, to continue a sign-in started without prompts (keys create)" },
+          sms: { type: "boolean", describe: "Text the verification code instead of pushing it to trusted devices (keys create)" },
+          phone: { type: "string", describe: "Trusted phone number to text, if the account has several (keys create)" },
+          "key-role": {
+            type: "string",
+            describe: "Role for a new App Store Connect API key: app_manager (default) or admin (keys create api_key)",
+          },
           "dry-run": { type: "boolean", hidden: true, describe: "Plan without writing" },
-        }),
+        })
+        .epilogue(ASC_HELP),
     (argv) => {
       return import("@/commands/platform/asc").then((m) => m.runAsc(argv));
+    },
+  )
+  .command(
+    "setup <target>",
+    "One Apple sign-in: create the keys an app is missing and set its URL",
+    (y) =>
+      y
+        .positional("target", { type: "string", describe: "apple" })
+        .options({
+          "apple-id": { type: "string", describe: "Apple Account email (or set SUPERWALL_APPLE_ID)" },
+          "apple-password": {
+            type: "string",
+            describe:
+              "Apple Account password; prefer the masked prompt or SUPERWALL_APPLE_PASSWORD to keep it out of shell history and the process list",
+          },
+          code: { type: "string", describe: "Apple verification code, to continue a sign-in started without prompts" },
+          sms: { type: "boolean", describe: "Text the verification code instead of pushing it to trusted devices" },
+          phone: { type: "string", describe: "Trusted phone number to text, if the account has several" },
+          team: { type: "string", describe: "Apple team id or name, if the account is on several" },
+          app: { type: "string", describe: "Superwall app id or name" },
+          project: { type: "string", describe: "Superwall project id" },
+          "bundle-id": { type: "string", describe: "Bundle ID of the App Store Connect app" },
+          "key-role": {
+            type: "string",
+            describe: "Role for the new App Store Connect API key: app_manager (default) or admin",
+          },
+          "skip-api-key": { type: "boolean", describe: "Don't create an App Store Connect API key" },
+          "skip-purchase-key": { type: "boolean", describe: "Don't create an In-App Purchase key" },
+          "skip-notification-url": { type: "boolean", describe: "Don't set the server notification URL" },
+          "dry-run": {
+            type: "boolean",
+            describe: "Sign in and check key access without creating or changing anything",
+          },
+        })
+        .example("$0 setup apple", "Sign in and connect an app, with prompts")
+        .example("$0 setup apple --dry-run", "Sign in and check key access; change nothing")
+        .example(
+          "$0 setup apple --apple-id you@example.com --app 123 --no-interactive",
+          "Without prompts: reads SUPERWALL_APPLE_PASSWORD, then stops for Apple's code",
+        )
+        .example("$0 setup apple --code 123456 --app 123 --no-interactive", "Continue with the code")
+        .epilogue(SETUP_APPLE_HELP),
+    (argv) => {
+      return import("@/commands/platform/setup").then((m) => m.runSetup(argv));
+    },
+  )
+  .command(
+    "revenue-provider [action] [value]",
+    "Read or set which revenue source an app's dashboard figures count",
+    (y) =>
+      y
+        .positional("action", { type: "string", describe: "get (default) | set" })
+        .positional("value", { type: "string", describe: "open_revenue | revenue_cat (set)" })
+        .options({
+          app: { type: "string", describe: "Superwall app id or name" },
+          project: { type: "string", describe: "Superwall project id" },
+          yes: {
+            type: "boolean",
+            alias: "y",
+            describe: "Change the provider without asking. Outside a terminal a change is refused without it",
+          },
+          "dry-run": { type: "boolean", describe: "Say what would change; change nothing" },
+        })
+        .epilogue(REVENUE_PROVIDER_HELP),
+    (argv) => {
+      return import("@/commands/platform/revenue-provider").then((m) => m.runRevenueProvider(argv));
     },
   )
   .command(

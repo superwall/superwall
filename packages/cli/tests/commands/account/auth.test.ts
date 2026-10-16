@@ -22,7 +22,8 @@ test("whoami names the account, the credential and the host it talks to", async 
   const result = await run(runWhoami.definition);
 
   const [list] = result.calls.filter((call) => call.method === "list");
-  const items = (list?.value as { items: { label: string; children: { label: string }[] }[] }).items;
+  const items = (list?.value as { items: { label: string; children: { label: string }[] }[] })
+    .items;
   assert.equal(items[0]?.label, "dev@example.com");
   assert.match(String(items[0]?.children[0]?.label), /API key sk_…abcd/);
 });
@@ -30,16 +31,20 @@ test("whoami names the account, the credential and the host it talks to", async 
 test("whoami says which credential kind is in play", async () => {
   useHome({ accessToken: "at_1", userEmail: "oauth@example.com" });
   const oauth = await run(runWhoami.definition);
-  const items = (oauth.calls.find((c) => c.method === "list")?.value as {
-    items: { children: { label: string }[] }[];
-  }).items;
+  const items = (
+    oauth.calls.find((c) => c.method === "list")?.value as {
+      items: { children: { label: string }[] }[];
+    }
+  ).items;
   assert.equal(items[0]?.children[0]?.label, "OAuth session");
 
   useHome({ userEmail: "bare@example.com" });
   const neither = await run(runWhoami.definition);
-  const bare = (neither.calls.find((c) => c.method === "list")?.value as {
-    items: { children: { label: string }[] }[];
-  }).items;
+  const bare = (
+    neither.calls.find((c) => c.method === "list")?.value as {
+      items: { children: { label: string }[] }[];
+    }
+  ).items;
   assert.equal(bare[0]?.children[0]?.label, " - ");
 });
 
@@ -52,14 +57,13 @@ test("whoami with no session says how to sign in", async () => {
 });
 
 test("whoami --json reports the account as data, logged in or not", async () => {
-  useHome({ userEmail: "dev@example.com", orgId: "42", orgName: "Solo Inc", apiKey: "sk_live_x" });
+  useHome({ userEmail: "dev@example.com", orgName: "Solo Inc", apiKey: "sk_live_x" });
 
   const loggedIn = await run(runWhoami.definition, { argv: { json: true } });
 
   assert.deepEqual(loggedIn.json, {
     authenticated: true,
     user: { email: "dev@example.com" },
-    organization: { id: "42", name: "Solo Inc", count: 1 },
     credential: { type: "api_key" },
     host: "https://api.example.com",
   });
@@ -137,12 +141,12 @@ test("login with an API key keeps the session and names the organization", async
 
   const saved = JSON.parse(fs.readFileSync(sessionFile(home), "utf8")) as {
     apiKey: string;
-    orgId: string;
+    orgId?: string;
     orgName: string;
     authMethod: string;
   };
   assert.equal(saved.apiKey, "sk_live_key");
-  assert.equal(saved.orgId, "42");
+  assert.equal(saved.orgId, undefined);
   assert.equal(saved.orgName, "Solo Inc");
   assert.equal(saved.authMethod, "api_key");
   assert.match(result.said("success").join(), /Logged in with an API key.*Solo Inc/);
@@ -159,7 +163,6 @@ test("login with an API key reports the account as data under --json", async () 
   assert.deepEqual(result.json, {
     authenticated: true,
     user: { email: null },
-    organization: { id: "7", name: "Acme", count: 1 },
     credential: { type: "api_key" },
     host: "https://api.example.com",
   });
@@ -185,4 +188,26 @@ test("an empty API key is refused before any request", async () => {
 
   assert.match(result.said("error").join(), /requires an interactive terminal|API key is required/);
   assert.equal(log.length, 0);
+});
+
+test("whoami shows an API key's organization, never a browser login's stale one", async () => {
+  const metaOf = (result: Awaited<ReturnType<typeof run>>) =>
+    (result.calls.find((c) => c.method === "list")?.value as { items: { meta?: string }[] })
+      .items[0]?.meta;
+
+  useHome({
+    authMethod: "api_key",
+    apiKey: "sk_live_x",
+    userEmail: "ci@example.com",
+    orgName: "Solo Inc",
+  });
+  assert.equal(metaOf(await run(runWhoami.definition)), "· Solo Inc");
+
+  useHome({
+    authMethod: "oauth",
+    accessToken: "at_1",
+    userEmail: "me@example.com",
+    orgName: "Demo Inc",
+  });
+  assert.equal(metaOf(await run(runWhoami.definition)), undefined);
 });

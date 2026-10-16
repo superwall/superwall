@@ -20,6 +20,7 @@ export interface OnboardedApp {
 
 interface Config {
   defaultApp?: Record<string, string>;
+  openedOrgs?: string[];
   skillsSync?: SkillsSync;
   telemetry?: { anonymousId?: string; noticeShown?: boolean };
   onboardingIdempotencyKey?: string;
@@ -60,6 +61,18 @@ export function setDefaultApp(projectId: string, applicationId: string): void {
     ...(config.defaultApp ?? {}),
     [projectId]: applicationId,
   };
+  write(config);
+}
+
+export function getOpenedOrgs(): string[] {
+  return read().openedOrgs ?? [];
+}
+
+export function setOpenedOrgs(ids: readonly string[]): void {
+  const config = read();
+  const next = [...new Set(ids)];
+  if (next.join() === (config.openedOrgs ?? []).join()) return;
+  config.openedOrgs = next;
   write(config);
 }
 

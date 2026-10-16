@@ -3,6 +3,7 @@ import { withSpinner } from "@/ui/spinner";
 import { SUPPORTED_LABEL } from "@/core/project/frameworks";
 import { scanProject, type DetectedApp } from "@/core/project/scan";
 import type { ExistingIntegration } from "@/core/project/existing";
+import { BROWSER_UNAVAILABLE } from "@/core/auth/browser";
 import { performLogin, type ProvisionedApp } from "@/core/auth/login";
 import { onboardingHooks } from "@/core/account/onboarding";
 import {
@@ -13,7 +14,7 @@ import {
 import { superwallApi } from "@/core/api/client";
 import type { SuperwallApi } from "@/core/api/client";
 import type { Scope } from "@/core/api/resources";
-import { clearSession, loadSession, type Session } from "@/core/auth/storage";
+import { clearSession, loadSession, sessionOrgName, type Session } from "@/core/auth/storage";
 import { getHostedStatus } from "@/core/agent/hosted";
 import type { AgentDriver } from "@/core/agent/drivers";
 import { ACTIONS, type ActionId } from "@/core/agent/actions";
@@ -26,8 +27,9 @@ export async function performLoginWithUi(
   const hooks = onboardingHooks(app);
   try {
     const session = await performLogin({
-      onVerify: ({ url, userCode }) => {
+      onVerify: ({ url, userCode, browserOpened }) => {
         ui.info(`Approve this login in your browser · code \`${userCode}\`\n${url}`);
+        if (!browserOpened) ui.warn(BROWSER_UNAVAILABLE);
         spin.start("Waiting for you to approve in the browser");
       },
       onStatus: (message) => spin.message(message),
@@ -60,8 +62,8 @@ export async function recoverUnmatchedScope(
   apiKey: string,
 ): Promise<{ scope: Scope; bundleId?: string } | null> {
   for (;;) {
-    const orgName = loadSession()?.orgName;
-    const orgLabel = orgName ? `\`${orgName}\`` : "your organization";
+    const orgName = sessionOrgName(loadSession());
+    const orgLabel = orgName ? `\`${orgName}\`` : "the apps this account can open";
     ui.error(
       `This project's API key (\`${apiKey}\`) doesn't match any app in ${orgLabel}. You might be logged in to the wrong account.`,
     );

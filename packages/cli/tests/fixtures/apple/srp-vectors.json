@@ -1,0 +1,26 @@
+[
+  {
+    "protocol": "s2k",
+    "accountName": "jane@example.com",
+    "password": "correct horse battery staple",
+    "salt": "AAECAwQFBgcICQoLDA0ODw==",
+    "iterations": 20136,
+    "secretHex": "030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc",
+    "publicKey": "OP1phOePkrUDMZXfxP+tPi3wcgjsnn+Y2jmAWegDuhlnX5JsYHZOP0S2nCerSefdIqNyZfo7EdY/grM32Tke0S6KRtQmhXzRVjh4TMHhjC5NvhYnfypux51es+hw5pA1qvhgkz2+njynRGRue5//MWCG8/cXhKlFZ9bGVxs4+SG81k0PYL8xksjy64jhRhJ6bbvidnwPmt02u+g79mAcHdj85OiqUcjIDkDFLm2dISxwQRggBzsJHqAnP+CnsqTO57fw5hbynJ9HoSaslexngQnX3RQicuN/rhoWsRdKvD+uDVj1iIzq06Ym3QqTM+ohNAiHw1hGX3H6yqWZ6/ABxw==",
+    "serverPublicKey": "ktIRVX1263Tn3piuvuq6QHd2/5l7oakKFL+4FDIQ8RpktaB/tEJ0ZldEfzAu6ExrDrF1AkuTBajVBoZ8xlD6lqtZ9BnMy739+ZMn1va6bIkdHEVrW4fn3y+F1wjXL8DURIc9eP7kyGKBNKQaGdHP1i9KD6EcacSa/IPFUrICSGHnlhVKvoCN4eZDsTGYLNkOmzpVc9j2+r2+cCoQ4rTBAZV7MGRVdK8lL+ez5VaSX9KqmJg9cYBK3c1u0xR78XSPX81WWk4rtf4Hg5lZexDDXT9JU2eRj1zKHOebdaGcoyXABJVpxT7vIVwm74RERtW/90cClPMtIAguQhPmCAqXeQ==",
+    "m1": "KoZxF903hREbAYtSWW3B20JXyhAEx7M0veUeasO8Bn4=",
+    "m2": "uJLeJPtlH1bsRqxppIYdMNbK2NZrre2vtV13sOEphnY="
+  },
+  {
+    "protocol": "s2k_fo",
+    "accountName": "jane@example.com",
+    "password": "correct horse battery staple",
+    "salt": "AAECAwQFBgcICQoLDA0ODw==",
+    "iterations": 20136,
+    "secretHex": "030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc",
+    "publicKey": "OP1phOePkrUDMZXfxP+tPi3wcgjsnn+Y2jmAWegDuhlnX5JsYHZOP0S2nCerSefdIqNyZfo7EdY/grM32Tke0S6KRtQmhXzRVjh4TMHhjC5NvhYnfypux51es+hw5pA1qvhgkz2+njynRGRue5//MWCG8/cXhKlFZ9bGVxs4+SG81k0PYL8xksjy64jhRhJ6bbvidnwPmt02u+g79mAcHdj85OiqUcjIDkDFLm2dISxwQRggBzsJHqAnP+CnsqTO57fw5hbynJ9HoSaslexngQnX3RQicuN/rhoWsRdKvD+uDVj1iIzq06Ym3QqTM+ohNAiHw1hGX3H6yqWZ6/ABxw==",
+    "serverPublicKey": "Rj8fmtdpBis/9DwNu1C3sIfnpKyqOoa18+AY4u0mp0ugiyOMtlhTrwwNZQR2PWHquse/YrVWtThNHO8bqwHItGUes8bw59p5BD5U+tNCaCL5vFGtGNf1qtQPOmkvbQPoRUwzbmECGTpRURus5SBXcHv3+26vWKt2B1I/jqsAkSRzDgqK1r+01yEl4mOXB97fTMSTY8ieGBzcOMvjQBR24ci4OF7iNzmW9vJ6Hj5nccE8GYdfRYTiscFun0IoN/issfVc2QGdoXQm6+qO1/HQ5QFA2i5hm+ZECCzyDZ6qDsoZKPltgUpGec5m2eQNk2JAE5YLz2HBQzBeCnXT8qU7gQ==",
+    "m1": "pNq3WgwmlJEz6H/Eke9llETnlMyU8OT45bEmj3bJWi0=",
+    "m2": "WAC9hVONucP5/S9xGlbw8QNyZvx6OPe3545zRPqmfZk="
+  }
+]

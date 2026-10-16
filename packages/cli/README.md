@@ -26,9 +26,11 @@ package installs it for you, along with the framework and both the
 package; everything below is what you get.
 
 `superwall login` opens your browser once and every command shares that
-session. In CI, log in without a browser: `superwall login --api-key <key>`.
-If your account belongs to more than one organization, pick one with
-`superwall orgs use` (you'll otherwise be asked the first time it matters).
+session. Where it can't open one (a server, or over SSH), it says so: open the
+URL it prints on any device and approve the code there. In CI, log in without
+a browser: `superwall login --api-key <key>`.
+There are no organizations to pick: `superwall apps list` shows every app you
+can open, grouped by organization, and commands take `--app <id|dashboard link>`.
 Upgrade any time with `superwall upgrade` - the CLI also tells you when a new
 version is out.
 
@@ -207,6 +209,12 @@ records a note in the source commit that rides along with every version, and
 Renames are resolved, never guessed — interactively, or with
 `push --rename old=new` in CI.
 
+A push also saves the project's source to the app's repo. It applies your
+changes on top of whatever teammates have published since your last push
+(the commit it last synced to is in `.superwall/source.json`), so two people
+working on different paywalls never undo each other. If you both changed the
+same file, the push stops and names it rather than overwriting their work.
+
 The full reference — assets, localization, trials, transitions, web
 checkout, troubleshooting — lives at
 [superwall.com/docs/framework](https://superwall.com/docs/framework).
@@ -232,6 +240,31 @@ superwall bootstrap                       # the whole account tree at a glance
 `--project <id>` / `--app <id>` to scope when you have more than one. Run
 `superwall <command> --help` for every action and flag.
 
+An app's bundle ID (package name on Android) decides which builds the SDK
+treats as that app; any other build runs in test mode. Read it, and the IDs
+the app's SDK reported in the last 30 days, then save one:
+
+```bash
+superwall apps bundle-id --app <id>                  # what is saved, and what the SDK reported
+superwall apps bundle-id com.acme.app --app <id>     # save it
+```
+
+When other IDs had production devices that the new one wouldn't cover, it
+says how many would run in test mode and asks first (`--yes` outside a
+terminal). An ID that is already saved is only replaced with `--replace`.
+
+`setup apple`, `asc keys create purchase_key` and `asc keys set purchase_key`
+keep the In-App Purchase key and the app on one bundle ID. An app with none
+gets the Apple app's (or the one `--bundle-id` names) saved with the key, both
+or neither, and they say so and how many reported builds would run in test
+mode. An app with a different bundle ID stops before anything is created or
+saved, and points at `apps bundle-id <id> --replace`.
+
+Lists stay usable on big accounts: `--search <text>` matches ids, names and
+identifiers, `--limit <n>` caps the rows, and a terminal shows the first 50 with
+a count of the rest (`--json` returns everything unless `--limit` caps it).
+`bootstrap --app <id>` loads one project instead of the whole account.
+
 ## Query your data
 
 Run SQL directly against your organization's ClickHouse analytics data:
@@ -249,7 +282,16 @@ native JSON envelope. Your session needs `data:read` access.
 
 ## Call the API
 
-Any Superwall API endpoint, authenticated with your session:
+`superwall api docs` searches the live API reference, so you can find any
+endpoint and its exact body before calling it (no login needed):
+
+```bash
+superwall api docs variant                    # search by keyword
+superwall api docs /v2/campaigns/123/audiences/9/variants post   # one endpoint in full
+```
+
+Any Superwall API endpoint, authenticated with your session. A request that
+fails names the reference entry to read:
 
 ```bash
 superwall get /v2/products
@@ -264,11 +306,96 @@ params become query parameters.
 ## App Store Connect
 
 The **entire** App Store Connect API, proxied and signed by Superwall — no
-`.p8` file or JWT to manage locally. Connect your credentials once:
+`.p8` file or JWT to manage locally. Connect an app in one command:
 
 ```bash
+superwall setup apple
+```
+
+It signs you in to Apple, creates the App Store Connect API key and the In-App
+Purchase key the app doesn't have yet, saves them on the app, and points the
+app's App Store Server Notifications at Superwall. Your Apple password goes from
+your computer straight to Apple; Superwall never receives it and it is not
+saved. The Apple Account must be an Admin or the Account Holder. It never
+creates a second key of a kind the app already has, never replaces a server
+notification URL that another server holds (it reports it and exits non-zero),
+and never changes the app's revenue provider.
+
+In a terminal it asks for your Apple Account email, your password (masked) and
+the verification code Apple sends. Type `sms` at the code prompt, or pass
+`--sms`, to get the code by text. Pass `--team <id|name>` when the account is
+on several teams, `--bundle-id <id>` to create the Superwall app from an App
+Store Connect app, and `--dry-run` to sign in and check key access without
+changing anything.
+
+A coding agent can run it for you if you want it to. You decide that by putting
+the password where the agent's shell can read it, as `SUPERWALL_APPLE_PASSWORD`;
+never paste it into a chat. Without a prompt the command runs in two steps,
+because Apple sends the code after the sign-in starts:
+
+```bash
+superwall setup apple --apple-id you@example.com --app <id> --no-interactive   # Apple sends you a code
+superwall setup apple --code 123456 --app <id> --no-interactive                # same flags, within 10 minutes
+```
+
+The first run exits non-zero saying a code is required; give the agent the code
+and it runs the second. Only Apple's pre-verification cookies are kept between
+the two runs, in `~/.superwall/apple-sign-in.json`, for 10 minutes.
+`--apple-password` exists too, but it lands in shell history and the process
+list.
+
+Each step is also its own command, so you or an agent can do one thing at a
+time:
+
+```bash
+superwall asc keys list --app <id>                    # which of the two keys the app has
+superwall asc keys import --app <id>                  # reuse a key your organization already has
+superwall asc keys create api_key --app <id>          # sign in to Apple and create just this key
+superwall asc keys create purchase_key --app <id>
+superwall asc notification-url --app <id>             # this app's Superwall URL
+superwall asc notification-url check --app <id>       # what Apple has, and whose it is
+superwall asc notification-url set --app <id>         # set it where Apple has none
+```
+
+`asc keys import` saves a key only when Apple confirms it for the app's bundle
+ID. `asc keys create` does nothing when the app already has that key; pass
+`--replace` to create another. `asc keys sources` and `asc keys copy <kind>
+--from <app id>` copy one named key from another of your apps, and `asc keys rm
+<kind> --app <id>` removes one from an app. `superwall asc --help` says what
+each command changes, what it never does, and its exit codes.
+
+`asc notification-url check` says for production and sandbox whose URL Apple
+has: this app's, another Superwall app's (named when you can read that app),
+someone else's, or none. `asc notification-url set` never replaces a URL
+another server holds. If RevenueCat or your own server receives Apple's
+notifications today, keep it there and have it forward them to the URL
+`asc notification-url` prints. Both work with a `superwall login` session or
+an API key.
+
+Receiving Apple's notifications and choosing which revenue source your
+dashboard counts are separate decisions. The second one is the revenue
+provider:
+
+```bash
+superwall revenue-provider --app <id>                         # what is counted, and what each source sent
+superwall revenue-provider set open_revenue --app <id>        # count the store's own events
+superwall revenue-provider set revenue_cat --app <id>         # count RevenueCat's events
+```
+
+A change asks first in a terminal and needs `--yes` outside one.
+
+Already have a key file? Save it on an app, or on your organization for the
+signed proxy:
+
+```bash
+superwall asc keys set api_key --app <id> --key-id <id> --issuer <id> --key-file AuthKey.p8
 superwall asc keys set --key-id <id> --issuer <id> --key-file AuthKey.p8
 ```
+
+Saving an API key on an app also gives the organization a key for that Apple
+team when it has none. `asc keys set --team <team id>` replaces the
+organization's key for a team, and is refused unless Apple confirms the new key
+belongs to the same team.
 
 Then it's the raw ASC API with the sharp edges filed off, because the CLI is
 **schema-aware**: it keeps a copy of Apple's own OpenAPI spec (fetched on first
@@ -377,7 +504,7 @@ packages/cli/
 │   │   ├── account/      login, whoami, orgs, doctor, feedback, skills, upgrade
 │   │   ├── resource/     apps, products, entitlements, campaigns, paywalls, bootstrap
 │   │   ├── workflow/     integrate, migrate, review
-│   │   ├── platform/     get/post/patch/delete, query, asc, asc keys
+│   │   ├── platform/     get/post/patch/delete, query, asc, asc keys, asc notification-url, setup apple, revenue-provider
 │   │   └── paywalls/     create, dev, push, promote, publish
 │   ├── core/             api client, auth, project detection, paywall
 │   │                     binding + lock, agent runners, telemetry, skills sync

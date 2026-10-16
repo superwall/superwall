@@ -1,4 +1,7 @@
 import type { SuperwallApi } from "./client";
+import { listReachableProjects } from "./orgs";
+
+export { listOrganizations } from "./orgs";
 import type { PaywallSettings } from "@/core/paywalls/project/framework";
 
 export interface Application {
@@ -14,6 +17,7 @@ export interface Application {
 export interface Project {
   id: string | number;
   name?: string;
+  organization_id?: string | number;
   applications?: Application[];
 }
 
@@ -26,7 +30,7 @@ export const RESOURCES = {
   entitlements: "/v2/entitlements",
 } as const;
 
-export type ResourceName = keyof typeof RESOURCES | "apps" | "orgs" | "projects";
+export type ResourceName = keyof typeof RESOURCES | "apps" | "projects";
 
 const RESOURCE_SCOPE: Record<keyof typeof RESOURCES, "project" | "application"> = {
   products: "project",
@@ -69,10 +73,7 @@ export interface Scope {
 }
 
 export async function listProjects(api: SuperwallApi): Promise<Project[]> {
-  const org = api.org?.id;
-  return api.list<Project>(
-    org ? `/v2/projects?organization_id=${encodeURIComponent(org)}` : "/v2/projects",
-  );
+  return listReachableProjects(api);
 }
 
 export async function listApplications(api: SuperwallApi): Promise<Application[]> {
@@ -106,6 +107,7 @@ export function createEntitlement(
 export type SubscriptionPeriod = "day" | "week" | "month" | "year";
 
 export interface ProductCreateOpts {
+  applicationId?: string;
   name?: string;
   price?: { amount: number; currency: string };
   subscription?: {
@@ -124,6 +126,7 @@ export function createProduct(
 ): Promise<Row> {
   return api.post<Row>("/v2/products", {
     project_id: scope.projectId,
+    ...(opts.applicationId ? { application_id: opts.applicationId } : {}),
     identifier,
     ...(opts.name ? { name: opts.name } : {}),
     ...(opts.price ? { price: opts.price } : {}),
@@ -132,18 +135,14 @@ export function createProduct(
   });
 }
 
-export async function listOrganizations(api: SuperwallApi): Promise<Row[]> {
-  const res = await api.get<{ data?: Row[] }>("/v2/me/organizations");
-  return res.data ?? [];
-}
-
-export function createProject(api: SuperwallApi, name: string): Promise<Row> {
-  const orgId = api.org.id;
-  if (!orgId)
-    throw new Error("No organization selected - run `superwall orgs use <id|name>` first.");
+export function createProject(
+  api: SuperwallApi,
+  name: string,
+  organizationId: string,
+): Promise<Row> {
   return api.post<Row>("/v2/projects", {
     name,
-    organization_id: Number(orgId),
+    organization_id: Number(organizationId),
   });
 }
 
@@ -306,17 +305,6 @@ export async function getPaywall(api: SuperwallApi, paywallId: string): Promise<
     featureGating: typeof row.feature_gating === "string" ? row.feature_gating : undefined,
     products: productRefsOf(row.products),
   };
-}
-
-export async function projectOrganizationId(
-  api: SuperwallApi,
-  projectId: string,
-): Promise<string | undefined> {
-  const row = await api.get<Row>(`/v2/projects/${encodeURIComponent(projectId)}`);
-  const organization = row.organization_id;
-  return typeof organization === "string" || typeof organization === "number"
-    ? String(organization)
-    : undefined;
 }
 
 export interface LivePaywall {

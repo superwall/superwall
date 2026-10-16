@@ -1,5 +1,5 @@
 import { API_HOST } from "@/environment";
-import { loadSession, saveSession, type Session } from "@/core/auth/storage";
+import { loadSession, type Session } from "@/core/auth/storage";
 import { resolveAuthToken } from "@/core/auth/token";
 import { NotLoggedInError } from "@/core/auth/errors";
 
@@ -82,10 +82,11 @@ export interface RequestOptions {
 }
 
 export type SuperwallApi = {
-  readonly org: { id?: string; name?: string; count: number };
+  // Set only by forOrg, for the org-wide endpoints of the app a command is about.
+  readonly org: { id?: string };
   readonly userEmail: string | undefined;
   readonly host: string;
-  setOrg(org: { id: string; name?: string }): void;
+  forOrg(id: string): SuperwallApi;
   get<T>(path: string, options?: RequestOptions): Promise<T>;
   post<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
   put<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
@@ -96,6 +97,15 @@ export type SuperwallApi = {
 };
 
 const PAGE_LIMIT = 50;
+const GET_RETRIES = 3;
+const RETRYABLE = new Set([429, 502, 503, 504]);
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function retryDelay(res: Response, retry: number): number {
+  const after = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(after) && after >= 0 && res.headers.has("retry-after")) return after * 1000;
+  return 400 * 2 ** retry;
+}
 
 export const createSuperwallApi = (initial: Session): SuperwallApi => {
   let session = initial;
@@ -123,16 +133,27 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
     options: RequestOptions = {},
   ): Promise<T> => {
     const token = await authorized();
-    const res = await send(`${host()}${path}`, {
-      method,
-      headers: {
-        ...options.headers,
-        authorization: `Bearer ${token}`,
-        accept: "application/json",
-        ...(body !== undefined ? { "content-type": "application/json" } : {}),
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
+    const attempt = () =>
+      send(`${host()}${path}`, {
+        method,
+        headers: {
+          ...options.headers,
+          authorization: `Bearer ${token}`,
+          accept: "application/json",
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+    let res = await attempt();
+    // Only reads are retried: a write that timed out may already have landed.
+    for (
+      let retry = 0;
+      method === "GET" && RETRYABLE.has(res.status) && retry < GET_RETRIES;
+      retry++
+    ) {
+      await sleep(retryDelay(res, retry));
+      res = await attempt();
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new ApiError(`${method} ${path}`, res.status, text);
@@ -142,24 +163,14 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
   };
 
   const api: SuperwallApi = {
-    get org() {
-      const override = process.env.SUPERWALL_ORG_ID;
-      return {
-        id: override ?? session.orgId,
-        name: override ? undefined : session.orgName,
-        count: session.orgCount ?? 1,
-      };
-    },
+    org: {},
     get userEmail() {
       return session.userEmail;
     },
     get host() {
       return host();
     },
-    setOrg(org) {
-      session = { ...session, orgId: org.id, orgName: org.name };
-      saveSession(session);
-    },
+    forOrg: (id) => ({ ...api, org: { id }, forOrg: api.forOrg }),
     get: (path, options) => request("GET", path, undefined, options),
     post: (path, body, options) => request("POST", path, body, options),
     put: (path, body, options) => request("PUT", path, body, options),

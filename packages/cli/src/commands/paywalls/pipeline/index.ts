@@ -29,11 +29,7 @@ import {
   type FrameworkProject,
   type FrameworkSurface,
 } from "@/core/paywalls/project/framework";
-import {
-  fetchProducts,
-  projectForApplication,
-  requireProducts,
-} from "@/core/paywalls/products";
+import { fetchProducts, projectForApplication, requireProducts } from "@/core/paywalls/products";
 import { warnNotPortable } from "@/core/paywalls/source/portability";
 import { parseRenameFlags, resolveRenames } from "@/core/paywalls/binding/renames";
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
@@ -70,6 +66,7 @@ import {
   requireProject,
   selectSurfaces,
 } from "./selection";
+import { pickAdoptOption } from "../pick-adopt";
 import { pickApplicationOption } from "../pick-app";
 import { pickRenameOption } from "../pick-rename";
 import { pickStaleOption } from "../pick-stale";
@@ -230,6 +227,7 @@ async function prepare(
           name: builds[index]?.name,
           surfaces: project.surfaces,
           renamesResolved: true,
+          confirmAdopt: input.interactive ? pickAdoptOption : undefined,
         }),
       );
     }
@@ -249,8 +247,9 @@ async function prepare(
         build,
         live: live.version,
         changed: needsWork(build.snapshotId, pushed, live.snapshotId),
-        pending: !needsWork(build.snapshotId, pushed, live.snapshotId)
-          && live.snapshotId !== build.snapshotId,
+        pending:
+          !needsWork(build.snapshotId, pushed, live.snapshotId) &&
+          live.snapshotId !== build.snapshotId,
       };
     });
     const modified = prepared.filter((entry) => entry.changed).length;
@@ -317,7 +316,7 @@ export async function runPushPipeline(
     interactive: context.interactive,
     promote: options.promote,
   });
-  
+
   for (const entry of prepared) {
     for (const source of entry.build.externalSources ?? []) external.add(source);
   }
@@ -392,6 +391,7 @@ export async function runPushPipeline(
         if (!source.ok) throw new Error(source.reason);
         return pushSource({
           api: context.api,
+          superwallDir: project.superwallDir,
           paywallId: bind.paywallId,
           applicationId: bind.applicationId,
           version,
