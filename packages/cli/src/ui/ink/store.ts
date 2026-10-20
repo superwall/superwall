@@ -56,6 +56,7 @@ export type Active =
       error?: string;
       footer?: string;
       transient?: boolean;
+      secret?: boolean;
       validate?: (v: string) => string | undefined;
       resolve: (v: string | null) => void;
     }

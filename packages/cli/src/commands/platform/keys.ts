@@ -2,19 +2,36 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import type { CommandContext } from "@/command";
 import type { SuperwallApi } from "@/core/api/client";
-import { createAscConfig, deleteAscConfig, listAscConfigs } from "@/core/api/asc";
+import { createAscConfig, deleteAscConfig, listAscConfigs, replaceAscConfig } from "@/core/api/asc";
 import { rowName } from "@/core/api/resources";
 import { apiCall, emitJson } from "@/commands/api-output";
+import {
+  copyAppKeyCommand,
+  importAppKeys,
+  listAppKeySources,
+  listAppKeys,
+  removeAppKeyCommand,
+  setAppKey,
+} from "./app-keys";
+import { appleDeps } from "./apple-deps";
+import { createAppKey, keyKind, text } from "./apple-keys";
 
-export async function runAscKeys(ctx: CommandContext, api: SuperwallApi): Promise<void> {
+export async function runAscKeys(ctx: CommandContext<"required">, api: SuperwallApi): Promise<void> {
   const action = (ctx.argv.value as string | undefined) ?? "list";
-  if (action === "list") return listKeys(ctx, api);
-  if (action === "set") return setKey(ctx, api);
-  if (action === "rm") return removeKey(ctx, api);
-  throw new Error(`Unknown "asc keys ${action}". Use list | set | rm.`);
+  const forApp = text(ctx, "app") !== undefined;
+  if (action === "list") return forApp ? listAppKeys(ctx) : listKeys(ctx, api);
+  if (action === "set") return setKey(ctx, api, forApp);
+  if (action === "rm") return forApp ? removeAppKeyCommand(ctx) : removeKey(ctx, api);
+  if (action === "create") return createAppKey(ctx, appleDeps);
+  if (action === "sources") return listAppKeySources(ctx);
+  if (action === "copy") return copyAppKeyCommand(ctx);
+  if (action === "import") return importAppKeys(ctx);
+  throw new Error(
+    `Unknown "asc keys ${action}". Use list | set | rm | create | sources | copy | import.`,
+  );
 }
 
-async function listKeys(ctx: CommandContext, api: SuperwallApi): Promise<void> {
+async function listKeys(ctx: CommandContext<"required">, api: SuperwallApi): Promise<void> {
   const configs = await apiCall(ctx, "Loading credentials", () => listAscConfigs(api));
   if (ctx.json) return emitJson(ctx, configs);
 
@@ -24,7 +41,7 @@ async function listKeys(ctx: CommandContext, api: SuperwallApi): Promise<void> {
       const add = await ctx.ui.confirm({
         message: "Connect an App Store Connect key now?",
       });
-      if (add) return setKey(ctx, api);
+      if (add) return setKey(ctx, api, false);
       return;
     }
     ctx.ui.info("Add one: superwall asc keys set --key-id <id> --issuer <id> --key-file <path.p8>");
@@ -35,13 +52,19 @@ async function listKeys(ctx: CommandContext, api: SuperwallApi): Promise<void> {
   for (const c of configs) ctx.ui.info(`\`${rowName(c)}\`  ${c.team_id ?? c.id ?? ""}`);
 }
 
-async function setKey(ctx: CommandContext, api: SuperwallApi): Promise<void> {
-  const input = await resolveKeyInput(ctx);
+async function setKey(
+  ctx: CommandContext<"required">,
+  api: SuperwallApi,
+  forApp: boolean,
+): Promise<void> {
+  const input = await resolveKeyInput(ctx, forApp);
   if (!input) return void ctx.ui.warn("Cancelled.");
+  if (forApp) return setAppKey(ctx, input);
   const { keyId, issuerId, keyFile, accountName } = input;
+  const teamId = text(ctx, "team");
 
   if (ctx.dryRun) {
-    const plan = { dryRun: true, action: "set", keyId, issuerId, keyFile };
+    const plan = { dryRun: true, action: "set", keyId, issuerId, keyFile, ...(teamId ? { teamId } : {}) };
     return void (ctx.json
       ? emitJson(ctx, plan)
       : ctx.ui.info(
@@ -50,8 +73,11 @@ async function setKey(ctx: CommandContext, api: SuperwallApi): Promise<void> {
   }
 
   const privateKey = readFileSync(keyFile, "utf8");
+  const credentials = { keyId, issuerId, privateKey, accountName };
   const created = await apiCall(ctx, "Connecting App Store Connect", () =>
-    createAscConfig(api, { keyId, issuerId, privateKey, accountName }),
+    teamId
+      ? replaceAscConfig(api, teamId, credentials)
+      : createAscConfig(api, { ...credentials, accountName: accountName ?? "App Store Connect" }),
   );
   if (ctx.json) return emitJson(ctx, created);
   ctx.ui.success(`App Store Connect connected ${created.team_id ?? created.id ?? ""}`);
@@ -60,6 +86,9 @@ async function setKey(ctx: CommandContext, api: SuperwallApi): Promise<void> {
 async function removeKey(ctx: CommandContext, api: SuperwallApi): Promise<void> {
   const teamId = ctx.argv.value2 as string | undefined;
   if (!teamId) throw new Error("Usage: superwall asc keys rm <team_id>");
+  if (keyKind(teamId)) {
+    throw new Error(`Usage: superwall asc keys rm ${teamId} --app <id>`);
+  }
   if (ctx.dryRun) {
     const plan = { dryRun: true, action: "rm", teamId };
     return void (ctx.json
@@ -71,14 +100,14 @@ async function removeKey(ctx: CommandContext, api: SuperwallApi): Promise<void> 
   ctx.ui.success(`Removed App Store Connect credential ${teamId}`);
 }
 
-interface KeyInput {
+export interface KeyInput {
   keyId: string;
   issuerId: string;
   keyFile: string;
-  accountName: string;
+  accountName?: string;
 }
 
-async function resolveKeyInput(ctx: CommandContext): Promise<KeyInput | null> {
+async function resolveKeyInput(ctx: CommandContext, forApp: boolean): Promise<KeyInput | null> {
   const { argv, ui, interactive } = ctx;
   let keyId = (argv["key-id"] as string | undefined)?.trim();
   let issuerId = (argv.issuer as string | undefined)?.trim();
@@ -87,8 +116,10 @@ async function resolveKeyInput(ctx: CommandContext): Promise<KeyInput | null> {
 
   if (interactive && (!keyId || !issuerId || !keyFile)) {
     ui.note(
-      "Create a key in App Store Connect → Users and Access → Integrations →\nApp Store Connect API. You'll need its Key ID, the Issuer ID, and the\ndownloaded .p8 file. This is stored org-wide for the signed proxy.",
-      "Connect App Store Connect",
+      forApp
+        ? "You'll need the key's Key ID, its Issuer ID, and the downloaded .p8 file,\nfrom App Store Connect → Users and Access → Integrations."
+        : "Create a key in App Store Connect → Users and Access → Integrations →\nApp Store Connect API. You'll need its Key ID, the Issuer ID, and the\ndownloaded .p8 file. This is stored org-wide for the signed proxy.",
+      forApp ? "Save an Apple key on the app" : "Connect App Store Connect",
     );
     if (!keyId) {
       const v = await ui.text({
@@ -122,7 +153,7 @@ async function resolveKeyInput(ctx: CommandContext): Promise<KeyInput | null> {
       if (v === null) return null;
       keyFile = v.trim();
     }
-    if (!name) {
+    if (!name && !forApp) {
       const v = await ui.text({
         message: "Name (optional)",
         placeholder: "App Store Connect",
@@ -134,7 +165,9 @@ async function resolveKeyInput(ctx: CommandContext): Promise<KeyInput | null> {
 
   if (!keyId || !issuerId || !keyFile) {
     throw new Error(
-      "Usage: superwall asc keys set --key-id <id> --issuer <id> --key-file <path.p8> [--name <name>]",
+      forApp
+        ? "Usage: superwall asc keys set [api_key | purchase_key] --app <id> --key-id <id> --issuer <id> --key-file <path.p8>"
+        : "Usage: superwall asc keys set --key-id <id> --issuer <id> --key-file <path.p8> [--name <name>] [--team <id>]",
     );
   }
   const path = expandHome(keyFile);
@@ -145,7 +178,7 @@ async function resolveKeyInput(ctx: CommandContext): Promise<KeyInput | null> {
     keyId,
     issuerId,
     keyFile: path,
-    accountName: name || "App Store Connect",
+    ...(name ? { accountName: name } : {}),
   };
 }
 

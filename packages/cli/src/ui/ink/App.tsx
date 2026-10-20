@@ -456,7 +456,7 @@ function ConfirmView({
 function TextView({ active }: { active: Extract<Active, { type: "text" }> }): React.ReactElement {
   useInput((input, key) => {
     if (key.return) {
-      const v = active.value.trim();
+      const v = active.secret ? active.value : active.value.trim();
       if (active.validate) {
         const err = active.validate(v);
         if (err) {
@@ -466,7 +466,7 @@ function TextView({ active }: { active: Extract<Active, { type: "text" }> }): Re
       }
       const resolve = active.resolve;
       if (active.transient) setActive(null);
-      else finish(active.message, v || "(empty)");
+      else finish(active.message, active.secret ? "•".repeat(8) : v || "(empty)");
       resolve(v);
     } else if (key.escape) {
       const resolve = active.resolve;
@@ -491,7 +491,7 @@ function TextView({ active }: { active: Extract<Active, { type: "text" }> }): Re
         <Text> </Text>
         {active.value ? (
           <>
-            <Text>{active.value}</Text>
+            <Text>{active.secret ? "•".repeat(active.value.length) : active.value}</Text>
             <Text color={PRIMARY}>▏</Text>
           </>
         ) : (

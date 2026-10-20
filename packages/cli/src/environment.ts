@@ -62,6 +62,18 @@ export function apiKeyFromEnv(): string | undefined {
   return v && v.trim() ? v.trim() : undefined;
 }
 
+export const ENV_APPLE_ID = "SUPERWALL_APPLE_ID";
+export const ENV_APPLE_PASSWORD = "SUPERWALL_APPLE_PASSWORD";
+
+export function appleCredentialsFromEnv(): { appleId?: string; password?: string } {
+  const appleId = process.env[ENV_APPLE_ID]?.trim();
+  const password = process.env[ENV_APPLE_PASSWORD];
+  return {
+    ...(appleId ? { appleId } : {}),
+    ...(password ? { password } : {}),
+  };
+}
+
 export function isNonInteractive(): boolean {
   return !process.stdout.isTTY || !process.stdin.isTTY || process.env.CI === "true";
 }

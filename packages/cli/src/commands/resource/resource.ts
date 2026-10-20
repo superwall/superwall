@@ -1,6 +1,7 @@
 import { defineCommand, type DefinedCommand } from "@/command";
 import type { ResourceName } from "@/core/api/resources";
 import { addCampaignPlacement, writeStoreKit } from "./actions";
+import { runBundleId } from "./bundle-id";
 import { create } from "./create";
 import { list, useApp, useOrg } from "./list";
 
@@ -16,6 +17,9 @@ export function runResource(resource: ResourceName): DefinedCommand<"required"> 
       if (action === "create") return create(context, context.api, resource);
       if (action === "use" && resource === "apps") {
         return useApp(context, context.api);
+      }
+      if (action === "bundle-id" && resource === "apps") {
+        return runBundleId(context);
       }
       if (action === "use" && resource === "orgs") {
         return useOrg(context, context.api);

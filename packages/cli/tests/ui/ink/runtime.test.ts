@@ -15,3 +15,13 @@ test("text prompts can start with an editable value", () => {
   if (active?.type === "text") assert.equal(active.value, "Monoroll");
   reset();
 });
+
+test("secret text prompts carry the flag to the active prompt", () => {
+  reset();
+  void inkRenderer.text({ message: "Apple Account password", secret: true });
+
+  const active = getState().active;
+  assert.equal(active?.type, "text");
+  if (active?.type === "text") assert.equal(active.secret, true);
+  reset();
+});

@@ -2,7 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createSuperwallApi } from "@/core/api/client";
 import type { SuperwallApi } from "@/core/api/client";
-import { createAscConfig, deleteAscConfig } from "@/core/api/asc";
+import {
+  createAscConfig,
+  deleteAscConfig,
+  getAppNotificationUrl,
+  saveAppAscKey,
+  saveAppPurchaseKey,
+  replaceAscConfig,
+} from "@/core/api/asc";
 import { generateStoreKit } from "@/core/dashboard/storekit";
 import type { Session } from "@/core/auth/storage";
 
@@ -58,4 +65,58 @@ test("generateStoreKit maps product identifiers into a valid-ish config", () => 
     ["com.app.pro", "com.app.plus"],
   );
   assert.equal(sk.version.major, 3);
+});
+
+const APP = { projectId: "5", applicationId: "8" };
+const CREDS = { keyId: "K", issuerId: "I", privateKey: "PEM" };
+
+test("replaceAscConfig replaces a team's key and asks for the team check", async () => {
+  const rec = record();
+  await replaceAscConfig(api, "T1", { ...CREDS, accountName: "Acme" });
+  assert.equal(rec.url, "https://api.example.com/v2/organizations/77/app-store-connect/T1");
+  assert.equal(rec.method, "PATCH");
+  assert.deepEqual(rec.body, {
+    key_id: "K",
+    issuer_id: "I",
+    private_key: "PEM",
+    validate: true,
+    account_name: "Acme",
+  });
+});
+
+test("saveAppAscKey puts the key on the application", async () => {
+  const rec = record();
+  await saveAppAscKey(api, APP, CREDS);
+  assert.equal(
+    rec.url,
+    "https://api.example.com/v2/projects/5/applications/8/integrations/app-store-connect/configuration",
+  );
+  assert.equal(rec.method, "PUT");
+  assert.deepEqual(rec.body, { key_id: "K", issuer_id: "I", private_key: "PEM" });
+});
+
+test("saveAppPurchaseKey sends the bundle id with the key", async () => {
+  const rec = record();
+  await saveAppPurchaseKey(api, APP, { ...CREDS, bundleId: "com.acme.app" });
+  assert.equal(
+    rec.url,
+    "https://api.example.com/v2/projects/5/applications/8/integrations/in-app-purchase/configuration",
+  );
+  assert.deepEqual(rec.body, {
+    bundle_id: "com.acme.app",
+    key_id: "K",
+    issuer_id: "I",
+    private_key: "PEM",
+  });
+});
+
+test("getAppNotificationUrl returns the application's webhook URL", async () => {
+  globalThis.fetch = (async (input: string | URL) => {
+    assert.equal(
+      String(input),
+      "https://api.example.com/v2/projects/5/applications/8/integrations/app-store-connect/notification-url",
+    );
+    return new Response(JSON.stringify({ url: "https://hook.test/?pk=1" }), { status: 200 });
+  }) as typeof fetch;
+  assert.equal(await getAppNotificationUrl(api, APP), "https://hook.test/?pk=1");
 });
