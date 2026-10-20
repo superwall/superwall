@@ -28,10 +28,11 @@ export interface LoginOptions {
   issuer?: string;
   apiHost?: string;
   clientId?: string;
-  onVerify?: (info: { url: string; userCode: string }) => void;
+  onVerify?: (info: { url: string; userCode: string; browserOpened: boolean }) => void;
   onStatus?: (message: string) => void;
   onOnboard?: () => Promise<OnboardSetup | null>;
   onProvisioned?: (result: ProvisionedApp) => void;
+  openBrowser?: (url: string) => Promise<boolean>;
 }
 
 export interface OnboardSetup {
@@ -60,8 +61,8 @@ export async function performLogin(opts: LoginOptions = {}): Promise<Session> {
 
   const dev = await startDeviceAuth(disc.device_authorization_endpoint, clientId);
   const url = dev.verification_uri_complete ?? dev.verification_uri;
-  opts.onVerify?.({ url, userCode: dev.user_code });
-  openBrowser(url);
+  const browserOpened = await (opts.openBrowser ?? openBrowser)(url);
+  opts.onVerify?.({ url, userCode: dev.user_code, browserOpened });
 
   const { accessToken, refreshToken, expiresIn, idToken } = await pollForToken(
     disc.token_endpoint,
