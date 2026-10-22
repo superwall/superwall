@@ -566,14 +566,14 @@ describe("useUserAttribute as state", () => {
     expect(result.current[0]).toBe("lose");
   });
 
-  it("writes once in StrictMode, whose effects run twice, after the host's first state", async () => {
+  it("writes once in StrictMode, whose effects run twice, on a surface waiting for the host", async () => {
     window.history.replaceState({}, "", "/?transport=editor");
     const outgoing: TOutgoingMessage[] = [];
     const { transport } = createHost({ onOutgoing: (message) => outgoing.push(message) });
     render(
       <React.StrictMode>
         <SuperwallProvider config={testConfig} transport={transport}>
-          <Opened />
+          <navigation.PaywallRouter routes={{ index: { default: Opened } }} entry={() => "index"} />
         </SuperwallProvider>
       </React.StrictMode>,
     );

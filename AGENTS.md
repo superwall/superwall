@@ -274,13 +274,17 @@ The stack, bottom to top — each layer depends only on the one below it:
     `superwall/navigation` and `superwall/hooks`. `navigation/query.ts`
     re-exports them for its old importers.
   - `src/provider/` — `SuperwallProvider` + session context (`context.ts`)
-    and the typed `createSuperwall` factory (`create.ts`). Under a host
-    (`detectSuperwallHost()`), the provider renders none of its children
-    until the host's first `template_variables` arrives, or
-    `HOST_STATE_TIMEOUT_MS` passes, so a paywall's first render already has
-    the user, device and products: no page ever paints with an empty user and
-    then jumps. Hosts answer the ping (sent in a layout effect) with that
-    state; the iOS SDK also keeps the webview hidden until it has sent it.
+    and the typed `createSuperwall` factory (`create.ts`). The provider
+    always renders its children. It sends the ping in a layout effect, before
+    first paint, and tracks whether the host's first state has arrived,
+    exposed as `useHostStateArrived()`: true at once with no host
+    (`detectSuperwallHost()`), otherwise on the first `template_variables` or
+    after `HOST_STATE_TIMEOUT_MS`. Only `PaywallRouter` waits on it, and only
+    for a surface with `entry` and no `?sw_nav=` stack in the URL: it renders
+    nothing until arrival so `entry` decides on the host's user and the first
+    page never paints with an empty user and then jumps. A surface without
+    `entry` renders at once on every host. The iOS SDK also keeps the webview
+    hidden until it has sent that state.
   - `src/navigation/` — `superwall/navigation`: the route stack behind the
     file-based `app/` tree (`useRouter`, `useIsFocused`, `PaywallRouter`).
     Routes are names, never paths — one bundle, no network on navigate; the
@@ -288,8 +292,8 @@ The stack, bottom to top — each layer depends only on the one below it:
     navigation reports `page_view`. The stack a surface opens on is
     `index`, unless `app/layout.tsx` exports `entry` (`({ user, device,
 params }) => RouteName | RouteName[]`): the router calls it once, in its
-    state initializer, so after the provider's wait for the host's first
-    state; it opens on that stack with no transition, mounts nothing outside
+    state initializer, once the host's first state has arrived (the router
+    renders nothing before then); it opens on that stack with no transition, mounts nothing outside
     it, and reports one `entry` page view for the top. `replayStack(start,
 next, answered)` (`navigation/replay.ts`) is the stack for a flow: it walks
     `next` while each route is answered and stops, with a warning, on a

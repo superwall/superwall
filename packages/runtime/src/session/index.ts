@@ -174,7 +174,11 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
     });
   };
 
+  let hostAnswered = false;
+  let unconfirmed: Record<string, string> | undefined;
+
   const handleIncoming = (message: TIncomingMessage) => {
+    if (message.event_name === "template_variables") hostAnswered = true;
     switch (message.event_name) {
       case "paywall_open":
         purchases.failAll("superseded");
@@ -231,7 +235,14 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
         break;
     }
 
-    commit(snapshotPatchFor(snapshot, message) ?? {});
+    const patch = snapshotPatchFor(snapshot, message) ?? {};
+    if (message.event_name === "template_variables" && unconfirmed) {
+      const user = { ...patch.user, ...unconfirmed };
+      unconfirmed = undefined;
+      commit({ ...patch, user, variables: { ...patch.variables, user } });
+    } else {
+      commit(patch);
+    }
     emit(message.event_name, message);
     emit("message", message);
   };
@@ -314,10 +325,9 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
       }));
       if (entries.length === 0) return;
       post(outgoing.userAttributeUpdated(entries));
-      const user = {
-        ...snapshot.user,
-        ...Object.fromEntries(entries.map(({ key, value }) => [key, value])),
-      };
+      const written = Object.fromEntries(entries.map(({ key, value }) => [key, value]));
+      if (!hostAnswered) unconfirmed = { ...unconfirmed, ...written };
+      const user = { ...snapshot.user, ...written };
       commit({ user, variables: { ...snapshot.variables, user } });
     },
     requestStoreReview: (reviewType) => post(outgoing.requestStoreReview(reviewType)),

@@ -250,7 +250,10 @@ checkout and in-app browsers hand a flow back where it left off.
 A surface opens on `index`. To open somewhere else, export `entry` from
 `app/layout.tsx`: it gets the host's first state and returns the starting
 stack, bottom to top (or one route name). It runs once, before the first
-render; nothing outside the stack mounts and nothing animates. A stack in the
+render; nothing outside the stack mounts and nothing animates. To get that
+state, a surface with `entry` renders nothing until the host answers, or for
+at most one second if it never does; a surface without `entry` renders at
+once. A stack in the
 URL (`?sw_nav=`) wins over it, and a bad answer falls back to `index`:
 
 ```tsx

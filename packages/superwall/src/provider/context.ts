@@ -18,8 +18,9 @@ import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
 import "./insets.css";
 
 const SuperwallContext = React.createContext<SuperwallSession | null>(null);
+const HostStateContext = React.createContext(true);
 
-/** How long a paywall waits for its host's first state before rendering without it. */
+/** How long a surface with `entry` waits for its host's first state before rendering without it. Nothing else waits. */
 export const HOST_STATE_TIMEOUT_MS = 1000;
 
 const useHostState = (session: SuperwallSession): boolean => {
@@ -126,7 +127,7 @@ export const SuperwallProvider = ({ children, config, transport }: SuperwallProv
     React.createElement(ColorScheme, { background: backgroundOf(config?.background) }),
     React.createElement(HostAttributes),
     React.createElement(Insets, { insets: config?.insets }),
-    ready ? children : null,
+    React.createElement(HostStateContext.Provider, { value: ready }, children),
   );
 };
 
@@ -188,6 +189,8 @@ const ColorScheme = ({ background }: { background?: ResolvedBackground }): null 
 
   return null;
 };
+
+export const useHostStateArrived = (): boolean => React.useContext(HostStateContext);
 
 export const useSuperwallSession = <
   TProduct extends SuperwallProduct = SuperwallProduct,

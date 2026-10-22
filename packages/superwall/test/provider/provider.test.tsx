@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ITransport } from "@superwall/runtime";
 import { SuperwallProvider } from "../../src";
 import { createSuperwall, useProducts, useUser } from "../../src/hooks";
+import { PaywallRouter, type Entry, type RouteMap } from "../../src/navigation/index";
 import { HOST_STATE_TIMEOUT_MS } from "../../src/provider/context";
 import { createHost, createWrapper, flush, testConfig } from "../helpers";
 
@@ -69,7 +70,7 @@ describe("window.paywall interface", () => {
 });
 
 describe("without a transport", () => {
-  it("talks to the page's host and renders nothing until it answers", async () => {
+  it("talks to the page's host and renders its children without waiting for it", async () => {
     window.history.replaceState({}, "", "/?transport=editor");
     const posted: string[] = [];
     const parent = vi.spyOn(window, "postMessage").mockImplementation((message) => {
@@ -83,7 +84,7 @@ describe("without a transport", () => {
     );
     await flush();
 
-    expect(screen.queryByText("paywall")).toBeNull();
+    expect(screen.getByText("paywall")).toBeTruthy();
     expect(posted.some((message) => message.includes('"event_name":"ping"'))).toBe(true);
     parent.mockRestore();
   });
@@ -102,15 +103,18 @@ const UserProbe = ({ seen }: { seen: unknown[] }) => {
   return <span>paywall</span>;
 };
 
+const opensOnIndex: Entry = () => "index";
+
 describe("waiting for the host", () => {
-  it("first renders with the host's user already in it", async () => {
+  it("first renders a surface with an entry with the host's user already in it", async () => {
     window.history.replaceState({}, "", "/?transport=editor");
     const seen: unknown[] = [];
     const { transport } = createHost({ user: { onboarding_goal: "build" } });
+    const routes: RouteMap = { index: { default: () => <UserProbe seen={seen} /> } };
 
     render(
       <SuperwallProvider config={testConfig} transport={transport}>
-        <UserProbe seen={seen} />
+        <PaywallRouter routes={routes} entry={opensOnIndex} />
       </SuperwallProvider>,
     );
     expect(screen.queryByText("paywall")).toBeNull();
@@ -121,13 +125,16 @@ describe("waiting for the host", () => {
     expect(seen[0]).toBe("build");
   });
 
-  it("goes ahead without a host that never answers", () => {
+  it("goes ahead with a surface with an entry when the host never answers", () => {
     vi.useFakeTimers();
     try {
       window.history.replaceState({}, "", "/?transport=editor");
       render(
         <SuperwallProvider config={testConfig} transport={silentHost()}>
-          <span>paywall</span>
+          <PaywallRouter
+            routes={{ index: { default: () => <span>paywall</span> } }}
+            entry={opensOnIndex}
+          />
         </SuperwallProvider>,
       );
 
@@ -139,6 +146,24 @@ describe("waiting for the host", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("renders plain children at once, then with the host's user once it answers", async () => {
+    window.history.replaceState({}, "", "/?transport=editor");
+    const seen: unknown[] = [];
+    const { transport } = createHost({ user: { onboarding_goal: "build" } });
+
+    render(
+      <SuperwallProvider config={testConfig} transport={transport}>
+        <UserProbe seen={seen} />
+      </SuperwallProvider>,
+    );
+    expect(screen.getByText("paywall")).toBeTruthy();
+    expect(seen[0]).toBeUndefined();
+
+    await flush();
+
+    expect(seen.at(-1)).toBe("build");
   });
 
   it("renders at once on a page with no host to wait for", () => {

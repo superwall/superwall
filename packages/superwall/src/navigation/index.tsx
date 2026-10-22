@@ -6,7 +6,7 @@ import {
   type SuperwallPlacementParams,
   type SuperwallUserVariables,
 } from "@superwall/runtime";
-import { useSuperwallSession } from "../provider/context";
+import { useHostStateArrived, useSuperwallSession } from "../provider/context";
 import {
   freeze,
   longestAnimationMs,
@@ -113,7 +113,9 @@ export type EntryVariables = {
 /**
  * The stack a surface opens on, bottom to top, or a single route. Exported as
  * `entry` from `app/layout.tsx` and called once before the first render, with
- * the host's first state already in. Return `[]` or `"index"` to open as usual.
+ * the host's first state already in: a surface with `entry` renders nothing
+ * until that state arrives, or `HOST_STATE_TIMEOUT_MS` passes. Return `[]` or
+ * `"index"` to open as usual.
  */
 export type Entry = (variables: EntryVariables) => RouteName | readonly RouteName[];
 
@@ -226,7 +228,11 @@ export type PaywallRouterProps = {
   routes: RouteMap;
   /** Wraps the whole stack, from the surface's `app/layout.tsx`. */
   Layout?: React.ComponentType<React.PropsWithChildren>;
-  /** The stack to open on, from the `entry` export of `app/layout.tsx`. A `?sw_nav=` stack in the URL wins. */
+  /**
+   * The stack to open on, from the `entry` export of `app/layout.tsx`. When set, the router renders
+   * nothing until the host's first state arrives (or `HOST_STATE_TIMEOUT_MS` passes); without it the
+   * router renders at once. A `?sw_nav=` stack in the URL wins, and opens without waiting.
+   */
   entry?: Entry;
   /** Names this stack in the `page_view` events the SDK receives. */
   navigationId?: string;
@@ -240,7 +246,13 @@ export type PaywallRouterProps = {
 
 type LayerState = "active" | "behind" | "below" | "exiting";
 
-export const PaywallRouter = ({
+export const PaywallRouter = (props: PaywallRouterProps) => {
+  const arrived = useHostStateArrived();
+  if (props.entry && !arrived && !askedStack(props.routes)) return null;
+  return <Router {...props} />;
+};
+
+const Router = ({
   routes,
   Layout,
   entry: chooseStack,
