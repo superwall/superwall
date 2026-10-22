@@ -289,3 +289,8 @@ test("a superwall/ directory with no install of its own falls back to the host r
 
   assert.equal(frameworkVersion(root), "1.5.0");
 });
+
+test("framework.ts imports nothing through the @ alias, since packages/superwall typechecks it directly", () => {
+  const source = fs.readFileSync(new URL("../../../../src/core/paywalls/project/framework.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /from "@\//);
+});

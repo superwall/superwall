@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { field } from "@/core/json";
 import type {
   AppScheme,
   Samples,
@@ -170,10 +169,9 @@ export function resolveFrameworkDir(cwd: string): string {
 
 export function frameworkVersion(cwd: string): string {
   try {
-    const parsed: unknown = JSON.parse(
+    const { version } = JSON.parse(
       readFileSync(join(resolveFrameworkDir(cwd), "package.json"), "utf8"),
-    );
-    const version = field(parsed, "version");
+    ) as { version?: unknown };
     if (typeof version === "string" && version !== "") return version;
   } catch {
     return "unknown";
