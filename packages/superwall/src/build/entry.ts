@@ -72,7 +72,6 @@ export const entrySource = ({
     `    messages: catalogs,`,
     `  },`,
     `};`,
-    // Spread, so a layout without an `entry` export is undefined rather than a missing-export warning.
     ...(surface.layoutFile ? [`const { default: Layout, entry } = { ...layout };`] : []),
     `const routes = {${surface.routes
       .map((route, index) => `${JSON.stringify(route.name)}: Route${index}`)
