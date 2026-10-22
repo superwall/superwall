@@ -1,7 +1,9 @@
 import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { ITransport } from "@superwall/runtime";
 import { SuperwallProvider } from "../../src";
-import { createSuperwall, useProducts } from "../../src/hooks";
+import { createSuperwall, useProducts, useUser } from "../../src/hooks";
+import { HOST_STATE_TIMEOUT_MS } from "../../src/provider/context";
 import { createHost, createWrapper, flush, testConfig } from "../helpers";
 
 describe("window.paywall interface", () => {
@@ -67,23 +69,86 @@ describe("window.paywall interface", () => {
 });
 
 describe("without a transport", () => {
-  it("talks to the page's host and invents nothing while it waits", async () => {
+  it("talks to the page's host and renders nothing until it answers", async () => {
     window.history.replaceState({}, "", "/?transport=editor");
     const posted: string[] = [];
     const parent = vi.spyOn(window, "postMessage").mockImplementation((message) => {
       if (typeof message === "string") posted.push(message);
     });
 
-    const { result } = renderHook(() => useProducts(), {
-      wrapper: ({ children }) => (
-        <SuperwallProvider config={testConfig}>{children}</SuperwallProvider>
-      ),
-    });
+    render(
+      <SuperwallProvider config={testConfig}>
+        <span>paywall</span>
+      </SuperwallProvider>,
+    );
     await flush();
 
-    expect(result.current.products).toEqual([]);
+    expect(screen.queryByText("paywall")).toBeNull();
     expect(posted.some((message) => message.includes('"event_name":"ping"'))).toBe(true);
     parent.mockRestore();
+  });
+});
+
+const silentHost = (): ITransport => ({
+  postMessage: () => undefined,
+  accept: () => undefined,
+  addListener: () => undefined,
+  startListening: () => undefined,
+});
+
+describe("waiting for the host", () => {
+  const UserProbe = ({ seen }: { seen: unknown[] }) => {
+    const user = useUser();
+    seen.push(user.onboarding_goal);
+    return <span>paywall</span>;
+  };
+
+  it("first renders with the host's user already in it", async () => {
+    window.history.replaceState({}, "", "/?transport=editor");
+    const seen: unknown[] = [];
+    const { transport } = createHost({ user: { onboarding_goal: "build" } });
+
+    render(
+      <SuperwallProvider config={testConfig} transport={transport}>
+        <UserProbe seen={seen} />
+      </SuperwallProvider>,
+    );
+    expect(screen.queryByText("paywall")).toBeNull();
+
+    await flush();
+
+    expect(screen.getByText("paywall")).toBeTruthy();
+    expect(seen[0]).toBe("build");
+  });
+
+  it("goes ahead without a host that never answers", () => {
+    vi.useFakeTimers();
+    try {
+      window.history.replaceState({}, "", "/?transport=editor");
+      render(
+        <SuperwallProvider config={testConfig} transport={silentHost()}>
+          <span>paywall</span>
+        </SuperwallProvider>,
+      );
+
+      act(() => vi.advanceTimersByTime(HOST_STATE_TIMEOUT_MS - 1));
+      expect(screen.queryByText("paywall")).toBeNull();
+
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.getByText("paywall")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders at once on a page with no host to wait for", () => {
+    render(
+      <SuperwallProvider config={testConfig} transport={silentHost()}>
+        <span>paywall</span>
+      </SuperwallProvider>,
+    );
+
+    expect(screen.getByText("paywall")).toBeTruthy();
   });
 });
 

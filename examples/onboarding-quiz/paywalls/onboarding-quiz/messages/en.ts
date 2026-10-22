@@ -89,6 +89,7 @@ export default {
     failed: "Nothing to restore, or the store didn't answer. Try again.",
   },
   common: {
+    back: "Back",
     close: "Close",
   },
   footer: {

@@ -39,6 +39,27 @@ const Screen = ({ label }: { label: string }) => {
       <button type="button" onClick={() => router.dismissTo("plans")}>
         dismiss to plans
       </button>
+      <button type="button" onClick={() => router.reset(["index", "plans", "terms"])}>
+        reset to terms
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          router.reset(["index", "plans"]);
+          router.push("terms");
+        }}
+      >
+        reset then push
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          router.reset(["index", "plans", "terms"]);
+          router.back();
+        }}
+      >
+        reset then back
+      </button>
     </div>
   );
 };
@@ -52,7 +73,18 @@ const routes: RouteMap = {
 
 let sent: PageView[] = [];
 
-const mount = (strict = false) => {
+const resuming: RouteMap = {
+  ...routes,
+  index: {
+    default: () => {
+      const router = useRouter();
+      React.useLayoutEffect(() => router.reset(["index", "plans", "goals/experience"]), []);
+      return <Screen label="index" />;
+    },
+  },
+};
+
+const mount = (strict = false, map: RouteMap = routes) => {
   sent = [];
   const onOutgoing = (message: TOutgoingMessage) => {
     if (message.event_name === "page_view") sent.push(message as PageView);
@@ -60,7 +92,7 @@ const mount = (strict = false) => {
   const Wrapper = createWrapper({ host: { onOutgoing } });
   const tree = (
     <Wrapper>
-      <PaywallRouter routes={routes} navigationId="get-started" />
+      <PaywallRouter routes={map} navigationId="get-started" />
     </Wrapper>
   );
   return render(strict ? <React.StrictMode>{tree}</React.StrictMode> : tree);
@@ -250,5 +282,51 @@ describe("page_view is reported for every navigation", () => {
       expect(sent[i].previous_page_node_id).toBe(sent[i - 1].page_name);
       expect(sent[i].previous_flow_position).toBe(sent[i - 1].flow_position);
     }
+  });
+});
+
+describe("a reset", () => {
+  it("reports only where a reset before the first paint lands, as the entry", () => {
+    mount(false, resuming);
+
+    expect(trail()).toEqual([["entry", "goals/experience", 2]]);
+    expect(sent[0].previous_page_node_id).toBeUndefined();
+  });
+
+  it("reports that entry once under StrictMode, which resets twice", () => {
+    mount(true, resuming);
+
+    expect(trail()).toEqual([["entry", "goals/experience", 2]]);
+  });
+
+  it("reports a reset after the first paint like any other navigation", () => {
+    mount();
+    tap("reset to terms");
+
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["forward", "terms", 2],
+    ]);
+    expect(sent[1].previous_page_node_id).toBe("index");
+  });
+
+  it("reports the navigation that follows a reset in the same moment", () => {
+    mount();
+    tap("reset then push");
+
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["forward", "terms", 2],
+    ]);
+  });
+
+  it("reports a back that follows a reset in the same moment", () => {
+    mount();
+    tap("reset then back");
+
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["back", "plans", 1],
+    ]);
   });
 });

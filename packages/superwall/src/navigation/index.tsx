@@ -72,6 +72,13 @@ export type Router = {
   dismissAll: () => void;
   /** Goes back to `route` if it is in the stack, otherwise replaces the current one. */
   dismissTo: (route: RouteName, options?: NavigateOptions) => void;
+  /**
+   * Replaces the whole stack with `routes`, the last on top, without a
+   * transition. Routes it shares with the current stack stay mounted, and
+   * going back walks down the rest with their own transitions. An empty list
+   * returns to the first route.
+   */
+  reset: (routes: readonly RouteName[]) => void;
 };
 
 export type RouteModule = {
@@ -97,6 +104,7 @@ type Nav = {
   entries: Entry[];
   exiting?: Entry;
   direction: Direction;
+  transition?: Transition;
   sync: QueryHistory | "skip";
 };
 
@@ -124,6 +132,18 @@ const serializeStack = (entries: readonly Entry[]): string | null =>
 
 const sameStack = (entries: readonly Entry[], names: readonly string[]): boolean =>
   entries.length === names.length && entries.every((entry, index) => entry.name === names[index]);
+
+const sharedDepth = (entries: readonly Entry[], names: readonly string[]): number => {
+  let shared = 0;
+  while (
+    shared < names.length &&
+    shared < entries.length &&
+    names[shared] === entries[shared].name
+  ) {
+    shared++;
+  }
+  return shared;
+};
 
 const RouterContext = React.createContext<Router | null>(null);
 const FocusContext = React.createContext<boolean>(true);
@@ -188,6 +208,7 @@ export const PaywallRouter = ({
   notify.current = onNavigate;
   const nextKey = React.useRef(entries.length);
   const layers = React.useRef<HTMLDivElement>(null);
+  const landing = React.useRef<{ name: string; depth: number } | undefined>(undefined);
 
   const top = entries[entries.length - 1];
 
@@ -202,6 +223,7 @@ export const PaywallRouter = ({
     const go = (name: string, options: NavigateOptions | undefined, keep: number | undefined) => {
       const target = resolve(name);
       const key = nextKey.current++;
+      landing.current = undefined;
       freeze(layers.current);
       setNav((current) => {
         const kept = keep === undefined ? current.entries : current.entries.slice(0, keep);
@@ -218,6 +240,7 @@ export const PaywallRouter = ({
     };
 
     const popBy = (count: number) => {
+      landing.current = undefined;
       freeze(layers.current);
       setNav((current) => {
         const removed = Math.min(Math.max(Math.trunc(count), 1), current.entries.length - 1);
@@ -247,6 +270,26 @@ export const PaywallRouter = ({
         if (at === -1) go(target, options, entries.length - 1);
         else popBy(entries.length - 1 - at);
       },
+      reset: (names) => {
+        const targets: RouteName[] = names.length === 0 ? [INITIAL_ROUTE] : names.map(resolve);
+        const keys = targets.map(() => nextKey.current++);
+        if (!sameStack(entries, targets)) {
+          landing.current = { name: targets[targets.length - 1], depth: targets.length - 1 };
+        }
+        setNav((current) => {
+          if (sameStack(current.entries, targets)) return current;
+          const shared = sharedDepth(current.entries, targets);
+          return {
+            entries: [
+              ...current.entries.slice(0, shared),
+              ...targets.slice(shared).map((name, index) => ({ key: keys[shared + index], name })),
+            ],
+            direction: targets.length < current.entries.length ? "back" : "forward",
+            transition: "none",
+            sync: "replace",
+          };
+        });
+      },
     };
   }, [entries, top]);
 
@@ -264,14 +307,7 @@ export const PaywallRouter = ({
   React.useEffect(() => {
     const names = parseStack(store.get(NAV_KEY), known.current) ?? [INITIAL_ROUTE];
     if (sameStack(entries, names)) return;
-    let shared = 0;
-    while (
-      shared < names.length &&
-      shared < entries.length &&
-      names[shared] === entries[shared].name
-    ) {
-      shared++;
-    }
+    const shared = sharedDepth(entries, names);
     const added = names.slice(shared).map((name) => ({ key: nextKey.current++, name }));
     freeze(layers.current);
     setNav({
@@ -290,6 +326,9 @@ export const PaywallRouter = ({
 
   React.useEffect(() => {
     if (reported.current === top.key) return;
+    const target = landing.current;
+    if (target && (target.name !== name || target.depth !== depth)) return;
+    landing.current = undefined;
     reported.current = top.key;
     notify.current?.(name);
 
@@ -319,7 +358,8 @@ export const PaywallRouter = ({
   const transitionOf = (entry: Entry): Transition =>
     entry.transition ?? routes[entry.name]?.transition ?? fallback;
 
-  const moving = direction === "back" && exiting ? transitionOf(exiting) : transitionOf(top);
+  const moving =
+    nav.transition ?? (direction === "back" && exiting ? transitionOf(exiting) : transitionOf(top));
 
   const [movement, setMovement] = React.useState(0);
   const [settled, setSettled] = React.useState(true);

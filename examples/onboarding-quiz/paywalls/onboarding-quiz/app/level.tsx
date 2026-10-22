@@ -1,20 +1,20 @@
-import { useState } from "react";
 import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
-import { answers, type Level } from "../components/answers";
+import { useAnswers, type Level } from "../components/answers";
 
 export default function Page() {
   const router = useRouter();
   const { t } = useTranslation();
   const haptics = useHaptics();
 
-  // The chosen card turns teal on the same frame as the haptic, then the router moves on.
-  const [chosen, setChosen] = useState(answers.level);
+  const { answers, save } = useAnswers();
+  const chosen = answers.level;
 
+  // Saved before moving on, so closing on the next screen loses nothing. The
+  // card turns teal on the same frame as the haptic: useUser() sees it at once.
   const choose = (value: Level) => {
     haptics.selection();
-    setChosen(value);
-    answers.level = value;
+    save("level", value);
     router.push("time");
   };
 

@@ -669,3 +669,98 @@ describe("a route that disappears while it is on screen", () => {
     expect(screen.queryByText("at index")).toBeNull();
   });
 });
+
+describe("reset", () => {
+  const Capture = ({ children }: React.PropsWithChildren) => {
+    captured = useRouter();
+    return <>{children}</>;
+  };
+
+  const resumingAt = (stack: readonly string[]): RouteMap => ({
+    ...routes,
+    index: {
+      default: () => {
+        const router = useRouter();
+        React.useLayoutEffect(() => router.reset(stack), []);
+        return <Index />;
+      },
+    },
+  });
+
+  const reset = (stack: readonly string[]) => act(() => captured?.reset(stack));
+
+  it("opens on a stack set before the first paint, with nothing animating", () => {
+    mount({ routes: resumingAt(["index", "plans", "onboarding/goals"]) });
+
+    expect(attribute("onboarding/goals", "data-sw-state")).toBe("active");
+    expect(attribute("onboarding/goals", "data-sw-settled")).toBe("");
+    expect(attribute("onboarding/goals", "data-sw-phase")).toBeNull();
+    expect(attribute("plans", "data-sw-state")).toBe("behind");
+    expect(attribute("index", "data-sw-state")).toBe("below");
+    expect(screen.getAllByTestId("depth").at(-1)?.textContent).toBe("2");
+  });
+
+  it("goes back down a reset stack with each route's own transition", () => {
+    mount({ routes: resumingAt(["index", "plans"]) });
+
+    fireEvent.click(screen.getByText("Back"));
+
+    expect(attribute("plans", "data-sw-state")).toBe("exiting");
+    expect(attribute("plans", "data-sw-transition")).toBe("slide");
+    expect(attribute("index", "data-sw-phase")).toBe("return");
+    settle();
+    expect(screen.queryByText("at plans")).toBeNull();
+  });
+
+  it("keeps the routes the new stack shares mounted and drops the rest at once", () => {
+    mount({ Layout: Capture });
+    tap("To plans");
+    const index = document.querySelector('[data-sw-route="index"]');
+
+    reset(["index", "terms"]);
+
+    expect(document.querySelector('[data-sw-route="index"]')).toBe(index);
+    expect(screen.queryByText("at plans")).toBeNull();
+    expect(attribute("terms", "data-sw-state")).toBe("active");
+    expect(attribute("terms", "data-sw-transition")).toBe("none");
+    expect(attribute("terms", "data-sw-settled")).toBe("");
+  });
+
+  it("lands at once even in the middle of a transition", () => {
+    mount({ Layout: Capture });
+    fireEvent.click(screen.getByText("To plans"));
+    expect(attribute("plans", "data-sw-settled")).toBeNull();
+
+    reset(["index", "terms"]);
+
+    expect(document.querySelector('[data-sw-state="exiting"]')).toBeNull();
+    expect(attribute("terms", "data-sw-settled")).toBe("");
+  });
+
+  it("returns to the first route for an empty stack", () => {
+    mount({ Layout: Capture });
+    tap("To plans");
+
+    reset([]);
+
+    expect(attribute("index", "data-sw-state")).toBe("active");
+    expect(attribute("index", "data-sw-direction")).toBe("back");
+    expect(screen.queryByText("at plans")).toBeNull();
+  });
+
+  it("changes nothing when the stack is already the one asked for", () => {
+    mount({ Layout: Capture });
+    tap("To plans");
+    const before = captured;
+
+    reset(["index", "plans"]);
+
+    expect(captured).toBe(before);
+  });
+
+  it("throws a listing error for an unknown route", () => {
+    mount({ Layout: Capture });
+
+    expect(() => captured?.reset(["index", "nope"])).toThrow(/Unknown route "nope"/);
+  });
+});

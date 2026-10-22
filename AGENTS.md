@@ -259,12 +259,22 @@ The stack, bottom to top — each layer depends only on the one below it:
     `useDiscount`, `useActions`, `useTranslation`, …), one file each; the
     barrel also carries `createSuperwall` and `useSuperwallSession`
   - `src/provider/` — `SuperwallProvider` + session context (`context.ts`)
-    and the typed `createSuperwall` factory (`create.ts`)
+    and the typed `createSuperwall` factory (`create.ts`). Under a host
+    (`detectSuperwallHost()`), the provider renders none of its children
+    until the host's first `template_variables` arrives, or
+    `HOST_STATE_TIMEOUT_MS` passes, so a paywall's first render already has
+    the user, device and products: no page ever paints with an empty user and
+    then jumps. Hosts answer the ping (sent in a layout effect) with that
+    state; the iOS SDK also keeps the webview hidden until it has sent it.
   - `src/navigation/` — `superwall/navigation`: the route stack behind the
     file-based `app/` tree (`useRouter`, `useIsFocused`, `PaywallRouter`).
     Routes are names, never paths — one bundle, no network on navigate; the
     stack stays mounted (and `inert`) so a pop restores state, and each
-    navigation reports `page_view`. Names are typed via the CLI-generated
+    navigation reports `page_view`. `reset(routes)` replaces the whole
+    stack without a transition (the stack it lands on is reported as one
+    `entry` when it happens before the first paint, never the route it
+    replaced), which is how a surface opens somewhere other than `index`,
+    e.g. resuming an onboarding from saved user attributes. Names are typed via the CLI-generated
     `superwall.d.ts`, which augments the `SuperwallRoutes` interface and
     carries the asset-module reference. `motion.ts` holds what the router
     reads back off the DOM (how long the running animations last, freezing an

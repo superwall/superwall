@@ -253,8 +253,9 @@ button,
   }
 }
 
-/* iOS close: a small circle at the top-right, 44px to the finger. */
-.close {
+/* iOS close and back: small circles at the top corners, 44px to the finger. */
+.close,
+.back {
   position: absolute;
   top: 4px;
   right: 10px;
@@ -275,13 +276,20 @@ button,
     color var(--duration-hover) var(--ease-out);
 }
 
-.close:active {
+.back {
+  right: auto;
+  left: 4px;
+}
+
+.close:active,
+.back:active {
   transform: scale(0.92);
   transition-duration: 80ms;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .close:hover {
+  .close:hover,
+  .back:hover {
     color: var(--fg);
   }
 }
@@ -336,7 +344,9 @@ button,
 
 /* ——— The quiz ——— */
 
+/* Every page but the first has a back button beside its step label. */
 .step {
+  margin-inline-start: 26px;
   font-family: var(--mono);
   font-size: 0.75rem;
   color: var(--fg-tertiary);

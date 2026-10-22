@@ -1,20 +1,20 @@
-import { useState } from "react";
 import { useHaptics, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
-import { answers, type Time } from "../components/answers";
+import { useAnswers, type Time } from "../components/answers";
 
 export default function Page() {
   const router = useRouter();
   const { t } = useTranslation();
   const haptics = useHaptics();
 
-  // The chosen card turns teal on the same frame as the haptic, then the router moves on.
-  const [chosen, setChosen] = useState(answers.time);
+  const { answers, save } = useAnswers();
+  const chosen = answers.time;
 
+  // Saved before moving on, so closing on the next screen loses nothing. The
+  // card turns teal on the same frame as the haptic: useUser() sees it at once.
   const choose = (value: Time) => {
     haptics.selection();
-    setChosen(value);
-    answers.time = value;
+    save("time", value);
     router.push("plan");
   };
 

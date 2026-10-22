@@ -39,7 +39,7 @@ control), and only the rules the example needs follow it.
 | ---------------------------------------------- | ------------------------------------------------------------------------------- |
 | [`multi-page`](./multi-page)                   | `router.push/back`, the route stack, `layout.tsx`                               |
 | [`transitions`](./transitions)                 | a button per transition — the five built-ins plus a custom one                  |
-| [`onboarding-quiz`](./onboarding-quiz)         | answers decide where you land; the router carries no state                      |
+| [`onboarding-quiz`](./onboarding-quiz)         | answers are saved as user attributes, so a quiz closed halfway resumes          |
 | [`animated-onboarding`](./animated-onboarding) | every hand-off choreographed: the answer becomes the bar, the photo, the colour |
 
 ## Purchases

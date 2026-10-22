@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useActions, useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
-import { answers, PLAN } from "../components/answers";
+import { PLAN, useAnswers } from "../components/answers";
 
 const LEVEL: Record<string, string> = {
   new: "plan.level.new",
@@ -16,6 +16,7 @@ export default function Plan() {
   const { purchase } = usePurchase();
   const { t } = useTranslation();
   const haptics = useHaptics();
+  const { answers } = useAnswers();
 
   // One line of copy for an outcome worth saying; nothing for an abandoned sheet.
   const [notice, setNotice] = useState<string>();
