@@ -11,7 +11,7 @@ import type {
   StudioStatus,
 } from "@superwall/studio/contract";
 
-export interface FrameworkRoute {
+interface FrameworkRoute {
   name: string;
   file: string;
 }
@@ -25,7 +25,7 @@ export interface FrameworkSurface {
   diagnostics?: string[];
 }
 
-export type ProjectMarker = "package.json";
+type ProjectMarker = "package.json";
 
 export interface FrameworkProject {
   root: string;
@@ -36,7 +36,7 @@ export interface FrameworkProject {
   diagnostics: string[];
 }
 
-export interface BuiltSnapshotAsset {
+interface BuiltSnapshotAsset {
   fileName: string;
   sha256: string;
   bytes: number;
@@ -44,7 +44,7 @@ export interface BuiltSnapshotAsset {
   path: string;
 }
 
-export type PaywallPresentationStyle =
+type PaywallPresentationStyle =
   | { type: "FULLSCREEN" | "MODAL" | "PUSH" | "NO_ANIMATION" }
   | { type: "DRAWER"; height: number; corner_radius: number }
   | { type: "POPUP"; width: number; height: number; corner_radius: number };
@@ -82,7 +82,7 @@ export interface BuildOptions {
   platform?: string;
 }
 
-export interface PreviewServerHandle {
+interface PreviewServerHandle {
   resolvedUrls?: { local: string[]; network: string[] } | null;
 }
 
@@ -140,16 +140,13 @@ export class FrameworkNotFoundError extends Error {
   }
 }
 
-async function importSubpath(packageDir: string, subpath: string): Promise<unknown> {
+async function importSubpath(packageDir: string, subpath: string): Promise<Record<string, unknown>> {
   const require = createRequire(join(packageDir, "package.json"));
   return import(pathToFileURL(require.resolve(subpath)).href);
 }
 
-function fn<T>(mod: unknown, name: string, subpath: string): T {
-  if (typeof mod !== "object" || mod === null) {
-    throw new Error(`superwall ${subpath} did not load as a module`);
-  }
-  const candidate = (mod as Record<string, unknown>)[name];
+function fn<T>(mod: Record<string, unknown>, name: string, subpath: string): T {
+  const candidate = mod[name];
   if (typeof candidate !== "function") {
     throw new Error(
       `This project's superwall version does not export ${name} from ${subpath} — ` +
@@ -172,20 +169,17 @@ export function resolveFrameworkDir(cwd: string): string {
 
 export function frameworkVersion(cwd: string): string {
   try {
-    const parsed: unknown = JSON.parse(
+    const { version } = JSON.parse(
       readFileSync(join(resolveFrameworkDir(cwd), "package.json"), "utf8"),
-    );
-    if (typeof parsed === "object" && parsed !== null) {
-      const version = (parsed as Record<string, unknown>).version;
-      if (typeof version === "string" && version !== "") return version;
-    }
+    ) as { version?: unknown };
+    if (typeof version === "string" && version !== "") return version;
   } catch {
     return "unknown";
   }
   return "unknown";
 }
 
-export async function loadFramework(cwd: string): Promise<Framework> {
+export async function resolveFramework(cwd: string): Promise<Framework> {
   const dir = resolveFrameworkDir(cwd);
 
   const [discover, build, preview] = await Promise.all([
@@ -195,10 +189,8 @@ export async function loadFramework(cwd: string): Promise<Framework> {
   ]);
 
   const studioProject =
-    typeof preview === "object" &&
-    preview !== null &&
-    typeof (preview as Record<string, unknown>).buildStudioProject === "function"
-      ? ((preview as Record<string, unknown>).buildStudioProject as Framework["studioProject"])
+    typeof preview.buildStudioProject === "function"
+      ? (preview.buildStudioProject as Framework["studioProject"])
       : undefined;
 
   return {

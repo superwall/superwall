@@ -1,5 +1,3 @@
-import { join } from "node:path";
-import { homedir } from "node:os";
 import { version } from "../package.json";
 
 export const VERSION = version;
@@ -18,35 +16,24 @@ const isChannel = (value: string | undefined): value is Channel =>
   value !== undefined && value in CHANNELS;
 
 export const CHANNEL = (): Channel => {
-  const value = process.env.SUPERWALL_CHANNEL?.trim();
+  const value = resolveEnv("SUPERWALL_CHANNEL");
   return isChannel(value) ? value : "latest";
 };
 
-export const AGENT_SKILLS_DIR = (): string =>
-  process.env.SUPERWALL_AGENT_SKILLS_DIR ?? join(homedir(), ".agents", "skills");
 
-export const SUPERWALL_HOME = (): string | undefined => {
-  const value = process.env.SUPERWALL_HOME;
-  return value && value.trim() !== "" ? value.trim() : undefined;
-};
-
-const host = (name: string, fallback: string): string => {
-  const value = process.env[name];
-  return value && value.trim() !== "" ? value.trim() : fallback;
-};
-
-export const AUTH_HOST = (): string => host("SUPERWALL_AUTH_HOST", "https://auth.superwall.com");
+export const AUTH_HOST = (): string => resolveEnv("SUPERWALL_AUTH_HOST") ?? "https://auth.superwall.com";
 export const ASSET_HOST = (): string =>
-  host("SUPERWALL_ASSET_HOST", "https://user-content.superwalleditor.com/user-content/hl");
-export const API_HOST = (): string => host("SUPERWALL_API_HOST", "https://api.superwall.com");
+  resolveEnv("SUPERWALL_ASSET_HOST") ?? "https://user-content.superwalleditor.com/user-content/hl";
+export const API_HOST_OVERRIDE = (): string | undefined => resolveEnv("SUPERWALL_API_HOST");
+export const API_HOST = (): string => API_HOST_OVERRIDE() ?? "https://api.superwall.com";
 export const CLI_CLIENT_ID = (): string =>
-  host("SUPERWALL_CLI_CLIENT_ID", "client_01KWEWM154D2T28NZAS02B8MWT");
+  resolveEnv("SUPERWALL_CLI_CLIENT_ID") ?? "client_01KWEWM154D2T28NZAS02B8MWT";
 export const OAUTH_SCOPE = "openid profile email offline_access";
 
 export const TELEMETRY_HOST = (): string =>
-  host("SUPERWALL_TELEMETRY_HOST", "https://us.i.posthog.com");
+  resolveEnv("SUPERWALL_TELEMETRY_HOST") ?? "https://us.i.posthog.com";
 export const TELEMETRY_KEY = (): string =>
-  host("SUPERWALL_TELEMETRY_KEY", "phc_obWpK8cuSfhNkZUKmDByATHp928RHPRD5DoMEDreAHS6");
+  resolveEnv("SUPERWALL_TELEMETRY_KEY") ?? "phc_obWpK8cuSfhNkZUKmDByATHp928RHPRD5DoMEDreAHS6";
 
 export enum Integration {
   swift = "swift",
@@ -58,15 +45,14 @@ export enum Integration {
 }
 
 export function apiKeyFromEnv(): string | undefined {
-  const v = process.env[ENV_API_KEY];
-  return v && v.trim() ? v.trim() : undefined;
+  return resolveEnv(ENV_API_KEY);
 }
 
 export const ENV_APPLE_ID = "SUPERWALL_APPLE_ID";
 export const ENV_APPLE_PASSWORD = "SUPERWALL_APPLE_PASSWORD";
 
 export function appleCredentialsFromEnv(): { appleId?: string; password?: string } {
-  const appleId = process.env[ENV_APPLE_ID]?.trim();
+  const appleId = resolveEnv(ENV_APPLE_ID);
   const password = process.env[ENV_APPLE_PASSWORD];
   return {
     ...(appleId ? { appleId } : {}),
@@ -74,6 +60,13 @@ export function appleCredentialsFromEnv(): { appleId?: string; password?: string
   };
 }
 
+export function resolveEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value === "" ? undefined : value;
+}
+
 export function isNonInteractive(): boolean {
   return !process.stdout.isTTY || !process.stdin.isTTY || process.env.CI === "true";
 }
+
+export const RUNNING_VIA_NPX = (): boolean => process.argv[1]?.includes("_npx") ?? false;

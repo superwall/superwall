@@ -1,7 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { ListItem, Opt } from "../types";
-
-export type { Opt };
+import type { ListItem, Opt } from "@/ui/types";
 
 export type ItemKind =
   | "intro"
@@ -75,7 +73,7 @@ function emit(): void {
   for (const l of listeners) l();
 }
 
-export function getState(): State {
+export function readState(): State {
   return state;
 }
 
@@ -118,7 +116,7 @@ export function addList(items: ListItem[], empty?: string): void {
   emit();
 }
 
-export function setActive(active: Active): void {
+export function replaceActive(active: Active): void {
   state = { ...state, active };
   emit();
 }
@@ -135,7 +133,7 @@ export function reset(): void {
   emit();
 }
 
-export function subscribe(l: () => void): () => void {
+function subscribe(l: () => void): () => void {
   listeners.add(l);
   return () => {
     listeners.delete(l);
@@ -143,5 +141,5 @@ export function subscribe(l: () => void): () => void {
 }
 
 export function useStore(): State {
-  return useSyncExternalStore(subscribe, getState, getState);
+  return useSyncExternalStore(subscribe, readState, readState);
 }

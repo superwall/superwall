@@ -3,9 +3,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
+import { ui } from "@/ui";
 import { buildCommitMessage, redact, tokenSecret, type CommitMessageInput } from "./commit";
 import type { SourceFile } from "./source";
-import { ui } from "@/ui";
 
 const run = promisify(execFile);
 
@@ -21,8 +21,19 @@ export interface SourceAccess {
   tokenId: string;
 }
 
+const REPOSITORY_ENV = new Set([
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+  "GIT_NAMESPACE",
+  "GIT_CONFIG_PARAMETERS",
+]);
+
 const gitEnv = (token: string, extra: Record<string, string> = {}): NodeJS.ProcessEnv => ({
-  ...process.env,
+  ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !REPOSITORY_ENV.has(key))),
   GIT_CONFIG_COUNT: "1",
   GIT_CONFIG_KEY_0: "http.extraHeader",
   GIT_CONFIG_VALUE_0: `Authorization: Bearer ${tokenSecret(token)}`,
@@ -30,18 +41,33 @@ const gitEnv = (token: string, extra: Record<string, string> = {}): NodeJS.Proce
   ...extra,
 });
 
+const GIT_TIMEOUT_MS = 5 * 60 * 1000;
+
+const ISOLATION = [
+  "-c",
+  "commit.gpgsign=false",
+  "-c",
+  "core.hooksPath=/dev/null",
+  "-c",
+  "core.autocrlf=false",
+];
+
 async function git(
   args: string[],
   options: { cwd?: string; env?: NodeJS.ProcessEnv; secrets?: string[] } = {},
 ): Promise<string> {
   try {
-    const { stdout } = await run("git", args, {
+    const { stdout } = await run("git", [...ISOLATION, ...args], {
       cwd: options.cwd,
       env: options.env,
       maxBuffer: 64 * 1024 * 1024,
+      timeout: GIT_TIMEOUT_MS,
     });
     return stdout;
   } catch (error) {
+    if (typeof error === "object" && error !== null && Reflect.get(error, "killed") === true) {
+      throw new GitError(`git ${args[0]} timed out after ${GIT_TIMEOUT_MS / 60_000} minutes.`);
+    }
     const detail =
       typeof error === "object" && error !== null
         ? String(Reflect.get(error, "stderr") ?? Reflect.get(error, "message") ?? error)
@@ -99,10 +125,28 @@ export function materializeSourceTree(dir: string, files: readonly SourceFile[])
   }
 }
 
+const SHOWN_FILES = 5;
+
+const listFiles = (files: readonly string[]): string => {
+  const shown = files.slice(0, SHOWN_FILES).join(", ");
+  const rest = files.length - SHOWN_FILES;
+  return rest > 0 ? `${shown} and ${rest} more` : shown;
+};
+
 export class SourceConflictError extends Error {
   constructor(readonly files: readonly string[]) {
     super(
-      `Someone else published changes to ${files.length === 1 ? files[0] : `${files.length} of the same files (${files.join(", ")})`} since this project was last in sync — bring their changes into your project first, then publish again.`,
+      `Someone else published changes to ${listFiles(files)} since this project last synced. ` +
+        "Pull their commits into this project, then publish again — or rerun with --overwrite-source to replace their version with yours.",
+    );
+  }
+}
+
+export class SourceDivergedError extends Error {
+  constructor(readonly files: readonly string[]) {
+    super(
+      `The source repo differs from this project in ${listFiles(files)}, and superwall.lock records no sync point to merge from. ` +
+        "Pull the latest superwall.lock, or rerun with --overwrite-source to replace the remote source with yours.",
     );
   }
 }
@@ -112,6 +156,7 @@ export interface DirectPushInput {
   files: readonly SourceFile[];
   message: CommitMessageInput;
   base?: string;
+  overwrite?: boolean;
 }
 
 export interface DirectPushResult {
@@ -142,17 +187,10 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     );
 
   try {
-    await git(["clone", "--branch", access.branch, access.remote, dir], {
-      env,
-      secrets,
-    }).catch(async (error: unknown) => {
-      await git(["clone", access.remote, dir], { env, secrets }).catch(() => {
-        throw error;
-      });
-    });
+    await cloneSource(access, dir, { env, secrets });
 
     const head = await revParse("HEAD");
-    const base = input.base && head ? await revParse(input.base) : undefined;
+    const base = input.base && head && !input.overwrite ? await revParse(input.base) : undefined;
     if (base && base !== head) await run(["checkout", "--quiet", "--detach", base]);
 
     materializeSourceTree(dir, input.files);
@@ -160,10 +198,16 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     await run(["add", "-A"]);
     const dirty = (await run(["status", "--porcelain"])).trim();
     if (dirty === "") return { commitSha: head ?? "", status: "unchanged", syncedTo: base ?? head };
+    if (head && !base && !input.overwrite) {
+      const differing = (await run(["diff", "--cached", "--name-only", "-z", "HEAD"]))
+        .split("\0")
+        .filter(Boolean);
+      throw new SourceDivergedError(differing);
+    }
 
     const messageFile = path.join(dir, ".git", "SUPERWALL_COMMITMSG");
     fs.writeFileSync(messageFile, buildCommitMessage(input.message));
-    await run(["commit", "--quiet", "-F", messageFile], { env: committing });
+    await run(["commit", "--quiet", "--no-verify", "-F", messageFile], { env: committing });
     const own = await revParse("HEAD");
     if (!own) throw new Error("The source commit was not created.");
     const isAncestor = (ancestor: string, of: string) =>
@@ -191,6 +235,36 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+const CLONE_ATTEMPTS = [
+  ["--filter=blob:none", "--branch"],
+  ["--branch"],
+  ["--filter=blob:none"],
+  [],
+];
+
+const CLONE_FALLBACK = /remote branch .* not found|filter/i;
+
+async function cloneSource(
+  access: SourceAccess,
+  dir: string,
+  options: { env: NodeJS.ProcessEnv; secrets: string[] },
+): Promise<void> {
+  let first: unknown;
+  for (const flags of CLONE_ATTEMPTS) {
+    const branch = flags.includes("--branch") ? [access.branch] : [];
+    try {
+      await git(["clone", "--quiet", ...flags, ...branch, access.remote, dir], options);
+      return;
+    } catch (error) {
+      first ??= error;
+      if (!(error instanceof GitError) || !CLONE_FALLBACK.test(error.message)) throw error;
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(dir);
+    }
+  }
+  throw first;
 }
 
 async function mergeUpstream(

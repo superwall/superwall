@@ -1,15 +1,16 @@
-import { ui } from "@/ui";
-import { withSpinner } from "@/ui/spinner";
 import type { SuperwallApi } from "@/core/api/client";
 import { listOrgGroups, listOrganizations } from "@/core/api/orgs";
 import { rowName, titleCase, type Row } from "@/core/api/resources";
+import { ui } from "@/ui";
+import { withSpinner } from "@/ui/spinner";
 
 export async function orgForNewProject(api: SuperwallApi, interactive: boolean): Promise<string> {
   const orgs = await withSpinner("Loading your account", () => listOrganizations(api));
-  if (orgs.length === 0) {
+  const [first] = orgs;
+  if (!first) {
     throw new Error("Your account has no organization yet - run `superwall login` to create one.");
   }
-  if (orgs.length === 1) return String(orgs[0]!.id);
+  if (orgs.length === 1) return String(first.id);
   if (!interactive) {
     throw new Error(
       `You belong to ${orgs.length} organizations, so a new project needs a home: run this interactively to choose, or pass --project <id> to add the app to an existing project.`,
@@ -18,7 +19,7 @@ export async function orgForNewProject(api: SuperwallApi, interactive: boolean):
   return chooseOrg(orgs, "Which organization should own the new project?");
 }
 
-export async function chooseOrg(orgs: Row[], message: string): Promise<string> {
+async function chooseOrg(orgs: Row[], message: string): Promise<string> {
   const sel = await ui.select({
     message,
     options: orgs.map((o) => ({

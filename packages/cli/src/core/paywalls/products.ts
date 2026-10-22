@@ -1,11 +1,10 @@
+import { productVariables, type DashboardProduct } from "@superwall/studio/products";
 import type { SuperwallApi } from "@/core/api/client";
 import { findApplication } from "@/core/api/lookup";
 
-import { productVariables, type DashboardProduct } from "@superwall/studio/products";
-
 export { productVariables };
 
-export async function fetchProducts(
+export async function listProjectProducts(
   api: SuperwallApi,
   projectId: string,
 ): Promise<Record<string, Record<string, unknown>>> {

@@ -1,6 +1,10 @@
+import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { promisify } from "node:util";
 import fg from "fast-glob";
+
+const run = promisify(execFile);
 
 const IGNORED_SCHEMES = new Set(["http", "https", "file", "mailto", "tel", "sms"]);
 
@@ -173,24 +177,17 @@ export const appScheme = async (
   if (fromDashboard !== undefined) {
     return { scheme: fromDashboard, source: "dashboard" };
   }
-  const local = await detectLocalScheme(roots).catch(() => undefined);
+  const local = await detectLocalScheme(roots);
   return local === undefined ? {} : { scheme: local, source: "app" };
 };
 
-export const plutilAvailable = async (): Promise<boolean> => {
-  const { execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  return promisify(execFile)("plutil", ["-help"]).then(
+export const plutilAvailable = async (): Promise<boolean> =>
+  run("plutil", ["-help"]).then(
     () => true,
     () => false,
   );
-};
 
 export const allowLocalNetworking = async (plist: string): Promise<void> => {
-  const { execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const run = promisify(execFile);
-
   if (!(await plutilAvailable())) {
     throw new Error("Editing an Info.plist needs `plutil`, which ships with macOS.");
   }

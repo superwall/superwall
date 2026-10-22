@@ -1,11 +1,7 @@
 import * as fs from "node:fs";
-import { ASSET_HOST } from "@/environment";
 import { ApiError, type SuperwallApi } from "@/core/api/client";
-import {
-  pushPaywallAssets,
-  type AssetManifestEntry,
-  type VersionAsset,
-} from "@/core/api/resources";
+import { pushPaywallAssets, type AssetManifestEntry, type VersionAsset } from "@/core/api/resources";
+import { ASSET_HOST } from "@/environment";
 import type { BuiltSnapshot } from "./project/framework";
 
 export const assetBaseUrl = (applicationId: string): string => `${ASSET_HOST()}/${applicationId}`;
@@ -28,7 +24,7 @@ export function requireAssets(built: BuiltSnapshot): BuildAsset[] {
   return built.assets;
 }
 
-export interface SyncedAssets {
+interface SyncedAssets {
   assets: VersionAsset[];
   uploaded: number;
   uploadedBytes: number;
@@ -37,7 +33,7 @@ export interface SyncedAssets {
 
 export class AssetSyncError extends Error {}
 
-export const assetName = (asset: BuildAsset): string =>
+const assetName = (asset: BuildAsset): string =>
   asset.path.split(/[\\/]/).pop() || asset.fileName;
 
 export function uploadFailure(

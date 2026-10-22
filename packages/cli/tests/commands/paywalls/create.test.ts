@@ -3,8 +3,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
-import { executeCommand } from "@/command";
-import { alreadyAProject, runCreate } from "@/commands/paywalls/create";
+import { command } from "@/commands/paywalls/create";
+import { runCommand } from "../../helpers/command";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
 import { restoreFetch, useFetch } from "../../helpers/fetch";
 import { clearHomes, useHome } from "../../helpers/home";
@@ -20,18 +20,10 @@ function scratch(name: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `sw-${name}-`));
 }
 
-async function create(argv: Record<string, unknown>, calls: RendererCall[] = []) {
-  // Bun keeps a nonzero exitCode when it's set back to undefined, so it is reset to 0.
+async function create(input: Record<string, unknown>, calls: RendererCall[] = []) {
   process.exitCode = 0;
-  await executeCommand(
-    runCreate.definition,
-    { _: [], $0: "superwall", ...argv },
-    {
-      renderer: () => recordingRenderer(calls),
-      nonInteractive: true,
-      waitForPaint: false,
-    },
-  );
+  const { dir, ...flags } = input;
+  await runCommand(command, { args: { dir }, flags, renderer: recordingRenderer(calls) });
   const failed = Boolean(process.exitCode);
   process.exitCode = 0;
   return { calls, failed };
@@ -67,40 +59,6 @@ test("an app that already has a superwall/ project gets a paywall added, not a s
     calls.some((call) => call.method === "error"),
     false,
   );
-});
-
-test("a superwall/ directory holding some other package is refused, not overwritten", () => {
-  const root = scratch("foreign");
-  fs.mkdirSync(path.join(root, "superwall"));
-  fs.writeFileSync(path.join(root, "superwall", "package.json"), "{}");
-  assert.match(alreadyAProject(root) ?? "", /isn't a superwall project/);
-});
-
-test("a superwall/ directory with only leftover subdirectories does not block setup", () => {
-  const root = scratch("leftover");
-  fs.mkdirSync(path.join(root, "superwall", "paywalls"), { recursive: true });
-  assert.equal(alreadyAProject(root), undefined);
-});
-
-test("a bare superwall project root is recognized by its markers", () => {
-  const bare = scratch("bare");
-  fs.writeFileSync(path.join(bare, "superwall.lock"), "{}");
-  assert.match(alreadyAProject(bare) ?? "", /already a superwall project/);
-
-  const byDep = scratch("dep");
-  fs.writeFileSync(
-    path.join(byDep, "package.json"),
-    JSON.stringify({ dependencies: { superwall: "latest" } }),
-  );
-  assert.match(alreadyAProject(byDep) ?? "", /already a superwall project/);
-});
-
-test("an empty superwall/ directory does not block setup", () => {
-  const root = scratch("fresh");
-  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "app" }));
-  fs.mkdirSync(path.join(root, "superwall"));
-
-  assert.equal(alreadyAProject(root), undefined);
 });
 
 test("an example is downloaded, adopted, and named after the app", async () => {

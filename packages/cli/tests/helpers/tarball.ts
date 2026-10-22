@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { gzipSync } from "node:zlib";
 
 export function exampleTarball(name: string, ref = "main", repo = "superwall"): Buffer {
   const staging = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-tarball-"));
@@ -14,9 +15,9 @@ export function exampleTarball(name: string, ref = "main", repo = "superwall"): 
   );
   fs.writeFileSync(path.join(dir, "paywalls", name, "config.ts"), "export default {};\n");
 
-  const archive = path.join(staging, "example.tar.gz");
-  execFileSync("tar", ["-czf", archive, "-C", staging, prefix]);
-  const bytes = fs.readFileSync(archive);
+  const archive = path.join(staging, "example.tar");
+  execFileSync("tar", ["-cf", archive, "-C", staging, prefix]);
+  const bytes = gzipSync(fs.readFileSync(archive));
   fs.rmSync(staging, { recursive: true, force: true });
   return bytes;
 }

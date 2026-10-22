@@ -1,0 +1,82 @@
+import { app, data } from "@/program/flags";
+import { defineCatalog } from "@/program/command";
+import { asaGroups } from "@/core/apple-search-ads/catalog";
+import { renderAsaHelp } from "@/core/apple-search-ads/help";
+import { runAsa } from "@/core/apple-search-ads/run";
+import { listAsaTools } from "@/core/apple-search-ads/tools";
+
+export const command = defineCatalog({
+  name: "asa",
+  summary: "The Apple Search Ads API through Superwall's proxy: no key or token handling",
+  flags: {
+    app: { ...app, describe: "Superwall app id or name (if several have Apple Search Ads connected)" },
+    orgId: { type: "string", value: "id", describe: "Apple Search Ads org id (X-AP-Context), if the API user spans several" },
+    campaign: { type: "string", value: "id", describe: "Campaign id" },
+    adgroup: { type: "string", value: "id", describe: "Ad group id" },
+    adamId: { type: "string", value: "id", describe: "App Store app id (adamId)" },
+    d: {
+      ...data,
+      describe:
+        "Body field, Stripe-style: -d key=value (string) or key:=value (number/bool/json); nesting via key[sub]. Query params on get/delete",
+    },
+    body: { type: "string", value: "json", describe: "Request body as JSON: inline, @file, or @- for stdin" },
+    selector: { type: "string", value: "json", describe: "Apple selector as JSON (find, reports): inline, @file, or @-" },
+    field: { type: "string", describe: "Selector shorthand: field name (with --op and --values)" },
+    op: { type: "string", describe: "Selector shorthand: EQUALS, IN, CONTAINS, STARTSWITH, ..." },
+    values: { type: "string", describe: "Selector shorthand: comma-separated values" },
+    orderBy: { type: "string", value: "field[:asc|desc]", describe: "Selector sort: field[:asc|desc]" },
+    fields: { type: "string", value: "a,b", describe: "Comma-separated fields to return (partial fetch)" },
+    limit: { type: "number", describe: "Page size" },
+    offset: { type: "number", describe: "Page offset" },
+    all: { type: "boolean", describe: "Walk every page" },
+    currency: { type: "string", describe: "Currency for money flags (defaults to the account's)" },
+    name: { type: "string", describe: "Name for the created or updated entity" },
+    status: { type: "string", describe: "ENABLED, PAUSED (keywords: ACTIVE, PAUSED)" },
+    countries: { type: "string", describe: "Comma-separated country codes" },
+    budget: { type: "string", describe: "Lifetime budget amount" },
+    dailyBudget: { type: "string", describe: "Daily budget amount" },
+    supplySources: { type: "string", describe: "Comma-separated supply sources" },
+    adChannelType: { type: "string", describe: "SEARCH or DISPLAY" },
+    billingEvent: { type: "string", describe: "TAPS or IMPRESSIONS" },
+    defaultBid: { type: "string", describe: "Ad group default bid" },
+    cpaGoal: { type: "string", describe: "Ad group CPA goal" },
+    searchMatch: { type: "boolean", describe: "Ad group Search Match" },
+    text: { type: "string", describe: "Keyword text" },
+    matchType: { type: "string", describe: "BROAD or EXACT" },
+    bid: { type: "string", describe: "Keyword bid amount" },
+    creativeId: { type: "string", describe: "Creative id (ads create)" },
+    type: { type: "string", describe: "Creative type" },
+    productPageId: { type: "string", describe: "Custom product page id" },
+    start: { type: "string", describe: "Start date (YYYY-MM-DD)" },
+    end: { type: "string", describe: "End date (YYYY-MM-DD)" },
+    granularity: { type: "string", describe: "HOURLY, DAILY, WEEKLY, or MONTHLY" },
+    groupBy: { type: "string", describe: "Report dimension (e.g. countryOrRegion)" },
+    timeZone: { type: "string", describe: "Report time zone: UTC or ORTZ" },
+    dimensions: { type: "string", describe: "Impression share dimensions" },
+    metrics: { type: "string", describe: "Impression share metrics" },
+    owned: { type: "boolean", describe: "apps search: only apps this org owns" },
+    country: { type: "string", describe: "geo search: country code" },
+    entity: { type: "string", describe: "geo: Country, AdminArea, or Locality" },
+    adgroupLevel: { type: "boolean", describe: "negative-keywords find: search ad group negatives" },
+    states: { type: "string", describe: "product-pages list: comma-separated states" },
+    deviceClasses: { type: "string", describe: "product-pages: comma-separated device classes" },
+    languageCodes: { type: "string", describe: "product-pages: comma-separated language codes" },
+    expand: { type: "boolean", describe: "product-pages: include nested versions" },
+    includeDeletedAssets: { type: "boolean", describe: "product-pages: include deleted assets" },
+  },
+  operations: asaGroups,
+  help: async (words) => renderAsaHelp(words),
+  tools: listAsaTools,
+  examples: [
+    ["asa campaigns list --app <app>", "Your campaigns"],
+    ["asa reports campaigns --start <yyyy-mm-dd> --end <yyyy-mm-dd>", "A campaign report"],
+    ["asa /me", "A raw GET"],
+  ],
+  auth: "required",
+  json: true,
+  prompts: false,
+  mcp: "write",
+  run(ctx, input) {
+    return runAsa(ctx, input);
+  },
+});

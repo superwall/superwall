@@ -1,14 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createSuperwallApi } from "@/core/api/client";
+import { ApiError, createSuperwallApi } from "@/core/api/client";
 import type { SuperwallApi } from "@/core/api/client";
 import {
   createCampaign,
   createEntitlement,
   createHeadlessPaywall,
   createProduct,
-  getPaywallApplicationId,
+  findPaywall,
   listAppPaywalls,
+  livePaywall,
   livePaywallVersion,
   listResource,
   pushPaywallAssets,
@@ -17,7 +18,7 @@ import {
   versionProducts,
   type Scope,
 } from "@/core/api/resources";
-import type { Session } from "@/core/auth/storage";
+import type { Session } from "@/core/account/storage";
 
 const SESSION: Session = {
   apiKey: "sk_x",
@@ -159,12 +160,12 @@ test("createHeadlessPaywall always stamps headless so binding can find it again"
   });
 });
 
-test("getPaywallApplicationId accepts a numeric id and refuses a missing one", async () => {
+test("getPaywall reads a numeric application id, and leaves a missing one undefined", async () => {
   mockFetch(() => ({ id: 208540, application_id: 42 }));
-  assert.equal(await getPaywallApplicationId(api, "208540"), "42");
+  assert.equal((await findPaywall(api, "208540")).applicationId, "42");
 
   mockFetch(() => ({ id: 208540 }));
-  await assert.rejects(getPaywallApplicationId(api, "208540"), /no application for paywall 208540/);
+  assert.equal((await findPaywall(api, "208540")).applicationId, undefined);
 });
 
 test("livePaywallVersion reads the published version, and stays undefined without one", async () => {
@@ -178,10 +179,22 @@ test("livePaywallVersion reads the published version, and stays undefined withou
   assert.equal(await livePaywallVersion(api, "208540"), undefined);
 });
 
-test("livePaywallVersion never throws — promote falls back to its single-line output", async () => {
+test("livePaywallVersion tolerates an outage — promote falls back to its single-line output", async () => {
   globalThis.fetch = (async () => new Response("nope", { status: 500 })) as typeof fetch;
   assert.equal(await livePaywallVersion(api, "208540"), undefined);
+
+  globalThis.fetch = (async () => {
+    throw new TypeError("fetch failed");
+  }) as typeof fetch;
+  assert.equal(await livePaywallVersion(api, "208540"), undefined);
 });
+
+for (const status of [401, 403, 404]) {
+  test(`livePaywall surfaces a ${status} instead of reading it as never published`, async () => {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ message: "no" }), { status })) as typeof fetch;
+    await assert.rejects(livePaywall(api, "208540"), (error: unknown) => error instanceof ApiError && error.status === status);
+  });
+}
 
 test("pushPaywallVersion omits an empty asset list rather than sending []", async () => {
   const recs = mockFetch(() => ({ version: 7, snapshot_id: "a", url: "u" }));

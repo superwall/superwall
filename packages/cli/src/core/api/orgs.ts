@@ -1,8 +1,8 @@
+import { readOpenedOrgs, writeOpenedOrgs } from "@/core/state/config";
 import { ApiError, type SuperwallApi } from "./client";
 import type { Project, Row } from "./resources";
-import { getOpenedOrgs, setOpenedOrgs } from "@/core/state/config";
 
-export interface OrgGroup {
+interface OrgGroup {
   id: string;
   name?: string;
   member: boolean;
@@ -21,13 +21,14 @@ export function orgProjects(api: SuperwallApi, orgId: string): Promise<Project[]
     .then((projects) => projects.map((project) => ({ organization_id: orgId, ...project })));
 }
 
-export const orgIdOf = (project: Project): string | undefined =>
-  project.organization_id === undefined ? undefined : String(project.organization_id);
+export function orgIdOf(project: Project): string | undefined {
+  return project.organization_id === undefined ? undefined : String(project.organization_id);
+}
 
-const asksForOrg = (error: unknown): boolean =>
-  error instanceof ApiError && error.status === 400 && /organization_id/.test(error.message);
+function asksForOrg(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 400 && /organization_id/.test(error.message);
+}
 
-// Organizations opened by id or link aren't memberships, so the CLI remembers them and lists them too.
 export async function listReachableProjects(api: SuperwallApi): Promise<Project[]> {
   let members = await api.list<Project>("/v2/projects").catch(async (error: unknown) => {
     if (!asksForOrg(error)) throw error;
@@ -37,18 +38,18 @@ export async function listReachableProjects(api: SuperwallApi): Promise<Project[
 
   members = unique(members);
   const seen = new Set(members.map(orgIdOf).filter((id): id is string => id !== undefined));
-  const opened = getOpenedOrgs().filter((id) => !seen.has(id));
+  const opened = readOpenedOrgs().filter((id) => !seen.has(id));
   if (opened.length === 0) return members;
 
   const reached = await Promise.all(
-    opened.map((id) =>
-      orgProjects(api, id).catch((error: unknown) => {
+    opened.map((id) => {
+      return orgProjects(api, id).catch((error: unknown) => {
         if (error instanceof ApiError && [400, 403, 404].includes(error.status)) return [];
         throw error;
-      }),
-    ),
+      });
+    }),
   );
-  setOpenedOrgs(opened.filter((_, index) => reached[index]!.length > 0));
+  writeOpenedOrgs(opened.filter((_, index) => (reached[index]?.length ?? 0) > 0));
   return [...members, ...reached.flat()];
 }
 
@@ -58,7 +59,7 @@ function unique(projects: Project[]): Project[] {
 
 export function rememberOrg(project: Project | undefined): void {
   const id = project && orgIdOf(project);
-  if (id) setOpenedOrgs([...getOpenedOrgs(), id]);
+  if (id) writeOpenedOrgs([...readOpenedOrgs(), id]);
 }
 
 export async function listOrgGroups(api: SuperwallApi): Promise<OrgGroup[]> {
@@ -70,9 +71,10 @@ export async function listOrgGroups(api: SuperwallApi): Promise<OrgGroup[]> {
   const groups = new Map<string, OrgGroup>();
   for (const project of projects) {
     const id = orgIdOf(project) ?? "";
+    const name = members.get(id)?.name;
     const group = groups.get(id) ?? {
       id,
-      name: members.get(id)?.name as string | undefined,
+      name: typeof name === "string" ? name : undefined,
       member: members.has(id) || id === "",
       projects: [],
     };

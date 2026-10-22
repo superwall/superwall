@@ -1,11 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { Session } from "@/core/auth/storage";
+import type { Session } from "@/core/account/storage";
 
 const homes: string[] = [];
-// The setup file's scratch home; falling back to the real ~/.superwall would leak a developer's
-// login and update cache into tests.
 const baseline = process.env.SUPERWALL_HOME;
 
 export function useHome(session?: Partial<Session>): string {

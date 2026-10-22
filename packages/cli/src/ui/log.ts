@@ -4,23 +4,17 @@ import pc from "picocolors";
 import wrapAnsi from "wrap-ansi";
 import { THEME, fg } from "./theme";
 
-export function brand(text: string): string {
+function brand(text: string): string {
   return fg(THEME.primary, text);
 }
-
-export const dim = pc.dim;
-export const bold = pc.bold;
-export const green = pc.green;
-export const red = pc.red;
-export const yellow = pc.yellow;
 
 export function stripReport(raw: string): string {
   const lines = raw
     .replace(/\r/g, "")
     .split("\n")
     .filter((l) => !/^\s*\[STATUS\]/i.test(l));
-  while (lines.length && !lines[0]!.trim()) lines.shift();
-  while (lines.length && !lines[lines.length - 1]!.trim()) lines.pop();
+  while (lines[0]?.trim() === "") lines.shift();
+  while (lines.at(-1)?.trim() === "") lines.pop();
   return lines.join("\n");
 }
 
@@ -32,8 +26,8 @@ export function styleMarkdown(text: string): string {
 }
 
 export function styleMarkdownLine(line: string, opts: { hyperlinks?: boolean } = {}): string {
-  const header = line.match(/^\s*(#{1,6})\s+(.*)$/);
-  if (header) return brand(bold(styleInline(header[2]!, opts.hyperlinks ?? false)));
+  const heading = line.match(/^\s*(#{1,6})\s+(.*)$/)?.[2];
+  if (heading !== undefined) return brand(pc.bold(styleInline(heading, opts.hyperlinks ?? false)));
   return styleInline(line, opts.hyperlinks ?? false);
 }
 
@@ -63,7 +57,7 @@ function styleInline(line: string, hyperlinks: boolean): string {
         ? ansiLink(brand(pc.underline(label)), terminalLinkTarget(target))
         : `${label} (${target})`;
     } else if (match[3] != null) {
-      out += bold(match[3]);
+      out += pc.bold(match[3]);
     } else if (match[4] != null) {
       out += brand(match[4]);
     } else if (match[5] != null) {
@@ -77,7 +71,8 @@ function styleInline(line: string, hyperlinks: boolean): string {
 
 function terminalLinkTarget(target: string): string {
   const local = target.match(/^(\/.*?)(?::(\d+))?$/);
-  if (!local) return target;
-  const url = pathToFileURL(local[1]!).href;
-  return local[2] ? `${url}#L${local[2]}` : url;
+  const file = local?.[1];
+  if (file === undefined) return target;
+  const url = pathToFileURL(file).href;
+  return local?.[2] ? `${url}#L${local[2]}` : url;
 }

@@ -2,12 +2,12 @@ import { ApiError, type SuperwallApi } from "./client";
 import { orgProjects, rememberOrg } from "./orgs";
 import { listProjects, type Application, type Project } from "./resources";
 
-export interface DashboardRef {
+interface DashboardRef {
   orgId?: string;
   applicationId?: string;
 }
 
-export interface FoundApplication {
+interface FoundApplication {
   project: Project;
   app: Application;
 }
@@ -27,8 +27,9 @@ export function parseDashboardUrl(value: string): DashboardRef | undefined {
   return { orgId: match[1], applicationId: match[2] };
 }
 
-const notFound = (error: unknown): boolean =>
-  error instanceof ApiError && (error.status === 404 || error.status === 403);
+function notFound(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 404 || error.status === 403);
+}
 
 export async function findProject(
   api: SuperwallApi,
@@ -47,7 +48,7 @@ export async function findProject(
   }
 }
 
-const inProjects = (
+const selectFromProjects = (
   projects: readonly Project[],
   matches: (app: Application) => boolean,
 ): FoundApplication | undefined => {
@@ -58,8 +59,6 @@ const inProjects = (
   return undefined;
 };
 
-// The API has no application endpoint, so an app outside the current organization is found
-// through a paywall that names its project, or through the organization a dashboard link names.
 export async function findApplication(
   api: SuperwallApi,
   ref: string,
@@ -69,7 +68,7 @@ export async function findApplication(
   const id = dashboard?.applicationId ?? ref;
   const byId = (app: Application) => String(app.id) === id;
 
-  const local = inProjects(
+  const local = selectFromProjects(
     known ?? (await listProjects(api)),
     (app) => byId(app) || app.name === ref,
   );
@@ -87,12 +86,12 @@ export async function findApplication(
     });
   if (paywall?.project_id !== undefined) {
     const project = await findProject(api, String(paywall.project_id));
-    const found = project && inProjects([project], byId);
+    const found = project && selectFromProjects([project], byId);
     if (found) return found;
   }
 
   if (!dashboard?.orgId) return undefined;
-  const found = inProjects(await orgProjects(api, dashboard.orgId), byId);
+  const found = selectFromProjects(await orgProjects(api, dashboard.orgId), byId);
   if (found) rememberOrg(found.project);
   return found;
 }

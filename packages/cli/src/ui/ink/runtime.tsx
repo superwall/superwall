@@ -1,7 +1,7 @@
 import { render, type Instance } from "ink";
+import type { MultiSelectOpts, Renderer, SelectOpts, Spinner, TextOpts } from "@/ui/types";
 import { App } from "./App";
-import { addItem, addList, onInterrupt, reset, setActive, updateActive } from "./store";
-import type { MultiSelectOpts, Renderer, SelectOpts, Spinner, TextOpts } from "../types";
+import { addItem, addList, onInterrupt, reset, replaceActive, updateActive } from "./store";
 
 let instance: Instance | null = null;
 
@@ -38,10 +38,10 @@ export const inkRenderer: Renderer = {
 
   spinner(): Spinner {
     return {
-      start: (message: string) => setActive({ type: "spinner", message }),
+      start: (message: string) => replaceActive({ type: "spinner", message }),
       message: (message: string) => updateActive({ message }),
       stop: (message: string) => {
-        setActive(null);
+        replaceActive(null);
         addItem("step", message);
       },
     };
@@ -57,7 +57,7 @@ export const inkRenderer: Renderer = {
             o.options.findIndex((x) => !x.disabled),
           );
     return new Promise((resolve) =>
-      setActive({
+      replaceActive({
         type: "select",
         message: o.message,
         options: o.options,
@@ -71,7 +71,7 @@ export const inkRenderer: Renderer = {
 
   multiselect(o: MultiSelectOpts): Promise<string[] | null> {
     return new Promise((resolve) =>
-      setActive({
+      replaceActive({
         type: "multiselect",
         message: o.message,
         options: o.options,
@@ -84,7 +84,7 @@ export const inkRenderer: Renderer = {
 
   confirm(o: { message: string; initial?: boolean }): Promise<boolean | null> {
     return new Promise((resolve) =>
-      setActive({
+      replaceActive({
         type: "confirm",
         message: o.message,
         value: o.initial ?? true,
@@ -95,7 +95,7 @@ export const inkRenderer: Renderer = {
 
   text(o: TextOpts): Promise<string | null> {
     return new Promise((resolve) =>
-      setActive({
+      replaceActive({
         type: "text",
         message: o.message,
         placeholder: o.placeholder,

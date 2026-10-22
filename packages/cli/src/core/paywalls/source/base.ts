@@ -1,42 +1,32 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { isRecord } from "@/core/json";
+import { parseSources, readLock, writeSources } from "@/core/paywalls/project/lock";
 
-const BASE_FILE = path.join(".superwall", "source.json");
+const LEGACY_FILE = path.join(".superwall", "source.json");
 
-interface BaseRecord {
-  version: 1;
-  repos: Record<string, string>;
-}
-
-function read(superwallDir: string): BaseRecord {
+function readLegacyBases(superwallDir: string): Record<string, string> {
+  const file = path.join(superwallDir, LEGACY_FILE);
+  if (!fs.existsSync(file)) return {};
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(
-      fs.readFileSync(path.join(superwallDir, BASE_FILE), "utf8"),
-    ) as unknown;
-    if (typeof parsed === "object" && parsed !== null && "repos" in parsed) {
-      const repos = (parsed as { repos: unknown }).repos;
-      if (typeof repos === "object" && repos !== null) {
-        const entries = Object.entries(repos).filter(
-          (entry): entry is [string, string] =>
-            typeof entry[1] === "string" && /^[0-9a-f]{40}$/.test(entry[1]),
-        );
-        return { version: 1, repos: Object.fromEntries(entries) };
-      }
-    }
-  } catch {
-    // Missing or unreadable: no base is known, which is the first-push case.
+    parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Can't read ${file} (${reason}) — fix or delete it, then push again.`);
   }
-  return { version: 1, repos: {} };
+  if (!isRecord(parsed) || !isRecord(parsed.repos)) {
+    throw new Error(`${file} isn't a source sync record — fix or delete it, then push again.`);
+  }
+  return parseSources(parsed.repos);
 }
 
 export function readSourceBase(superwallDir: string, repo: string): string | undefined {
-  return read(superwallDir).repos[repo];
+  return readLock(superwallDir).sources?.[repo] ?? readLegacyBases(superwallDir)[repo];
 }
 
 export function writeSourceBase(superwallDir: string, repo: string, commitSha: string): void {
-  const record = read(superwallDir);
-  record.repos[repo] = commitSha;
-  const file = path.join(superwallDir, BASE_FILE);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
+  const legacy = readLegacyBases(superwallDir);
+  writeSources(superwallDir, { ...legacy, ...readLock(superwallDir).sources, [repo]: commitSha });
+  fs.rmSync(path.join(superwallDir, LEGACY_FILE), { force: true });
 }

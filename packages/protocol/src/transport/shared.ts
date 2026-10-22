@@ -1,7 +1,14 @@
 import type { TIncomingMessage, TOutgoingMessage } from "../messages";
 
-const isTransportDebugEnabled = () =>
-  typeof localStorage !== "undefined" && localStorage.getItem("SW_DEBUG_TRANSPORT") === "true";
+const isTransportDebugEnabled = () => {
+  try {
+    return (
+      typeof localStorage !== "undefined" && localStorage.getItem("SW_DEBUG_TRANSPORT") === "true"
+    );
+  } catch {
+    return false;
+  }
+};
 
 const TRANSPORT_COLORS: Record<string, string> = {
   WebKit: "#9C27B0",

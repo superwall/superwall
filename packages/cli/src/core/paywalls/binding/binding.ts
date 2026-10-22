@@ -1,11 +1,7 @@
 import type { SuperwallApi } from "@/core/api/client";
-import {
-  createHeadlessPaywall,
-  listAppPaywalls,
-  type HeadlessPaywallRef,
-} from "@/core/api/resources";
-import type { FrameworkSurface } from "../project/framework";
-import { readLock, writeBinding } from "../project/lock";
+import { createHeadlessPaywall, listAppPaywalls, type HeadlessPaywallRef } from "@/core/api/resources";
+import type { FrameworkSurface } from "@/core/paywalls/project/framework";
+import { readLock, writeBinding } from "@/core/paywalls/project/lock";
 
 export interface ResolvedApp {
   platform: string;

@@ -1,5 +1,3 @@
-import { Integration } from "@/environment";
-import { ui, type Opt } from "@/ui";
 import { orgForNewProject } from "@/core/account/org";
 import type { SuperwallApi } from "@/core/api/client";
 import {
@@ -10,6 +8,9 @@ import {
   type Application,
   type Project,
 } from "@/core/api/resources";
+import { Integration } from "@/environment";
+import { ui, type Opt } from "@/ui";
+import { withSpinner } from "@/ui/spinner";
 
 const NEW = "__new__";
 const NEW_PROJECT = "__new_project__";
@@ -17,7 +18,7 @@ const NEW_PROJECT = "__new_project__";
 const BACK = "esc back";
 const CANCEL = "esc cancel";
 
-export interface AppBinding {
+interface AppBinding {
   apiKey: string;
   app: Application;
   projectId: string;
@@ -37,8 +38,6 @@ export function platformForIntegration(integration: Integration): string {
       return "react_native";
     case Integration.web:
       return "web";
-    default:
-      return "ios";
   }
 }
 
@@ -46,17 +45,18 @@ export async function resolveAppBinding(
   api: SuperwallApi,
   opts: { platform: string; appName: string; bundleId?: string },
 ): Promise<AppBinding | null> {
-  const projects = await loading("Loading your projects", () => listProjects(api));
+  const projects = await withSpinner("Loading your projects", () => listProjects(api));
   let lastProjectId: string | undefined;
 
   for (;;) {
     const project = await pickProject(api, projects, opts.appName, lastProjectId);
     if (project === "cancel") return null;
-    lastProjectId = String(project.id); // so going back re-selects it
+    lastProjectId = String(project.id);
 
-    const app = await pickApp(api, project, opts);
-    if (app === "back") continue;
+    const picked = await pickApp(api, project, opts);
+    if (picked === "back") continue;
 
+    const { app } = picked;
     if (!app.public_api_key) {
       ui.warn(`\`${app.name ?? app.id}\` has no SDK key yet - pick another or add a new app.`);
       return null;
@@ -64,13 +64,12 @@ export async function resolveAppBinding(
     return {
       apiKey: app.public_api_key,
       app,
-      projectId: String(project.id),
+      projectId: String(picked.project.id),
       applicationId: String(app.id),
     };
   }
 }
 
-// Lets an already-integrated app (pk_ key already in code) reach later stages without re-picking.
 export async function resolveScopeFromKey(
   api: SuperwallApi,
   publicApiKey: string,
@@ -103,9 +102,10 @@ async function pickProject(
   preselect?: string,
 ): Promise<Project | "cancel"> {
   for (;;) {
-    if (projects.length === 0) {
+    const first = projects[0];
+    if (!first) {
       const created = await createProjectFlow(api, defaultName);
-      return created === "back" ? "cancel" : created; // nothing behind the root → cancel
+      return created === "back" ? "cancel" : created;
     }
 
     const sel = await ui.select({
@@ -118,7 +118,7 @@ async function pickProject(
         })),
         { value: NEW, label: "＋ Create a new project" },
       ],
-      initialValue: preselect ?? String(projects[0]!.id),
+      initialValue: preselect ?? String(first.id),
       footer: CANCEL,
       transient: true,
     });
@@ -128,7 +128,8 @@ async function pickProject(
       if (created === "back") continue;
       return created;
     }
-    return projects.find((p) => String(p.id) === sel)!;
+    const picked = projects.find((p) => String(p.id) === sel);
+    if (picked) return picked;
   }
 }
 
@@ -136,11 +137,12 @@ async function pickApp(
   api: SuperwallApi,
   project: Project,
   opts: { platform: string; appName: string; bundleId?: string },
-): Promise<Application | "back"> {
+): Promise<{ project: Project; app: Application } | "back"> {
   for (;;) {
     const apps = project.applications ?? [];
     const label = platformLabel(opts.platform);
-    if (apps.length === 0) {
+    const first = apps[0];
+    if (!first) {
       const sel = await ui.select({
         message: `No apps in \`${project.name ?? "this project"}\` yet.`,
         options: [
@@ -157,12 +159,11 @@ async function pickApp(
       if (sel === null) return "back";
       const created = await createAppFlow(api, project, opts);
       if (created === "back") continue;
-      return created;
+      return { project, app: created };
     }
 
-    // One app per platform per project; other-platform apps are shown but disabled.
     const platformTaken = apps.some((a) => a.platform === opts.platform);
-    const match = apps.find((a) => a.platform === opts.platform) ?? apps[0]!;
+    const match = apps.find((a) => a.platform === opts.platform) ?? first;
 
     const options: Opt[] = apps.map((a) => ({
       value: String(a.id),
@@ -190,16 +191,17 @@ async function pickApp(
     if (sel === NEW) {
       const created = await createAppFlow(api, project, opts);
       if (created === "back") continue;
-      return created;
+      return { project, app: created };
     }
     if (sel === NEW_PROJECT) {
       const fresh = await createProjectFlow(api, opts.appName);
       if (fresh === "back") continue;
       const created = await createAppFlow(api, fresh, opts);
       if (created === "back") continue;
-      return created;
+      return { project: fresh, app: created };
     }
-    return apps.find((a) => String(a.id) === sel)!;
+    const picked = apps.find((a) => String(a.id) === sel);
+    if (picked) return { project, app: picked };
   }
 }
 
@@ -216,7 +218,7 @@ async function createProjectFlow(
     transient: true,
   });
   if (name === null) return "back";
-  const created = (await loading("Creating project", () =>
+  const created = (await withSpinner("Creating project", () =>
     createProject(api, name.trim(), organizationId),
   )) as Project;
   ui.success(`Created project \`${created.name ?? name.trim()}\``);
@@ -253,8 +255,7 @@ async function createAppFlow(
     if (bundle === null) continue;
     const bundleId = bundle.trim() || opts.bundleId;
 
-    // createApplication returns the parent project with the new app nested inside.
-    const parent = (await loading(`Adding the ${label} app`, () =>
+    const parent = (await withSpinner(`Adding the ${label} app`, () =>
       createApplication(
         api,
         { projectId: String(project.id) },
@@ -277,17 +278,4 @@ async function createAppFlow(
 function appCountHint(p: Project): string {
   const n = (p.applications ?? []).length;
   return `${n} app${n === 1 ? "" : "s"}`;
-}
-
-async function loading<T>(label: string, work: () => Promise<T>): Promise<T> {
-  const spin = ui.spinner();
-  spin.start(label);
-  try {
-    const result = await work();
-    spin.stop(label);
-    return result;
-  } catch (e) {
-    spin.stop("Failed");
-    throw e;
-  }
 }

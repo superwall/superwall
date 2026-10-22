@@ -1,8 +1,9 @@
-import { test } from "node:test";
+import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { ApiError, createSuperwallApi } from "@/core/api/client";
-import type { SuperwallApi } from "@/core/api/client";
-import type { Session } from "@/core/auth/storage";
+import { ApiError, createSuperwallApi, superwallApi, withQuery, ApiUnreachableError } from "@/core/api/client";
+import { NotLoggedInError } from "@/core/account/errors";
+import { clearHomes, useHome } from "../../helpers/home";
+import type { Session } from "@/core/account/storage";
 
 const SESSION: Session = {
   apiKey: "sk_test123",
@@ -61,7 +62,7 @@ test("non-2xx throws ApiError with status + body", async () => {
   const api = createSuperwallApi(SESSION);
   await assert.rejects(
     () => api.get("/v2/x"),
-    (e: unknown) => e instanceof ApiError && (e as ApiError).status === 400,
+    (e: unknown) => e instanceof ApiError && e.status === 400,
   );
 });
 
@@ -231,4 +232,194 @@ test("custom headers can't override the session's authorization", async () => {
     (calls[0]!.init.headers as Record<string, string>).authorization,
     "Bearer sk_test123",
   );
+});
+
+test("withQuery appends params and refuses nested ones", () => {
+  assert.equal(withQuery("/campaigns", { limit: 5 }), "/campaigns?limit=5");
+  assert.equal(withQuery("/campaigns?x=1", new URLSearchParams({ y: "2" })), "/campaigns?x=1&y=2");
+  assert.equal(withQuery("/campaigns", {}), "/campaigns");
+  assert.throws(() => withQuery("/c", { a: { b: 1 } }), /Nested/);
+});
+
+const originalFetch = globalThis.fetch;
+const originalHost = process.env.SUPERWALL_API_HOST;
+
+const session = {
+  authMethod: "api_key" as const,
+  apiKey: "sk_test",
+  host: "https://api.superwall.com",
+  createdAt: new Date().toISOString(),
+};
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  if (originalHost === undefined) delete process.env.SUPERWALL_API_HOST;
+  else process.env.SUPERWALL_API_HOST = originalHost;
+});
+
+test("a dead local API says what to start instead of 'fetch failed'", async () => {
+  process.env.SUPERWALL_API_HOST = "http://localhost:3001";
+  globalThis.fetch = () => Promise.reject(new TypeError("fetch failed"));
+
+  await assert.rejects(createSuperwallApi(session).get("/v2/projects"), (error: Error) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.match(error.message, /http:\/\/localhost:3001/);
+    assert.match(error.message, /start the API/);
+    return true;
+  });
+});
+
+test("an unreachable hosted API points at the network, not the server", async () => {
+  delete process.env.SUPERWALL_API_HOST;
+  globalThis.fetch = () => Promise.reject(new TypeError("fetch failed"));
+
+  await assert.rejects(createSuperwallApi(session).get("/v2/projects"), (error: Error) => {
+    assert.match(error.message, /api\.superwall\.com/);
+    assert.match(error.message, /network or proxy/);
+    return true;
+  });
+});
+
+test("HTTP failures still surface status and body", async () => {
+  delete process.env.SUPERWALL_API_HOST;
+  globalThis.fetch = () => Promise.resolve(new Response("nope", { status: 409 }));
+
+  await assert.rejects(createSuperwallApi(session).get("/v2/paywalls"), (error: Error) => {
+    assert.match(error.message, /HTTP 409/);
+    return true;
+  });
+});
+
+const original = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = original;
+});
+
+const api = () =>
+  createSuperwallApi({
+    authMethod: "api_key",
+    apiKey: "sk_live_x",
+    host: "https://api.example.com",
+    createdAt: new Date().toISOString(),
+  });
+
+function respond(statuses: number[]): string[] {
+  const methods: string[] = [];
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    methods.push(init?.method ?? "GET");
+    const status = statuses.shift() ?? 200;
+    return new Response(status === 200 ? '{"ok":true}' : "busy", {
+      status,
+      headers: { "retry-after": "0" },
+    });
+  }) as typeof fetch;
+  return methods;
+}
+
+test("a read that meets a busy API is retried until it lands", async () => {
+  const methods = respond([503, 429, 200]);
+  assert.deepEqual(await api().get("/v2/projects"), { ok: true });
+  assert.equal(methods.length, 3);
+});
+
+test("a read gives up after a bounded number of retries and says why", async () => {
+  const methods = respond([503, 503, 503, 503, 503]);
+  await assert.rejects(
+    api().get("/v2/projects"),
+    (error: unknown) => error instanceof ApiError && error.status === 503,
+  );
+  assert.equal(methods.length, 4);
+});
+
+test("a write is never retried, since it may already have landed", async () => {
+  const methods = respond([503, 200]);
+  await assert.rejects(api().post("/v2/paywalls", {}), ApiError);
+  assert.deepEqual(methods, ["POST"]);
+});
+
+test("a client error is not retried", async () => {
+  const methods = respond([404, 200]);
+  await assert.rejects(api().get("/v2/projects/1"), ApiError);
+  assert.equal(methods.length, 1);
+});
+
+test("an error body that can't be read still reports the status", async () => {
+  globalThis.fetch = (async () =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.error(new Error("connection reset"));
+        },
+      }),
+      { status: 502 },
+    )) as typeof fetch;
+  await assert.rejects(api().post("/v2/paywalls", {}), (error: unknown) => {
+    assert.ok(error instanceof ApiError);
+    assert.equal(error.message, "HTTP 502");
+    return true;
+  });
+});
+
+test("a busy answer without a usable retry-after backs off on its own schedule", async () => {
+  const methods: string[] = [];
+  const statuses = [503, 200];
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    methods.push(init?.method ?? "GET");
+    const status = statuses.shift() ?? 200;
+    return new Response(status === 200 ? '{"ok":true}' : "busy", { status, headers: { "retry-after": "-1" } });
+  }) as typeof fetch;
+  const started = Date.now();
+  assert.deepEqual(await api().get("/v2/projects"), { ok: true });
+  assert.ok(Date.now() - started >= 350);
+  assert.deepEqual(methods, ["GET", "GET"]);
+});
+
+test("a 204 answer resolves to nothing, and the client reports its host, email and organization", async () => {
+  const calls = mockFetch(() => ({ status: 204 }));
+  const client = createSuperwallApi({ ...SESSION, userEmail: "dev@acme.com" });
+  assert.equal(await client.del("/v2/paywalls/1"), undefined);
+  assert.equal(calls[0]?.init.method, "DELETE");
+  assert.equal(client.host, "https://api.example.com");
+  assert.equal(client.userEmail, "dev@acme.com");
+  const scoped = client.forOrg("7").forOrg("8");
+  assert.deepEqual(scoped.org, { id: "8" });
+  assert.deepEqual(client.org, {});
+});
+
+test("list() stops on an empty page or a row it can't page past", async () => {
+  const empty = mockFetch(() => ({ body: { data: [], has_more: true } }));
+  assert.deepEqual(await createSuperwallApi(SESSION).list("/v2/products"), []);
+  assert.equal(empty.length, 1);
+  for (const last of [{ name: "no id" }, { id: null }, "plain"]) {
+    const calls = mockFetch(() => ({ body: { data: [last], has_more: true } }));
+    assert.deepEqual(await createSuperwallApi(SESSION).list("/v2/products"), [last]);
+    assert.equal(calls.length, 1);
+  }
+});
+
+test("superwallApi needs a saved login", async () => {
+  useHome();
+  try {
+    assert.throws(() => superwallApi(), NotLoggedInError);
+    useHome({ apiKey: "sk_saved" });
+    const calls = mockFetch(() => ({ body: { ok: 1 } }));
+    assert.deepEqual(await superwallApi().get("/v2/me"), { ok: 1 });
+    assert.equal(calls[0]?.url, "https://api.example.com/v2/me");
+  } finally {
+    clearHomes();
+  }
+});
+
+test("patch() sends its JSON body, and errors without a body or with a JSON scalar keep the status", async () => {
+  const calls = mockFetch(() => ({ body: { ok: true } }));
+  assert.deepEqual(await createSuperwallApi(SESSION).patch("/v2/paywalls/1", { name: "x" }), { ok: true });
+  assert.equal(calls[0]?.init.method, "PATCH");
+  assert.equal(calls[0]?.init.body, '{"name":"x"}');
+
+  assert.equal(new ApiError("GET /x", 500).message, "HTTP 500");
+  for (const body of ["null", "3"]) {
+    const error = new ApiError("GET /x", 400, body);
+    assert.equal(error.envelope, false);
+    assert.equal(error.message, `HTTP 400 — ${body}`);
+  }
 });

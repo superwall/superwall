@@ -1,6 +1,6 @@
-import type { MultiSelectOpts, Renderer, SelectOpts, Spinner, TextOpts } from "../types";
-import { stripVTControlCharacters } from "node:util";
-import { styleMarkdown } from "../log";
+import { stripAnsi } from "../ansi";
+import { styleMarkdown } from "@/ui/log";
+import type { Renderer, Spinner } from "@/ui/types";
 
 function out(line: string): void {
   process.stdout.write(`${plainText(line)}\n`);
@@ -11,7 +11,7 @@ function err(line: string): void {
 }
 
 function plainText(value: string): string {
-  return stripVTControlCharacters(styleMarkdown(value));
+  return stripAnsi(styleMarkdown(value));
 }
 
 export const plainRenderer: Renderer = {
@@ -43,16 +43,16 @@ export const plainRenderer: Renderer = {
   spinner(): Spinner {
     return { start: () => {}, message: () => {}, stop: () => {} };
   },
-  async select(_opts: SelectOpts) {
+  async select() {
     return null;
   },
-  async multiselect(_opts: MultiSelectOpts) {
+  async multiselect() {
     return null;
   },
   async confirm() {
     return null;
   },
-  async text(_opts: TextOpts) {
+  async text() {
     return null;
   },
 };

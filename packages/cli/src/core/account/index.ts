@@ -1,20 +1,18 @@
-import type { Arguments } from "yargs";
+import type { ExistingIntegration } from "@/core/codebase/existing";
 import type { Renderer } from "@/ui";
-import { apiKeyFromEnv } from "@/environment";
-import type { ExistingIntegration } from "@/core/project/existing";
 
-export interface AccountResult {
+interface AccountResult {
   apiKey: string;
 }
 
 export async function resolveAccount(opts: {
   existing: ExistingIntegration;
-  argv: Arguments;
+  apiKey: string | undefined;
   interactive: boolean;
   ui: Renderer;
 }): Promise<AccountResult | null> {
   const projectKey = opts.existing.apiKey;
-  const flagKey = (opts.argv.apiKey as string | undefined) ?? apiKeyFromEnv();
+  const flagKey = opts.apiKey;
 
   if (projectKey) {
     if (!opts.interactive || flagKey === projectKey) {
@@ -32,6 +30,6 @@ export async function resolveAccount(opts: {
   throw new Error(
     opts.interactive
       ? "Couldn't connect your app - re-run and complete the browser login."
-      : "No public API key found. Pass --api-key or set SUPERWALL_API_KEY.",
+      : "No public API key found. Pass --api-key.",
   );
 }

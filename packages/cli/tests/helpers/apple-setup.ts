@@ -1,5 +1,7 @@
-import type { CommandContext, CommandDefinition } from "@/command";
-import type { AppleKeyDeps } from "@/commands/platform/apple-keys";
+import type { AnyCommand } from "@/program/command";
+import type { AppleKeyDeps } from "@/core/app-store-connect/keys/create";
+import { appleDeps } from "@/core/app-store-connect/setup/deps";
+import { timing } from "@/core/timing";
 import type { ApiError, SuperwallApi } from "@/core/api/client";
 import type {
   BundleIdCandidate,
@@ -12,8 +14,8 @@ import {
   type AppleTeam,
   type IrisRequest,
   type PendingVerification,
-} from "@/core/apple/session";
-import { run } from "./command";
+} from "@/core/app-store-connect/apple-web/session";
+import { runCommand } from "./command";
 import { recordingRenderer, type RendererCall } from "./renderer";
 
 export const PEM = "-----BEGIN PRIVATE KEY-----\nMIGT\n-----END PRIVATE KEY-----\n";
@@ -56,7 +58,7 @@ export interface AppleOptions {
 
 function fakeSession(options: AppleOptions, log: string[]): AppleSession {
   const teams = options.teams ?? [ACME];
-  let current = teams[0]!;
+  let current = teams[0] ?? ACME;
   return {
     signIn: async (appleId) => {
       log.push(`signIn ${appleId}`);
@@ -102,7 +104,7 @@ export interface ApiOptions {
   saved?: Record<string, unknown>;
   appVerdicts?: Array<{ valid: boolean; error: string | null }>;
   purchaseVerdict?: { valid: boolean; error: string | null };
-  failAppSave?: ApiError;
+  failAppSave?: Error;
   createdApps?: unknown[];
   checks?: ServerNotifications[];
   written?: ServerNotifications[];
@@ -156,6 +158,7 @@ export function fakeApi(options: ApiOptions = {}) {
       const sent = body as { bundle_id: string };
       return { bundle_id: sent.bundle_id, app_store_id: null };
     }
+    if (path.startsWith("/v2/paywalls?application_id=")) return { data: [] };
     if (path === "/v2/me/organizations") return { data: [{ id: 9, name: "Org" }] };
     if (path === "/v2/projects") return { id: 70 };
     if (/^\/v2\/projects\/\d+\/applications$/.test(path)) {
@@ -188,7 +191,9 @@ export function fakeApi(options: ApiOptions = {}) {
 export interface Scenario {
   apple?: AppleOptions;
   api?: ApiOptions;
-  argv?: Record<string, unknown>;
+  args?: Record<string, unknown>;
+  flags?: Record<string, unknown>;
+  json?: boolean;
   credentials?: { appleId?: string; password?: string };
   stored?: PendingVerification;
   interactive?: boolean;
@@ -199,11 +204,18 @@ export interface Scenario {
   };
 }
 
-export async function scenario(
-  name: string,
-  command: (ctx: CommandContext<"required">, deps: AppleKeyDeps) => void | Promise<void>,
-  options: Scenario = {},
-) {
+export function useAppleDeps(deps: AppleKeyDeps): () => void {
+  const original = { ...appleDeps };
+  const sleep = timing.sleep;
+  Object.assign(appleDeps, deps);
+  timing.sleep = deps.sleep;
+  return () => {
+    Object.assign(appleDeps, original);
+    timing.sleep = sleep;
+  };
+}
+
+export async function scenario(command: AnyCommand, options: Scenario = {}) {
   const log: string[] = [];
   const sleeps: number[] = [];
   const files: Record<string, string> = {};
@@ -243,18 +255,20 @@ export async function scenario(
     select: async (value: unknown) => (calls.push({ method: "select", value }), select.shift() ?? null),
     confirm: async (value: unknown) => (calls.push({ method: "confirm", value }), confirm.shift() ?? null),
   };
-  const definition: CommandDefinition<"required"> = {
-    name,
-    auth: "required",
-    output: "both",
-    run: (ctx) => command(ctx, deps),
-  };
-  const result = await run(definition, {
-    argv: options.argv,
-    api,
-    interactive: options.interactive ?? false,
-    renderer,
-  });
+  const restore = useAppleDeps(deps);
+  let result;
+  try {
+    result = await runCommand(command, {
+      args: options.args,
+      flags: options.flags,
+      json: options.json,
+      api,
+      interactive: options.interactive ?? false,
+      renderer,
+    });
+  } finally {
+    restore();
+  }
   return {
     result,
     calls,
@@ -270,5 +284,63 @@ export async function scenario(
         .map((call) => String(call.value ?? "").replace(/\u001B\[[0-9;]*m/g, "")),
     wrote: (method: string, fragment: string) =>
       requests.filter((request) => request.method === method && request.path.includes(fragment)),
+  };
+}
+
+export interface CommandInput {
+  args?: Record<string, unknown>;
+  flags?: Record<string, unknown>;
+  json?: boolean;
+}
+
+export async function runWithApi(
+  command: AnyCommand,
+  input: CommandInput = {},
+  options: ApiOptions & { interactive?: boolean; confirm?: boolean | null } = {},
+) {
+  const { api, requests } = fakeApi(options);
+  const calls: RendererCall[] = [];
+  const renderer = {
+    ...recordingRenderer(calls),
+    confirm: async (value: unknown) => (calls.push({ method: "confirm", value }), options.confirm ?? null),
+  };
+  const result = await runCommand(command, { ...input, api, interactive: options.interactive ?? false, renderer });
+  return {
+    json: () => result.json,
+    said: (method: string) =>
+      calls
+        .filter((call) => call.method === method)
+        .map((call) => String(call.value ?? "").replace(/\u001B\[[0-9;]*m/g, "")),
+    requests,
+    wrote: (method: string, fragment: string) =>
+      requests.filter((request) => request.method === method && request.path.includes(fragment)),
+  };
+}
+
+const NOTIFICATION_URL =
+  "/v2/projects/5/applications/8/integrations/app-store-connect/notification-url/apple";
+
+export async function runNotificationUrl(command: AnyCommand, input: CommandInput, options: ApiOptions = {}) {
+  const { api, requests } = fakeApi(options);
+  const sleeps: number[] = [];
+  const restore = useAppleDeps({
+    ...appleDeps,
+    sleep: async (ms) => {
+      sleeps.push(ms);
+    },
+  });
+  let result;
+  try {
+    result = await runCommand(command, { ...input, api });
+  } finally {
+    restore();
+  }
+  return {
+    result,
+    sleeps,
+    calls: () =>
+      requests
+        .filter((request) => request.path === NOTIFICATION_URL)
+        .map((request) => [request.method, request.body ?? null] as const),
   };
 }

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getState, interrupt, onInterrupt, reset, setActive } from "@/ui/ink/store";
+import { readState, interrupt, onInterrupt, reset, replaceActive } from "@/ui/ink/store";
 
 test("an interrupt resolves the open prompt to null, records it, and tells the command", async () => {
   reset();
   const answered = new Promise<string | null>((resolve) =>
-    setActive({
+    replaceActive({
       type: "select",
       message: "Rebuild the pages now?",
       options: [{ value: "agent", label: "With Claude Code" }],
@@ -21,8 +21,8 @@ test("an interrupt resolves the open prompt to null, records it, and tells the c
   interrupt();
 
   assert.equal(await answered, null);
-  assert.equal(getState().active, null);
-  assert.equal(getState().items.at(-1)?.text, "Rebuild the pages now?\ncancelled");
+  assert.equal(readState().active, null);
+  assert.equal(readState().items.at(-1)?.text, "Rebuild the pages now?\ncancelled");
   assert.equal(told, 1);
 
   off();
@@ -32,14 +32,14 @@ test("an interrupt resolves the open prompt to null, records it, and tells the c
 
 test("an interrupt during a spinner leaves the timeline alone and still tells the command", () => {
   reset();
-  setActive({ type: "spinner", message: "Rebuilding" });
+  replaceActive({ type: "spinner", message: "Rebuilding" });
   let told = 0;
   const off = onInterrupt(() => {
     told += 1;
   });
   interrupt();
   assert.equal(told, 1);
-  assert.deepEqual(getState().active, { type: "spinner", message: "Rebuilding" });
-  assert.equal(getState().items.length, 0);
+  assert.deepEqual(readState().active, { type: "spinner", message: "Rebuilding" });
+  assert.equal(readState().items.length, 0);
   off();
 });

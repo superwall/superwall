@@ -1,13 +1,13 @@
-import React from "react";
 import { Box, Static, Text, useInput } from "ink";
 import Spinner from "ink-spinner";
-import { wrapReportLine } from "../log";
-import { THEME } from "../theme";
-import type { ListItem } from "../types";
+import React from "react";
+import { wrapReportLine } from "@/ui/log";
+import { THEME } from "@/ui/theme";
+import type { ListItem } from "@/ui/types";
 import {
   addItem,
   interrupt,
-  setActive,
+  replaceActive,
   updateActive,
   useStore,
   type Active,
@@ -44,12 +44,10 @@ function symbolFor(kind: ItemKind): {
 }
 
 function Inline({ line }: { line: string }): React.ReactElement {
-  // Brand cyan is reserved for `code` and accents so bold headers don't read as muddy teal.
   const header = line.match(/^\s*#{1,6}\s+(.*)$/);
   if (header) return <Text bold>{header[1]}</Text>;
 
   const nodes: React.ReactNode[] = [];
-  // **bold** | `code` | https://links
   const re = /\*\*(.+?)\*\*|`([^`]+)`|(https?:\/\/[^\s]+)/g;
   let last = 0;
   let k = 0;
@@ -148,7 +146,6 @@ function ListBlock({ items, empty }: { items: ListItem[]; empty?: string }): Rea
         return (
           <Box key={i} flexDirection="column">
             <Box>
-              {/* symbol + 2-space gap matches TimelineRow so labels align under the header column. */}
               <Text color={PRIMARY}>●</Text>
               <Text>{"  "}</Text>
               <Text>{it.label}</Text>
@@ -161,7 +158,6 @@ function ListBlock({ items, empty }: { items: ListItem[]; empty?: string }): Rea
                 <Text dimColor>{[c.badge, c.label, c.meta].filter(Boolean).join("  ")}</Text>
               </Box>
             ))}
-            {/* Connector omitted after the last row so the tree doesn't dangle. */}
             {!isLast ? <Text dimColor>│</Text> : null}
           </Box>
         );
@@ -170,12 +166,6 @@ function ListBlock({ items, empty }: { items: ListItem[]; empty?: string }): Rea
   );
 }
 
-/**
- * One timeline entry. Connectors prefix every item after the first — the cap
- * included, so the closing line is spaced off the work above it — and are
- * never trailing, so the timeline cannot dangle when a command ends without
- * an outro (stop() caps it with `└`).
- */
 function TimelineRow({ item, first }: { item: TimelineItem; first: boolean }): React.ReactElement {
   const connector = !first ? <Text dimColor>│</Text> : null;
 
@@ -245,7 +235,7 @@ function TimelineRow({ item, first }: { item: TimelineItem; first: boolean }): R
 
 function finish(message: string, chosen: string): void {
   addItem("step", `${message}\n${chosen}`);
-  setActive(null);
+  replaceActive(null);
 }
 
 function SpinnerView({ message }: { message: string }): React.ReactElement {
@@ -276,15 +266,15 @@ function SelectView({
     if (key.upArrow || input === "k") updateActive({ index: nextEnabled(active.index, -1) });
     else if (key.downArrow || input === "j") updateActive({ index: nextEnabled(active.index, 1) });
     else if (key.return) {
-      const opt = active.options[active.index]!;
-      if (opt.disabled) return;
+      const opt = active.options[active.index];
+      if (!opt || opt.disabled) return;
       const resolve = active.resolve;
-      if (active.transient) setActive(null);
+      if (active.transient) replaceActive(null);
       else finish(active.message, opt.label);
       resolve(opt.value);
     } else if (key.escape) {
       const resolve = active.resolve;
-      if (active.transient) setActive(null);
+      if (active.transient) replaceActive(null);
       else finish(active.message, "cancelled");
       resolve(null);
     }
@@ -376,7 +366,8 @@ function MultiSelectView({
     if (key.upArrow) updateActive({ index: (active.index - 1 + n) % n });
     else if (key.downArrow) updateActive({ index: (active.index + 1) % n });
     else if (input === " ") {
-      const v = active.options[active.index]!.value;
+      const v = active.options[active.index]?.value;
+      if (v === undefined) return;
       const next = new Set(active.selected);
       if (next.has(v)) next.delete(v);
       else next.add(v);
@@ -465,12 +456,12 @@ function TextView({ active }: { active: Extract<Active, { type: "text" }> }): Re
         }
       }
       const resolve = active.resolve;
-      if (active.transient) setActive(null);
+      if (active.transient) replaceActive(null);
       else finish(active.message, active.secret ? "•".repeat(8) : v || "(empty)");
       resolve(v);
     } else if (key.escape) {
       const resolve = active.resolve;
-      if (active.transient) setActive(null);
+      if (active.transient) replaceActive(null);
       else finish(active.message, "cancelled");
       resolve(null);
     } else if (key.backspace || key.delete) {

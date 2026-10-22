@@ -3,7 +3,7 @@ import * as path from "node:path";
 import fg from "fast-glob";
 import type { ScreenFramework } from "./project/lock";
 
-export type ScreenActionKind =
+type ScreenActionKind =
   | "purchase"
   | "restore"
   | "open-url"
@@ -13,12 +13,12 @@ export type ScreenActionKind =
   | "navigate"
   | "tap";
 
-export interface ScreenAction {
+interface ScreenAction {
   kind: ScreenActionKind;
   count: number;
 }
 
-export interface ScreenInventory {
+interface ScreenInventory {
   copy: string[];
   interpolations: string[];
   assets: string[];
@@ -39,7 +39,7 @@ export interface ScreenSource {
   companions: string[];
 }
 
-export interface ScreenCandidate {
+interface ScreenCandidate {
   path: string;
   framework: ScreenFramework;
   name: string;
@@ -188,7 +188,9 @@ const interpolationsIn = (value: string, framework: ScreenFramework): string[] =
       : framework === "flutter" || framework === "compose" || framework === "android-views"
         ? /\$\{([^}]*)\}|\$([A-Za-z_]\w*)/g
         : /\$\{([^}]*)\}/g;
-  return [...value.matchAll(pattern)].map((match) => (match[1] ?? match[2] ?? "").trim());
+  return [...value.matchAll(pattern)].flatMap((match) =>
+    match.slice(1).filter((group) => group !== undefined).map((group) => group.trim()),
+  );
 };
 
 const MODULE_CONTEXT = /\b(import|from|package)\s*$/;
@@ -368,7 +370,7 @@ export function scanInterfaceBuilder(xml: string, classes: string[]): ScreenInve
     .filter((value) => /[A-Za-z]/.test(value));
   const assets = [...text.matchAll(/\bimage="([^"]*)"/g)].map((match) => match[1]!);
   const symbols = [...text.matchAll(/\bcatalog="system"[^>]*\bimage="([^"]*)"|\bimage="([^"]*)"[^>]*\bcatalog="system"/g)]
-    .map((match) => match[1] ?? match[2] ?? "");
+    .flatMap((match) => match.slice(1).filter((group) => group !== undefined));
   const taps = (text.match(/<button\b/g) ?? []).length;
   return {
     copy: unique(copy),
@@ -422,7 +424,7 @@ const EMPTY_INVENTORY: ScreenInventory = {
   actions: [],
 };
 
-const ANDROID_RESOURCE_TYPES = /\b(ViewModel|Presenter|State|Model)\b/;
+const ANDROID_RESOURCE_TYPES = /(Model|Presenter)$/;
 
 function androidCompanionsOf(searchRoot: string, primary: string, source: string): string[] {
   const options = { cwd: searchRoot, ignore: CANDIDATE_IGNORE, onlyFiles: true, followSymbolicLinks: false };
@@ -446,12 +448,7 @@ function androidStringsOf(companions: string[]): Map<string, string> {
   const strings = new Map<string, string>();
   for (const file of companions) {
     if (!file.endsWith("strings.xml")) continue;
-    let xml: string;
-    try {
-      xml = fs.readFileSync(file, "utf8");
-    } catch {
-      continue;
-    }
+    const xml = fs.readFileSync(file, "utf8");
     for (const match of xml.matchAll(/<string\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/string>/g)) {
       strings.set(match[1]!, decodeXml(match[2]!.trim()).replace(/^"|"$/g, "").replace(/\\'/g, "'"));
     }
@@ -480,7 +477,7 @@ const withResolvedStrings = (
   };
 };
 
-export function scanAndroidLayout(xml: string, strings: Map<string, string>): ScreenInventory {
+function scanAndroidLayout(xml: string, strings: Map<string, string>): ScreenInventory {
   const resolve = (value: string): string | undefined => {
     const reference = /^@string\/(\w+)$/.exec(value);
     if (reference) return strings.get(reference[1]!);
@@ -709,8 +706,8 @@ const ACTION_MAPPING: Record<ScreenActionKind, [string, string]> = {
 
 const table = (rows: string[][]): string => rows.map((row) => `| ${row.join(" | ")} |`).join("\n");
 
-const bulletsOr = (values: string[], empty: string, format = (value: string) => `\`${value}\``): string =>
-  values.length === 0 ? `_${empty}_` : values.map((value) => `- ${format(value)}`).join("\n");
+const bulletsOr = (values: string[], empty: string): string =>
+  values.length === 0 ? `_${empty}_` : values.map((value) => `- \`${value}\``).join("\n");
 
 export function screenBrief(screen: ScreenSource, screenshot?: string): string {
   const { inventory } = screen;
