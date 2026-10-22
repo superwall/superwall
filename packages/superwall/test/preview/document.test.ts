@@ -4,6 +4,7 @@ import {
   injectPlatformLayer,
   PLATFORM_STYLESHEET_URL,
   renderDocument,
+  VIEWPORT_FIT_GUARD,
 } from "../../src/document";
 import { injectWebviewSimulation } from "../../src/preview/webview";
 
@@ -44,6 +45,38 @@ describe("renderDocument", () => {
     expect(html).toContain('<div id="root">');
     // Any <style> here would silently diverge preview from production.
     expect(html).not.toContain("<style");
+  });
+});
+
+describe("VIEWPORT_FIT_GUARD", () => {
+  it("ships in every document, ahead of the paywall", () => {
+    const html = doc();
+    expect(html).toContain(`<script>${VIEWPORT_FIT_GUARD}</script>`);
+    expect(html.indexOf(VIEWPORT_FIT_GUARD)).toBeLessThan(html.indexOf("entry.jsx"));
+  });
+
+  it("puts viewport-fit=cover back on a viewport tag the SDK appends later", async () => {
+    new Function(VIEWPORT_FIT_GUARD)();
+    const appended = (content: string) => {
+      const meta = document.createElement("meta");
+      meta.name = "viewport";
+      meta.content = content;
+      document.head.appendChild(meta);
+      return meta;
+    };
+    const sdk = appended("width=device-width, initial-scale=1.0, user-scalable=no");
+    const fixed = appended("width=device-width, viewport-fit=cover");
+    const other = document.createElement("meta");
+    other.name = "description";
+    other.content = "paywall";
+    document.head.appendChild(other);
+    await Promise.resolve();
+    expect(sdk.content).toBe(
+      "width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover",
+    );
+    expect(fixed.content).toBe("width=device-width, viewport-fit=cover");
+    expect(other.content).toBe("paywall");
+    for (const meta of [sdk, fixed, other]) meta.remove();
   });
 });
 

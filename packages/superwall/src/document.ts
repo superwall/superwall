@@ -3,7 +3,7 @@ import {
   type SuperwallConfig,
   type SuperwallDeviceVariables,
 } from "@superwall/runtime";
-import { cutoutOf, idiomOf, platformOf } from "./device";
+import { cutoutOf, idiomOf, modelOf, platformOf } from "./device";
 
 export const SUPERWALL_GENERATION = 5;
 
@@ -33,18 +33,14 @@ export const hostAttributes = (
 ): Record<(typeof HOST_ATTRIBUTE_NAMES)[number], string | undefined> => ({
   "data-sw-platform": platformOf(device),
   "data-sw-idiom": idiomOf(device),
-  "data-sw-cutout": cutoutOf(device.deviceModel),
+  "data-sw-cutout": cutoutOf(modelOf(device)),
 });
 
-/**
- * The platform stylesheet a preview links. Published paywalls link their own
- * runtime's versioned copy; a preview has no runtime version, so it links this
- * stable URL, which the API redirects to the stylesheet of the runtime it
- * currently bakes with — the file a paywall pushed now would get.
- */
 export const PLATFORM_STYLESHEET_URL = "https://api.superwall.com/runtime/live.css";
 
 export const ROUTE_ASSETS_ID = "sw-route-assets";
+
+export const VIEWPORT_FIT_GUARD = `new MutationObserver((records) => records.forEach((record) => record.addedNodes.forEach((node) => { if (node.nodeName === "META" && node.name === "viewport" && !/viewport-fit/.test(node.content)) node.content += ", viewport-fit=cover"; }))).observe(document.head, { childList: true });`;
 
 export type DocumentOptions = {
   title: string;
@@ -65,6 +61,7 @@ export const renderDocument = ({ title, config, entry }: DocumentOptions): strin
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <script>${VIEWPORT_FIT_GUARD}</script>
     <title>${title}</title>
   </head>
   <body>

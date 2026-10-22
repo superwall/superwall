@@ -206,6 +206,19 @@ const StagePane = ({
   );
 };
 
+const CanvasFooter = ({ children }: React.PropsWithChildren) => {
+  const scale = useCanvasScale();
+  return (
+    <div
+      className="w-fit origin-top self-center"
+      style={{ transform: `scale(${1 / scale})` }}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      {children}
+    </div>
+  );
+};
+
 const nameOf = (surface: StudioSurface): string => surface.label ?? `${surface.kind}/${surface.id}`;
 
 export const SurfaceEditor = ({
@@ -298,7 +311,10 @@ export const SurfaceEditor = ({
   const responsive = deviceId === RESPONSIVE_ID;
   const device = deviceById(deviceId);
   const web = isWebOnly(surface.platforms);
-  const frameDevice = React.useMemo(() => deviceVariablesFor(device, web), [device, web]);
+  const frameDevice = React.useMemo(
+    () => deviceVariablesFor(device, web, landscape),
+    [device, web, landscape],
+  );
   const upright = responsive
     ? size
     : web
@@ -546,48 +562,65 @@ export const SurfaceEditor = ({
             presentation?.style ?? "",
           ].join(":")}
         >
-          {comparePane && (
-            <StagePane
-              label={comparePane.label}
-              width={frame.width}
-              height={frame.height}
-              title={comparePane.title}
-              src={"src" in comparePane ? comparePane.src : undefined}
-              image={"image" in comparePane ? comparePane.image : undefined}
-              presentation={
-                compareWith?.type === "surface" && !web
-                  ? compareWith.surface.presentation
-                  : presentation
-              }
-              hostState={hostState}
-              delegate={delegate}
-              reloadKey={reloadKey}
-              empty={"empty" in comparePane ? comparePane.empty : undefined}
-              chrome={chrome}
-              landscape={landscape}
-              theme={theme}
-            />
-          )}
-          <StagePane
-            label={comparePane ? (surface.label ?? "Local") : undefined}
-            width={frame.width}
-            height={frame.height}
-            title={`${surface.id} preview`}
-            src={previewSrc}
-            presentation={presentation}
-            hostState={hostState}
-            delegate={delegate}
-            reloadKey={reloadKey}
-            chrome={chrome}
-            landscape={landscape}
-            theme={theme}
-            onResize={
-              responsive
-                ? (next) => setSize(landscape ? { width: next.height, height: next.width } : next)
-                : undefined
-            }
-            canvas={canvas}
-          />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-start gap-16">
+              {comparePane && (
+                <StagePane
+                  label={comparePane.label}
+                  width={frame.width}
+                  height={frame.height}
+                  title={comparePane.title}
+                  src={"src" in comparePane ? comparePane.src : undefined}
+                  image={"image" in comparePane ? comparePane.image : undefined}
+                  presentation={
+                    compareWith?.type === "surface" && !web
+                      ? compareWith.surface.presentation
+                      : presentation
+                  }
+                  hostState={hostState}
+                  delegate={delegate}
+                  reloadKey={reloadKey}
+                  empty={"empty" in comparePane ? comparePane.empty : undefined}
+                  chrome={chrome}
+                  landscape={landscape}
+                  theme={theme}
+                />
+              )}
+              <StagePane
+                label={comparePane ? (surface.label ?? "Local") : undefined}
+                width={frame.width}
+                height={frame.height}
+                title={`${surface.id} preview`}
+                src={previewSrc}
+                presentation={presentation}
+                hostState={hostState}
+                delegate={delegate}
+                reloadKey={reloadKey}
+                chrome={chrome}
+                landscape={landscape}
+                theme={theme}
+                onResize={
+                  responsive
+                    ? (next) =>
+                        setSize(landscape ? { width: next.height, height: next.width } : next)
+                    : undefined
+                }
+                canvas={canvas}
+              />
+            </div>
+            <CanvasFooter>
+              <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-fg-secondary select-none">
+                <Switch
+                  label="Introductory offer"
+                  checked={hasIntroductoryOffer(hostState)}
+                  onChange={(checked) =>
+                    setEdited((current) => ({ ...current, introductoryOfferEligible: checked }))
+                  }
+                />
+                Introductory offer
+              </label>
+            </CanvasFooter>
+          </div>
         </Canvas>
 
         <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
@@ -596,44 +629,6 @@ export const SurfaceEditor = ({
       </div>
 
       <Toolbar>
-        <ToolbarGroup label="Intro offer">
-          <Switch
-            label="Introductory offer"
-            checked={hasIntroductoryOffer(hostState)}
-            onChange={(checked) =>
-              setEdited((current) => ({ ...current, introductoryOfferEligible: checked }))
-            }
-          />
-        </ToolbarGroup>
-        <ToolbarGroup label="Theme">
-          <Segmented
-            label="Theme"
-            value={theme}
-            options={[
-              { value: "light", label: <SunIcon />, name: "Light" },
-              { value: "dark", label: <MoonIcon />, name: "Dark" },
-            ]}
-            onChange={setTheme}
-          />
-          <Tooltip
-            side="top"
-            align="center"
-            hint={landscape ? "Back to portrait" : "Rotate to landscape"}
-          >
-            <button
-              type="button"
-              className="sw-btn sw-btn--icon"
-              aria-label="Rotate device"
-              aria-pressed={landscape}
-              onClick={() => setLandscape((value) => !value)}
-            >
-              <RotateDeviceIcon
-                className={`transition-disclosure ${landscape ? "-rotate-90" : ""}`}
-              />
-            </button>
-          </Tooltip>
-        </ToolbarGroup>
-        <ToolbarDivider />
         <ToolbarGroup label="Zoom">
           <div
             className="flex h-8 flex-none overflow-hidden rounded-sm border border-border transition-colors duration-hover has-[:focus-visible]:border-primary"
@@ -667,6 +662,7 @@ export const SurfaceEditor = ({
             </button>
           </div>
         </ToolbarGroup>
+        <ToolbarDivider />
         <ToolbarGroup label="Device">
           <Select
             label="Device"
@@ -676,6 +672,32 @@ export const SurfaceEditor = ({
               { value: RESPONSIVE_ID, label: "Responsive" },
             ]}
             onChange={setDeviceId}
+          />
+          <Tooltip
+            side="top"
+            align="center"
+            hint={landscape ? "Back to portrait" : "Rotate to landscape"}
+          >
+            <button
+              type="button"
+              className="sw-btn sw-btn--icon"
+              aria-label="Rotate device"
+              aria-pressed={landscape}
+              onClick={() => setLandscape((value) => !value)}
+            >
+              <RotateDeviceIcon
+                className={`transition-disclosure ${landscape ? "-rotate-90" : ""}`}
+              />
+            </button>
+          </Tooltip>
+          <Segmented
+            label="Theme"
+            value={theme}
+            options={[
+              { value: "light", label: <SunIcon />, name: "Light" },
+              { value: "dark", label: <MoonIcon />, name: "Dark" },
+            ]}
+            onChange={setTheme}
           />
           {responsive && (
             <span className="flex items-center gap-1.5">

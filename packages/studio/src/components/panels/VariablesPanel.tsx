@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Switch } from "../controls";
-import { ChevronDownIcon } from "../icons";
+import { ChevronDownIcon, SearchIcon } from "../icons";
 import type { VariableOverrides } from "../../lib/variables";
 
 export type VariableGroup = "user" | "device" | "params" | "products";
@@ -88,14 +88,17 @@ const Group = ({
   rows,
   overrideOf,
   onChange,
+  searching,
 }: {
   label: string;
   blurb: string;
   rows: VariableRow[];
+  searching: boolean;
   overrideOf: (path: string) => unknown;
   onChange: (path: string, value: unknown) => void;
 }) => {
-  const [state, setState] = React.useState<"closed" | "open" | "closing">("closed");
+  const [chosen, setState] = React.useState<"closed" | "open" | "closing">("closed");
+  const state = searching ? "open" : chosen;
   const open = state === "open";
   const overridden = rows.filter((row) => overrideOf(row.path) !== undefined).length;
 
@@ -187,14 +190,39 @@ export const VariablesPanel = ({
     onChange({ ...overrides, products: next });
   };
 
+  const [query, setQuery] = React.useState("");
+  const needle = query.trim().toLowerCase();
+  const matching = (rows: VariableRow[]) =>
+    needle === "" ? rows : rows.filter((row) => row.path.toLowerCase().includes(needle));
+  const shown = GROUPS.filter(
+    (group) => needle === "" || matching(groups[group.key] ?? []).length > 0,
+  );
+
   return (
     <div className="flex flex-col">
-      {GROUPS.map((group) => (
+      <div className="border-b border-border p-3">
+        <label className="relative flex items-center">
+          <SearchIcon className="icon-tertiary pointer-events-none absolute left-2.5" />
+          <input
+            className="sw-input sw-input--sm w-full pl-8"
+            type="search"
+            aria-label="Search variables"
+            placeholder="Search variables"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </div>
+      {shown.length === 0 && (
+        <span className="block px-4 py-4 text-xs text-fg-tertiary">No variables match.</span>
+      )}
+      {shown.map((group) => (
         <Group
           key={group.key}
           label={group.label}
           blurb={group.blurb}
-          rows={groups[group.key] ?? []}
+          searching={needle !== ""}
+          rows={matching(groups[group.key] ?? [])}
           overrideOf={(path) =>
             group.key === "products"
               ? overrides.products?.[path.split(".")[1] ?? ""]?.[path.split(".")[2] ?? ""]

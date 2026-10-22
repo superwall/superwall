@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cutoutOf, idiomOf, platformOf } from "../src/device";
+import { cutoutOf, idiomOf, modelOf, platformOf } from "../src/device";
 
 describe("platformOf", () => {
   it("reads the host's platform in whichever case it arrives", () => {
@@ -66,6 +66,10 @@ describe("cutoutOf", () => {
     expect(cutoutOf("iPhone18,3")).toBe("island");
   });
 
+  it("reads iPhone Duo as a strip, whose camera edge moves with the fold", () => {
+    expect(cutoutOf("iPhone19,4")).toBe("strip");
+  });
+
   it("assumes an island for an iPhone newer than it knows", () => {
     expect(cutoutOf("iPhone25,1")).toBe("island");
   });
@@ -75,5 +79,18 @@ describe("cutoutOf", () => {
     expect(cutoutOf("Pixel 10")).toBeUndefined();
     expect(cutoutOf("")).toBeUndefined();
     expect(cutoutOf(undefined)).toBeUndefined();
+  });
+});
+
+describe("simulatorModel", () => {
+  it("stands in for deviceModel, which a simulator reports as its CPU", () => {
+    const device = { deviceModel: "arm64", simulatorModel: "iPhone19,4" };
+    expect(modelOf(device)).toBe("iPhone19,4");
+    expect(idiomOf(device)).toBe("phone");
+    expect(cutoutOf(modelOf(device))).toBe("strip");
+  });
+
+  it("falls back to deviceModel on a real device", () => {
+    expect(modelOf({ deviceModel: "iPhone18,3" })).toBe("iPhone18,3");
   });
 });

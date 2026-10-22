@@ -376,5 +376,6 @@ export {
   type SuperwallDeviceVariables,
   type SuperwallExperiment,
   type SuperwallPlacementParams,
+  type SuperwallSafeAreaInsets,
   type SuperwallUserVariables,
 } from "./variables";

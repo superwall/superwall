@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { DeviceChrome } from "../../../src/components/preview/DeviceChrome";
+import { DeviceChrome, duoLayout } from "../../../src/components/preview/DeviceChrome";
 import type { DeviceChromeSpec } from "../../../src/lib/devices";
 
 const island: DeviceChromeSpec = {
@@ -98,5 +98,50 @@ describe("DeviceChrome", () => {
     );
 
     expect(cutout(container)).toEqual([]);
+  });
+});
+
+describe("DeviceChrome on iPhone Duo", () => {
+  const spec = (duo: "closed" | "open"): DeviceChromeSpec => ({
+    radius: 40,
+    duo,
+    statusBarHeight: 0,
+    homeIndicator: true,
+  });
+
+  it("draws the closed phone's camera and status in its strip, over the paywall", () => {
+    const view = render(
+      <DeviceChrome
+        spec={spec("closed")}
+        width={466}
+        height={678}
+        landscape={false}
+        theme="light"
+      />,
+    );
+    expect(view.getByTestId("duo-camera").style.left).toBe("418.2px");
+    expect(view.getByTestId("duo-status").style.mixBlendMode).toBe("difference");
+    expect(view.getAllByText("9:41")).toHaveLength(1);
+  });
+
+  it("hides the closed phone's status in landscape and keeps the camera", () => {
+    const view = render(
+      <DeviceChrome spec={spec("closed")} width={678} height={466} landscape theme="light" />,
+    );
+    expect(view.getByTestId("duo-camera")).toBeTruthy();
+    expect(view.queryByTestId("duo-status")).toBeNull();
+  });
+
+  it("shows only the status on the open phone, whose camera is on the outer display", () => {
+    const view = render(
+      <DeviceChrome spec={spec("open")} width={669} height={951} landscape={false} theme="light" />,
+    );
+    expect(view.queryByTestId("duo-camera")).toBeNull();
+    expect(view.getByTestId("duo-status")).toBeTruthy();
+  });
+
+  it("has a corner per side of the fold", () => {
+    expect(duoLayout("closed", false).corners).toEqual([8, 59, 59, 8]);
+    expect(duoLayout("open", true).corners).toEqual([55, 55, 55, 55]);
   });
 });

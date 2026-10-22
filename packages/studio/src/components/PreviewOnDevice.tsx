@@ -103,12 +103,9 @@ export const PreviewOnDevice = ({
                   {scheme === undefined ? "Set URL scheme" : "Edit URL scheme"}
                 </button>
               )}
-              <button className="sw-btn" type="button" onClick={() => setOpen(false)}>
-                Done
-              </button>
               {link.status === "ready" && (
                 <a
-                  className="sw-btn sw-btn--primary"
+                  className="sw-btn sw-btn--primary sm:ml-auto"
                   href={link.url}
                   {...(hosted ? { target: "_blank", rel: "noreferrer" } : {})}
                 >
