@@ -1,6 +1,6 @@
 {
   "name": "@superwall/studio",
-  "version": "1.7.0",
+  "version": "2.0.0",
   "description": "The Superwall studio: paywall browsing, device preview, and editing surfaces. Shared between `superwall dev` (local studio) and the hosted dashboard.",
   "keywords": [
     "paywall",
