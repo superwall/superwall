@@ -74,3 +74,17 @@ test("only linux without DISPLAY, WAYLAND_DISPLAY or WSL counts as headless", ()
   assert.equal(hasDisplay({}, "darwin"), true);
   assert.equal(hasDisplay({}, "win32"), true);
 });
+
+test("BROWSER=none never opens a browser", async () => {
+  let spawned = false;
+  const opened = await openBrowser(URL, {
+    platform: "darwin",
+    env: { BROWSER: "none" },
+    spawn: (() => {
+      spawned = true;
+      return fakeChild("spawn");
+    }) as typeof spawn,
+  });
+  assert.equal(opened, false);
+  assert.equal(spawned, false);
+});

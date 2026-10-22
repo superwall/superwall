@@ -12,6 +12,18 @@ export const registerAccountCommands = <T>(cli: Argv<T>): Argv<T> =>
             type: "string",
             describe: "Log in headlessly with an API key (for CI) instead of the browser",
           },
+          poll: {
+            type: "boolean",
+            describe: "Finish a login started without a terminal, once it's approved in the browser",
+          },
+          timeout: {
+            type: "number",
+            describe: "--poll: seconds to wait for approval before returning (default 60)",
+          },
+          "org-name": {
+            type: "string",
+            describe: "Create this organization if the account has none (without a terminal)",
+          },
           host: {
             type: "string",
             describe: "OAuth issuer override",

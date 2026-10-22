@@ -1,10 +1,16 @@
-import { defineCommand } from "@/command";
+import { defineCommand, type CommandContext } from "@/command";
 import { API_HOST } from "@/environment";
 import { ensureSkillsCurrent } from "@/core/agent/skills";
 import { onboardingHooks } from "@/core/account/onboarding";
 import { track } from "@/core/telemetry";
 import { BROWSER_UNAVAILABLE } from "@/core/auth/browser";
-import { loginWithApiKey, performLogin } from "@/core/auth/login";
+import {
+  loginWithApiKey,
+  performLogin,
+  pollLogin,
+  startLogin,
+  type PendingLogin,
+} from "@/core/auth/login";
 import { clearSession, loadSession, type Session } from "@/core/auth/storage";
 import { scanProject } from "@/core/project/scan";
 
@@ -36,10 +42,9 @@ export const runLogin = defineCommand({
       return;
     }
 
-    if (!ctx.interactive)
-      throw new Error(
-        "Browser login requires an interactive terminal. Use `superwall login --api-key <key>`.",
-      );
+    const orgName = typeof ctx.argv.orgName === "string" ? ctx.argv.orgName.trim() || undefined : undefined;
+    if (ctx.argv.poll === true) return pollForApproval(ctx, orgName);
+    if (!ctx.interactive) return startForAgent(ctx, orgName);
 
     const scan = await scanProject(ctx.installDir).catch(() => null);
     const hooks = onboardingHooks(scan?.apps[0]);
@@ -79,6 +84,86 @@ export const runLogin = defineCommand({
     }
   },
 });
+
+const POLL_HINT = "superwall login --poll";
+
+function expiresAt(pending: PendingLogin): string {
+  return new Date(pending.expiresAt).toISOString();
+}
+
+async function startForAgent(ctx: CommandContext, orgName: string | undefined): Promise<void> {
+  const { pending, browserOpened } = await startLogin({
+    issuer: ctx.argv.host as string | undefined,
+    clientId: ctx.argv.clientId as string | undefined,
+    orgName,
+  });
+  track("login started", { method: "oauth_poll" });
+  if (ctx.json) {
+    return ctx.output.data({
+      status: "pending",
+      verification_url: pending.url,
+      user_code: pending.userCode,
+      expires_at: expiresAt(pending),
+      browser_opened: browserOpened,
+      next: POLL_HINT,
+    });
+  }
+  ctx.ui.info(`Approve this login in your browser · code \`${pending.userCode}\`\n${pending.url}`);
+  if (!browserOpened) ctx.ui.warn(BROWSER_UNAVAILABLE);
+  ctx.ui.outro(
+    `Once it's approved, run \`${POLL_HINT}\` to finish. The code expires at ${expiresAt(pending)}.`,
+  );
+}
+
+async function pollForApproval(ctx: CommandContext, orgName: string | undefined): Promise<void> {
+  const seconds = Number(ctx.argv.timeout ?? 60);
+  const timeoutMs = Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : 60_000;
+  const spin = ctx.ui.spinner();
+  spin.start("Waiting for you to approve in the browser");
+  let result: Awaited<ReturnType<typeof pollLogin>>;
+  try {
+    result = await pollLogin({ timeoutMs, orgName, onStatus: (m) => spin.message(m) });
+  } catch (error) {
+    spin.stop("Login failed");
+    track("login finished", { status: "error", method: "oauth_poll" });
+    throw error;
+  }
+
+  if (result.status === "logged_in") {
+    const { session } = result;
+    spin.stop(
+      `Logged in as \`${session.userEmail ?? "you"}\`${session.orgName ? ` · \`${session.orgName}\`` : ""}`,
+    );
+    track("login finished", { status: "success", method: "oauth_poll" });
+    if (ctx.json) return ctx.output.data({ status: "logged_in", ...sessionOutput(session) });
+    await ensureSkillsCurrent(false, "login").catch(() => {});
+    ctx.ui.outro("You're all set - run `superwall integrate` to set up your app.");
+    return;
+  }
+
+  process.exitCode = 1;
+  const { pending } = result;
+  if (result.status === "needs_organization") {
+    spin.stop("Approved");
+    const message = `This account has no organization yet. Run \`${POLL_HINT} --org-name "<name>"\` to create one.`;
+    if (ctx.json) return ctx.output.data({ status: "needs_organization", message });
+    ctx.ui.warn(message);
+    return;
+  }
+  spin.stop("Not approved yet");
+  if (ctx.json) {
+    return ctx.output.data({
+      status: "pending",
+      verification_url: pending.url,
+      user_code: pending.userCode,
+      expires_at: expiresAt(pending),
+      next: POLL_HINT,
+    });
+  }
+  ctx.ui.info(
+    `Still waiting for approval · code \`${pending.userCode}\`\n${pending.url}\nRun \`${POLL_HINT}\` again. The code expires at ${expiresAt(pending)}.`,
+  );
+}
 
 export const runLogout = defineCommand({
   name: "logout",

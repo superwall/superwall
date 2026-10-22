@@ -119,14 +119,42 @@ test("logout --json reports what it did without asking", async () => {
   assert.deepEqual(empty.json, { loggedOut: false, account: null });
 });
 
-test("login refuses browser login where nobody can approve it", async () => {
-  useHome();
+test("login without a terminal prints the link and code, and returns for --poll to finish", async () => {
+  const home = useHome();
+  useFetch([
+    {
+      match: "/.well-known/openid-configuration",
+      body: {
+        token_endpoint: "https://auth.test/oauth2/token",
+        device_authorization_endpoint: "https://auth.test/oauth2/device_authorization",
+      },
+    },
+    {
+      match: "/oauth2/device_authorization",
+      body: {
+        device_code: "device-1",
+        user_code: "ABCD-EFGH",
+        verification_uri: "https://auth.test/device",
+        verification_uri_complete: "https://auth.test/device?user_code=ABCD-EFGH",
+        expires_in: 300,
+      },
+    },
+  ]);
+  process.env.BROWSER = "none";
+  try {
+    const result = await run(runLogin.definition, {
+      argv: { interactive: false, host: "https://auth.test" },
+    });
 
-  const result = await run(runLogin.definition, { argv: { interactive: false } });
-
-  assert.match(result.said("error").join(), /requires an interactive terminal/);
-  assert.match(result.said("error").join(), /--api-key/);
-  assert.equal(process.exitCode, 1);
+    assert.match(result.said("info").join(), /ABCD-EFGH/);
+    assert.match(result.said("info").join(), /https:\/\/auth\.test\/device\?user_code=ABCD-EFGH/);
+    assert.match(result.said("outro").join(), /superwall login --poll/);
+    assert.equal(process.exitCode, undefined);
+    assert.equal(fs.existsSync(path.join(home, "pending-login.json")), true);
+    assert.equal(fs.existsSync(sessionFile(home)), false);
+  } finally {
+    delete process.env.BROWSER;
+  }
 });
 
 test("login with an API key keeps the session and names the organization", async () => {

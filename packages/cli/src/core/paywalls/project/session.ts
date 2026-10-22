@@ -11,7 +11,8 @@ export class LoginRequiredError extends Error {
     super(
       "Pushing paywalls needs a Superwall account.\n" +
         "  Interactively: run `superwall login`.\n" +
-        `  In CI or an agent: set ${ENV_API_KEY} to an org API key (sk_…).`,
+        "  In an agent: run `superwall login`, approve the link it prints, then `superwall login --poll`.\n" +
+        `  In CI: set ${ENV_API_KEY} to an org API key (sk_…).`,
     );
     this.name = "LoginRequiredError";
   }

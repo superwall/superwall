@@ -48,3 +48,25 @@ export function clearSession(): void {
     /* ignore */
   }
 }
+
+function pendingFile(): string {
+  return join(dir(), "pending-login.json");
+}
+
+export function savePendingLogin(pending: object): void {
+  mkdirSync(dir(), { recursive: true, mode: 0o700 });
+  writeFileSync(pendingFile(), `${formatJson(pending)}\n`, { mode: 0o600 });
+}
+
+export function loadPendingLogin<T>(): T | null {
+  try {
+    if (!existsSync(pendingFile())) return null;
+    return JSON.parse(readFileSync(pendingFile(), "utf8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingLogin(): void {
+  rmSync(pendingFile(), { force: true });
+}

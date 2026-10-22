@@ -29,6 +29,13 @@ package; everything below is what you get.
 session. Where it can't open one (a server, or over SSH), it says so: open the
 URL it prints on any device and approve the code there. In CI, log in without
 a browser: `superwall login --api-key <key>`.
+
+A coding agent can log you in too. Without a terminal, `superwall login` prints
+the link and code and returns at once; the agent shows you the link, and once
+you've approved it, `superwall login --poll` finishes the login (it waits up to
+`--timeout` seconds, 60 by default, and says `pending` until then). A new
+account without an organization needs `--org-name "<name>"` on either command.
+`BROWSER=none` stops the CLI from opening a browser itself.
 If your account belongs to more than one organization, pick one with
 `superwall orgs use` (you'll otherwise be asked the first time it matters).
 Upgrade any time with `superwall upgrade` - the CLI also tells you when a new
