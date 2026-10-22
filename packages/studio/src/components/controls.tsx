@@ -28,7 +28,7 @@ export const Segmented = <TValue extends string>({
 
   return (
     <div
-      className="flex h-8 flex-none rounded-[calc(var(--radius-sm)+3px)] border border-border p-0.5"
+      className="flex h-8 flex-none rounded-sm border border-border p-0.5"
       role="group"
       aria-label={label}
     >
@@ -36,7 +36,7 @@ export const Segmented = <TValue extends string>({
         {box && (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 rounded-sm bg-primary/10 transition-[left,width] duration-move ease-out motion-reduce:transition-none"
+            className="pointer-events-none absolute inset-y-0 rounded-[1px] bg-primary/10 transition-[left,width] duration-move ease-out motion-reduce:transition-none"
             style={box}
           />
         )}
@@ -52,7 +52,7 @@ export const Segmented = <TValue extends string>({
               type="button"
               aria-pressed={selected}
               aria-label={option.name}
-              className={`relative z-10 flex h-6.5 min-w-6.5 items-center justify-center gap-2 rounded-sm border border-transparent px-[calc(--spacing(2.5)-1px)] text-sm whitespace-nowrap transition-colors duration-hover focus-visible:border-primary ${
+              className={`relative z-10 flex h-6.5 min-w-6.5 items-center justify-center gap-2 rounded-[1px] border border-transparent px-[calc(--spacing(2.5)-1px)] text-sm whitespace-nowrap transition-colors duration-hover focus-visible:border-primary ${
                 selected
                   ? "text-primary"
                   : "text-fg-tertiary hover:text-foreground [&:not(:hover)>svg]:icon-tertiary"

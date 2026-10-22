@@ -34,6 +34,119 @@ const StatusCluster = () => (
   </span>
 );
 
+type Point = { x: number; y: number };
+
+export type DuoLayout = {
+  corners: [number, number, number, number];
+  camera?: Point;
+  clock?: Point;
+  ring?: Point;
+};
+
+/** Where iPhone Duo's camera and status sit, in the points UIKit reports on the iOS 27.1 simulator. */
+export const duoLayout = (duo: "closed" | "open", landscape: boolean): DuoLayout => {
+  if (duo === "closed") {
+    return landscape
+      ? { corners: [8, 8, 59, 59], camera: { x: 630.5, y: 418.5 } }
+      : {
+          corners: [8, 59, 59, 8],
+          camera: { x: 418.2, y: 47.8 },
+          clock: { x: 417.7, y: 92.7 },
+          ring: { x: 418, y: 130 },
+        };
+  }
+  return landscape
+    ? { corners: [55, 55, 55, 55], clock: { x: 903, y: 39.7 }, ring: { x: 903, y: 77 } }
+    : { corners: [55, 55, 55, 55], clock: { x: 574.6, y: 47.6 }, ring: { x: 621, y: 48 } };
+};
+
+const at = (point: Point) => ({
+  position: "absolute" as const,
+  left: point.x,
+  top: point.y,
+  transform: "translate(-50%, -50%)",
+});
+
+const DuoStatusRing = () => {
+  const dots = [64, 77, 90, 103, 116].map((deg) => {
+    const r = (deg * Math.PI) / 180;
+    return { cx: 20 + 17 * Math.cos(r), cy: 20 + 17 * Math.sin(r) };
+  });
+  return (
+    <svg width={40} height={40} viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path
+        d="M8.1 32.2 A17 17 0 1 1 31.9 32.2"
+        stroke="#fff"
+        strokeWidth={3}
+        strokeLinecap="round"
+      />
+      {dots.map((dot) => (
+        <circle key={dot.cx} cx={dot.cx} cy={dot.cy} r={1.2} fill="#fff" opacity={0.6} />
+      ))}
+      <path
+        d="M13.5 18.2a9.2 9.2 0 0 1 13 0"
+        stroke="#fff"
+        strokeWidth={2.4}
+        strokeLinecap="round"
+      />
+      <path
+        d="M16.3 21a5.2 5.2 0 0 1 7.4 0"
+        stroke="#fff"
+        strokeWidth={2.4}
+        strokeLinecap="round"
+      />
+      <circle cx={20} cy={24.2} r={1.8} fill="#fff" />
+    </svg>
+  );
+};
+
+/** The paywall runs under all of it, as on the device: nothing here is opaque but the camera. */
+const DuoChrome = ({ layout }: { layout: DuoLayout }) => (
+  <>
+    {(layout.clock || layout.ring) && (
+      <div
+        className="absolute inset-0"
+        style={{ mixBlendMode: "difference" }}
+        data-testid="duo-status"
+      >
+        {layout.clock && (
+          <span
+            className="leading-none"
+            style={{
+              ...at(layout.clock),
+              fontFamily: '-apple-system, "SF Pro Text", system-ui, sans-serif',
+              fontSize: 15,
+              fontWeight: 600,
+              letterSpacing: -0.2,
+              color: "#fff",
+            }}
+          >
+            9:41
+          </span>
+        )}
+        {layout.ring && (
+          <div style={at(layout.ring)}>
+            <DuoStatusRing />
+          </div>
+        )}
+      </div>
+    )}
+    {layout.camera && (
+      <div
+        className="absolute rounded-full"
+        data-testid="duo-camera"
+        style={{
+          ...at(layout.camera),
+          width: 37,
+          height: 37,
+          background: "radial-gradient(circle at 50% 50%, #1b2733 0 18%, #05070a 30% 100%)",
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.06)",
+        }}
+      />
+    )}
+  </>
+);
+
 /**
  * Drawn in device pixels over the preview iframe; the frame scales the whole
  * layer. Everything is pointer-events-none so taps land on the paywall.
@@ -60,7 +173,9 @@ export const DeviceChrome = ({
       style={{ width, height, color: ink }}
       data-testid="device-chrome"
     >
-      {!landscape && (
+      {spec.duo && <DuoChrome layout={duoLayout(spec.duo, landscape)} />}
+
+      {!landscape && !spec.duo && (
         <div
           className="absolute inset-x-0 top-0 flex items-center justify-between"
           style={{

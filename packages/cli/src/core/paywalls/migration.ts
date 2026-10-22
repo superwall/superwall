@@ -1,21 +1,18 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { DASHBOARD_URL } from "@/environment";
-import { copyToClipboard } from "@/clipboard";
+import { copyToClipboard } from "@/ui/clipboard";
+import { detectDrivers, type AgentEvent, type AgentResult } from "@/core/workflows/agent/drivers/index";
+import { readPrompt } from "@/core/workflows/agent/prompt";
+import { runWithDriverFallback } from "@/core/workflows/agent/run";
+import { readBundledSkill } from "@/core/support/skills";
 import { ApiError, type SuperwallApi } from "@/core/api/client";
-import {
-  getPaywall,
-  listApplications,
-  projectOrganizationId,
-  type Application,
-} from "@/core/api/resources";
-import { detectDrivers, type AgentEvent, type AgentResult } from "@/core/agent/drivers";
-import { loadPrompt } from "@/core/agent/prompt";
-import { runWithDriverFallback } from "@/core/agent/run";
-import { loadBundledSkill } from "@/core/agent/skills";
+import { findPaywall, listApplications, type Application } from "@/core/api/resources";
+import { readPackageJson, allDeps } from "@/core/codebase/package";
+import { DASHBOARD_URL } from "@/environment";
+import type { Renderer } from "@/ui";
+import { stripReport } from "@/ui/log";
 import {
   isScreenOrigin,
-  originKey,
   readLock,
   writeApp,
   writeOrigin,
@@ -23,13 +20,22 @@ import {
   type ScreenOrigin,
   type SurfaceOrigin,
 } from "./project/lock";
-import { originBrief, originConfigSource, originOf, parseOriginDocument, type OriginPaywall } from "./project/origin";
+import {
+  originBrief,
+  originConfigSource,
+  originOf,
+  parseOriginDocument,
+  type OriginPaywall,
+} from "./project/origin";
 import { projectPackageName } from "./project/scaffold";
 import { writeProjectFiles, writeSurfaceFiles } from "./project/template";
-import { readScreen, screenBrief, screenConfigSource, screenFrameworkLabel, type ScreenSource } from "./screen";
-import { readPackageJson, allDeps } from "@/core/project/package";
-import { stripReport } from "@/ui/log";
-import type { Renderer } from "@/ui";
+import {
+  readScreen,
+  screenBrief,
+  screenConfigSource,
+  screenFrameworkLabel,
+  type ScreenSource,
+} from "./screen";
 
 export interface PaywallMigration {
   superwallDir: string;
@@ -38,12 +44,12 @@ export interface PaywallMigration {
   brief: string;
 }
 
-export const screenFileOf = (migration: PaywallMigration, origin: ScreenOrigin): string =>
+const screenFileOf = (migration: PaywallMigration, origin: ScreenOrigin): string =>
   path.resolve(migration.superwallDir, origin.path);
 
 export const migrationSource = (migration: PaywallMigration, from = process.cwd()): string =>
   isScreenOrigin(migration.origin)
-    ? path.relative(from, screenFileOf(migration, migration.origin)) || "."
+    ? path.relative(from, screenFileOf(migration, migration.origin))
     : migration.origin.paywallId;
 
 export const migrationCommand = (migration: PaywallMigration, from = process.cwd()): string =>
@@ -101,7 +107,7 @@ export function screenMigrationFor(
   );
 }
 
-export interface ScreenScaffoldOptions {
+interface ScreenScaffoldOptions {
   root: string;
   target: string;
   file: string;
@@ -109,7 +115,7 @@ export interface ScreenScaffoldOptions {
   screenshot?: string;
 }
 
-export const ORIGINAL_SCREENSHOT = "original.png";
+const ORIGINAL_SCREENSHOT = "original.png";
 
 export function scaffoldFromScreen(ui: Renderer, options: ScreenScaffoldOptions): ScreenSource {
   const { root, target, file } = options;
@@ -137,15 +143,14 @@ export function scaffoldFromScreen(ui: Renderer, options: ScreenScaffoldOptions)
   };
   writeOrigin(target, "paywall", screen.slug, origin);
 
+  const actions = inventory.actions.reduce((sum, action) => sum + action.count, 0);
   const found = [
     `${inventory.copy.length} string${inventory.copy.length === 1 ? "" : "s"}`,
     `${inventory.assets.length} asset${inventory.assets.length === 1 ? "" : "s"}`,
     `${inventory.productIds.length} product${inventory.productIds.length === 1 ? "" : "s"}`,
-    `${inventory.actions.reduce((sum, action) => sum + action.count, 0)} action${inventory.actions.length === 1 ? "" : "s"}`,
+    `${actions} action${actions === 1 ? "" : "s"}`,
   ].join(", ");
-  ui.step(
-    `Read \`${screen.path}\` (${screenFrameworkLabel(screen.framework)}): ${found}`,
-  );
+  ui.step(`Read \`${screen.path}\` (${screenFrameworkLabel(screen.framework)}): ${found}`);
   ui.step(
     `Created ${path.relative(root, target) || "."}/paywalls/${screen.slug} for \`${screen.name}\``,
   );
@@ -157,7 +162,7 @@ export function scaffoldFromScreen(ui: Renderer, options: ScreenScaffoldOptions)
   return screen;
 }
 
-export interface ScaffoldOptions {
+interface ScaffoldOptions {
   root: string;
   target: string;
   paywallId: string;
@@ -178,11 +183,11 @@ export async function scaffoldFromPaywall(
   const { root, target, paywallId } = options;
   const spin = ui.spinner();
   spin.start(`Reading paywall ${paywallId}`);
-  const detail = await getPaywall(api, paywallId).catch((error: unknown) => {
+  const detail = await findPaywall(api, paywallId).catch((error: unknown) => {
     spin.stop(`Could not read paywall ${paywallId}`);
     if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
       throw new Error(
-        `Paywall ${paywallId} isn't visible to this account. Check the id in the dashboard URL, and if it belongs to another organization, switch with \`superwall orgs use <id>\` first.`,
+        `Paywall ${paywallId} isn't visible to this account. Check the id in the dashboard URL.`,
       );
     }
     throw error;
@@ -215,7 +220,9 @@ export async function scaffoldFromPaywall(
   if (origin.url !== undefined) {
     writeOrigin(target, "paywall", origin.slug, { paywallId: origin.id, url: origin.url });
   }
-  ui.step(`Created ${path.relative(root, target) || "."}/paywalls/${origin.slug} from \`${origin.name}\``);
+  ui.step(
+    `Created ${path.relative(root, target) || "."}/paywalls/${origin.slug} from \`${origin.name}\``,
+  );
   if (origin.products.some((product) => product.identifier === "missing")) {
     ui.warn(
       "Some product slots have no store product on the dashboard — fix them in config.ts before pushing.",
@@ -233,25 +240,14 @@ export async function scaffoldFromPaywall(
           `Pushes go to \`${app.name ?? app.id}\`, the paywall's app — saved in superwall.lock, so commit that file.`,
         );
       } else {
-        const organization =
-          origin.projectId === undefined
-            ? undefined
-            : await projectOrganizationId(api, origin.projectId).catch(() => undefined);
         ui.success(
           `Pushes go to app ${origin.applicationId}, the paywall's app — saved in superwall.lock.`,
-        );
-        ui.warn(
-          organization === undefined
-            ? "That app is in another organization: run `superwall orgs use <id>` before pushing."
-            : `That app is in another organization: run \`superwall orgs use ${organization}\` before pushing.`,
         );
       }
     }
   }
   return origin;
 }
-
-export const migrationKey = (surfaceId: string): string => originKey("paywall", surfaceId);
 
 const SCREEN_REFERENCE: Record<ScreenOrigin["framework"], string> = {
   swiftui: "ios",
@@ -263,26 +259,30 @@ const SCREEN_REFERENCE: Record<ScreenOrigin["framework"], string> = {
 };
 
 const screenPrompt = (migration: PaywallMigration, origin: ScreenOrigin): string =>
-  loadPrompt("actions/screen-migrate.xml", {
+  readPrompt("actions/screen-migrate.xml", {
     project_dir: migration.superwallDir,
     surface_dir: `paywalls/${migration.surfaceId}`,
     source_path: origin.path,
     framework: screenFrameworkLabel(origin.framework),
-    screenshot: origin.screenshot === undefined ? "none" : `paywalls/${migration.surfaceId}/${origin.screenshot}`,
+    screenshot:
+      origin.screenshot === undefined
+        ? "none"
+        : `paywalls/${migration.surfaceId}/${origin.screenshot}`,
     dashboard_url: DASHBOARD_URL,
-    skill: loadBundledSkill("superwall-screen-migrate", SCREEN_REFERENCE[origin.framework]),
+    skill: readBundledSkill("superwall-screen-migrate", SCREEN_REFERENCE[origin.framework]),
     brief: migration.brief || "(MIGRATION.md is missing — inventory the source file first.)",
   });
 
 const paywallPrompt = (migration: PaywallMigration, origin: PaywallOrigin): string =>
-  loadPrompt("actions/paywall-migrate.xml", {
+  readPrompt("actions/paywall-migrate.xml", {
     project_dir: migration.superwallDir,
     surface_dir: `paywalls/${migration.surfaceId}`,
     paywall_id: origin.paywallId,
     source_url: origin.url,
     dashboard_url: DASHBOARD_URL,
-    skill: loadBundledSkill("superwall-paywall-migrate"),
-    brief: migration.brief || "(MIGRATION.md is missing — inventory the source from its URL first.)",
+    skill: readBundledSkill("superwall-paywall-migrate"),
+    brief:
+      migration.brief || "(MIGRATION.md is missing — inventory the source from its URL first.)",
   });
 
 export function buildMigrationPrompt(migration: PaywallMigration): string {
@@ -331,7 +331,7 @@ export async function runMigration(
   );
 }
 
-export type MigrationChoice = "agent" | "copy" | "later";
+type MigrationChoice = "agent" | "copy" | "later";
 
 export async function offerMigration(
   ui: Renderer,

@@ -39,14 +39,19 @@
     "./auth": {
       "types": "./dist/auth.d.ts",
       "import": "./dist/auth.js"
+    },
+    "./tools": {
+      "types": "./dist/tools.d.ts",
+      "import": "./dist/tools.js"
     }
   },
   "scripts": {
-    "build": "tsdown && tsx scripts/vendor-skills.ts",
+    "build": "tsdown && tsx scripts/vendor-skills.ts && bun scripts/build-tools.ts",
     "watch": "tsdown --watch",
     "regen:asc": "tsx scripts/regen-asc-index.ts",
     "skills:vendor": "tsx scripts/vendor-skills.ts",
-    "skills:ensure": "test -f dist/skills/superwall/SKILL.md || tsx scripts/vendor-skills.ts",
+    "test:parity": "for area in main api-and-asc apple-search-ads; do tsx --tsconfig tsconfig.json scripts/mcp-parity.ts scripts/mcp-parity/$area.json /tmp/mcp-parity-$area.json || exit 1; done",
+    "skills:ensure": "test -f dist/skills/index.json || tsx scripts/vendor-skills.ts",
     "dev": "bun bin.ts",
     "test": "bun run skills:ensure && tsx --test --import ./tests/setup.ts $(rg --files tests -g '*.test.ts')",
     "link:global": "tsdown && bun link",
@@ -54,7 +59,7 @@
     "prepack": "bun run build",
     "prepublishOnly": "bun run typecheck && bun run test",
     "test:run": "tsx --test $(rg --files tests -g '*.test.ts')",
-    "test:coverage": "bun run skills:ensure && tsx --test --import ./tests/setup.ts --experimental-test-coverage --test-coverage-lines=85 --test-coverage-branches=88 --test-coverage-functions=85 $(rg --files tests -g '*.test.ts')",
+    "test:coverage": "bun run skills:ensure && tsx --test --import ./tests/setup.ts --experimental-test-coverage --test-coverage-lines=98 --test-coverage-branches=94 --test-coverage-functions=96 $(rg --files tests -g '*.test.ts')",
     "clean": "rm -rf dist"
   },
   "dependencies": {

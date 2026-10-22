@@ -35,6 +35,15 @@ describe("createTransportLogger", () => {
     expect(error).toHaveBeenCalledTimes(1);
   });
 
+  it("stays quiet when storage access throws, as in a sandboxed frame", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    createTransportLogger("Something").debug("quiet");
+    expect(log).not.toHaveBeenCalled();
+  });
+
   it("colours known transports", () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     createTransportLogger("WebKit").info("hi");

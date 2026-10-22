@@ -1,0 +1,1377 @@
+{
+  "asa_campaigns_list": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 3
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2,
+        "offset": 1,
+        "fields": "id,name,status"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "does-not-exist"
+      },
+      "ok": false
+    }
+  ],
+  "asa_campaigns_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906433850"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906433850",
+        "fields": "id,name,status"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_campaigns_find": [
+    {
+      "input": {
+        "app": "1128",
+        "selector": {
+          "conditions": [
+            {
+              "field": "status",
+              "operator": "EQUALS",
+              "values": [
+                "PAUSED"
+              ]
+            }
+          ],
+          "pagination": {
+            "offset": 0,
+            "limit": 2
+          }
+        }
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "field": "name",
+        "op": "CONTAINS",
+        "values": "BRAND",
+        "order_by": "name:desc",
+        "fields": "id,name",
+        "limit": 3
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "selector": "not json"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "field": "status"
+      },
+      "ok": false
+    }
+  ],
+  "asa_campaigns_create": [
+    {
+      "input": {
+        "app": "1128",
+        "name": "parity-refused",
+        "adam_id": "not-a-number"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "body": "[1]"
+      },
+      "ok": false
+    }
+  ],
+  "asa_campaigns_update": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "status": "PAUSED"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "body": {
+          "name": "parity-refused"
+        }
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906433850",
+        "body": "not json"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": false
+    }
+  ],
+  "asa_campaigns_delete": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": false
+    }
+  ],
+  "asa_adgroups_list": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_adgroups_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906750349",
+        "campaign": "1906433850"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906750349",
+        "campaign": "1906433850",
+        "fields": "id,name"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "1906433850"
+      },
+      "ok": false
+    }
+  ],
+  "asa_adgroups_find": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2,
+        "fields": "id,name"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "selector": "[1]"
+      },
+      "ok": false
+    }
+  ],
+  "asa_adgroups_create": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999",
+        "name": "parity-refused"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "body": "[1]"
+      },
+      "ok": false
+    }
+  ],
+  "asa_adgroups_update": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "999999999999",
+        "status": "PAUSED"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "1906433850",
+        "search_match": true,
+        "body": "[1]"
+      },
+      "ok": false
+    }
+  ],
+  "asa_adgroups_delete": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_keywords_list": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "adgroup": "1906750349"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "adgroup": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_keywords_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906791114",
+        "campaign": "1906433850",
+        "adgroup": "1906750349"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "1906433850",
+        "adgroup": "1906750349"
+      },
+      "ok": false
+    }
+  ],
+  "asa_keywords_find": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_keywords_create": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999",
+        "adgroup": "999999999999",
+        "text": "parity refused",
+        "match_type": "EXACT"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "adgroup": "1906750349"
+      },
+      "ok": false
+    }
+  ],
+  "asa_keywords_update": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "999999999999",
+        "adgroup": "999999999999",
+        "status": "PAUSED"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906791114",
+        "campaign": "1906433850",
+        "adgroup": "1906750349",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_keywords_delete": [
+    {
+      "input": {
+        "app": "1128",
+        "ids": "999999999999",
+        "campaign": "999999999999",
+        "adgroup": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "ids": "999999999998,999999999999",
+        "campaign": "999999999999",
+        "adgroup": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "adgroup": "1906750349"
+      },
+      "ok": false
+    }
+  ],
+  "asa_negative_keywords_list": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906437168"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906437168",
+        "adgroup": "1906763410",
+        "limit": 2
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_negative_keywords_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906800848",
+        "campaign": "1906437168",
+        "adgroup": "1906763410"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "1906437168"
+      },
+      "ok": false
+    }
+  ],
+  "asa_negative_keywords_find": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906437168"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906437168",
+        "adgroup_level": true,
+        "limit": 2,
+        "fields": "id,text"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_negative_keywords_create": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999",
+        "text": "parity refused",
+        "match_type": "EXACT"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906437168"
+      },
+      "ok": false
+    }
+  ],
+  "asa_negative_keywords_update": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "999999999999",
+        "adgroup": "999999999999",
+        "status": "PAUSED"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906800848",
+        "campaign": "1906437168",
+        "body": 7
+      },
+      "ok": false
+    }
+  ],
+  "asa_negative_keywords_delete": [
+    {
+      "input": {
+        "app": "1128",
+        "ids": "999999999999",
+        "campaign": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "ids": "999999999999",
+        "campaign": "999999999999",
+        "adgroup": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906437168"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ads_list": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "adgroup": "1906750349"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999",
+        "adgroup": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ads_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "1906433850",
+        "adgroup": "1906750349"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ads_find": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "selector": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ads_create": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999",
+        "adgroup": "999999999999",
+        "name": "parity-refused",
+        "creative_id": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "adgroup": "1906750349",
+        "creative_id": "not-a-number"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ads_update": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "999999999999",
+        "adgroup": "999999999999",
+        "status": "PAUSED"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "adgroup": "1906750349",
+        "status": "PAUSED"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ads_delete": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "campaign": "999999999999",
+        "adgroup": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999",
+        "adgroup": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_creatives_list": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "limit": "many"
+      },
+      "ok": false
+    }
+  ],
+  "asa_creatives_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "include_deleted_assets": true
+      },
+      "ok": false
+    }
+  ],
+  "asa_creatives_find": [
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "selector": []
+      },
+      "ok": false
+    }
+  ],
+  "asa_creatives_create": [
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "not-a-number",
+        "name": "parity-refused"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "body": "[1]"
+      },
+      "ok": false
+    }
+  ],
+  "asa_product_pages_list": [
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "1659137743"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "1659137743",
+        "name": "nothing",
+        "states": "VISIBLE"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_product_pages_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "does-not-exist",
+        "adam_id": "1659137743"
+      },
+      "ok": false
+    }
+  ],
+  "asa_product_pages_locales": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "does-not-exist",
+        "adam_id": "1659137743",
+        "expand": true
+      },
+      "ok": false
+    }
+  ],
+  "asa_product_pages_countries": [
+    {
+      "input": {
+        "app": "1128",
+        "countries": "US,GB"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "does-not-exist"
+      },
+      "ok": false
+    }
+  ],
+  "asa_product_pages_device_sizes": [
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "does-not-exist"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ad_rejections_find": [
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "selector": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ad_rejections_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ad_rejections_assets": [
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "1659137743",
+        "limit": 2
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "999999999999"
+      },
+      "ok": true
+    }
+  ],
+  "asa_reports_campaigns": [
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "granularity": "daily",
+        "group_by": "countryOrRegion",
+        "time_zone": "ORTZ"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-12",
+        "end": "2025-07-10"
+      },
+      "ok": false
+    }
+  ],
+  "asa_reports_adgroups": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "start": "2025-07-10",
+        "end": "2025-07-12"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999",
+        "start": "2025-07-10",
+        "end": "2025-07-12"
+      },
+      "ok": false
+    }
+  ],
+  "asa_reports_keywords": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "start": "2025-07-10",
+        "end": "2025-07-12"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "adgroup": "1906750349",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "selector": {
+          "orderBy": [
+            {
+              "field": "impressions",
+              "sortOrder": "DESCENDING"
+            }
+          ],
+          "pagination": {
+            "offset": 0,
+            "limit": 5
+          }
+        }
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999",
+        "start": "2025-07-10",
+        "end": "2025-07-12"
+      },
+      "ok": false
+    }
+  ],
+  "asa_reports_searchterms": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "time_zone": "ORTZ"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "adgroup": "1906750349",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "time_zone": "ORTZ"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "start": "2025-07-10",
+        "end": "2025-07-12"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "selector": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_reports_ads": [
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906433850",
+        "start": "2025-07-10",
+        "end": "2025-07-12"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "999999999999",
+        "start": "2025-07-10",
+        "end": "2025-07-12"
+      },
+      "ok": false
+    }
+  ],
+  "asa_impression_share_list": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 1,
+        "offset": 100000
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "limit": "many"
+      },
+      "ok": false
+    }
+  ],
+  "asa_impression_share_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_impression_share_create": [
+    {
+      "input": {
+        "app": "1128",
+        "body": "[1]"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_apps_search": [
+    {
+      "input": {
+        "app": "1128",
+        "query": "natural camera",
+        "limit": 3
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "natural camera",
+        "owned": true
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": false
+    }
+  ],
+  "asa_apps_eligibility": [
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "1659137743"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_apps_get": [
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "1659137743"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_apps_localized": [
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "1659137743"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_geo_search": [
+    {
+      "input": {
+        "app": "1128",
+        "query": "san francisco",
+        "country": "US",
+        "entity": "Locality",
+        "limit": 3
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": false
+    }
+  ],
+  "asa_geo_get": [
+    {
+      "input": {
+        "app": "1128",
+        "ids": "6252001",
+        "entity": "Country"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "ids": "6252001"
+      },
+      "ok": false
+    }
+  ],
+  "asa_budget_orders_list": [
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": true
+    }
+  ],
+  "asa_budget_orders_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_budget_orders_create": [
+    {
+      "input": {
+        "app": "1128",
+        "body": "[1]"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_budget_orders_update": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "0",
+        "body": "[1]"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "body": {
+          "bo": {}
+        }
+      },
+      "ok": false
+    }
+  ],
+  "asa_acls_list": [
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "does-not-exist"
+      },
+      "ok": false
+    }
+  ],
+  "asa_me_get": [
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "org_id": "1385480"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "does-not-exist"
+      },
+      "ok": false
+    }
+  ],
+  "asa_keys": [
+    {
+      "input": {},
+      "ok": true
+    },
+    {
+      "input": {
+        "action": "add"
+      },
+      "ok": false
+    }
+  ],
+  "asa_get": [
+    {
+      "input": {
+        "app": "1128",
+        "path": "/me"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "path": "/campaigns",
+        "d": [
+          "limit=2",
+          "fields=id,name"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "path": "/does-not-exist"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "path": "me"
+      },
+      "ok": false
+    }
+  ],
+  "asa_post": [
+    {
+      "input": {
+        "app": "1128",
+        "path": "/does-not-exist",
+        "body": "{}"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "path": "campaigns",
+        "body": "{}"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "path": "/campaigns",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_put": [
+    {
+      "input": {
+        "app": "1128",
+        "path": "/does-not-exist",
+        "body": "{}"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "path": "campaigns/999999999999",
+        "d": [
+          "status=PAUSED"
+        ]
+      },
+      "ok": false
+    }
+  ],
+  "asa_delete": [
+    {
+      "input": {
+        "app": "1128",
+        "path": "/does-not-exist"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "path": "campaigns/999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_docs": [
+    {
+      "input": {},
+      "ok": true
+    },
+    {
+      "input": {
+        "resource": "keywords"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "resource": "campaigns",
+        "operation": "create"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "resource": "budget"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "resource": "campaigns",
+        "operation": "nope"
+      },
+      "ok": false
+    }
+  ]
+}

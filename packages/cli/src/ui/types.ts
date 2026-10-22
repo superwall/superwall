@@ -2,7 +2,6 @@ export interface Opt {
   value: string;
   label: string;
   hint?: string;
-  /** Shown but not selectable - cursor skips it, rendered dim. */
   disabled?: boolean;
 }
 
@@ -11,7 +10,6 @@ export interface SelectOpts {
   options: Opt[];
   initialValue?: string;
   footer?: string;
-  /** Don't commit to the timeline on resolve, so a step can be replaced in place (back nav). */
   transient?: boolean;
 }
 
@@ -28,7 +26,6 @@ export interface TextOpts {
   validate?: (v: string) => string | undefined;
   footer?: string;
   transient?: boolean;
-  /** Echo bullets instead of the typed characters, and keep the value out of the timeline. */
   secret?: boolean;
 }
 
@@ -50,7 +47,6 @@ export interface Spinner {
   stop: (message: string) => void;
 }
 
-/** Prompt methods resolve to `null` when the user cancels or a non-interactive backend has no answer. */
 export interface Renderer {
   start: () => void;
   stop: () => void;

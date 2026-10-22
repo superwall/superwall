@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { modelOf } from "../../device";
 import { deviceStylesOf } from "./device";
 import type { StyleWithVariables } from "../../css";
 import { useSuperwallSnapshot } from "../../hooks/useSuperwallSnapshot";
@@ -15,7 +16,7 @@ const FULLSCREEN_STYLES = new Set(["fullscreen", "push", "noAnimation"]);
 export const SheetShell = ({ open, onClose, children, largeViewport }: SheetShellProps) => {
   const { config, device } = useSuperwallSnapshot();
   const isFullscreen = FULLSCREEN_STYLES.has(config?.presentation?.style ?? "fullscreen");
-  const deviceStyles = deviceStylesOf(device.deviceModel ?? "");
+  const deviceStyles = deviceStylesOf(modelOf(device) ?? "");
   const [container, setContainer] = React.useState<HTMLDivElement | null>(null);
   const [canAnimate, setCanAnimate] = React.useState(false);
 

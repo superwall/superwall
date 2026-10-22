@@ -20,6 +20,7 @@ import {
   type CollectedAssets,
   type SnapshotAsset,
 } from "./assets";
+import { assertBundlerBuilds } from "./bundler";
 import { entrySource } from "./entry";
 import { resolveConfigProducts, resolveProductIds } from "./products";
 import { paywallSettingsOf, type PaywallSettings } from "./settings";
@@ -69,6 +70,7 @@ export const buildSnapshot = async (
   surface: DiscoveredSurface,
   options: BuildOptions = {},
 ): Promise<BuiltSnapshot> => {
+  assertBundlerBuilds();
   const { assetBaseUrl } = options;
   const platform = normalizePlatform(options.platform);
   const variant = platform === undefined ? [] : [platform];

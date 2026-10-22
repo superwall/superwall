@@ -11,10 +11,12 @@ import {
   scanScreen,
   screenBrief,
   screenConfigSource,
+  screenFrameworkLabel,
   screenFrameworkOf,
   screenNameOf,
   slugOfName,
 } from "@/core/paywalls/screen";
+import type { ScreenFramework } from "@/core/paywalls/project/lock";
 
 const FIXTURES = path.resolve("tests/fixtures/screens");
 const dirs: string[] = [];
@@ -432,4 +434,164 @@ test("an Android Views screen resolves its layout and strings.xml as companions"
   const model = scanScreen("class UpdateModel { val x = 1 }", "android-views");
   assert.deepEqual(model.copy, []);
   assert.throws(() => screenFrameworkOf("Model.kt", "class UpdateModel { val x = 1 }"), /no Composable, Activity or Fragment/);
+});
+
+const asRoot = process.getuid?.() === 0;
+
+test("a comment that runs to the end of the file hides what follows it", () => {
+  const line = scanScreen('import SwiftUI\nstruct A: View { var body: some View { Text("Hi there") } } // Text("not this")', "swiftui");
+  assert.deepEqual(line.copy, ["Hi there"]);
+
+  const block = scanScreen('import SwiftUI\nstruct A: View { var body: some View { Text("Hi there") } } /* Text("nor this")', "swiftui");
+  assert.deepEqual(block.copy, ["Hi there"]);
+});
+
+test("JSX text with words in it is copy even when it starts like a format string", () => {
+  const inventory = scanScreen("export const A = () => <Text>%d days left</Text>;", "react-native");
+  assert.deepEqual(inventory.copy, ["%d days left"]);
+});
+
+test("a dotted identifier in a product context is a product, and a phrase there is copy", () => {
+  const inventory = scanScreen(
+    'import SwiftUI\nstruct A: View {\n  let product = "Pro.Annual"\n  let plan = "Best value"\n  var body: some View { Text("x") }\n}',
+    "swiftui",
+  );
+  assert.deepEqual(inventory.productIds, ["Pro.Annual"]);
+  assert.deepEqual(inventory.copy, ["Best value", "x"]);
+});
+
+test("a system image is a symbol whichever attribute comes first", () => {
+  const xib = scanInterfaceBuilder(
+    '<document><view><imageView image="star.fill" catalog="system"/><imageView catalog="system" image="bolt"/><imageView image="hero"/></view></document>',
+    ["Anything"],
+  );
+  assert.deepEqual(xib.symbols, ["star.fill", "bolt"]);
+  assert.deepEqual(xib.assets, ["hero"]);
+  assert.deepEqual(xib.actions, []);
+});
+
+test("an Interface Builder file that is too big or unreadable is not a companion", { skip: asRoot }, () => {
+  const scene = '<document><viewController customClass="UpgradeScreen"><label text="Upgrade today"/></viewController></document>';
+  const root = scratch({
+    "App/UpgradeScreen.swift": "import UIKit\nclass UpgradeScreen: UIViewController {}",
+    "App/Upgrade.storyboard": scene,
+    "App/Huge.storyboard": `${scene}${" ".repeat(1_000_001)}`,
+    "App/Locked.xib": scene,
+  });
+  fs.chmodSync(path.join(root, "App/Locked.xib"), 0o000);
+
+  const screen = readScreen(path.join(root, "superwall"), path.join(root, "App/UpgradeScreen.swift"), root);
+
+  assert.deepEqual(screen.companions, ["../App/Upgrade.storyboard"]);
+  assert.deepEqual(screen.inventory.copy, ["Upgrade today"]);
+});
+
+test("a Compose screen pulls in its view model and the strings it reads, without a layout", () => {
+  const root = scratch({
+    "app/src/main/java/com/acme/PaywallScreen.kt": [
+      "@Composable",
+      "fun PaywallScreen(model: PaywallViewModel, row: PlanRowView) {",
+      "  Text(stringResource(R.string.paywall_title))",
+      "  Button(onClick = { model.buy() }) { Text(\"Start trial\") }",
+      "}",
+    ].join("\n"),
+    "app/src/main/java/com/acme/PaywallViewModel.kt": [
+      "class PaywallViewModel {",
+      "  val headline = stringResource(R.string.paywall_headline)",
+      "  fun buy() { billingClient.launchBillingFlow(activity, params) }",
+      "}",
+    ].join("\n"),
+    "app/src/main/java/com/acme/PlanRowView.kt": 'class PlanRowView { val label = "Not a companion" }',
+    "app/src/main/res/values/strings.xml": [
+      "<resources>",
+      '  <string name="paywall_title">Go \\\'Pro\\\'</string>',
+      '  <string name="paywall_headline">"Unlock everything"</string>',
+      "</resources>",
+    ].join("\n"),
+  });
+
+  const screen = readScreen(path.join(root, "superwall"), path.join(root, "app/src/main/java/com/acme/PaywallScreen.kt"), root);
+
+  assert.equal(screen.framework, "compose");
+  assert.deepEqual(screen.companions, [
+    "../app/src/main/java/com/acme/PaywallViewModel.kt",
+    "../app/src/main/res/values/strings.xml",
+  ]);
+  assert.deepEqual(screen.inventory.copy, ["Start trial", "Go 'Pro'", "Unlock everything"]);
+  assert.deepEqual(kinds(screen), { purchase: 1, tap: 1 });
+});
+
+test("a layout's bound expressions are not copy, and a layout without buttons adds no taps", () => {
+  const root = scratch({
+    "app/src/main/java/com/acme/WelcomeActivity.kt": [
+      "class WelcomeActivity : AppCompatActivity() {",
+      "  override fun onCreate(state: Bundle?) { setContentView(R.layout.activity_welcome) }",
+      "}",
+    ].join("\n"),
+    "app/src/main/res/layout/activity_welcome.xml": [
+      "<LinearLayout>",
+      '  <TextView android:text="@{viewModel.title}"/>',
+      '  <TextView android:text="@string/missing"/>',
+      '  <TextView android:text="Welcome aboard"/>',
+      "</LinearLayout>",
+    ].join("\n"),
+    "app/src/main/res/values/strings.xml": "<resources></resources>",
+  });
+
+  const screen = readScreen(path.join(root, "superwall"), path.join(root, "app/src/main/java/com/acme/WelcomeActivity.kt"), root);
+
+  assert.deepEqual(screen.inventory.copy, ["Welcome aboard"]);
+  assert.deepEqual(screen.inventory.actions, []);
+});
+
+test("a strings.xml that cannot be read fails the read instead of dropping its copy", { skip: asRoot }, () => {
+  const root = scratch({
+    "app/src/main/java/com/acme/WelcomeScreen.kt": "@Composable\nfun WelcomeScreen() { Text(stringResource(R.string.title)) }",
+    "app/src/main/res/values/strings.xml": '<resources><string name="title">Welcome</string></resources>',
+  });
+  fs.chmodSync(path.join(root, "app/src/main/res/values/strings.xml"), 0o000);
+
+  assert.throws(
+    () => readScreen(path.join(root, "superwall"), path.join(root, "app/src/main/java/com/acme/WelcomeScreen.kt"), root),
+    /EACCES/,
+  );
+});
+
+test("candidates skip unreadable files and Swift views of no known framework, and tie by path", { skip: asRoot }, () => {
+  const root = scratch({
+    "App/PaywallView.swift": "import SwiftUI\nstruct PaywallView: View {}",
+    "App/OfferView.swift": "import SwiftUI\nstruct OfferView: View {}",
+    "App/UpgradeView.swift": "struct UpgradeView: View {}",
+    "App/LockedUpdateView.swift": "import SwiftUI\nstruct LockedUpdateView: View {}",
+  });
+  fs.chmodSync(path.join(root, "App/LockedUpdateView.swift"), 0o000);
+
+  assert.deepEqual(
+    findScreenCandidates(root).map((candidate) => candidate.path),
+    ["App/OfferView.swift", "App/PaywallView.swift"],
+  );
+});
+
+test("an Android screen that reads no strings and names no layout has no companions", () => {
+  const root = scratch({
+    "app/src/main/java/com/acme/RateScreen.kt": '@Composable\nfun RateScreen() { Text("Enjoying Acme?") }',
+    "app/src/main/res/values/strings.xml": '<resources><string name="title">Unused</string></resources>',
+  });
+
+  const screen = readScreen(path.join(root, "superwall"), path.join(root, "app/src/main/java/com/acme/RateScreen.kt"), root);
+
+  assert.deepEqual(screen.companions, []);
+  assert.deepEqual(screen.inventory.copy, ["Enjoying Acme?"]);
+});
+
+test("each framework has a label for the brief and the terminal", () => {
+  const frameworks: ScreenFramework[] = ["swiftui", "uikit", "compose", "android-views", "react-native", "flutter"];
+  assert.deepEqual(frameworks.map(screenFrameworkLabel), [
+    "SwiftUI",
+    "UIKit",
+    "Jetpack Compose",
+    "Android Views",
+    "React Native",
+    "Flutter",
+  ]);
 });

@@ -6,7 +6,7 @@ import { afterEach, test } from "node:test";
 import {
   FrameworkNotFoundError,
   frameworkVersion,
-  loadFramework,
+  resolveFramework,
   resolveFrameworkDir,
 } from "@/core/paywalls/project/framework";
 
@@ -83,7 +83,7 @@ test("loading a framework whose subpaths are missing names the dependency to upd
   );
 
   await assert.rejects(
-    loadFramework(dir),
+    resolveFramework(dir),
     /does not export buildSnapshot from superwall\/build — update the project's superwall dependency/,
   );
 });
@@ -109,11 +109,84 @@ test("a framework that loads cleanly exposes the three entry points", async () =
     },
   );
 
-  const framework = await loadFramework(dir);
+  const framework = await resolveFramework(dir);
   assert.equal(typeof framework.discoverProject, "function");
   assert.equal(typeof framework.buildSnapshot, "function");
   assert.equal(typeof framework.startPreviewServer, "function");
   assert.deepEqual(framework.discoverProject("/x"), { root: "/x", surfaces: [] });
+  assert.equal(framework.studioProject, undefined);
+});
+
+test("a framework whose preview builds studio projects exposes that too", async () => {
+  const dir = scaffold(
+    {
+      name: "superwall",
+      version: "1.0.0",
+      type: "module",
+      exports: {
+        "./discover": "./discover.js",
+        "./build": "./build.js",
+        "./preview": "./preview.js",
+        "./package.json": "./package.json",
+      },
+    },
+    {
+      "discover.js": "export const discoverProject = () => ({});\n",
+      "build.js": "export const buildSnapshot = async () => ({});\n",
+      "preview.js":
+        "export const startPreviewServer = async () => ({});\n" +
+        "export const buildStudioProject = async (root) => ({ root, surfaces: [] });\n",
+    },
+  );
+
+  const framework = await resolveFramework(dir);
+  assert.deepEqual(await framework.studioProject?.("/x"), { root: "/x", surfaces: [] });
+});
+
+test("a framework built as CommonJS loads the same entry points", async () => {
+  const dir = scaffold(
+    {
+      name: "superwall",
+      version: "1.0.0",
+      exports: {
+        "./discover": "./discover.cjs",
+        "./build": "./build.cjs",
+        "./preview": "./preview.cjs",
+        "./package.json": "./package.json",
+      },
+    },
+    {
+      "discover.cjs": 'Object.defineProperty(exports, "__esModule", { value: true });\nexports.discoverProject = (root) => ({ root });\n',
+      "build.cjs": 'Object.defineProperty(exports, "__esModule", { value: true });\nexports.buildSnapshot = async () => ({});\n',
+      "preview.cjs": 'Object.defineProperty(exports, "__esModule", { value: true });\nexports.startPreviewServer = async () => ({});\n',
+    },
+  );
+
+  const framework = await resolveFramework(dir);
+  assert.deepEqual(framework.discoverProject("/x"), { root: "/x" });
+  assert.equal(typeof framework.buildSnapshot, "function");
+  assert.equal(framework.studioProject, undefined);
+});
+
+test("a framework too old to export an entry point fails on that entry point", async () => {
+  const dir = scaffold(
+    {
+      name: "superwall",
+      version: "0.1.0",
+      type: "module",
+      exports: { "./discover": "./discover.js", "./build": "./build.js", "./package.json": "./package.json" },
+    },
+    {
+      "discover.js": "export const discoverProject = () => ({});\n",
+      "build.js": "export const buildSnapshot = async () => ({});\n",
+    },
+  );
+
+  await assert.rejects(resolveFramework(dir), (error: NodeJS.ErrnoException) => {
+    assert.equal(error.code, "ERR_PACKAGE_PATH_NOT_EXPORTED");
+    assert.match(error.message, /\.\/preview/);
+    return true;
+  });
 });
 
 test("loading from a project with no framework at all reports it as missing", async () => {
@@ -121,7 +194,7 @@ test("loading from a project with no framework at all reports it as missing", as
   dirs.push(dir);
   fs.writeFileSync(path.join(dir, "package.json"), "{}");
 
-  await assert.rejects(loadFramework(dir), FrameworkNotFoundError);
+  await assert.rejects(resolveFramework(dir), FrameworkNotFoundError);
 });
 
 function install(at: string, version = "2.0.0"): void {
@@ -215,4 +288,9 @@ test("a superwall/ directory with no install of its own falls back to the host r
   });
 
   assert.equal(frameworkVersion(root), "1.5.0");
+});
+
+test("framework.ts imports nothing through the @ alias, since packages/superwall typechecks it directly", () => {
+  const source = fs.readFileSync(new URL("../../../../src/core/paywalls/project/framework.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /from "@\//);
 });

@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { HostDelegate, HostState } from "@superwall/host";
-import { DeviceChrome } from "./DeviceChrome";
+import { DeviceChrome, duoLayout } from "./DeviceChrome";
 import { HostedIframe } from "./HostedIframe";
 import type { DeviceChromeSpec } from "../../lib/devices";
 import { presentationRect, type StudioPresentation } from "../../lib/presentation";
@@ -92,12 +92,17 @@ export const DeviceFrame = ({
     radius: { top: 0, bottom: 0 },
   };
   const dark = theme === "dark";
+  const radius = chrome?.duo
+    ? duoLayout(chrome.duo, landscape)
+        .corners.map((corner) => `${corner}px`)
+        .join(" ")
+    : (chrome?.radius ?? 3);
 
   return (
     <div
       className="relative flex-none overflow-hidden bg-background outline outline-foreground/20"
       data-testid="device-frame"
-      style={{ width, height, borderRadius: chrome?.radius ?? 3 }}
+      style={{ width, height, borderRadius: radius }}
     >
       {sheet && (
         <div

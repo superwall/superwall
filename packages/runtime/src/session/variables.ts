@@ -55,6 +55,7 @@ export type SuperwallDeviceVariables = {
   bundleId?: string;
   osVersion?: string;
   deviceModel?: string;
+  simulatorModel?: string;
   deviceLocale?: string;
   preferredLocale?: string;
   deviceLanguageCode?: string;
@@ -103,6 +104,14 @@ export type SuperwallDeviceVariables = {
   swiftVersion?: string;
   compilerVersion?: string;
   localResourceIds?: string;
+  safeAreaInsets?: SuperwallSafeAreaInsets;
+};
+
+export type SuperwallSafeAreaInsets = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 };
 
 export type SuperwallUserVariables = {

@@ -130,6 +130,39 @@ describe("host attributes on the document", () => {
   });
 });
 
+describe("simulated safe area from the host", () => {
+  it("turns reported insets into floors and clears them when the host stops reporting", async () => {
+    const view = renderWithProvider(() => null, {
+      host: {
+        device: {
+          platform: "iOS",
+          deviceModel: "iPhone19,4",
+          safeAreaInsets: { top: 0, right: 84, bottom: 34, left: 0 },
+        },
+      },
+    });
+    await flush();
+    const style = document.documentElement.style;
+    expect(document.documentElement.getAttribute("data-sw-cutout")).toBe("strip");
+    expect(style.getPropertyValue("--sw-safe-area-floor-top")).toBe("0px");
+    expect(style.getPropertyValue("--sw-safe-area-floor-right")).toBe("84px");
+    expect(style.getPropertyValue("--sw-safe-area-floor-bottom")).toBe("34px");
+    view.unmount();
+
+    renderWithProvider(() => null, { host: { device: { platform: "iOS" } } });
+    await flush();
+    expect(style.getPropertyValue("--sw-safe-area-floor-right")).toBe("");
+  });
+
+  it("reports the cutout through useDevice", async () => {
+    const { result } = renderWithProvider(() => useDevice(), {
+      host: { device: { deviceModel: "iPhone19,4" } },
+    });
+    await flush();
+    expect(result.current.cutout).toBe("strip");
+  });
+});
+
 describe("web2app body on a web host", () => {
   it("marks the body web2app for a web host and clears it for a native one", async () => {
     const web = renderWithProvider(() => null, { host: { device: { platform: "web" } } });

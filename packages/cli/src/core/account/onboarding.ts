@@ -1,25 +1,33 @@
+import type { OnboardSetup, ProvisionedApp } from "@/core/account/login";
+import type { DetectedApp } from "@/core/codebase/scan";
+import { writeOnboardedApp } from "@/core/state/config";
 import { Integration } from "@/environment";
-import type { OnboardSetup, ProvisionedApp } from "@/core/auth/login";
-import type { DetectedApp } from "@/core/project/scan";
-import { setOnboardedApp } from "@/core/state/config";
 import { ui } from "@/ui";
 
-export interface OnboardingHooks {
+type OnboardPlatform = NonNullable<OnboardSetup["app"]>["platform"];
+
+interface OnboardingHooks {
   onOnboard: () => Promise<OnboardSetup | null>;
   onProvisioned: (result: ProvisionedApp) => void;
   provisioned: () => ProvisionedApp | null;
 }
 
+function resolveOnboardPlatform(integration: Integration | undefined): OnboardPlatform | undefined {
+  switch (integration) {
+    case Integration.swift:
+      return "ios";
+    case Integration.android:
+      return "android";
+    case Integration.web:
+      return "web";
+    default:
+      return undefined;
+  }
+}
+
 export function onboardingHooks(app?: DetectedApp): OnboardingHooks {
   const ref: { current: ProvisionedApp | null } = { current: null };
-  const platform =
-    app?.integration === Integration.swift
-      ? ("ios" as const)
-      : app?.integration === Integration.android
-        ? ("android" as const)
-        : app?.integration === Integration.web
-          ? ("web" as const)
-          : undefined;
+  const platform = resolveOnboardPlatform(app?.integration);
 
   return {
     onOnboard: async () => {
@@ -46,7 +54,7 @@ export function onboardingHooks(app?: DetectedApp): OnboardingHooks {
     onProvisioned: (result) => {
       ref.current = result;
       if (app && result.publicApiKey) {
-        setOnboardedApp(app.path, {
+        writeOnboardedApp(app.path, {
           publicApiKey: result.publicApiKey,
           projectId: result.projectId,
           applicationId: result.applicationId,

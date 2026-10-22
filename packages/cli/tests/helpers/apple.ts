@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { Fetch } from "@/core/apple/transport";
+import type { Fetch } from "@/core/app-store-connect/apple-web/transport";
 
 interface Vector {
   accountName: string;

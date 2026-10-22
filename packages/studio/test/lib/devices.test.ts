@@ -5,6 +5,7 @@ import {
   deviceById,
   deviceVariablesFor,
   isWebOnly,
+  safeAreaFor,
   STUDIO_DEVICES,
   webViewportFor,
 } from "../../src/lib/devices";
@@ -90,5 +91,29 @@ describe("web paywalls", () => {
   it("reserve the Android navigation bar the way the SDK keeps the webview above it", () => {
     expect(deviceById("pixel-10").chrome?.navigationBarHeight).toBe(24);
     expect(deviceById("iphone-17").chrome?.navigationBarHeight).toBeUndefined();
+  });
+});
+
+describe("iPhone Duo", () => {
+  it("tells the page the safe area measured for each fold and rotation", () => {
+    const closed = deviceById("iphone-duo-closed");
+    const open = deviceById("iphone-duo-open");
+    expect(safeAreaFor(closed, false)).toEqual({ top: 0, right: 84, bottom: 34, left: 0 });
+    expect(safeAreaFor(closed, true)).toEqual({ top: 0, right: 84, bottom: 34, left: 0 });
+    expect(safeAreaFor(open, false)).toEqual({ top: 82, right: 0, bottom: 34, left: 0 });
+    expect(safeAreaFor(open, true)).toEqual({ top: 0, right: 84, bottom: 34, left: 0 });
+    expect(deviceVariablesFor(open, false, true)).toMatchObject({
+      deviceModel: "iPhone19,4",
+      safeAreaInsets: { top: 0, right: 84, bottom: 34, left: 0 },
+    });
+  });
+
+  it("leaves the safe area to the CSS floors on devices that have one", () => {
+    expect(safeAreaFor(deviceById("iphone-17"), false)).toBeUndefined();
+    expect(deviceVariablesFor(deviceById("iphone-17"), false)).not.toHaveProperty("safeAreaInsets");
+    expect(deviceVariablesFor(deviceById("iphone-duo-open"), true)).toEqual({
+      ...deviceById("iphone-duo-open").device,
+      platform: "web",
+    });
   });
 });

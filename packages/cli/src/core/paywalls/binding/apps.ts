@@ -1,6 +1,6 @@
 import type { SuperwallApi } from "@/core/api/client";
 import { listApplications, platformLabel, type Application } from "@/core/api/resources";
-import { readLock, writeApp } from "../project/lock";
+import { readLock, writeApp } from "@/core/paywalls/project/lock";
 
 export const PLATFORMS = ["ios", "android", "web"] as const;
 

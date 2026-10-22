@@ -1,9 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { formatJson } from "@/output";
-import { SUPERWALL_HOME } from "@/environment";
+import { formatJson } from "@/program/output";
+import { readJson, state } from "./store";
 
 export interface SkillsSync {
   cliVersion: string;
@@ -12,7 +8,7 @@ export interface SkillsSync {
   ref?: string;
 }
 
-export interface OnboardedApp {
+interface OnboardedApp {
   publicApiKey: string;
   projectId?: string;
   applicationId?: string;
@@ -20,6 +16,7 @@ export interface OnboardedApp {
 
 interface Config {
   defaultApp?: Record<string, string>;
+  openedOrgs?: string[];
   skillsSync?: SkillsSync;
   telemetry?: { anonymousId?: string; noticeShown?: boolean };
   onboardingIdempotencyKey?: string;
@@ -30,31 +27,21 @@ interface Config {
   updateCheck?: { latest?: string; checkedAt?: string };
 }
 
-function dir(): string {
-  return SUPERWALL_HOME() ?? join(homedir(), ".superwall");
-}
-function file(): string {
-  return join(dir(), "config.json");
-}
+const FILE = "config.json";
 
 function read(): Config {
-  try {
-    return existsSync(file()) ? (JSON.parse(readFileSync(file(), "utf8")) as Config) : {};
-  } catch {
-    return {};
-  }
+  return readJson<Config>(state(), FILE) ?? {};
 }
 
 function write(config: Config): void {
-  mkdirSync(dir(), { recursive: true, mode: 0o700 });
-  writeFileSync(file(), `${formatJson(config)}\n`, { mode: 0o600 });
+  state().write(FILE, `${formatJson(config)}\n`);
 }
 
-export function getDefaultApp(projectId: string): string | undefined {
+export function readDefaultApp(projectId: string): string | undefined {
   return read().defaultApp?.[projectId];
 }
 
-export function setDefaultApp(projectId: string, applicationId: string): void {
+export function writeDefaultApp(projectId: string, applicationId: string): void {
   const config = read();
   config.defaultApp = {
     ...(config.defaultApp ?? {}),
@@ -63,43 +50,52 @@ export function setDefaultApp(projectId: string, applicationId: string): void {
   write(config);
 }
 
-export function getSkillsSync(): SkillsSync | undefined {
+export function readOpenedOrgs(): string[] {
+  return read().openedOrgs ?? [];
+}
+
+export function writeOpenedOrgs(ids: readonly string[]): void {
+  const config = read();
+  const next = [...new Set(ids)];
+  if (next.join() === (config.openedOrgs ?? []).join()) return;
+  config.openedOrgs = next;
+  write(config);
+}
+
+export function readSkillsSync(): SkillsSync | undefined {
   return read().skillsSync;
 }
 
-export function setSkillsSync(sync: SkillsSync): void {
+export function writeSkillsSync(sync: SkillsSync): void {
   const config = read();
   config.skillsSync = sync;
   write(config);
 }
 
-export function getAnonymousId(): string {
+export function readAnonymousId(): string {
   const config = read();
   if (config.telemetry?.anonymousId) return config.telemetry.anonymousId;
-  const anonymousId = randomUUID();
+  const anonymousId = crypto.randomUUID();
   config.telemetry = { ...config.telemetry, anonymousId };
   write(config);
   return anonymousId;
 }
 
-// Org membership and project listings lag for up to a minute after
-// provisioning (server-side auth caching), so the CLI remembers what it
-// created instead of re-asking the API.
-export function getOnboardedOrg(): { id: string; name: string } | undefined {
+export function readOnboardedOrg(): { id: string; name: string } | undefined {
   return read().onboarded?.org;
 }
 
-export function setOnboardedOrg(org: { id: string; name: string }): void {
+export function writeOnboardedOrg(org: { id: string; name: string }): void {
   const config = read();
   config.onboarded = { ...config.onboarded, org };
   write(config);
 }
 
-export function getOnboardedApp(appPath: string): OnboardedApp | undefined {
+export function readOnboardedApp(appPath: string): OnboardedApp | undefined {
   return read().onboarded?.apps?.[appPath];
 }
 
-export function setOnboardedApp(appPath: string, app: OnboardedApp): void {
+export function writeOnboardedApp(appPath: string, app: OnboardedApp): void {
   const config = read();
   config.onboarded = {
     ...config.onboarded,
@@ -108,20 +104,20 @@ export function setOnboardedApp(appPath: string, app: OnboardedApp): void {
   write(config);
 }
 
-export function getUpdateCheck(): { latest?: string; checkedAt?: string } | undefined {
+export function readUpdateCheck(): { latest?: string; checkedAt?: string } | undefined {
   return read().updateCheck;
 }
 
-export function setUpdateCheck(check: { latest: string; checkedAt: string }): void {
+export function writeUpdateCheck(check: { latest: string; checkedAt: string }): void {
   const config = read();
   config.updateCheck = check;
   write(config);
 }
 
-export function getOnboardingIdempotencyKey(): string {
+export function readOnboardingIdempotencyKey(): string {
   const config = read();
   if (config.onboardingIdempotencyKey) return config.onboardingIdempotencyKey;
-  const key = randomUUID();
+  const key = crypto.randomUUID();
   config.onboardingIdempotencyKey = key;
   write(config);
   return key;
@@ -131,7 +127,7 @@ export function telemetryNoticeShown(): boolean {
   return Boolean(read().telemetry?.noticeShown);
 }
 
-export function setTelemetryNoticeShown(): void {
+export function writeTelemetryNoticeShown(): void {
   const config = read();
   config.telemetry = { ...config.telemetry, noticeShown: true };
   write(config);

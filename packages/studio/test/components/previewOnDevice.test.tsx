@@ -87,15 +87,12 @@ describe("previewing a surface on a device", () => {
     prompt.mockRestore();
   });
 
-  it("closes from Done, from Escape, and from a click on the backdrop", () => {
+  it("has no Done button, and closes from Escape and from a click on the backdrop", () => {
     mount("local", sourceWith({ scheme: "myapp" }));
     const dialog = () => screen.queryByRole("dialog", { name: "Preview on a device" });
 
     openDialog();
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
-    expect(dialog()).toBeNull();
-
-    openDialog();
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     fireEvent.keyDown(window, { key: "Enter" });
     expect(dialog()).not.toBeNull();
     fireEvent.keyDown(window, { key: "Escape" });

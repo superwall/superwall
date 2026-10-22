@@ -71,6 +71,7 @@
     "@superwall/runtime": "workspace:*",
     "@superwall/studio": "workspace:*",
     "@vitejs/plugin-react-swc": "^4.0.0",
+    "rollup": "4.63.6",
     "tsx": "^4.19.0",
     "vite": "^7.0.0",
     "vite-plugin-singlefile": "^2.3.3"

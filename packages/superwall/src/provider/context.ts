@@ -136,6 +136,14 @@ const HostAttributes = (): null => {
     // web2app body. A web host (the Web SDK's frame) has to opt in itself: the
     // host page cannot reach this cross-origin document.
     document.body.classList.toggle("web2app", attributes["data-sw-platform"] === "web");
+
+    const insets = device.safeAreaInsets;
+    for (const edge of INSET_EDGES) {
+      const value = insets?.[edge];
+      if (typeof value === "number")
+        root.style.setProperty(`--sw-safe-area-floor-${edge}`, `${value}px`);
+      else root.style.removeProperty(`--sw-safe-area-floor-${edge}`);
+    }
   }, [device]);
 
   return null;

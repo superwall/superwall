@@ -1,6 +1,9 @@
+export type SafeAreaInsets = { top: number; right: number; bottom: number; left: number };
+
 export type DeviceChromeSpec = {
   radius: number;
   cutout?: "island" | "punch";
+  duo?: "closed" | "open";
   statusBarHeight: number;
   homeIndicator: boolean;
   navigationBarHeight?: number;
@@ -18,6 +21,7 @@ export type StudioDevice = {
     interfaceType?: string;
   };
   chrome?: DeviceChromeSpec;
+  safeArea?: { portrait: SafeAreaInsets; landscape: SafeAreaInsets };
 };
 
 const IPHONE_ISLAND: DeviceChromeSpec = {
@@ -45,6 +49,14 @@ export const STUDIO_DEVICES: readonly [StudioDevice, ...StudioDevice[]] = [
     chrome: IPHONE_ISLAND,
   },
   {
+    id: "iphone-17-pro",
+    name: "iPhone 17 Pro",
+    width: 402,
+    height: 874,
+    device: { platform: "iOS", deviceModel: "iPhone18,1", osVersion: "26.0" },
+    chrome: IPHONE_ISLAND,
+  },
+  {
     id: "iphone-air",
     name: "iPhone Air",
     width: 420,
@@ -59,6 +71,30 @@ export const STUDIO_DEVICES: readonly [StudioDevice, ...StudioDevice[]] = [
     height: 956,
     device: { platform: "iOS", deviceModel: "iPhone18,2", osVersion: "26.0" },
     chrome: IPHONE_ISLAND,
+  },
+  {
+    id: "iphone-duo-closed",
+    name: "iPhone Duo (Closed)",
+    width: 466,
+    height: 678,
+    device: { platform: "iOS", deviceModel: "iPhone19,4", osVersion: "27.1" },
+    chrome: { radius: 40, duo: "closed", statusBarHeight: 0, homeIndicator: true },
+    safeArea: {
+      portrait: { top: 0, right: 84, bottom: 34, left: 0 },
+      landscape: { top: 0, right: 84, bottom: 34, left: 0 },
+    },
+  },
+  {
+    id: "iphone-duo-open",
+    name: "iPhone Duo (Open)",
+    width: 669,
+    height: 951,
+    device: { platform: "iOS", deviceModel: "iPhone19,4", osVersion: "27.1" },
+    chrome: { radius: 32, duo: "open", statusBarHeight: 0, homeIndicator: true },
+    safeArea: {
+      portrait: { top: 82, right: 0, bottom: 34, left: 0 },
+      landscape: { top: 0, right: 84, bottom: 34, left: 0 },
+    },
   },
   {
     id: "pixel-10",
@@ -142,11 +178,19 @@ const DESKTOP_HOST = {
   interfaceType: "mac",
 };
 
+export const safeAreaFor = (device: StudioDevice, landscape: boolean): SafeAreaInsets | undefined =>
+  device.safeArea?.[landscape ? "landscape" : "portrait"];
+
 export const deviceVariablesFor = (
   device: StudioDevice,
   web: boolean,
-): Record<string, unknown> | undefined =>
-  web ? { ...device.device, platform: "web" } : (device.device ?? DESKTOP_HOST);
+  landscape = false,
+): Record<string, unknown> | undefined => {
+  if (web) return { ...device.device, platform: "web" };
+  const safeAreaInsets = safeAreaFor(device, landscape);
+  const host = device.device ?? DESKTOP_HOST;
+  return safeAreaInsets === undefined ? host : { ...host, safeAreaInsets };
+};
 
 export const RESPONSIVE_ID = "responsive";
 export const RESPONSIVE_DEFAULT = { width: 393, height: 852 };

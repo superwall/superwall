@@ -36,6 +36,12 @@ const paths = (result: Awaited<ReturnType<typeof collect>>): string[] => {
   return result.ok ? result.files.map((file) => file.path) : [];
 };
 
+const filesOf = async (dir: string) => {
+  const result = await collect(dir);
+  assert.equal(result.ok, true);
+  return result.ok ? result.files : [];
+};
+
 afterEach(() => {
   while (dirs.length > 0) {
     const dir = dirs.pop();
@@ -59,6 +65,24 @@ test("build output, dependencies, secrets and OS litter never leave the machine"
     "paywalls/plus-upgrade/.env.production": "SECRET=1\n",
     ".DS_Store": "junk",
     "assets/.DS_Store": "junk",
+  });
+
+  assert.deepEqual(paths(await collect(dir)), Object.keys(PROJECT).sort());
+});
+
+test("credentials and signing keys never leave the machine, wherever they sit", async () => {
+  const dir = scaffold({
+    ...PROJECT,
+    ".npmrc": "//registry.npmjs.org/:_authToken=npm_dead\n",
+    ".netrc": "machine github.com password x\n",
+    "certs/server.pem": "-----BEGIN PRIVATE KEY-----\n",
+    "AuthKey_ABC123.p8": "-----BEGIN PRIVATE KEY-----\n",
+    "certs/dist.p12": Buffer.from([1, 2, 3]),
+    "certs/tls.key": "key\n",
+    "android/release.keystore": Buffer.from([1]),
+    "android/upload.jks": Buffer.from([1]),
+    "android/google-services.json": "{}\n",
+    "ios/GoogleService-Info.plist": "<plist/>\n",
   });
 
   assert.deepEqual(paths(await collect(dir)), Object.keys(PROJECT).sort());
@@ -157,4 +181,32 @@ test("an empty superwall dir is a failure, not an empty push", async () => {
 
   assert.equal(result.ok, false);
   if (!result.ok) assert.match(result.reason, /No source files/);
+});
+
+test("a tree over the size limit is refused before a byte is read, naming the largest files", async () => {
+  const dir = scaffold(PROJECT);
+  for (const [name, megabytes] of [["dump.bin", 200], ["video.mov", 60], ["clip.mp4", 2], ["tiny.bin", 1]] as const) {
+    const fd = fs.openSync(path.join(dir, name), "w");
+    fs.ftruncateSync(fd, megabytes * 1024 * 1024);
+    fs.closeSync(fd);
+  }
+
+  const result = await collect(dir);
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.reason, /is 263\.0 MB, over the 250 MB limit/);
+  assert.match(result.reason, /Largest: dump\.bin \(200\.0 MB\), video\.mov \(60\.0 MB\), clip\.mp4 \(2\.0 MB\)\./);
+  assert.ok(!result.reason.includes("tiny.bin"));
+});
+
+test("the pushed lock leaves out the push base, so moving it never changes the source", async () => {
+  const lock = { version: 1, apps: { ios: "8" }, paywalls: {}, funnels: {} };
+  const shared = scaffold({ "superwall.lock": JSON.stringify(lock) });
+  const based = scaffold({ "superwall.lock": JSON.stringify({ ...lock, sources: { "superwall/app-8": "abc123" } }) });
+  const [first] = await filesOf(shared);
+  const [second] = await filesOf(based);
+  assert.equal(second?.content.toString(), first?.content.toString());
+  assert.doesNotMatch(String(second?.content), /sources|abc123/);
+  assert.match(String(second?.content), /"ios": "8"/);
 });

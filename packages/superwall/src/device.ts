@@ -2,7 +2,9 @@ import type { SuperwallDeviceVariables } from "@superwall/runtime";
 
 export type DevicePlatform = "ios" | "android" | "web";
 export type DeviceIdiom = "phone" | "tablet" | "desktop";
-export type DeviceCutout = "none" | "notch" | "island";
+export type DeviceCutout = "none" | "notch" | "island" | "strip";
+
+const STRIP_PREFIXES = ["iPhone19,4"];
 
 const NOTCH_PREFIXES = [
   "iPhone10,3",
@@ -53,6 +55,9 @@ const announcedPlatform = (): DevicePlatform | undefined => {
   return normalizePlatform(new URLSearchParams(window.location.search).get("platform"));
 };
 
+export const modelOf = (device: SuperwallDeviceVariables): string | undefined =>
+  device.simulatorModel || device.deviceModel;
+
 export const platformOf = (device: SuperwallDeviceVariables): DevicePlatform | undefined =>
   normalizePlatform(device.platform) ?? announcedPlatform();
 
@@ -60,7 +65,7 @@ export const idiomOf = (device: SuperwallDeviceVariables): DeviceIdiom | undefin
   const interfaceType = device.interfaceType?.toLowerCase();
   if (interfaceType === "mac" || device.isMac === true) return "desktop";
 
-  const model = device.deviceModel ?? "";
+  const model = modelOf(device) ?? "";
   if (model.startsWith("iPad")) return "tablet";
   if (model.startsWith("iPhone")) return "phone";
 
@@ -71,6 +76,7 @@ export const idiomOf = (device: SuperwallDeviceVariables): DeviceIdiom | undefin
 
 export const cutoutOf = (deviceModel: string | undefined): DeviceCutout | undefined => {
   if (!deviceModel?.startsWith("iPhone")) return undefined;
+  if (matchesPrefix(deviceModel, STRIP_PREFIXES)) return "strip";
   if (matchesPrefix(deviceModel, FLAT_PREFIXES)) return "none";
   if (matchesPrefix(deviceModel, NOTCH_PREFIXES)) return "notch";
   return "island";

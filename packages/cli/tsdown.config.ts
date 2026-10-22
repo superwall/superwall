@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: { entry: "src/entry.ts", auth: "src/core/auth/token.ts" },
+  entry: { entry: "src/entry.ts", auth: "src/core/account/token.ts", tools: "src/tools.ts" },
   format: "esm",
   platform: "node",
   target: "node20",

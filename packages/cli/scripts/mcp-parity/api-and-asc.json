@@ -1,0 +1,1364 @@
+{
+  "query": [
+    {
+      "input": {
+        "sql": "SELECT 1 AS one",
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "sql": "SELECT {app:UInt64} AS app, {revenue_provider:String} AS provider, {limit:UInt8} AS limit",
+        "app": "5861",
+        "param": [
+          "limit=3"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "sql": "SELECT count() AS n FROM open_revenue.transactions WHERE applicationId = {app:UInt64}",
+        "app": "43674"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "sql": "SELECT FROM WHERE",
+        "app": "5861"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "sql": "SELECT 1 FORMAT JSON",
+        "app": "5861"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "sql": "SELECT 1",
+        "app": "5861",
+        "param": [
+          "novalue"
+        ]
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "sql": "SELECT 1",
+        "app": "does-not-exist"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "sql": ""
+      },
+      "ok": false
+    }
+  ],
+  "api_docs": [
+    {
+      "input": {
+        "query": [
+          "variant"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "query": [
+          "/v2/campaigns/{id}/audiences",
+          "post"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "query": [
+          "/v2/products",
+          "GET"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "query": [
+          "zzzz-no-such-endpoint"
+        ]
+      },
+      "ok": true
+    }
+  ],
+  "get": [
+    {
+      "input": {
+        "path": "/v2/projects/282"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "path": "/v2/products",
+        "d": [
+          "project_id=282",
+          "limit=2"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "path": "/v2/products/does-not-exist"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "/v2/no-such-endpoint"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "v2/projects"
+      },
+      "ok": false
+    }
+  ],
+  "post": [
+    {
+      "input": {
+        "path": "/v2/no-such-endpoint",
+        "d": [
+          "name=parity"
+        ]
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "/v2/products/does-not-exist/archive"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "v2/entitlements",
+        "d": [
+          "identifier=parity"
+        ]
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "/v2/entitlements",
+        "d": [
+          "bad"
+        ]
+      },
+      "ok": false
+    }
+  ],
+  "patch": [
+    {
+      "input": {
+        "path": "/v2/projects/0",
+        "d": [
+          "name=parity"
+        ]
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "/v2/products/does-not-exist",
+        "d": [
+          "name=parity"
+        ]
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "v2/projects/282",
+        "d": [
+          "name=parity"
+        ]
+      },
+      "ok": false
+    }
+  ],
+  "delete": [
+    {
+      "input": {
+        "path": "/v2/products/does-not-exist"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "/v2/entitlements/0"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "v2/products/0"
+      },
+      "ok": false
+    }
+  ],
+  "asc_keys_list": [
+    {
+      "input": {
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asc_keys_sources": [
+    {
+      "input": {
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asc_keys_import": [
+    {
+      "input": {
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "kind": "api_key",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "kind": "purchase_key",
+        "from": "43674",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "from": "43674",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    },
+    {
+      "input": {
+        "kind": "nope",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_keys_delete": [
+    {
+      "input": {
+        "key": "purchase_key",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "key": "api_key",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "key": "ZZZZZZZZZZ"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "key": "nope",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    },
+    {
+      "input": {
+        "key": "api_key",
+        "app": "999999999999"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_notification_url_check": [
+    {
+      "input": {
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asc_notification_url_set": [
+    {
+      "input": {
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "43674",
+        "set_revenue_provider": true
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_apps": [
+    {
+      "input": {
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "43674",
+        "team": "ZZZZZZZZZZ"
+      },
+      "ok": false
+    }
+  ],
+  "asc_products": [
+    {
+      "input": {
+        "id": "studio.overclock.cruisesignal",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "com.example.does-not-exist",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_subscription_groups_list": [
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "studio.overclock.cruisesignal",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "com.example.does-not-exist",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_subscription_groups_get": [
+    {
+      "input": {
+        "id": "22055316",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "0",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_subscription_groups_create": [
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "reference_name": "Parity",
+        "display_name": "Parity",
+        "custom_app_name": "CruiseSignal",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_subscription_groups_update": [
+    {
+      "input": {
+        "id": "22055316",
+        "reference_name": "CruiseSignal",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_subscription_groups_delete": [
+    {
+      "input": {
+        "id": "22055316",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_subscriptions_list": [
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "group": "22055316",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "group": "CruiseSignal",
+        "asc_app": "6761544101",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_subscriptions_get": [
+    {
+      "input": {
+        "id": "6786271714",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "0",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_subscriptions_create": [
+    {
+      "input": {
+        "group": "22055316",
+        "product_id": "parity.monthly",
+        "name": "Parity Monthly",
+        "subscription_period": "ONE_MONTH",
+        "price": 9.99,
+        "available_territories": "USA,CAN",
+        "display_name": "Parity",
+        "description": "Parity check",
+        "trial": "ONE_WEEK",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "group": "CruiseSignal",
+        "asc_app": "6761544101",
+        "product_id": "parity.yearly",
+        "name": "Parity Yearly",
+        "subscription_period": "ONE_YEAR",
+        "price": 49.99,
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "group": "22055316",
+        "product_id": "parity.bad",
+        "name": "Bad",
+        "subscription_period": "MONTHLY",
+        "price": 9.99,
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_subscriptions_update": [
+    {
+      "input": {
+        "id": "6786271714",
+        "review_note": "Parity",
+        "family_sharable": false,
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "6786271714",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_subscriptions_delete": [
+    {
+      "input": {
+        "id": "6786271714",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_iaps_list": [
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "in_app_purchase_type": "CONSUMABLE",
+        "app": "43674"
+      },
+      "ok": true
+    }
+  ],
+  "asc_iaps_get": [
+    {
+      "input": {
+        "id": "0",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_iaps_create": [
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "product_id": "parity.coins",
+        "name": "Parity Coins",
+        "in_app_purchase_type": "CONSUMABLE",
+        "price": 0.99,
+        "available_territories": "USA",
+        "display_name": "Coins",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_iaps_update": [
+    {
+      "input": {
+        "id": "0",
+        "name": "Parity",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_iaps_delete": [
+    {
+      "input": {
+        "id": "0",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_localizations_list": [
+    {
+      "input": {
+        "subscription": "6786271714",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "group": "22055316",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_localizations_add": [
+    {
+      "input": {
+        "subscription": "6786271714",
+        "locale": "de-DE",
+        "name": "Parity",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "group": "22055316",
+        "locale": "de-DE",
+        "name": "Parity",
+        "description": "x",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_localizations_update": [
+    {
+      "input": {
+        "group": "22055316",
+        "locale": "en-US",
+        "name": "Premium",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "group": "22055316",
+        "locale": "en-US",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_localizations_delete": [
+    {
+      "input": {
+        "subscription": "6786271714",
+        "locale": "en-US",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_prices_points": [
+    {
+      "input": {
+        "subscription": "6786271714",
+        "territory": "USA",
+        "price": 7.99,
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "subscription": "6786271714",
+        "price": 9.98,
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_prices_list": [
+    {
+      "input": {
+        "subscription": "6786271714",
+        "app": "43674"
+      },
+      "ok": true
+    }
+  ],
+  "asc_prices_set": [
+    {
+      "input": {
+        "subscription": "6786271714",
+        "price": 7.99,
+        "preserve_current_price": true,
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "subscription": "6786271714",
+        "price": 9.98,
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_offers_list": [
+    {
+      "input": {
+        "subscription": "6780532798",
+        "app": "43674"
+      },
+      "ok": true
+    }
+  ],
+  "asc_offers_create": [
+    {
+      "input": {
+        "subscription": "6786271714",
+        "offer_mode": "FREE_TRIAL",
+        "duration": "THREE_DAYS",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "subscription": "6786271714",
+        "offer_mode": "PAY_UP_FRONT",
+        "duration": "ONE_MONTH",
+        "price": 0.99,
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "subscription": "6786271714",
+        "offer_mode": "PAY_UP_FRONT",
+        "duration": "ONE_MONTH",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_offers_update": [
+    {
+      "input": {
+        "id": "0",
+        "end_date": "2027-01-01",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_offers_delete": [
+    {
+      "input": {
+        "subscription": "6780532798",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_availability_get": [
+    {
+      "input": {
+        "subscription": "6786271714",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "subscription": "6786271714",
+        "iap": "0",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_availability_set": [
+    {
+      "input": {
+        "subscription": "6786271714",
+        "available_territories": "USA,CAN",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_submit": [
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "subscription": [
+          "6786271714"
+        ],
+        "group": [
+          "22055316"
+        ],
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_versions_list": [
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "studio.overclock.cruisesignal",
+        "platform": "IOS",
+        "app_version_state": "READY_FOR_DISTRIBUTION",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "com.example.does-not-exist",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_versions_get": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "version": "1.6.0",
+        "asc_app": "6761544101",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "version": "1.6.0",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_versions_create": [
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "version_string": "99.0.0",
+        "release_type": "MANUAL",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "version_string": "99.0.0",
+        "earliest_release_date": "2030-01-01T00:00:00Z",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_versions_update": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "copyright": "2026 Overclock Studio",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_versions_delete": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_builds_list": [
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "limit": 3,
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "version_string": "1.6.0",
+        "processing_state": "VALID",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "asc_app": "6761544101",
+        "limit": 0,
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_builds_get": [
+    {
+      "input": {
+        "id": "60869ed6-6cd2-466d-9e59-9b5ab926a539",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "00000000-0000-0000-0000-000000000000",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_builds_attach": [
+    {
+      "input": {
+        "id": "60869ed6-6cd2-466d-9e59-9b5ab926a539",
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_builds_expire": [
+    {
+      "input": {
+        "id": "60869ed6-6cd2-466d-9e59-9b5ab926a539",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_metadata_list": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "app": "43674"
+      },
+      "ok": true
+    }
+  ],
+  "asc_metadata_get": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "locale": "en-US",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "locale": "xx-XX",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_metadata_update": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "locale": "en-US",
+        "promotional_text": "Parity",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "locale": "en-US",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_metadata_add": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "locale": "de-DE",
+        "whats_new": "Parity",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "asc_release_submit": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "subscription": [
+          "6786271714"
+        ],
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "subscription": [
+          "0"
+        ],
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_release_release": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_release_phased": [
+    {
+      "input": {
+        "action": "start",
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "action": "pause",
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_release_status": [
+    {
+      "input": {
+        "version": "1b73ab0b-9e84-4cf6-ba02-f74e22ca5d54",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "version": "1.6.0",
+        "asc_app": "studio.overclock.cruisesignal",
+        "app": "43674"
+      },
+      "ok": true
+    }
+  ],
+  "asc_get": [
+    {
+      "input": {
+        "path": "/v1/apps?fields[apps]=bundleId,name",
+        "app": "43674"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "path": "/v1/apps/0",
+        "app": "43674"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "v1/apps",
+        "app": "43674"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "/v1/apps",
+        "app": "5861"
+      },
+      "ok": false
+    }
+  ],
+  "asc_post": [
+    {
+      "input": {
+        "path": "/v1/subscriptionGroups",
+        "app": "43674"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "/v1/subscriptionGroups",
+        "d": [
+          "bogusField=1"
+        ],
+        "app": "43674"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "v1/subscriptionGroups",
+        "d": [
+          "referenceName=parity"
+        ],
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_patch": [
+    {
+      "input": {
+        "path": "/v1/subscriptionGroups/0",
+        "d": [
+          "referenceName=parity"
+        ],
+        "app": "43674"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "v1/subscriptionGroups/0",
+        "d": [
+          "referenceName=parity"
+        ],
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_delete": [
+    {
+      "input": {
+        "path": "/v1/subscriptionGroups/0",
+        "app": "43674"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "v1/subscriptionGroups/0",
+        "app": "43674"
+      },
+      "ok": false
+    }
+  ],
+  "asc_docs": [
+    {
+      "input": {
+        "query": [
+          "/v1/subscriptionGroups",
+          "post"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "query": [
+          "subscription",
+          "prices"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "query": [
+          "/v1/no-such-resource"
+        ]
+      },
+      "ok": true
+    }
+  ]
+}

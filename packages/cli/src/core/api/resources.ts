@@ -1,5 +1,7 @@
-import type { SuperwallApi } from "./client";
+import { isRecord } from "@/core/json";
 import type { PaywallSettings } from "@/core/paywalls/project/framework";
+import { ApiError, ApiUnreachableError, type SuperwallApi } from "./client";
+import { listReachableProjects } from "./orgs";
 
 export interface Application {
   id: string | number;
@@ -14,6 +16,7 @@ export interface Application {
 export interface Project {
   id: string | number;
   name?: string;
+  organization_id?: string | number;
   applications?: Application[];
 }
 
@@ -26,7 +29,7 @@ export const RESOURCES = {
   entitlements: "/v2/entitlements",
 } as const;
 
-export type ResourceName = keyof typeof RESOURCES | "apps" | "orgs" | "projects";
+export type ResourceName = keyof typeof RESOURCES | "apps";
 
 const RESOURCE_SCOPE: Record<keyof typeof RESOURCES, "project" | "application"> = {
   products: "project",
@@ -40,7 +43,7 @@ export function isAppScoped(name: keyof typeof RESOURCES): boolean {
 }
 
 export function titleCase(s: string): string {
-  return s ? s[0]!.toUpperCase() + s.slice(1).toLowerCase() : s;
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
 export function platformLabel(platform?: string): string {
@@ -57,7 +60,7 @@ export function platformLabel(platform?: string): string {
     case "web":
       return "Web";
     default:
-      return platform ? platform[0]!.toUpperCase() + platform.slice(1) : "?";
+      return platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : "?";
   }
 }
 
@@ -69,10 +72,7 @@ export interface Scope {
 }
 
 export async function listProjects(api: SuperwallApi): Promise<Project[]> {
-  const org = api.org?.id;
-  return api.list<Project>(
-    org ? `/v2/projects?organization_id=${encodeURIComponent(org)}` : "/v2/projects",
-  );
+  return listReachableProjects(api);
 }
 
 export async function listApplications(api: SuperwallApi): Promise<Application[]> {
@@ -106,6 +106,7 @@ export function createEntitlement(
 export type SubscriptionPeriod = "day" | "week" | "month" | "year";
 
 export interface ProductCreateOpts {
+  applicationId?: string;
   name?: string;
   price?: { amount: number; currency: string };
   subscription?: {
@@ -124,6 +125,7 @@ export function createProduct(
 ): Promise<Row> {
   return api.post<Row>("/v2/products", {
     project_id: scope.projectId,
+    ...(opts.applicationId ? { application_id: opts.applicationId } : {}),
     identifier,
     ...(opts.name ? { name: opts.name } : {}),
     ...(opts.price ? { price: opts.price } : {}),
@@ -132,18 +134,14 @@ export function createProduct(
   });
 }
 
-export async function listOrganizations(api: SuperwallApi): Promise<Row[]> {
-  const res = await api.get<{ data?: Row[] }>("/v2/me/organizations");
-  return res.data ?? [];
-}
-
-export function createProject(api: SuperwallApi, name: string): Promise<Row> {
-  const orgId = api.org.id;
-  if (!orgId)
-    throw new Error("No organization selected - run `superwall orgs use <id|name>` first.");
+export function createProject(
+  api: SuperwallApi,
+  name: string,
+  organizationId: string,
+): Promise<Row> {
   return api.post<Row>("/v2/projects", {
     name,
-    organization_id: Number(orgId),
+    organization_id: Number(organizationId),
   });
 }
 
@@ -175,16 +173,6 @@ export function createCampaign(
   });
 }
 
-export function addPlacement(
-  api: SuperwallApi,
-  campaignId: string,
-  placement: string,
-): Promise<Row> {
-  return api.post<Row>(`/v2/campaigns/${campaignId}/placements`, {
-    event_name: placement,
-  });
-}
-
 export function rowName(row: Row): string {
   for (const key of ["name", "identifier", "product_identifier", "title", "description", "id"]) {
     const v = row[key];
@@ -201,13 +189,13 @@ export interface HeadlessPaywallRef {
   metadata: Record<string, string>;
 }
 
-export interface PushedVersion {
+interface PushedVersion {
   version: number;
   snapshot_id: string;
   url: string;
 }
 
-export interface PromotedVersion {
+interface PromotedVersion {
   version: number;
   url: string;
 }
@@ -221,20 +209,12 @@ export async function listAppPaywalls(
     `/v2/paywalls?application_id=${encodeURIComponent(applicationId)}` +
       (options.archived ? "&archived=true" : ""),
   );
-  return rows.map((row) => {
-    const metadata: Record<string, string> = {};
-    if (typeof row.metadata === "object" && row.metadata !== null) {
-      for (const [key, value] of Object.entries(row.metadata)) {
-        if (typeof value === "string") metadata[key] = value;
-      }
-    }
-    return {
-      id: String(row.id),
-      identifier: typeof row.identifier === "string" ? row.identifier : undefined,
-      archived: options.archived === true,
-      metadata,
-    };
-  });
+  return rows.map((row) => ({
+    id: String(row.id),
+    identifier: typeof row.identifier === "string" ? row.identifier : undefined,
+    archived: options.archived === true,
+    metadata: parseMetadata(row.metadata),
+  }));
 }
 
 export interface PaywallProductRef {
@@ -257,12 +237,20 @@ export interface PaywallDetail extends HeadlessPaywallRef {
   products: PaywallProductRef[];
 }
 
-const productRefsOf = (value: unknown): PaywallProductRef[] => {
+function parseMetadata(value: unknown): Record<string, string> {
+  const metadata: Record<string, string> = {};
+  if (!isRecord(value)) return metadata;
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === "string") metadata[key] = entry;
+  }
+  return metadata;
+}
+
+function parseProductRefs(value: unknown): PaywallProductRef[] {
   if (!Array.isArray(value)) return [];
   const refs: PaywallProductRef[] = [];
-  for (const entry of value) {
-    if (typeof entry !== "object" || entry === null) continue;
-    const row = entry as Record<string, unknown>;
+  for (const row of value) {
+    if (!isRecord(row)) continue;
     if (typeof row.reference_name !== "string" || typeof row.identifier !== "string") continue;
     refs.push({
       reference: row.reference_name,
@@ -271,23 +259,17 @@ const productRefsOf = (value: unknown): PaywallProductRef[] => {
     });
   }
   return refs;
-};
+}
 
-export async function getPaywall(api: SuperwallApi, paywallId: string): Promise<PaywallDetail> {
+export async function findPaywall(api: SuperwallApi, paywallId: string): Promise<PaywallDetail> {
   const row = await api.get<Row>(`/v2/paywalls/${encodeURIComponent(paywallId)}`);
-  const metadata: Record<string, string> = {};
-  if (typeof row.metadata === "object" && row.metadata !== null) {
-    for (const [key, value] of Object.entries(row.metadata)) {
-      if (typeof value === "string") metadata[key] = value;
-    }
-  }
   const applicationId = row.application_id;
   return {
     id: String(row.id ?? paywallId),
     identifier: typeof row.identifier === "string" ? row.identifier : undefined,
     name: typeof row.name === "string" ? row.name : undefined,
     archived: row.archived === true,
-    metadata,
+    metadata: parseMetadata(row.metadata),
     applicationId:
       typeof applicationId === "string" || typeof applicationId === "number"
         ? String(applicationId)
@@ -304,22 +286,11 @@ export async function getPaywall(api: SuperwallApi, paywallId: string): Promise<
     presentationStyle:
       typeof row.presentation_style === "string" ? row.presentation_style : undefined,
     featureGating: typeof row.feature_gating === "string" ? row.feature_gating : undefined,
-    products: productRefsOf(row.products),
+    products: parseProductRefs(row.products),
   };
 }
 
-export async function projectOrganizationId(
-  api: SuperwallApi,
-  projectId: string,
-): Promise<string | undefined> {
-  const row = await api.get<Row>(`/v2/projects/${encodeURIComponent(projectId)}`);
-  const organization = row.organization_id;
-  return typeof organization === "string" || typeof organization === "number"
-    ? String(organization)
-    : undefined;
-}
-
-export interface LivePaywall {
+interface LivePaywall {
   version?: number;
   snapshotId?: string;
 }
@@ -327,12 +298,16 @@ export interface LivePaywall {
 const SNAPSHOT_IN_URL = /([a-f0-9]{64})\.html/;
 
 export async function livePaywall(api: SuperwallApi, paywallId: string): Promise<LivePaywall> {
-  return getPaywall(api, paywallId).then(
+  return findPaywall(api, paywallId).then(
     (paywall) => ({
       version: paywall.version,
       snapshotId: paywall.url?.match(SNAPSHOT_IN_URL)?.[1],
     }),
-    () => ({}),
+    (error: unknown) => {
+      if (error instanceof ApiUnreachableError) return {};
+      if (error instanceof ApiError && error.status >= 500) return {};
+      throw error;
+    },
   );
 }
 
@@ -341,15 +316,6 @@ export async function livePaywallVersion(
   paywallId: string,
 ): Promise<number | undefined> {
   return livePaywall(api, paywallId).then((live) => live.version);
-}
-
-export async function getPaywallApplicationId(
-  api: SuperwallApi,
-  paywallId: string,
-): Promise<string> {
-  const { applicationId } = await getPaywall(api, paywallId);
-  if (applicationId !== undefined) return applicationId;
-  throw new Error(`Superwall returned no application for paywall ${paywallId}.`);
 }
 
 export async function createHeadlessPaywall(
@@ -365,25 +331,25 @@ export async function createHeadlessPaywall(
   return { id: String(row.id), identifier: opts.identifier, archived: false, metadata: {} };
 }
 
-export interface VersionProduct {
+interface VersionProduct {
   store: "stripe" | "app-store" | "play-store" | "custom";
   identifier: string;
   reference_name: string;
 }
 
-export const versionProducts = (
+function resolveStore(identifier: string, platform: string | undefined): VersionProduct["store"] {
+  if (/^(test|live):price_[^:]+/.test(identifier)) return "stripe";
+  return platform === "android" ? "play-store" : "app-store";
+}
+
+export function versionProducts(
   products: Record<string, string> | undefined,
   platform?: string,
-): VersionProduct[] =>
-  Object.entries(products ?? {}).map(([reference, identifier]) => ({
-    store: /^(test|live):price_[^:]+/.test(identifier)
-      ? "stripe"
-      : platform === "android"
-        ? "play-store"
-        : "app-store",
-    identifier,
-    reference_name: reference,
-  }));
+): VersionProduct[] {
+  return Object.entries(products ?? {}).map(([reference, identifier]) => {
+    return { store: resolveStore(identifier, platform), identifier, reference_name: reference };
+  });
+}
 
 export function pushPaywallVersion(
   api: SuperwallApi,
@@ -419,13 +385,13 @@ export interface AssetManifestEntry {
   file_name: string;
 }
 
-export interface ResolvedAsset {
+interface ResolvedAsset {
   sha256: string;
   url: string;
   uploadUrl?: string;
 }
 
-export const ASSET_MANIFEST_CHUNK = 100;
+const ASSET_MANIFEST_CHUNK = 100;
 
 export async function pushPaywallAssets(
   api: SuperwallApi,
@@ -459,7 +425,7 @@ export async function pushPaywallAssets(
   return resolved;
 }
 
-export interface SourceAccessGrant {
+interface SourceAccessGrant {
   repo: string;
   remote: string;
   branch: string;

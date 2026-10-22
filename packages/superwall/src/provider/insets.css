@@ -42,6 +42,10 @@
   --sw-safe-area-floor-bottom: 34px;
 }
 
+:root:where([data-sw-platform="ios"][data-sw-cutout="strip"]) {
+  --sw-safe-area-floor-top: 0px;
+}
+
 :root:where([data-sw-platform="ios"][data-sw-idiom="tablet"]) {
   --sw-safe-area-floor-top: 24px;
   --sw-safe-area-floor-bottom: 20px;

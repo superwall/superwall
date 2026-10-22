@@ -202,6 +202,17 @@ from `config.ts`, and `provider/insets.css` turns those into the floors.
 Every framework rule has bare-`:root` specificity and comes first, so a
 paywall's own `:root` declaration of any of the three variable layers wins.
 
+iPhone Duo (`iPhone19,4`) gets `data-sw-cutout="strip"` and no floor: its
+camera strip sits on the right when closed or in landscape and on top when
+open in portrait, and a host app built with an older iOS SDK runs beside it
+rather than under it, so only `env()` knows the real inset. A host may also
+report `safeAreaInsets` in its device variables; the provider writes them
+as the floors. The studio does this for its iPhone Duo presets.
+Framework paywalls always report `env()` insets: the document sets
+`viewport-fit=cover` and, before anything else runs, a script adds it back to
+the viewport tag SuperwallKit for iOS appends after load, without which every
+`env()` reads 0.
+
 ### Navigation
 
 ```tsx

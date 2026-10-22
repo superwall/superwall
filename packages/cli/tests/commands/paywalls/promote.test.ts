@@ -1,8 +1,31 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, test } from "node:test";
+import { command } from "@/commands/paywalls/promote";
 import type { SuperwallApi } from "@/core/api/client";
-import { pushedLine, transition } from "@/commands/paywalls/pipeline";
 import { promotePaywallVersion } from "@/core/api/resources";
+import { runCommand } from "../../helpers/command";
+
+const apiKey = process.env.SUPERWALL_API_KEY;
+
+afterEach(() => {
+  if (apiKey === undefined) delete process.env.SUPERWALL_API_KEY;
+  else process.env.SUPERWALL_API_KEY = apiKey;
+  process.exitCode = 0;
+});
+
+test("promote without a login stops before touching the project, and says how to log in", async () => {
+  delete process.env.SUPERWALL_API_KEY;
+
+  const result = await runCommand(command, { args: { dir: "/nonexistent" }, flags: { version: 3 } });
+
+  assert.match(result.said("error")[0] ?? "", /Pushing paywalls needs a Superwall account/);
+  assert.equal(process.exitCode, 1);
+});
+
+test("--version is a number, and -v is its short form", () => {
+  assert.equal(command.flags.version?.alias, "v");
+  assert.throws(() => command.validate({ flags: { version: "three" } }), /--version takes a number/);
+});
 
 interface Posted {
   path: string;
@@ -48,65 +71,4 @@ test("the paywall id is escaped into the path", async () => {
   await promotePaywallVersion(fakeApi(posted), "a/b c");
 
   assert.equal(posted[0]?.path, "/v2/paywalls/a%2Fb%20c/promote");
-});
-
-const plain = (text: string): string => text.replace(/\[[0-9;]*m/g, "");
-
-test("moving forward reads as a promotion, with both ends of the move", () => {
-  assert.equal(plain(transition(10, 11)), "Promoted version 10 → 11");
-});
-
-test("moving backward reads as a rollback, not a promotion", () => {
-  assert.equal(plain(transition(11, 10)), "Rolled back version 11 → 10");
-});
-
-test("promoting what is already live claims no change", () => {
-  assert.equal(plain(transition(11, 11)), "Version 11 already live");
-});
-
-test("an unknown live version falls back to the single-version line", () => {
-  assert.equal(plain(transition(undefined, 11)), "Promoted version 11");
-});
-
-test("version 0 is a live version like any other, never treated as absent", () => {
-  assert.equal(plain(transition(0, 1)), "Promoted version 0 → 1");
-  assert.equal(plain(transition(1, 0)), "Rolled back version 1 → 0");
-});
-
-const SNAPSHOT = "ac4e644d1f0b9c7e2a";
-
-test("a push shows the snapshot sha and what is still live behind it", () => {
-  assert.equal(
-    plain(pushedLine({ version: 12, snapshotId: SNAPSHOT, live: 10, promoting: false })),
-    "Pushed version 12 (ac4e644) · live 10",
-  );
-});
-
-test("a publish drops the live context — its own promote line carries the move", () => {
-  assert.equal(
-    plain(pushedLine({ version: 12, snapshotId: SNAPSHOT, live: 10, promoting: true })),
-    "Pushed version 12 (ac4e644)",
-  );
-});
-
-test("nothing live yet leaves the version line alone", () => {
-  assert.equal(
-    plain(pushedLine({ version: 1, snapshotId: SNAPSHOT, promoting: false })),
-    "Pushed version 1 (ac4e644)",
-  );
-});
-
-test("live version 0 is still shown — it is a version, not an absent value", () => {
-  assert.equal(
-    plain(pushedLine({ version: 1, snapshotId: SNAPSHOT, live: 0, promoting: false })),
-    "Pushed version 1 (ac4e644) · live 0",
-  );
-});
-
-test("a missing or stub snapshot id drops the sha rather than printing a partial one", () => {
-  assert.equal(plain(pushedLine({ version: 12, promoting: false })), "Pushed version 12");
-  assert.equal(
-    plain(pushedLine({ version: 12, snapshotId: "abc", promoting: false })),
-    "Pushed version 12",
-  );
 });

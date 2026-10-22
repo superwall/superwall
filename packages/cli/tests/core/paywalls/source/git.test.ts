@@ -5,7 +5,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
-import { gitAvailable, gitReason, materializeSourceTree, pushSourceTree } from "@/core/paywalls/source/git";
+import {
+  gitAvailable,
+  gitReason,
+  materializeSourceTree,
+  pushSourceTree,
+  SourceConflictError,
+  SourceDivergedError,
+} from "@/core/paywalls/source/git";
 import type { SourceFile } from "@/core/paywalls/source/source";
 
 const dirs: string[] = [];
@@ -127,6 +134,7 @@ test("a changed file makes a new commit on top of the old one", async () => {
   });
   const second = await pushSourceTree({
     access: access(repo.remote),
+    base: first.syncedTo,
     files: [file("config.ts", "two\n")],
     message: { ...message, version: 8 },
   });
@@ -141,7 +149,7 @@ test("a changed file makes a new commit on top of the old one", async () => {
 
 test("deleting a source file removes it from the repo", async () => {
   const repo = bareRepo();
-  await pushSourceTree({
+  const first = await pushSourceTree({
     access: access(repo.remote),
     files: [file("keep.ts", "a\n"), file("gone.ts", "b\n")],
     message,
@@ -149,6 +157,7 @@ test("deleting a source file removes it from the repo", async () => {
 
   await pushSourceTree({
     access: access(repo.remote),
+    base: first.syncedTo,
     files: [file("keep.ts", "a\n")],
     message: { ...message, version: 8 },
   });
@@ -249,4 +258,146 @@ test("gitAvailable reports false when no git binary is on PATH", async () => {
   } finally {
     process.env.PATH = savedPath;
   }
+});
+
+test("with no sync point, a remote that already differs is refused, naming the files, and nothing lands", async () => {
+  const repo = bareRepo();
+  const theirs = await pushSourceTree({
+    access: access(repo.remote),
+    files: [file("config.ts", "theirs\n"), ...Array.from({ length: 6 }, (_, i) => file(`f${i}.ts`, "x\n"))],
+    message,
+  });
+
+  const error = await pushSourceTree({
+    access: access(repo.remote),
+    files: [file("config.ts", "mine\n")],
+    message: { ...message, version: 8 },
+  }).then(
+    () => undefined,
+    (thrown: unknown) => thrown,
+  );
+
+  assert.ok(error instanceof SourceDivergedError);
+  assert.deepEqual([...error.files].sort(), ["config.ts", "f0.ts", "f1.ts", "f2.ts", "f3.ts", "f4.ts", "f5.ts"]);
+  assert.match(error.message, /config\.ts, f0\.ts, f1\.ts, f2\.ts, f3\.ts and 2 more/);
+  assert.match(error.message, /--overwrite-source/);
+  assert.equal(execFileSync("git", ["--git-dir", repo.dir, "rev-parse", "main"], { encoding: "utf8" }).trim(), theirs.commitSha);
+});
+
+test("with no sync point, a remote that already matches is adopted as the base", async () => {
+  const repo = bareRepo();
+  const files = [file("config.ts", "same\n")];
+  const first = await pushSourceTree({ access: access(repo.remote), files, message });
+
+  const second = await pushSourceTree({ access: access(repo.remote), files, message: { ...message, version: 8 } });
+
+  assert.equal(second.status, "unchanged");
+  assert.equal(second.syncedTo, first.commitSha);
+});
+
+test("a sync point the remote never had is no sync point at all", async () => {
+  const repo = bareRepo();
+  await pushSourceTree({ access: access(repo.remote), files: [file("config.ts", "theirs\n")], message });
+
+  await assert.rejects(
+    pushSourceTree({
+      access: access(repo.remote),
+      base: "f".repeat(40),
+      files: [file("config.ts", "mine\n")],
+      message: { ...message, version: 8 },
+    }),
+    SourceDivergedError,
+  );
+});
+
+test("overwrite replaces the remote tree on top of its history, ignoring the sync point", async () => {
+  const repo = bareRepo();
+  const theirs = await pushSourceTree({ access: access(repo.remote), files: [file("theirs.ts", "t\n")], message });
+
+  const result = await pushSourceTree({
+    access: access(repo.remote),
+    base: "f".repeat(40),
+    overwrite: true,
+    files: [file("mine.ts", "m\n")],
+    message: { ...message, version: 8 },
+  });
+
+  assert.equal(result.status, "committed");
+  assert.equal(result.syncedTo, result.commitSha);
+  assert.deepEqual(treeFiles(repo.dir), ["mine.ts"]);
+  const parent = execFileSync("git", ["--git-dir", repo.dir, "rev-parse", "main^"], { encoding: "utf8" }).trim();
+  assert.equal(parent, theirs.commitSha, "history is kept, never force-pushed away");
+});
+
+test("a conflict names what to do with the commands that exist", () => {
+  const error = new SourceConflictError(["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "f.ts"]);
+
+  assert.match(error.message, /a\.ts, b\.ts, c\.ts, d\.ts, e\.ts and 1 more/);
+  assert.match(error.message, /Pull their commits into this project/);
+  assert.match(error.message, /--overwrite-source/);
+});
+
+test("the user's git hooks, signing and line-ending settings never touch the source push", async () => {
+  const repo = bareRepo();
+  const home = temp("superwall-git-home-");
+  const hooks = temp("superwall-git-hooks-");
+  const marker = path.join(home, "hook-ran");
+  fs.writeFileSync(path.join(hooks, "pre-commit"), `#!/bin/sh\ntouch ${marker}\nexit 1\n`, { mode: 0o755 });
+  fs.writeFileSync(
+    path.join(home, ".gitconfig"),
+    `[core]\n  hooksPath = ${hooks}\n  autocrlf = true\n[commit]\n  gpgsign = true\n[gpg]\n  program = false\n`,
+  );
+  const saved = { HOME: process.env.HOME, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };
+  process.env.HOME = home;
+  delete process.env.XDG_CONFIG_HOME;
+
+  try {
+    const result = await pushSourceTree({
+      access: access(repo.remote),
+      files: [file("config.ts", "one\r\ntwo\n")],
+      message,
+    });
+    assert.equal(result.status, "committed");
+  } finally {
+    process.env.HOME = saved.HOME;
+    if (saved.XDG_CONFIG_HOME !== undefined) process.env.XDG_CONFIG_HOME = saved.XDG_CONFIG_HOME;
+  }
+
+  assert.equal(fs.existsSync(marker), false);
+  const committed = execFileSync("git", ["--git-dir", repo.dir, "cat-file", "blob", "main:config.ts"], { encoding: "utf8" });
+  assert.equal(committed, "one\r\ntwo\n");
+});
+
+test("a git repository named by the caller's environment is never the one written to", async () => {
+  const repo = bareRepo();
+  const decoy = temp("superwall-decoy-");
+  execFileSync("git", ["init", "--quiet", decoy]);
+  const saved = process.env.GIT_DIR;
+  process.env.GIT_DIR = path.join(decoy, ".git");
+
+  try {
+    await pushSourceTree({ access: access(repo.remote), files: [file("config.ts", "x\n")], message });
+  } finally {
+    if (saved === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = saved;
+  }
+
+  assert.deepEqual(treeFiles(repo.dir), ["config.ts"]);
+  assert.throws(() => execFileSync("git", ["-C", decoy, "rev-parse", "HEAD"], { stdio: "ignore" }));
+});
+
+test("a remote that serves partial clones still checks out, commits and pushes on top", async () => {
+  const repo = bareRepo();
+  execFileSync("git", ["--git-dir", repo.dir, "config", "uploadpack.allowFilter", "true"]);
+  const first = await pushSourceTree({ access: access(repo.remote), files: [file("config.ts", "one\n")], message });
+
+  const second = await pushSourceTree({
+    access: access(repo.remote),
+    base: first.syncedTo,
+    files: [file("config.ts", "two\n")],
+    message: { ...message, version: 8 },
+  });
+
+  assert.equal(second.status, "committed");
+  assert.equal(execFileSync("git", ["--git-dir", repo.dir, "show", "main:config.ts"], { encoding: "utf8" }), "two\n");
 });

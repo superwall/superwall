@@ -3,8 +3,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
-import { executeCommand } from "@/command";
-import { alreadyAProject, runCreate } from "@/commands/paywalls/create";
+import { command } from "@/commands/paywalls/create";
+import { runCommand } from "../../helpers/command";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
 import { restoreFetch, useFetch } from "../../helpers/fetch";
 import { clearHomes, useHome } from "../../helpers/home";
@@ -20,16 +20,12 @@ function scratch(name: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `sw-${name}-`));
 }
 
-async function create(argv: Record<string, unknown>, calls: RendererCall[] = []) {
-  const before = process.exitCode;
-  await executeCommand(runCreate.definition, { _: [], $0: "superwall", ...argv }, {
-    renderer: () => recordingRenderer(calls),
-    nonInteractive: true,
-    waitForPaint: false,
-  });
-  const failed =
-    process.exitCode !== undefined && process.exitCode !== 0 && process.exitCode !== before;
-  process.exitCode = before;
+async function create(input: Record<string, unknown>, calls: RendererCall[] = []) {
+  process.exitCode = 0;
+  const { dir, ...flags } = input;
+  await runCommand(command, { args: { dir }, flags, renderer: recordingRenderer(calls) });
+  const failed = Boolean(process.exitCode);
+  process.exitCode = 0;
   return { calls, failed };
 }
 
@@ -40,9 +36,7 @@ test("create scaffolds superwall/ inside the app root, named after the app", asy
 
   assert.equal(failed, false);
   assert.ok(fs.existsSync(path.join(root, "superwall", "paywalls", "pro", "config.ts")));
-  const parsed = JSON.parse(
-    fs.readFileSync(path.join(root, "superwall", "package.json"), "utf8"),
-  );
+  const parsed = JSON.parse(fs.readFileSync(path.join(root, "superwall", "package.json"), "utf8"));
   assert.equal(parsed.name, "my-app");
   const list = calls.find((call) => call.method === "list");
   const labels = (list?.value as { items: Array<{ label: string }> }).items.map(
@@ -61,41 +55,10 @@ test("an app that already has a superwall/ project gets a paywall added, not a s
   assert.equal(failed, false);
   assert.ok(fs.existsSync(path.join(root, "superwall", "paywalls", "pro", "config.ts")));
   assert.equal(fs.existsSync(path.join(root, "superwall", "package.json")), false);
-  assert.equal(calls.some((call) => call.method === "error"), false);
-});
-
-test("a superwall/ directory holding some other package is refused, not overwritten", () => {
-  const root = scratch("foreign");
-  fs.mkdirSync(path.join(root, "superwall"));
-  fs.writeFileSync(path.join(root, "superwall", "package.json"), "{}");
-  assert.match(alreadyAProject(root) ?? "", /isn't a superwall project/);
-});
-
-test("a superwall/ directory with only leftover subdirectories does not block setup", () => {
-  const root = scratch("leftover");
-  fs.mkdirSync(path.join(root, "superwall", "paywalls"), { recursive: true });
-  assert.equal(alreadyAProject(root), undefined);
-});
-
-test("a bare superwall project root is recognized by its markers", () => {
-  const bare = scratch("bare");
-  fs.writeFileSync(path.join(bare, "superwall.lock"), "{}");
-  assert.match(alreadyAProject(bare) ?? "", /already a superwall project/);
-
-  const byDep = scratch("dep");
-  fs.writeFileSync(
-    path.join(byDep, "package.json"),
-    JSON.stringify({ dependencies: { superwall: "latest" } }),
+  assert.equal(
+    calls.some((call) => call.method === "error"),
+    false,
   );
-  assert.match(alreadyAProject(byDep) ?? "", /already a superwall project/);
-});
-
-test("an empty superwall/ directory does not block setup", () => {
-  const root = scratch("fresh");
-  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "app" }));
-  fs.mkdirSync(path.join(root, "superwall"));
-
-  assert.equal(alreadyAProject(root), undefined);
 });
 
 test("an example is downloaded, adopted, and named after the app", async () => {
@@ -163,7 +126,11 @@ const originDocument = `<html><body><style>html { background-color: #101010ff }<
     document: {
       schema: {},
       store: {
-        "paywall:paywall": { typeName: "paywall", presentationStyleV3: { type: "MODAL" }, isScrollEnabled: "DISABLED" },
+        "paywall:paywall": {
+          typeName: "paywall",
+          presentationStyleV3: { type: "MODAL" },
+          isScrollEnabled: "DISABLED",
+        },
         "node:root": { typeName: "node", type: "stack", id: "node:root" },
         "node:cta": {
           typeName: "node",
@@ -180,7 +147,7 @@ const originDocument = `<html><body><style>html { background-color: #101010ff }<
 test("--from rebuilds a dashboard paywall's config, briefs the migration, and binds its app", async () => {
   const root = path.join(scratch("create-from"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([
     { match: "/v2/paywalls/255456", body: originRow },
@@ -228,7 +195,10 @@ test("--from rebuilds a dashboard paywall's config, briefs the migration, and bi
       .map((call) => String(call.value))
       .join();
   assert.match(said("success"), /Pushes go to `Force`, the paywall's app/);
-  assert.equal(calls.some((call) => call.method === "confirm"), false);
+  assert.equal(
+    calls.some((call) => call.method === "confirm"),
+    false,
+  );
   const list = calls.find((call) => call.method === "list");
   const labels = (list?.value as { items: Array<{ label: string }> }).items.map(
     (item) => item.label,
@@ -238,10 +208,10 @@ test("--from rebuilds a dashboard paywall's config, briefs the migration, and bi
   assert.match(labels[2] ?? "", /ask your agent to tweak/);
 });
 
-test("--from binds the paywall's app even when the CLI's organization cannot see it, and says so", async () => {
+test("--from binds the paywall's app even when the CLI's organization cannot see it, with no org switch", async () => {
   const root = path.join(scratch("create-from-org"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([
     { match: "/v2/paywalls/255456", body: { ...originRow, products: [], paywall_url: null } },
@@ -263,7 +233,7 @@ test("--from binds the paywall's app even when the CLI's organization cannot see
       .map((call) => String(call.value))
       .join();
   assert.match(said("success"), /Pushes go to app 43674/);
-  assert.match(said("warn"), /superwall orgs use 10566/);
+  assert.doesNotMatch(said("warn"), /orgs use/);
   const brief = fs.readFileSync(
     path.join(root, "superwall", "paywalls", "force-update", "MIGRATION.md"),
     "utf8",
@@ -271,10 +241,10 @@ test("--from binds the paywall's app even when the CLI's organization cannot see
   assert.match(brief, /could not be read/);
 });
 
-test("--from still names the org switch when the project's organization cannot be read", async () => {
+test("--from asks for no org switch when the project's organization cannot be read", async () => {
   const root = path.join(scratch("create-from-noorg"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([
     { match: "/v2/paywalls/255456", body: { ...originRow, products: [], paywall_url: null } },
@@ -288,13 +258,13 @@ test("--from still names the org switch when the project's organization cannot b
     .filter((call) => call.method === "warn")
     .map((call) => String(call.value))
     .join();
-  assert.match(warned, /superwall orgs use <id>/);
+  assert.doesNotMatch(warned, /orgs use/);
 });
 
 test("--from explains a paywall the account cannot see", async () => {
   const root = path.join(scratch("create-from-hidden"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([
     {
@@ -308,7 +278,7 @@ test("--from explains a paywall the account cannot see", async () => {
   assert.equal(failed, true);
   assert.match(
     String(calls.find((call) => call.method === "error")?.value),
-    /isn't visible to this account[\s\S]*superwall orgs use/,
+    /isn't visible to this account/,
   );
   assert.equal(fs.existsSync(path.join(root, "superwall", "package.json")), false);
 });
@@ -316,7 +286,7 @@ test("--from explains a paywall the account cannot see", async () => {
 test("--from reads a real multi-page document, warns about template products, and names an app without a name by id", async () => {
   const root = path.join(scratch("create-from-real"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([
     {
@@ -364,7 +334,7 @@ test("--from reads a real multi-page document, warns about template products, an
 test("--from falls back to the API row when the served document cannot be fetched, and to `<id>` without a project", async () => {
   const root = path.join(scratch("create-from-nodoc"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([
     { match: "/v2/paywalls/255456", body: { ...originRow, project_id: null } },
@@ -380,7 +350,7 @@ test("--from falls back to the API row when the served document cannot be fetche
       .map((call) => String(call.value))
       .join("\n");
   assert.match(said("spinner.stop"), /from the API only/);
-  assert.match(said("warn"), /superwall orgs use <id>/);
+  assert.doesNotMatch(said("warn"), /orgs use/);
   const brief = fs.readFileSync(
     path.join(root, "superwall", "paywalls", "force-update", "MIGRATION.md"),
     "utf8",
@@ -391,16 +361,21 @@ test("--from falls back to the API row when the served document cannot be fetche
 test("--from surfaces a network failure as itself, and names an unnamed headless paywall by id", async () => {
   const offline = path.join(scratch("create-from-offline"), "my-app");
   fs.mkdirSync(offline, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([{ match: "/v2/paywalls/255456", fail: true }]);
   const down = await create({ dir: offline, from: "255456", install: false });
   assert.equal(down.failed, true);
-  assert.doesNotMatch(String(down.calls.find((call) => call.method === "error")?.value), /isn't visible/);
+  assert.doesNotMatch(
+    String(down.calls.find((call) => call.method === "error")?.value),
+    /isn't visible/,
+  );
 
   const nameless = path.join(scratch("create-from-nameless"), "my-app");
   fs.mkdirSync(nameless, { recursive: true });
-  useFetch([{ match: "/v2/paywalls/900", body: { ...originRow, id: 900, name: null, headless: true } }]);
+  useFetch([
+    { match: "/v2/paywalls/900", body: { ...originRow, id: 900, name: null, headless: true } },
+  ]);
   const headless = await create({ dir: nameless, from: "900", install: false });
   assert.equal(headless.failed, true);
   assert.match(
@@ -424,7 +399,10 @@ test("inside an existing project, create adds a starter paywall with a unique id
   assert.equal(failed, false);
   assert.ok(fs.existsSync(path.join(project, "paywalls", "pro-2", "config.ts")));
   assert.ok(fs.existsSync(path.join(project, "paywalls", "pro-2", "messages", "en.ts")));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(project, "package.json"), "utf8")).name, "mine");
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(project, "package.json"), "utf8")).name,
+    "mine",
+  );
   assert.match(
     calls
       .filter((call) => call.method === "step")
@@ -442,7 +420,7 @@ test("inside an existing project, --from adds the rebuilt paywall to it", async 
     path.join(project, "package.json"),
     JSON.stringify({ name: "mine", dependencies: { superwall: "latest" } }),
   );
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([
     { match: "/v2/paywalls/255456", body: originRow },
@@ -450,7 +428,9 @@ test("inside an existing project, --from adds the rebuilt paywall to it", async 
     {
       match: "/v2/projects",
       body: {
-        data: [{ id: 21525, name: "P", applications: [{ id: 43674, name: "Force", platform: "ios" }] }],
+        data: [
+          { id: 21525, name: "P", applications: [{ id: 43674, name: "Force", platform: "ios" }] },
+        ],
         has_more: false,
       },
     },
@@ -458,7 +438,10 @@ test("inside an existing project, --from adds the rebuilt paywall to it", async 
   const { calls, failed } = await create({ dir: root, from: "255456", install: false });
   assert.equal(failed, false);
   assert.ok(fs.existsSync(path.join(project, "paywalls", "force-update", "MIGRATION.md")));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(project, "package.json"), "utf8")).name, "mine");
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(project, "package.json"), "utf8")).name,
+    "mine",
+  );
   const lock = JSON.parse(fs.readFileSync(path.join(project, "superwall.lock"), "utf8")) as {
     origins: Record<string, unknown>;
   };
@@ -475,7 +458,10 @@ test("inside an existing project, an example or --app is refused with a reason",
   fs.writeFileSync(path.join(root, "superwall", "superwall.lock"), "{}");
   const example = await create({ dir: root, example: "minimal", install: false });
   assert.equal(example.failed, true);
-  assert.match(String(example.calls.find((call) => call.method === "error")?.value), /empty directory/);
+  assert.match(
+    String(example.calls.find((call) => call.method === "error")?.value),
+    /empty directory/,
+  );
   const app = await create({ dir: root, app: "42", install: false });
   assert.equal(app.failed, true);
   assert.match(String(app.calls.find((call) => call.method === "error")?.value), /drop `--app`/);
@@ -484,16 +470,13 @@ test("inside an existing project, an example or --app is refused with a reason",
 test("--from refuses a paywall that is already code, and the flags that contradict it", async () => {
   const root = path.join(scratch("create-from-headless"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([{ match: "/v2/paywalls/900", body: { ...originRow, id: 900, headless: true } }]);
 
   const headless = await create({ dir: root, from: "900", install: false });
   assert.equal(headless.failed, true);
-  assert.match(
-    String(headless.calls.find((call) => call.method === "error")?.value),
-    /already/,
-  );
+  assert.match(String(headless.calls.find((call) => call.method === "error")?.value), /already/);
 
   const withExample = await create({
     dir: path.join(scratch("create-from-example"), "my-app"),
@@ -514,7 +497,7 @@ test("--from refuses a paywall that is already code, and the flags that contradi
 test("connecting binds the account's only app into superwall.lock", async () => {
   const root = path.join(scratch("create-connect"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([
     {
@@ -545,7 +528,7 @@ test("connecting binds the account's only app into superwall.lock", async () => 
 test("several apps and nobody to ask leaves the choice to the first push", async () => {
   const root = path.join(scratch("create-many"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([
     {
@@ -599,7 +582,7 @@ const twoApps = {
 test("--app binds the named app without asking, even among several", async () => {
   const root = path.join(scratch("create-app"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([twoApps]);
 
@@ -622,7 +605,7 @@ test("--app binds the named app without asking, even among several", async () =>
 test("--app with an id the account does not have fails loudly", async () => {
   const root = path.join(scratch("create-app-missing"), "my-app");
   fs.mkdirSync(root, { recursive: true });
-  useHome({ apiKey: "sk_live_x", orgId: "1" });
+  useHome({ apiKey: "sk_live_x" });
   process.env.SUPERWALL_API_HOST = "https://api.example.com";
   useFetch([twoApps]);
 
