@@ -33,13 +33,13 @@ setUserAttributes({ onboarding_goal: "build" });
 The keys are stable snake_case names, because campaigns target on them and
 analytics segment by them. Values come back as strings.
 
-**The next presentation resumes at the first unanswered question.** The host's
-attributes are in before the first render, so the first screen resets the stack
-to every answered question and then that one in a layout effect, and the
-resumed screen is the first thing that paints:
+**The next presentation resumes at the first unanswered question.** The
+layout exports `entry`, the stack to open on. It runs once, with the host's
+attributes already in, so the resumed screen is the first thing that paints and
+the first screen never mounts unless it is in the stack:
 
 ```ts
-useLayoutEffect(() => router.reset(resumeStack(answers)), []);
+export const entry: Entry = ({ user }) => resumeStack(answersOf(user));
 ```
 
 Back and "Start over" behave as if the user had tapped through. Never store the

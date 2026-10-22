@@ -90,7 +90,7 @@ superwall/
 │   └── plus-upgrade/         each paywall is a mini React app
 │       ├── config.ts         required — name, products, platforms, settings
 │       ├── app/              routes only — every .tsx here is a route
-│       │   ├── layout.tsx    optional — wraps every route
+│       │   ├── layout.tsx    optional — wraps every route; `entry` picks where it opens
 │       │   ├── index.tsx     where the flow starts
 │       │   ├── plans.tsx     one file per route
 │       │   └── goals/        directories prefix route names
@@ -229,6 +229,21 @@ expo-router's API, method for method. Route names are generated into
 Routes are names, not paths — the whole flow ships as one HTML file — and
 `useQueryState` (nuqs's API) keeps web funnel state in the URL so hosted
 checkout and in-app browsers hand a flow back where it left off.
+
+A surface opens on `index`. To open somewhere else, export `entry` from
+`app/layout.tsx`: it gets the host's first state and returns the starting
+stack, bottom to top (or one route name). It runs once, before the first
+render; nothing outside the stack mounts and nothing animates. A stack in the
+URL (`?sw_nav=`) wins over it, and a bad answer falls back to `index`:
+
+```tsx
+import type { Entry } from "superwall/navigation";
+
+export const entry: Entry = ({ user }) =>
+  user.onboarding_goal ? ["index", "goal", "level"] : "index";
+```
+
+Mid-flow, `router.reset(routes)` replaces the whole stack the same way.
 
 ### Dev — the studio
 

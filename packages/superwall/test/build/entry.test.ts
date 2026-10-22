@@ -48,11 +48,12 @@ describe("entrySource", () => {
       config: { checkout: "sheet" },
       products: { primary: "pro_year" },
     });
-    expect(source).toContain('import Layout from "../../../../paywalls/pro/app/layout.tsx";');
+    expect(source).toContain('import * as layout from "../../../../paywalls/pro/app/layout.tsx";');
+    expect(source).toContain("const { default: Layout, entry } = { ...layout };");
     expect(source).toContain('import { SuperwallCheckout } from "superwall/checkout";');
     expect(source).toContain("<SuperwallCheckout />");
     expect(source).toContain('products: {"primary":"pro_year"},');
-    expect(source).toContain("<PaywallRouter routes={routes} Layout={Layout}");
+    expect(source).toContain("<PaywallRouter routes={routes} Layout={Layout} entry={entry}");
   });
 
   it("prefixes ./ for a file that sits beside the entry", () => {

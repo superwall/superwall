@@ -1,8 +1,13 @@
 import type { PropsWithChildren } from "react";
 import { useActions, useHaptics, useTranslation } from "superwall/hooks";
-import { useRouter } from "superwall/navigation";
+import { useRouter, type Entry } from "superwall/navigation";
+import { answersOf, resumeStack } from "../components/answers";
 import { Wordmark } from "../components/Wordmark";
 import "./theme.css";
+
+// The host's attributes are in before this runs, so a returning user opens on
+// the first unanswered question with the answered ones under it.
+export const entry: Entry = ({ user }) => resumeStack(answersOf(user));
 
 export default function Layout({ children }: PropsWithChildren) {
   const { close, openUrl } = useActions();

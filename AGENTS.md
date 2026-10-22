@@ -67,7 +67,7 @@ self-describing npm project — clone it, install, `superwall dev`:
   default. Products are the one per-platform field and travel separately. A surface without `config.ts` is invalid; product data comes from
   Superwall alone, never from the file) + an `app/` route tree (**routes only**: every `.tsx` is a
   route, directories prefix the name, `index.tsx` is the entry, and `layout.tsx`
-  is the one reserved name — anything else in `app/` is a diagnostic telling you
+  (which may also export `entry`, the stack to open on) is the one reserved name — anything else in `app/` is a diagnostic telling you
   to move it to `components/`) + local `components/` and `messages/`
 - `superwall/superwall.lock` — the binding map, and the only metadata file in
   the tree: `apps` maps each platform (`ios`, `android`, `web` — one Superwall
@@ -270,11 +270,18 @@ The stack, bottom to top — each layer depends only on the one below it:
     file-based `app/` tree (`useRouter`, `useIsFocused`, `PaywallRouter`).
     Routes are names, never paths — one bundle, no network on navigate; the
     stack stays mounted (and `inert`) so a pop restores state, and each
-    navigation reports `page_view`. `reset(routes)` replaces the whole
-    stack without a transition (the stack it lands on is reported as one
-    `entry` when it happens before the first paint, never the route it
-    replaced), which is how a surface opens somewhere other than `index`,
-    e.g. resuming an onboarding from saved user attributes. Names are typed via the CLI-generated
+    navigation reports `page_view`. The stack a surface opens on is
+    `index`, unless `app/layout.tsx` exports `entry` (`({ user, device,
+params }) => RouteName | RouteName[]`): the router calls it once, in its
+    state initializer, so after the provider's wait for the host's first
+    state; it opens on that stack with no transition, mounts nothing outside
+    it, and reports one `entry` page view for the top. A `?sw_nav=` stack in
+    the URL wins over it; unknown names or a throw open on `index` with a
+    console warning or error. It lives on the layout because it is a
+    property of the whole stack, as expo-router's `unstable_settings` is
+    (the build spreads the layout module so a layout without it is no
+    missing-export warning). `reset(routes)` replaces the whole stack
+    mid-flow without a transition. Names are typed via the CLI-generated
     `superwall.d.ts`, which augments the `SuperwallRoutes` interface and
     carries the asset-module reference. `motion.ts` holds what the router
     reads back off the DOM (how long the running animations last, freezing an
@@ -546,6 +553,15 @@ it does not exist.
     SDK-injected/published globals).
     A new cast needs a justification of this kind in a comment, or it doesn't
     land.
+- **Browser storage is never a requirement.** The Android SDK's WebView has
+  DOM storage off, so `localStorage` and `sessionStorage` are `null` there
+  (not `undefined`: a `typeof` guard passes and the call throws), and
+  sandboxed frames throw on access. Nothing a paywall needs to render, send a
+  message, or keep its state may depend on them. Storage is only for optional
+  extras like debug flags, every access sits in a `try`/`catch` that treats
+  a failure as unset, and each one has a test with storage `null` and one
+  where access throws. One unguarded read in the send path blanked every
+  code-built paywall on Android (1.3.0–1.7.0).
 - `purchase()` never throws for flow outcomes — it resolves
   `{ status: "completed" | "abandoned" | "failed" }`. Keep that contract.
 - Product variables are SDK-owned; the runtime merges, never invents.

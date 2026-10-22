@@ -1,5 +1,5 @@
 import { useActions, useUser } from "superwall/hooks";
-import type { RouteName } from "superwall/navigation";
+import type { EntryVariables, RouteName } from "superwall/navigation";
 
 const GOALS = ["lose", "build", "endure"] as const;
 const LEVELS = ["new", "returning", "regular"] as const;
@@ -28,20 +28,20 @@ export const QUESTIONS: readonly Question[] = ["goal", "level", "time"];
 const oneOf = <T extends string>(options: readonly T[], value: unknown): T | undefined =>
   options.find((option) => option === value);
 
+export const answersOf = (user: EntryVariables["user"]): Answers => ({
+  goal: oneOf(GOALS, user[ATTRIBUTES.goal]),
+  level: oneOf(LEVELS, user[ATTRIBUTES.level]),
+  time: oneOf(TIMES, user[ATTRIBUTES.time]),
+});
+
 /**
  * Every answer is a user attribute, saved the moment it is given. The host SDK
  * keeps them across presentations and launches, so a user who closes halfway
  * still has them the next time the paywall opens.
  */
 export const useAnswers = () => {
-  const user = useUser();
+  const answers = answersOf(useUser());
   const { setUserAttributes } = useActions();
-
-  const answers: Answers = {
-    goal: oneOf(GOALS, user[ATTRIBUTES.goal]),
-    level: oneOf(LEVELS, user[ATTRIBUTES.level]),
-    time: oneOf(TIMES, user[ATTRIBUTES.time]),
-  };
 
   const save = <Q extends Question>(question: Q, value: NonNullable<Answers[Q]>) =>
     setUserAttributes({ [ATTRIBUTES[question]]: value });

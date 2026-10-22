@@ -1,5 +1,11 @@
 import * as React from "react";
-import { checkoutModeOf, detectSuperwallHost } from "@superwall/runtime";
+import {
+  checkoutModeOf,
+  detectSuperwallHost,
+  type SuperwallDeviceVariables,
+  type SuperwallPlacementParams,
+  type SuperwallUserVariables,
+} from "@superwall/runtime";
 import { useSuperwallSession } from "../provider/context";
 import {
   freeze,
@@ -90,19 +96,33 @@ export type RouteModule = {
 
 export type RouteMap = Record<string, RouteModule>;
 
+/** What the host has told the paywall by its first render, for `entry` to decide on. */
+export type EntryVariables = {
+  user: SuperwallUserVariables;
+  device: SuperwallDeviceVariables;
+  params: SuperwallPlacementParams;
+};
+
+/**
+ * The stack a surface opens on, bottom to top, or a single route. Exported as
+ * `entry` from `app/layout.tsx` and called once before the first render, with
+ * the host's first state already in. Return `[]` or `"index"` to open as usual.
+ */
+export type Entry = (variables: EntryVariables) => RouteName | readonly RouteName[];
+
 export const INITIAL_ROUTE = "index";
 
 type Direction = "forward" | "back";
 
-type Entry = {
+type StackEntry = {
   key: number;
   name: RouteName;
   transition?: Transition;
 };
 
 type Nav = {
-  entries: Entry[];
-  exiting?: Entry;
+  entries: StackEntry[];
+  exiting?: StackEntry;
   direction: Direction;
   transition?: Transition;
   sync: QueryHistory | "skip";
@@ -122,18 +142,50 @@ const parseStack = (value: string | null, routes: RouteMap): RouteName[] | undef
   return names;
 };
 
-const askedStack = (routes: RouteMap): RouteName[] | undefined =>
-  parseStack(new URLSearchParams(window.location.search).get(NAV_KEY), routes);
+const askedStack = (routes: RouteMap): RouteName[] | undefined => {
+  const value = new URLSearchParams(window.location.search).get(NAV_KEY);
+  return value ? parseStack(value, routes) : undefined;
+};
 
-const serializeStack = (entries: readonly Entry[]): string | null =>
+const variablesOf = (session: ReturnType<typeof useSuperwallSession>): EntryVariables => {
+  const { user, device, params } = session.getSnapshot();
+  return { user, device, params };
+};
+
+const enteredStack = (
+  entry: Entry | undefined,
+  routes: RouteMap,
+  variables: EntryVariables,
+): RouteName[] => {
+  if (!entry) return [INITIAL_ROUTE];
+  let chosen: unknown;
+  try {
+    chosen = entry(variables);
+  } catch (error) {
+    console.error(`The layout's entry() threw, so the paywall opens on "${INITIAL_ROUTE}":`, error);
+    return [INITIAL_ROUTE];
+  }
+  const names: unknown[] | undefined =
+    typeof chosen === "string" ? [chosen] : Array.isArray(chosen) ? chosen : undefined;
+  if (names?.length === 0) return [INITIAL_ROUTE];
+  if (names?.every((name) => typeof name === "string" && isRoute(routes, name))) {
+    return names as RouteName[];
+  }
+  console.warn(
+    `The layout's entry() returned ${JSON.stringify(chosen)}, which is not a stack of routes, so the paywall opens on "${INITIAL_ROUTE}". Available routes: ${Object.keys(routes).join(", ")}`,
+  );
+  return [INITIAL_ROUTE];
+};
+
+const serializeStack = (entries: readonly StackEntry[]): string | null =>
   entries.length === 1 && entries[0].name === INITIAL_ROUTE
     ? null
     : entries.map((entry) => entry.name).join(",");
 
-const sameStack = (entries: readonly Entry[], names: readonly string[]): boolean =>
+const sameStack = (entries: readonly StackEntry[], names: readonly string[]): boolean =>
   entries.length === names.length && entries.every((entry, index) => entry.name === names[index]);
 
-const sharedDepth = (entries: readonly Entry[], names: readonly string[]): number => {
+const sharedDepth = (entries: readonly StackEntry[], names: readonly string[]): number => {
   let shared = 0;
   while (
     shared < names.length &&
@@ -163,6 +215,8 @@ export type PaywallRouterProps = {
   routes: RouteMap;
   /** Wraps the whole stack, from the surface's `app/layout.tsx`. */
   Layout?: React.ComponentType<React.PropsWithChildren>;
+  /** The stack to open on, from the `entry` export of `app/layout.tsx`. A `?sw_nav=` stack in the URL wins. */
+  entry?: Entry;
   /** Names this stack in the `page_view` events the SDK receives. */
   navigationId?: string;
   /** The paywall's default transition. Defaults to `push`. */
@@ -178,6 +232,7 @@ type LayerState = "active" | "behind" | "below" | "exiting";
 export const PaywallRouter = ({
   routes,
   Layout,
+  entry: chooseStack,
   navigationId = "paywall",
   transition: fallback = "push",
   queryState,
@@ -192,10 +247,9 @@ export const PaywallRouter = ({
   );
 
   const [nav, setNav] = React.useState<Nav>(() => ({
-    entries: (askedStack(routes) ?? [INITIAL_ROUTE]).map((name, key) => ({
-      key,
-      name,
-    })),
+    entries: (askedStack(routes) ?? enteredStack(chooseStack, routes, variablesOf(session))).map(
+      (name, key) => ({ key, name }),
+    ),
     direction: "forward",
     sync: "replace",
   }));
@@ -355,7 +409,7 @@ export const PaywallRouter = ({
     });
   }, []);
 
-  const transitionOf = (entry: Entry): Transition =>
+  const transitionOf = (entry: StackEntry): Transition =>
     entry.transition ?? routes[entry.name]?.transition ?? fallback;
 
   const moving =
@@ -398,7 +452,7 @@ export const PaywallRouter = ({
     return undefined;
   };
 
-  const render = (entry: Entry, state: LayerState, layer: number) => {
+  const render = (entry: StackEntry, state: LayerState, layer: number) => {
     const module = routes[entry.name];
     if (!module) return null;
     const Component = module.default;

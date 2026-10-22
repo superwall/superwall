@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTransportLogger } from "../src/transport/shared";
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   localStorage.clear();
   vi.restoreAllMocks();
 });
@@ -41,6 +42,17 @@ describe("createTransportLogger", () => {
       throw new DOMException("denied", "SecurityError");
     });
     createTransportLogger("Something").debug("quiet");
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("still logs when localStorage is null, as in the Android SDK's WebView", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.stubGlobal("localStorage", null);
+    const logger = createTransportLogger("Android");
+    expect(() => logger.info("sent")).not.toThrow();
+    logger.debug("quiet");
+    expect(info).toHaveBeenCalledTimes(1);
     expect(log).not.toHaveBeenCalled();
   });
 
