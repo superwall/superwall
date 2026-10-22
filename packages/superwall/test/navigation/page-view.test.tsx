@@ -84,7 +84,31 @@ const resuming: RouteMap = {
   },
 };
 
-const mount = (strict = false, map: RouteMap = routes) => {
+/** `route` runs `stacks` as resets, in order, the first time it mounts. */
+const resettingOnEntry = (route: string, stacks: readonly (readonly string[])[]): RouteMap => {
+  let done = false;
+  return {
+    ...routes,
+    [route]: {
+      default: () => {
+        const router = useRouter();
+        React.useLayoutEffect(() => {
+          if (done) return;
+          done = true;
+          for (const names of stacks) router.reset(names);
+        }, []);
+        return <Screen label={route} />;
+      },
+    },
+  };
+};
+
+const mount = (
+  strict = false,
+  map: RouteMap = routes,
+  entry?: readonly string[],
+  onNavigate?: (route: string) => void,
+) => {
   sent = [];
   const onOutgoing = (message: TOutgoingMessage) => {
     if (message.event_name === "page_view") sent.push(message as PageView);
@@ -92,7 +116,12 @@ const mount = (strict = false, map: RouteMap = routes) => {
   const Wrapper = createWrapper({ host: { onOutgoing } });
   const tree = (
     <Wrapper>
-      <PaywallRouter routes={map} navigationId="get-started" />
+      <PaywallRouter
+        routes={map}
+        navigationId="get-started"
+        entry={entry && (() => entry)}
+        onNavigate={onNavigate}
+      />
     </Wrapper>
   );
   return render(strict ? <React.StrictMode>{tree}</React.StrictMode> : tree);
@@ -318,6 +347,43 @@ describe("a reset", () => {
       ["entry", "index", 0],
       ["forward", "terms", 2],
     ]);
+  });
+
+  it("reports a reset before the first paint that keeps the top page but replaces it, once", () => {
+    const navigated: string[] = [];
+    mount(
+      false,
+      resettingOnEntry("terms", [["index", "goals/experience", "terms"]]),
+      ["index", "plans", "terms"],
+      (route) => navigated.push(route),
+    );
+
+    expect(trail()).toEqual([["entry", "terms", 2]]);
+    expect(navigated).toEqual(["terms"]);
+  });
+
+  it("reports where the last of several resets before the first paint lands", () => {
+    const navigated: string[] = [];
+    mount(false, resettingOnEntry("index", [["index", "plans"], ["index"]]), undefined, (route) =>
+      navigated.push(route),
+    );
+
+    expect(screen.getByText("index")).toBeTruthy();
+    expect(trail()).toEqual([["entry", "index", 0]]);
+    expect(navigated).toEqual(["index"]);
+  });
+
+  it("reports the opened page when a reset before the first paint lands back on it", () => {
+    mount(
+      false,
+      resettingOnEntry("terms", [
+        ["index", "plans"],
+        ["index", "plans", "terms"],
+      ]),
+      ["index", "plans", "terms"],
+    );
+
+    expect(trail()).toEqual([["entry", "terms", 2]]);
   });
 
   it("reports a back that follows a reset in the same moment", () => {

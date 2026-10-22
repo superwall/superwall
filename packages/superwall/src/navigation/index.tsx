@@ -133,6 +133,8 @@ type Nav = {
   direction: Direction;
   transition?: Transition;
   sync: QueryHistory | "skip";
+  /** The `reset` this state came from; page views wait for the latest one to commit. */
+  reset?: number;
 };
 
 export const NAV_KEY = "sw_nav";
@@ -271,7 +273,8 @@ export const PaywallRouter = ({
   notify.current = onNavigate;
   const nextKey = React.useRef(entries.length);
   const layers = React.useRef<HTMLDivElement>(null);
-  const landing = React.useRef<{ name: string; depth: number } | undefined>(undefined);
+  const resets = React.useRef(0);
+  const landing = React.useRef<number | undefined>(undefined);
 
   const top = entries[entries.length - 1];
 
@@ -336,11 +339,10 @@ export const PaywallRouter = ({
       reset: (names) => {
         const targets: RouteName[] = names.length === 0 ? [INITIAL_ROUTE] : names.map(resolve);
         const keys = targets.map(() => nextKey.current++);
-        if (!sameStack(entries, targets)) {
-          landing.current = { name: targets[targets.length - 1], depth: targets.length - 1 };
-        }
+        const reset = ++resets.current;
+        landing.current = reset;
         setNav((current) => {
-          if (sameStack(current.entries, targets)) return current;
+          if (sameStack(current.entries, targets)) return { ...current, reset };
           const shared = sharedDepth(current.entries, targets);
           return {
             entries: [
@@ -350,6 +352,7 @@ export const PaywallRouter = ({
             direction: targets.length < current.entries.length ? "back" : "forward",
             transition: "none",
             sync: "replace",
+            reset,
           };
         });
       },
@@ -372,6 +375,7 @@ export const PaywallRouter = ({
     if (sameStack(entries, names)) return;
     const shared = sharedDepth(entries, names);
     const added = names.slice(shared).map((name) => ({ key: nextKey.current++, name }));
+    landing.current = undefined;
     freeze(layers.current);
     setNav({
       entries: [...entries.slice(0, shared), ...added],
@@ -388,10 +392,9 @@ export const PaywallRouter = ({
   const reported = React.useRef<number | undefined>(undefined);
 
   React.useEffect(() => {
-    if (reported.current === top.key) return;
-    const target = landing.current;
-    if (target && (target.name !== name || target.depth !== depth)) return;
+    if (landing.current !== undefined && landing.current !== nav.reset) return;
     landing.current = undefined;
+    if (reported.current === top.key) return;
     reported.current = top.key;
     notify.current?.(name);
 
@@ -407,7 +410,7 @@ export const PaywallRouter = ({
       timeOnPreviousMs: before ? now - before.at : undefined,
     });
     previous.current = { name, depth, at: now };
-  }, [top.key, name, depth, direction, navigationId, session]);
+  }, [top.key, nav.reset, name, depth, direction, navigationId, session]);
 
   const warmed = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
