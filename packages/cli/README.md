@@ -29,8 +29,8 @@ package; everything below is what you get.
 session. Where it can't open one (a server, or over SSH), it says so: open the
 URL it prints on any device and approve the code there. In CI, log in without
 a browser: `superwall login --api-key <key>`.
-If your account belongs to more than one organization, pick one with
-`superwall orgs use` (you'll otherwise be asked the first time it matters).
+There are no organizations to pick: `superwall apps list` shows every app you
+can open, grouped by organization, and commands take `--app <id|dashboard link>`.
 Upgrade any time with `superwall upgrade` - the CLI also tells you when a new
 version is out.
 
@@ -209,50 +209,87 @@ records a note in the source commit that rides along with every version, and
 Renames are resolved, never guessed — interactively, or with
 `push --rename old=new` in CI.
 
+A push also saves the project's source to the app's repo. It applies your
+changes on top of whatever teammates have published since your last push
+(the commit it last synced to is in `superwall.lock`, so commit it), so two
+people working on different paywalls never undo each other. If you both
+changed the same file, or the repo has changes this project never synced
+with, the push stops and names the files rather than overwriting their work;
+`--overwrite-source` replaces the remote source with yours when you mean to.
+
 The full reference — assets, localization, trials, transitions, web
 checkout, troubleshooting — lives at
 [superwall.com/docs/framework](https://superwall.com/docs/framework).
 
 ## Manage your account
 
-Everything in the dashboard, from the terminal:
+Everything in the dashboard, from the terminal. Commands follow the API,
+Stripe-style: `superwall <resource> <operation> [ids] [--field value]`.
 
 ```bash
-superwall apps list
-superwall products create pro_monthly --price 9.99 --period month
+superwall apps get <app>                  # everything about one app: bundle ID, Apple team, keys
+superwall apps <app>                      # the same: an id where the operation goes means get
+superwall apps update <app> --team-id <team-id>
+superwall products create --identifier pro_monthly --price 9.99 --period month
 superwall products storekit               # generate a local .storekit file
-superwall entitlements create pro
-superwall campaigns create "Onboarding upsell" onboarding_complete
-superwall campaigns placement <campaign-id> onboarding_complete
-superwall paywalls list
-superwall whoami
+superwall entitlements create --identifier pro
+superwall campaigns create --description "Onboarding upsell" --placement onboarding_complete
+superwall campaigns placements create <campaign-id> --event-name onboarding_complete
+superwall campaigns audiences readout <campaign-id> <audience-id>
+superwall users subscriptions <app-user-id> --app <app>
+superwall webhooks list --app <app>
 superwall bootstrap                       # the whole account tree at a glance
 ```
 
-`list` is the default action, so `superwall products` means
-`superwall products list`. Add `--json` for machine-readable output, and
-`--project <id>` / `--app <id>` to scope when you have more than one. Run
-`superwall <command> --help` for every action and flag.
+Resources: `apps`, `products`, `entitlements` (+ `grants`),
+`campaigns` (+ `placements`, `audiences`, `variants`), `paywalls`, `users`,
+`webhooks`, `events`. Each has `list`, `get`, `create`, `update`, `delete` where
+the API does, plus its own actions (`archive`, `publish`, `duplicate`, ...).
+
+- Every command, and every subcommand of `asc`, `asa`, `setup` and `api`,
+  has its own `--help` page with only the flags
+  it takes. A group on its own (`superwall asc`) shows that page.
+- `superwall <resource> --help` lists its operations;
+  `superwall <resource> <operation> --help` lists that operation's flags, read
+  from the live API reference, so new API fields work without a CLI update.
+- A flag is a request field: `--event-name x` sends `event_name`. Anything else
+  goes in with `-d key=value` (`key:=json` for numbers and objects). A flag the
+  endpoint doesn't take is refused before anything is sent.
+- `--app <id|name|link>` fills in the project, app and organization ids, so
+  nobody types `/v2/projects/{id}/applications/{application_id}`.
+- `--dry-run` prints the request instead of sending it. Deleting, archiving and
+  other changes that can't be undone ask first, and need `--yes` outside a
+  terminal.
+- Creating takes flags too (`--identifier`, `--name`, `--description`,
+  `--placement`), never positionals. One way to change a thing: an app's bundle
+  ID and revenue provider are `apps update` fields like any other.
+- `list` is the default, so `superwall products` means `superwall products list`.
+  `--json` returns the API's response unformatted.
 
 An app's bundle ID (package name on Android) decides which builds the SDK
-treats as that app; any other build runs in test mode. Read it, and the IDs
-the app's SDK reported in the last 30 days, then save one:
+treats as that app; any other build runs in test mode. `apps get` shows the one
+saved and the IDs the app's SDK reported in the last 30 days, each marked live
+or test mode. Change it like any other field:
 
 ```bash
-superwall apps bundle-id --app <id>                  # what is saved, and what the SDK reported
-superwall apps bundle-id com.acme.app --app <id>     # save it
+superwall apps get <app>                             # saved, and what the SDK reported
+superwall apps update <app> --bundle-id com.acme.app # save it
 ```
 
-When other IDs had production devices that the new one wouldn't cover, it
-says how many would run in test mode and asks first (`--yes` outside a
-terminal). An ID that is already saved is only replaced with `--replace`.
+When builds the SDK reported would run in test mode under the new ID, it says
+how many and asks first (`--yes` outside a terminal).
 
-`setup apple`, `asc keys create purchase_key` and `asc keys set purchase_key`
+`setup apple` and `asc keys create purchase_key`
 keep the In-App Purchase key and the app on one bundle ID. An app with none
 gets the Apple app's (or the one `--bundle-id` names) saved with the key, both
 or neither, and they say so and how many reported builds would run in test
 mode. An app with a different bundle ID stops before anything is created or
-saved, and points at `apps bundle-id <id> --replace`.
+saved, and points at `apps update <app> --bundle-id <id>`.
+
+Lists stay usable on big accounts: `--search <text>` matches ids, names and
+identifiers, `--limit <n>` caps the rows, and a terminal shows the first 50 with
+a count of the rest (`--json` returns everything unless `--limit` caps it).
+`bootstrap --app <id>` loads one project instead of the whole account.
 
 ## Query your data
 
@@ -269,9 +306,35 @@ Use it for anything you'd build on raw data: ad hoc analysis, custom
 dashboards, scheduled reports, agent workflows. `--json` returns ClickHouse's
 native JSON envelope. Your session needs `data:read` access.
 
+Many apps receive revenue from both the store and RevenueCat, so the same
+purchase can arrive twice, and each app's revenue provider decides which one
+its figures count. `--app <app>` passes that to the query as ClickHouse
+parameters, so SQL counts revenue the way the dashboard does:
+
+```sql
+-- superwall query --file revenue.sql --app <app>
+SELECT sum(price)
+FROM open_revenue.attributed_events_by_ts_rep FINAL
+WHERE applicationId = {app:UInt64}
+  AND (integration IN {revenue_integrations:Array(String)} OR source = 'sdk')
+  AND NOT (coalesce(integration, '') = 'revenue_cat' AND store = 'STRIPE')
+```
+
+`{revenue_provider:String}` holds the provider itself, and `--param name=value`
+adds any other parameter.
+
 ## Call the API
 
-Any Superwall API endpoint, authenticated with your session:
+`superwall api docs` searches the live API reference, so you can find any
+endpoint and its exact body before calling it (no login needed):
+
+```bash
+superwall api docs variant                    # search by keyword
+superwall api docs /v2/campaigns/123/audiences/9/variants post   # one endpoint in full
+```
+
+Any Superwall API endpoint, authenticated with your session. A request that
+fails names the reference entry to read:
 
 ```bash
 superwall get /v2/products
@@ -332,16 +395,15 @@ superwall asc keys list --app <id>                    # which of the two keys th
 superwall asc keys import --app <id>                  # reuse a key your organization already has
 superwall asc keys create api_key --app <id>          # sign in to Apple and create just this key
 superwall asc keys create purchase_key --app <id>
-superwall asc notification-url --app <id>             # this app's Superwall URL
 superwall asc notification-url check --app <id>       # what Apple has, and whose it is
 superwall asc notification-url set --app <id>         # set it where Apple has none
 ```
 
 `asc keys import` saves a key only when Apple confirms it for the app's bundle
 ID. `asc keys create` does nothing when the app already has that key; pass
-`--replace` to create another. `asc keys sources` and `asc keys copy <kind>
---from <app id>` copy one named key from another of your apps, and `asc keys rm
-<kind> --app <id>` removes one from an app. `superwall asc --help` says what
+`--replace` to create another. `asc keys sources` lists the keys on your other
+apps, `asc keys import <kind> --from <app>` reuses one of them, and
+`asc keys delete <kind> --app <id>` removes one from an app. `superwall asc --help` says what
 each command changes, what it never does, and its exit codes.
 
 `asc notification-url check` says for production and sandbox whose URL Apple
@@ -349,17 +411,18 @@ has: this app's, another Superwall app's (named when you can read that app),
 someone else's, or none. `asc notification-url set` never replaces a URL
 another server holds. If RevenueCat or your own server receives Apple's
 notifications today, keep it there and have it forward them to the URL
-`asc notification-url` prints. Both work with a `superwall login` session or
+`apps get` shows. Both work with a `superwall login` session or
 an API key.
 
 Receiving Apple's notifications and choosing which revenue source your
 dashboard counts are separate decisions. The second one is the revenue
-provider:
+provider, and `superwall query --app <app>` hands it to your SQL (see Query
+your data):
 
 ```bash
-superwall revenue-provider --app <id>                         # what is counted, and what each source sent
-superwall revenue-provider set open_revenue --app <id>        # count the store's own events
-superwall revenue-provider set revenue_cat --app <id>         # count RevenueCat's events
+superwall apps get <app>                                       # what is counted, and how many events each source sent
+superwall apps update <app> --revenue-provider open_revenue    # count the store's own events
+superwall apps update <app> --revenue-provider revenue_cat     # count RevenueCat's events
 ```
 
 A change asks first in a terminal and needs `--yes` outside one.
@@ -368,12 +431,12 @@ Already have a key file? Save it on an app, or on your organization for the
 signed proxy:
 
 ```bash
-superwall asc keys set api_key --app <id> --key-id <id> --issuer <id> --key-file AuthKey.p8
-superwall asc keys set --key-id <id> --issuer <id> --key-file AuthKey.p8
+superwall asc keys create api_key --app <id> --key-id <id> --issuer <id> --key-file AuthKey.p8
+superwall asc keys create --key-id <id> --issuer <id> --key-file AuthKey.p8
 ```
 
 Saving an API key on an app also gives the organization a key for that Apple
-team when it has none. `asc keys set --team <team id>` replaces the
+team when it has none. `asc keys update --team <team id>` replaces the
 organization's key for a team, and is refused unless Apple confirms the new key
 belongs to the same team.
 
@@ -405,12 +468,79 @@ superwall asc post /v1/subscriptions \
   • subscriptionPeriod "MONTHLY" not allowed — use ONE_WEEK|ONE_MONTH|…|ONE_YEAR
 ```
 
-Fix the value and it goes through. Shortcuts cover the common reads
-(`asc apps`, `asc products <bundle-id>`, `asc subscriptions <bundle-id>`);
-everything else is `asc get|post|patch|delete /v1/…`. Between the schema lookup
-and the validation, an agent can build and manage your whole ASC catalog —
-groups, subscriptions, prices, introductory offers — without ever memorizing the
-API or eating a silent rejection.
+Fix the value and it goes through. Anything the commands below don't cover is
+`asc get|post|patch|delete /v1/…`.
+
+### Subscriptions and in-app purchases
+
+What an app sells has its own commands, each with `list`, `get`, `create`,
+`update` and `delete`. They take the App Store app as an id or a bundle ID, and
+flags named after Apple's own fields:
+
+```bash
+superwall asc apps                                          # your apps at Apple
+superwall asc products com.acme.app                         # everything the app sells
+superwall asc subscription-groups create --asc-app com.acme.app \
+  --reference-name Pro --display-name "Acme Pro"
+superwall asc subscriptions list com.acme.app
+superwall asc subscriptions get <id>                        # localizations, prices, offers, availability, what's missing
+superwall asc iaps create --asc-app com.acme.app --product-id coins.100 --name "100 Coins" \
+  --in-app-purchase-type consumable --price 0.99 --display-name "100 Coins"
+```
+
+`asc subscriptions create` does everything Apple asks for before review, in
+order: the subscription, its localization, where it's sold, its price in one
+territory equalized to every other, and a free trial if you want one. It ends by
+reading the subscription back and saying what's still missing:
+
+```bash
+superwall asc subscriptions create --group Pro --asc-app com.acme.app \
+  --product-id com.acme.pro.monthly --name "Pro Monthly" --subscription-period ONE_MONTH \
+  --price 9.99 --display-name "Pro" --description "Everything, monthly" --trial ONE_WEEK
+```
+
+The details have commands of their own:
+
+```bash
+superwall asc localizations add --subscription <id> --locale de-DE --name "Pro"
+superwall asc prices points --subscription <id> --territory USA --price 9.99
+superwall asc prices set --subscription <id> --price 12.99 --preserve-current-price
+superwall asc offers create --subscription <id> --offer-mode FREE_TRIAL --duration TWO_WEEKS
+superwall asc availability set --iap <id> --available-territories USA,CAN
+superwall asc screenshots upload --subscription <id> paywall.png
+superwall asc submit --asc-app com.acme.app --group <id> --subscription <id>
+```
+
+Every change takes `--dry-run`: it prints each request it would send, bodies
+included, and changes nothing. Deletes ask first (`--yes` in scripts).
+
+### Releases
+
+The steps of an App Store release have commands too. A version is its id, or
+its version string with `--asc-app` (and `--platform` off iOS):
+
+```bash
+superwall asc versions create --asc-app com.acme.app --version-string 1.3.0 --release-type MANUAL
+superwall asc builds list com.acme.app --version-string 1.3.0 --processing-state VALID
+superwall asc builds attach <build> 1.3.0 --asc-app com.acme.app
+superwall asc metadata update 1.3.0 --asc-app com.acme.app --locale en-US --whats-new "Faster sync"
+superwall asc release submit 1.3.0 --asc-app com.acme.app --subscription <id>
+superwall asc release status 1.3.0 --asc-app com.acme.app      # state, build, review submission, phased release
+superwall asc release release 1.3.0 --asc-app com.acme.app     # once it's pending developer release
+superwall asc release phased pause 1.3.0 --asc-app com.acme.app
+```
+
+`asc release submit` puts the version in the app's review submission, with any
+`--subscription`, `--iap` or `--group` alongside: Apple reviews an app's first
+in-app purchases only together with a version. `asc versions delete` works only
+while a version is still editable; it, `asc builds expire` and `asc release
+release` ask first.
+
+`asc get`, `asc post`, `asc patch`, `asc delete` and `asc docs` warn when an
+endpoint is one Apple has replaced (the v1 subscription and in-app purchase
+localizations, the v1 product submissions, `subscriptionAvailabilities`, the old
+in-app purchase and version-submission endpoints, screenshot and preview sets),
+and name the replacement.
 
 ## Apple Search Ads
 
@@ -456,6 +586,12 @@ asking. The framework itself is built to be written by agents: a plain npm
 project, file-based routes, ordinary React state — conventions an agent
 already knows, so it gets a paywall right on the first try.
 
+## Upgrading to 2.0
+
+2.0 renamed several commands; the old names are unknown commands now.
+[The CLI guide](https://superwall.com/docs/agents/cli#upgrading-from-1x)
+maps each one to its replacement.
+
 ## Channels
 
 Set `SUPERWALL_CHANNEL=next` to opt into experimental and beta features:
@@ -479,16 +615,20 @@ linked to your account. Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or
 packages/cli/
 ├── bin.ts                the entry the `superwall` launcher runs
 ├── src/
-│   ├── cli.ts            every command, flag, and help line (yargs)
-│   ├── commands/
-│   │   ├── account/      login, whoami, orgs, doctor, feedback, skills, upgrade
-│   │   ├── resource/     apps, products, entitlements, campaigns, paywalls, bootstrap
-│   │   ├── workflow/     integrate, migrate, review
-│   │   ├── platform/     get/post/patch/delete, query, asc, asc keys, asc notification-url, setup apple, revenue-provider
-│   │   └── paywalls/     create, dev, push, promote, publish
-│   ├── core/             api client, auth, project detection, paywall
-│   │                     binding + lock, agent runners, telemetry, skills sync
-│   └── ui/               the renderer: human output, --json envelopes, prompts
+│   ├── entry.ts          main(): run the program, flush telemetry
+│   ├── program/          the command system: defineCommand, parser, help, lifecycle
+│   ├── commands/         registry.ts + one directory per section of `superwall --help`
+│   │   ├── workflows/          integrate, review, migrate
+│   │   ├── paywalls/           create, dev, build, push, promote, publish
+│   │   ├── main/               bootstrap, apps, products, entitlements, campaigns, paywalls, users, webhooks, events
+│   │   ├── analytics/          query
+│   │   ├── api/                docs, get, post, patch, delete
+│   │   ├── app-store-connect/  setup/, keys/, notification-url/, store/ (apps, products, …), api/ (get, post, …, docs)
+│   │   ├── apple-search-ads/   asa (the catalog), keys, api/ (get, post, put, delete, docs)
+│   │   ├── account/            login, logout, whoami
+│   │   └── support/            doctor, feedback, skills, upgrade
+│   ├── core/             the logic behind every command, by domain
+│   └── ui/               the renderer: human output, --json envelopes, prompts, help layout
 ├── dist/skills/          the playbooks integrate/migrate/review run, bundled from superwall/skills at build
 └── tests/                mirrors src/
 ```

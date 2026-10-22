@@ -25,7 +25,6 @@ const routeBlock = (names: readonly string[]): string =>
     'export type SuperwallRouteName = keyof import("superwall/navigation").SuperwallRoutes;',
   ].join("\n");
 
-
 const isStripeIdentifier = (identifier: string): boolean =>
   /^(test|live):price_[^:]+/.test(identifier);
 
@@ -42,7 +41,7 @@ const productBlock = (references: readonly string[], stripe: readonly string[]):
     "}",
   ].join("\n");
 
-export interface ProjectDeclarations {
+interface ProjectDeclarations {
   products: Record<string, string[]>;
   platforms: Record<string, string[] | undefined>;
 }
@@ -96,9 +95,10 @@ export function projectTypes(
 
   const sorted = [...names].sort();
   const sortedProducts = Object.keys(products).sort();
-  const sortedStripe = sortedProducts.filter((name) =>
-    (products[name] ?? []).some((identifier) => isStripeIdentifier(identifier)),
-  );
+  const sortedStripe = Object.entries(products)
+    .filter(([, identifiers]) => identifiers.some(isStripeIdentifier))
+    .map(([name]) => name)
+    .sort();
 
   const blocks = [
     sorted.length > 0 ? routeBlock(sorted) : "",

@@ -1,0 +1,1284 @@
+{
+  "bootstrap": [
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "project": "282"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "apps_list": [
+    {
+      "input": {
+        "search": "Christo-Demo"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "search": "5861",
+        "limit": 1
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "search": "no-such-app-anywhere"
+      },
+      "ok": true
+    }
+  ],
+  "apps_get": [
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "apps_create": [
+    {
+      "input": {
+        "name": "Parity Check",
+        "platform": "ios",
+        "project": "282"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "name": "Parity Check",
+        "platform": "not-a-platform",
+        "project": "282"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "apps_update": [
+    {
+      "input": {
+        "app": "5861",
+        "support_url": "https://example.com/support"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "not_a_field": "x"
+      },
+      "dryRun": true,
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "999999999999",
+        "support_url": "https://example.com/support"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "apps_statistics": [
+    {
+      "input": {
+        "app": "5861",
+        "environment": "SANDBOX",
+        "from": "2025-01-01",
+        "to": "2025-12-31"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "environment": "nope"
+      },
+      "ok": false
+    }
+  ],
+  "apps_transactions": [
+    {
+      "input": {
+        "app": "5861",
+        "environment": "SANDBOX",
+        "from": "2025-01-01",
+        "to": "2026-10-01"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": false
+    }
+  ],
+  "apps_notices": [
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "products_list": [
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "search": "test",
+        "limit": 2
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "products_get": [
+    {
+      "input": {
+        "id": "594842"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "products_create": [
+    {
+      "input": {
+        "app": "5861",
+        "identifier": "parity.check.monthly",
+        "price": 4.99,
+        "currency": "USD",
+        "period": "month"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "products_update": [
+    {
+      "input": {
+        "id": "594842",
+        "name": "Parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "594842",
+        "not_a_field": "x"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "products_delete": [
+    {
+      "input": {
+        "id": "594842"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "products_impact": [
+    {
+      "input": {
+        "id": "594842"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "entitlements_list": [
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "search": "pro",
+        "limit": 1
+      },
+      "ok": true
+    }
+  ],
+  "entitlements_get": [
+    {
+      "input": {
+        "id": "7969"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "entitlements_create": [
+    {
+      "input": {
+        "app": "5861",
+        "identifier": "parity_check"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "entitlements_update": [
+    {
+      "input": {
+        "id": "7969",
+        "description": "Parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "description": "Parity"
+      },
+      "ok": false
+    }
+  ],
+  "entitlements_delete": [
+    {
+      "input": {
+        "id": "7969"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "entitlements_grants_list": [
+    {
+      "input": {
+        "id": "7969"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "7969",
+        "include_expired": true,
+        "include_revoked": true,
+        "limit": 5
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "entitlements_grants_create": [
+    {
+      "input": {
+        "id": "7969",
+        "device_id": "parity-device",
+        "reason": "parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "device_id": "parity-device"
+      },
+      "ok": false
+    }
+  ],
+  "entitlements_grants_delete": [
+    {
+      "input": {
+        "id": "7969",
+        "grant_id": "does-not-exist"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "grant_id": "does-not-exist"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_list": [
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "search": "Example"
+      },
+      "ok": true
+    }
+  ],
+  "campaigns_get": [
+    {
+      "input": {
+        "id": "13402"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_create": [
+    {
+      "input": {
+        "app": "5861",
+        "description": "Parity",
+        "placement": "parity_placement"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "description": "Parity"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "campaigns_update": [
+    {
+      "input": {
+        "id": "13402",
+        "notes": "parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "notes": "parity"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_archive": [
+    {
+      "input": {
+        "id": "13402"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_unarchive": [
+    {
+      "input": {
+        "id": "13402"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_prioritize": [
+    {
+      "input": {
+        "id": "13402",
+        "is_prioritized": true
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "is_prioritized": true
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_counts": [
+    {
+      "input": {
+        "id": "13402"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_placements_create": [
+    {
+      "input": {
+        "id": "13402",
+        "event_name": "parity_placement"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "event_name": "parity_placement"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_placements_update": [
+    {
+      "input": {
+        "id": "13402",
+        "placement_id": "16316",
+        "enabled": false
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "placement_id": "0",
+        "enabled": false
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_placements_delete": [
+    {
+      "input": {
+        "id": "13402",
+        "placement_id": "16316"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "placement_id": "0"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_audiences_create": [
+    {
+      "input": {
+        "id": "13402",
+        "description": "Parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "description": "Parity"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_audiences_update": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033",
+        "description": "Parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0",
+        "description": "Parity"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_audiences_delete": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_audiences_duplicate": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_audiences_reorder": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_ids": [
+          "24033"
+        ]
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_ids": [
+          "0"
+        ]
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_audiences_reset": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_audiences_readout": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_audiences_users": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033",
+        "limit": 5
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_audiences_purchasers": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033",
+        "limit": 5
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_variants_create": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033",
+        "type": "treatment",
+        "paywall": "38645",
+        "percentage": 0
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0",
+        "type": "treatment",
+        "paywall": "0"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_variants_update": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033",
+        "variant_id": "295181",
+        "percentage": 50
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0",
+        "variant_id": "0",
+        "percentage": 50
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_variants_delete": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033",
+        "variant_id": "295181"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0",
+        "variant_id": "0"
+      },
+      "ok": false
+    }
+  ],
+  "campaigns_variants_weights": [
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033",
+        "weights": [
+          {
+            "variant_id": "295181",
+            "percentage": 50
+          },
+          {
+            "variant_id": "295182",
+            "percentage": 50
+          }
+        ]
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "13402",
+        "audience_id": "24033",
+        "weights": [
+          {
+            "variant_id": "295181",
+            "percentage": 100
+          }
+        ]
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999",
+        "audience_id": "0",
+        "weights": [
+          {
+            "variant_id": "0",
+            "percentage": 100
+          }
+        ]
+      },
+      "ok": false
+    }
+  ],
+  "paywalls_list": [
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "search": "Example",
+        "limit": 3
+      },
+      "ok": true
+    }
+  ],
+  "paywalls_get": [
+    {
+      "input": {
+        "id": "38645"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "paywalls_create": [
+    {
+      "input": {
+        "app": "5861",
+        "name": "Parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999",
+        "name": "Parity"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "paywalls_duplicate": [
+    {
+      "input": {
+        "app": "5861",
+        "id": "38645",
+        "name": "Parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "paywalls_publish": [
+    {
+      "input": {
+        "id": "38645"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "paywalls_archive": [
+    {
+      "input": {
+        "id": "38645"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "paywalls_unarchive": [
+    {
+      "input": {
+        "id": "38645"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "paywalls_versions": [
+    {
+      "input": {
+        "id": "281365"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "id": "38645"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "users_get": [
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app_user_id": "does-not-exist",
+        "app": "5861"
+      },
+      "ok": true
+    }
+  ],
+  "users_subscriptions": [
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app_user_id": "does-not-exist",
+        "app": "5861"
+      },
+      "ok": true
+    }
+  ],
+  "users_summary": [
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app_user_id": "does-not-exist",
+        "app": "5861"
+      },
+      "ok": true
+    }
+  ],
+  "users_entitlements": [
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app_user_id": "does-not-exist",
+        "app": "5861"
+      },
+      "ok": true
+    }
+  ],
+  "users_attributes": [
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app_user_id": "does-not-exist",
+        "app": "5861"
+      },
+      "ok": true
+    }
+  ],
+  "users_update": [
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861",
+        "attributes": {
+          "parity": "check"
+        }
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "users_aliases": [
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app_user_id": "does-not-exist",
+        "app": "5861"
+      },
+      "ok": true
+    }
+  ],
+  "users_events": [
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861",
+        "limit": 5,
+        "before": "2026-02-05T00:00:00Z"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app_user_id": "678",
+        "app": "5861",
+        "event_group": "not-a-group"
+      },
+      "ok": false
+    }
+  ],
+  "webhooks_list": [
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "webhooks_get": [
+    {
+      "input": {
+        "app": "5861",
+        "endpoint_id": "ep_does_not_exist"
+      },
+      "ok": false
+    }
+  ],
+  "webhooks_create": [
+    {
+      "input": {
+        "app": "5861",
+        "url": "https://example.com/parity",
+        "description": "parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "webhooks_update": [
+    {
+      "input": {
+        "app": "5861",
+        "endpoint_id": "ep_does_not_exist",
+        "description": "parity"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "endpoint_id": "ep_does_not_exist",
+        "description": "parity"
+      },
+      "ok": false
+    }
+  ],
+  "webhooks_delete": [
+    {
+      "input": {
+        "app": "5861",
+        "endpoint_id": "ep_does_not_exist"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "endpoint_id": "ep_does_not_exist"
+      },
+      "ok": false
+    }
+  ],
+  "webhooks_rotate_secret": [
+    {
+      "input": {
+        "app": "5861",
+        "endpoint_id": "ep_does_not_exist"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "endpoint_id": "ep_does_not_exist"
+      },
+      "ok": false
+    }
+  ],
+  "webhooks_attempts": [
+    {
+      "input": {
+        "app": "5861",
+        "endpoint_id": "ep_does_not_exist"
+      },
+      "ok": false
+    }
+  ],
+  "webhooks_stats": [
+    {
+      "input": {
+        "app": "5861",
+        "endpoint_id": "ep_does_not_exist"
+      },
+      "ok": false
+    }
+  ],
+  "events_list": [
+    {
+      "input": {
+        "app": "5861",
+        "limit": 3,
+        "before": "2026-10-01T00:00:00Z"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "events_get": [
+    {
+      "input": {
+        "app": "5861",
+        "event_id": "msg_3HYIxzu0gjsYBnJZUu0saE3yCsh"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "event_id": "msg_does_not_exist"
+      },
+      "ok": false
+    }
+  ],
+  "events_attempts": [
+    {
+      "input": {
+        "app": "5861",
+        "event_id": "msg_3HYIxzu0gjsYBnJZUu0saE3yCsh"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "event_id": "msg_does_not_exist"
+      },
+      "ok": false
+    }
+  ],
+  "events_retry": [
+    {
+      "input": {
+        "app": "5861",
+        "event_id": "msg_3HYIxzu0gjsYBnJZUu0saE3yCsh",
+        "endpoint_id": "ep_does_not_exist"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "event_id": "msg_does_not_exist",
+        "endpoint_id": "ep_does_not_exist"
+      },
+      "ok": false
+    }
+  ]
+}

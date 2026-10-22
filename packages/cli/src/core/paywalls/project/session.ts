@@ -1,10 +1,9 @@
-import { performLoginWithUi } from "@/commands/workflow/integrate/app";
-import { API_HOST, ENV_API_KEY } from "@/environment";
 import { createSuperwallApi } from "@/core/api/client";
 import type { SuperwallApi } from "@/core/api/client";
-import { loadSession } from "@/core/auth/storage";
+import { readSession, type Session } from "@/core/account/storage";
+import { performLoginWithUi } from "@/core/workflows/login";
+import { API_HOST, ENV_API_KEY, apiKeyFromEnv } from "@/environment";
 import { ui } from "@/ui";
-import { apiKeyFromEnv } from "@/environment";
 
 export class LoginRequiredError extends Error {
   constructor() {
@@ -17,7 +16,10 @@ export class LoginRequiredError extends Error {
   }
 }
 
-export async function requireApi(interactive: boolean): Promise<SuperwallApi> {
+export async function requireApi(
+  interactive: boolean,
+  login: () => Promise<Session | null> = performLoginWithUi,
+): Promise<SuperwallApi> {
   const apiKey = apiKeyFromEnv();
   if (apiKey) {
     return createSuperwallApi({
@@ -28,13 +30,13 @@ export async function requireApi(interactive: boolean): Promise<SuperwallApi> {
     });
   }
 
-  const session = loadSession();
+  const session = readSession();
   if (session) return createSuperwallApi(session);
 
   if (!interactive) throw new LoginRequiredError();
 
   ui.info("You're not signed in to Superwall yet — let's fix that.");
-  const signedIn = await performLoginWithUi();
+  const signedIn = await login();
   if (!signedIn) throw new LoginRequiredError();
   return createSuperwallApi(signedIn);
 }

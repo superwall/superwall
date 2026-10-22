@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
-import { SUPERWALL_SKILLS_SOURCE, VENDORED_SKILLS, skillsRefFor } from "../src/core/agent/skills";
+import { SUPERWALL_SKILLS_SOURCE, VENDORED_SKILLS, skillsRefFor } from "../src/core/support/skills";
 
 const root = path.resolve(import.meta.dirname, "..");
 const target = path.join(root, "dist", "skills");

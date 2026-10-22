@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { Renderer } from "@/ui";
 
-export interface BootedSimulator {
+interface BootedSimulator {
   udid: string;
   name: string;
 }
@@ -13,39 +13,51 @@ export interface SimulatorRuntime {
   screenshot: (udid: string) => Promise<string | undefined>;
 }
 
-const simctl = (args: string[]): Promise<string | undefined> =>
-  new Promise((resolve) => {
-    execFile("xcrun", ["simctl", ...args], { timeout: 15_000 }, (error, stdout) => {
-      resolve(error ? undefined : String(stdout));
-    });
-  });
+type ExecFile = (
+  file: string,
+  args: string[],
+  options: { timeout: number },
+  callback: (error: Error | null, stdout: string | Buffer) => void,
+) => unknown;
 
-export const simulator: SimulatorRuntime = {
-  booted: async () => {
-    if (os.platform() !== "darwin") return undefined;
-    const output = await simctl(["list", "devices", "booted", "-j"]);
-    if (output === undefined) return undefined;
-    try {
-      const parsed = JSON.parse(output) as { devices?: Record<string, Array<{ udid?: string; name?: string; state?: string }>> };
-      for (const list of Object.values(parsed.devices ?? {})) {
-        const device = list.find((entry) => entry.state === "Booted" && typeof entry.udid === "string");
-        if (device?.udid) return { udid: device.udid, name: device.name ?? device.udid };
+export function createSimulator(
+  run: ExecFile = execFile,
+  platform: NodeJS.Platform = os.platform(),
+): SimulatorRuntime {
+  const simctl = (args: string[]): Promise<string | undefined> =>
+    new Promise((resolve) => {
+      run("xcrun", ["simctl", ...args], { timeout: 15_000 }, (error, stdout) => {
+        resolve(error ? undefined : String(stdout));
+      });
+    });
+
+  return {
+    booted: async () => {
+      if (platform !== "darwin") return undefined;
+      const output = await simctl(["list", "devices", "booted", "-j"]);
+      if (output === undefined) return undefined;
+      try {
+        const parsed = JSON.parse(output) as { devices?: Record<string, Array<{ udid?: string; name?: string; state?: string }>> };
+        for (const list of Object.values(parsed.devices ?? {})) {
+          const device = list.find((entry) => entry.state === "Booted" && typeof entry.udid === "string");
+          if (device?.udid) return { udid: device.udid, name: device.name ?? device.udid };
+        }
+      } catch {
+        return undefined;
       }
-    } catch {
       return undefined;
-    }
-    return undefined;
-  },
-  screenshot: async (udid) => {
-    const file = path.join(os.tmpdir(), `superwall-original-${Date.now()}.png`);
-    const output = await simctl(["io", udid, "screenshot", file]);
-    return output === undefined ? undefined : file;
-  },
-};
+    },
+    screenshot: async (udid) => {
+      const file = path.join(os.tmpdir(), `superwall-original-${Date.now()}.png`);
+      const output = await simctl(["io", udid, "screenshot", file]);
+      return output === undefined ? undefined : file;
+    },
+  };
+}
 
 export async function askForScreenshot(
   ui: Renderer,
-  runtime: SimulatorRuntime = simulator,
+  runtime: SimulatorRuntime = createSimulator(),
 ): Promise<string | undefined> {
   const booted = await runtime.booted();
   if (booted === undefined) return undefined;

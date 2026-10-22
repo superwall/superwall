@@ -1,4 +1,4 @@
-import type { FrameworkSurface } from "../project/framework";
+import type { FrameworkSurface } from "@/core/paywalls/project/framework";
 import {
   describeBindings,
   readLock,
@@ -6,7 +6,7 @@ import {
   writeBindings,
   type SurfaceBindings,
   type SurfaceKind,
-} from "../project/lock";
+} from "@/core/paywalls/project/lock";
 
 export type { SurfaceKind };
 

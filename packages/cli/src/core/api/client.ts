@@ -1,9 +1,8 @@
-import { API_HOST } from "@/environment";
-import { loadSession, saveSession, type Session } from "@/core/auth/storage";
-import { resolveAuthToken } from "@/core/auth/token";
-import { NotLoggedInError } from "@/core/auth/errors";
+import { NotLoggedInError } from "@/core/account/errors";
+import { readSession, resolveApiHost, type Session } from "@/core/account/storage";
+import { resolveAuthToken } from "@/core/account/token";
 
-export interface ApiErrorDetail {
+interface ApiErrorDetail {
   type?: string;
   code?: string;
   param?: string;
@@ -75,17 +74,15 @@ export class ApiUnreachableError extends Error {
   }
 }
 
-export { NotLoggedInError } from "@/core/auth/errors";
-
-export interface RequestOptions {
+interface RequestOptions {
   headers?: Record<string, string>;
 }
 
 export type SuperwallApi = {
-  readonly org: { id?: string; name?: string; count: number };
+  readonly org: { id?: string };
   readonly userEmail: string | undefined;
   readonly host: string;
-  setOrg(org: { id: string; name?: string }): void;
+  forOrg(id: string): SuperwallApi;
   get<T>(path: string, options?: RequestOptions): Promise<T>;
   post<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
   put<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
@@ -96,11 +93,24 @@ export type SuperwallApi = {
 };
 
 const PAGE_LIMIT = 50;
+const GET_RETRIES = 3;
+const RETRYABLE = new Set([429, 502, 503, 504]);
+
+async function parseApiError(request: string, res: Response): Promise<ApiError> {
+  const text = await res.text().catch(() => "");
+  return new ApiError(request, res.status, text);
+}
+
+function retryDelay(res: Response, retry: number): number {
+  const after = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(after) && after >= 0 && res.headers.has("retry-after")) return after * 1000;
+  return 400 * 2 ** retry;
+}
 
 export const createSuperwallApi = (initial: Session): SuperwallApi => {
   let session = initial;
 
-  const host = (): string => process.env.SUPERWALL_API_HOST ?? session.host ?? API_HOST();
+  const host = (): string => resolveApiHost(session);
 
   const send = async (url: string, init: RequestInit): Promise<Response> => {
     try {
@@ -123,43 +133,41 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
     options: RequestOptions = {},
   ): Promise<T> => {
     const token = await authorized();
-    const res = await send(`${host()}${path}`, {
-      method,
-      headers: {
-        ...options.headers,
-        authorization: `Bearer ${token}`,
-        accept: "application/json",
-        ...(body !== undefined ? { "content-type": "application/json" } : {}),
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new ApiError(`${method} ${path}`, res.status, text);
+    const attempt = () => {
+      return send(`${host()}${path}`, {
+        method,
+        headers: {
+          ...options.headers,
+          authorization: `Bearer ${token}`,
+          accept: "application/json",
+          ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+    };
+    let res = await attempt();
+    for (
+      let retry = 0;
+      method === "GET" && RETRYABLE.has(res.status) && retry < GET_RETRIES;
+      retry++
+    ) {
+      await new Promise((done) => setTimeout(done, retryDelay(res, retry)));
+      res = await attempt();
     }
+    if (!res.ok) throw await parseApiError(`${method} ${path}`, res);
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
   };
 
   const api: SuperwallApi = {
-    get org() {
-      const override = process.env.SUPERWALL_ORG_ID;
-      return {
-        id: override ?? session.orgId,
-        name: override ? undefined : session.orgName,
-        count: session.orgCount ?? 1,
-      };
-    },
+    org: {},
     get userEmail() {
       return session.userEmail;
     },
     get host() {
       return host();
     },
-    setOrg(org) {
-      session = { ...session, orgId: org.id, orgName: org.name };
-      saveSession(session);
-    },
+    forOrg: (id) => ({ ...api, org: { id }, forOrg: api.forOrg }),
     get: (path, options) => request("GET", path, undefined, options),
     post: (path, body, options) => request("POST", path, body, options),
     put: (path, body, options) => request("PUT", path, body, options),
@@ -176,10 +184,7 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
         },
         body,
       });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new ApiError(`POST ${path}`, res.status, text);
-      }
+      if (!res.ok) throw await parseApiError(`POST ${path}`, res);
       return res.text();
     },
     async list<T>(path: string) {
@@ -191,8 +196,8 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
         const batch = await api.get<{ data: T[]; has_more?: boolean }>(url);
         out.push(...batch.data);
         if (!batch.has_more || batch.data.length === 0) break;
-        const last = batch.data[batch.data.length - 1] as { id?: string | number };
-        if (last?.id == null) break;
+        const last = batch.data.at(-1);
+        if (typeof last !== "object" || last === null || !("id" in last) || last.id == null) break;
         after = String(last.id);
       }
       return out;
@@ -203,7 +208,21 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
 };
 
 export const superwallApi = (): SuperwallApi => {
-  const session = loadSession();
+  const session = readSession();
   if (!session) throw new NotLoggedInError();
   return createSuperwallApi(session);
 };
+
+export function withQuery(path: string, qs: URLSearchParams | Record<string, unknown>): string {
+  const params = qs instanceof URLSearchParams ? qs : new URLSearchParams();
+  if (!(qs instanceof URLSearchParams)) {
+    for (const [key, value] of Object.entries(qs)) {
+      if (typeof value === "object" && value !== null) {
+        throw new Error(`Nested -d params aren't supported on GET/DELETE (got "${key}").`);
+      }
+      params.set(key, String(value));
+    }
+  }
+  const s = params.toString();
+  return s ? `${path}${path.includes("?") ? "&" : "?"}${s}` : path;
+}

@@ -3,15 +3,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
+import { field } from "@/core/json";
 
 const run = promisify(execFile);
 
 export const EXAMPLES_REPO = process.env.SUPERWALL_EXAMPLES_REPO ?? "superwall/superwall";
-export const EXAMPLES_REF = process.env.SUPERWALL_EXAMPLES_REF ?? "main";
+const EXAMPLES_REF = process.env.SUPERWALL_EXAMPLES_REF ?? "main";
 
 export class ExampleError extends Error {}
 
-export interface FetchResponse {
+interface FetchResponse {
   ok: boolean;
   status: number;
   arrayBuffer(): Promise<ArrayBuffer>;
@@ -29,10 +30,11 @@ export async function listExamples(fetchImpl: FetchLike = fetch): Promise<string
       `Could not list examples from github.com/${EXAMPLES_REPO} (HTTP ${response.status}).`,
     );
   }
-  const entries = (await response.json()) as Array<{ name?: string; type?: string }>;
-  return entries
-    .filter((entry) => entry.type === "dir" && typeof entry.name === "string")
-    .map((entry) => entry.name as string)
+  const entries: unknown = await response.json();
+  return (Array.isArray(entries) ? entries : [])
+    .filter((entry) => field(entry, "type") === "dir")
+    .map((entry) => field(entry, "name"))
+    .filter((name): name is string => typeof name === "string")
     .sort();
 }
 

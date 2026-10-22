@@ -52,6 +52,14 @@ test("listExamples returns the repo's example directories, sorted", async () => 
   assert.deepEqual(names, ["minimal", "with-rive"]);
 });
 
+test("listExamples skips unnamed entries and reads anything but a list as no examples", async () => {
+  const names = await listExamples(() =>
+    respond(200, [{ type: "dir" }, { name: "demo", type: "dir" }, null]),
+  );
+  assert.deepEqual(names, ["demo"]);
+  assert.deepEqual(await listExamples(() => respond(200, { message: "moved" })), []);
+});
+
 test("listExamples surfaces an HTTP failure as an ExampleError naming the repo", async () => {
   await assert.rejects(
     listExamples(() => respond(404, [])),
@@ -74,6 +82,34 @@ test("an example the repo does not have is a clear error, not an empty directory
   await assert.rejects(
     downloadExample("nope", target, () => respond(200, tarball)),
     (error: unknown) => error instanceof ExampleError && error.message.includes("`nope`"),
+  );
+});
+
+test("a download the repo refuses names the status and leaves nothing behind", async () => {
+  const target = path.join(scratch("refused"), "demo");
+  await assert.rejects(
+    downloadExample("demo", target, () => respond(503, Buffer.alloc(0))),
+    (error: unknown) =>
+      error instanceof ExampleError &&
+      error.message === "Could not download github.com/superwall/superwall (HTTP 503). Check your network, then try again.",
+  );
+  assert.equal(fs.existsSync(target), false);
+});
+
+test("an example directory without a package.json is not a project", async () => {
+  const stage = scratch("bare-example");
+  const example = path.join(stage, "superwall-main", "examples", "bare");
+  fs.mkdirSync(example, { recursive: true });
+  fs.writeFileSync(path.join(example, "README.md"), "# bare\n");
+  const tarball = path.join(stage, "repo.tar.gz");
+  execFileSync("tar", ["-czf", tarball, "-C", stage, "superwall-main"]);
+
+  await assert.rejects(
+    downloadExample("bare", path.join(scratch("bare-target"), "bare"), () =>
+      respond(200, fs.readFileSync(tarball)),
+    ),
+    (error: unknown) =>
+      error instanceof ExampleError && error.message === "Example `bare` did not contain a project.",
   );
 });
 

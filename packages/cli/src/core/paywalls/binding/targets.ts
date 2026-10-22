@@ -1,4 +1,4 @@
-import type { FrameworkSurface } from "../project/framework";
+import type { FrameworkSurface } from "@/core/paywalls/project/framework";
 import { describePlatforms, platformFor } from "./apps";
 
 export interface SurfaceTarget {

@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   MissingProductError,
+  listProjectProducts,
   productVariables,
+  projectForApplication,
   requireProducts,
 } from "@/core/paywalls/products";
+import { routedApi } from "../../helpers/routed-api";
 
 test("derives the variables a paywall reads from what Superwall knows", () => {
   const variables = productVariables({
@@ -83,4 +86,28 @@ test("every gap is reported at once, across every selected paywall", () => {
 
 test("a paywall that declares no products is never blocked", () => {
   assert.doesNotThrow(() => requireProducts({}, [{ id: "info", products: {} }, { id: "bare" }]));
+});
+
+test("the catalogue is keyed by store identifier and skips products without one", async () => {
+  const { api, sent } = routedApi({
+    "GET /v2/products?project_id=a%2Fb": [
+      { identifier: "pro_999_month", price: { amount: 999, currency: "USD" } },
+      { price: { amount: 100, currency: "USD" } },
+    ],
+  });
+
+  const catalogue = await listProjectProducts(api, "a/b");
+
+  assert.deepEqual(Object.keys(catalogue), ["pro_999_month"]);
+  assert.equal(catalogue.pro_999_month?.price, "$9.99");
+  assert.deepEqual(sent, [{ method: "GET", path: "/v2/products?project_id=a%2Fb" }]);
+});
+
+test("an app's project is found by the app id, and an app that can't be found has none", async () => {
+  const { api } = routedApi({
+    "GET /v2/projects": [{ id: 9, applications: [{ id: 42, name: "Acme" }] }],
+  });
+
+  assert.equal(await projectForApplication(api, "42"), "9");
+  assert.equal(await projectForApplication(api, "43"), undefined);
 });

@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-import { writeTemplate } from "@/core/paywalls/project/template";
+import { starterConfig, writeTemplate } from "@/core/paywalls/project/template";
 
 function scratch(name: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `sw-${name}-`));
@@ -76,4 +76,15 @@ test("the scaffold theme keeps the pages above the layout's footer", () => {
   const theme = fs.readFileSync(path.join(dir, "paywalls", "pro", "app", "theme.css"), "utf8");
   assert.match(theme, /--sw-background: var\(--bg\);\n  --sw-page-inset-bottom: 0px;/);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("a starter config carries the paywall's name, quoted as code, and nothing else changes", () => {
+  const target = path.join(scratch("template"), "app");
+  writeTemplate(target);
+  const pro = fs.readFileSync(path.join(target, "paywalls/pro/config.ts"), "utf8");
+
+  const named = starterConfig('Say "Hi"');
+  assert.match(named, /name: "Say \\"Hi\\""/);
+  assert.equal(named.replace('name: "Say \\"Hi\\""', 'name: "Pro"'), pro);
+  assert.equal(starterConfig("Pro"), pro);
 });

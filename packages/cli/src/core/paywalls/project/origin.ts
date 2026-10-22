@@ -1,11 +1,11 @@
 import type { PaywallDetail, PaywallProductRef } from "@/core/api/resources";
 
-export type OriginPresentation =
+type OriginPresentation =
   | { style: "fullscreen" | "modal" | "push" | "noAnimation" }
   | { style: "drawer"; height?: number; cornerRadius?: number }
   | { style: "popup"; width?: number; height?: number; cornerRadius?: number };
 
-export interface OriginSettings {
+interface OriginSettings {
   presentation: OriginPresentation;
   featureGating: "gated" | "nonGated";
   scrollEnabled: boolean;
@@ -14,7 +14,7 @@ export interface OriginSettings {
   webCheckoutDestination?: string;
 }
 
-export interface OriginInventory {
+interface OriginInventory {
   pages: number;
   drawers: number;
   nodes: Record<string, number>;

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-export const REACT_VERSION = "19.1.0";
+const REACT_VERSION = "19.1.0";
 
 export function projectPackageName(root: string): string {
   const name = path
