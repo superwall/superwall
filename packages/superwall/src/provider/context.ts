@@ -21,7 +21,7 @@ const SuperwallContext = React.createContext<SuperwallSession | null>(null);
 const HostStateContext = React.createContext(true);
 
 /** How long a surface with `entry` waits for its host's first state before rendering without it. Nothing else waits. */
-export const HOST_STATE_TIMEOUT_MS = 1000;
+export const HOST_STATE_TIMEOUT_MS = 3000;
 
 const useHostState = (session: SuperwallSession): boolean => {
   const [arrived, setArrived] = React.useState(() => !detectSuperwallHost());
