@@ -1,59 +1,48 @@
-import { useState } from "react";
-import { useHaptics, useTranslation } from "superwall/hooks";
+import { useHaptics, useTranslation, useUser, useUserAttribute } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
-import { answers, type Time } from "../components/answers";
+import { next, questionsFor, TIME, type Time } from "../components/answers";
+
+const OPTIONS: readonly Time[] = ["15", "30", "45"];
 
 export default function Page() {
   const router = useRouter();
   const { t } = useTranslation();
   const haptics = useHaptics();
 
-  // The chosen card turns teal on the same frame as the haptic, then the router moves on.
-  const [chosen, setChosen] = useState(answers.time);
+  const user = useUser();
+  const [chosen, setChosen] = useUserAttribute(TIME.key, TIME.parser);
+  const questions = questionsFor(user);
 
   const choose = (value: Time) => {
     haptics.selection();
     setChosen(value);
-    answers.time = value;
-    router.push("plan");
+    const to = next("time", { ...user, [TIME.key]: value });
+    if (to) router.push(to);
   };
 
   return (
     <main className="page">
-      <span className="step">{t("quiz.step", { current: 3, total: 3 })}</span>
+      <span className="step">
+        {t("quiz.step", { current: questions.indexOf("time") + 1, total: questions.length })}
+      </span>
 
       <div className="lede">
         <h1>{t("time.title")}</h1>
       </div>
 
       <div className="choices">
-        <button
-          type="button"
-          className="choice"
-          aria-pressed={chosen === "15"}
-          onClick={() => choose("15")}
-        >
-          <span className="choice-name">{t("time.15.name")}</span>
-          <span className="choice-hint">{t("time.15.hint")}</span>
-        </button>
-        <button
-          type="button"
-          className="choice"
-          aria-pressed={chosen === "30"}
-          onClick={() => choose("30")}
-        >
-          <span className="choice-name">{t("time.30.name")}</span>
-          <span className="choice-hint">{t("time.30.hint")}</span>
-        </button>
-        <button
-          type="button"
-          className="choice"
-          aria-pressed={chosen === "45"}
-          onClick={() => choose("45")}
-        >
-          <span className="choice-name">{t("time.45.name")}</span>
-          <span className="choice-hint">{t("time.45.hint")}</span>
-        </button>
+        {OPTIONS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className="choice"
+            aria-pressed={chosen === option}
+            onClick={() => choose(option)}
+          >
+            <span className="choice-name">{t(`time.${option}.name`)}</span>
+            <span className="choice-hint">{t(`time.${option}.hint`)}</span>
+          </button>
+        ))}
       </div>
     </main>
   );

@@ -10,7 +10,7 @@ import {
   type PaywallRouterProps,
   type RouteMap,
 } from "../../src/navigation/index";
-import { createWrapper, testConfig } from "../helpers";
+import { createWrapper, flush, testConfig } from "../helpers";
 
 const Screen = ({ label }: { label: string }) => {
   const router = useRouter();
@@ -222,11 +222,12 @@ describe("when the URL is kept", () => {
     expect(search()).toBe("");
   });
 
-  it("never applies inside a native host", () => {
+  it("never applies inside a native host", async () => {
     const host = window as typeof window & { webkit?: unknown };
     host.webkit = { messageHandlers: { paywallMessageHandler: { postMessage: () => undefined } } };
     try {
       mount({ queryState: true });
+      await flush();
       fireEvent.click(screen.getByText("push goal"));
       settle();
       expect(search()).toBe("");

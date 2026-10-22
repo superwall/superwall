@@ -1,6 +1,12 @@
 import * as React from "react";
-import { checkoutModeOf, detectSuperwallHost } from "@superwall/runtime";
-import { useSuperwallSession } from "../provider/context";
+import {
+  checkoutModeOf,
+  detectSuperwallHost,
+  type SuperwallDeviceVariables,
+  type SuperwallPlacementParams,
+  type SuperwallUserVariables,
+} from "@superwall/runtime";
+import { useHostStateArrived, useSuperwallSession } from "../provider/context";
 import {
   freeze,
   longestAnimationMs,
@@ -10,6 +16,7 @@ import {
   TRANSITION_MS,
 } from "./animation";
 import { readRouteAssets, warmAssets, whenIdle } from "./assets";
+import { whileEntering } from "./replay";
 import { createQueryStore, QueryStoreContext, type QueryHistory, type QueryStore } from "./query";
 import type { StyleWithVariables } from "../css";
 import "./routes.css";
@@ -26,12 +33,15 @@ export {
   parseAsStringEnum,
   useQueryState,
   type Parser,
+  type ParserSpec,
   type ParserWithDefault,
   type QueryHistory,
   type QueryStateOptions,
   type QueryUpdate,
   type SetQueryState,
 } from "./query";
+
+export { replayStack } from "./replay";
 
 export interface SuperwallRoutes {}
 
@@ -72,6 +82,13 @@ export type Router = {
   dismissAll: () => void;
   /** Goes back to `route` if it is in the stack, otherwise replaces the current one. */
   dismissTo: (route: RouteName, options?: NavigateOptions) => void;
+  /**
+   * Replaces the whole stack with `routes`, the last on top, without a
+   * transition. Routes it shares with the current stack stay mounted, and
+   * going back walks down the rest with their own transitions. An empty list
+   * returns to the first route.
+   */
+  reset: (routes: readonly RouteName[]) => void;
 };
 
 export type RouteModule = {
@@ -83,21 +100,43 @@ export type RouteModule = {
 
 export type RouteMap = Record<string, RouteModule>;
 
+/** What the host has told the paywall by its first render, for `entry` to decide on. */
+export type EntryVariables = {
+  /** The user's attributes, as `useUser()` returns them. Read one with `readAttribute`. */
+  user: SuperwallUserVariables;
+  /** The device variables the host sent (platform, locale, osVersion, …). */
+  device: SuperwallDeviceVariables;
+  /** The params the app passed to the placement that presented this surface. */
+  params: SuperwallPlacementParams;
+};
+
+/**
+ * The stack a surface opens on, bottom to top, or a single route. Exported as
+ * `entry` from `app/layout.tsx` and called once before the first render, with
+ * the host's first state already in: a surface with `entry` renders nothing
+ * until that state arrives, or `HOST_STATE_TIMEOUT_MS` passes. Return `[]` or
+ * `"index"` to open as usual.
+ */
+export type Entry = (variables: EntryVariables) => RouteName | readonly RouteName[];
+
 export const INITIAL_ROUTE = "index";
 
 type Direction = "forward" | "back";
 
-type Entry = {
+type StackEntry = {
   key: number;
   name: RouteName;
   transition?: Transition;
 };
 
 type Nav = {
-  entries: Entry[];
-  exiting?: Entry;
+  entries: StackEntry[];
+  exiting?: StackEntry;
   direction: Direction;
+  transition?: Transition;
   sync: QueryHistory | "skip";
+  /** The `reset` this state came from; page views wait for the latest one to commit. */
+  reset?: number;
 };
 
 export const NAV_KEY = "sw_nav";
@@ -114,16 +153,62 @@ const parseStack = (value: string | null, routes: RouteMap): RouteName[] | undef
   return names;
 };
 
-const askedStack = (routes: RouteMap): RouteName[] | undefined =>
-  parseStack(new URLSearchParams(window.location.search).get(NAV_KEY), routes);
+const askedStack = (routes: RouteMap): RouteName[] | undefined => {
+  const value = new URLSearchParams(window.location.search).get(NAV_KEY);
+  return value ? parseStack(value, routes) : undefined;
+};
 
-const serializeStack = (entries: readonly Entry[]): string | null =>
+const variablesOf = (session: ReturnType<typeof useSuperwallSession>): EntryVariables => {
+  const { user, device, params } = session.getSnapshot();
+  return { user, device, params };
+};
+
+const enteredStack = (
+  entry: Entry | undefined,
+  routes: RouteMap,
+  variables: EntryVariables,
+): RouteName[] => {
+  if (!entry) return [INITIAL_ROUTE];
+  let chosen: unknown;
+  try {
+    chosen = whileEntering(Object.keys(routes), () => entry(variables));
+  } catch (error) {
+    console.error(`The layout's entry() threw, so the paywall opens on "${INITIAL_ROUTE}":`, error);
+    return [INITIAL_ROUTE];
+  }
+  const names: readonly unknown[] | undefined =
+    typeof chosen === "string" ? [chosen] : Array.isArray(chosen) ? chosen : undefined;
+  if (names?.length === 0) return [INITIAL_ROUTE];
+  if (
+    names?.every((name): name is RouteName => typeof name === "string" && isRoute(routes, name))
+  ) {
+    return [...names];
+  }
+  console.warn(
+    `The layout's entry() returned ${JSON.stringify(chosen)}, which is not a stack of routes, so the paywall opens on "${INITIAL_ROUTE}". Available routes: ${Object.keys(routes).join(", ")}`,
+  );
+  return [INITIAL_ROUTE];
+};
+
+const serializeStack = (entries: readonly StackEntry[]): string | null =>
   entries.length === 1 && entries[0].name === INITIAL_ROUTE
     ? null
     : entries.map((entry) => entry.name).join(",");
 
-const sameStack = (entries: readonly Entry[], names: readonly string[]): boolean =>
+const sameStack = (entries: readonly StackEntry[], names: readonly string[]): boolean =>
   entries.length === names.length && entries.every((entry, index) => entry.name === names[index]);
+
+const sharedDepth = (entries: readonly StackEntry[], names: readonly string[]): number => {
+  let shared = 0;
+  while (
+    shared < names.length &&
+    shared < entries.length &&
+    names[shared] === entries[shared].name
+  ) {
+    shared++;
+  }
+  return shared;
+};
 
 const RouterContext = React.createContext<Router | null>(null);
 const FocusContext = React.createContext<boolean>(true);
@@ -143,6 +228,12 @@ export type PaywallRouterProps = {
   routes: RouteMap;
   /** Wraps the whole stack, from the surface's `app/layout.tsx`. */
   Layout?: React.ComponentType<React.PropsWithChildren>;
+  /**
+   * The stack to open on, from the `entry` export of `app/layout.tsx`. When set, the router renders
+   * nothing until the host's first state arrives (or `HOST_STATE_TIMEOUT_MS` passes); without it the
+   * router renders at once. A `?sw_nav=` stack in the URL wins, and opens without waiting.
+   */
+  entry?: Entry;
   /** Names this stack in the `page_view` events the SDK receives. */
   navigationId?: string;
   /** The paywall's default transition. Defaults to `push`. */
@@ -155,9 +246,16 @@ export type PaywallRouterProps = {
 
 type LayerState = "active" | "behind" | "below" | "exiting";
 
-export const PaywallRouter = ({
+export const PaywallRouter = (props: PaywallRouterProps) => {
+  const arrived = useHostStateArrived();
+  if (props.entry && !arrived && !askedStack(props.routes)) return null;
+  return <Router {...props} />;
+};
+
+const Router = ({
   routes,
   Layout,
+  entry: chooseStack,
   navigationId = "paywall",
   transition: fallback = "push",
   queryState,
@@ -172,10 +270,9 @@ export const PaywallRouter = ({
   );
 
   const [nav, setNav] = React.useState<Nav>(() => ({
-    entries: (askedStack(routes) ?? [INITIAL_ROUTE]).map((name, key) => ({
-      key,
-      name,
-    })),
+    entries: (askedStack(routes) ?? enteredStack(chooseStack, routes, variablesOf(session))).map(
+      (name, key) => ({ key, name }),
+    ),
     direction: "forward",
     sync: "replace",
   }));
@@ -188,6 +285,8 @@ export const PaywallRouter = ({
   notify.current = onNavigate;
   const nextKey = React.useRef(entries.length);
   const layers = React.useRef<HTMLDivElement>(null);
+  const resets = React.useRef(0);
+  const landing = React.useRef<number | undefined>(undefined);
 
   const top = entries[entries.length - 1];
 
@@ -202,6 +301,7 @@ export const PaywallRouter = ({
     const go = (name: string, options: NavigateOptions | undefined, keep: number | undefined) => {
       const target = resolve(name);
       const key = nextKey.current++;
+      landing.current = undefined;
       freeze(layers.current);
       setNav((current) => {
         const kept = keep === undefined ? current.entries : current.entries.slice(0, keep);
@@ -218,6 +318,7 @@ export const PaywallRouter = ({
     };
 
     const popBy = (count: number) => {
+      landing.current = undefined;
       freeze(layers.current);
       setNav((current) => {
         const removed = Math.min(Math.max(Math.trunc(count), 1), current.entries.length - 1);
@@ -247,6 +348,26 @@ export const PaywallRouter = ({
         if (at === -1) go(target, options, entries.length - 1);
         else popBy(entries.length - 1 - at);
       },
+      reset: (names) => {
+        const targets: RouteName[] = names.length === 0 ? [INITIAL_ROUTE] : names.map(resolve);
+        const keys = targets.map(() => nextKey.current++);
+        const reset = ++resets.current;
+        landing.current = reset;
+        setNav((current) => {
+          if (sameStack(current.entries, targets)) return { ...current, reset };
+          const shared = sharedDepth(current.entries, targets);
+          return {
+            entries: [
+              ...current.entries.slice(0, shared),
+              ...targets.slice(shared).map((name, index) => ({ key: keys[shared + index], name })),
+            ],
+            direction: targets.length < current.entries.length ? "back" : "forward",
+            transition: "none",
+            sync: "replace",
+            reset,
+          };
+        });
+      },
     };
   }, [entries, top]);
 
@@ -264,15 +385,9 @@ export const PaywallRouter = ({
   React.useEffect(() => {
     const names = parseStack(store.get(NAV_KEY), known.current) ?? [INITIAL_ROUTE];
     if (sameStack(entries, names)) return;
-    let shared = 0;
-    while (
-      shared < names.length &&
-      shared < entries.length &&
-      names[shared] === entries[shared].name
-    ) {
-      shared++;
-    }
+    const shared = sharedDepth(entries, names);
     const added = names.slice(shared).map((name) => ({ key: nextKey.current++, name }));
+    landing.current = undefined;
     freeze(layers.current);
     setNav({
       entries: [...entries.slice(0, shared), ...added],
@@ -289,6 +404,8 @@ export const PaywallRouter = ({
   const reported = React.useRef<number | undefined>(undefined);
 
   React.useEffect(() => {
+    if (landing.current !== undefined && landing.current !== nav.reset) return;
+    landing.current = undefined;
     if (reported.current === top.key) return;
     reported.current = top.key;
     notify.current?.(name);
@@ -305,7 +422,7 @@ export const PaywallRouter = ({
       timeOnPreviousMs: before ? now - before.at : undefined,
     });
     previous.current = { name, depth, at: now };
-  }, [top.key, name, depth, direction, navigationId, session]);
+  }, [top.key, nav.reset, name, depth, direction, navigationId, session]);
 
   const warmed = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
@@ -316,10 +433,11 @@ export const PaywallRouter = ({
     });
   }, []);
 
-  const transitionOf = (entry: Entry): Transition =>
+  const transitionOf = (entry: StackEntry): Transition =>
     entry.transition ?? routes[entry.name]?.transition ?? fallback;
 
-  const moving = direction === "back" && exiting ? transitionOf(exiting) : transitionOf(top);
+  const moving =
+    nav.transition ?? (direction === "back" && exiting ? transitionOf(exiting) : transitionOf(top));
 
   const [movement, setMovement] = React.useState(0);
   const [settled, setSettled] = React.useState(true);
@@ -358,7 +476,7 @@ export const PaywallRouter = ({
     return undefined;
   };
 
-  const render = (entry: Entry, state: LayerState, layer: number) => {
+  const render = (entry: StackEntry, state: LayerState, layer: number) => {
     const module = routes[entry.name];
     if (!module) return null;
     const Component = module.default;

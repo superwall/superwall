@@ -90,7 +90,7 @@ superwall/
 │   └── plus-upgrade/         each paywall is a mini React app
 │       ├── config.ts         required — name, products, platforms, settings
 │       ├── app/              routes only — every .tsx here is a route
-│       │   ├── layout.tsx    optional — wraps every route
+│       │   ├── layout.tsx    optional — wraps every route; `entry` picks where it opens
 │       │   ├── index.tsx     where the flow starts
 │       │   ├── plans.tsx     one file per route
 │       │   └── goals/        directories prefix route names
@@ -158,18 +158,35 @@ under Stripe's own field names, and the discounted price per product;
 `onDropped` fires if checkout later refuses the code, and a host can redeem one
 for the paywall with `redeem_discount`), `useActions` (close, restore, open
 URLs and deep links, custom placements, permissions, callbacks, store review,
-and `setUserAttributes` — the host SDK persists the attributes and the
-paywall's own `useUser()` sees them at once), `useCheckoutRedemption`
+and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedemption`
 (finishes a `postPurchase: "stay"` web checkout — `completed`, `redeem`,
 `redirect`), `useHaptics`, `useColorScheme`, `useTranslation`,
 `useIntroductoryOffer`, `useDevice` / `useUser` / `useVariables`,
-`useLocalResource`, `useSuperwallEvent`, `useGameController`.
+`useUserAttribute`, `useLocalResource`, `useSuperwallEvent`,
+`useGameController`.
+
+`useUserAttribute(key, parser)` is one user attribute as typed state —
+`useQueryState`'s API with the same parsers, kept by the host SDK across
+presentations and launches:
+
+```tsx
+import { parseAsStringEnum, useUserAttribute } from "superwall/hooks";
+
+const goals = parseAsStringEnum(["lose", "build", "endure"]);
+const [goal, setGoal] = useUserAttribute("onboarding_goal", goals); // "lose" | "build" | "endure" | null
+setGoal("build"); // sent to the host, re-rendered at once
+```
+
+Anything the parser cannot read is `null` (or the `.withDefault()` value).
+A paywall cannot remove an attribute, so the setter takes no `null`; a `null`
+at runtime is ignored with a warning. `readAttribute(user, key, parser)` is
+the same read as a plain function, for `entry`.
 
 Web checkout is made for one shopper: a `user.email` becomes the Stripe
 session's `customer_email` (shown in the sheet, not editable there) and a
 `user.stripe_customer_id` pins the customer, both read when the session is
 created. Setting either later — a funnel capturing the email with
-`setUserAttributes({ email })`, or a host sending fresher variables — drops
+`useUserAttribute("email")`, or a host sending fresher variables — drops
 every cached session and prefetches again, so the sheet never opens with an
 empty email once one is known.
 
@@ -229,6 +246,36 @@ expo-router's API, method for method. Route names are generated into
 Routes are names, not paths — the whole flow ships as one HTML file — and
 `useQueryState` (nuqs's API) keeps web funnel state in the URL so hosted
 checkout and in-app browsers hand a flow back where it left off.
+
+A surface opens on `index`. To open somewhere else, export `entry` from
+`app/layout.tsx`: it gets the host's first state and returns the starting
+stack, bottom to top (or one route name). It runs once, before the first
+render; nothing outside the stack mounts and nothing animates. To get that
+state, a surface with `entry` renders nothing until the host answers, or for
+at most one second if it never does; a surface without `entry` renders at
+once. A stack in the
+URL (`?sw_nav=`) wins over it, and a bad answer falls back to `index`:
+
+```tsx
+import type { Entry } from "superwall/navigation";
+
+export const entry: Entry = ({ user }) =>
+  user.onboarding_goal ? ["index", "goal", "level"] : "index";
+```
+
+For a flow, `replayStack(start, next, answered)` builds that stack: it walks
+`next` from `start` while each route is answered, so a returning user opens
+on the first unanswered route with the ones they passed under it. Give it the
+same `next` the pages navigate with and a branching flow resumes down the
+branch the user took. It never loops — a repeated route, a name the surface
+does not have, or 100 routes ends the walk with a warning:
+
+```tsx
+export const entry: Entry = ({ user }) =>
+  replayStack("index", (route) => next(route, user), (route) => answered(route, user));
+```
+
+Mid-flow, `router.reset(routes)` replaces the whole stack the same way.
 
 ### Dev — the studio
 
@@ -382,14 +429,14 @@ Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1`.
 
 ## Package layout
 
-| Entry                  | What it holds                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …) |
-| `superwall/config`     | `definePaywall`                                                                       |
-| `superwall/hooks`      | every hook, plus `createSuperwall` and `useSuperwallSession`                          |
-| `superwall/navigation` | `useRouter`, `useIsFocused`, `useQueryState` + parsers, `PaywallRouter`               |
-| `superwall/checkout`   | web checkout (Stripe) — bundled only when `config.checkout` asks for it               |
-| `superwall/assets`     | ambient types for asset imports                                                       |
+| Entry                  | What it holds                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …)  |
+| `superwall/config`     | `definePaywall`                                                                        |
+| `superwall/hooks`      | every hook, `readAttribute` + parsers, `createSuperwall` and `useSuperwallSession`     |
+| `superwall/navigation` | `useRouter`, `useIsFocused`, `useQueryState` + parsers, `replayStack`, `PaywallRouter` |
+| `superwall/checkout`   | web checkout (Stripe) — bundled only when `config.checkout` asks for it                |
+| `superwall/assets`     | ambient types for asset imports                                                        |
 
 The `superwall` and `sw` binaries launch [`@superwall/cli`](https://github.com/superwall/superwall/tree/main/packages/cli),
 which owns every command. `superwall/build`, `superwall/preview`, and

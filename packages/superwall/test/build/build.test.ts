@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { parseAst as rollupParse } from "vite";
 import {
   buildSnapshot,
@@ -526,5 +526,52 @@ describe("checkout and background ride the settings block", () => {
   it("a native-only paywall's settings carry no destination", async () => {
     const built = await buildSnapshot(project(), surface("tiny"), {});
     expect(built.settings).not.toHaveProperty("web_checkout_destination");
+  }, 120_000);
+});
+
+const run = async (html: string, url = "https://paywall.test/") => {
+  const { JSDOM } = await import("jsdom");
+  const module = /<script type="module">([\s\S]*?)<\/script>/.exec(html)?.[1] ?? "";
+  const dom = new JSDOM(html.replace(/<script type="module">[\s\S]*?<\/script>/, ""), {
+    runScripts: "dangerously",
+    url,
+  });
+  dom.window.eval(module);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  return [...dom.window.document.querySelectorAll<HTMLElement>("[data-sw-route]")].map((layer) => [
+    layer.dataset.swRoute,
+    layer.dataset.swState,
+    layer.dataset.swPhase ?? null,
+  ]);
+};
+
+describe("the layout's entry export", () => {
+  it("opens the built paywall on the stack it returns, with nothing animating", async () => {
+    const built = await buildSnapshot(project(), surface("resume"), {});
+
+    expect(await run(built.html)).toEqual([
+      ["index", "behind", null],
+      ["goal", "active", null],
+    ]);
+  }, 120_000);
+
+  it("opens on index for a layout without one, and the build says nothing about it", async () => {
+    const warn = vi.spyOn(console, "warn");
+    const log = vi.spyOn(console, "log");
+    const built = await buildSnapshot(project(), surface("demo"), {});
+    const said = [...warn.mock.calls, ...log.mock.calls].flat().map(String).join("\n");
+    warn.mockRestore();
+    log.mockRestore();
+
+    expect(said).not.toMatch(/\bentry\b/);
+    expect((await run(built.html)).map(([name]) => name)).toEqual(["index"]);
+  }, 120_000);
+
+  it("gives way to a sw_nav stack in the URL", async () => {
+    const built = await buildSnapshot(project(), surface("resume"), {});
+
+    expect(await run(built.html, "https://paywall.test/?sw_nav=goal")).toEqual([
+      ["goal", "active", null],
+    ]);
   }, 120_000);
 });

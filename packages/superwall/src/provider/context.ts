@@ -3,6 +3,7 @@ import { useColorScheme } from "../hooks/useColorScheme";
 import {
   backgroundOf,
   createSuperwallSession,
+  detectSuperwallHost,
   INSET_EDGES,
   insetsOf,
   pendingHostMessages,
@@ -17,6 +18,27 @@ import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
 import "./insets.css";
 
 const SuperwallContext = React.createContext<SuperwallSession | null>(null);
+const HostStateContext = React.createContext(true);
+
+/** How long a surface with `entry` waits for its host's first state before rendering without it. Nothing else waits. */
+export const HOST_STATE_TIMEOUT_MS = 3000;
+
+const useHostState = (session: SuperwallSession): boolean => {
+  const [arrived, setArrived] = React.useState(() => !detectSuperwallHost());
+
+  React.useLayoutEffect(() => {
+    if (arrived) return;
+    const arrive = () => setArrived(true);
+    const timer = setTimeout(arrive, HOST_STATE_TIMEOUT_MS);
+    const off = session.on("template_variables", arrive);
+    return () => {
+      clearTimeout(timer);
+      off();
+    };
+  }, [arrived, session]);
+
+  return arrived;
+};
 
 export type SuperwallProviderProps = React.PropsWithChildren<{
   config?: SuperwallConfig;
@@ -72,10 +94,12 @@ export const SuperwallProvider = ({ children, config, transport }: SuperwallProv
     };
   }, [value]);
 
+  const ready = useHostState(value);
+
   // Begin listening and send the handshake ping, once per session. A single
   // `start()` call: the session ignores a repeat once it is listening.
   const pingedSession = React.useRef<SuperwallSession | null>(null);
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const firstStart = pingedSession.current !== value;
     value.start({ sendPing: firstStart });
     if (firstStart) {
@@ -103,7 +127,7 @@ export const SuperwallProvider = ({ children, config, transport }: SuperwallProv
     React.createElement(ColorScheme, { background: backgroundOf(config?.background) }),
     React.createElement(HostAttributes),
     React.createElement(Insets, { insets: config?.insets }),
-    children,
+    React.createElement(HostStateContext.Provider, { value: ready }, children),
   );
 };
 
@@ -165,6 +189,8 @@ const ColorScheme = ({ background }: { background?: ResolvedBackground }): null 
 
   return null;
 };
+
+export const useHostStateArrived = (): boolean => React.useContext(HostStateContext);
 
 export const useSuperwallSession = <
   TProduct extends SuperwallProduct = SuperwallProduct,

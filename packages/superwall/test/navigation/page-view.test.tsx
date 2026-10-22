@@ -39,6 +39,27 @@ const Screen = ({ label }: { label: string }) => {
       <button type="button" onClick={() => router.dismissTo("plans")}>
         dismiss to plans
       </button>
+      <button type="button" onClick={() => router.reset(["index", "plans", "terms"])}>
+        reset to terms
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          router.reset(["index", "plans"]);
+          router.push("terms");
+        }}
+      >
+        reset then push
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          router.reset(["index", "plans", "terms"]);
+          router.back();
+        }}
+      >
+        reset then back
+      </button>
     </div>
   );
 };
@@ -52,7 +73,42 @@ const routes: RouteMap = {
 
 let sent: PageView[] = [];
 
-const mount = (strict = false) => {
+const resuming: RouteMap = {
+  ...routes,
+  index: {
+    default: () => {
+      const router = useRouter();
+      React.useLayoutEffect(() => router.reset(["index", "plans", "goals/experience"]), []);
+      return <Screen label="index" />;
+    },
+  },
+};
+
+/** `route` runs `stacks` as resets, in order, the first time it mounts. */
+const resettingOnEntry = (route: string, stacks: readonly (readonly string[])[]): RouteMap => {
+  let done = false;
+  return {
+    ...routes,
+    [route]: {
+      default: () => {
+        const router = useRouter();
+        React.useLayoutEffect(() => {
+          if (done) return;
+          done = true;
+          for (const names of stacks) router.reset(names);
+        }, []);
+        return <Screen label={route} />;
+      },
+    },
+  };
+};
+
+const mount = (
+  strict = false,
+  map: RouteMap = routes,
+  entry?: readonly string[],
+  onNavigate?: (route: string) => void,
+) => {
   sent = [];
   const onOutgoing = (message: TOutgoingMessage) => {
     if (message.event_name === "page_view") sent.push(message as PageView);
@@ -60,7 +116,12 @@ const mount = (strict = false) => {
   const Wrapper = createWrapper({ host: { onOutgoing } });
   const tree = (
     <Wrapper>
-      <PaywallRouter routes={routes} navigationId="get-started" />
+      <PaywallRouter
+        routes={map}
+        navigationId="get-started"
+        entry={entry && (() => entry)}
+        onNavigate={onNavigate}
+      />
     </Wrapper>
   );
   return render(strict ? <React.StrictMode>{tree}</React.StrictMode> : tree);
@@ -250,5 +311,88 @@ describe("page_view is reported for every navigation", () => {
       expect(sent[i].previous_page_node_id).toBe(sent[i - 1].page_name);
       expect(sent[i].previous_flow_position).toBe(sent[i - 1].flow_position);
     }
+  });
+});
+
+describe("a reset", () => {
+  it("reports only where a reset before the first paint lands, as the entry", () => {
+    mount(false, resuming);
+
+    expect(trail()).toEqual([["entry", "goals/experience", 2]]);
+    expect(sent[0].previous_page_node_id).toBeUndefined();
+  });
+
+  it("reports that entry once under StrictMode, which resets twice", () => {
+    mount(true, resuming);
+
+    expect(trail()).toEqual([["entry", "goals/experience", 2]]);
+  });
+
+  it("reports a reset after the first paint like any other navigation", () => {
+    mount();
+    tap("reset to terms");
+
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["forward", "terms", 2],
+    ]);
+    expect(sent[1].previous_page_node_id).toBe("index");
+  });
+
+  it("reports the navigation that follows a reset in the same moment", () => {
+    mount();
+    tap("reset then push");
+
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["forward", "terms", 2],
+    ]);
+  });
+
+  it("reports a reset before the first paint that keeps the top page but replaces it, once", () => {
+    const navigated: string[] = [];
+    mount(
+      false,
+      resettingOnEntry("terms", [["index", "goals/experience", "terms"]]),
+      ["index", "plans", "terms"],
+      (route) => navigated.push(route),
+    );
+
+    expect(trail()).toEqual([["entry", "terms", 2]]);
+    expect(navigated).toEqual(["terms"]);
+  });
+
+  it("reports where the last of several resets before the first paint lands", () => {
+    const navigated: string[] = [];
+    mount(false, resettingOnEntry("index", [["index", "plans"], ["index"]]), undefined, (route) =>
+      navigated.push(route),
+    );
+
+    expect(screen.getByText("index")).toBeTruthy();
+    expect(trail()).toEqual([["entry", "index", 0]]);
+    expect(navigated).toEqual(["index"]);
+  });
+
+  it("reports the opened page when a reset before the first paint lands back on it", () => {
+    mount(
+      false,
+      resettingOnEntry("terms", [
+        ["index", "plans"],
+        ["index", "plans", "terms"],
+      ]),
+      ["index", "plans", "terms"],
+    );
+
+    expect(trail()).toEqual([["entry", "terms", 2]]);
+  });
+
+  it("reports a back that follows a reset in the same moment", () => {
+    mount();
+    tap("reset then back");
+
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["back", "plans", 1],
+    ]);
   });
 });

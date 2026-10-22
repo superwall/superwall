@@ -67,7 +67,7 @@ self-describing npm project — clone it, install, `superwall dev`:
   default. Products are the one per-platform field and travel separately. A surface without `config.ts` is invalid; product data comes from
   Superwall alone, never from the file) + an `app/` route tree (**routes only**: every `.tsx` is a
   route, directories prefix the name, `index.tsx` is the entry, and `layout.tsx`
-  is the one reserved name — anything else in `app/` is a diagnostic telling you
+  (which may also export `entry`, the stack to open on) is the one reserved name — anything else in `app/` is a diagnostic telling you
   to move it to `components/`) + local `components/` and `messages/`
 - `superwall/superwall.lock` — the binding map, and the only metadata file in
   the tree: `apps` maps each platform (`ios`, `android`, `web` — one Superwall
@@ -257,14 +257,55 @@ The stack, bottom to top — each layer depends only on the one below it:
 
   - `src/hooks/` — the specialized hooks (`useProducts`, `usePurchase`,
     `useDiscount`, `useActions`, `useTranslation`, …), one file each; the
-    barrel also carries `createSuperwall` and `useSuperwallSession`
+    barrel also carries `createSuperwall` and `useSuperwallSession`.
+    `useUserAttribute.ts` is user attributes as typed state and
+    `readAttribute`, the same read for `entry`: one `textOf` +
+    `parseValue` path, so the two cannot disagree. A non-string reads as
+    missing unless it is a number or boolean (read as its `String()`, the
+    string `setUserAttributes` would have sent), and so do the strings
+    `"null"` and `"undefined"`. The setter never stores those: attributes
+    cannot be deleted from a paywall, so its type has no `null` and a
+    runtime `null`/`undefined` is dropped with a warning; it re-reads the
+    live snapshot, so updaters in one event compose, and skips a write equal
+    to what is stored.
+  - `src/parsers.ts` — the nuqs-style parsers (`parseAs*`, `createParser`,
+    `withDefault`) and `parseValue`, shared by `useQueryState` and
+    `useUserAttribute` and re-exported, as the same objects, from
+    `superwall/navigation` and `superwall/hooks`. `navigation/query.ts`
+    re-exports them for its old importers.
   - `src/provider/` — `SuperwallProvider` + session context (`context.ts`)
-    and the typed `createSuperwall` factory (`create.ts`)
+    and the typed `createSuperwall` factory (`create.ts`). The provider
+    always renders its children. It sends the ping in a layout effect, before
+    first paint, and tracks whether the host's first state has arrived,
+    exposed as `useHostStateArrived()`: true at once with no host
+    (`detectSuperwallHost()`), otherwise on the first `template_variables` or
+    after `HOST_STATE_TIMEOUT_MS`. Only `PaywallRouter` waits on it, and only
+    for a surface with `entry` and no `?sw_nav=` stack in the URL: it renders
+    nothing until arrival so `entry` decides on the host's user and the first
+    page never paints with an empty user and then jumps. A surface without
+    `entry` renders at once on every host. The iOS SDK also keeps the webview
+    hidden until it has sent that state.
   - `src/navigation/` — `superwall/navigation`: the route stack behind the
     file-based `app/` tree (`useRouter`, `useIsFocused`, `PaywallRouter`).
     Routes are names, never paths — one bundle, no network on navigate; the
     stack stays mounted (and `inert`) so a pop restores state, and each
-    navigation reports `page_view`. Names are typed via the CLI-generated
+    navigation reports `page_view`. The stack a surface opens on is
+    `index`, unless `app/layout.tsx` exports `entry` (`({ user, device,
+params }) => RouteName | RouteName[]`): the router calls it once, in its
+    state initializer, once the host's first state has arrived (the router
+    renders nothing before then); it opens on that stack with no transition, mounts nothing outside
+    it, and reports one `entry` page view for the top. `replayStack(start,
+next, answered)` (`navigation/replay.ts`) is the stack for a flow: it walks
+    `next` while each route is answered and stops, with a warning, on a
+    repeated route, a non-name, 100 routes, or a name the surface lacks — the
+    router runs `entry` inside `whileEntering(routes)` so that last check sees
+    the route map. A `?sw_nav=` stack in
+    the URL wins over it; unknown names or a throw open on `index` with a
+    console warning or error. It lives on the layout because it is a
+    property of the whole stack, as expo-router's `unstable_settings` is
+    (the build spreads the layout module so a layout without it is no
+    missing-export warning). `reset(routes)` replaces the whole stack
+    mid-flow without a transition. Names are typed via the CLI-generated
     `superwall.d.ts`, which augments the `SuperwallRoutes` interface and
     carries the asset-module reference. `motion.ts` holds what the router
     reads back off the DOM (how long the running animations last, freezing an
@@ -536,6 +577,15 @@ it does not exist.
     SDK-injected/published globals).
     A new cast needs a justification of this kind in a comment, or it doesn't
     land.
+- **Browser storage is never a requirement.** The Android SDK's WebView has
+  DOM storage off, so `localStorage` and `sessionStorage` are `null` there
+  (not `undefined`: a `typeof` guard passes and the call throws), and
+  sandboxed frames throw on access. Nothing a paywall needs to render, send a
+  message, or keep its state may depend on them. Storage is only for optional
+  extras like debug flags, every access sits in a `try`/`catch` that treats
+  a failure as unset, and each one has a test with storage `null` and one
+  where access throws. One unguarded read in the send path blanked every
+  code-built paywall on Android (1.3.0–1.7.0).
 - `purchase()` never throws for flow outcomes — it resolves
   `{ status: "completed" | "abandoned" | "failed" }`. Keep that contract.
 - Product variables are SDK-owned; the runtime merges, never invents.

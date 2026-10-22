@@ -48,7 +48,7 @@ superwall/
 │   └── plus-upgrade/         each paywall is a mini React app
 │       ├── config.ts         required — name, products
 │       ├── app/              routes only — every .tsx here is a route
-│       │   ├── layout.tsx    optional — wraps every route
+│       │   ├── layout.tsx    optional — wraps every route; `entry` picks where it opens
 │       │   ├── index.tsx     where the flow starts
 │       │   ├── plans.tsx     one file per route
 │       │   └── goals/        directories prefix route names

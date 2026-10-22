@@ -1,101 +1,31 @@
 import * as React from "react";
+import {
+  parseAsString,
+  parseValue,
+  type Parser,
+  type ParserWithDefault,
+  type QueryHistory,
+  type QueryStateOptions,
+} from "../parsers";
 
 export const REPLACE_THROTTLE_MS = 300;
 export const RESERVED_PREFIX = "sw_";
 export const RESERVED_KEYS: readonly string[] = ["platform", "transport"];
 
-export type QueryHistory = "push" | "replace";
-
-export type QueryStateOptions = {
-  /** Whether a write adds a browser history entry. Defaults to `replace`. */
-  history?: QueryHistory;
-  /** Drop the key from the URL when the value equals the default. Defaults to true. */
-  clearOnDefault?: boolean;
-};
-
-/** Reads one query value into a type, and writes it back. */
-export type Parser<T> = QueryStateOptions & {
-  /** Reads the raw value, or `null` when it is not one of yours. */
-  parse(value: string): T | null;
-  /** Writes the value into the URL. Defaults to `String`. */
-  serialize(value: T): string;
-  /** Compares two values, to know a no-op write. Defaults to `Object.is`. */
-  eq(a: T, b: T): boolean;
-  /** The value a missing or unreadable key falls back to. */
-  defaultValue?: T;
-  /** A copy with a default, so the state is never `null`. */
-  withDefault(value: T): ParserWithDefault<T>;
-  /** A copy with different write options. */
-  withOptions(options: QueryStateOptions): Parser<T>;
-};
-
-/** A parser whose state can never be `null`. */
-export type ParserWithDefault<T> = Parser<T> & {
-  defaultValue: T;
-  withOptions(options: QueryStateOptions): ParserWithDefault<T>;
-};
-
-type ParserSpec<T> = {
-  parse(value: string): T | null;
-  serialize?(value: T): string;
-  eq?(a: T, b: T): boolean;
-};
-
-const build = <T>(spec: ParserSpec<T>, options: QueryStateOptions): Parser<T> => ({
-  parse: spec.parse,
-  serialize: spec.serialize ?? String,
-  eq: spec.eq ?? Object.is,
-  ...options,
-  withDefault: (value) => withDefault(build(spec, options), value),
-  withOptions: (next) => build(spec, { ...options, ...next }),
-});
-
-const withDefault = <T>(parser: Parser<T>, defaultValue: T): ParserWithDefault<T> => ({
-  ...parser,
-  defaultValue,
-  withOptions: (next) => withDefault(parser.withOptions(next), defaultValue),
-});
-
-export const createParser = <T>(spec: ParserSpec<T>): Parser<T> => build(spec, {});
-
-export const parseAsString = createParser<string>({ parse: (value) => value });
-
-export const parseAsInteger = createParser<number>({
-  parse: (value) => {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isNaN(parsed) ? null : parsed;
-  },
-  serialize: (value) => String(Math.round(value)),
-});
-
-export const parseAsFloat = createParser<number>({
-  parse: (value) => {
-    const parsed = Number.parseFloat(value);
-    return Number.isNaN(parsed) ? null : parsed;
-  },
-});
-
-export const parseAsBoolean = createParser<boolean>({
-  parse: (value) => (value === "true" ? true : value === "false" ? false : null),
-});
-
-export const parseAsStringEnum = <const T extends string>(values: readonly T[]): Parser<T> =>
-  createParser<T>({
-    parse: (value) => values.find((candidate) => candidate === value) ?? null,
-  });
-
-export const parseAsArrayOf = <T>(item: Parser<T>, separator = ","): Parser<T[]> =>
-  createParser<T[]>({
-    parse: (value) =>
-      value === ""
-        ? []
-        : value
-            .split(separator)
-            .map((one) => item.parse(one))
-            .filter((one): one is T => one !== null),
-    serialize: (value) => value.map((one) => item.serialize(one)).join(separator),
-    eq: (a, b) => a.length === b.length && a.every((one, index) => item.eq(one, b[index])),
-  });
+export {
+  createParser,
+  parseAsArrayOf,
+  parseAsBoolean,
+  parseAsFloat,
+  parseAsInteger,
+  parseAsString,
+  parseAsStringEnum,
+  type Parser,
+  type ParserSpec,
+  type ParserWithDefault,
+  type QueryHistory,
+  type QueryStateOptions,
+} from "../parsers";
 
 export type QueryPatch = Record<string, string | null>;
 
@@ -227,11 +157,6 @@ const useQueryStore = (key: string): QueryStore => {
   return store;
 };
 
-const read = <T>(parser: Parser<T>, raw: string | null): T | null => {
-  if (raw === null) return parser.defaultValue ?? null;
-  return parser.parse(raw) ?? parser.defaultValue ?? null;
-};
-
 const encode = <T>(
   parser: Parser<T>,
   value: T | null,
@@ -279,7 +204,7 @@ export function useQueryState(
   );
   const current = React.useRef(parser);
   current.current = parser;
-  const value = React.useMemo(() => read(parser, raw), [parser, raw]);
+  const value = React.useMemo(() => parseValue(parser, raw), [parser, raw]);
   const latest = React.useRef(value);
   latest.current = value;
 

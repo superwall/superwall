@@ -1,15 +1,50 @@
 import type { PropsWithChildren } from "react";
 import { useActions, useHaptics, useTranslation } from "superwall/hooks";
+import { replayStack, useRouter, type Entry } from "superwall/navigation";
+import { answered, next } from "../components/answers";
 import { Wordmark } from "../components/Wordmark";
 import "./theme.css";
+
+export const entry: Entry = ({ user }) =>
+  replayStack(
+    "index",
+    (route) => next(route, user),
+    (route) => answered(route, user),
+  );
 
 export default function Layout({ children }: PropsWithChildren) {
   const { close, openUrl } = useActions();
   const { t } = useTranslation();
   const haptics = useHaptics();
+  const router = useRouter();
 
   return (
     <div className="shell">
+      {router.canGoBack() ? (
+        <button
+          type="button"
+          className="back"
+          aria-label={t("common.back")}
+          onClick={() => {
+            haptics.light();
+            router.back();
+          }}
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="24"
+            height="24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10 3 5 8l5 5" />
+          </svg>
+        </button>
+      ) : null}
       <button
         type="button"
         className="close"

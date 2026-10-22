@@ -1,3 +1,4 @@
+import { TRIED } from "../components/answers";
 import { Question } from "../components/Question";
 
 /** "absorb": the statement's colour collapses into the bar, this question rises as it clears. */
@@ -6,7 +7,7 @@ export const transition = "story-absorb";
 export default function Tried() {
   return (
     <Question
-      attribute="tried_before"
+      answer={TRIED}
       title="tried.title"
       options={[
         { value: "nothing", label: "tried.nothing" },

@@ -37,7 +37,7 @@ export const entrySource = ({
   surface.routes.forEach((route, index) => {
     lines.push(`import * as Route${index} from ${imp(route.file)};`);
   });
-  if (surface.layoutFile) lines.push(`import Layout from ${imp(surface.layoutFile)};`);
+  if (surface.layoutFile) lines.push(`import * as layout from ${imp(surface.layoutFile)};`);
   lines.push(`import definition from ${imp(surface.configFile)};`);
 
   const catalogs: string[] = [];
@@ -48,7 +48,7 @@ export const entrySource = ({
 
   const routerProps = [
     `routes={routes}`,
-    ...(surface.layoutFile ? [`Layout={Layout}`] : []),
+    ...(surface.layoutFile ? [`Layout={Layout}`, `entry={entry}`] : []),
     `transition={definition?.transition}`,
     `queryState={definition?.queryState}`,
     `navigationId={${JSON.stringify(surface.id)}}`,
@@ -72,6 +72,7 @@ export const entrySource = ({
     `    messages: catalogs,`,
     `  },`,
     `};`,
+    ...(surface.layoutFile ? [`const { default: Layout, entry } = { ...layout };`] : []),
     `const routes = {${surface.routes
       .map((route, index) => `${JSON.stringify(route.name)}: Route${index}`)
       .join(", ")}};`,

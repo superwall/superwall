@@ -10,6 +10,41 @@ const createSession = () => {
 };
 
 describe("setUserAttributes", () => {
+  it("keeps a write made before the host's first state, which the host's reply predates", () => {
+    const { session, transport } = createSession();
+
+    session.setUserAttributes({ onboarding_opened: true });
+    transport.accept({
+      event_name: "template_variables",
+      variables: { user: { firstName: "Ada", onboarding_opened: "stale" } },
+    });
+
+    expect(session.getSnapshot().user).toEqual({ firstName: "Ada", onboarding_opened: "true" });
+    expect(session.getSnapshot().state).toMatchObject({
+      user: { firstName: "Ada", onboarding_opened: "true" },
+    });
+  });
+
+  it("lets later host state win once the host has answered", () => {
+    const { session, transport } = createSession();
+
+    session.setUserAttributes({ plan: "pro" });
+    transport.accept({ event_name: "template_variables", variables: { user: {} } });
+    transport.accept({ event_name: "template_variables", variables: { user: { plan: "free" } } });
+
+    expect(session.getSnapshot().user).toEqual({ plan: "free" });
+  });
+
+  it("does not hold writes made after the host answered", () => {
+    const { session, transport } = createSession();
+    transport.accept({ event_name: "template_variables", variables: { user: {} } });
+
+    session.setUserAttributes({ plan: "pro" });
+    transport.accept({ event_name: "template_variables", variables: { user: { plan: "free" } } });
+
+    expect(session.getSnapshot().user).toEqual({ plan: "free" });
+  });
+
   it("sends user_attribute_updated with every value as a string", () => {
     const { session, transport } = createSession();
 

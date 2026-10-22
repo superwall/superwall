@@ -16,7 +16,10 @@ declare module "virtual:superwall/project" {
     messages: PreviewMessages[];
     sharedMessages: PreviewMessages[];
     loadConfig: PreviewModule<import("../config").PaywallDefinition | undefined>;
-    loadLayout?: PreviewModule<React.ComponentType<React.PropsWithChildren>>;
+    loadLayout?: () => Promise<{
+      default: React.ComponentType<React.PropsWithChildren>;
+      entry?: import("../navigation/index").Entry;
+    }>;
   };
   export const surfaces: PreviewSurface[];
   export const sharedMessages: PreviewMessages[];
