@@ -1,59 +1,48 @@
-import { useHaptics, useTranslation } from "superwall/hooks";
+import { useHaptics, useTranslation, useUser, useUserAttribute } from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
-import { useAnswers, type Level } from "../components/answers";
+import { next, questionsFor, LEVEL, type Level } from "../components/answers";
+
+const OPTIONS: readonly Level[] = ["new", "returning", "regular"];
 
 export default function Page() {
   const router = useRouter();
   const { t } = useTranslation();
   const haptics = useHaptics();
 
-  const { answers, save } = useAnswers();
-  const chosen = answers.level;
+  const user = useUser();
+  const [chosen, setChosen] = useUserAttribute(LEVEL.key, LEVEL.parser);
+  const questions = questionsFor(user);
 
-  // Saved before moving on, so closing on the next screen loses nothing. The
-  // card turns teal on the same frame as the haptic: useUser() sees it at once.
   const choose = (value: Level) => {
     haptics.selection();
-    save("level", value);
-    router.push("time");
+    setChosen(value);
+    const to = next("level", { ...user, [LEVEL.key]: value });
+    if (to) router.push(to);
   };
 
   return (
     <main className="page">
-      <span className="step">{t("quiz.step", { current: 2, total: 3 })}</span>
+      <span className="step">
+        {t("quiz.step", { current: questions.indexOf("level") + 1, total: questions.length })}
+      </span>
 
       <div className="lede">
         <h1>{t("level.title")}</h1>
       </div>
 
       <div className="choices">
-        <button
-          type="button"
-          className="choice"
-          aria-pressed={chosen === "new"}
-          onClick={() => choose("new")}
-        >
-          <span className="choice-name">{t("level.new.name")}</span>
-          <span className="choice-hint">{t("level.new.hint")}</span>
-        </button>
-        <button
-          type="button"
-          className="choice"
-          aria-pressed={chosen === "returning"}
-          onClick={() => choose("returning")}
-        >
-          <span className="choice-name">{t("level.returning.name")}</span>
-          <span className="choice-hint">{t("level.returning.hint")}</span>
-        </button>
-        <button
-          type="button"
-          className="choice"
-          aria-pressed={chosen === "regular"}
-          onClick={() => choose("regular")}
-        >
-          <span className="choice-name">{t("level.regular.name")}</span>
-          <span className="choice-hint">{t("level.regular.hint")}</span>
-        </button>
+        {OPTIONS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className="choice"
+            aria-pressed={chosen === option}
+            onClick={() => choose(option)}
+          >
+            <span className="choice-name">{t(`level.${option}.name`)}</span>
+            <span className="choice-hint">{t(`level.${option}.hint`)}</span>
+          </button>
+        ))}
       </div>
     </main>
   );

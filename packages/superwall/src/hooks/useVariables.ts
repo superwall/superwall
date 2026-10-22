@@ -8,7 +8,8 @@ import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
 
 /**
  * User attributes the app set via the native SDK
- * (`Superwall.shared.setUserAttributes`).
+ * (`Superwall.shared.setUserAttributes`), raw. To read or write one as a
+ * typed value, use `useUserAttribute`.
  */
 export const useUser = (): SuperwallUserVariables => useSuperwallSnapshot().user;
 

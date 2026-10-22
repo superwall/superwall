@@ -1,7 +1,7 @@
 export default {
   index: {
     title: "Let's build your plan",
-    subtitle: "Three questions. Takes about twenty seconds.",
+    subtitle: "A few questions. Takes about twenty seconds.",
     cta: "Get started",
   },
   quiz: {

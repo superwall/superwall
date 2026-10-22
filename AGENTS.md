@@ -257,7 +257,22 @@ The stack, bottom to top — each layer depends only on the one below it:
 
   - `src/hooks/` — the specialized hooks (`useProducts`, `usePurchase`,
     `useDiscount`, `useActions`, `useTranslation`, …), one file each; the
-    barrel also carries `createSuperwall` and `useSuperwallSession`
+    barrel also carries `createSuperwall` and `useSuperwallSession`.
+    `useUserAttribute.ts` is user attributes as typed state and
+    `readAttribute`, the same read for `entry`: one `textOf` +
+    `parseValue` path, so the two cannot disagree. A non-string reads as
+    missing unless it is a number or boolean (read as its `String()`, the
+    string `setUserAttributes` would have sent), and so do the strings
+    `"null"` and `"undefined"`. The setter never stores those: attributes
+    cannot be deleted from a paywall, so its type has no `null` and a
+    runtime `null`/`undefined` is dropped with a warning; it re-reads the
+    live snapshot, so updaters in one event compose, and skips a write equal
+    to what is stored.
+  - `src/parsers.ts` — the nuqs-style parsers (`parseAs*`, `createParser`,
+    `withDefault`) and `parseValue`, shared by `useQueryState` and
+    `useUserAttribute` and re-exported, as the same objects, from
+    `superwall/navigation` and `superwall/hooks`. `navigation/query.ts`
+    re-exports them for its old importers.
   - `src/provider/` — `SuperwallProvider` + session context (`context.ts`)
     and the typed `createSuperwall` factory (`create.ts`). Under a host
     (`detectSuperwallHost()`), the provider renders none of its children
@@ -275,7 +290,12 @@ The stack, bottom to top — each layer depends only on the one below it:
 params }) => RouteName | RouteName[]`): the router calls it once, in its
     state initializer, so after the provider's wait for the host's first
     state; it opens on that stack with no transition, mounts nothing outside
-    it, and reports one `entry` page view for the top. A `?sw_nav=` stack in
+    it, and reports one `entry` page view for the top. `replayStack(start,
+next, answered)` (`navigation/replay.ts`) is the stack for a flow: it walks
+    `next` while each route is answered and stops, with a warning, on a
+    repeated route, a non-name, 100 routes, or a name the surface lacks — the
+    router runs `entry` inside `whileEntering(routes)` so that last check sees
+    the route map. A `?sw_nav=` stack in
     the URL wins over it; unknown names or a throw open on `index` with a
     console warning or error. It lives on the layout because it is a
     property of the whole stack, as expo-router's `unstable_settings` is

@@ -344,7 +344,6 @@ button,
 
 /* ——— The quiz ——— */
 
-/* Every page but the first has a back button beside its step label. */
 .step {
   margin-inline-start: 26px;
   font-family: var(--mono);

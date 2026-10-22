@@ -1,7 +1,14 @@
 import { useState } from "react";
-import { useActions, useHaptics, useProducts, usePurchase, useTranslation } from "superwall/hooks";
+import {
+  useActions,
+  useHaptics,
+  useProducts,
+  usePurchase,
+  useTranslation,
+  useUser,
+} from "superwall/hooks";
 import { useRouter } from "superwall/navigation";
-import { PLAN, useAnswers } from "../components/answers";
+import { answersOf, PLAN, questionsFor } from "../components/answers";
 
 const LEVEL: Record<string, string> = {
   new: "plan.level.new",
@@ -16,7 +23,8 @@ export default function Plan() {
   const { purchase } = usePurchase();
   const { t } = useTranslation();
   const haptics = useHaptics();
-  const { answers } = useAnswers();
+  const user = useUser();
+  const answers = answersOf(user);
 
   // One line of copy for an outcome worth saying; nothing for an abandoned sheet.
   const [notice, setNotice] = useState<string>();
@@ -34,12 +42,14 @@ export default function Plan() {
       </div>
 
       <div className="rows">
-        <div className="kv">
-          <span className="kv-key">{t("plan.startingPoint")}</span>
-          <span className="kv-value">
-            {answers.level ? t(LEVEL[answers.level]) : t("plan.empty")}
-          </span>
-        </div>
+        {questionsFor(user).includes("level") ? (
+          <div className="kv">
+            <span className="kv-key">{t("plan.startingPoint")}</span>
+            <span className="kv-value">
+              {answers.level ? t(LEVEL[answers.level]) : t("plan.empty")}
+            </span>
+          </div>
+        ) : null}
         <div className="kv">
           <span className="kv-key">{t("plan.perSession")}</span>
           <span className="kv-value">

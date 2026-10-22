@@ -96,13 +96,13 @@ const silentHost = (): ITransport => ({
   startListening: () => undefined,
 });
 
-describe("waiting for the host", () => {
-  const UserProbe = ({ seen }: { seen: unknown[] }) => {
-    const user = useUser();
-    seen.push(user.onboarding_goal);
-    return <span>paywall</span>;
-  };
+const UserProbe = ({ seen }: { seen: unknown[] }) => {
+  const user = useUser();
+  seen.push(user.onboarding_goal);
+  return <span>paywall</span>;
+};
 
+describe("waiting for the host", () => {
   it("first renders with the host's user already in it", async () => {
     window.history.replaceState({}, "", "/?transport=editor");
     const seen: unknown[] = [];

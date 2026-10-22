@@ -16,6 +16,7 @@ import {
   TRANSITION_MS,
 } from "./animation";
 import { readRouteAssets, warmAssets, whenIdle } from "./assets";
+import { whileEntering } from "./replay";
 import { createQueryStore, QueryStoreContext, type QueryHistory, type QueryStore } from "./query";
 import type { StyleWithVariables } from "../css";
 import "./routes.css";
@@ -32,12 +33,15 @@ export {
   parseAsStringEnum,
   useQueryState,
   type Parser,
+  type ParserSpec,
   type ParserWithDefault,
   type QueryHistory,
   type QueryStateOptions,
   type QueryUpdate,
   type SetQueryState,
 } from "./query";
+
+export { replayStack } from "./replay";
 
 export interface SuperwallRoutes {}
 
@@ -98,8 +102,11 @@ export type RouteMap = Record<string, RouteModule>;
 
 /** What the host has told the paywall by its first render, for `entry` to decide on. */
 export type EntryVariables = {
+  /** The user's attributes, as `useUser()` returns them. Read one with `readAttribute`. */
   user: SuperwallUserVariables;
+  /** The device variables the host sent (platform, locale, osVersion, …). */
   device: SuperwallDeviceVariables;
+  /** The params the app passed to the placement that presented this surface. */
   params: SuperwallPlacementParams;
 };
 
@@ -160,16 +167,18 @@ const enteredStack = (
   if (!entry) return [INITIAL_ROUTE];
   let chosen: unknown;
   try {
-    chosen = entry(variables);
+    chosen = whileEntering(Object.keys(routes), () => entry(variables));
   } catch (error) {
     console.error(`The layout's entry() threw, so the paywall opens on "${INITIAL_ROUTE}":`, error);
     return [INITIAL_ROUTE];
   }
-  const names: unknown[] | undefined =
+  const names: readonly unknown[] | undefined =
     typeof chosen === "string" ? [chosen] : Array.isArray(chosen) ? chosen : undefined;
   if (names?.length === 0) return [INITIAL_ROUTE];
-  if (names?.every((name) => typeof name === "string" && isRoute(routes, name))) {
-    return names as RouteName[];
+  if (
+    names?.every((name): name is RouteName => typeof name === "string" && isRoute(routes, name))
+  ) {
+    return [...names];
   }
   console.warn(
     `The layout's entry() returned ${JSON.stringify(chosen)}, which is not a stack of routes, so the paywall opens on "${INITIAL_ROUTE}". Available routes: ${Object.keys(routes).join(", ")}`,

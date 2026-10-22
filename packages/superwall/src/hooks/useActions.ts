@@ -10,11 +10,13 @@ export type UseActionsResult = Pick<
   | "openExternalUrl"
   | "openDeepLink"
   | "customPlacement"
-  | "setUserAttributes"
   | "requestPermission"
   | "requestCallback"
   | "requestStoreReview"
->;
+> & {
+  /** @deprecated Use `useUserAttribute(key, parser)`: typed, re-renders, and reads back the same way. */
+  setUserAttributes: SuperwallSession["setUserAttributes"];
+};
 
 export const useActions = (): UseActionsResult => {
   const session = useSuperwallSession();

@@ -1,11 +1,19 @@
+import { parseAsStringEnum } from "superwall/hooks";
+
 /**
- * Answers live outside React because a later page reads them after the one
- * that collected them has unmounted, and the router carries no state. Each key
- * is the attribute sent to Superwall with `setUserAttributes` the moment it is
- * answered; values are stable kebab-case so audiences built on them hold.
+ * Every answer is a user attribute, read and written with `useUserAttribute`,
+ * so it outlives the page that asked and reaches Superwall the moment it is
+ * given. Values are stable kebab-case so audiences built on them hold.
  */
-export const answers: {
-  sleep_struggle?: "racing" | "waking" | "schedule" | "noise";
-  bad_nights?: "one" | "few" | "most" | "every";
-  tried_before?: "nothing" | "melatonin" | "apps" | "routine";
-} = {};
+export const STRUGGLE = {
+  key: "sleep_struggle",
+  parser: parseAsStringEnum(["racing", "waking", "schedule", "noise"]),
+};
+export const NIGHTS = {
+  key: "bad_nights",
+  parser: parseAsStringEnum(["one", "few", "most", "every"]),
+};
+export const TRIED = {
+  key: "tried_before",
+  parser: parseAsStringEnum(["nothing", "melatonin", "apps", "routine"]),
+};

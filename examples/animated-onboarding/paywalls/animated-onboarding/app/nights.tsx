@@ -1,3 +1,4 @@
+import { NIGHTS } from "../components/answers";
 import { Question } from "../components/Question";
 
 /** "kept": the chosen answer flies into the progress bar, the next question rises under it. */
@@ -6,7 +7,7 @@ export const transition = "story-kept";
 export default function Nights() {
   return (
     <Question
-      attribute="bad_nights"
+      answer={NIGHTS}
       title="nights.title"
       options={[
         { value: "one", label: "nights.one" },
