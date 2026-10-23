@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 import { resolveScopeFromKey } from "@/core/account/bind";
 import type { SuperwallApi } from "@/core/api/client";
+import { findApplication } from "@/core/api/lookup";
 import {
   createApplication,
   listApplications,
@@ -200,8 +201,7 @@ export async function connectApp(
   const api = await requireApi(interactive);
 
   if (appId !== undefined) {
-    const apps = await listApplications(api);
-    const app = apps.find((candidate) => String(candidate.id) === appId);
+    const app = (await findApplication(api, appId))?.app;
     if (app === undefined) {
       throw new Error(
         `No app with id \`${appId}\` in this account — run \`superwall apps\` to list them.`,
