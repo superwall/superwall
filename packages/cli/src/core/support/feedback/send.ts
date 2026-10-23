@@ -1,17 +1,18 @@
 
 import { FEEDBACK_KINDS, type FeedbackKind } from "./kinds";
-import { readFileSync } from "node:fs";
-import { arch, release } from "node:os";
-import { basename } from "node:path";
 import type { CommandContext } from "@/program/command";
 import type { SuperwallApi } from "@/core/api/client";
 import { findApplication } from "@/core/api/lookup";
 import { orgIdOf } from "@/core/api/orgs";
 import { readSession } from "@/core/account/storage";
 import { readAnonymousId, readOnboardedApp } from "@/core/state/config";
+import { readInput } from "@/program/host";
 import { TELEMETRY_HOST, TELEMETRY_KEY, VERSION } from "@/environment";
 
 type FeedbackVia = "human" | "agent";
+
+// The MCP and hosted agents run this in a Worker, where Node's process may be absent.
+const proc = (globalThis as { process?: NodeJS.Process }).process;
 
 export const MAX_FILES = 5;
 export const MAX_FILE_CHARS = 20_000;
@@ -45,7 +46,7 @@ export function parseContext(pairs: string[]): Record<string, string> {
   return out;
 }
 
-function linkedApp(cwd = process.cwd()): {
+function linkedApp(cwd = proc?.cwd() ?? ""): {
   projectId?: string;
   applicationId?: string;
 } {
@@ -60,7 +61,7 @@ const AGENT_ENV: [string, string][] = [
   ["GEMINI_CLI", "gemini-cli"],
 ];
 
-export function detectAgent(env: NodeJS.ProcessEnv = process.env): string | undefined {
+export function detectAgent(env: NodeJS.ProcessEnv = proc?.env ?? {}): string | undefined {
   return AGENT_ENV.find(([key]) => env[key])?.[1];
 }
 
@@ -69,10 +70,10 @@ export function readAttachments(paths: string[]): FeedbackAttachment[] {
     throw new Error(`Attach at most ${MAX_FILES} files.`);
   }
   return paths.map((path) => {
-    const raw = readFileSync(path === "-" ? 0 : path, "utf8");
+    const raw = readInput(path);
     const truncated = raw.length > MAX_FILE_CHARS;
     return {
-      name: path === "-" ? "stdin" : basename(path),
+      name: path === "-" ? "stdin" : (path.split(/[\\/]/).pop() ?? path),
       content: truncated ? raw.slice(-MAX_FILE_CHARS) : raw,
       truncated,
     };
@@ -88,6 +89,7 @@ export function buildFeedbackEvent(
     orgName?: string;
     authMethod?: string;
   } | null,
+  osRelease?: string,
 ): Record<string, unknown> {
   return {
     api_key: TELEMETRY_KEY(),
@@ -108,11 +110,11 @@ export function buildFeedbackEvent(
       via,
       agent: feedback.agent ?? null,
       cli_version: VERSION,
-      platform: process.platform,
-      os_release: release(),
-      arch: arch(),
-      node_version: process.version,
-      ci: process.env.CI === "true",
+      platform: proc?.platform ?? "worker",
+      os_release: osRelease ?? null,
+      arch: proc?.arch ?? null,
+      node_version: proc?.version ?? null,
+      ci: proc?.env.CI === "true",
       email: session?.userEmail ?? null,
       org_name: session?.orgName ?? null,
       auth_method: session?.authMethod ?? null,
@@ -121,7 +123,8 @@ export function buildFeedbackEvent(
 }
 
 async function submitFeedback(feedback: Feedback, via: FeedbackVia): Promise<boolean> {
-  const payload = buildFeedbackEvent(feedback, via, readAnonymousId(), readSession());
+  const osRelease = proc ? await import("node:os").then((os) => os.release()).catch(() => undefined) : undefined;
+  const payload = buildFeedbackEvent(feedback, via, readAnonymousId(), readSession(), osRelease);
   try {
     const res = await fetch(`${TELEMETRY_HOST()}/capture/`, {
       method: "POST",
@@ -146,7 +149,8 @@ export async function organizationOfApp(
     .then((found) => (found ? orgIdOf(found.project) : undefined))
     .catch(() => undefined);
   const timeout = new Promise<undefined>((resolve) => {
-    setTimeout(() => resolve(undefined), ORG_LOOKUP_MS).unref();
+    const timer: { unref?: () => void } = setTimeout(() => resolve(undefined), ORG_LOOKUP_MS);
+    timer.unref?.();
   });
   return Promise.race([lookup, timeout]);
 }

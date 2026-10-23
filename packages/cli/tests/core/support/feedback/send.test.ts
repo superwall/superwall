@@ -60,6 +60,7 @@ test("feedback event carries the report, source, and follow-up contact", () => {
     "agent",
     "3e37f5f0-0000-4000-8000-000000000000",
     { userEmail: "dev@acme.com", orgName: "Acme" },
+    "25.0.0",
   ) as {
     event: string;
     distinct_id: string;
@@ -79,7 +80,7 @@ test("feedback event carries the report, source, and follow-up contact", () => {
     paywall: "pw_abc",
     sdk: "expo@3.1.0",
   });
-  assert.equal(typeof event.properties.os_release, "string");
+  assert.equal(event.properties.os_release, "25.0.0");
   assert.deepEqual(event.properties.attachments, [
     { name: "log.txt", content: "boom", truncated: false },
   ]);
