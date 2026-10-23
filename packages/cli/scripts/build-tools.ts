@@ -1,6 +1,5 @@
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { bundledSkills } from "@/core/support/skills";
 import { downloadAscIndex } from "@/core/app-store-connect/api/spec";
 import { downloadApiIndex } from "@/core/api/reference";
 
@@ -44,19 +43,15 @@ const seed = {
   "asc-index.json": JSON.stringify({ ...asc, fetchedAt: PINNED }),
 };
 
-const SKILLS_DIR = "dist/skills";
+const SKILLS_DIR = "dist/tools-skills";
 const filesOf = (dir: string): string[] =>
   readdirSync(dir).flatMap((entry) => {
     const path = join(dir, entry);
     return statSync(path).isDirectory() ? filesOf(path) : [path];
   });
-const NOT_ON_MCP = new Set(["superwall-framework"]);
 const skills: Record<string, string> = {};
-for (const { name, channel } of bundledSkills()) {
-  if (channel !== "latest" || NOT_ON_MCP.has(name)) continue;
-  for (const file of filesOf(join(SKILLS_DIR, name)).filter((path) => path.endsWith(".md"))) {
-    skills[relative(SKILLS_DIR, file)] = readFileSync(file, "utf8");
-  }
+for (const file of filesOf(SKILLS_DIR).filter((path) => path.endsWith(".md"))) {
+  skills[relative(SKILLS_DIR, file)] = readFileSync(file, "utf8");
 }
 if (!skills["superwall/SKILL.md"]) {
   console.error(`No ${SKILLS_DIR}/superwall/SKILL.md; vendor the skills before building the tools.`);
