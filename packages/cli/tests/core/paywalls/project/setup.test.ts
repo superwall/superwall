@@ -310,6 +310,22 @@ test("an app without a name is named by its id", async () => {
   assert.match(said(calls, "success")[0] ?? "", /^Pushes go to `5`/);
 });
 
+test("an app in an organization the account can open but isn't a member of still binds", async () => {
+  signIn([
+    { match: "/v2/paywalls?application_id=88", body: { data: [{ project_id: 20 }] } },
+    { match: "/v2/projects/20", body: { id: 20, name: "Theirs", applications: [{ id: 88, name: "C", platform: "ios" }] } },
+    twoApps,
+  ]);
+  const target = scratch("other-org");
+  const calls: RendererCall[] = [];
+
+  await connectApp(recordingRenderer(calls), false, target, target, undefined, "88");
+  assert.deepEqual(lockApps(target), { ios: "88" });
+  assert.deepEqual(said(calls, "success"), [
+    "Pushes go to `C` — saved in superwall.lock, so commit that file.",
+  ]);
+});
+
 test("an app id the account does not have fails with where to look", async () => {
   signIn([twoApps]);
   const target = scratch("missing-id");
