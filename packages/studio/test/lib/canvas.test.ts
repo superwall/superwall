@@ -26,6 +26,18 @@ describe("fitTransform", () => {
     expect(tall.y).toBeCloseTo(48);
   });
 
+  it("fits inside a caller's own inset", () => {
+    const inset = { top: 10, right: 20, bottom: 30, left: 40 };
+    const fitted = fitTransform({ width: 2000, height: 1000 }, viewport, inset);
+    expect(fitted.scale).toBeCloseTo(940 / 2000);
+    expect(fitted.x).toBeCloseTo(40);
+    expect(centered(1, { width: 100, height: 100 }, viewport, inset)).toEqual({
+      scale: 1,
+      x: 40 + (940 - 100) / 2,
+      y: 10 + (760 - 100) / 2,
+    });
+  });
+
   it("never scales content up past actual size", () => {
     const fitted = fitTransform({ width: 400, height: 300 }, viewport);
     expect(fitted).toEqual({ scale: 1, x: 300, y: 250 });
