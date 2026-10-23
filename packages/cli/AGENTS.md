@@ -322,11 +322,13 @@ server at mcp.superwall.com run the same commands; `@superwall/cli/tools`
   run for real; writes only as dry runs or against ids that can't exist. Add
   cases when you add or change a tool. The only accepted difference is state the
   terminal keeps: organizations you opened by link but aren't a member of.
-- **The MCP carries the public skills.** `bun run build` vendors the skills,
-  then `build-tools.ts` embeds every file of every skill on `main` into
-  `dist/tools.js`, except those in its `NOT_ON_MCP` denylist: work that needs a
-  shell, today `superwall-framework`. A new skill on `main` reaches the MCP with
-  the next release, with no change here. `listSkills()` and `readSkill(uri)`
+- **The MCP carries the skills on `next`, whatever the CLI's channel.** The CLI
+  itself reads skills from its channel's branch, but the MCP and Superwall's own
+  hosted agents always read `next` (`TOOLS_SKILLS_REF`). `vendor-skills.ts` also
+  copies every skill on `next` into `dist/tools-skills`, except those in
+  `TOOLS_EXCLUDED_SKILLS` (work that needs a shell, today `superwall-framework`),
+  and `build-tools.ts` embeds that directory into `dist/tools.js`. A new skill on
+  `next` reaches the MCP with the next release, with no change here. `listSkills()` and `readSkill(uri)`
   serve them as `skill://` resources (`superwall/SKILL.md` first), and the
   read-only `skill` tool comes first in `listTools()` for clients that don't
   read resources. Vendor before building the tools; the build fails without

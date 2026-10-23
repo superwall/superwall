@@ -24,6 +24,11 @@ const skillsInstallSourceFor = (channel: Channel): string =>
 
 export const SKILLS_INSTALL_SOURCE = (): string => skillsInstallSourceFor(CHANNEL());
 
+// The MCP and Superwall's own hosted agents read skills from `next` whatever the
+// CLI's channel; the framework skill needs a shell, so they leave it out.
+export const TOOLS_SKILLS_REF = CHANNELS.next.skillsRef;
+export const TOOLS_EXCLUDED_SKILLS: readonly string[] = ["superwall-framework"];
+
 export interface BundledSkill {
   name: string;
   channel: Channel;
