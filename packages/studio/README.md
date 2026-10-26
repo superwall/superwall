@@ -110,14 +110,13 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   has no project on disk) offers `["promote"]` and a `pick` that switches the
   surface, so the menu collapses to the picker and one button; the local
   studio keeps its own pick and sends a `version` only when one was chosen.
-- `StudioSource.unsaved` (`{ saving?, save(intent) }`) marks a surface the
-  account does not have yet, such as an agent's unsaved build. Promote,
-  Preview and the screenshot then call `save("promote" | "preview" |
-  "screenshot")` instead of running, and the one a save is running for
-  reads "Saving…" while the others wait. The host saves, moves to the saved
-  paywall and passes the intent to `SurfaceEditor`'s `resume`, which finishes
-  it once (opens Preview, downloads the screenshot, or promotes the saved
-  version once its versions are known) and calls `onResumed`.
+- A hosted surface with no `paywallId` whose host offers `push` is not in
+  the account yet (an agent's unpushed build). It ships through the same
+  action menu (`["push", "publish"]`, with `status` listing no versions),
+  and Preview asks to push it first, then runs `push` with `resume:
+"preview"` in the request. A host that moves to the saved surface passes
+  that on as `SurfaceEditor`'s `resume`, which opens Preview there once and
+  calls `onResumed`. The screenshot stays disabled until a version is live.
 - `StudioShell` (`position="absolute"` when the host owns the viewport) is
   the ink stage every screen expects, and it carries the `sw-studio` class
   the stylesheet scopes its base rules to.

@@ -1079,114 +1079,85 @@ describe("SurfaceEditor driven by its host", () => {
   });
 });
 
+const renderHosted = (element: React.ReactElement<React.ComponentProps<typeof SurfaceEditor>>) =>
+  render(
+    <StudioHostProvider mode="hosted" home={{ href: "/", navigate: () => {} }}>
+      {element}
+    </StudioHostProvider>,
+  );
+
 describe("a surface the account does not have yet", () => {
-  const unsavedSource = (saving?: "preview" | "promote" | "screenshot") => {
-    const save = vi.fn();
-    return { save, source: { ...source, unsaved: { saving, save } } satisfies StudioSource };
-  };
+  const draft: StudioSurface = { ...live, label: "Draft", paywallId: undefined };
+  const draftSource = (run: NonNullable<StudioSource["actions"]>["run"]) =>
+    ({
+      ...source,
+      surfaces: [draft],
+      actions: { offered: ["push", "publish"], run, status: async () => ({}) },
+    }) satisfies StudioSource;
 
-  it("saves it first for Promote, Preview and the screenshot", async () => {
-    const { save, source: unsaved } = unsavedSource();
-    renderEditor(<SurfaceEditor source={unsaved} surface={live} samples={{}} />);
+  it("ships through the normal menu: Push and Publish, with nothing to pick", async () => {
+    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: false }));
+    renderHosted(<SurfaceEditor source={draftSource(run)} surface={draft} samples={{}} />);
     await act(async () => {});
 
-    fireEvent.click(screen.getByRole("button", { name: "Promote" }));
+    expect(screen.queryByRole("button", { name: "Version" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
+    expect(screen.getByText("New version, nothing live changes")).toBeDefined();
+    expect(screen.getByText("Push and make it live")).toBeDefined();
+  });
+
+  it("asks before pushing it to preview, and pushes for the preview once confirmed", async () => {
+    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: false }));
+    renderHosted(<SurfaceEditor source={draftSource(run)} surface={draft} samples={{}} />);
+    await act(async () => {});
+
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
-    fireEvent.click(screen.getByRole("button", { name: "Download screenshot" }));
-    expect(save.mock.calls).toEqual([["promote"], ["preview"], ["screenshot"]]);
+    expect(screen.getByRole("dialog", { name: "Push this paywall first?" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-  });
+    expect(run).not.toHaveBeenCalled();
 
-  it("shows the action a save runs for as saving, and holds the others", async () => {
-    const { source: unsaved } = unsavedSource("promote");
-    renderEditor(<SurfaceEditor source={unsaved} surface={live} samples={{}} />);
-    await act(async () => {});
-
-    const promote = screen.getByRole("button", { name: "Saving…" });
-    expect(promote.hasAttribute("disabled")).toBe(true);
-    expect(promote.getAttribute("aria-busy")).toBe("true");
-    expect(screen.getByRole("button", { name: "Preview" }).hasAttribute("disabled")).toBe(true);
-    expect(
-      screen.getByRole("button", { name: "Download screenshot" }).hasAttribute("disabled"),
-    ).toBe(true);
-  });
-
-  it("names Preview and the screenshot as saving when a save runs for them", async () => {
-    const preview = unsavedSource("preview");
-    const { unmount } = renderEditor(
-      <SurfaceEditor source={preview.source} surface={live} samples={{}} />,
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Push and preview" }));
+    });
+    expect(run).toHaveBeenCalledWith(
+      draft,
+      { action: "push", version: undefined, resume: "preview" },
+      expect.any(Function),
     );
-    await act(async () => {});
-    expect(screen.getByRole("button", { name: "Saving…" }).getAttribute("aria-busy")).toBe("true");
-    unmount();
+    expect(screen.queryByRole("dialog", { name: "Push this paywall first?" })).toBeNull();
+  });
 
-    const screenshot = unsavedSource("screenshot");
-    renderEditor(<SurfaceEditor source={screenshot.source} surface={live} samples={{}} />);
+  it("holds Preview while the push runs", async () => {
+    let finish: ((value: { ok: true; version: number; live: boolean }) => void) | undefined;
+    const run = vi.fn(
+      () => new Promise<{ ok: true; version: number; live: boolean }>((done) => (finish = done)),
+    );
+    renderHosted(<SurfaceEditor source={draftSource(run)} surface={draft} samples={{}} />);
     await act(async () => {});
-    expect(screen.getByRole("button", { name: "Saving…" }).getAttribute("aria-busy")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Push and preview" }));
+    expect(screen.getByRole("button", { name: "Preview" }).hasAttribute("disabled")).toBe(true);
+    await act(async () => finish?.({ ok: true, version: 1, live: false }));
+    expect(screen.getByRole("button", { name: "Preview" }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("keeps the screenshot disabled until a version is live", async () => {
+    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: false }));
+    renderHosted(<SurfaceEditor source={draftSource(run)} surface={draft} samples={{}} />);
+    await act(async () => {});
+    expect(
+      screen.getByRole("button", { name: "Download screenshot" }).getAttribute("aria-disabled"),
+    ).toBe("true");
   });
 });
 
-describe("finishing an action a save was made for", () => {
-  const savedVersions = [{ version: 1, url: "https://cdn.test/v1.html", live: false }];
+describe("finishing a push made to preview", () => {
   const saved: StudioSurface = { ...live, label: "v1", version: 1 };
 
-  it("promotes the saved version once its versions are known, and says so once", async () => {
-    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: true }));
-    const onResumed = vi.fn();
-    const hosted: StudioSource = {
-      ...source,
-      surfaces: [saved],
-      actions: {
-        offered: ["promote"],
-        run,
-        status: async () => ({ paywallId: "208540", versions: savedVersions }),
-      },
-    };
-    const { rerender } = renderEditor(
-      <SurfaceEditor
-        source={hosted}
-        surface={saved}
-        samples={{}}
-        resume="promote"
-        onResumed={onResumed}
-      />,
-    );
-    await act(async () => {});
-
-    expect(run).toHaveBeenCalledTimes(1);
-    expect(run).toHaveBeenCalledWith(
-      saved,
-      { action: "promote", version: 1 },
-      expect.any(Function),
-    );
-    expect(onResumed).toHaveBeenCalledTimes(1);
-
-    rerender(
-      <StudioHostProvider mode="local" home={{ href: "/", navigate: () => {} }}>
-        <SurfaceEditor source={hosted} surface={saved} samples={{}} onResumed={onResumed} />
-      </StudioHostProvider>,
-    );
-    await act(async () => {});
-    expect(run).toHaveBeenCalledTimes(1);
-  });
-
-  it("waits for a shipping seam before promoting", async () => {
-    const onResumed = vi.fn();
-    renderEditor(
-      <SurfaceEditor
-        source={source}
-        surface={saved}
-        samples={{}}
-        resume="promote"
-        onResumed={onResumed}
-      />,
-    );
-    await act(async () => {});
-    expect(onResumed).not.toHaveBeenCalled();
-  });
-
-  it("opens Preview on a device for a save made to preview", async () => {
+  it("opens Preview on a device once, and says so", async () => {
     const onResumed = vi.fn();
     renderEditor(
       <SurfaceEditor
@@ -1198,7 +1169,7 @@ describe("finishing an action a save was made for", () => {
       />,
     );
     await act(async () => {});
-    expect(screen.getByRole("dialog")).toBeDefined();
+    expect(screen.getByRole("dialog", { name: "Preview on a device" })).toBeDefined();
     expect(onResumed).toHaveBeenCalledTimes(1);
   });
 });

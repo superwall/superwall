@@ -1,6 +1,16 @@
 export type StudioActionName = "push" | "promote" | "publish";
 
-export type StudioActionRequest = { action: StudioActionName; version?: number };
+/**
+ * What a push of a surface the account does not have yet was made for, so a
+ * host that moves to the saved surface can finish it there.
+ */
+export type StudioResume = "preview";
+
+export type StudioActionRequest = {
+  action: StudioActionName;
+  version?: number;
+  resume?: StudioResume;
+};
 
 export type StudioActionResult =
   | { ok: true; version: number; live: boolean }

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { hasIntroductoryOffer, type HostDelegate, type HostState } from "@superwall/host";
-import { ActionMenu, UnsavedPromote, type ActionProgress } from "../components/menus/ActionMenu";
+import { ActionMenu, type ActionProgress } from "../components/menus/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/menus/CompareMenu";
 import {
   Canvas,
@@ -69,12 +69,13 @@ import {
   type Samples,
   type StudioActionName,
   type StudioPresentation,
-  type StudioSaveIntent,
+  type StudioResume,
   type StudioSource,
   type StudioStatus,
   type StudioSurface,
   type StudioVersion,
 } from "../lib/surfaces";
+import { useStudioMode } from "../lib/studio-host";
 import { timeAgo } from "../lib/time";
 import { type VariableOverrides } from "../lib/variables";
 
@@ -269,10 +270,11 @@ export const SurfaceEditor = ({
   actions?: React.ReactNode;
   panel?: StudioPanel;
   /**
-   * An action a save was made for (`StudioSource.unsaved`), to finish now
-   * the surface is saved: once, then `onResumed`.
+   * What a push of the unsaved surface was made for (`StudioActionRequest`'s
+   * `resume`), finished here once the host moved to the saved one, then
+   * `onResumed`.
    */
-  resume?: StudioSaveIntent;
+  resume?: StudioResume;
   onResumed?: () => void;
   /** Drives the editor's own controls (`StudioCommand`) and reads them back. */
   ref?: React.Ref<StudioHandle>;
@@ -316,13 +318,14 @@ export const SurfaceEditor = ({
     };
   }, [shipping, surface]);
 
-  const ship = async (action: StudioActionName) => {
+  const ship = async (action: StudioActionName, then?: StudioResume) => {
     if (!shipping) return;
     window.clearTimeout(dismissTimer.current);
     setProgress({ action, steps: {} });
 
     const version = action === "promote" ? (surface.version ?? picked) : undefined;
-    const result = await shipping.run(surface, { action, version }, (step, state) => {
+    const request = then ? { action, version, resume: then } : { action, version };
+    const result = await shipping.run(surface, request, (step, state) => {
       setProgress((current) =>
         current?.action === action
           ? {
@@ -353,19 +356,23 @@ export const SurfaceEditor = ({
     }
   };
 
-  // Read at mount: the host drops `resume` once told, and the dialog, the
-  // download or the promote it started carries on.
+  // Read at mount: the host drops `resume` once told, and the dialog it
+  // opened stays open.
   const [resuming] = React.useState(resume);
-  const resumed = React.useRef(false);
-  const statusLoaded = (status.versions?.length ?? 0) > 0;
   React.useEffect(() => {
-    if (resuming === undefined || resumed.current) return;
-    if (resuming === "promote" && !(shipping && statusLoaded)) return;
-    resumed.current = true;
-    onResumed?.();
-    if (resuming === "promote") void ship("promote");
-    // `ship` and `onResumed` change every render; this runs once, when it can.
-  }, [resuming, shipping, statusLoaded]);
+    if (resuming !== undefined) onResumed?.();
+    // `onResumed` changes every render; this runs once.
+  }, [resuming]);
+
+  // A hosted surface with no paywall is not in the account yet (an agent's
+  // build, say): pushing it is the only way to give a device something to open.
+  const hosted = useStudioMode() === "hosted";
+  const unsaved =
+    hosted && surface.paywallId === undefined && shipping?.offered.includes("push") === true;
+  const shippingBusy =
+    progress !== undefined &&
+    progress.error === undefined &&
+    ACTION_STEPS[progress.action].some((step) => progress.steps[step] !== "done");
 
   const responsive = deviceId === RESPONSIVE_ID;
   const device = deviceById(deviceId);
@@ -773,14 +780,15 @@ export const SurfaceEditor = ({
                   </button>
                 </Tooltip>
               )}
-              <DownloadScreenshot
-                source={source}
-                surface={surface}
-                autoDownload={resuming === "screenshot"}
-              />
+              <DownloadScreenshot source={source} surface={surface} />
             </span>
-            <PreviewOnDevice source={source} surface={surface} autoOpen={resuming === "preview"} />
-            {!shipping && source.unsaved && <UnsavedPromote unsaved={source.unsaved} />}
+            <PreviewOnDevice
+              source={source}
+              surface={surface}
+              autoOpen={resuming === "preview"}
+              pushFirst={unsaved ? () => void ship("push", "preview") : undefined}
+              disabled={unsaved && shippingBusy}
+            />
             {shipping && (
               <ActionMenu
                 offered={shipping.offered}

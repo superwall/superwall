@@ -23,16 +23,23 @@ export const PreviewOnDevice = ({
   source,
   surface,
   autoOpen = false,
+  pushFirst,
+  disabled = false,
 }: {
   source: StudioSource;
   surface: StudioSurface;
-  /** Opens with the dialog showing, as a save made for it lands here. */
+  /** Opens with the dialog showing, as a push made for it lands here. */
   autoOpen?: boolean;
+  /**
+   * Set while the surface is not in the account yet: a device has nothing to
+   * open, so Preview asks to push it first and this runs the push.
+   */
+  pushFirst?: () => void;
+  disabled?: boolean;
 }) => {
   const hosted = useStudioMode() === "hosted";
   const [open, setOpen] = React.useState(autoOpen);
-  const unsaved = source.unsaved;
-  const saving = unsaved?.saving === "preview";
+  const [confirming, setConfirming] = React.useState(false);
   const [scheme, setScheme] = React.useState(() => readScheme() ?? source.scheme);
   const [link, setLink] = React.useState<LinkState>({ status: "loading" });
 
@@ -78,15 +85,38 @@ export const PreviewOnDevice = ({
       <button
         className="sw-btn sw-btn--sm max-sm:w-7 max-sm:px-0"
         type="button"
-        aria-label={saving ? "Saving…" : "Preview"}
-        disabled={unsaved?.saving !== undefined}
-        aria-busy={saving || undefined}
-        // An unsaved surface has nothing a device can open yet.
-        onClick={() => (unsaved ? unsaved.save("preview") : setOpen(true))}
+        aria-label="Preview"
+        disabled={disabled}
+        onClick={() => (pushFirst ? setConfirming(true) : setOpen(true))}
       >
-        {saving ? <SpinnerIcon /> : <QrCodeIcon />}
-        <span className="max-sm:hidden">{saving ? "Saving…" : "Preview"}</span>
+        <QrCodeIcon />
+        <span className="max-sm:hidden">Preview</span>
       </button>
+
+      {confirming && pushFirst && (
+        <Dialog
+          title="Push this paywall first?"
+          description="Previewing on a device needs a saved version. This pushes it as a draft: a new version, nothing live changes."
+          onClose={() => setConfirming(false)}
+          footer={
+            <>
+              <button className="sw-btn" type="button" onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+              <button
+                className="sw-btn sw-btn--primary"
+                type="button"
+                onClick={() => {
+                  setConfirming(false);
+                  pushFirst();
+                }}
+              >
+                Push and preview
+              </button>
+            </>
+          }
+        />
+      )}
 
       {open && (
         <Dialog

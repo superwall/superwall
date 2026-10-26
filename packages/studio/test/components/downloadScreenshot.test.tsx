@@ -194,37 +194,3 @@ describe("downloading a paywall's screenshot", () => {
     await waitFor(() => expect(blocked()).toBe(false));
   });
 });
-
-describe("downloading a screenshot a save was made for", () => {
-  const mountResumed = (source: StudioSource) =>
-    render(
-      <StudioHostProvider mode="hosted" home={{ href: "/", navigate: () => {} }}>
-        <DownloadScreenshot source={source} surface={surface} autoDownload />
-      </StudioHostProvider>,
-    );
-
-  it("downloads it as soon as it is known", async () => {
-    const { clicked } = captureAnchor();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, blob: async () => new Blob(["png"]) })),
-    );
-    mountResumed(sourceWith({ screenshotUrl: async () => "https://cdn/shot.png" }));
-
-    await waitFor(() => expect(clicked).toHaveBeenCalledTimes(1));
-  });
-
-  it("explains why when there is none to download yet", async () => {
-    const custom = vi.spyOn(toast, "custom");
-    mountResumed(sourceWith({ screenshotUrl: async () => undefined }));
-
-    await waitFor(() => expect(custom).toHaveBeenCalledTimes(1));
-  });
-
-  it("explains why when the screenshot service is out of reach", async () => {
-    const custom = vi.spyOn(toast, "custom");
-    mountResumed(sourceWith({ screenshotUrl: async () => Promise.reject(new Error("down")) }));
-
-    await waitFor(() => expect(custom).toHaveBeenCalledTimes(1));
-  });
-});
