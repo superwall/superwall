@@ -10,6 +10,7 @@ import {
   findPaywall,
   listAppPaywalls,
   livePaywall,
+  pushedProducts,
   livePaywallVersion,
   listResource,
   pushPaywallAssets,
@@ -168,15 +169,24 @@ test("getPaywall reads a numeric application id, and leaves a missing one undefi
   assert.equal((await findPaywall(api, "208540")).applicationId, undefined);
 });
 
-test("livePaywall carries the live products with their stores", async () => {
+test("pushedProducts reads the newest version of a snapshot, and nothing for one never pushed", async () => {
   mockFetch(() => ({
-    id: 208540,
-    version: 3,
-    products: [{ reference_name: "primary", identifier: "elite1w", store: "custom" }],
+    object: "list",
+    data: [
+      { version: 2, snapshot_id: "s1", products: [{ reference_name: "a", identifier: "x", store: "custom" }] },
+      { version: 1, snapshot_id: "s1", products: [{ reference_name: "a", identifier: "x", store: "app-store" }] },
+      { version: 3, snapshot_id: "s2", products: [] },
+      { version: "4", snapshot_id: "s1" },
+      "junk",
+    ],
   }));
-  assert.deepEqual((await livePaywall(api, "208540")).products, [
-    { reference: "primary", identifier: "elite1w", store: "custom" },
+  assert.deepEqual(await pushedProducts(api, "208540", "s1"), [
+    { reference: "a", identifier: "x", store: "custom" },
   ]);
+  assert.equal(await pushedProducts(api, "208540", "s9"), undefined);
+
+  mockFetch(() => ({ object: "list" }));
+  assert.equal(await pushedProducts(api, "208540", "s1"), undefined);
 });
 
 test("versionProducts reads only the catalogue's own entries, whatever an identifier is called", () => {

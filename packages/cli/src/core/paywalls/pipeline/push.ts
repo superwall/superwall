@@ -4,6 +4,7 @@ import type { SuperwallApi } from "@/core/api/client";
 import {
   livePaywall,
   platformStore,
+  pushedProducts,
   promotePaywallVersion,
   pushPaywallVersion,
   versionProducts,
@@ -262,16 +263,16 @@ async function prepare(
       const section = target.surface.kind === "paywall" ? lock.paywalls : lock.funnels;
       const recorded = section[target.surface.id]?.[target.platform];
       const stores = catalogueOf(target)?.stores ?? {};
-      const storesChanged = storesDiffer(
-        versionProducts(build.products, target.platform, stores),
-        live.products,
-      );
       const unsourced =
-        !storesChanged && recorded?.snapshot === build.snapshotId ? recorded.sourcePending : undefined;
-      const changed =
-        storesChanged ||
-        unsourced !== undefined ||
-        needsWork(build.snapshotId, recorded?.snapshot, live.snapshotId);
+        recorded?.snapshot === build.snapshotId ? recorded.sourcePending : undefined;
+      const stale = needsWork(build.snapshotId, recorded?.snapshot, live.snapshotId);
+      const storesChanged =
+        !stale &&
+        storesDiffer(
+          versionProducts(build.products, target.platform, stores),
+          await pushedProducts(context.api, bind.paywallId, build.snapshotId),
+        );
+      const changed = unsourced !== undefined || stale || storesChanged;
       return {
         target,
         bind,
@@ -279,7 +280,7 @@ async function prepare(
         live: live.version,
         changed,
         pending: !changed && live.snapshotId !== build.snapshotId,
-        unsourced,
+        unsourced: storesChanged ? undefined : unsourced,
         stores,
       };
     });

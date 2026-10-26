@@ -293,7 +293,6 @@ export async function findPaywall(api: SuperwallApi, paywallId: string): Promise
 interface LivePaywall {
   version?: number;
   snapshotId?: string;
-  products?: PaywallProductRef[];
 }
 
 const SNAPSHOT_IN_URL = /([a-f0-9]{64})\.html/;
@@ -303,7 +302,6 @@ export async function livePaywall(api: SuperwallApi, paywallId: string): Promise
     (paywall) => ({
       version: paywall.version,
       snapshotId: paywall.url?.match(SNAPSHOT_IN_URL)?.[1],
-      products: paywall.products,
     }),
     (error: unknown) => {
       if (error instanceof ApiUnreachableError) return {};
@@ -311,6 +309,21 @@ export async function livePaywall(api: SuperwallApi, paywallId: string): Promise
       throw error;
     },
   );
+}
+
+export async function pushedProducts(
+  api: SuperwallApi,
+  paywallId: string,
+  snapshotId: string,
+): Promise<PaywallProductRef[] | undefined> {
+  const body = await api.get<{ data?: unknown }>(
+    `/v2/paywalls/${encodeURIComponent(paywallId)}/versions`,
+  );
+  const rows = Array.isArray(body.data) ? body.data.filter(isRecord) : [];
+  const pushed = rows
+    .filter((row) => row.snapshot_id === snapshotId && typeof row.version === "number")
+    .sort((a, b) => Number(b.version) - Number(a.version))[0];
+  return pushed === undefined ? undefined : parseProductRefs(pushed.products);
 }
 
 export async function livePaywallVersion(

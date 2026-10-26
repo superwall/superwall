@@ -87,8 +87,10 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
                     ? "access"
                     : url.endsWith("/source-commit")
                       ? "link"
-                      : url.endsWith("/versions")
-                        ? "versions"
+                      : url.endsWith("/versions") && req.method === "GET"
+                        ? "history"
+                        : url.endsWith("/versions")
+                          ? "versions"
                         : /^\/v2\/paywalls\/[^/]+$/.test(url) && req.method === "GET"
                           ? "live"
                           : "other";
@@ -109,6 +111,7 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
         link: { commit_sha: "linked" },
         promote: { version: 7, url: "u" },
         live: { id: "2080" },
+        history: { object: "list", data: [] },
         paywalls: { data: [] },
         create: { id: 9 },
         projects: { data: [{ id: "9", applications: [{ id: "42" }] }] },
@@ -783,46 +786,63 @@ test("a surface whose snapshot already matches production is skipped entirely", 
       }),
   });
 
-  assert.deepEqual(fake.calls, ["projects", "products", "live"]);
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "history"]);
 });
 
-test("a snapshot production already has is pushed again when its products went up with the wrong store", async () => {
-  const project = scaffold();
-  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "ios", {
-    paywallId: "2080",
-    snapshot: "a".repeat(64),
-  });
-  const fake = await fakeApi({
-    products: {
-      body: {
-        data: [
-          { identifier: "elite1w", platform: "ios", store: "app_store" },
-          { identifier: "stripe_elite1w", platform: "custom", store: "custom" },
-        ],
+const elite = { primary: "elite1w", stripePrimary: "stripe_elite1w" };
+
+const eliteCatalogue = {
+  body: {
+    data: [
+      { identifier: "elite1w", platform: "ios", store: "app_store" },
+      { identifier: "stripe_elite1w", platform: "custom", store: "custom" },
+    ],
+  },
+};
+
+const pushedWith = (snapshot: string, stripeStore: string) => ({
+  body: {
+    object: "list",
+    data: [
+      {
+        version: 6,
+        snapshot_id: "0".repeat(64),
+        products: [{ reference_name: "stripePrimary", identifier: "stripe_elite1w", store: "custom" }],
       },
-    },
-    live: {
-      body: {
-        id: "2080",
+      {
         version: 7,
-        paywall_url: `https://r/x/headless/2080/${"a".repeat(64)}.html`,
+        snapshot_id: snapshot,
         products: [
           { reference_name: "primary", identifier: "elite1w", store: "app-store" },
-          { reference_name: "stripePrimary", identifier: "stripe_elite1w", store: "app-store" },
+          { reference_name: "stripePrimary", identifier: "stripe_elite1w", store: stripeStore },
         ],
       },
-    },
+    ],
+  },
+});
+
+const liveOn = (snapshot: string) => ({
+  body: { id: "2080", version: 7, paywall_url: `https://r/x/headless/2080/${snapshot}.html` },
+});
+
+test("a snapshot already pushed is pushed again when its version carries the wrong store", async () => {
+  const project = scaffold();
+  const snapshot = "a".repeat(64);
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "ios", {
+    paywallId: "2080",
+    snapshot,
+  });
+  const fake = await fakeApi({
+    products: eliteCatalogue,
+    live: liveOn(snapshot),
+    history: pushedWith(snapshot, "app-store"),
   });
 
   await runPushPipeline(contextFor(fake.api), {
     promote: true,
     load: async () =>
       frameworkFor(project, {
-        buildSnapshot: async () =>
-          built({
-            snapshotId: "a".repeat(64),
-            products: { primary: "elite1w", stripePrimary: "stripe_elite1w" },
-          }),
+        buildSnapshot: async () => built({ snapshotId: snapshot, products: elite }),
       }),
   });
 
@@ -833,6 +853,56 @@ test("a snapshot production already has is pushed again when its products went u
     { store: "app-store", identifier: "elite1w", reference_name: "primary" },
     { store: "custom", identifier: "stripe_elite1w", reference_name: "stripePrimary" },
   ]);
+});
+
+test("a corrected draft is not pushed again while production still has the old stores", async () => {
+  const project = scaffold();
+  const snapshot = "a".repeat(64);
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "ios", {
+    paywallId: "2080",
+    snapshot,
+  });
+  const fake = await fakeApi({
+    products: eliteCatalogue,
+    live: liveOn("b".repeat(64)),
+    history: pushedWith(snapshot, "custom"),
+  });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () =>
+      frameworkFor(project, {
+        buildSnapshot: async () => built({ snapshotId: snapshot, products: elite }),
+      }),
+  });
+
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "history"]);
+});
+
+test("a version whose source failed is pushed again first when its stores were wrong", async () => {
+  const project = scaffold();
+  const snapshot = "a".repeat(64);
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "ios", {
+    paywallId: "2080",
+    snapshot,
+    sourcePending: 7,
+  });
+  const fake = await fakeApi({
+    products: eliteCatalogue,
+    live: liveOn("b".repeat(64)),
+    history: pushedWith(snapshot, "app-store"),
+  });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () =>
+      frameworkFor(project, {
+        buildSnapshot: async () => built({ snapshotId: snapshot, products: elite }),
+      }),
+  });
+
+  assert.deepEqual(fake.calls, ["projects", "products", "live", "history", "versions", "access", "link"]);
+  assert.equal(readLock(project.superwallDir).paywalls["plus-upgrade"]?.ios?.sourcePending, undefined);
 });
 
 test("a changed snapshot still ships when production is on an older one", async () => {
@@ -912,7 +982,7 @@ test("pushing twice with no edits skips the second run — the version already e
   await runPushPipeline(contextFor(fake.api), { promote: false, load });
   assert.deepEqual(
     fake.calls,
-    ["projects", "products", "live"],
+    ["projects", "products", "live", "history"],
     "nothing to push: the built snapshot is already a version",
   );
 });
@@ -937,7 +1007,7 @@ test("publish refuses to re-push an identical version and points at promote inst
 
   assert.deepEqual(
     fake.calls,
-    ["projects", "products", "live"],
+    ["projects", "products", "live", "history"],
     "no second version push, and no promote of an old push",
   );
 });
@@ -1022,7 +1092,7 @@ test("no promote hint when the built snapshot is what production already serves"
     });
     assert.deepEqual(
       fake.calls,
-      ["projects", "products", "live"],
+      ["projects", "products", "live", "history"],
       "already live: nothing to push, nothing to promote",
     );
     assert.deepEqual(warnings, [], "and nothing to warn about");
@@ -1411,7 +1481,7 @@ test("a version whose source failed is retried on the next push, not skipped as 
 
   assert.deepEqual(
     fake.calls.filter((call) => call !== "projects"),
-    ["products", "live", "access", "link"],
+    ["products", "live", "history", "access", "link"],
   );
   assert.deepEqual(readLock(project.superwallDir).paywalls["plus-upgrade"]?.ios, {
     paywallId: "2080",
@@ -1436,7 +1506,7 @@ test("publish after a source failure finishes the source before promoting, and n
 
     assert.deepEqual(
       fake.calls.filter((call) => call !== "projects"),
-      ["products", "live", "access", "link", "promote"],
+      ["products", "live", "history", "access", "link", "promote"],
     );
     assert.deepEqual(JSON.parse(fake.bodies.promote ?? "{}"), { version: 7 });
     assert.deepEqual(warnings, []);
