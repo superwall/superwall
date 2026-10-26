@@ -276,6 +276,22 @@ export const Canvas = ({
     onZoom?.({ scale: transform.scale, fitted: mode.kind === "fit" });
   }, [onZoom, transform.scale, mode.kind]);
 
+  // The stage changing size (a side panel opening, a window resize) puts the
+  // paywall back in the middle: a pan alone refits, a manual zoom is kept.
+  const lastViewport = React.useRef(viewportSize);
+  React.useLayoutEffect(() => {
+    const before = lastViewport.current;
+    lastViewport.current = viewportSize;
+    if (before.width === viewportSize.width && before.height === viewportSize.height) return;
+    const asked = requested.current;
+    if (asked.kind !== "manual" || before.width <= 0 || before.height <= 0) return;
+    const { contentSize: size, room: inset } = measured.current;
+    const wasFitted =
+      Math.abs(asked.transform.scale - fitTransform(size, before, inset).scale) < 1e-3;
+    if (wasFitted) fit();
+    else apply(centered(asked.transform.scale, size, viewportSize, inset));
+  }, [viewportSize, measured, fit, apply]);
+
   React.useEffect(() => {
     if (lastFitKey.current === fitKey) return;
     lastFitKey.current = fitKey;

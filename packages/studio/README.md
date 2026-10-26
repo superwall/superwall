@@ -145,8 +145,9 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   stage a device or orientation change refits.
 - `SurfaceEditor`'s `panel` (`{ open, label, content, width?, onWidthChange? }`)
   is a host-owned panel at the start of the editor's row, from under the top
-  bar to the bottom of the studio; the stage and its toolbar sit to its right
-  (the Variables panel stays in the stage row, above the toolbar). The
+  bar to the bottom of the studio; the stage and its toolbar sit to its right.
+  The Variables panel mirrors it on the right, also full height, so the
+  toolbar spans only the stage column between the two. The
   dashboard puts the agent chat's slot there. It opens like the Variables
   panel, by growing its width (`ease-drawer`, the move duration, none under
   reduced motion), while its content keeps its width pinned to the inner
@@ -176,7 +177,12 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   Push, Publish and Promote beside a picker of the pushed versions, reading
   **Roll back** when the picked one is older than what is live, and a Compare
   menu splits the stage against any pushed version of the paywall (the live one
-  marked) or another local one.
+  marked) or another local one. The progress panel a run opens closes like
+  any popover (outside click, Escape, focus or the window leaving); the
+  action button or its chevron brings a running one back, and a failure
+  reopens it. When the stage changes size (a side panel opening or closing,
+  a resize), the device goes back to the middle: refitted if the user only
+  panned, re-centred at their zoom if they zoomed.
 
 ## Design
 

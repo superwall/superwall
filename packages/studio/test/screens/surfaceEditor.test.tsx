@@ -345,9 +345,7 @@ describe("SurfaceEditor shipping a local surface", () => {
     });
 
   const ship = async (label: string) => {
-    const menu = screen.getByRole("button", { name: /push|publish|promote/i });
-    fireEvent.click(menu);
-    fireEvent.click(screen.getByRole("button", { name: new RegExp(label, "i") }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${label}$`, "i") }));
     await act(async () => {});
   };
 
@@ -1071,6 +1069,11 @@ describe("SurfaceEditor driven by its host", () => {
     expect(panel.style.getPropertyValue("--sw-host-panel")).toContain("100cqw - 400px");
     fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
     expect(panel.style.getPropertyValue("--sw-host-panel")).toContain("100cqw - 720px");
+    // Variables mirrors the chat: full height on the right, the toolbar only under the stage.
+    const variables = screen.getByRole("button", { name: "Close variables" }).closest("aside")!;
+    const column = screen.getByTestId("stage-column");
+    expect(column.nextElementSibling).toBe(variables);
+    expect(variables.contains(screen.getByRole("group", { name: "Zoom" }))).toBe(false);
     fireEvent.keyDown(screen.getByRole("separator", { name: "Resize chat" }), {
       key: "ArrowRight",
     });
@@ -1104,6 +1107,25 @@ describe("a surface the account does not have yet", () => {
     fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
     expect(screen.getByText("New version, nothing live changes")).toBeDefined();
     expect(screen.getByText("Push and make it live")).toBeDefined();
+  });
+
+  it("names a draft titled by its own id once, with its label in the version slot", async () => {
+    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: false }));
+    const named = {
+      ...draft,
+      project: undefined,
+      id: "monthly-yearly",
+      label: "Draft · from chat",
+    };
+    renderHosted(
+      <SurfaceEditor
+        source={{ ...draftSource(run), title: "monthly-yearly", surfaces: [named] }}
+        surface={named}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    expect(screen.getByText("monthly-yearly / Draft · from chat")).toBeTruthy();
   });
 
   it("asks before pushing it to preview, and pushes for the preview once confirmed", async () => {

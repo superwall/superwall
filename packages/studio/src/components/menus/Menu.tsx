@@ -21,11 +21,22 @@ export const useDismiss = (
     const escape = (event: KeyboardEvent) => {
       if (event.key === "Escape") dismiss.current();
     };
+    const focus = (event: FocusEvent) => {
+      const path = event.composedPath();
+      if (!refs.some((ref) => ref.current && path.includes(ref.current))) dismiss.current();
+    };
+    // A click into an iframe (the preview, a host's chat) never reaches this
+    // window as a mousedown; it blurs the window instead.
+    const blur = () => dismiss.current();
     window.addEventListener("mousedown", outside);
     window.addEventListener("keydown", escape);
+    window.addEventListener("focusin", focus);
+    window.addEventListener("blur", blur);
     return () => {
       window.removeEventListener("mousedown", outside);
       window.removeEventListener("keydown", escape);
+      window.removeEventListener("focusin", focus);
+      window.removeEventListener("blur", blur);
     };
   }, [refs, open]);
 };

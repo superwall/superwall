@@ -208,19 +208,42 @@ export const ActionMenu = ({
     progress !== undefined &&
     progress.error === undefined &&
     ACTION_STEPS[progress.action].some((step) => progress.steps[step] !== "done");
-  const showPanel = progress !== undefined;
+  // The progress panel opens when a run starts or fails, and closes like any
+  // popover; the button or chevron brings it back while the run is on screen.
+  const [panelOpen, setPanelOpen] = React.useState(false);
+  const runKey = progress ? `${progress.action}:${progress.error !== undefined}` : undefined;
+  React.useEffect(() => setPanelOpen(runKey !== undefined), [runKey]);
+  const showPanel = progress !== undefined && panelOpen;
 
   const popupRef = React.useRef<HTMLDivElement>(null);
   const dismissRefs = React.useMemo(() => [menuRef, popupRef], []);
-  useDismiss(dismissRefs, open, () => setOpen(false));
+  useDismiss(dismissRefs, open || showPanel, () => {
+    setOpen(false);
+    setPanelOpen(false);
+  });
 
   const start = () => {
+    if (busy) {
+      setPanelOpen((value) => !value);
+      return;
+    }
     if (stopped) {
       if (selected !== "promote") onBlocked?.();
       return;
     }
     setRun({ direction, target: promotion.target });
+    setOpen(false);
+    setPanelOpen(true);
     onRun(selected);
+  };
+
+  const toggleChooser = () => {
+    if (busy) {
+      setPanelOpen((value) => !value);
+      return;
+    }
+    setPanelOpen(false);
+    setOpen((value) => showPanel || !value);
   };
 
   const choose = (action: StudioActionName) => {
@@ -247,8 +270,9 @@ export const ActionMenu = ({
             <button
               type="button"
               className={`${SEGMENT} ${chooser ? "rounded-e-none border-e-0" : ""}`}
-              disabled={busy || (stopped && selected === "promote")}
+              disabled={!busy && stopped && selected === "promote"}
               aria-busy={busy || undefined}
+              aria-expanded={progress ? showPanel : undefined}
               onClick={start}
             >
               {busy && <SpinnerIcon />}
@@ -261,10 +285,9 @@ export const ActionMenu = ({
                   type="button"
                   className={`${SEGMENT} sw-btn--icon rounded-s-none border-s-0`}
                   aria-label="Choose action"
-                  aria-expanded={open}
+                  aria-expanded={open || showPanel}
                   aria-busy={busy || undefined}
-                  disabled={busy}
-                  onClick={() => setOpen((value) => !value)}
+                  onClick={toggleChooser}
                 >
                   <ChevronDownIcon />
                 </button>

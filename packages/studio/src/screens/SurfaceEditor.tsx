@@ -230,6 +230,13 @@ const CanvasFooter = ({ children }: React.PropsWithChildren) => {
   );
 };
 
+// The id is left out where the title already says it (a draft named by its folder).
+const editorTitle = (surface: StudioSurface, sourceTitle: string): string => {
+  const head = surface.project ?? sourceTitle;
+  const id = surface.label && surface.id !== head ? ` · ${surface.id}` : "";
+  return `${head} / ${surface.label ?? surface.id}${id}`;
+};
+
 const nameOf = (surface: StudioSurface): string => surface.label ?? `${surface.kind}/${surface.id}`;
 
 /**
@@ -751,9 +758,7 @@ export const SurfaceEditor = ({
         />
       )}
       <TopBar
-        title={`${surface.project ?? source.title} / ${surface.label ?? surface.id}${
-          surface.label ? ` · ${surface.id}` : ""
-        }`}
+        title={editorTitle(surface, source.title)}
         actions={
           <>
             {actions}
@@ -905,10 +910,6 @@ export const SurfaceEditor = ({
                 </CanvasFooter>
               </div>
             </Canvas>
-
-            <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
-              <VariablesPanel overrides={edited} groups={groups} onChange={setEdited} />
-            </SidePanel>
           </div>
 
           <Toolbar>
@@ -1034,6 +1035,9 @@ export const SurfaceEditor = ({
             </button>
           </Toolbar>
         </div>
+        <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
+          <VariablesPanel overrides={edited} groups={groups} onChange={setEdited} />
+        </SidePanel>
       </div>
     </>
   );

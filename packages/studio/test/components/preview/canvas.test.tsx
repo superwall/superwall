@@ -106,6 +106,42 @@ describe("Canvas", () => {
     expect(zoom.current).toEqual({ scale: 904 / 2000, fitted: true });
   });
 
+  it("refits a panned stage when it changes size, and re-centres a zoomed one", () => {
+    const observers: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          observers.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const resize = (viewport: Size) => {
+      sizes.canvas = viewport;
+      act(() => observers.forEach((callback) => callback([], {} as ResizeObserver)));
+    };
+    const { layer, api, zoom } = mount();
+
+    act(() => api().pan(120, 40));
+    expect(zoom.current.fitted).toBe(false);
+    resize({ width: 680, height: 800 });
+    expect(zoom.current.fitted).toBe(true);
+    expect(transformOf(layer).scale).toBeCloseTo(584 / 2000);
+
+    act(() => api().zoomStep(1));
+    act(() => api().pan(-200, 30));
+    const zoomed = transformOf(layer).scale;
+    resize({ width: 1000, height: 800 });
+    expect(zoom.current.fitted).toBe(false);
+    expect(transformOf(layer)).toEqual({
+      scale: zoomed,
+      x: 48 + (904 - 2000 * zoomed) / 2,
+      y: 48 + (704 - 1000 * zoomed) / 2,
+    });
+  });
+
   it("zooms around the cursor on a pinch or ctrl-wheel, and pans on a plain wheel", () => {
     const { canvas, layer, zoom } = mount();
     const before = transformOf(layer);
