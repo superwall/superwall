@@ -2,6 +2,7 @@ import { field, readCheckoutStatus } from "../api/decode";
 import type { CheckoutStatus } from "../types";
 import { fetchWithRetry } from "../api/fetch";
 import { subscriptionsApiUrl } from "../api/url";
+import { sessionQueryOf } from "./boot";
 
 export type CreatedTeleport = { teleportId: string; url: string };
 
@@ -93,6 +94,18 @@ export const readCheckoutOf = async (
     { retries: 0 },
   );
   return readCheckoutStatus(await response.json()).status;
+};
+
+export const readTeleportQuery = async (
+  publicApiKey: string,
+  teleportId: string,
+): Promise<Record<string, string>> => {
+  const response = await fetchWithRetry(subscriptionsApiUrl("checkout/teleport/session/read"), {
+    method: "POST",
+    headers: headers(publicApiKey),
+    body: JSON.stringify({ teleportId }),
+  });
+  return sessionQueryOf(field(await response.json(), "session"));
 };
 
 export const completeTeleportCheckout = async (

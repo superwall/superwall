@@ -7,6 +7,7 @@ export type TeleportBoot = {
   appLinkUrl?: string;
   productReference?: string;
   query: Record<string, string>;
+  loadSession: boolean;
 };
 
 export const NAV_QUERY_KEY = "sw_nav";
@@ -28,7 +29,7 @@ const navigable = (value: unknown): string | undefined => {
   }
 };
 
-const queryOf = (session: unknown): Record<string, string> => {
+export const sessionQueryOf = (session: unknown): Record<string, string> => {
   const query = field(session, SESSION_QUERY_FIELD);
   if (typeof query !== "object" || query === null) return {};
   const entries: Record<string, string> = {};
@@ -60,7 +61,8 @@ export const readTeleportBoot = (): TeleportBoot | undefined => {
     ...(returnUrl === undefined ? {} : { returnUrl }),
     ...(appLinkUrl === undefined ? {} : { appLinkUrl }),
     ...(productReference === undefined ? {} : { productReference }),
-    query: queryOf(field(value, "session")),
+    query: sessionQueryOf(field(value, "session")),
+    loadSession: field(value, "loadSession") === true && field(value, "session") === undefined,
   };
 };
 

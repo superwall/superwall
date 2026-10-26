@@ -14,6 +14,7 @@ import {
   completeTeleportCheckout,
   createTeleport,
   readCheckoutOf,
+  readTeleportQuery,
   readTeleportStatus,
   teleportStatusUrls,
 } from "./api";
@@ -80,6 +81,27 @@ export const flowQuery = (
 ): Record<string, string> => {
   const { [NAV_QUERY_KEY]: _nav, ...query } = store?.entries() ?? {};
   return query;
+};
+
+type QueryWriter = {
+  get(key: string): string | null;
+  set(patch: Record<string, string>, history: "replace"): void;
+};
+
+export const restoreTeleportQuery = async (
+  boot: TeleportBoot,
+  publicApiKey: string,
+  store: QueryWriter,
+): Promise<void> => {
+  let saved: Record<string, string>;
+  try {
+    saved = await readTeleportQuery(publicApiKey, boot.id);
+  } catch (error) {
+    console.warn("Reading the flow the app saved for this teleport failed:", error);
+    return;
+  }
+  const missing = Object.entries(saved).filter(([key]) => store.get(key) === null);
+  if (missing.length > 0) store.set(Object.fromEntries(missing), "replace");
 };
 
 let opens = 0;

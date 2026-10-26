@@ -9,7 +9,8 @@ export type SubscriptionsApiPath =
   | "checkout/discount"
   | "checkout/status"
   | "checkout/teleport"
-  | "checkout/teleport/status";
+  | "checkout/teleport/status"
+  | "checkout/teleport/session/read";
 
 const BASE_URL_BY_ENV: Record<SubscriptionsApiEnvironment, string> = {
   local: "http://localhost:3045/subscriptions-api/public/v1",

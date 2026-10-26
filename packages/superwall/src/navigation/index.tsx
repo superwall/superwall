@@ -7,7 +7,7 @@ import {
   type SuperwallUserVariables,
 } from "@superwall/runtime";
 import { readTeleportBoot, seedTeleportUrl } from "../checkout/teleport/boot";
-import { flowQuery, teleportFor } from "../checkout/teleport/flow";
+import { flowQuery, restoreTeleportQuery, teleportFor } from "../checkout/teleport/flow";
 import { useHostStateArrived, useSuperwallSession } from "../provider/context";
 import {
   freeze,
@@ -387,6 +387,24 @@ const Router = ({
       },
     };
   }, [entries, top, session, store]);
+
+  React.useEffect(() => {
+    const boot = readTeleportBoot();
+    if (!boot?.loadSession) return;
+    let pending = true;
+    const load = () => {
+      const key = session.getSnapshot().device.publicApiKey;
+      if (!pending || typeof key !== "string" || key === "") return;
+      pending = false;
+      void restoreTeleportQuery(boot, key, store);
+    };
+    const unsubscribe = session.subscribe(load);
+    load();
+    return () => {
+      pending = false;
+      unsubscribe();
+    };
+  }, [session, store]);
 
   React.useEffect(() => {
     if (nav.sync === "skip") return;

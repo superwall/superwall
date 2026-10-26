@@ -10,6 +10,7 @@ import {
   teleportFor,
   TELEPORT_TTL_MS,
   type TeleportSession,
+  restoreTeleportQuery,
 } from "../../../src/checkout/teleport/flow";
 
 type Fixture = {
@@ -640,9 +641,18 @@ describe("the web half of a teleport", () => {
 
   it("goes straight to a universal link that is the scheme itself", () => {
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
-    openApp({ id: "v1", route: "r", returnUrl: "myapp://x", query: {} }, "universal");
     openApp(
-      { id: "v1", route: "r", appLinkUrl: "https://a.superwall.link/x", query: {} },
+      { id: "v1", route: "r", returnUrl: "myapp://x", query: {}, loadSession: false },
+      "universal",
+    );
+    openApp(
+      {
+        id: "v1",
+        route: "r",
+        appLinkUrl: "https://a.superwall.link/x",
+        query: {},
+        loadSession: false,
+      },
       "universal",
     );
     expect(go.mock.calls).toEqual([["myapp://x"], ["https://a.superwall.link/x"]]);
@@ -671,5 +681,50 @@ describe("the link and the flow state", () => {
       goal: "sleep",
     });
     expect(flowQuery(null)).toEqual({});
+  });
+});
+
+describe("the flow the app saved for a teleport", () => {
+  const linkBoot = { id: "v1:tp", route: "checkout", query: {}, loadSession: true };
+
+  it("fills in the answers the page doesn't have yet, and leaves the ones it has", async () => {
+    const calls = api({
+      "checkout/teleport/session/read": {
+        session: { query: { goal: "sleep", level: "new", sw_nav: "index" } },
+      },
+    });
+    const writes: unknown[] = [];
+    const store = {
+      get: (key: string) => (key === "level" ? "old" : null),
+      set: (patch: Record<string, string>) => writes.push(patch),
+    };
+
+    await restoreTeleportQuery(linkBoot, "pk_test", store);
+
+    expect(calls[0]).toMatchObject({
+      path: "checkout/teleport/session/read",
+      body: { teleportId: "v1:tp" },
+    });
+    expect(calls[0]?.init.headers).toMatchObject({ Authorization: "Bearer pk_test" });
+    expect(writes).toEqual([{ goal: "sleep" }]);
+  });
+
+  it("writes nothing when the saved flow adds nothing", async () => {
+    api({ "checkout/teleport/session/read": {} });
+    const set = vi.fn();
+    await restoreTeleportQuery(linkBoot, "pk_test", { get: () => null, set });
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it("keeps the page as it is when the saved flow cannot be read", async () => {
+    api({ "checkout/teleport/session/read": new Response("{}", { status: 404 }) });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const set = vi.fn();
+    await restoreTeleportQuery(linkBoot, "pk_test", { get: () => null, set });
+    expect(set).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      "Reading the flow the app saved for this teleport failed:",
+      expect.any(Error),
+    );
   });
 });

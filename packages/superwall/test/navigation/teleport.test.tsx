@@ -150,17 +150,17 @@ describe("teleporting from the app", () => {
   });
 });
 
-describe("the web half of a teleport", () => {
-  const boot = () =>
-    Reflect.set(window, "__SW_TELEPORT__", {
-      id: "v1:tp",
-      route: "checkout",
-      returnUrl: "myapp://superwall/return",
-      session: { query: { goal: "sleep" } },
-    });
+const bootWebHalf = () =>
+  Reflect.set(window, "__SW_TELEPORT__", {
+    id: "v1:tp",
+    route: "checkout",
+    returnUrl: "myapp://superwall/return",
+    session: { query: { goal: "sleep" } },
+  });
 
+describe("the web half of a teleport", () => {
   it("opens on the teleported route with the answers, and goes back to the app from it", async () => {
-    boot();
+    bootWebHalf();
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     await mount({ platform: "iOS", publicApiKey: "pk_test" });
 
@@ -180,6 +180,43 @@ describe("the web half of a teleport", () => {
 
     captured.close?.();
     expect(go).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads the flow the app saved once the host's key is in, for a page opened from its link", async () => {
+    Reflect.set(window, "__SW_TELEPORT__", {
+      id: "v1:tp",
+      route: "checkout",
+      returnUrl: "myapp://superwall/return",
+      loadSession: true,
+    });
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ session: { query: { goal: "sleep" } } })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const Wrapper = createWrapper({ config, host: { products, device: { platform: "iOS" } } });
+    const view = render(
+      <Wrapper>
+        <PaywallRouter routes={routes} transition="none" />
+      </Wrapper>,
+    );
+    await flush();
+    expect(screen.getByText("goal:none")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      captured.session?.accept([
+        { event_name: "template_variables", variables: { device: { publicApiKey: "pk_web" } } },
+      ]);
+      await flush();
+    });
+    await act(async () => {
+      captured.session?.accept([{ event_name: "template_variables", variables: {} }]);
+      await flush();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("goal:sleep")).toBeTruthy();
+    view.unmount();
   });
 
   it("closes the paywall as usual off the web half", async () => {

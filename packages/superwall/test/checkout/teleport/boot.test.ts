@@ -35,6 +35,7 @@ describe("readTeleportBoot", () => {
       returnUrl: "myapp://superwall/return",
       productReference: "card",
       query: { goal: "sleep" },
+      loadSession: false,
     });
 
     boot({
@@ -44,7 +45,21 @@ describe("readTeleportBoot", () => {
       appLinkUrl: "data:text/html,x",
       session: { query: "x" },
     });
-    expect(readTeleportBoot()).toEqual({ id: "v1:tp", route: "checkout", query: {} });
+    expect(readTeleportBoot()).toEqual({
+      id: "v1:tp",
+      route: "checkout",
+      query: {},
+      loadSession: false,
+    });
+  });
+
+  it("asks for the saved flow only when the worker sent none with a link boot", () => {
+    boot({ id: "v1:tp", route: "checkout", loadSession: true });
+    expect(readTeleportBoot()?.loadSession).toBe(true);
+    boot({ id: "v1:tp", route: "checkout", loadSession: true, session: { query: {} } });
+    expect(readTeleportBoot()?.loadSession).toBe(false);
+    boot({ id: "v1:tp", route: "checkout", loadSession: "yes" });
+    expect(readTeleportBoot()?.loadSession).toBe(false);
   });
 
   it("takes the product tapped since from the link's fragment, when it is a reference", () => {
