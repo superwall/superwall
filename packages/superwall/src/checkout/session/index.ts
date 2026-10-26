@@ -9,6 +9,7 @@ import {
   readDiscountValidation,
 } from "../api/decode";
 import { fetchWithRetry } from "../api/fetch";
+import { attachCheckoutMetadata } from "../api/metadata";
 import { subscriptionsApiUrl } from "../api/url";
 import { createDiscountStore, type DiscountStore } from "../discount/store";
 import { bareProductIdentifier, isStripeProductIdentifier } from "../products";
@@ -212,14 +213,12 @@ export const createCheckoutSessions = (
     clearDiscount: () => {
       if (discounts.clear()) invalidate();
     },
-    attachMetadata: async (checkoutContextId, metadata) => {
-      if (Object.keys(metadata).length === 0) return;
-      await fetchWithRetry(subscriptionsApiUrl("checkout/session/custom-metadata"), {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({ checkoutContextId, metadata, timing: "post_purchase" }),
-      });
-    },
+    attachMetadata: (checkoutContextId, metadata) =>
+      attachCheckoutMetadata(
+        asString(getSnapshot().device.publicApiKey),
+        checkoutContextId,
+        metadata,
+      ),
     completeWebapp: async (checkoutContextId) => {
       const response = await fetchWithRetry(
         subscriptionsApiUrl("checkout/session/complete-webapp"),

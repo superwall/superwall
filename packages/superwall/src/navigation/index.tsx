@@ -274,6 +274,7 @@ const Router = ({
         (checkoutModeOf(session.getSnapshot().config?.checkout) !== undefined ||
           readTeleportBoot() !== undefined)) &&
         !detectSuperwallHost(),
+      readTeleportBoot()?.query,
     ),
   );
 

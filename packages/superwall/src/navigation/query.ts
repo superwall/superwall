@@ -74,9 +74,12 @@ const apply = (params: URLSearchParams, patch: QueryPatch): boolean => {
  * hosts, servers) it is plain state with the same shape, so a paywall reads
  * identically everywhere.
  */
-export const createQueryStore = (url: boolean): QueryStore => {
+export const createQueryStore = (
+  url: boolean,
+  seed: Readonly<Record<string, string>> = {},
+): QueryStore => {
   const live = url && typeof window !== "undefined";
-  let params = new URLSearchParams(live ? window.location.search : "");
+  let params = new URLSearchParams(live ? window.location.search : seed);
   const listeners = new Set<() => void>();
   const pending = new Map<string, string | null>();
   let timer: ReturnType<typeof setTimeout> | undefined;

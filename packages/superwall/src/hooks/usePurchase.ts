@@ -77,16 +77,18 @@ export const usePurchase = <
       const reference = referenceOf(input);
       const product = session.getSnapshot().productsByReference[reference];
       const teleporter = teleportFor(session);
+      const { postPurchase, stripeMetadata } = options ?? {};
       if (product && sessionsFor(session).isStripeProduct(reference) && teleporter.available()) {
         const outcome = await teleporter.begin({
           productReference: reference,
           query: flowQuery(queryStore),
+          postPurchase,
+          stripeMetadata,
         });
         if (typeof outcome === "object") return session.purchase(outcome.fallback, options);
         return { status: outcome, product };
       }
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
-        const { postPurchase, stripeMetadata } = options ?? {};
         const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
           postPurchase,
           stripeMetadata,

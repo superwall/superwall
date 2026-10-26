@@ -104,6 +104,17 @@ const setVisibility = (state: "visible" | "hidden") => {
   document.dispatchEvent(new Event("visibilitychange"));
 };
 
+const handleReturn = () => Reflect.get(window, "handleTeleportReturn")();
+
+const boot = (over: Record<string, unknown> = {}) =>
+  Reflect.set(window, "__SW_TELEPORT__", {
+    id: "v1:tp",
+    route: "checkout",
+    returnUrl: "myapp://superwall/return",
+    appLinkUrl: "https://acme.superwall.link/app-link/superwall/return",
+    ...over,
+  });
+
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -384,7 +395,6 @@ describe("a teleport from the app", () => {
   it("checks at once when the shopper returns, and abandons once still unpaid after the grace", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
     const { session, posted } = fakeSession();
-    const handleReturn = () => Reflect.get(window, "handleTeleportReturn")();
     const outcome = teleportFor(session).begin({ productReference: "card", query: {} });
     await settle(1_500);
 
@@ -432,6 +442,105 @@ describe("a teleport from the app", () => {
     await expect(second).resolves.toBe("abandoned");
   });
 
+  it("hands a second tap made while the teleport is being created the same purchase", async () => {
+    const calls = api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": [
+        { status: "pending" },
+        { status: "completed", checkoutContextId: "ctx_1" },
+      ],
+    });
+    const { session, events } = fakeSession();
+    const teleporter = teleportFor(session);
+
+    const first = teleporter.begin({ productReference: "card", query: {} });
+    const second = teleporter.begin({ productReference: "card", query: {} });
+    expect(second).toBe(first);
+    await settle();
+    await settle(2_000);
+    await settle(2_000);
+
+    await expect(first).resolves.toBe("completed");
+    expect(calls.filter((call) => call.path === "checkout/teleport")).toHaveLength(1);
+    expect(events().filter((name) => name === "open_url_external")).toHaveLength(1);
+
+    const third = teleporter.begin({ productReference: "card", query: {} });
+    expect(third).not.toBe(first);
+    await settle();
+    teleporter.cancel();
+    await expect(third).resolves.toBe("abandoned");
+  });
+
+  it("finishes with the purchase's own postPurchase and writes its Stripe metadata", async () => {
+    const calls = api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": { status: "completed", checkoutContextId: "ctx_1" },
+      "checkout/session/custom-metadata": {},
+    });
+    const { session, posted } = fakeSession({ postPurchase: "dismiss" });
+
+    const outcome = teleportFor(session).begin({
+      productReference: "card",
+      query: {},
+      postPurchase: "stay",
+      stripeMetadata: { quiz: "q1" },
+    });
+    await settle();
+    await settle(2_000);
+
+    await expect(outcome).resolves.toBe("completed");
+    expect(posted.at(-1)).toMatchObject({
+      event_name: "stripe_checkout_complete",
+      should_dismiss: false,
+    });
+    expect(calls.find((call) => call.path === "checkout/session/custom-metadata")?.body).toEqual({
+      checkoutContextId: "ctx_1",
+      metadata: { quiz: "q1" },
+      timing: "post_purchase",
+    });
+  });
+
+  it("logs Stripe metadata that cannot be written and still completes", async () => {
+    api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": { status: "completed", checkoutContextId: "ctx_1" },
+      "checkout/session/custom-metadata": new Response("nope", { status: 400 }),
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { session } = fakeSession();
+
+    const outcome = teleportFor(session).begin({
+      productReference: "card",
+      query: {},
+      stripeMetadata: { quiz: "q1" },
+    });
+    await settle();
+    await settle(2_000);
+
+    await expect(outcome).resolves.toBe("completed");
+    expect(error).toHaveBeenCalledWith("Attaching checkout metadata failed:", expect.any(Error));
+  });
+
+  it("forgets a return once the shopper reopens the browser, so the grace starts on the next one", async () => {
+    api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
+    const { session } = fakeSession();
+    const teleporter = teleportFor(session);
+    const outcome = teleporter.begin({ productReference: "card", query: {} });
+    let done = false;
+    void outcome.then(() => (done = true));
+    await settle();
+
+    teleporter.handleReturn();
+    await settle(5_000);
+    teleporter.reopen();
+    await settle(30_000);
+    expect(done).toBe(false);
+
+    teleporter.handleReturn();
+    await settle(20_000);
+    await expect(outcome).resolves.toBe("abandoned");
+  });
+
   it("buys the fallback in the app instead, once the store priced it", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
     const { session } = fakeSession();
@@ -475,7 +584,7 @@ describe("a teleport from the app", () => {
   });
 
   it("drops a status answer that arrives after the teleport was settled", async () => {
-    let answer: (value: Response) => void = () => undefined;
+    let answer: ((value: Response) => void) | undefined;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -488,14 +597,14 @@ describe("a teleport from the app", () => {
     const outcome = teleporter.begin({ productReference: "card", query: {} });
     await settle(2_000);
     teleporter.cancel();
-    answer(new Response(JSON.stringify({ status: "completed", checkoutContextId: "ctx" })));
+    answer?.(new Response(JSON.stringify({ status: "completed", checkoutContextId: "ctx" })));
     await settle();
     await expect(outcome).resolves.toBe("abandoned");
     expect(events()).not.toContain("stripe_checkout_complete");
   });
 
   it("drops a checkout answer that arrives after the teleport was settled", async () => {
-    let answer: (value: Response) => void = () => undefined;
+    let answer: ((value: Response) => void) | undefined;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -511,14 +620,14 @@ describe("a teleport from the app", () => {
     const outcome = teleporter.begin({ productReference: "card", query: {} });
     await settle(2_000);
     teleporter.cancel();
-    answer(new Response(JSON.stringify({ status: "completed" })));
+    answer?.(new Response(JSON.stringify({ status: "completed" })));
     await settle();
     await expect(outcome).resolves.toBe("abandoned");
     expect(events()).not.toContain("stripe_checkout_complete");
   });
 
   it("drops a failed check that arrives after the teleport was settled", async () => {
-    let fail: (error: Error) => void = () => undefined;
+    let fail: ((error: Error) => void) | undefined;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -532,22 +641,13 @@ describe("a teleport from the app", () => {
     void teleporter.begin({ productReference: "card", query: {} });
     await settle(2_000);
     teleporter.cancel();
-    fail(new Error("late"));
+    fail?.(new Error("late"));
     await settle(10_000);
     expect(teleporter.getState().waiting).toBe(false);
   });
 });
 
 describe("the web half of a teleport", () => {
-  const boot = (over: Record<string, unknown> = {}) =>
-    Reflect.set(window, "__SW_TELEPORT__", {
-      id: "v1:tp",
-      route: "checkout",
-      returnUrl: "myapp://superwall/return",
-      appLinkUrl: "https://acme.superwall.link/app-link/superwall/return",
-      ...over,
-    });
-
   it("binds the purchase, then shows the success screen", async () => {
     boot();
     const calls = api({ "checkout/session/complete": {} });

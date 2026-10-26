@@ -50,7 +50,7 @@ const routes: RouteMap = {
   plans: { default: () => <Page name="plans" /> },
 };
 
-const mount = async (device: Record<string, unknown> = appDevice) => {
+const mount = async (device: Record<string, unknown> = appDevice, queryState?: boolean) => {
   const outgoing: TOutgoingMessage[] = [];
   const Wrapper = createWrapper({
     config,
@@ -58,7 +58,7 @@ const mount = async (device: Record<string, unknown> = appDevice) => {
   });
   render(
     <Wrapper>
-      <PaywallRouter routes={routes} transition="none" />
+      <PaywallRouter routes={routes} transition="none" queryState={queryState} />
     </Wrapper>,
   );
   await flush();
@@ -180,6 +180,14 @@ describe("the web half of a teleport", () => {
 
     captured.close?.();
     expect(go).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the answers the app carried when the paywall keeps its state out of the URL", async () => {
+    bootWebHalf();
+    await mount({ platform: "iOS", publicApiKey: "pk_test" }, false);
+
+    expect(screen.getByText("checkout")).toBeTruthy();
+    expect(screen.getByText("goal:sleep")).toBeTruthy();
   });
 
   it("reads the flow the app saved once the host's key is in, for a page opened from its link", async () => {

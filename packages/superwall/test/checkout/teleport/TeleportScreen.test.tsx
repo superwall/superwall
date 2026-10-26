@@ -135,17 +135,17 @@ describe("the waiting screen in the app", () => {
   });
 });
 
-describe("the success screen on the web", () => {
-  const boot = (returnUrl?: string) =>
-    Reflect.set(window, "__SW_TELEPORT__", {
-      id: "v1:tp",
-      route: "checkout",
-      productReference: "card",
-      ...(returnUrl ? { returnUrl } : {}),
-    });
+const bootWebHalf = (returnUrl?: string) =>
+  Reflect.set(window, "__SW_TELEPORT__", {
+    id: "v1:tp",
+    route: "checkout",
+    productReference: "card",
+    ...(returnUrl ? { returnUrl } : {}),
+  });
 
+describe("the success screen on the web", () => {
   it("says the purchase is complete and returns to the app", async () => {
-    boot("myapp://superwall/return");
+    bootWebHalf("myapp://superwall/return");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("{}")),
@@ -199,7 +199,7 @@ describe("the success screen on the web", () => {
   });
 
   it("tells the shopper to go back on their own when there is no way back", async () => {
-    boot();
+    bootWebHalf();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("{}")),

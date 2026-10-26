@@ -2,10 +2,12 @@ import {
   dismissesOnPurchase,
   teleportOf,
   type ResolvedTeleport,
+  type SuperwallPostPurchase,
   type SuperwallSession,
 } from "@superwall/runtime";
 import { platformOf } from "../../device";
 import { attributionOf } from "../api/body";
+import { attachCheckoutMetadata } from "../api/metadata";
 import { asString } from "../api/decode";
 import { hostedInWebSdk } from "../host/surface";
 import { startLoading, stopLoading } from "../loading";
@@ -43,6 +45,8 @@ export type TeleportState = {
 export type TeleportRequest = {
   productReference?: string;
   query: Record<string, string>;
+  postPurchase?: SuperwallPostPurchase;
+  stripeMetadata?: Readonly<Record<string, string>>;
 };
 
 export type Teleporter = {
@@ -73,6 +77,8 @@ type OpenTeleport = {
   checkoutContextId?: string;
   checkoutProductIdentifier?: string;
   returnedAt?: number;
+  postPurchase?: SuperwallPostPurchase;
+  stripeMetadata?: Readonly<Record<string, string>>;
   settle: (outcome: TeleportOutcome) => void;
 };
 
@@ -172,6 +178,7 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let overlayWait: (() => void) | undefined;
   let windowApis = false;
+  let creating: Promise<TeleportOutcome> | undefined;
 
   const setState = (patch: Partial<TeleportState>) => {
     state = { ...state, ...patch };
@@ -233,7 +240,14 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
 
   const redeem = (record: OpenTeleport, checkoutContextId: string, productIdentifier?: string) => {
     stop();
-    const dismiss = dismissesOnPurchase(paywall.getSnapshot().config?.postPurchase);
+    const dismiss = dismissesOnPurchase(
+      record.postPurchase ?? paywall.getSnapshot().config?.postPurchase,
+    );
+    if (record.stripeMetadata !== undefined) {
+      attachCheckoutMetadata(publicApiKey(), checkoutContextId, record.stripeMetadata).catch(
+        (error: unknown) => console.error("Attaching checkout metadata failed:", error),
+      );
+    }
     post({
       event_name: "stripe_checkout_complete",
       checkout_context_id: checkoutContextId,
@@ -325,6 +339,64 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
     host.handleTeleportReturn = async () => teleporter.handleReturn();
   };
 
+  const start = async (
+    resolved: ResolvedTeleport,
+    { productReference, query, postPurchase, stripeMetadata }: TeleportRequest,
+  ): Promise<TeleportOutcome> => {
+    if (current !== undefined) abandon(current);
+    installWindowApis(teleporter);
+    const snapshot = paywall.getSnapshot();
+    const productIdentifier =
+      productReference === undefined
+        ? ""
+        : (snapshot.productsByReference[productReference]?.productId ?? "");
+
+    startLoading();
+    let created: Awaited<ReturnType<typeof createTeleport>>;
+    try {
+      created = await createTeleport(publicApiKey(), {
+        route: resolved.route,
+        productReference,
+        presentationId: crypto.randomUUID(),
+        context: attributionOf(
+          snapshot,
+          resolved.trialEligibility === "always" ? { freeTrial: true } : {},
+        ),
+        session: { query },
+      });
+    } catch (error) {
+      console.error("Opening the web checkout failed:", error);
+      return "failed";
+    } finally {
+      stopLoading();
+      creating = undefined;
+    }
+
+    return new Promise<TeleportOutcome>((settle) => {
+      const record: OpenTeleport = {
+        ...created,
+        productReference,
+        productIdentifier,
+        createdAt: Date.now(),
+        postPurchase,
+        stripeMetadata,
+        settle,
+      };
+      current = record;
+      if (productIdentifier !== "") {
+        post({
+          event_name: "stripe_checkout_start",
+          checkout_context_id: record.teleportId,
+          product_identifier: productIdentifier,
+        });
+      }
+      open(record, resolved.overlay);
+      setState({ waiting: true, productReference });
+      if (resolved.overlay) showOnceAway();
+      schedule(record, FAST_POLL_MS);
+    });
+  };
+
   const teleporter: Teleporter = {
     getState: () => state,
     subscribe: (listener) => {
@@ -344,61 +416,18 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
         asString(snapshot.device.sdkVersionPadded) >= TELEPORT_SDK_VERSION
       );
     },
-    begin: async ({ productReference, query }) => {
+    begin: (request) => {
+      if (creating !== undefined) return creating;
       const resolved = settings();
-      if (resolved === undefined) return "failed";
-      if (current !== undefined) abandon(current);
-      installWindowApis(teleporter);
-      const snapshot = paywall.getSnapshot();
-      const productIdentifier =
-        productReference === undefined
-          ? ""
-          : (snapshot.productsByReference[productReference]?.productId ?? "");
-
-      startLoading();
-      let created: Awaited<ReturnType<typeof createTeleport>>;
-      try {
-        created = await createTeleport(publicApiKey(), {
-          route: resolved.route,
-          productReference,
-          presentationId: crypto.randomUUID(),
-          context: attributionOf(
-            snapshot,
-            resolved.trialEligibility === "always" ? { freeTrial: true } : {},
-          ),
-          session: { query },
-        });
-      } catch (error) {
-        console.error("Opening the web checkout failed:", error);
-        return "failed";
-      } finally {
-        stopLoading();
-      }
-
-      return new Promise<TeleportOutcome>((settle) => {
-        const record: OpenTeleport = {
-          ...created,
-          productReference,
-          productIdentifier,
-          createdAt: Date.now(),
-          settle,
-        };
-        current = record;
-        if (productIdentifier !== "") {
-          post({
-            event_name: "stripe_checkout_start",
-            checkout_context_id: record.teleportId,
-            product_identifier: productIdentifier,
-          });
-        }
-        open(record, resolved.overlay);
-        setState({ waiting: true, productReference });
-        if (resolved.overlay) showOnceAway();
-        schedule(record, FAST_POLL_MS);
-      });
+      if (resolved === undefined) return Promise.resolve("failed");
+      const started = start(resolved, request);
+      creating = started;
+      return started;
     },
     reopen: () => {
-      if (current !== undefined) open(current, false);
+      if (current === undefined) return;
+      current.returnedAt = undefined;
+      open(current, false);
     },
     cancel: () => {
       if (current !== undefined) abandon(current);
