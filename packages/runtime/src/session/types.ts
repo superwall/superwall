@@ -12,7 +12,11 @@ import type {
 } from "@superwall/protocol";
 import type { SuperwallConfig, SuperwallPostPurchase } from "../config";
 import type { SuperwallTranslateValues } from "../localization";
-import type { SuperwallProduct, SuperwallProductInput } from "../products";
+import type {
+  SuperwallProduct,
+  SuperwallProductInput,
+  SuperwallProductVariables,
+} from "../products";
 import type { Outgoing, PageViewInput } from "./outgoing";
 import type { CallbackBehavior } from "./requests";
 import type {
@@ -142,6 +146,7 @@ export type SuperwallSessionStartOptions = {
 
 export type SuperwallSessionOptions = {
   config?: SuperwallConfig;
+  inlineProducts?: Readonly<Record<string, SuperwallProductVariables>>;
   transport?: ITransport;
   transportKind?: TransportKind;
   onDecodeError?: (error: unknown) => void;

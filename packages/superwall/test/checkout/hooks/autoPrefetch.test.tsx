@@ -30,7 +30,7 @@ const render = async (checkout: SuperwallCheckoutConfig | undefined) => {
     },
     {
       config: { ...testConfig, checkout },
-      host: { products, device: { publicApiKey: "pk_test" } },
+      host: { products, device: { platform: "Android", publicApiKey: "pk_test" } },
     },
   );
   await flush();

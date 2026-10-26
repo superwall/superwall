@@ -54,18 +54,28 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
   const requests = createRequestTracker();
   const derive = createProductDeriver();
 
-  let raw: readonly SuperwallProduct[] = [];
+  const inline = options.inlineProducts ?? {};
+  let raw: readonly SuperwallProduct[] = Object.entries(inline).map(([reference, variables]) => {
+    const slot = options.config?.products?.[reference];
+    return createSuperwallProduct({
+      reference,
+      productId: slot === undefined ? undefined : productIdFor(slot),
+      variables,
+      source: "inline",
+    });
+  });
   let localeOverride: string | undefined;
   let translator = createTranslator(
     options.config?.localization,
     resolveLocale(undefined, options.config?.localization),
   );
+  const seeded = derive(raw, languageCandidates(undefined));
 
   let snapshot: SuperwallRuntimeSnapshot = {
     status: "idle",
     config: options.config,
-    products: [],
-    productsByReference: {},
+    products: seeded,
+    productsByReference: productsByReference(seeded),
     variables: {},
     device: {},
     user: {},
@@ -188,6 +198,10 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
         break;
       case "template_variables": {
         const variables = productVariablesFromTemplateVariables(message.variables);
+        for (const [reference, delivered] of variables) {
+          const baked = inline[reference];
+          if (baked) variables.set(reference, { ...baked, ...delivered });
+        }
         if (variables.size > 0) raw = mergeProductVariables(raw, variables);
         break;
       }

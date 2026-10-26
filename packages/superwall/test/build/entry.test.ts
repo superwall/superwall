@@ -56,6 +56,30 @@ describe("entrySource", () => {
     expect(source).toContain("<PaywallRouter routes={routes} Layout={Layout} entry={entry}");
   });
 
+  it("hands the provider the inline products a platform build baked, and only when there are some", () => {
+    const baked = entrySource({
+      entryDir,
+      project,
+      surface: surface(),
+      config: {},
+      products: { card14: "live:price_1:14days-free" },
+      inlineProducts: { card14: { price: "$59.99" } },
+    });
+    expect(baked).toContain(
+      '<SuperwallProvider config={config} inlineProducts={{"card14":{"price":"$59.99"}}}>',
+    );
+
+    const none = entrySource({
+      entryDir,
+      project,
+      surface: surface(),
+      config: {},
+      products: { annual: "pro_year" },
+      inlineProducts: {},
+    });
+    expect(none).toContain("<SuperwallProvider config={config}>");
+  });
+
   it("prefixes ./ for a file that sits beside the entry", () => {
     const source = entrySource({
       entryDir,

@@ -7,11 +7,11 @@ import type {
   SuperwallPurchaseResult,
   SuperwallTransaction,
 } from "@superwall/runtime";
-import { checkoutModeOf } from "@superwall/runtime";
 import { useSuperwallSession } from "../provider/context";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
 import type { ProductReference } from "./index";
 import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
+import { checkoutModeFor } from "../checkout/host/sdk";
 import type { CheckoutMode, PurchaseOutcome } from "../checkout/types";
 
 export type WebCheckoutResult<TProduct extends SuperwallProduct = SuperwallProduct> = {
@@ -39,10 +39,12 @@ const referenceOf = (input: string | { reference: string }): string =>
   typeof input === "string" ? input : input.reference;
 
 /**
- * Buy a product. Store products go to the native SDK. With `checkout: "sheet"`
- * a Stripe product opens Stripe's embedded sheet; with `"applePay"` it opens
- * the wallet where the device offers it and falls back to the sheet. Web
- * checkout only runs when a host supplied a public API key.
+ * Buy a product. Store products go to the native SDK; a Stripe product is
+ * always bought on the web. With `checkout: "sheet"` it opens Stripe's
+ * embedded sheet; with `"applePay"` it opens the wallet where the device
+ * offers it and falls back to the sheet; otherwise, and always inside an iOS
+ * app, it opens Superwall's hosted checkout in the browser. Web checkout only
+ * runs when a host supplied a public API key.
  */
 export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
@@ -50,7 +52,7 @@ export const usePurchase = <
   const session = useSuperwallSession<SuperwallProduct<TVariables>>();
   const snapshot = useSuperwallSnapshot<SuperwallProduct<TVariables>>();
 
-  const mode = checkoutModeOf(snapshot.config?.checkout);
+  const mode = checkoutModeFor(snapshot);
   const hasApiKey =
     typeof snapshot.device.publicApiKey === "string" && snapshot.device.publicApiKey !== "";
 

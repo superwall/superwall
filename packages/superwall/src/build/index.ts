@@ -22,7 +22,12 @@ import {
 } from "./assets";
 import { assertBundlerBuilds } from "./bundler";
 import { entrySource } from "./entry";
-import { resolveConfigProducts, resolveProductIds } from "./products";
+import {
+  inlineProductsOf,
+  resolveConfigProducts,
+  resolveProductIds,
+  type ProductCatalogue,
+} from "./products";
 import { paywallSettingsOf, type PaywallSettings } from "./settings";
 import { loadSurfaceConfig } from "../config/load";
 import { localesOf } from "../config/messages";
@@ -56,6 +61,7 @@ export type BuiltSnapshot = {
 export type BuildOptions = {
   assetBaseUrl?: string;
   platform?: string;
+  catalogue?: ProductCatalogue;
 };
 
 export const titleCase = (id: string): string =>
@@ -103,6 +109,8 @@ export const buildSnapshot = async (
       surface,
       config,
       products: platform === undefined ? undefined : products,
+      inlineProducts:
+        platform === undefined ? undefined : inlineProductsOf(products, options.catalogue),
     }),
   );
   fs.writeFileSync(

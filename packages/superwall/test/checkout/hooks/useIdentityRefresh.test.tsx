@@ -16,7 +16,7 @@ const sheetConfig = {
 
 const sheetHost: HostProps = {
   products: [{ reference: "primary", productId: "test:price_1:no-trial" }],
-  device: { publicApiKey: "pk_test", sdkVersionPadded: "004.014.000" },
+  device: { platform: "Android", publicApiKey: "pk_test", sdkVersionPadded: "004.014.000" },
 };
 
 const renderRefresh = (hostProps: HostProps = sheetHost) => {

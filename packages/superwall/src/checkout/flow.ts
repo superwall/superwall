@@ -1,12 +1,12 @@
 import type { SuperwallPostPurchase, SuperwallSession } from "@superwall/runtime";
-import { checkoutModeOf, checkoutPrefetchOf, detectSuperwallHost } from "@superwall/runtime";
+import { checkoutPrefetchOf, detectSuperwallHost } from "@superwall/runtime";
 import { createApplePay, type ApplePay, type ApplePayOutcome } from "./applePay";
 import { asString, field } from "./api/decode";
 import { fetchWithRetry } from "./api/fetch";
 import { subscriptionsApiUrl } from "./api/url";
 import { checkoutEvents } from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
-import { sdkHostsCheckoutInPaywall, sdkRedeemsCheckout } from "./host/sdk";
+import { checkoutModeFor, sdkRedeemsCheckout } from "./host/sdk";
 import { presentingPlacement } from "./host/init";
 import { bindsEntitlement, hostedInWebSdk } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
@@ -170,10 +170,9 @@ export const autoPrefetchTargets = (paywall: PaywallSession, mode: CheckoutMode)
 };
 
 export const reprefetch = (paywall: PaywallSession) => {
-  const mode = checkoutModeOf(paywall.getSnapshot().config?.checkout);
+  const mode = checkoutModeFor(paywall.getSnapshot());
   if (mode !== "sheet" && mode !== "applePay") return;
   if (!paywall.getSnapshot().device.publicApiKey) return;
-  if (!sdkHostsCheckoutInPaywall(paywall.getSnapshot())) return;
   for (const reference of autoPrefetchTargets(paywall, mode)) {
     void prefetchSession(paywall, reference, mode);
   }
@@ -396,7 +395,7 @@ export const purchaseOnWeb = async (
   options: WebPurchaseOptions = {},
 ): Promise<PurchaseOutcome> => {
   const sessions = sessionsFor(paywall);
-  const mode = sdkHostsCheckoutInPaywall(paywall.getSnapshot()) ? requested : "external";
+  const mode = checkoutModeFor(paywall.getSnapshot(), requested);
   rememberPurchaseOptions(paywall, referenceName, options);
   try {
     if (mode === "applePay") {

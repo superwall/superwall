@@ -33,23 +33,77 @@ const redirect: RedirectCheckoutSession = {
   referenceName: "primary",
 };
 
-const renderCheckout = async (checkout?: SuperwallCheckoutConfig) => {
+const renderCheckout = async (checkout?: SuperwallCheckoutConfig, platform = "Android") => {
+  const outgoing: string[] = [];
   const rendered = renderWithProvider(
     () => ({ session: useSuperwallSession(), purchase: usePurchase() }),
     {
       config: { ...testConfig, checkout },
-      host: { products, device: { publicApiKey: "pk_test" } },
+      host: {
+        products,
+        device: { platform, publicApiKey: "pk_test" },
+        onOutgoing: (message) => outgoing.push(message.event_name),
+      },
     },
   );
   await flush();
   const session = rendered.result.current.session;
   const [product] = session.getSnapshot().products;
   if (!product) throw new Error("the mock host delivered no products");
-  return { ...rendered, sessions: sessionsFor(session), product };
+  return { ...rendered, sessions: sessionsFor(session), product, outgoing };
 };
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("usePurchase with a Stripe product inside an iOS app", () => {
+  it("sends the shopper to the hosted page even when the paywall asks for the sheet", async () => {
+    const { result, sessions, outgoing } = await renderCheckout("sheet", "iOS");
+    const begin = vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
+
+    let outcome: { status: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.purchase.purchase("primary");
+    });
+
+    expect(begin).toHaveBeenCalledWith({
+      referenceName: "primary",
+      mode: "external",
+      scope: "default",
+    });
+    expect(outgoing).toContain("initiate_web_checkout");
+    expect(window.location.hash).toBe("#hosted-checkout");
+    expect(outcome).toMatchObject({ status: "abandoned" });
+  });
+
+  it("buys it on the web when the paywall configures no checkout at all, never through the store", async () => {
+    const { result, sessions } = await renderCheckout(undefined, "iOS");
+    const begin = vi.spyOn(sessions, "begin").mockRejectedValue(new Error("offline"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    let outcome: { status: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.purchase.purchase("primary");
+    });
+
+    expect(begin).toHaveBeenCalledWith({
+      referenceName: "primary",
+      mode: "external",
+      scope: "default",
+    });
+    expect(outcome).toMatchObject({ status: "failed" });
+    expect(result.current.purchase.transaction).toBeUndefined();
+  });
+
+  it("warms nothing, since nothing in the app opens a sheet", async () => {
+    const { result, sessions } = await renderCheckout("sheet", "iOS");
+    const prefetch = vi.spyOn(sessions, "prefetch");
+
+    act(() => result.current.purchase.prefetch("primary"));
+
+    expect(prefetch).not.toHaveBeenCalled();
+  });
 });
 
 describe("usePurchase with web checkout", () => {

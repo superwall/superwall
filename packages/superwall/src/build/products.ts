@@ -5,7 +5,24 @@ import {
   type SuperwallPlatform,
 } from "@superwall/runtime";
 import type { Plugin } from "vite";
+import { isStripeProductIdentifier } from "../checkout/products";
 import type { DiscoveredSurface } from "../discover";
+
+export type ProductCatalogue = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+
+export const inlineProductsOf = (
+  products: Record<string, string>,
+  catalogue: ProductCatalogue | undefined,
+): Record<string, Readonly<Record<string, unknown>>> => {
+  const inline: Record<string, Readonly<Record<string, unknown>>> = {};
+  for (const [reference, identifier] of Object.entries(products)) {
+    const variables = catalogue?.[identifier];
+    if (variables?.price !== undefined && isStripeProductIdentifier(identifier)) {
+      inline[reference] = variables;
+    }
+  }
+  return inline;
+};
 
 export const resolveProductIds = (
   config: SuperwallConfig,

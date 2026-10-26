@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { SuperwallRuntimeSnapshot } from "@superwall/runtime";
-import { sdkHostsCheckoutInPaywall, sdkRedeemsCheckout } from "../../../src/checkout/host/sdk";
+import {
+  checkoutModeFor,
+  sdkHostsCheckoutInPaywall,
+  sdkRedeemsCheckout,
+} from "../../../src/checkout/host/sdk";
 
 const on = (sdkVersionPadded?: string): SuperwallRuntimeSnapshot =>
   ({ device: sdkVersionPadded === undefined ? {} : { sdkVersionPadded } }) as never;
@@ -34,6 +38,36 @@ describe("sdkRedeemsCheckout", () => {
   });
 });
 
+const app = (
+  platform: string,
+  checkout?: "sheet" | "applePay" | "external",
+): SuperwallRuntimeSnapshot =>
+  ({ device: { platform, sdkVersionPadded: "004.017.000" }, config: { checkout } }) as never;
+
+describe("checkoutModeFor", () => {
+  it("is always the hosted page inside an iOS app, whatever the paywall asks for", () => {
+    expect(checkoutModeFor(app("iOS", "sheet"))).toBe("external");
+    expect(checkoutModeFor(app("iOS", "applePay"))).toBe("external");
+    expect(checkoutModeFor(app("iOS"), "sheet")).toBe("external");
+  });
+
+  it("keeps the configured mode elsewhere, and is the hosted page when none is configured", () => {
+    expect(checkoutModeFor(app("Android", "sheet"))).toBe("sheet");
+    expect(checkoutModeFor(app("web", "applePay"))).toBe("applePay");
+    expect(checkoutModeFor(app("Android"))).toBe("external");
+    expect(checkoutModeFor(app("Android", "sheet"), "applePay")).toBe("applePay");
+  });
+
+  it("is the hosted page for an SDK too old to host payment", () => {
+    expect(
+      checkoutModeFor({
+        device: { platform: "Android", sdkVersionPadded: "004.010.007" },
+        config: { checkout: "sheet" },
+      } as never),
+    ).toBe("external");
+  });
+});
+
 describe("inside the Web SDK", () => {
   afterEach(() => {
     window.history.replaceState(null, "", "/");
@@ -43,5 +77,10 @@ describe("inside the Web SDK", () => {
     window.history.replaceState(null, "", "/?client_surface=web-sdk");
     expect(sdkHostsCheckoutInPaywall(on("000.002.009"))).toBe(true);
     expect(sdkRedeemsCheckout(on("000.002.009"))).toBe(true);
+  });
+
+  it("keeps the configured mode even when the shopper's device is an iPhone", () => {
+    window.history.replaceState(null, "", "/?client_surface=web-sdk");
+    expect(checkoutModeFor(app("iOS", "sheet"))).toBe("sheet");
   });
 });

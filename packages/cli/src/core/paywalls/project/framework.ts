@@ -80,6 +80,7 @@ export interface BuiltSnapshot {
 export interface BuildOptions {
   assetBaseUrl?: string;
   platform?: string;
+  catalogue?: Record<string, Record<string, unknown>>;
 }
 
 interface PreviewServerHandle {
