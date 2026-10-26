@@ -14,6 +14,8 @@ import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
 import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
 import { useIdentityRefresh } from "../checkout/hooks/useIdentityRefresh";
 import { checkoutModeFor } from "../checkout/host/sdk";
+import { flowQuery, teleportFor } from "../checkout/teleport/flow";
+import { QueryStoreContext } from "../navigation/query";
 import type { CheckoutMode, PurchaseOutcome } from "../checkout/types";
 
 export type WebCheckoutResult<TProduct extends SuperwallProduct = SuperwallProduct> = {
@@ -56,6 +58,7 @@ export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
 >(): UsePurchaseResult<TVariables> => {
   const session = useSuperwallSession<SuperwallProduct<TVariables>>();
+  const queryStore = React.useContext(QueryStoreContext);
   const snapshot = useSuperwallSnapshot<SuperwallProduct<TVariables>>();
 
   const mode = checkoutModeFor(snapshot);
@@ -73,6 +76,15 @@ export const usePurchase = <
     ): Promise<PurchaseResult<TVariables>> => {
       const reference = referenceOf(input);
       const product = session.getSnapshot().productsByReference[reference];
+      const teleporter = teleportFor(session);
+      if (product && sessionsFor(session).isStripeProduct(reference) && teleporter.available()) {
+        const outcome = await teleporter.begin({
+          productReference: reference,
+          query: flowQuery(queryStore),
+        });
+        if (typeof outcome === "object") return session.purchase(outcome.fallback, options);
+        return { status: outcome, product };
+      }
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
         const { postPurchase, stripeMetadata } = options ?? {};
         const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
@@ -83,7 +95,7 @@ export const usePurchase = <
       }
       return session.purchase(input, options);
     },
-    [session, webMode],
+    [session, webMode, queryStore],
   );
 
   const first = snapshot.products[0]?.reference;

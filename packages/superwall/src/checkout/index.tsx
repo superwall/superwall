@@ -24,6 +24,7 @@ export const SuperwallCheckout = () => (
   </SheetProvider>
 );
 
+export { TeleportScreen } from "./teleport/TeleportScreen";
 export { checkoutEvents } from "./events";
 export type { CheckoutEventPayload, CheckoutEventType } from "./events";
 export type { ApplePayOutcome } from "./applePay";

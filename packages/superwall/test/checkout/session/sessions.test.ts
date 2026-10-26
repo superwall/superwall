@@ -191,6 +191,25 @@ describe("createCheckoutSessions.createSession", () => {
     expect(body.allowedCheckoutDirectives).toEqual(["redirect"]);
   });
 
+  it("names the teleport a session is made on, on the web half of one", async () => {
+    const fetchMock = mockSession({
+      checkoutContextId: "ctx_2",
+      directive: { directive: "redirect", checkoutSessionId: "cs_1", checkoutUrl: "https://x" },
+    });
+    Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout" });
+    try {
+      await createCheckoutSessions(() => snapshot()).begin({
+        referenceName: "monthly",
+        mode: "sheet",
+      });
+    } finally {
+      Reflect.deleteProperty(window, "__SW_TELEPORT__");
+    }
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.teleportId).toBe("v1:tp");
+  });
+
   it("prefetch is a silent no-op for store products", async () => {
     const fetchMock = mockSession({});
     const sessions = createCheckoutSessions(() => snapshot());

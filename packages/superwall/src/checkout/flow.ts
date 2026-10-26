@@ -11,6 +11,8 @@ import { presentingPlacement } from "./host/init";
 import { bindsEntitlement, hostedInWebSdk } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
+import { readTeleportBoot } from "./teleport/boot";
+import { teleportFor } from "./teleport/flow";
 import type {
   CheckoutMode,
   DiscountValidationResult,
@@ -275,6 +277,10 @@ export const reportCompletedCheckout = async (
     completion,
   );
 
+  if (readTeleportBoot() !== undefined) {
+    await teleportFor(paywall).completePurchase(session.checkoutContextId);
+    return;
+  }
   if (sdkRedeemsCheckout(paywall.getSnapshot())) return;
   if (redemptionUrl !== undefined) {
     host.redeem(redemptionUrl);

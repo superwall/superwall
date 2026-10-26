@@ -119,6 +119,37 @@ describe("OutgoingMessageSchema", () => {
     });
   });
 
+  it("parses a teleport: the external open it rides on, the background watch, and the redemption", () => {
+    accepts({
+      event_name: "open_url_external",
+      url: "https://x",
+      teleport: true,
+      waiting_screen: true,
+    });
+    rejects({ event_name: "open_url_external", url: "https://x", teleport: "yes" });
+    accepts({
+      event_name: "teleport_watch_start",
+      teleport_id: "v1:abc",
+      teleport_status_url: "https://api/checkout/teleport/status",
+      checkout_status_url: "https://api/checkout/status",
+      public_api_key: "pk_1",
+    });
+    rejects({ event_name: "teleport_watch_start", teleport_id: "v1:abc" });
+    accepts({ event_name: "teleport_watch_end" });
+    accepts({
+      event_name: "stripe_checkout_complete",
+      checkout_context_id: "ctx",
+      product_identifier: "p",
+      should_dismiss: false,
+    });
+    rejects({
+      event_name: "stripe_checkout_complete",
+      checkout_context_id: "ctx",
+      product_identifier: "p",
+      should_dismiss: "no",
+    });
+  });
+
   it("parses the web checkout lifecycle the paywall reports to a host", () => {
     accepts({
       event_name: "initiate_web_checkout",

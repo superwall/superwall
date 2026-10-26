@@ -1,0 +1,122 @@
+import { field, readCheckoutStatus } from "../api/decode";
+import type { CheckoutStatus } from "../types";
+import { fetchWithRetry } from "../api/fetch";
+import { subscriptionsApiUrl } from "../api/url";
+
+export type CreatedTeleport = { teleportId: string; url: string };
+
+export type TeleportStatus = {
+  status: "pending" | "claimed" | "completed" | "expired";
+  checkoutContextId?: string;
+  checkoutProductIdentifier?: string;
+};
+
+export type TeleportRequest = {
+  route: string;
+  productReference?: string;
+  presentationId: string;
+  context: Record<string, unknown>;
+  session: Record<string, unknown>;
+};
+
+const STATUSES = ["pending", "claimed", "completed", "expired"] as const;
+const COMPLETE_TIMEOUT_MS = 8_000;
+
+const headers = (publicApiKey: string): HeadersInit => ({
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${publicApiKey}`,
+});
+
+const text = (body: unknown, key: string): string | undefined => {
+  const value = field(body, key);
+  return typeof value === "string" && value !== "" ? value : undefined;
+};
+
+export const createTeleport = async (
+  publicApiKey: string,
+  request: TeleportRequest,
+): Promise<CreatedTeleport> => {
+  const response = await fetchWithRetry(subscriptionsApiUrl("checkout/teleport"), {
+    method: "POST",
+    headers: headers(publicApiKey),
+    body: JSON.stringify({
+      store: "stripe",
+      route: request.route,
+      ...(request.productReference === undefined
+        ? {}
+        : { productReference: request.productReference }),
+      presentationId: request.presentationId,
+      context: request.context,
+      session: request.session,
+    }),
+  });
+  const body: unknown = await response.json();
+  const teleportId = text(body, "teleportId");
+  const url = text(body, "url");
+  if (teleportId === undefined || url === undefined) {
+    throw new Error("The teleport backend returned no teleport id or link.");
+  }
+  return { teleportId, url };
+};
+
+export const readTeleportStatus = async (
+  publicApiKey: string,
+  teleportId: string,
+): Promise<TeleportStatus> => {
+  const response = await fetchWithRetry(
+    subscriptionsApiUrl("checkout/teleport/status"),
+    { method: "POST", headers: headers(publicApiKey), body: JSON.stringify({ teleportId }) },
+    { retries: 0 },
+  );
+  const body: unknown = await response.json();
+  const status = STATUSES.find((candidate) => candidate === field(body, "status")) ?? "pending";
+  const checkoutContextId = text(body, "checkoutContextId");
+  const checkoutProductIdentifier = text(body, "checkoutProductIdentifier");
+  return {
+    status,
+    ...(checkoutContextId === undefined ? {} : { checkoutContextId }),
+    ...(checkoutProductIdentifier === undefined ? {} : { checkoutProductIdentifier }),
+  };
+};
+
+export const readCheckoutOf = async (
+  publicApiKey: string,
+  checkoutContextId: string,
+): Promise<CheckoutStatus["status"]> => {
+  const response = await fetchWithRetry(
+    subscriptionsApiUrl("checkout/status"),
+    {
+      method: "POST",
+      headers: headers(publicApiKey),
+      body: JSON.stringify({ checkoutId: checkoutContextId }),
+    },
+    { retries: 0 },
+  );
+  return readCheckoutStatus(await response.json()).status;
+};
+
+export const completeTeleportCheckout = async (
+  publicApiKey: string,
+  checkoutContextId: string,
+): Promise<void> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), COMPLETE_TIMEOUT_MS);
+  try {
+    await fetch(subscriptionsApiUrl("checkout/session/complete"), {
+      method: "POST",
+      headers: headers(publicApiKey),
+      body: JSON.stringify({ checkoutContextId }),
+      keepalive: true,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    console.error("Completing the teleport checkout failed:", error);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+export const teleportStatusUrls = () => ({
+  teleport_status_url: subscriptionsApiUrl("checkout/teleport/status"),
+  checkout_status_url: subscriptionsApiUrl("checkout/status"),
+});

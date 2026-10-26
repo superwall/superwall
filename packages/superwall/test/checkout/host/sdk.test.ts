@@ -75,6 +75,20 @@ describe("checkoutModeFor", () => {
   });
 });
 
+describe("checkoutModeFor on the web half of a teleport", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window, "__SW_TELEPORT__");
+  });
+
+  it("pays in the page, never on the hosted page, whatever the app's device", () => {
+    Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout" });
+    expect(checkoutModeFor(app("iOS", "sheet"))).toBe("sheet");
+    expect(checkoutModeFor(app("iOS", "applePay"))).toBe("applePay");
+    expect(checkoutModeFor(app("iOS", "external"))).toBe("applePay");
+    expect(checkoutModeFor(app("iOS"))).toBe("applePay");
+  });
+});
+
 describe("inside the Web SDK", () => {
   afterEach(() => {
     window.history.replaceState(null, "", "/");

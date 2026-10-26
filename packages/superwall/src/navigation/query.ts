@@ -31,6 +31,7 @@ export type QueryPatch = Record<string, string | null>;
 
 export type QueryStore = {
   get(key: string): string | null;
+  entries(): Record<string, string>;
   subscribe(listener: () => void): () => void;
   set(patch: QueryPatch, history: QueryHistory): void;
 };
@@ -121,6 +122,7 @@ export const createQueryStore = (url: boolean): QueryStore => {
 
   return {
     get: (key) => params.get(key),
+    entries: () => Object.fromEntries(params),
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {

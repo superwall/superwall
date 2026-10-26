@@ -7,7 +7,9 @@ export type SubscriptionsApiPath =
   | "checkout/session/complete-webapp"
   | "checkout/session/custom-metadata"
   | "checkout/discount"
-  | "checkout/status";
+  | "checkout/status"
+  | "checkout/teleport"
+  | "checkout/teleport/status";
 
 const BASE_URL_BY_ENV: Record<SubscriptionsApiEnvironment, string> = {
   local: "http://localhost:3045/subscriptions-api/public/v1",

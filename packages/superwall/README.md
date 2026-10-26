@@ -163,7 +163,8 @@ and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedempt
 `redirect`), `useHaptics`, `useColorScheme`, `useTranslation`,
 `useIntroductoryOffer`, `useDevice` / `useUser` / `useVariables`,
 `useUserAttribute`, `useLocalResource`, `useSuperwallEvent`,
-`useGameController`.
+`useGameController`, `useTeleport` (where a teleport stands, for a paywall
+that draws its own waiting screen).
 
 `useUserAttribute(key, parser)` is one user attribute as typed state —
 `useQueryState`'s API with the same parsers, kept by the host SDK across
@@ -276,6 +277,17 @@ export const entry: Entry = ({ user }) =>
 ```
 
 Mid-flow, `router.reset(routes)` replaces the whole stack the same way.
+
+`teleport: { route }` in `config.ts` moves the rest of a flow to the web
+when it is shown in an iOS app (SuperwallKit 4.18+): pushing to `route`, or
+buying a Stripe product, opens that route in the shopper's browser on the
+project's web paywall domain with every `useQueryState` value carried along,
+and the app shows a waiting screen and redeems the purchase once it is paid.
+On the web page the flow opens on `route`; navigation works as usual, and
+going back from `route` (or `close()`) returns to the app through its
+universal link or URL scheme. Options: `overlay` (the waiting screen),
+`fallbacks` (a store product the waiting screen offers instead), `returnStyle`,
+`appLink`, `trialEligibility`.
 
 ### Dev — the studio
 
@@ -429,14 +441,14 @@ Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1`.
 
 ## Package layout
 
-| Entry                  | What it holds                                                                          |
-| ---------------------- | -------------------------------------------------------------------------------------- |
-| `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …)  |
-| `superwall/config`     | `definePaywall`                                                                        |
-| `superwall/hooks`      | every hook, `readAttribute` + parsers, `createSuperwall` and `useSuperwallSession`     |
-| `superwall/navigation` | `useRouter`, `useIsFocused`, `useQueryState` + parsers, `replayStack`, `PaywallRouter` |
-| `superwall/checkout`   | web checkout (Stripe) — bundled only when `config.checkout` asks for it                |
-| `superwall/assets`     | ambient types for asset imports                                                        |
+| Entry                  | What it holds                                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …)                             |
+| `superwall/config`     | `definePaywall`                                                                                                   |
+| `superwall/hooks`      | every hook, `readAttribute` + parsers, `createSuperwall` and `useSuperwallSession`                                |
+| `superwall/navigation` | `useRouter`, `useIsFocused`, `useQueryState` + parsers, `replayStack`, `PaywallRouter`                            |
+| `superwall/checkout`   | web checkout (Stripe) and `TeleportScreen` — bundled only when `config.checkout` or `config.teleport` asks for it |
+| `superwall/assets`     | ambient types for asset imports                                                                                   |
 
 The `superwall` and `sw` binaries launch [`@superwall/cli`](https://github.com/superwall/superwall/tree/main/packages/cli),
 which owns every command. `superwall/build`, `superwall/preview`, and

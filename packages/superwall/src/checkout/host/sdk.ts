@@ -1,6 +1,7 @@
 import { checkoutModeOf, type SuperwallRuntimeSnapshot } from "@superwall/runtime";
 import { platformOf } from "../../device";
 import { asString } from "../api/decode";
+import { readTeleportBoot } from "../teleport/boot";
 import type { CheckoutMode } from "../types";
 import { hostedInWebSdk } from "./surface";
 
@@ -45,6 +46,9 @@ export const checkoutModeFor = (
   snapshot: SuperwallRuntimeSnapshot,
   requested?: CheckoutMode,
 ): CheckoutMode => {
+  if (readTeleportBoot() !== undefined) {
+    return requested === "sheet" || requested === "applePay" ? requested : "applePay";
+  }
   if (!sdkHostsCheckoutInPaywall(snapshot)) return "external";
   if (!hostedInWebSdk() && platformOf(snapshot.device) === "ios") return "external";
   const configured = checkoutModeOf(snapshot.config?.checkout);

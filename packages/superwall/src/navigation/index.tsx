@@ -6,6 +6,8 @@ import {
   type SuperwallPlacementParams,
   type SuperwallUserVariables,
 } from "@superwall/runtime";
+import { readTeleportBoot, seedTeleportUrl } from "../checkout/teleport/boot";
+import { flowQuery, teleportFor } from "../checkout/teleport/flow";
 import { useHostStateArrived, useSuperwallSession } from "../provider/context";
 import {
   freeze,
@@ -72,11 +74,14 @@ export type Router = {
   push: (route: RouteName, options?: NavigateOptions) => void;
   /** Swaps the top route, so going back skips the one it replaced. */
   replace: (route: RouteName, options?: NavigateOptions) => void;
-  /** Goes back one route. A no-op at the first. */
+  /**
+   * Goes back one route. A no-op at the first, except on the web half of a
+   * teleport, where it returns to the app.
+   */
   back: () => void;
-  /** Whether anything is underneath the current route. */
+  /** Whether anything is underneath the current route, or, on the web half of a teleport, the app. */
   canGoBack: () => boolean;
-  /** Goes back `count` routes, stopping at the first. */
+  /** Goes back `count` routes, stopping at the first (on a teleport's web half, returning to the app). */
   dismiss: (count?: number) => void;
   /** Returns to the first route. */
   dismissAll: () => void;
@@ -247,6 +252,7 @@ export type PaywallRouterProps = {
 type LayerState = "active" | "behind" | "below" | "exiting";
 
 export const PaywallRouter = (props: PaywallRouterProps) => {
+  seedTeleportUrl(Object.keys(props.routes));
   const arrived = useHostStateArrived();
   if (props.entry && !arrived && !askedStack(props.routes)) return null;
   return <Router {...props} />;
@@ -264,7 +270,9 @@ const Router = ({
   const session = useSuperwallSession();
   const [store] = React.useState<QueryStore>(() =>
     createQueryStore(
-      (queryState ?? checkoutModeOf(session.getSnapshot().config?.checkout) !== undefined) &&
+      (queryState ??
+        (checkoutModeOf(session.getSnapshot().config?.checkout) !== undefined ||
+          readTeleportBoot() !== undefined)) &&
         !detectSuperwallHost(),
     ),
   );
@@ -300,6 +308,11 @@ const Router = ({
 
     const go = (name: string, options: NavigateOptions | undefined, keep: number | undefined) => {
       const target = resolve(name);
+      const teleporter = teleportFor(session);
+      if (target === session.getSnapshot().config?.teleport?.route && teleporter.available()) {
+        void teleporter.begin({ query: flowQuery(store) });
+        return;
+      }
       const key = nextKey.current++;
       landing.current = undefined;
       freeze(layers.current);
@@ -318,6 +331,10 @@ const Router = ({
     };
 
     const popBy = (count: number) => {
+      if (entries.length === 1 && readTeleportBoot() !== undefined) {
+        teleportFor(session).returnToApp("closed");
+        return;
+      }
       landing.current = undefined;
       freeze(layers.current);
       setNav((current) => {
@@ -338,7 +355,7 @@ const Router = ({
       push: (name, options) => go(name, options, undefined),
       replace: (name, options) => go(name, options, entries.length - 1),
       back: () => popBy(1),
-      canGoBack: () => entries.length > 1,
+      canGoBack: () => entries.length > 1 || readTeleportBoot() !== undefined,
       dismiss: (count = 1) => popBy(count),
       dismissAll: () => popBy(Number.MAX_SAFE_INTEGER),
       dismissTo: (name, options) => {
@@ -369,7 +386,7 @@ const Router = ({
         });
       },
     };
-  }, [entries, top]);
+  }, [entries, top, session, store]);
 
   React.useEffect(() => {
     if (nav.sync === "skip") return;

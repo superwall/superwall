@@ -12,6 +12,7 @@ import { fetchWithRetry } from "../api/fetch";
 import { subscriptionsApiUrl } from "../api/url";
 import { createDiscountStore, type DiscountStore } from "../discount/store";
 import { bareProductIdentifier, isStripeProductIdentifier } from "../products";
+import { readTeleportBoot } from "../teleport/boot";
 import type {
   CheckoutMode,
   CheckoutSessionResult,
@@ -108,6 +109,7 @@ export const createCheckoutSessions = (
       productIdentifier: bareProductIdentifier(product.productId),
       mode,
       silent,
+      teleportId: readTeleportBoot()?.id,
     });
 
     const request = (promotionCode: string | null) =>

@@ -1,0 +1,331 @@
+export const TELEPORT_SCREEN_CSS = `
+.sw-teleport {
+  --sw-teleport-bg: #ffffff;
+  --sw-teleport-fg: #111111;
+  --sw-teleport-muted: #5f5f5f;
+  --sw-teleport-primary-bg: #111111;
+  --sw-teleport-primary-fg: #ffffff;
+  --sw-teleport-tinted-bg: rgba(0, 0, 0, 0.06);
+  --sw-teleport-success: #34c759;
+  --sw-teleport-failure: #ff3b30;
+  --sw-teleport-footer-logo: rgba(0, 0, 0, 0.2);
+  --sw-teleport-footer-text: rgba(0, 0, 0, 0.3);
+  --sw-teleport-footer-hover: rgba(0, 0, 0, 0.9);
+  --sw-teleport-brand: #46d7d4;
+  --sw-teleport-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: max(24px, env(safe-area-inset-top)) 32px max(24px, env(safe-area-inset-bottom));
+  background: var(--sw-teleport-bg);
+  color: var(--sw-teleport-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Helvetica Neue", sans-serif;
+  text-align: center;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0;
+  transition: opacity 240ms var(--sw-teleport-ease);
+}
+.sw-teleport:focus {
+  outline: none;
+}
+.sw-teleport *,
+.sw-teleport *::before,
+.sw-teleport *::after {
+  box-sizing: border-box;
+}
+.sw-teleport[data-surface="overlay"] {
+  --sw-teleport-bg: rgba(0, 0, 0, 0.86);
+  --sw-teleport-fg: #ffffff;
+  --sw-teleport-muted: rgba(255, 255, 255, 0.78);
+  --sw-teleport-primary-bg: #ffffff;
+  --sw-teleport-primary-fg: #000000;
+  --sw-teleport-tinted-bg: rgba(255, 255, 255, 0.14);
+  --sw-teleport-success: #30d158;
+  --sw-teleport-failure: #ff453a;
+  --sw-teleport-footer-logo: rgba(255, 255, 255, 0.2);
+  --sw-teleport-footer-text: rgba(255, 255, 255, 0.3);
+  --sw-teleport-footer-hover: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+@media (prefers-color-scheme: dark) {
+  .sw-teleport[data-surface="page"] {
+    --sw-teleport-bg: #000000;
+    --sw-teleport-fg: #ffffff;
+    --sw-teleport-muted: rgba(255, 255, 255, 0.72);
+    --sw-teleport-primary-bg: #ffffff;
+    --sw-teleport-primary-fg: #000000;
+    --sw-teleport-tinted-bg: rgba(255, 255, 255, 0.14);
+    --sw-teleport-success: #30d158;
+    --sw-teleport-failure: #ff453a;
+    --sw-teleport-footer-logo: rgba(255, 255, 255, 0.2);
+    --sw-teleport-footer-text: rgba(255, 255, 255, 0.3);
+    --sw-teleport-footer-hover: rgba(255, 255, 255, 0.9);
+  }
+}
+.sw-teleport-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 340px;
+  margin: auto;
+  transform: scale(0.95);
+  transition: transform 240ms var(--sw-teleport-ease);
+}
+.sw-teleport[data-state="open"] {
+  opacity: 1;
+}
+.sw-teleport[data-state="open"] .sw-teleport-content {
+  transform: none;
+}
+.sw-teleport[data-instant],
+.sw-teleport[data-instant] .sw-teleport-content {
+  transition: none;
+}
+.sw-teleport[data-state="closing"],
+.sw-teleport[data-state="closing"] .sw-teleport-content {
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sw-teleport-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+.sw-teleport-spinner {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 24px;
+}
+.sw-teleport-spinner svg,
+.sw-teleport-orbit,
+.sw-teleport-arc {
+  position: absolute;
+  inset: 0;
+}
+.sw-teleport-track {
+  opacity: 0.2;
+}
+.sw-teleport-orbit {
+  animation: sw-teleport-spin 2s linear infinite;
+  will-change: transform;
+}
+.sw-teleport-arc {
+  animation: sw-teleport-spin 1s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
+  will-change: transform;
+}
+.sw-teleport-status {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 24px;
+}
+.sw-teleport-status[data-status="success"] {
+  color: var(--sw-teleport-success);
+}
+.sw-teleport-status[data-status="failure"] {
+  color: var(--sw-teleport-failure);
+}
+.sw-teleport-status svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.sw-teleport-status-ring {
+  stroke-dasharray: 88;
+  stroke-dashoffset: 88;
+  animation: sw-teleport-draw 420ms var(--sw-teleport-ease) 80ms forwards;
+}
+.sw-teleport-status-mark {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: sw-teleport-draw 300ms var(--sw-teleport-ease) 320ms forwards;
+}
+.sw-teleport-status[data-status="failure"] .sw-teleport-status-mark {
+  opacity: 0;
+  animation: sw-teleport-burst 420ms var(--sw-teleport-ease) 360ms forwards;
+}
+.sw-teleport-title {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font: -apple-system-title3;
+  font-weight: 600;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+.sw-teleport-body {
+  margin: 0;
+  font-size: 17px;
+  font: -apple-system-body;
+  line-height: 1.35;
+  text-wrap: balance;
+  color: var(--sw-teleport-muted);
+}
+.sw-teleport-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+  margin-top: 28px;
+}
+.sw-teleport[data-footer] {
+  padding-top: calc(env(safe-area-inset-top) + 128px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 128px);
+}
+.sw-teleport[data-overflow] {
+  overflow: hidden;
+}
+.sw-teleport[data-overflow] .sw-teleport-content {
+  height: 100%;
+  margin: 0 auto;
+}
+.sw-teleport[data-overflow] .sw-teleport-message {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 28px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+.sw-teleport[data-overflow] .sw-teleport-actions {
+  flex: none;
+  margin-top: 0;
+  padding-top: 12px;
+}
+.sw-teleport[data-footer][data-overflow] {
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+.sw-teleport-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 50px;
+  margin: 0;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 17px;
+  font: -apple-system-body;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 160ms ease-out;
+}
+.sw-teleport-button:active {
+  transform: scale(0.97);
+}
+.sw-teleport-button:focus:not(:focus-visible) {
+  outline: none;
+}
+.sw-teleport-button:focus-visible {
+  outline: 2px solid var(--sw-teleport-fg);
+  outline-offset: 3px;
+}
+.sw-teleport-primary {
+  background: var(--sw-teleport-primary-bg);
+  color: var(--sw-teleport-primary-fg);
+  font-weight: 600;
+}
+.sw-teleport-tinted {
+  background: var(--sw-teleport-tinted-bg);
+  color: var(--sw-teleport-fg);
+  font-weight: 500;
+}
+.sw-teleport-secondary {
+  background: transparent;
+  color: var(--sw-teleport-muted);
+  font-weight: 500;
+}
+.sw-teleport-footer {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 48px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.sw-teleport-footer svg {
+  width: 32px;
+  height: 32px;
+  color: var(--sw-teleport-footer-logo);
+  transition: color 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sw-teleport-footer-logo-s {
+  transition: fill 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sw-teleport-footer-text {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--sw-teleport-footer-text);
+}
+.sw-teleport-footer-brand {
+  transition: color 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (hover: hover) {
+  .sw-teleport-footer:hover .sw-teleport-footer-logo-s {
+    fill: var(--sw-teleport-brand);
+  }
+  .sw-teleport-footer:hover svg,
+  .sw-teleport-footer:hover .sw-teleport-footer-brand {
+    color: var(--sw-teleport-footer-hover);
+    text-decoration: underline;
+  }
+}
+.sw-teleport-footer:focus:not(:focus-visible) {
+  outline: none;
+}
+.sw-teleport[data-overflow] .sw-teleport-footer {
+  display: none;
+}
+@keyframes sw-teleport-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes sw-teleport-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes sw-teleport-burst {
+  from { opacity: 1; stroke-dasharray: 0 1; stroke-dashoffset: -0.5; }
+  to { opacity: 1; stroke-dasharray: 1 0; stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sw-teleport-content { transform: none; }
+  .sw-teleport-arc { animation: none; }
+  .sw-teleport-orbit { animation-duration: 3s; }
+  .sw-teleport-status[data-status] .sw-teleport-status-ring,
+  .sw-teleport-status[data-status] .sw-teleport-status-mark { animation: none; stroke-dashoffset: 0; opacity: 1; }
+}
+`;
+export const STATUS_MARKS = {
+  success: ["M10.5 16.25l3.75 3.75 7.25-7.5"],
+  failure: ["M11.5 11.5l9 9", "M20.5 11.5l-9 9"],
+} as const;
+
+export const SUPERWALL_LOGO_PATHS = {
+  w: "M11.6704 5C11.5073 5 11.3555 5.05276 11.2344 5.16513C11.1125 5.27817 11.0514 5.42445 11.0514 5.5855V5.60232L11.0714 5.75125L13.0539 15.7426L13.0555 15.7488C13.1046 15.9442 13.1995 16.1174 13.358 16.24C13.5171 16.3629 13.712 16.4131 13.9185 16.4131H15.0594C15.2494 16.4131 15.4302 16.3721 15.5831 16.2707C15.737 16.1688 15.8391 16.0214 15.8987 15.8496L17.5257 11.3752L19.1519 15.8475C19.2041 16.0053 19.3053 16.1359 19.4399 16.24C19.5973 16.3617 19.7885 16.4131 19.992 16.4131H21.1328C21.3471 16.4131 21.5474 16.3593 21.7112 16.2314C21.8739 16.1042 21.9677 15.9309 21.9997 15.7315L23.9755 5.77354C23.9947 5.71046 24 5.64489 24 5.5855C24 5.42445 23.9388 5.27817 23.817 5.16513C23.7024 5.05877 23.5588 5 23.3978 5H21.8878C21.7184 5 21.5493 5.03077 21.4102 5.12292C21.2637 5.21999 21.1825 5.36387 21.1554 5.52524L19.975 11.5351L18.7868 7.98302L18.7863 7.98162C18.7373 7.83092 18.6479 7.70169 18.5258 7.59548C18.3776 7.46658 18.1921 7.41265 17.9954 7.41265H17.0727C16.8954 7.41265 16.7284 7.45826 16.5848 7.55915C16.4435 7.65853 16.3428 7.79888 16.273 7.96065L16.2686 7.97086L15.0903 11.5328L13.8952 5.52132C13.8658 5.37127 13.7979 5.21826 13.6545 5.11853C13.519 5.02423 13.344 5 13.1803 5H11.6704Z",
+  s: "M4.52814 5.4738C4.35584 5.4738 4.19642 5.52773 4.06582 5.64024C3.92315 5.76316 3.85881 5.92813 3.85881 6.10599V6.95366C2.83079 7.10357 1.98923 7.45269 1.35342 8.01647C0.66785 8.62437 0.318771 9.37785 0.318771 10.262C0.318771 11.2182 0.652159 11.9836 1.3416 12.5186C2.00264 13.0315 3.01511 13.4261 4.3481 13.7199C5.13825 13.9161 5.72908 14.0822 6.12532 14.2182C6.51567 14.3521 6.78117 14.5002 6.94431 14.6516C7.0909 14.7876 7.16397 14.9526 7.16397 15.1651C7.16397 15.4946 7.01884 15.7501 6.69237 15.9506C6.3573 16.1564 5.83223 16.2763 5.08179 16.2763C4.41547 16.2763 3.92563 16.1609 3.58647 15.9571C3.23024 15.7429 3.01761 15.4911 2.91845 15.2068L2.90841 15.178L2.89175 15.1522C2.8128 15.0302 2.71863 14.9224 2.60337 14.8483C2.46934 14.7622 2.30612 14.7353 2.14574 14.7353H0.63577C0.466468 14.7353 0.313742 14.7947 0.191383 14.9082C0.0761004 15.0152 0 15.1548 0 15.3208V15.3266L0.000274989 15.3325C0.0250464 15.8611 0.202228 16.3559 0.524719 16.8132C0.851098 17.276 1.32453 17.6573 1.93042 17.9629C2.48333 18.2418 3.12778 18.4225 3.85881 18.5103V19.3678C3.85881 19.5457 3.92315 19.7106 4.06582 19.8336C4.19642 19.9461 4.35584 20 4.52814 20H5.56834C5.74388 20 5.91338 19.9504 6.04628 19.8271C6.18054 19.7025 6.23767 19.5395 6.23767 19.3678V18.5091C7.35069 18.3703 8.26679 18.0278 8.96789 17.4658C9.73008 16.8548 10.1133 16.0493 10.1133 15.0717C10.1133 14.4217 9.96461 13.8634 9.64687 13.4153C9.33263 12.9722 8.85545 12.6189 8.23745 12.3459C7.62637 12.0759 6.81535 11.8379 5.81195 11.6286C5.1018 11.4638 4.56552 11.3115 4.19682 11.1727C3.82908 11.0343 3.59323 10.8866 3.45964 10.7427C3.33552 10.609 3.26806 10.4395 3.26806 10.2153C3.26806 9.88594 3.39996 9.65288 3.67327 9.48384C3.96705 9.30214 4.39419 9.19754 4.98113 9.19754C5.50435 9.19754 5.91981 9.30181 6.24252 9.49397C6.57133 9.68975 6.73384 9.91251 6.78307 10.1561L6.78929 10.1869L6.80291 10.2153C6.86734 10.3498 6.96436 10.4623 7.09735 10.5388C7.22863 10.6144 7.3776 10.6451 7.5313 10.6451H9.12516C9.28819 10.6451 9.44004 10.5924 9.56116 10.48C9.683 10.367 9.74415 10.2207 9.74415 10.0596V10.0523L9.74373 10.045C9.71811 9.60534 9.54899 9.16771 9.25578 8.73469C8.95575 8.29159 8.52676 7.91112 7.98004 7.58932C7.48027 7.29517 6.8978 7.09649 6.23767 6.98853V6.10599C6.23767 5.93429 6.18054 5.77128 6.04628 5.64671C5.91338 5.52341 5.74388 5.4738 5.56834 5.4738H4.52814Z",
+} as const;
+export const FOOTER_BRAND = "Superwall";

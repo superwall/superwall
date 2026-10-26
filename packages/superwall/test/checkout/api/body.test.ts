@@ -182,6 +182,19 @@ describe("sessionBody", () => {
     expect(body.allowedCheckoutDirectives).toEqual(["elements", "embedded", "redirect"]);
   });
 
+  it("names the teleport a session is made on, and only then", () => {
+    const body = sessionBody({
+      snapshot: snapshotOf(),
+      product,
+      productIdentifier: "test:price_1:no-trial",
+      mode: "sheet",
+      silent: false,
+      teleportId: "v1:tp",
+    });
+    expect(body.teleportId).toBe("v1:tp");
+    expect(bodyOf()).not.toHaveProperty("teleportId");
+  });
+
   it("lists only the products the store priced", () => {
     const body = sessionBody({
       snapshot: snapshotOf({

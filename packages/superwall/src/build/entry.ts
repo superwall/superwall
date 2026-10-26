@@ -26,14 +26,21 @@ export const entrySource = ({
   inlineProducts,
 }: EntrySourceOptions): string => {
   const imp = (file: string) => JSON.stringify(relativeImport(entryDir, file));
-  const checkout = checkoutNeedsPaymentUi(config.checkout);
+  const teleport = config.teleport !== undefined;
+  const checkout = checkoutNeedsPaymentUi(config.checkout) || teleport;
   const lines: string[] = [
     `import * as React from "react";`,
     `import { createRoot } from "react-dom/client";`,
     `import { SuperwallProvider } from "superwall";`,
     `import { mergeMessages } from "superwall/internal";`,
     `import { PaywallRouter } from "superwall/navigation";`,
-    ...(checkout ? [`import { SuperwallCheckout } from "superwall/checkout";`] : []),
+    ...(checkout
+      ? [
+          teleport
+            ? `import { SuperwallCheckout, TeleportScreen } from "superwall/checkout";`
+            : `import { SuperwallCheckout } from "superwall/checkout";`,
+        ]
+      : []),
   ];
 
   surface.routes.forEach((route, index) => {
@@ -86,6 +93,7 @@ export const entrySource = ({
       : `    <SuperwallProvider config={config} inlineProducts={${JSON.stringify(inlineProducts)}}>`,
     `      <PaywallRouter ${routerProps} />`,
     ...(checkout ? [`      <SuperwallCheckout />`] : []),
+    ...(teleport ? [`      <TeleportScreen />`] : []),
     `    </SuperwallProvider>`,
     `  </React.StrictMode>,`,
     `);`,
