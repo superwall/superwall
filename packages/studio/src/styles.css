@@ -320,6 +320,9 @@
       [aria-disabled="true"]
     ) {
     border-color: color-mix(in oklch, var(--foreground) 20%, transparent);
+  }
+
+  .sw-btn:hover:not(:disabled, [aria-disabled="true"]) {
     background-color: var(--accent);
   }
 
@@ -468,6 +471,7 @@
     padding: 0 33px 0 11px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    background-color: transparent;
     color: var(--foreground);
     font: inherit;
     font-size: 0.875rem;

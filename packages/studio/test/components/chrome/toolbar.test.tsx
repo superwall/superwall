@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  balanceRows,
   markOrphanDividers,
   Toolbar,
   ToolbarDivider,
@@ -84,5 +85,74 @@ describe("Toolbar dividers", () => {
     layOut(toolbar, () => 0);
     markOrphanDividers(toolbar);
     expect(dividers()).toEqual([false, false]);
+  });
+});
+
+describe("balanceRows", () => {
+  // Greedy wrap of fixed-width items into the toolbar's max-width, the way flex-wrap lays them out.
+  const wrapping = (widths: number[], full: number) => {
+    const toolbar = document.createElement("div");
+    toolbar.style.flexWrap = "wrap";
+    const items = widths.map((width) => {
+      const item = document.createElement("span");
+      item.dataset.width = String(width);
+      toolbar.append(item);
+      return item;
+    });
+    const tops = () => {
+      const limit = Number.parseFloat(toolbar.style.maxWidth) || full;
+      const result = new Map<HTMLElement, number>();
+      let row = 0;
+      let used = 0;
+      for (const item of items) {
+        const width = Number(item.dataset.width);
+        if (used > 0 && used + width > limit) {
+          row += 1;
+          used = 0;
+        }
+        used += width;
+        result.set(item, row * ROW);
+      }
+      return result;
+    };
+    vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(
+      function (this: HTMLElement) {
+        return tops().get(this) ?? 0;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(24);
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
+      function (this: HTMLElement) {
+        return this === toolbar ? Number.parseFloat(toolbar.style.maxWidth) || full : 0;
+      },
+    );
+    const rows = () => new Set(tops().values()).size;
+    const perRow = () => {
+      const counts = new Map<number, number>();
+      for (const top of tops().values()) counts.set(top, (counts.get(top) ?? 0) + 1);
+      return [...counts.values()];
+    };
+    return { toolbar, rows, perRow };
+  };
+
+  it("spreads the items over the rows they need instead of stranding the last one", () => {
+    const { toolbar, rows, perRow } = wrapping([100, 100, 100, 100], 320);
+    expect(perRow()).toEqual([3, 1]);
+    balanceRows(toolbar);
+    expect(rows()).toBe(2);
+    expect(perRow()).toEqual([2, 2]);
+  });
+
+  it("leaves a single row alone", () => {
+    const { toolbar } = wrapping([100, 100], 400);
+    balanceRows(toolbar);
+    expect(toolbar.style.maxWidth).toBe("");
+  });
+
+  it("leaves a toolbar that scrolls instead of wrapping alone", () => {
+    const { toolbar } = wrapping([100, 100, 100, 100], 320);
+    toolbar.style.flexWrap = "nowrap";
+    balanceRows(toolbar);
+    expect(toolbar.style.maxWidth).toBe("");
   });
 });
