@@ -217,6 +217,8 @@ test("publish pushes the source between the version and the promote", async () =
     "promote:done",
   ]);
   assert.deepEqual(api.calls, [
+    "GET /v2/projects?limit=100",
+    "GET /v2/paywalls?application_id=42&limit=1",
     "POST /v2/paywalls/208540/versions",
     "POST /v2/paywalls/208540/source-access",
     "POST /v2/paywalls/208540/versions/7/source-commit",
@@ -565,6 +567,51 @@ test("a two-platform studio push sends each app its own product id and store", a
   ]);
   assert.deepEqual(Reflect.get(Object(android), "products"), [
     { store: "play-store", identifier: "pro_year_play", reference_name: "annual" },
+  ]);
+});
+
+test("a studio push sends the store the project's catalogue records, so a custom product stays custom", async () => {
+  const api = await startApi();
+  api.gate = (url) => {
+    if (url.startsWith("/v2/projects")) {
+      return { status: 200, body: { data: [{ id: 9, applications: [{ id: 42 }] }], has_more: false } };
+    }
+    if (url.startsWith("/v2/products")) {
+      return {
+        status: 200,
+        body: {
+          data: [
+            { identifier: "pro_year", platform: "ios", store: "app_store" },
+            { identifier: "stripe_elite1w", platform: "custom", store: "custom" },
+          ],
+          has_more: false,
+        },
+      };
+    }
+    return undefined;
+  };
+  const project = boundProject();
+  const custom: Framework = {
+    ...framework,
+    buildSnapshot: async () => ({
+      name: "Pro",
+      snapshotId: "abc",
+      html: "<html></html>",
+      bytes: 13,
+      htmlFile: "x",
+      assets: [],
+      assetBytes: 0,
+      products: { primary: "pro_year", stripePrimary: "stripe_elite1w" },
+    }),
+  };
+
+  const result = await createStudioActions(custom, project).run("push", surface);
+
+  assert.equal(result.ok, true);
+  const body: unknown = JSON.parse(api.bodies["/v2/paywalls/208540/versions"] ?? "{}");
+  assert.deepEqual(Reflect.get(Object(body), "products"), [
+    { store: "app-store", identifier: "pro_year", reference_name: "primary" },
+    { store: "custom", identifier: "stripe_elite1w", reference_name: "stripePrimary" },
   ]);
 });
 

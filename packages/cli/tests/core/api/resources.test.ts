@@ -311,6 +311,31 @@ test("pushPaywallVersion spreads the paywall settings into the version body", as
   assert.deepEqual(posted[1]?.body, { html: "<html></html>" });
 });
 
+test("versionProducts takes a custom or Stripe store from the catalogue, and the platform's store when the catalogue has it", () => {
+  const stores = {
+    stripe_elite1w: ["custom" as const],
+    prod_web: ["stripe" as const],
+    shared: ["custom" as const, "app-store" as const],
+    pro_play: ["play-store" as const],
+  };
+  assert.deepEqual(
+    versionProducts(
+      {
+        stripePrimary: "stripe_elite1w",
+        web: "prod_web",
+        shared: "shared",
+        play: "pro_play",
+        unknown: "pro_999_month",
+        composite: "live:price_abc:trial",
+      },
+      "ios",
+      stores,
+    ).map((product) => product.store),
+    ["custom", "stripe", "app-store", "app-store", "app-store", "stripe"],
+  );
+  assert.equal(versionProducts({ shared: "shared" }, "android", stores)[0]?.store, "custom");
+});
+
 test("versionProducts returns empty for no products", () => {
   assert.deepEqual(versionProducts(undefined), []);
   assert.deepEqual(versionProducts({}), []);

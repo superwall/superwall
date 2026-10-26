@@ -14,8 +14,9 @@ import type {
   FrameworkSurface,
 } from "@/core/paywalls/project/framework";
 import { readLock, writeApp, writeBinding } from "@/core/paywalls/project/lock";
-import { ui } from "@/ui";
+import { ui, useRenderer } from "@/ui";
 import { selectRenderer } from "@/ui/select";
+import { recordingRenderer, type RendererCall } from "../../../helpers/renderer";
 
 selectRenderer({ mode: "json" });
 
@@ -1182,6 +1183,46 @@ test("each platform's version carries its own product ids and store", async () =
   assert.deepEqual(Reflect.get(Object(last), "products"), [
     { store: "play-store", identifier: "pro_5999_year_play", reference_name: "annual" },
   ]);
+});
+
+test("a product the catalogue records as custom is pushed as custom, and the push says so", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({
+    products: {
+      body: {
+        data: [
+          { identifier: "elite1w", platform: "ios", store: "app_store" },
+          { identifier: "stripe_elite1w", platform: "ios", store: "custom" },
+        ],
+      },
+    },
+  });
+  const calls: RendererCall[] = [];
+  useRenderer(recordingRenderer(calls));
+
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      load: async () =>
+        frameworkFor(project, {
+          buildSnapshot: async () =>
+            built({ products: { primary: "elite1w", stripePrimary: "stripe_elite1w" } }),
+        }),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  const body: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  assert.deepEqual(Reflect.get(Object(body), "products"), [
+    { store: "app-store", identifier: "elite1w", reference_name: "primary" },
+    { store: "custom", identifier: "stripe_elite1w", reference_name: "stripePrimary" },
+  ]);
+  assert.ok(
+    calls.some(
+      (call) => typeof call.value === "string" && call.value.includes("stripePrimary → custom"),
+    ),
+  );
 });
 
 test("the settings a build resolves from config.ts travel with the version", async () => {

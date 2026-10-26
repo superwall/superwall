@@ -3,9 +3,11 @@ import pc from "picocolors";
 import type { SuperwallApi } from "@/core/api/client";
 import {
   livePaywall,
+  platformStore,
   promotePaywallVersion,
   pushPaywallVersion,
   versionProducts,
+  type ProductStores,
 } from "@/core/api/resources";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
 import { resolveApps } from "@/core/paywalls/binding/apps";
@@ -23,7 +25,12 @@ import { pickAdoptOption } from "@/core/paywalls/pickers/adopt";
 import { pickApplicationOption } from "@/core/paywalls/pickers/application";
 import { pickRenameOption } from "@/core/paywalls/pickers/rename";
 import { pickStaleOption } from "@/core/paywalls/pickers/stale";
-import { listProjectProducts, projectForApplication, requireProducts } from "@/core/paywalls/products";
+import {
+  listProjectCatalogue,
+  projectForApplication,
+  requireProducts,
+  type ProjectCatalogue,
+} from "@/core/paywalls/products";
 import {
   frameworkVersion,
   resolveFramework,
@@ -147,6 +154,7 @@ interface Prepared {
   changed: boolean;
   pending: boolean;
   unsourced?: number;
+  stores: ProductStores;
 }
 
 const BUILD_CONCURRENCY = Math.max(2, Math.min(8, cpus().length - 1));
@@ -200,14 +208,19 @@ async function prepare(
         await projectForApplication(context.api, target.applicationId),
       );
     }
-    const catalogues = new Map<string, Record<string, Record<string, unknown>>>();
+    const catalogues = new Map<string, ProjectCatalogue>();
     for (const projectId of new Set(projectIds.values())) {
       if (projectId === undefined) continue;
-      catalogues.set(projectId, await listProjectProducts(context.api, projectId));
+      catalogues.set(projectId, await listProjectCatalogue(context.api, projectId));
     }
+    const catalogueOf = (target: SurfaceTarget): ProjectCatalogue | undefined => {
+      const projectId = projectIds.get(target.applicationId);
+      return projectId === undefined ? undefined : catalogues.get(projectId);
+    };
+
     for (const [projectId, catalogue] of catalogues) {
       requireProducts(
-        catalogue,
+        catalogue.variables,
         targets.flatMap((target, index) =>
           projectIds.get(target.applicationId) === projectId
             ? [{ id: target.surface.id, products: builds[index]?.products }]
@@ -253,6 +266,7 @@ async function prepare(
         changed,
         pending: !changed && live.snapshotId !== build.snapshotId,
         unsourced,
+        stores: catalogueOf(target)?.stores ?? {},
       };
     });
     const modified = prepared.filter((entry) => entry.changed).length;
@@ -272,6 +286,7 @@ async function pushVersion(
     target: SurfaceTarget;
     bind: ResolvedBinding;
     build: Prepared["build"];
+    stores: ProductStores;
     wasLive?: number;
     promoting: boolean;
   },
@@ -297,13 +312,21 @@ async function pushVersion(
     );
   }
 
+  const products = versionProducts(build.products, target.platform, input.stores);
+  const elsewhere = products.filter((product) => product.store !== platformStore(target.platform));
+  if (elsewhere.length > 0) {
+    lines.push(
+      `Products ${pc.dim(elsewhere.map((product) => `${product.reference_name} → ${product.store}`).join(", "))}`,
+    );
+  }
+
   note("Pushing");
   const push = await timed(() =>
     pushPaywallVersion(context.api, bind.paywallId, {
       html: build.html,
       surface: target.surface.id,
       assets: synced.value.assets,
-      products: versionProducts(build.products, target.platform),
+      products,
       settings: build.settings,
       locales: build.locales,
     }),
@@ -387,7 +410,7 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
   }
   const files = source.ok ? source.files : [];
 
-  for (const { target, bind, build, live: wasLive, unsourced } of changed) {
+  for (const { target, bind, build, live: wasLive, unsourced, stores } of changed) {
     const { surface } = target;
     let version = 0;
     let live = false;
@@ -397,7 +420,7 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
       if (unsourced === undefined) {
         version = await pushVersion(
           context,
-          { target, bind, build, wasLive, promoting: options.promote },
+          { target, bind, build, stores, wasLive, promoting: options.promote },
           lines,
           note,
         );
