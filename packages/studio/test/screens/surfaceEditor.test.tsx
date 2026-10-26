@@ -2,6 +2,7 @@ import * as React from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SurfaceEditor } from "../../src/screens/SurfaceEditor";
+import type { StudioHandle } from "../../src/lib/commands";
 import { StudioHostProvider } from "../../src/lib/studio-host";
 
 const renderEditor = (element: React.ReactElement<React.ComponentProps<typeof SurfaceEditor>>) =>
@@ -775,5 +776,274 @@ describe("SurfaceEditor promoting and rolling back", () => {
       expect(screen.getByText("Roll back failed")).toBeDefined();
       expect(screen.getByRole("alert").textContent).toBe("paywalls:write is missing");
     });
+  });
+});
+
+describe("SurfaceEditor driven by its host", () => {
+  const surfaceWithLocales: StudioSurface = { ...live, locales: ["en", "de-DE"] };
+
+  const drive = async (
+    handle: React.RefObject<StudioHandle | null>,
+    commands: Parameters<StudioHandle["run"]>[0],
+  ) => {
+    let result: Awaited<ReturnType<StudioHandle["run"]>> | undefined;
+    let running: ReturnType<StudioHandle["run"]> | undefined;
+    // Two acts: the run resolves after the commit its commands cause, which an
+    // async act awaiting it would hold back until it returned.
+    act(() => {
+      running = handle.current?.run(commands);
+    });
+    await act(async () => {
+      result = await running;
+    });
+    if (!result) throw new Error("the editor did not answer");
+    return result;
+  };
+
+  it("applies commands to the controls a person uses, and reports what is on stage", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(
+      <SurfaceEditor ref={handle} source={source} surface={surfaceWithLocales} samples={{}} />,
+    );
+    const host = hostOf(preview());
+    host.ping();
+
+    const result = await drive(handle, [
+      { type: "device", device: "iPhone 17 Pro Max" },
+      { type: "orientation", orientation: "landscape" },
+      { type: "theme", theme: "dark" },
+      { type: "locale", locale: "de_de" },
+      { type: "introductoryOffer", eligible: true },
+      { type: "variable", path: "user.name", value: "Ada" },
+      { type: "variable", path: "products.annual.price", value: "$1" },
+      { type: "variablesPanel", open: true },
+      { type: "zoom", to: 50 },
+    ]);
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.state).toMatchObject({
+      surface: { id: "plus-upgrade", label: "v12 · Live" },
+      device: { id: "iphone-17-pro-max", name: "iPhone 17 Pro Max", width: 956, height: 440 },
+      orientation: "landscape",
+      theme: "dark",
+      locale: "de-DE",
+      locales: ["en", "de-DE"],
+      introductoryOffer: { eligible: true, overridden: true },
+      zoom: { percent: 50, fitted: false },
+      variables: { user: { name: "Ada" }, products: { annual: { price: "$1" } } },
+      variablesPanel: true,
+      compare: null,
+    });
+    expect((screen.getByLabelText("Device") as HTMLSelectElement).value).toBe("iphone-17-pro-max");
+    expect(screen.getByRole("button", { name: "Rotate device" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(
+      screen.getByRole("switch", { name: "Introductory offer" }).getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(screen.getByRole("button", { name: /Variables/ }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    expect(host.sent().at(-1)?.[0]).toMatchObject({
+      variables: {
+        device: { interfaceStyle: "Dark", deviceLocale: "de-DE" },
+        user: { name: "Ada" },
+      },
+    });
+    expect(handle.current?.state().theme).toBe("dark");
+  });
+
+  it("says which commands it could not apply, and still applies the rest", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(
+      <SurfaceEditor
+        ref={handle}
+        source={source}
+        surface={{ ...live, version: 12 }}
+        samples={{}}
+      />,
+    );
+
+    const result = await drive(handle, [
+      { type: "device", device: "Nokia 3310" },
+      { type: "locale", locale: "fr" },
+      { type: "variable", path: "experiment.id", value: 1 },
+      { type: "version", version: 4 },
+      { type: "compare", with: "nothing" },
+      { type: "theme", theme: "dark" },
+    ]);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual([
+      { index: 0, type: "device", error: 'no device "Nokia 3310"; see state.devices' },
+      { index: 1, type: "locale", error: "this paywall has one language only" },
+      {
+        index: 2,
+        type: "variable",
+        error:
+          "experiment.id is not user.<key>, device.<key>, params.<key> or products.<reference>.<key>",
+      },
+      { index: 3, type: "version", error: "this studio cannot switch versions" },
+      {
+        index: 4,
+        type: "compare",
+        error: 'nothing to compare called "nothing"; see state.compareOptions',
+      },
+    ]);
+    expect(result.state.theme).toBe("dark");
+  });
+
+  it("names the locales it has when asked for another", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(
+      <SurfaceEditor ref={handle} source={source} surface={surfaceWithLocales} samples={{}} />,
+    );
+    const result = await drive(handle, [
+      { type: "locale", locale: "fr" },
+      { type: "locale", locale: null },
+    ]);
+    expect(result.errors).toEqual([
+      { index: 0, type: "locale", error: "this paywall has no fr locale; it has en, de-DE" },
+    ]);
+    expect(result.state.locale).toBeNull();
+  });
+
+  it("zooms, resizes, compares and reloads like the toolbar", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(<SurfaceEditor ref={handle} source={source} surface={live} samples={{}} />);
+
+    const zoomed = await drive(handle, [{ type: "zoom", to: "in" }]);
+    expect(zoomed.state.zoom.fitted).toBe(false);
+    await drive(handle, [{ type: "zoom", to: "out" }]);
+    await drive(handle, [{ type: "zoom", to: "actual" }]);
+    const fitted = await drive(handle, [{ type: "zoom", to: "fit" }]);
+    expect(fitted.state.zoom.fitted).toBe(true);
+
+    const sized = await drive(handle, [
+      { type: "size", width: 900 },
+      { type: "size", height: 5000 },
+    ]);
+    expect(sized.state.device).toEqual({
+      id: "responsive",
+      name: "Responsive",
+      width: 900,
+      height: 3000,
+    });
+    const back = await drive(handle, [
+      { type: "device", device: "responsive" },
+      { type: "orientation", orientation: "portrait" },
+    ]);
+    expect(back.state.device.id).toBe("responsive");
+
+    const compared = await drive(handle, [{ type: "compare", with: "V13" }]);
+    expect(compared.state.compare).toBe("surface:paywall/plus-upgrade");
+    expect(compared.state.compareOptions).toEqual([
+      { key: "surface:paywall/plus-upgrade", label: "v13" },
+    ]);
+    expect(screen.getByTitle("v13 preview")).toBeTruthy();
+    const ended = await drive(handle, [{ type: "compare", with: null }, { type: "reload" }]);
+    expect(ended.state.compare).toBeNull();
+    expect(screen.queryByTitle("v13 preview")).toBeNull();
+  });
+
+  it("resets the variables but keeps the offer switch, and clears the switch alone", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(<SurfaceEditor ref={handle} source={source} surface={live} samples={{}} />);
+    await drive(handle, [
+      { type: "variable", path: "params.source", value: "push" },
+      { type: "introductoryOffer", eligible: false },
+    ]);
+    const reset = await drive(handle, [{ type: "resetVariables" }]);
+    expect(reset.state.variables).toEqual({});
+    expect(reset.state.introductoryOffer).toEqual({ eligible: false, overridden: true });
+    const cleared = await drive(handle, [
+      { type: "introductoryOffer", eligible: null },
+      { type: "resetVariables" },
+    ]);
+    expect(cleared.state.introductoryOffer.overridden).toBe(false);
+  });
+
+  it("switches pushed versions through the host's picker, and compares the original", async () => {
+    const pick = vi.fn();
+    const rebuilt: StudioSurface = {
+      ...live,
+      version: 12,
+      origin: { paywallId: "1", url: "https://editor.test/1" },
+    };
+    const hosted: StudioSource = {
+      ...source,
+      surfaces: [rebuilt],
+      actions: {
+        offered: ["promote"],
+        run: vi.fn(),
+        status: async () => ({
+          paywallId: "208540",
+          versions: [
+            { version: 13, url: "https://cdn.test/13.html", live: false },
+            { version: 12, url: "https://cdn.test/12.html", live: true },
+          ],
+        }),
+        pick,
+      },
+    };
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(<SurfaceEditor ref={handle} source={hosted} surface={rebuilt} samples={{}} />);
+    await act(async () => {});
+
+    const result = await drive(handle, [
+      { type: "version", version: 13 },
+      { type: "version", version: 9 },
+      { type: "compare", with: "Original" },
+    ]);
+    expect(pick).toHaveBeenCalledWith(13);
+    expect(result.errors).toEqual([
+      { index: 1, type: "version", error: "there is no v9; see state.versions" },
+    ]);
+    expect(result.state.versions).toEqual([
+      { version: 13, live: false },
+      { version: 12, live: true },
+    ]);
+    expect(result.state.compare).toBe("origin");
+    expect(result.state.surface).toEqual({ id: "plus-upgrade", label: "v12 · Live", version: 12 });
+
+    const version = await drive(handle, [{ type: "compare", with: "version:13" }]);
+    expect(version.state.compare).toBe("version:13");
+  });
+
+  it("reports the zoom it last heard before the canvas mounts a handle", () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(<SurfaceEditor ref={handle} source={source} surface={live} samples={{}} />);
+    expect(handle.current?.state().zoom).toEqual({ percent: 100, fitted: true });
+  });
+
+  it("lays the host's panel at the start of the stage row, open or closed", () => {
+    const view = renderEditor(
+      <SurfaceEditor
+        source={source}
+        surface={live}
+        samples={{}}
+        panel={{ open: false, label: "Chat", content: <div data-testid="slot" /> }}
+      />,
+    );
+    const panel = screen.getByTestId("host-panel");
+    expect(panel.getAttribute("aria-label")).toBe("Chat");
+    expect(panel.getAttribute("aria-hidden")).toBe("true");
+    expect(panel.className).toContain("w-0");
+    expect(panel.nextElementSibling).toBe(screen.getByTestId("canvas"));
+    expect(within(panel).getByTestId("slot")).toBeTruthy();
+
+    view.rerender(
+      <StudioHostProvider mode="local" home={{ href: "/", navigate: () => {} }}>
+        <SurfaceEditor
+          source={source}
+          surface={live}
+          samples={{}}
+          panel={{ open: true, label: "Chat", content: <div data-testid="slot" /> }}
+        />
+      </StudioHostProvider>,
+    );
+    expect(screen.getByTestId("host-panel").getAttribute("aria-hidden")).toBe("false");
+    expect(screen.getByTestId("host-panel").className).toContain("w-[min(23rem,100cqw)]");
   });
 });

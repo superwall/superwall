@@ -1,7 +1,19 @@
 import "./styles.css";
 
 export { StudioApp } from "./StudioApp";
-export { SurfaceEditor } from "./screens/SurfaceEditor";
+export { SurfaceEditor, type StudioPanel } from "./screens/SurfaceEditor";
+export {
+  editVariable,
+  findDevice,
+  parseStudioCommands,
+  STUDIO_COMMAND_TYPES,
+  type StudioCommand,
+  type StudioCommandError,
+  type StudioCommandResult,
+  type StudioCommandType,
+  type StudioHandle,
+  type StudioState,
+} from "./lib/commands";
 export { SurfaceList } from "./screens/SurfaceList";
 export { DeviceFrame } from "./components/preview/DeviceFrame";
 export {
@@ -19,6 +31,7 @@ export { PreviewOnDevice } from "./components/PreviewOnDevice";
 export { Tooltip } from "./components/Tooltip";
 export { TopBar } from "./components/chrome/TopBar";
 export { VariablesPanel } from "./components/panels/VariablesPanel";
+export { HostPanel } from "./components/panels/SidePanel";
 export { Segmented, Select, Switch } from "./components/controls";
 export {
   chromeFor,

@@ -126,6 +126,22 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   preview server, importable from node without DOM types.
   `@superwall/studio/styles.css` is the Tailwind source for hosts that run
   their own v4 pipeline.
+- `SurfaceEditor`'s `ref` is a `StudioHandle`: `run(commands)` applies
+  `StudioCommand`s (zoom, device, size, orientation, theme, locale,
+  introductory offer, a Variables panel value, reset, the Variables panel,
+  version, compare, reload) through the same state the toolbar drives, and
+  resolves once the stage has settled with `{ ok, errors, state }`;
+  `state()` reads the same `StudioState` without changing anything. Commands
+  that arrive as untrusted JSON (an agent's, over a bridge) go through
+  `parseStudioCommands` first. A bad command is reported by index and the
+  rest still apply. Zoom applies after everything else, so it lands on the
+  stage a device or orientation change refits.
+- `SurfaceEditor`'s `panel` (`{ open, label, content }`) is a host-owned
+  panel at the start of the stage row, between the top bar and the toolbar:
+  the dashboard puts the agent chat's slot there. It opens like the Variables
+  panel, by growing its width (`ease-drawer`, the move duration, none under
+  reduced motion), while its content keeps its width pinned to the inner
+  edge, so the content slides in and the canvas refits beside it.
 
 ## Screens
 

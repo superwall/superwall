@@ -27,7 +27,7 @@ import {
   SunIcon,
 } from "../components/icons";
 import { Tooltip } from "../components/Tooltip";
-import { SidePanel } from "../components/panels/SidePanel";
+import { HostPanel, SidePanel } from "../components/panels/SidePanel";
 import { Toolbar, ToolbarDivider, ToolbarGroup } from "../components/chrome/Toolbar";
 import { TopBar } from "../components/chrome/TopBar";
 import {
@@ -47,6 +47,15 @@ import {
   STUDIO_DEVICES,
   type DeviceChromeSpec,
 } from "../lib/devices";
+import {
+  editVariable,
+  findDevice,
+  variableOverrides,
+  type StudioCommand,
+  type StudioCommandError,
+  type StudioHandle,
+  type StudioState,
+} from "../lib/commands";
 import { hostStateFor, previewDevice, studioDefaults } from "../lib/host";
 import { percent } from "../lib/canvas";
 import { hostedUrl, originalUrl } from "../lib/preview";
@@ -221,16 +230,30 @@ const CanvasFooter = ({ children }: React.PropsWithChildren) => {
 
 const nameOf = (surface: StudioSurface): string => surface.label ?? `${surface.kind}/${surface.id}`;
 
+/** A host's panel beside the stage (an agent chat): its content is the host's. */
+export type StudioPanel = { open: boolean; label: string; content: React.ReactNode };
+
+// The panels' `duration-move`, plus a frame.
+const PANEL_MOVE_MS = 220;
+
+const nextFrame = (): Promise<void> =>
+  new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+
 export const SurfaceEditor = ({
   source,
   surface,
   samples,
   actions,
+  panel,
+  ref,
 }: {
   source: StudioSource;
   surface: StudioSurface;
   samples: Samples;
   actions?: React.ReactNode;
+  panel?: StudioPanel;
+  /** Drives the editor's own controls (`StudioCommand`) and reads them back. */
+  ref?: React.Ref<StudioHandle>;
 }) => {
   const [deviceId, setDeviceId] = React.useState(DEFAULT_DEVICE_ID);
   const [size, setSize] = React.useState(RESPONSIVE_DEFAULT);
@@ -473,6 +496,204 @@ export const SurfaceEditor = ({
     Object.keys(edited.params ?? {}).length +
     Object.keys(edited.device ?? {}).length;
 
+  const compareKey = !compareWith
+    ? null
+    : compareWith.type === "origin"
+      ? "origin"
+      : compareWith.type === "version"
+        ? `version:${compareWith.version}`
+        : `surface:${compareWith.surface.kind}/${compareWith.surface.id}`;
+
+  const readState = (): StudioState => {
+    const shown = canvas.current?.zoom() ?? zoom;
+    return {
+      surface: {
+        id: surface.id,
+        ...(surface.label ? { label: surface.label } : {}),
+        ...(surface.version === undefined ? {} : { version: surface.version }),
+      },
+      device: responsive
+        ? { id: RESPONSIVE_ID, name: "Responsive", ...frame }
+        : { id: device.id, name: device.name, ...frame },
+      devices: [
+        ...STUDIO_DEVICES.map((entry) => ({ id: entry.id, name: entry.name })),
+        { id: RESPONSIVE_ID, name: "Responsive" },
+      ],
+      orientation: landscape ? "landscape" : "portrait",
+      theme,
+      locale: locale ?? null,
+      locales: [...locales],
+      introductoryOffer: {
+        eligible: hasIntroductoryOffer(hostState),
+        overridden: edited.introductoryOfferEligible !== undefined,
+      },
+      zoom: { percent: Math.round(shown.scale * 100), fitted: shown.fitted },
+      variables: variableOverrides(edited),
+      variablesPanel: panelOpen,
+      versions: versions.map((entry) => ({ version: entry.version, live: entry.live === true })),
+      compare: compareKey,
+      compareOptions: compareOptions.map((option) => ({ key: option.key, label: option.label })),
+    };
+  };
+
+  const applyCommand = (command: StudioCommand): string | undefined => {
+    switch (command.type) {
+      case "zoom":
+        if (!canvas.current) return "the canvas is not on screen";
+        if (command.to === "in") canvas.current.zoomStep(1);
+        else if (command.to === "out") canvas.current.zoomStep(-1);
+        else if (command.to === "fit") canvas.current.fit();
+        else if (command.to === "actual") canvas.current.actualSize();
+        else canvas.current.zoomTo(command.to / 100);
+        return undefined;
+      case "device": {
+        const found = findDevice(command.device);
+        if (!found) return `no device ${JSON.stringify(command.device)}; see state.devices`;
+        setDeviceId(found === RESPONSIVE_ID ? RESPONSIVE_ID : found.id);
+        return undefined;
+      }
+      case "size":
+        setDeviceId(RESPONSIVE_ID);
+        setSize((current) => ({
+          width:
+            command.width === undefined ? current.width : clampSize(command.width, current.width),
+          height:
+            command.height === undefined
+              ? current.height
+              : clampSize(command.height, current.height),
+        }));
+        return undefined;
+      case "orientation":
+        setLandscape(command.orientation === "landscape");
+        return undefined;
+      case "theme":
+        setTheme(command.theme);
+        return undefined;
+      case "locale": {
+        if (command.locale === null) {
+          setLocale(undefined);
+          return undefined;
+        }
+        const wanted = command.locale.toLowerCase().replace("_", "-");
+        const match = locales.find((entry) => entry.toLowerCase().replace("_", "-") === wanted);
+        if (!match) {
+          return locales.length > 0
+            ? `this paywall has no ${command.locale} locale; it has ${locales.join(", ")}`
+            : "this paywall has one language only";
+        }
+        setLocale(match);
+        return undefined;
+      }
+      case "introductoryOffer":
+        setEdited((current) => {
+          const { introductoryOfferEligible: _offer, ...rest } = current;
+          return command.eligible === null
+            ? rest
+            : { ...rest, introductoryOfferEligible: command.eligible };
+        });
+        return undefined;
+      case "variable": {
+        const checked = editVariable({}, command.path, command.value);
+        if ("error" in checked) return checked.error;
+        setEdited((current) => {
+          const edit = editVariable(current, command.path, command.value);
+          return "overrides" in edit ? edit.overrides : current;
+        });
+        return undefined;
+      }
+      case "resetVariables":
+        setEdited((current) =>
+          current.introductoryOfferEligible === undefined
+            ? {}
+            : { introductoryOfferEligible: current.introductoryOfferEligible },
+        );
+        return undefined;
+      case "variablesPanel":
+        setPanelOpen(command.open);
+        return undefined;
+      case "version":
+        if (!promotion.pick) return "this studio cannot switch versions";
+        if (!versions.some((entry) => entry.version === command.version)) {
+          return `there is no v${command.version}; see state.versions`;
+        }
+        promotion.pick(command.version);
+        return undefined;
+      case "compare": {
+        if (command.with === null) {
+          setCompareWith(undefined);
+          return undefined;
+        }
+        const wanted = command.with.trim().toLowerCase();
+        const option = compareOptions.find(
+          (entry) => entry.key.toLowerCase() === wanted || entry.label.toLowerCase() === wanted,
+        );
+        if (!option)
+          return `nothing to compare called ${JSON.stringify(command.with)}; see state.compareOptions`;
+        setCompareWith(option.target);
+        return undefined;
+      }
+      case "reload":
+        setReloadKey((key) => key + 1);
+        return undefined;
+    }
+  };
+
+  const latestCommands = React.useRef({ applyCommand, readState });
+  latestCommands.current = { applyCommand, readState };
+  const [commits, setCommits] = React.useState(0);
+  const waiting = React.useRef(new Map<number, () => void>());
+  React.useEffect(() => {
+    const ready = waiting.current.get(commits);
+    if (!ready) return;
+    waiting.current.delete(commits);
+    ready();
+  }, [commits]);
+
+  React.useImperativeHandle(
+    ref,
+    (): StudioHandle => ({
+      state: () => latestCommands.current.readState(),
+      run: (commands) => {
+        const errors: StudioCommandError[] = [];
+        const apply = (index: number) => {
+          const command = commands[index]!;
+          const error = latestCommands.current.applyCommand(command);
+          if (error) errors.push({ index, type: command.type, error });
+        };
+        // Zoom goes last, once the stage it zooms has settled: a device or
+        // orientation change refits the canvas when it commits.
+        const zooms: number[] = [];
+        commands.forEach((command, index) => {
+          if (command.type === "zoom") zooms.push(index);
+          else apply(index);
+        });
+        return new Promise((resolve) => {
+          const settle = async () => {
+            if (zooms.length > 0) {
+              await nextFrame();
+              // A panel opening or closing narrows the canvas for one move.
+              if (commands.some((command) => command.type === "variablesPanel")) {
+                await new Promise((wait) => window.setTimeout(wait, PANEL_MOVE_MS));
+              }
+              zooms.forEach(apply);
+            }
+            // A refit lands on the next measure, a frame or two on.
+            await nextFrame();
+            await nextFrame();
+            errors.sort((a, b) => a.index - b.index);
+            resolve({ ok: errors.length === 0, errors, state: latestCommands.current.readState() });
+          };
+          setCommits((count) => {
+            const next = count + 1;
+            waiting.current.set(next, () => void settle());
+            return next;
+          });
+        });
+      },
+    }),
+    [],
+  );
+
   return (
     <>
       <PaywallToasts
@@ -551,7 +772,12 @@ export const SurfaceEditor = ({
         </div>
       )}
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="@container relative flex min-h-0 flex-1">
+        {panel && (
+          <HostPanel open={panel.open} label={panel.label}>
+            {panel.content}
+          </HostPanel>
+        )}
         <Canvas
           ref={canvas}
           onZoom={setZoom}

@@ -26,6 +26,11 @@ describe("what a second host can reach", () => {
       "createStudioDelegate",
       "hostedUrl",
       "snapshotPreviewUrl",
+      "parseStudioCommands",
+      "findDevice",
+      "editVariable",
+      "HostPanel",
+      "TopBar",
     ]) {
       expect(studio, name).toHaveProperty(name);
     }

@@ -34,3 +34,31 @@ export const SidePanel = ({
     </div>
   </aside>
 );
+
+/**
+ * The host's panel at the start of the stage row (a chat beside the paywall),
+ * between the top bar and the toolbar. It opens the way the Variables panel
+ * does, by growing its width, while its content keeps its own width pinned to
+ * the panel's inner edge, so the content slides in from the left and the
+ * canvas re-fits beside it; on a row narrower than a phone in landscape it
+ * takes the whole row. It has no header: the host draws its own.
+ */
+export const HostPanel = ({
+  open,
+  label,
+  children,
+}: React.PropsWithChildren<{ open: boolean; label: string }>) => (
+  <aside
+    className={`relative flex-none overflow-hidden transition-[width] duration-move ease-drawer motion-reduce:transition-none ${
+      open ? "w-[min(23rem,100cqw)] @max-xl:w-[100cqw]" : "w-0"
+    }`}
+    aria-label={label}
+    aria-hidden={!open}
+    inert={!open}
+    data-testid="host-panel"
+  >
+    <div className="absolute inset-y-0 end-0 w-[min(23rem,100cqw)] border-r border-border bg-background @max-xl:w-[100cqw]">
+      {children}
+    </div>
+  </aside>
+);

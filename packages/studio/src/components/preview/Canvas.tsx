@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
   centered,
+  clampScale,
   FIT_INSET,
   fitTransform,
   panBy,
@@ -141,6 +142,10 @@ export type CanvasZoom = { scale: number; fitted: boolean };
 
 export type CanvasHandle = {
   zoomStep: (direction: 1 | -1) => void;
+  /** Zooms to `scale` with the stage centred. */
+  zoomTo: (scale: number) => void;
+  /** The zoom on stage now, for a host that reports it. */
+  zoom: () => CanvasZoom;
   actualSize: () => void;
   fit: () => void;
   hold: () => void;
@@ -187,11 +192,26 @@ export const Canvas = ({
   const pinch = React.useRef<Pinch | null>(null);
   const lastFitKey = React.useRef(fitKey);
 
+  // The mode last asked for, ahead of the render that shows it, so a host
+  // chaining zoom commands (or reading the zoom back) never sees a stale one.
+  const requested = React.useRef<Mode>(mode);
+  const measured = useLatest({ contentSize, viewportSize, room });
+  const current = React.useCallback((): CanvasTransform => {
+    const asked = requested.current;
+    if (asked.kind === "manual") return asked.transform;
+    const sizes = measured.current;
+    return fitTransform(sizes.contentSize, sizes.viewportSize, sizes.room);
+  }, [measured]);
+
   const apply = React.useCallback((next: CanvasTransform) => {
-    setMode({ kind: "manual", transform: next });
+    requested.current = { kind: "manual", transform: next };
+    setMode(requested.current);
   }, []);
 
-  const fit = React.useCallback(() => setMode({ kind: "fit" }), []);
+  const fit = React.useCallback(() => {
+    requested.current = { kind: "fit" };
+    setMode(requested.current);
+  }, []);
 
   const toViewport = React.useCallback(
     (clientX: number, clientY: number): Point => {
@@ -212,10 +232,23 @@ export const Canvas = ({
   const zoomStep = React.useCallback(
     (direction: 1 | -1) => {
       const centre = { x: viewportSize.width / 2, y: viewportSize.height / 2 };
-      const next = stepScale(latest.current.scale, direction);
-      apply(zoomAt(latest.current, next / latest.current.scale, centre));
+      const from = current();
+      apply(zoomAt(from, stepScale(from.scale, direction) / from.scale, centre));
     },
-    [apply, latest, viewportSize],
+    [apply, current, viewportSize],
+  );
+
+  const zoomTo = React.useCallback(
+    (scale: number) => {
+      const sizes = measured.current;
+      apply(centered(clampScale(scale), sizes.contentSize, sizes.viewportSize, sizes.room));
+    },
+    [apply, measured],
+  );
+
+  const zoom = React.useCallback(
+    (): CanvasZoom => ({ scale: current().scale, fitted: requested.current.kind === "fit" }),
+    [current],
   );
 
   const actualSize = React.useCallback(() => {
@@ -229,8 +262,10 @@ export const Canvas = ({
     [apply, latest],
   );
 
-  React.useImperativeHandle(ref, () => ({ zoomStep, actualSize, fit, hold, pan }), [
+  React.useImperativeHandle(ref, () => ({ zoomStep, zoomTo, zoom, actualSize, fit, hold, pan }), [
     zoomStep,
+    zoomTo,
+    zoom,
     actualSize,
     fit,
     hold,
