@@ -27,17 +27,17 @@ export async function listProjectCatalogue(
   const rows = await api.list<CatalogueRow>(
     `/v2/products?project_id=${encodeURIComponent(projectId)}`,
   );
-  const variables: Record<string, Record<string, unknown>> = {};
-  const stores: Record<string, VersionStore[]> = {};
+  const variables = new Map<string, Record<string, unknown>>();
+  const stores = new Map<string, VersionStore[]>();
   for (const row of rows) {
     if (!row.identifier) continue;
-    variables[row.identifier] = productVariables(row);
+    variables.set(row.identifier, productVariables(row));
     const store = storeOf(row);
     if (store === undefined) continue;
-    const known = (stores[row.identifier] ??= []);
-    if (!known.includes(store)) known.push(store);
+    const known = stores.get(row.identifier) ?? [];
+    if (!known.includes(store)) stores.set(row.identifier, [...known, store]);
   }
-  return { variables, stores };
+  return { variables: Object.fromEntries(variables), stores: Object.fromEntries(stores) };
 }
 
 export async function listProjectProducts(
@@ -72,7 +72,7 @@ export function requireProducts(
 ): void {
   const gaps = surfaces.flatMap((surface) =>
     Object.entries(surface.products ?? {})
-      .filter(([, identifier]) => catalogue[identifier] === undefined)
+      .filter(([, identifier]) => !Object.hasOwn(catalogue, identifier))
       .map(([reference, identifier]) => `  ${surface.id}: ${reference} → ${identifier}`),
   );
   if (gaps.length === 0) return;

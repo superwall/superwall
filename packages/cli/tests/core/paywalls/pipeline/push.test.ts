@@ -786,6 +786,55 @@ test("a surface whose snapshot already matches production is skipped entirely", 
   assert.deepEqual(fake.calls, ["projects", "products", "live"]);
 });
 
+test("a snapshot production already has is pushed again when its products went up with the wrong store", async () => {
+  const project = scaffold();
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "ios", {
+    paywallId: "2080",
+    snapshot: "a".repeat(64),
+  });
+  const fake = await fakeApi({
+    products: {
+      body: {
+        data: [
+          { identifier: "elite1w", platform: "ios", store: "app_store" },
+          { identifier: "stripe_elite1w", platform: "custom", store: "custom" },
+        ],
+      },
+    },
+    live: {
+      body: {
+        id: "2080",
+        version: 7,
+        paywall_url: `https://r/x/headless/2080/${"a".repeat(64)}.html`,
+        products: [
+          { reference_name: "primary", identifier: "elite1w", store: "app-store" },
+          { reference_name: "stripePrimary", identifier: "stripe_elite1w", store: "app-store" },
+        ],
+      },
+    },
+  });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: true,
+    load: async () =>
+      frameworkFor(project, {
+        buildSnapshot: async () =>
+          built({
+            snapshotId: "a".repeat(64),
+            products: { primary: "elite1w", stripePrimary: "stripe_elite1w" },
+          }),
+      }),
+  });
+
+  assert.ok(fake.calls.includes("versions"), "the version is pushed again");
+  assert.ok(fake.calls.includes("promote"), "and promoted, so the corrected stores go live");
+  const body: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  assert.deepEqual(Reflect.get(Object(body), "products"), [
+    { store: "app-store", identifier: "elite1w", reference_name: "primary" },
+    { store: "custom", identifier: "stripe_elite1w", reference_name: "stripePrimary" },
+  ]);
+});
+
 test("a changed snapshot still ships when production is on an older one", async () => {
   const project = scaffold();
   const fake = await fakeApi({

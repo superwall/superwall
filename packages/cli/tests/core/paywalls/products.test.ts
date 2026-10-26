@@ -127,6 +127,29 @@ test("the catalogue records each identifier's stores in the version vocabulary",
   assert.deepEqual(Object.keys(variables), ["pro_year", "stripe_elite1w", "prod_web", "grant"]);
 });
 
+test("the catalogue keeps products named like object built-ins", async () => {
+  const { api } = routedApi({
+    "GET /v2/products?project_id=9": [
+      { identifier: "constructor", platform: "custom", store: "custom" },
+      { identifier: "__proto__", platform: "ios", store: "app_store" },
+      { identifier: "toString", price: { amount: 100, currency: "USD" } },
+    ],
+  });
+
+  const { stores, variables } = await listProjectCatalogue(api, "9");
+
+  assert.deepEqual(Object.keys(stores), ["constructor", "__proto__"]);
+  assert.deepEqual(stores.constructor, ["custom"]);
+  assert.deepEqual(Object.keys(variables), ["constructor", "__proto__", "toString"]);
+  assert.doesNotThrow(() =>
+    requireProducts(variables, [{ id: "p", products: { a: "constructor", b: "toString" } }]),
+  );
+  assert.throws(
+    () => requireProducts({}, [{ id: "p", products: { a: "constructor" } }]),
+    MissingProductError,
+  );
+});
+
 test("an app's catalogue is its project's, and an app without a project has an empty one", async () => {
   const { api } = routedApi({
     "GET /v2/projects": [{ id: 9, applications: [{ id: 42 }] }],

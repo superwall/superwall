@@ -168,6 +168,31 @@ test("getPaywall reads a numeric application id, and leaves a missing one undefi
   assert.equal((await findPaywall(api, "208540")).applicationId, undefined);
 });
 
+test("livePaywall carries the live products with their stores", async () => {
+  mockFetch(() => ({
+    id: 208540,
+    version: 3,
+    products: [{ reference_name: "primary", identifier: "elite1w", store: "custom" }],
+  }));
+  assert.deepEqual((await livePaywall(api, "208540")).products, [
+    { reference: "primary", identifier: "elite1w", store: "custom" },
+  ]);
+});
+
+test("versionProducts reads only the catalogue's own entries, whatever an identifier is called", () => {
+  assert.deepEqual(
+    versionProducts({ a: "constructor", b: "toString", c: "__proto__" }, "ios", {}).map(
+      (product) => product.store,
+    ),
+    ["app-store", "app-store", "app-store"],
+  );
+  assert.equal(
+    versionProducts({ a: "constructor" }, "ios", Object.fromEntries([["constructor", ["custom"]]]))[0]
+      ?.store,
+    "custom",
+  );
+});
+
 test("livePaywallVersion reads the published version, and stays undefined without one", async () => {
   mockFetch(() => ({ id: 208540, version: 11 }));
   assert.equal(await livePaywallVersion(api, "208540"), 11);

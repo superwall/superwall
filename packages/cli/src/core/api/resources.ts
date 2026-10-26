@@ -293,6 +293,7 @@ export async function findPaywall(api: SuperwallApi, paywallId: string): Promise
 interface LivePaywall {
   version?: number;
   snapshotId?: string;
+  products?: PaywallProductRef[];
 }
 
 const SNAPSHOT_IN_URL = /([a-f0-9]{64})\.html/;
@@ -302,6 +303,7 @@ export async function livePaywall(api: SuperwallApi, paywallId: string): Promise
     (paywall) => ({
       version: paywall.version,
       snapshotId: paywall.url?.match(SNAPSHOT_IN_URL)?.[1],
+      products: paywall.products,
     }),
     (error: unknown) => {
       if (error instanceof ApiUnreachableError) return {};
@@ -365,7 +367,11 @@ export function versionProducts(
 ): VersionProduct[] {
   return Object.entries(products ?? {}).map(([reference, identifier]) => {
     return {
-      store: resolveStore(identifier, platform, stores[identifier] ?? []),
+      store: resolveStore(
+        identifier,
+        platform,
+        Object.hasOwn(stores, identifier) ? (stores[identifier] ?? []) : [],
+      ),
       identifier,
       reference_name: reference,
     };

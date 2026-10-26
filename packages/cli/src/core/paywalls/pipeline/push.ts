@@ -59,7 +59,14 @@ import {
   transition,
   weight,
 } from "./output";
-import { needsWork, requireClean, requireProject, resolveProjectDir, selectSurfaces } from "./selection";
+import {
+  needsWork,
+  requireClean,
+  requireProject,
+  resolveProjectDir,
+  selectSurfaces,
+  storesDiffer,
+} from "./selection";
 
 export interface PushContext {
   api: SuperwallApi;
@@ -254,10 +261,17 @@ async function prepare(
       const lock = readLock(project.superwallDir);
       const section = target.surface.kind === "paywall" ? lock.paywalls : lock.funnels;
       const recorded = section[target.surface.id]?.[target.platform];
+      const stores = catalogueOf(target)?.stores ?? {};
+      const storesChanged = storesDiffer(
+        versionProducts(build.products, target.platform, stores),
+        live.products,
+      );
       const unsourced =
-        recorded?.snapshot === build.snapshotId ? recorded.sourcePending : undefined;
+        !storesChanged && recorded?.snapshot === build.snapshotId ? recorded.sourcePending : undefined;
       const changed =
-        unsourced !== undefined || needsWork(build.snapshotId, recorded?.snapshot, live.snapshotId);
+        storesChanged ||
+        unsourced !== undefined ||
+        needsWork(build.snapshotId, recorded?.snapshot, live.snapshotId);
       return {
         target,
         bind,
@@ -266,7 +280,7 @@ async function prepare(
         changed,
         pending: !changed && live.snapshotId !== build.snapshotId,
         unsourced,
-        stores: catalogueOf(target)?.stores ?? {},
+        stores,
       };
     });
     const modified = prepared.filter((entry) => entry.changed).length;
