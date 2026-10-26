@@ -175,6 +175,29 @@ describe("the success screen on the web", () => {
     expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=closed");
   });
 
+  it("returns through the universal link when the app has no URL scheme", async () => {
+    Reflect.set(window, "__SW_TELEPORT__", {
+      id: "v1:tp",
+      route: "checkout",
+      appLinkUrl: "https://acme.superwall.link/app-link/superwall/return",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}")),
+    );
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const { session } = await mount({ teleport: { route: "checkout" } });
+    await act(async () => {
+      await teleportFor(session).completePurchase("ctx");
+    });
+
+    expect(screen.getByText("Your purchase is complete.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Return to App" }));
+    expect(go).toHaveBeenCalledWith(
+      "https://acme.superwall.link/app-link/superwall/return?reason=purchased",
+    );
+  });
+
   it("tells the shopper to go back on their own when there is no way back", async () => {
     boot();
     vi.stubGlobal(

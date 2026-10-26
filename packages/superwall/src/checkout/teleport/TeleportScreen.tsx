@@ -172,6 +172,10 @@ export const TeleportScreen = () => {
   };
 
   if (settings?.overlay && teleport.waitingScreen) {
+    const payInApp: Action[] =
+      teleport.fallback === undefined
+        ? []
+        : [{ label: copy.waiting.payInApp, kind: "tinted", onClick: tapped(teleport.payInApp) }];
     return (
       <Screen
         surface="overlay"
@@ -181,15 +185,7 @@ export const TeleportScreen = () => {
         spinner
         actions={[
           { label: copy.waiting.continue, kind: "primary", onClick: tapped(teleport.reopen) },
-          ...(teleport.fallback === undefined
-            ? []
-            : [
-                {
-                  label: copy.waiting.payInApp,
-                  kind: "tinted" as const,
-                  onClick: tapped(teleport.payInApp),
-                },
-              ]),
+          ...payInApp,
           { label: copy.waiting.cancel, kind: "secondary", onClick: tapped(teleport.cancel) },
         ]}
       />
@@ -197,7 +193,8 @@ export const TeleportScreen = () => {
   }
 
   if (teleport.onWeb && teleport.completed) {
-    const returns = readTeleportBoot()?.returnUrl !== undefined;
+    const boot = readTeleportBoot();
+    const returns = boot?.returnUrl !== undefined || boot?.appLinkUrl !== undefined;
     return (
       <Screen
         surface="page"
