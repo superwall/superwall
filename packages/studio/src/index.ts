@@ -82,10 +82,12 @@ export type {
   StudioActionResult,
   StudioActions,
   StudioPresentation,
+  StudioSaveIntent,
   StudioSource,
   StudioStatus,
   StudioSurface,
   StudioSurfaceKind,
+  StudioUnsaved,
   StudioVersion,
 } from "./lib/surfaces";
 export type { SampleDefaults, VariableOverrides } from "./lib/variables";

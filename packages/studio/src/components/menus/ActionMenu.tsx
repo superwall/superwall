@@ -17,7 +17,7 @@ import {
   type Promotion,
   type PromotionDirection,
 } from "../../lib/promotion";
-import { type StudioActionName, type StudioVersion } from "../../lib/surfaces";
+import { type StudioActionName, type StudioUnsaved, type StudioVersion } from "../../lib/surfaces";
 
 const HINTS: Record<Exclude<StudioActionName, "promote">, string> = {
   push: "New version, nothing live changes",
@@ -294,5 +294,27 @@ export const ActionMenu = ({
         )}
       </div>
     </div>
+  );
+};
+
+/**
+ * Promote on a surface the account does not have yet: it saves the surface
+ * first, and the host promotes the saved version once it lands.
+ */
+export const UnsavedPromote = ({ unsaved }: { unsaved: StudioUnsaved }) => {
+  const saving = unsaved.saving === "promote";
+  return (
+    <Tooltip hint={saving ? undefined : "Save this paywall, then make it live"}>
+      <button
+        type="button"
+        className={SEGMENT}
+        disabled={unsaved.saving !== undefined}
+        aria-busy={saving || undefined}
+        onClick={() => unsaved.save("promote")}
+      >
+        {saving && <SpinnerIcon />}
+        {saving ? "Saving…" : PROMOTION_LABEL.promote.label}
+      </button>
+    </Tooltip>
   );
 };

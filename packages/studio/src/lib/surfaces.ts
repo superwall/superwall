@@ -86,6 +86,20 @@ export type StudioActions = {
   pick?(version: number): void;
 };
 
+/** An action that needs the paywall to exist in the account. */
+export type StudioSaveIntent = "preview" | "promote" | "screenshot";
+
+/**
+ * A surface the account does not have yet, such as an agent's unsaved build.
+ * The actions that need a saved paywall ask the host to save it first; the
+ * host then finishes them on the saved paywall (`SurfaceEditor`'s `resume`).
+ */
+export type StudioUnsaved = {
+  /** The action a running save was started for. */
+  saving?: StudioSaveIntent;
+  save(intent: StudioSaveIntent): void;
+};
+
 export type StudioSource = {
   scheme?: string;
   networkOrigin?: string;
@@ -98,6 +112,7 @@ export type StudioSource = {
   actions?: StudioActions;
   previewLink?: (surface: StudioSurface) => Promise<string>;
   screenshotUrl?: (surface: StudioSurface) => Promise<string | undefined>;
+  unsaved?: StudioUnsaved;
   compareHint?: string;
 };
 

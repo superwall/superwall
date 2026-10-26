@@ -22,12 +22,17 @@ const askForScheme = (initial: string): string | undefined => {
 export const PreviewOnDevice = ({
   source,
   surface,
+  autoOpen = false,
 }: {
   source: StudioSource;
   surface: StudioSurface;
+  /** Opens with the dialog showing, as a save made for it lands here. */
+  autoOpen?: boolean;
 }) => {
   const hosted = useStudioMode() === "hosted";
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(autoOpen);
+  const unsaved = source.unsaved;
+  const saving = unsaved?.saving === "preview";
   const [scheme, setScheme] = React.useState(() => readScheme() ?? source.scheme);
   const [link, setLink] = React.useState<LinkState>({ status: "loading" });
 
@@ -73,11 +78,14 @@ export const PreviewOnDevice = ({
       <button
         className="sw-btn sw-btn--sm max-sm:w-7 max-sm:px-0"
         type="button"
-        aria-label="Preview"
-        onClick={() => setOpen(true)}
+        aria-label={saving ? "Saving…" : "Preview"}
+        disabled={unsaved?.saving !== undefined}
+        aria-busy={saving || undefined}
+        // An unsaved surface has nothing a device can open yet.
+        onClick={() => (unsaved ? unsaved.save("preview") : setOpen(true))}
       >
-        <QrCodeIcon />
-        <span className="max-sm:hidden">Preview</span>
+        {saving ? <SpinnerIcon /> : <QrCodeIcon />}
+        <span className="max-sm:hidden">{saving ? "Saving…" : "Preview"}</span>
       </button>
 
       {open && (

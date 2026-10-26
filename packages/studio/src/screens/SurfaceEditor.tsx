@@ -1,6 +1,6 @@
 import * as React from "react";
 import { hasIntroductoryOffer, type HostDelegate, type HostState } from "@superwall/host";
-import { ActionMenu, type ActionProgress } from "../components/menus/ActionMenu";
+import { ActionMenu, UnsavedPromote, type ActionProgress } from "../components/menus/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/menus/CompareMenu";
 import {
   Canvas,
@@ -69,6 +69,7 @@ import {
   type Samples,
   type StudioActionName,
   type StudioPresentation,
+  type StudioSaveIntent,
   type StudioSource,
   type StudioStatus,
   type StudioSurface,
@@ -245,6 +246,8 @@ export const SurfaceEditor = ({
   samples,
   actions,
   panel,
+  resume,
+  onResumed,
   ref,
 }: {
   source: StudioSource;
@@ -252,6 +255,12 @@ export const SurfaceEditor = ({
   samples: Samples;
   actions?: React.ReactNode;
   panel?: StudioPanel;
+  /**
+   * An action a save was made for (`StudioSource.unsaved`), to finish now
+   * the surface is saved: once, then `onResumed`.
+   */
+  resume?: StudioSaveIntent;
+  onResumed?: () => void;
   /** Drives the editor's own controls (`StudioCommand`) and reads them back. */
   ref?: React.Ref<StudioHandle>;
 }) => {
@@ -330,6 +339,20 @@ export const SurfaceEditor = ({
       });
     }
   };
+
+  // Read at mount: the host drops `resume` once told, and the dialog, the
+  // download or the promote it started carries on.
+  const [resuming] = React.useState(resume);
+  const resumed = React.useRef(false);
+  const statusLoaded = (status.versions?.length ?? 0) > 0;
+  React.useEffect(() => {
+    if (resuming === undefined || resumed.current) return;
+    if (resuming === "promote" && !(shipping && statusLoaded)) return;
+    resumed.current = true;
+    onResumed?.();
+    if (resuming === "promote") void ship("promote");
+    // `ship` and `onResumed` change every render; this runs once, when it can.
+  }, [resuming, shipping, statusLoaded]);
 
   const responsive = deviceId === RESPONSIVE_ID;
   const device = deviceById(deviceId);
@@ -737,9 +760,14 @@ export const SurfaceEditor = ({
                   </button>
                 </Tooltip>
               )}
-              <DownloadScreenshot source={source} surface={surface} />
+              <DownloadScreenshot
+                source={source}
+                surface={surface}
+                autoDownload={resuming === "screenshot"}
+              />
             </span>
-            <PreviewOnDevice source={source} surface={surface} />
+            <PreviewOnDevice source={source} surface={surface} autoOpen={resuming === "preview"} />
+            {!shipping && source.unsaved && <UnsavedPromote unsaved={source.unsaved} />}
             {shipping && (
               <ActionMenu
                 offered={shipping.offered}

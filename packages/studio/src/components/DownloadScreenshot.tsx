@@ -34,15 +34,20 @@ const open = (href: string, download?: string) => {
 export const DownloadScreenshot = ({
   source,
   surface,
+  autoDownload = false,
 }: {
   source: StudioSource;
   surface: StudioSurface;
+  /** Downloads once the screenshot is known, as a save made for it lands here. */
+  autoDownload?: boolean;
 }) => {
   const hosted = useStudioMode() === "hosted";
   const [shot, setShot] = React.useState<Shot>({ status: "checking" });
   const [saving, setSaving] = React.useState(false);
+  const pending = React.useRef(autoDownload);
+  const unsaved = source.unsaved;
 
-  const resolve = hosted ? source.screenshotUrl : fetchScreenshot;
+  const resolve = unsaved ? undefined : hosted ? source.screenshotUrl : fetchScreenshot;
 
   React.useEffect(() => {
     if (resolve === undefined) {
@@ -99,6 +104,35 @@ export const DownloadScreenshot = ({
       setSaving(false);
     }
   };
+
+  React.useEffect(() => {
+    if (!pending.current || shot.status === "checking") return;
+    pending.current = false;
+    if (shot.status === "ready") void save();
+    else
+      notify("Couldn’t download screenshot", {
+        tone: "warning",
+        description: shot.status === "none" ? HINTS.none : shot.reason,
+      });
+  }, [shot]);
+
+  if (unsaved) {
+    const savingFirst = unsaved.saving === "screenshot";
+    return (
+      <Tooltip hint={savingFirst ? undefined : "Save this paywall, then download its screenshot"}>
+        <button
+          className="sw-btn sw-btn--sm sw-btn--icon sw-btn--ghost"
+          type="button"
+          aria-label={savingFirst ? "Saving…" : "Download screenshot"}
+          disabled={unsaved.saving !== undefined}
+          aria-busy={savingFirst || undefined}
+          onClick={() => unsaved.save("screenshot")}
+        >
+          {savingFirst ? <SpinnerIcon /> : <DownloadIcon />}
+        </button>
+      </Tooltip>
+    );
+  }
 
   const blocked = shot.status !== "ready" || saving;
   const hint = saving

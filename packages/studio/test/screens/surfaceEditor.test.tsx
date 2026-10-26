@@ -1047,3 +1047,127 @@ describe("SurfaceEditor driven by its host", () => {
     expect(screen.getByTestId("host-panel").className).toContain("w-[min(23rem,100cqw)]");
   });
 });
+
+describe("a surface the account does not have yet", () => {
+  const unsavedSource = (saving?: "preview" | "promote" | "screenshot") => {
+    const save = vi.fn();
+    return { save, source: { ...source, unsaved: { saving, save } } satisfies StudioSource };
+  };
+
+  it("saves it first for Promote, Preview and the screenshot", async () => {
+    const { save, source: unsaved } = unsavedSource();
+    renderEditor(<SurfaceEditor source={unsaved} surface={live} samples={{}} />);
+    await act(async () => {});
+
+    fireEvent.click(screen.getByRole("button", { name: "Promote" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Download screenshot" }));
+    expect(save.mock.calls).toEqual([["promote"], ["preview"], ["screenshot"]]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows the action a save runs for as saving, and holds the others", async () => {
+    const { source: unsaved } = unsavedSource("promote");
+    renderEditor(<SurfaceEditor source={unsaved} surface={live} samples={{}} />);
+    await act(async () => {});
+
+    const promote = screen.getByRole("button", { name: "Saving…" });
+    expect(promote.hasAttribute("disabled")).toBe(true);
+    expect(promote.getAttribute("aria-busy")).toBe("true");
+    expect(screen.getByRole("button", { name: "Preview" }).hasAttribute("disabled")).toBe(true);
+    expect(
+      screen.getByRole("button", { name: "Download screenshot" }).hasAttribute("disabled"),
+    ).toBe(true);
+  });
+
+  it("names Preview and the screenshot as saving when a save runs for them", async () => {
+    const preview = unsavedSource("preview");
+    const { unmount } = renderEditor(
+      <SurfaceEditor source={preview.source} surface={live} samples={{}} />,
+    );
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: "Saving…" }).getAttribute("aria-busy")).toBe("true");
+    unmount();
+
+    const screenshot = unsavedSource("screenshot");
+    renderEditor(<SurfaceEditor source={screenshot.source} surface={live} samples={{}} />);
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: "Saving…" }).getAttribute("aria-busy")).toBe("true");
+  });
+});
+
+describe("finishing an action a save was made for", () => {
+  const savedVersions = [{ version: 1, url: "https://cdn.test/v1.html", live: false }];
+  const saved: StudioSurface = { ...live, label: "v1", version: 1 };
+
+  it("promotes the saved version once its versions are known, and says so once", async () => {
+    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: true }));
+    const onResumed = vi.fn();
+    const hosted: StudioSource = {
+      ...source,
+      surfaces: [saved],
+      actions: {
+        offered: ["promote"],
+        run,
+        status: async () => ({ paywallId: "208540", versions: savedVersions }),
+      },
+    };
+    const { rerender } = renderEditor(
+      <SurfaceEditor
+        source={hosted}
+        surface={saved}
+        samples={{}}
+        resume="promote"
+        onResumed={onResumed}
+      />,
+    );
+    await act(async () => {});
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith(
+      saved,
+      { action: "promote", version: 1 },
+      expect.any(Function),
+    );
+    expect(onResumed).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <StudioHostProvider mode="local" home={{ href: "/", navigate: () => {} }}>
+        <SurfaceEditor source={hosted} surface={saved} samples={{}} onResumed={onResumed} />
+      </StudioHostProvider>,
+    );
+    await act(async () => {});
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for a shipping seam before promoting", async () => {
+    const onResumed = vi.fn();
+    renderEditor(
+      <SurfaceEditor
+        source={source}
+        surface={saved}
+        samples={{}}
+        resume="promote"
+        onResumed={onResumed}
+      />,
+    );
+    await act(async () => {});
+    expect(onResumed).not.toHaveBeenCalled();
+  });
+
+  it("opens Preview on a device for a save made to preview", async () => {
+    const onResumed = vi.fn();
+    renderEditor(
+      <SurfaceEditor
+        source={source}
+        surface={saved}
+        samples={{}}
+        resume="preview"
+        onResumed={onResumed}
+      />,
+    );
+    await act(async () => {});
+    expect(screen.getByRole("dialog")).toBeDefined();
+    expect(onResumed).toHaveBeenCalledTimes(1);
+  });
+});
