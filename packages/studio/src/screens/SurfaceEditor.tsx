@@ -231,8 +231,21 @@ const CanvasFooter = ({ children }: React.PropsWithChildren) => {
 
 const nameOf = (surface: StudioSurface): string => surface.label ?? `${surface.kind}/${surface.id}`;
 
-/** A host's panel beside the stage (an agent chat): its content is the host's. */
-export type StudioPanel = { open: boolean; label: string; content: React.ReactNode };
+/**
+ * A host's panel beside the stage (an agent chat): its content is the host's.
+ * Its width is the studio's (remembered) unless the host passes
+ * `onWidthChange`, which makes `width` the host's; see `HostPanel`.
+ */
+export type StudioPanel = {
+  open: boolean;
+  label: string;
+  content: React.ReactNode;
+  width?: number;
+  onWidthChange?: (width: number | undefined) => void;
+};
+
+// The Variables panel's `w-80`.
+const VARIABLES_WIDTH = 320;
 
 // The panels' `duration-move`, plus a frame.
 const PANEL_MOVE_MS = 220;
@@ -802,206 +815,218 @@ export const SurfaceEditor = ({
 
       <div className="@container relative flex min-h-0 flex-1">
         {panel && (
-          <HostPanel open={panel.open} label={panel.label}>
+          <HostPanel
+            open={panel.open}
+            label={panel.label}
+            width={panel.width}
+            onWidthChange={panel.onWidthChange}
+            reserve={panelOpen ? VARIABLES_WIDTH : 0}
+          >
             {panel.content}
           </HostPanel>
         )}
-        <Canvas
-          ref={canvas}
-          onZoom={setZoom}
-          fitKey={[
-            deviceId,
-            responsive ? "" : `${frame.width}x${frame.height}`,
-            comparePane ? "compare" : "single",
-            presentation?.style ?? "",
-          ].join(":")}
-        >
-          <div className="flex flex-col gap-2">
-            <div className="flex items-start gap-16">
-              {comparePane && (
-                <StagePane
-                  label={comparePane.label}
-                  width={frame.width}
-                  height={frame.height}
-                  title={comparePane.title}
-                  src={"src" in comparePane ? comparePane.src : undefined}
-                  image={"image" in comparePane ? comparePane.image : undefined}
-                  presentation={
-                    compareWith?.type === "surface" && !web
-                      ? compareWith.surface.presentation
-                      : presentation
-                  }
-                  hostState={hostState}
-                  delegate={delegate}
-                  reloadKey={reloadKey}
-                  empty={"empty" in comparePane ? comparePane.empty : undefined}
-                  chrome={chrome}
-                  landscape={landscape}
-                  theme={theme}
-                />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden" data-testid="stage-column">
+          <div className="relative flex min-h-0 flex-1">
+            <Canvas
+              ref={canvas}
+              onZoom={setZoom}
+              fitKey={[
+                deviceId,
+                responsive ? "" : `${frame.width}x${frame.height}`,
+                comparePane ? "compare" : "single",
+                presentation?.style ?? "",
+              ].join(":")}
+            >
+              <div className="flex flex-col gap-2">
+                <div className="flex items-start gap-16">
+                  {comparePane && (
+                    <StagePane
+                      label={comparePane.label}
+                      width={frame.width}
+                      height={frame.height}
+                      title={comparePane.title}
+                      src={"src" in comparePane ? comparePane.src : undefined}
+                      image={"image" in comparePane ? comparePane.image : undefined}
+                      presentation={
+                        compareWith?.type === "surface" && !web
+                          ? compareWith.surface.presentation
+                          : presentation
+                      }
+                      hostState={hostState}
+                      delegate={delegate}
+                      reloadKey={reloadKey}
+                      empty={"empty" in comparePane ? comparePane.empty : undefined}
+                      chrome={chrome}
+                      landscape={landscape}
+                      theme={theme}
+                    />
+                  )}
+                  <StagePane
+                    label={comparePane ? (surface.label ?? "Local") : undefined}
+                    width={frame.width}
+                    height={frame.height}
+                    title={`${surface.id} preview`}
+                    src={previewSrc}
+                    presentation={presentation}
+                    hostState={hostState}
+                    delegate={delegate}
+                    reloadKey={reloadKey}
+                    chrome={chrome}
+                    landscape={landscape}
+                    theme={theme}
+                    onResize={
+                      responsive
+                        ? (next) =>
+                            setSize(landscape ? { width: next.height, height: next.width } : next)
+                        : undefined
+                    }
+                    canvas={canvas}
+                  />
+                </div>
+                <CanvasFooter>
+                  <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-fg-secondary select-none">
+                    <Switch
+                      label="Introductory offer"
+                      checked={hasIntroductoryOffer(hostState)}
+                      onChange={(checked) =>
+                        setEdited((current) => ({ ...current, introductoryOfferEligible: checked }))
+                      }
+                    />
+                    Introductory offer
+                  </label>
+                </CanvasFooter>
+              </div>
+            </Canvas>
+
+            <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
+              <VariablesPanel overrides={edited} groups={groups} onChange={setEdited} />
+            </SidePanel>
+          </div>
+
+          <Toolbar>
+            <ToolbarGroup label="Zoom">
+              <div
+                className="flex h-8 flex-none overflow-hidden rounded-sm border border-border transition-colors duration-hover has-[:focus-visible]:border-primary"
+                role="group"
+                aria-label="Zoom"
+              >
+                <button
+                  type="button"
+                  className={STEPPER}
+                  aria-label="Zoom out"
+                  onClick={() => canvas.current?.zoomStep(-1)}
+                >
+                  <MinusIcon className="icon-tertiary" />
+                </button>
+                <button
+                  type="button"
+                  className="min-w-14 border-x border-border px-2 text-sm tabular-nums outline-none transition-colors duration-hover hover:bg-accent focus-visible:bg-accent"
+                  aria-label="Fit to view"
+                  aria-pressed={zoom.fitted}
+                  onClick={() => canvas.current?.fit()}
+                >
+                  {percent(zoom.scale)}
+                </button>
+                <button
+                  type="button"
+                  className={STEPPER}
+                  aria-label="Zoom in"
+                  onClick={() => canvas.current?.zoomStep(1)}
+                >
+                  <PlusIcon className="icon-tertiary" />
+                </button>
+              </div>
+            </ToolbarGroup>
+            <ToolbarDivider />
+            <ToolbarGroup label="Device">
+              <Select
+                label="Device"
+                value={deviceId}
+                options={[
+                  ...STUDIO_DEVICES.map((entry) => ({ value: entry.id, label: entry.name })),
+                  { value: RESPONSIVE_ID, label: "Responsive" },
+                ]}
+                onChange={setDeviceId}
+              />
+              <Tooltip
+                side="top"
+                align="center"
+                hint={landscape ? "Back to portrait" : "Rotate to landscape"}
+              >
+                <button
+                  type="button"
+                  className="sw-btn sw-btn--icon"
+                  aria-label="Rotate device"
+                  aria-pressed={landscape}
+                  onClick={() => setLandscape((value) => !value)}
+                >
+                  <RotateDeviceIcon
+                    className={`transition-disclosure ${landscape ? "-rotate-90" : ""}`}
+                  />
+                </button>
+              </Tooltip>
+              <Segmented
+                label="Theme"
+                value={theme}
+                options={[
+                  { value: "light", label: <SunIcon />, name: "Light" },
+                  { value: "dark", label: <MoonIcon />, name: "Dark" },
+                ]}
+                onChange={setTheme}
+              />
+              {responsive && (
+                <span className="flex items-center gap-1.5">
+                  <SizeInput
+                    label="Preview width"
+                    value={frame.width}
+                    onCommit={(width) => setSize((current) => ({ ...current, width }))}
+                  />
+                  <span className="text-fg-tertiary">×</span>
+                  <SizeInput
+                    label="Preview height"
+                    value={frame.height}
+                    onCommit={(height) => setSize((current) => ({ ...current, height }))}
+                  />
+                </span>
               )}
-              <StagePane
-                label={comparePane ? (surface.label ?? "Local") : undefined}
-                width={frame.width}
-                height={frame.height}
-                title={`${surface.id} preview`}
-                src={previewSrc}
-                presentation={presentation}
-                hostState={hostState}
-                delegate={delegate}
-                reloadKey={reloadKey}
-                chrome={chrome}
-                landscape={landscape}
-                theme={theme}
-                onResize={
-                  responsive
-                    ? (next) =>
-                        setSize(landscape ? { width: next.height, height: next.width } : next)
-                    : undefined
-                }
-                canvas={canvas}
-              />
-            </div>
-            <CanvasFooter>
-              <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-fg-secondary select-none">
-                <Switch
-                  label="Introductory offer"
-                  checked={hasIntroductoryOffer(hostState)}
-                  onChange={(checked) =>
-                    setEdited((current) => ({ ...current, introductoryOfferEligible: checked }))
-                  }
+            </ToolbarGroup>
+            {locales.length > 1 && (
+              <ToolbarGroup label="Locale">
+                <Select
+                  label="Locale"
+                  value={locale ?? "default"}
+                  options={[
+                    { value: "default", label: "Device" },
+                    ...locales.map((entry) => ({ value: entry, label: entry })),
+                  ]}
+                  onChange={(value) => setLocale(value === "default" ? undefined : value)}
                 />
-                Introductory offer
-              </label>
-            </CanvasFooter>
-          </div>
-        </Canvas>
-
-        <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
-          <VariablesPanel overrides={edited} groups={groups} onChange={setEdited} />
-        </SidePanel>
+              </ToolbarGroup>
+            )}
+            <ToolbarDivider />
+            {(shipping || compareOptions.length > 0) && (
+              <CompareMenu
+                active={compareWith}
+                options={compareOptions}
+                notice={compareNotice}
+                onSelect={setCompareWith}
+              />
+            )}
+            <button
+              type="button"
+              className="sw-btn"
+              aria-expanded={panelOpen}
+              onClick={() => setPanelOpen((open) => !open)}
+            >
+              <SlidersIcon />
+              Variables
+              {overrideCount > 0 && (
+                <span className="text-primary tabular-nums">{overrideCount}</span>
+              )}
+            </button>
+          </Toolbar>
+        </div>
       </div>
-
-      <Toolbar>
-        <ToolbarGroup label="Zoom">
-          <div
-            className="flex h-8 flex-none overflow-hidden rounded-sm border border-border transition-colors duration-hover has-[:focus-visible]:border-primary"
-            role="group"
-            aria-label="Zoom"
-          >
-            <button
-              type="button"
-              className={STEPPER}
-              aria-label="Zoom out"
-              onClick={() => canvas.current?.zoomStep(-1)}
-            >
-              <MinusIcon className="icon-tertiary" />
-            </button>
-            <button
-              type="button"
-              className="min-w-14 border-x border-border px-2 text-sm tabular-nums outline-none transition-colors duration-hover hover:bg-accent focus-visible:bg-accent"
-              aria-label="Fit to view"
-              aria-pressed={zoom.fitted}
-              onClick={() => canvas.current?.fit()}
-            >
-              {percent(zoom.scale)}
-            </button>
-            <button
-              type="button"
-              className={STEPPER}
-              aria-label="Zoom in"
-              onClick={() => canvas.current?.zoomStep(1)}
-            >
-              <PlusIcon className="icon-tertiary" />
-            </button>
-          </div>
-        </ToolbarGroup>
-        <ToolbarDivider />
-        <ToolbarGroup label="Device">
-          <Select
-            label="Device"
-            value={deviceId}
-            options={[
-              ...STUDIO_DEVICES.map((entry) => ({ value: entry.id, label: entry.name })),
-              { value: RESPONSIVE_ID, label: "Responsive" },
-            ]}
-            onChange={setDeviceId}
-          />
-          <Tooltip
-            side="top"
-            align="center"
-            hint={landscape ? "Back to portrait" : "Rotate to landscape"}
-          >
-            <button
-              type="button"
-              className="sw-btn sw-btn--icon"
-              aria-label="Rotate device"
-              aria-pressed={landscape}
-              onClick={() => setLandscape((value) => !value)}
-            >
-              <RotateDeviceIcon
-                className={`transition-disclosure ${landscape ? "-rotate-90" : ""}`}
-              />
-            </button>
-          </Tooltip>
-          <Segmented
-            label="Theme"
-            value={theme}
-            options={[
-              { value: "light", label: <SunIcon />, name: "Light" },
-              { value: "dark", label: <MoonIcon />, name: "Dark" },
-            ]}
-            onChange={setTheme}
-          />
-          {responsive && (
-            <span className="flex items-center gap-1.5">
-              <SizeInput
-                label="Preview width"
-                value={frame.width}
-                onCommit={(width) => setSize((current) => ({ ...current, width }))}
-              />
-              <span className="text-fg-tertiary">×</span>
-              <SizeInput
-                label="Preview height"
-                value={frame.height}
-                onCommit={(height) => setSize((current) => ({ ...current, height }))}
-              />
-            </span>
-          )}
-        </ToolbarGroup>
-        {locales.length > 1 && (
-          <ToolbarGroup label="Locale">
-            <Select
-              label="Locale"
-              value={locale ?? "default"}
-              options={[
-                { value: "default", label: "Device" },
-                ...locales.map((entry) => ({ value: entry, label: entry })),
-              ]}
-              onChange={(value) => setLocale(value === "default" ? undefined : value)}
-            />
-          </ToolbarGroup>
-        )}
-        <ToolbarDivider />
-        {(shipping || compareOptions.length > 0) && (
-          <CompareMenu
-            active={compareWith}
-            options={compareOptions}
-            notice={compareNotice}
-            onSelect={setCompareWith}
-          />
-        )}
-        <button
-          type="button"
-          className="sw-btn"
-          aria-expanded={panelOpen}
-          onClick={() => setPanelOpen((open) => !open)}
-        >
-          <SlidersIcon />
-          Variables
-          {overrideCount > 0 && <span className="text-primary tabular-nums">{overrideCount}</span>}
-        </button>
-      </Toolbar>
     </>
   );
 };

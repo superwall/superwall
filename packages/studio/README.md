@@ -144,12 +144,23 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   `parseStudioCommands` first. A bad command is reported by index and the
   rest still apply. Zoom applies after everything else, so it lands on the
   stage a device or orientation change refits.
-- `SurfaceEditor`'s `panel` (`{ open, label, content }`) is a host-owned
-  panel at the start of the stage row, between the top bar and the toolbar:
-  the dashboard puts the agent chat's slot there. It opens like the Variables
+- `SurfaceEditor`'s `panel` (`{ open, label, content, width?, onWidthChange? }`)
+  is a host-owned panel at the start of the editor's row, from under the top
+  bar to the bottom of the studio; the stage and its toolbar sit to its right
+  (the Variables panel stays in the stage row, above the toolbar). The
+  dashboard puts the agent chat's slot there. It opens like the Variables
   panel, by growing its width (`ease-drawer`, the move duration, none under
   reduced motion), while its content keeps its width pinned to the inner
-  edge, so the content slides in and the canvas refits beside it.
+  edge, so the content slides in and the canvas refits beside it. Its right
+  edge resizes it: drag it (mouse, touch or pen), or focus it (a
+  `separator`) and use the arrow keys; Home and End go to the minimum and
+  maximum, a double click back to the default 368px. It stays between 320px
+  and 60% of the row, always leaves the stage 400px beside the open
+  Variables panel, and takes the whole row (no handle) below 576px. The
+  width is remembered in localStorage (`sw-studio-panel-width`); a host that
+  passes `onWidthChange` owns it instead, through `width` (undefined is the
+  default). `HostPanel` is exported for hosts that lay out their own row
+  (a size container, `@container`).
 
 ## Screens
 

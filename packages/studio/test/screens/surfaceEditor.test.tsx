@@ -1030,7 +1030,13 @@ describe("SurfaceEditor driven by its host", () => {
     expect(panel.getAttribute("aria-label")).toBe("Chat");
     expect(panel.getAttribute("aria-hidden")).toBe("true");
     expect(panel.className).toContain("w-0");
-    expect(panel.nextElementSibling).toBe(screen.getByTestId("canvas"));
+    // The panel runs the full height; the stage and its toolbar sit beside it.
+    const column = screen.getByTestId("stage-column");
+    expect(panel.nextElementSibling).toBe(column);
+    expect(column.contains(screen.getByTestId("canvas"))).toBe(true);
+    expect(column.contains(screen.getByRole("group", { name: "Zoom" }))).toBe(true);
+    expect(panel.contains(screen.getByRole("group", { name: "Zoom" }))).toBe(false);
+    expect(screen.queryByRole("separator", { name: "Resize chat" })).toBeNull();
     expect(within(panel).getByTestId("slot")).toBeTruthy();
 
     view.rerender(
@@ -1044,7 +1050,32 @@ describe("SurfaceEditor driven by its host", () => {
       </StudioHostProvider>,
     );
     expect(screen.getByTestId("host-panel").getAttribute("aria-hidden")).toBe("false");
-    expect(screen.getByTestId("host-panel").className).toContain("w-[min(23rem,100cqw)]");
+    expect(screen.getByTestId("host-panel").className).toContain("w-(--sw-host-panel)");
+    expect(screen.getByTestId("stage-column").previousElementSibling).toBe(
+      screen.getByRole("separator", { name: "Resize chat" }).parentElement,
+    );
+  });
+
+  it("lets the host own the panel's width, and reserves the Variables panel beside the stage", () => {
+    const onWidthChange = vi.fn();
+    renderEditor(
+      <SurfaceEditor
+        source={source}
+        surface={live}
+        samples={{}}
+        panel={{ open: true, label: "Chat", content: null, width: 500, onWidthChange }}
+      />,
+    );
+    const panel = screen.getByTestId("host-panel");
+    expect(panel.style.getPropertyValue("--sw-host-panel")).toContain("500px");
+    expect(panel.style.getPropertyValue("--sw-host-panel")).toContain("100cqw - 400px");
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+    expect(panel.style.getPropertyValue("--sw-host-panel")).toContain("100cqw - 720px");
+    fireEvent.keyDown(screen.getByRole("separator", { name: "Resize chat" }), {
+      key: "ArrowRight",
+    });
+    expect(onWidthChange).toHaveBeenCalledWith(516);
+    expect(window.localStorage.getItem("sw-studio-panel-width")).toBeNull();
   });
 });
 
