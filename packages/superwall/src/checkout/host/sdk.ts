@@ -3,7 +3,7 @@ import { platformOf } from "../../device";
 import { asString } from "../api/decode";
 import { readTeleportBoot } from "../teleport/boot";
 import type { CheckoutMode } from "../types";
-import { hostedInWebSdk } from "./surface";
+import { hostOf } from "../../host";
 
 /**
  * Native SDK versions old enough to change what web checkout may do, as
@@ -26,7 +26,7 @@ const paddedVersionOf = (snapshot: SuperwallRuntimeSnapshot): string =>
  * hosts the sheet.
  */
 export const sdkHostsCheckoutInPaywall = (snapshot: SuperwallRuntimeSnapshot): boolean => {
-  if (hostedInWebSdk()) return true;
+  if (hostOf() === "web-sdk") return true;
   const padded = paddedVersionOf(snapshot);
   return padded === "" || padded >= IN_PAYWALL_CHECKOUT;
 };
@@ -40,7 +40,7 @@ export const sdkHostsCheckoutInPaywall = (snapshot: SuperwallRuntimeSnapshot): b
  * reads it back on `post_checkout_complete`.
  */
 export const sdkRedeemsCheckout = (snapshot: SuperwallRuntimeSnapshot): boolean =>
-  hostedInWebSdk() || paddedVersionOf(snapshot) >= CHECKOUT_EVENTS;
+  hostOf() === "web-sdk" || paddedVersionOf(snapshot) >= CHECKOUT_EVENTS;
 
 export const checkoutModeFor = (
   snapshot: SuperwallRuntimeSnapshot,
@@ -52,7 +52,7 @@ export const checkoutModeFor = (
     return wanted === "sheet" || wanted === "applePay" ? wanted : "applePay";
   }
   if (!sdkHostsCheckoutInPaywall(snapshot)) return "external";
-  if (!hostedInWebSdk() && platformOf(snapshot.device) === "ios") return "external";
+  if (hostOf() !== "web-sdk" && platformOf(snapshot.device) === "ios") return "external";
   if (configured !== "sheet" && configured !== "applePay") return "external";
   return requested ?? configured;
 };

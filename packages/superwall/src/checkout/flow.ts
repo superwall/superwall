@@ -8,7 +8,8 @@ import { checkoutEvents } from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
 import { checkoutModeFor, sdkRedeemsCheckout } from "./host/sdk";
 import { presentingPlacement } from "./host/init";
-import { bindsEntitlement, hostedInWebSdk } from "./host/surface";
+import { hostOf } from "../host";
+import { bindsEntitlement } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
 import { introductoryOfferFromFragment, readTeleportBoot } from "./teleport/boot";
@@ -260,7 +261,7 @@ export const reportCompletedCheckout = async (
   }
 
   let completion: WebappCompletion | undefined;
-  if (hostedInWebSdk() && bindsEntitlement(session.postPurchaseBehavior)) {
+  if (hostOf() === "web-sdk" && bindsEntitlement(session.postPurchaseBehavior)) {
     try {
       completion = await sessionsFor(paywall).completeWebapp(session.checkoutContextId);
     } catch (error) {

@@ -9,7 +9,7 @@ import { platformOf } from "../../device";
 import { attributionOf } from "../api/body";
 import { attachCheckoutMetadata } from "../api/metadata";
 import { asString } from "../api/decode";
-import { hostedInWebSdk } from "../host/surface";
+import { hostOf } from "../../host";
 import { startLoading, stopLoading } from "../loading";
 import { isStripeProductIdentifier } from "../products";
 import {
@@ -731,7 +731,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     const snapshot = paywall.getSnapshot();
     return (
       settings() !== undefined &&
-      !hostedInWebSdk() &&
+      hostOf() !== "web-sdk" &&
       platformOf(snapshot.device) === "ios" &&
       publicApiKey() !== "" &&
       asString(snapshot.device.sdkVersionPadded) >= TELEPORT_SDK_VERSION
