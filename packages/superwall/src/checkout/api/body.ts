@@ -43,8 +43,7 @@ export const identityOf = (snapshot: SuperwallRuntimeSnapshot): SessionIdentity 
   const vendorId = asString(device.vendorId);
 
   // Android reports a non-UUID vendorId, so its deviceId is the stable one.
-  const rawDeviceId =
-    platform === "android" ? providedDeviceId || vendorId : vendorId || providedDeviceId;
+  const rawDeviceId = platform === "android" ? providedDeviceId || vendorId : vendorId;
   const deviceIdValue = rawDeviceId || crypto.randomUUID();
   const deviceId = deviceIdValue.startsWith("$SuperwallDevice:")
     ? deviceIdValue
@@ -64,12 +63,15 @@ export type SessionBodyOptions = {
   teleportId?: string;
 };
 
+export const UNKNOWN_PRESENTING_EVENT_ID = "fa3c2ba4-01c4-463d-ac3c-c58a32c6f0c6";
+
 export const attributionOf = (
   snapshot: SuperwallRuntimeSnapshot,
   { freeTrial = snapshot.introductoryOffer.eligible === true }: { freeTrial?: boolean } = {},
 ) => {
   const { device, params } = snapshot;
   const placement = presentingPlacement(params);
+  const presentation = snapshot.paywall?.presentation;
   return {
     paywall: {
       paywallId: snapshot.paywall?.id ?? "0",
@@ -87,11 +89,11 @@ export const attributionOf = (
     },
     presentment: {
       isFreeTrialAvailable: freeTrial,
-      presentedBy: "placement",
-      presentationSourceType: "register",
-      presentedByEventName: placement.name,
-      presentedByEventId: placement.eventId || crypto.randomUUID(),
-      presentedByEventTimestamp: new Date().toISOString(),
+      presentedBy: presentation?.presentedBy ?? "placement",
+      presentationSourceType: presentation?.sourceType ?? "register",
+      presentedByEventName: presentation?.eventName ?? placement.name,
+      presentedByEventId:
+        presentation?.eventId ?? (placement.eventId || UNKNOWN_PRESENTING_EVENT_ID),
     },
     placementParams: {
       placementParams: params,

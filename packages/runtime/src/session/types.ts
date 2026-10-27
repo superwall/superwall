@@ -33,9 +33,18 @@ import type {
 
 export type SuperwallRuntimeStatus = "idle" | "listening";
 
+export type SuperwallPresentation = {
+  id?: string;
+  presentedBy?: "placement" | "event";
+  sourceType?: "implicit" | "getPaywall" | "register";
+  eventId?: string;
+  eventName?: string;
+};
+
 export type SuperwallPaywallIdentity = {
   id: string;
   identifier: string;
+  presentation?: SuperwallPresentation;
 };
 
 export type SuperwallPendingPurchase<out TProduct extends SuperwallProduct = SuperwallProduct> = {

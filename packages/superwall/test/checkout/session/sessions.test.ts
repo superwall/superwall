@@ -170,7 +170,7 @@ describe("createCheckoutSessions.createSession", () => {
     expect(body.productIdentifier).toBe("test:price_2:no-trial");
     expect(body.allowedCheckoutDirectives).toEqual(["embedded", "redirect"]);
     expect(body.context.presentment.presentedByEventId).toBeTruthy();
-    expect(body.context.presentment.presentedByEventTimestamp).toBeTruthy();
+    expect(body.context.presentment).not.toHaveProperty("presentedByEventTimestamp");
 
     expect(result.directive).toBe("embedded");
     if (result.directive === "embedded") {

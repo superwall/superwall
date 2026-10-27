@@ -74,8 +74,9 @@ describe("identityOf", () => {
     expect(
       identityOf(snapshotOf({ device: { platform: "Android", vendorId: "v1" } })).deviceId,
     ).toBe("$SuperwallDevice:v1");
+    vi.spyOn(crypto, "randomUUID").mockReturnValue("11111111-2222-3333-4444-555555555555");
     expect(identityOf(snapshotOf({ device: { deviceId: "d1" } })).deviceId).toBe(
-      "$SuperwallDevice:d1",
+      "$SuperwallDevice:11111111-2222-3333-4444-555555555555",
     );
   });
 
@@ -125,15 +126,49 @@ describe("sessionBody", () => {
     expect(body.deferElementsIntentCreation).toBe(false);
   });
 
+  it("attributes to the presentation the SDK reported on paywall_open, as paywall.js does", () => {
+    const body = bodyOf({
+      paywall: {
+        id: "42",
+        identifier: "pw_42",
+        presentation: {
+          id: "pres-1",
+          presentedBy: "event",
+          sourceType: "getPaywall",
+          eventId: "evt-1",
+          eventName: "campaign_trigger",
+        },
+      },
+      params: { event_name: "from_params", event_id: "from-params" },
+    });
+    expect(body.context.presentment).toEqual({
+      isFreeTrialAvailable: false,
+      presentedBy: "event",
+      presentationSourceType: "getPaywall",
+      presentedByEventName: "campaign_trigger",
+      presentedByEventId: "evt-1",
+    });
+
+    const fromParams = bodyOf({ params: { event_name: "from_params", event_id: "from-params" } });
+    expect(fromParams.context.presentment).toMatchObject({
+      presentedByEventName: "from_params",
+      presentedByEventId: "from-params",
+    });
+  });
+
   it("defaults the ids the SDK has not sent yet and calls the platform web", () => {
     vi.spyOn(crypto, "randomUUID").mockReturnValue("11111111-2222-3333-4444-555555555555");
     const body = bodyOf();
 
     expect(body.context.paywall).toMatchObject({ paywallId: "0", paywallIdentifier: "" });
     expect(body.context.experiment).toEqual({ experimentId: "0", variantId: "0" });
-    expect(body.context.presentment.presentedByEventId).toBe(
-      "11111111-2222-3333-4444-555555555555",
-    );
+    expect(body.context.presentment).toEqual({
+      isFreeTrialAvailable: false,
+      presentedBy: "placement",
+      presentationSourceType: "register",
+      presentedByEventName: "",
+      presentedByEventId: "fa3c2ba4-01c4-463d-ac3c-c58a32c6f0c6",
+    });
     expect(body.context.device.platform).toBe("web");
     expect(body.context.device.appInstallDate).toBeUndefined();
   });

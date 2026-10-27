@@ -1,7 +1,42 @@
 import type { TIncomingMessage } from "@superwall/protocol";
 import { permissionStateName } from "./requests";
-import type { SuperwallRuntimeSnapshot } from "./types";
+import type {
+  SuperwallPaywallIdentity,
+  SuperwallPresentation,
+  SuperwallRuntimeSnapshot,
+} from "./types";
 import { recordFromVariables } from "./variables";
+
+const PRESENTED_BY = ["placement", "event"] as const;
+const PRESENTATION_SOURCE_TYPES = ["implicit", "getPaywall", "register"] as const;
+
+const nonEmpty = (value: string | undefined): string | undefined =>
+  value === undefined || value === "" ? undefined : value;
+
+const presentationOf = (
+  message: Extract<TIncomingMessage, { event_name: "paywall_open" }>,
+): SuperwallPresentation => {
+  const id = nonEmpty(message.presentation_id);
+  const presentedBy = PRESENTED_BY.find((value) => value === message.presented_by);
+  const sourceType = PRESENTATION_SOURCE_TYPES.find(
+    (value) => value === message.presentation_source_type,
+  );
+  const eventId = nonEmpty(message.presented_by_event_id);
+  const eventName = nonEmpty(message.presented_by_event_name);
+  return {
+    ...(id === undefined ? {} : { id }),
+    ...(presentedBy === undefined ? {} : { presentedBy }),
+    ...(sourceType === undefined ? {} : { sourceType }),
+    ...(eventId === undefined ? {} : { eventId }),
+    ...(eventName === undefined ? {} : { eventName }),
+  };
+};
+
+const withPresentation = (
+  paywall: SuperwallPaywallIdentity,
+  presentation: SuperwallPresentation,
+): SuperwallPaywallIdentity =>
+  Object.keys(presentation).length === 0 ? paywall : { ...paywall, presentation };
 
 export const snapshotPatchFor = (
   snapshot: SuperwallRuntimeSnapshot,
@@ -10,7 +45,10 @@ export const snapshotPatchFor = (
   switch (message.event_name) {
     case "paywall_open":
       return {
-        paywall: { id: message.paywall_id, identifier: message.paywall_identifier },
+        paywall: withPresentation(
+          { id: message.paywall_id, identifier: message.paywall_identifier },
+          presentationOf(message),
+        ),
         pendingPurchase: undefined,
         lastTransaction: undefined,
         lastPurchaseFailure: undefined,
