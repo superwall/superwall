@@ -733,6 +733,44 @@ describe("a prepared teleport", () => {
     teleporter.cancel();
   });
 
+  it("saves the whole flow when an answer was cleared since it was prepared, so the page never brings it back", async () => {
+    const calls = api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": { status: "pending" },
+      "checkout/teleport/session": { saved: true },
+    });
+    const { session, posted } = fakeSession();
+    const teleporter = teleportFor(session);
+
+    teleporter.prefetch(undefined, { goal: "sleep", level: "1" });
+    await settle();
+    void teleporter.begin({ productReference: "card", query: { level: "1" } });
+    await settle();
+
+    expect(patchOf(posted.at(-1))).toBeUndefined();
+    expect(calls.find((call) => call.path === "checkout/teleport/session")?.body).toEqual({
+      teleportId: "v1:tp",
+      session: { query: { level: "1" } },
+    });
+    teleporter.cancel();
+  });
+
+  it("carries the changed flow again every time the shopper reopens the browser", async () => {
+    api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
+    const { session, posted } = fakeSession();
+    const teleporter = teleportFor(session);
+
+    teleporter.prefetch(undefined, { goal: "sleep" });
+    await settle();
+    void teleporter.begin({ productReference: "card", query: { goal: "focus" } });
+    await settle();
+    teleporter.reopen();
+
+    expect(posted.at(-1)).toMatchObject({ event_name: "open_url_external" });
+    expect(patchOf(posted.at(-1))).toEqual({ query: { goal: "focus" } });
+    teleporter.cancel();
+  });
+
   it("opens with what it had when the flow cannot be saved", async () => {
     api({
       "checkout/teleport": created,

@@ -95,6 +95,7 @@ type OpenTeleport = CreatedTeleport & {
   checkoutContextId?: string;
   checkoutProductIdentifier?: string;
   returnedAt?: number;
+  queryPatch?: string;
   postPurchase?: SuperwallPostPurchase;
   stripeMetadata?: Readonly<Record<string, string>>;
   settle: (outcome: TeleportOutcome) => void;
@@ -366,11 +367,11 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
     schedule(record, age < FAST_POLL_WINDOW_MS ? FAST_POLL_MS : SLOW_POLL_MS);
   };
 
-  const open = (record: OpenTeleport, queryPatch?: string) => {
+  const open = (record: OpenTeleport) => {
     const overlay = settings()?.overlay === true;
     post({
       event_name: "open_url_external",
-      url: checkoutUrlFor(record.url, record.productReference, queryPatch),
+      url: checkoutUrlFor(record.url, record.productReference, record.queryPatch),
       teleport: true,
       ...(overlay ? { waiting_screen: true } : {}),
     });
@@ -428,9 +429,10 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
     query: Record<string, string>,
   ): Promise<string | undefined> => {
     const changed = changedQuery(saved, query);
-    if (Object.keys(changed).length === 0) return undefined;
+    const removed = Object.keys(saved).some((key) => !Object.hasOwn(query, key));
+    if (!removed && Object.keys(changed).length === 0) return undefined;
     const patch = encodeQueryPatch(changed);
-    if (patch.length <= QUERY_FRAGMENT_LIMIT) return patch;
+    if (!removed && patch.length <= QUERY_FRAGMENT_LIMIT) return patch;
     try {
       await saveTeleportQuery(publicApiKey(), teleport.teleportId, query);
     } catch (error) {
@@ -482,6 +484,7 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
         productIdentifier,
         query,
         createdAt: Date.now(),
+        ...(queryPatch === undefined ? {} : { queryPatch }),
         postPurchase,
         stripeMetadata,
         settle,
@@ -494,7 +497,7 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
           product_identifier: productIdentifier,
         });
       }
-      open(record, queryPatch);
+      open(record);
       schedule(record, FAST_POLL_MS);
     });
   };
