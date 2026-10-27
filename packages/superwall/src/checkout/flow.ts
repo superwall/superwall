@@ -174,6 +174,7 @@ export const autoPrefetchTargets = (paywall: PaywallSession, mode: CheckoutMode)
 
 export const reprefetch = (paywall: PaywallSession): boolean => {
   if (!paywall.getSnapshot().device.publicApiKey) return false;
+  if (teleportFor(paywall).available()) return false;
   const mode = checkoutModeFor(paywall.getSnapshot());
   const targets = autoPrefetchTargets(paywall, mode);
   for (const reference of targets) {

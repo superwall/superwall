@@ -36,6 +36,7 @@ type SessionOverrides = {
   teleport?: import("@superwall/runtime").SuperwallTeleportConfig;
   postPurchase?: import("@superwall/runtime").SuperwallPostPurchase;
   sdkVersionPadded?: string;
+  platform?: string;
   publicApiKey?: string;
   references?: string[];
   store?: string[];
@@ -49,6 +50,7 @@ const fakeSession = ({
   teleport,
   postPurchase,
   sdkVersionPadded,
+  platform,
   publicApiKey = "pk_test",
   references = ["primary", "secondary"],
   store = [],
@@ -69,7 +71,11 @@ const fakeSession = ({
   const session: PaywallSession = {
     getSnapshot: () =>
       ({
-        device: { publicApiKey, ...(sdkVersionPadded ? { sdkVersionPadded } : {}) },
+        device: {
+          publicApiKey,
+          ...(sdkVersionPadded ? { sdkVersionPadded } : {}),
+          ...(platform ? { platform } : {}),
+        },
         user: {},
         params: eventName === undefined ? {} : { event_name: eventName },
         products,
@@ -223,6 +229,17 @@ describe("reprefetch", () => {
     const warmKeyless = vi.spyOn(sessionsFor(keyless.session), "prefetch");
     expect(reprefetch(keyless.session)).toBe(false);
     expect(warmKeyless).not.toHaveBeenCalled();
+  });
+
+  it("warms no hosted page in an app that teleports, since a tap opens the teleport instead", () => {
+    const { session } = fakeSession({
+      teleport: { route: "checkout" },
+      platform: "iOS",
+      sdkVersionPadded: "004.018.000",
+    });
+    const warm = vi.spyOn(sessionsFor(session), "prefetch");
+    expect(reprefetch(session)).toBe(false);
+    expect(warm).not.toHaveBeenCalled();
   });
 });
 

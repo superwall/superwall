@@ -198,9 +198,12 @@ describe("the web half of a teleport", () => {
       loadSession: true,
     });
     const fetchMock = vi.fn(
-      async () => new Response(JSON.stringify({ session: { query: { goal: "sleep" } } })),
+      async (_url: string) =>
+        new Response(JSON.stringify({ session: { query: { goal: "sleep" } } })),
     );
     vi.stubGlobal("fetch", fetchMock);
+    const sessionReads = () =>
+      fetchMock.mock.calls.filter(([url]) => url.includes("checkout/teleport/session/read"));
     const Wrapper = createWrapper({ config, host: { products, device: { platform: "iOS" } } });
     const view = render(
       <Wrapper>
@@ -222,7 +225,7 @@ describe("the web half of a teleport", () => {
       await flush();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sessionReads()).toHaveLength(1);
     expect(screen.getByText("goal:sleep")).toBeTruthy();
     view.unmount();
   });
