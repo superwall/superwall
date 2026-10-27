@@ -87,6 +87,12 @@ describe("checkoutModeFor on the web half of a teleport", () => {
     expect(checkoutModeFor(app("iOS", "external"))).toBe("applePay");
     expect(checkoutModeFor(app("iOS"))).toBe("applePay");
   });
+
+  it("lets one purchase pick the sheet or the wallet there, never the hosted page", () => {
+    Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout" });
+    expect(checkoutModeFor(app("iOS", "applePay"), "sheet")).toBe("sheet");
+    expect(checkoutModeFor(app("iOS", "sheet"), "external")).toBe("applePay");
+  });
 });
 
 describe("inside the Web SDK", () => {
