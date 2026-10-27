@@ -22,6 +22,18 @@ describe("useDevice", () => {
     await flush();
     expect(result.current.orientation).toBe("portrait");
   });
+
+  it("says which surface hosts the paywall, apart from the platform the user is on", async () => {
+    window.history.replaceState(null, "", "/?client_surface=web-sdk");
+    try {
+      const { result } = renderWithProvider(() => useDevice());
+      await flush();
+      expect(result.current.host).toBe("web-sdk");
+      expect(result.current.hostPlatform).toBe("ios");
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
 });
 
 describe("useUser", () => {
