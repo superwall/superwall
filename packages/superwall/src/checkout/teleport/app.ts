@@ -365,7 +365,6 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       product_identifier: record.productIdentifier,
     });
     record.settle("abandoned");
-    emit("cancel");
     prepare();
   };
 
@@ -393,6 +392,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
   const cancel = (record: OpenTeleport) => {
     settleAbandoned(record);
     park(record);
+    emit("cancel");
   };
 
   const payInApp = (

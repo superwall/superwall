@@ -104,11 +104,24 @@ const api = (routes: Record<string, Reply[] | Reply>) => {
   );
   const calls: { path: string; body: unknown; init: RequestInit }[] = [];
   const warmed: string[] = [];
+  const loads: { src: string; crossOrigin: string | null; referrerPolicy: string }[] = [];
+  vi.stubGlobal(
+    "Image",
+    class {
+      crossOrigin: string | null = null;
+      referrerPolicy = "";
+      set src(value: string) {
+        warmed.push(value);
+        loads.push({
+          src: value,
+          crossOrigin: this.crossOrigin,
+          referrerPolicy: this.referrerPolicy,
+        });
+      }
+    },
+  );
   const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
-    if (init.method === "GET") {
-      warmed.push(url);
-      return new Response(null, { status: 204 });
-    }
+    if (init.method === "GET") throw new Error(`a GET through fetch, which the CSP blocks: ${url}`);
     const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
     const body: unknown = JSON.parse(String(init.body));
     calls.push({ path, body, init });
@@ -121,7 +134,7 @@ const api = (routes: Record<string, Reply[] | Reply>) => {
     return new Response(JSON.stringify(value));
   });
   vi.stubGlobal("fetch", fetchMock);
-  return Object.assign(calls, { warmed });
+  return Object.assign(calls, { warmed, loads });
 };
 
 const created = {
@@ -388,14 +401,18 @@ describe("a teleport from the app", () => {
     });
   });
 
-  it("abandons an expired teleport", async () => {
+  it("abandons an expired teleport without calling it a cancel", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "expired" } });
     const { session, posted } = fakeSession();
-    const outcome = appTeleport(session).begin({ productReference: "card", query: {} });
+    const teleporter = appTeleport(session);
+    const cancelled = vi.fn();
+    teleporter.on("cancel", cancelled);
+    const outcome = teleporter.begin({ productReference: "card", query: {} });
     await settle();
     await settle(2_000);
 
     await expect(outcome).resolves.toBe("abandoned");
+    expect(cancelled).not.toHaveBeenCalled();
     expect(posted.at(-1)).toEqual({
       event_name: "stripe_checkout_abandon",
       checkout_context_id: "v1:tp",
@@ -1074,8 +1091,12 @@ describe("a prepared teleport", () => {
     });
     teleporter.cancel();
 
-    warmTeleportPage("https://acme.superwall.app/sw-teleport/v1:tp", []);
-    expect(calls.warmed.at(-1)).toBe("https://acme.superwall.app/sw-teleport/v1:tp?sw_warm=1");
+    warmTeleportPage("https://checkout.acme.com/sw-teleport/v1:tp", []);
+    expect(calls.loads.at(-1)).toEqual({
+      src: "https://checkout.acme.com/sw-teleport/v1:tp?sw_warm=1",
+      crossOrigin: "anonymous",
+      referrerPolicy: "no-referrer",
+    });
   });
 
   it("prepares a route the app pushes with teleport, and refreshes one prepared under another trial offer", async () => {

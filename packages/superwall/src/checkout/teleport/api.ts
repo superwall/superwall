@@ -156,9 +156,10 @@ export const warmTeleportPage = (url: string, references: readonly string[]): vo
     const warm = new URL(url);
     warm.searchParams.set("sw_warm", "1");
     if (reference !== undefined) warm.searchParams.set(TAPPED_PRODUCT_QUERY_KEY, reference);
-    fetch(warm.toString(), { method: "GET", mode: "no-cors", credentials: "omit" }).catch(
-      () => undefined,
-    );
+    const request = new Image();
+    request.crossOrigin = "anonymous";
+    request.referrerPolicy = "no-referrer";
+    request.src = warm.toString();
   }
 };
 
