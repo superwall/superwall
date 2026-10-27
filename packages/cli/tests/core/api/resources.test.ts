@@ -10,6 +10,7 @@ import {
   findPaywall,
   listAppPaywalls,
   livePaywall,
+  pushedProducts,
   livePaywallVersion,
   listResource,
   pushPaywallAssets,
@@ -168,6 +169,40 @@ test("getPaywall reads a numeric application id, and leaves a missing one undefi
   assert.equal((await findPaywall(api, "208540")).applicationId, undefined);
 });
 
+test("pushedProducts reads the newest version of a snapshot, and nothing for one never pushed", async () => {
+  mockFetch(() => ({
+    object: "list",
+    data: [
+      { version: 2, snapshot_id: "s1", products: [{ reference_name: "a", identifier: "x", store: "custom" }] },
+      { version: 1, snapshot_id: "s1", products: [{ reference_name: "a", identifier: "x", store: "app-store" }] },
+      { version: 3, snapshot_id: "s2", products: [] },
+      { version: "4", snapshot_id: "s1" },
+      "junk",
+    ],
+  }));
+  assert.deepEqual(await pushedProducts(api, "208540", "s1"), [
+    { reference: "a", identifier: "x", store: "custom" },
+  ]);
+  assert.equal(await pushedProducts(api, "208540", "s9"), undefined);
+
+  mockFetch(() => ({ object: "list" }));
+  assert.equal(await pushedProducts(api, "208540", "s1"), undefined);
+});
+
+test("versionProducts reads only the catalogue's own entries, whatever an identifier is called", () => {
+  assert.deepEqual(
+    versionProducts({ a: "constructor", b: "toString", c: "__proto__" }, "ios", {}).map(
+      (product) => product.store,
+    ),
+    ["app-store", "app-store", "app-store"],
+  );
+  assert.equal(
+    versionProducts({ a: "constructor" }, "ios", Object.fromEntries([["constructor", ["custom"]]]))[0]
+      ?.store,
+    "custom",
+  );
+});
+
 test("livePaywallVersion reads the published version, and stays undefined without one", async () => {
   mockFetch(() => ({ id: 208540, version: 11 }));
   assert.equal(await livePaywallVersion(api, "208540"), 11);
@@ -309,6 +344,31 @@ test("pushPaywallVersion spreads the paywall settings into the version body", as
 
   await pushPaywallVersion(fake, "1", { html: "<html></html>" });
   assert.deepEqual(posted[1]?.body, { html: "<html></html>" });
+});
+
+test("versionProducts takes a custom or Stripe store from the catalogue, and the platform's store when the catalogue has it", () => {
+  const stores = {
+    stripe_elite1w: ["custom" as const],
+    prod_web: ["stripe" as const],
+    shared: ["custom" as const, "app-store" as const],
+    pro_play: ["play-store" as const],
+  };
+  assert.deepEqual(
+    versionProducts(
+      {
+        stripePrimary: "stripe_elite1w",
+        web: "prod_web",
+        shared: "shared",
+        play: "pro_play",
+        unknown: "pro_999_month",
+        composite: "live:price_abc:trial",
+      },
+      "ios",
+      stores,
+    ).map((product) => product.store),
+    ["custom", "stripe", "app-store", "app-store", "app-store", "stripe"],
+  );
+  assert.equal(versionProducts({ shared: "shared" }, "android", stores)[0]?.store, "custom");
 });
 
 test("versionProducts returns empty for no products", () => {

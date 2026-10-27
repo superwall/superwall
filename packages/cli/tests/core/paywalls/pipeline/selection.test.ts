@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   needsWork,
+  storesDiffer,
   requireClean,
   requireProject,
   resolveProjectDir,
@@ -142,6 +143,36 @@ test("selectSurfaces explains an unknown name, and an empty project", () => {
     /No paywalls or funnels found/,
   );
   assert.throws(() => selectSurfaces({ ...project, surfaces: [] }, ["nope"]), /expected superwall/);
+});
+
+test("storesDiffer flags a product production has under another store, and nothing else", () => {
+  const products = [
+    { store: "custom" as const, identifier: "stripe_elite1w", reference_name: "stripePrimary" },
+    { store: "app-store" as const, identifier: "elite1w", reference_name: "primary" },
+  ];
+
+  assert.equal(
+    storesDiffer(products, [
+      { reference: "stripePrimary", identifier: "stripe_elite1w", store: "app-store" },
+    ]),
+    true,
+  );
+  assert.equal(
+    storesDiffer(products, [
+      { reference: "stripePrimary", identifier: "stripe_elite1w", store: "custom" },
+      { reference: "primary", identifier: "elite1w", store: "app-store" },
+    ]),
+    false,
+  );
+  assert.equal(
+    storesDiffer(products, [
+      { reference: "stripePrimary", identifier: "other", store: "app-store" },
+      { reference: "primary", identifier: "elite1w" },
+    ]),
+    false,
+    "another product, or no store recorded",
+  );
+  assert.equal(storesDiffer(products, undefined), false, "never published");
 });
 
 test("needsWork compares against the last pushed snapshot, never the live one", () => {

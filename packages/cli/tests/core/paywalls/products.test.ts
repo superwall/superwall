@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   MissingProductError,
+  listApplicationCatalogue,
+  listProjectCatalogue,
   listProjectProducts,
   productVariables,
   projectForApplication,
@@ -101,6 +103,63 @@ test("the catalogue is keyed by store identifier and skips products without one"
   assert.deepEqual(Object.keys(catalogue), ["pro_999_month"]);
   assert.equal(catalogue.pro_999_month?.price, "$9.99");
   assert.deepEqual(sent, [{ method: "GET", path: "/v2/products?project_id=a%2Fb" }]);
+});
+
+test("the catalogue records each identifier's stores in the version vocabulary", async () => {
+  const { api } = routedApi({
+    "GET /v2/products?project_id=9": [
+      { identifier: "pro_year", platform: "ios", store: "app_store" },
+      { identifier: "pro_year", platform: "android", store: "play_store" },
+      { identifier: "stripe_elite1w", platform: "ios", store: "custom" },
+      { identifier: "stripe_elite1w", platform: "custom", store: null },
+      { identifier: "prod_web", platform: "stripe", store: null },
+      { identifier: "grant", platform: "promotional", store: null },
+    ],
+  });
+
+  const { stores, variables } = await listProjectCatalogue(api, "9");
+
+  assert.deepEqual(stores, {
+    pro_year: ["app-store", "play-store"],
+    stripe_elite1w: ["custom"],
+    prod_web: ["stripe"],
+  });
+  assert.deepEqual(Object.keys(variables), ["pro_year", "stripe_elite1w", "prod_web", "grant"]);
+});
+
+test("the catalogue keeps products named like object built-ins", async () => {
+  const { api } = routedApi({
+    "GET /v2/products?project_id=9": [
+      { identifier: "constructor", platform: "custom", store: "custom" },
+      { identifier: "__proto__", platform: "ios", store: "app_store" },
+      { identifier: "toString", price: { amount: 100, currency: "USD" } },
+    ],
+  });
+
+  const { stores, variables } = await listProjectCatalogue(api, "9");
+
+  assert.deepEqual(Object.keys(stores), ["constructor", "__proto__"]);
+  assert.deepEqual(stores.constructor, ["custom"]);
+  assert.deepEqual(Object.keys(variables), ["constructor", "__proto__", "toString"]);
+  assert.doesNotThrow(() =>
+    requireProducts(variables, [{ id: "p", products: { a: "constructor", b: "toString" } }]),
+  );
+  assert.throws(
+    () => requireProducts({}, [{ id: "p", products: { a: "constructor" } }]),
+    MissingProductError,
+  );
+});
+
+test("an app's catalogue is its project's, and an app without a project has an empty one", async () => {
+  const { api } = routedApi({
+    "GET /v2/projects": [{ id: 9, applications: [{ id: 42 }] }],
+    "GET /v2/products?project_id=9": [{ identifier: "stripe_elite1w", store: "custom" }],
+  });
+
+  assert.deepEqual((await listApplicationCatalogue(api, "42")).stores, {
+    stripe_elite1w: ["custom"],
+  });
+  assert.deepEqual(await listApplicationCatalogue(api, "43"), { variables: {}, stores: {} });
 });
 
 test("an app's project is found by the app id, and an app that can't be found has none", async () => {

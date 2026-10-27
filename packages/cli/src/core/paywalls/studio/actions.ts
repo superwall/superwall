@@ -9,7 +9,11 @@ import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets"
 import { resolveApps } from "@/core/paywalls/binding/apps";
 import { resolveBinding } from "@/core/paywalls/binding/binding";
 import { planTargets, wantedPlatforms, type SurfaceTarget } from "@/core/paywalls/binding/targets";
-import { listProjectProducts, projectForApplication } from "@/core/paywalls/products";
+import {
+  listApplicationCatalogue,
+  listProjectProducts,
+  projectForApplication,
+} from "@/core/paywalls/products";
 import {
   frameworkVersion,
   type Framework,
@@ -166,15 +170,16 @@ export function createStudioActions(
           const synced = await step("assets", () =>
             syncAssets({ api: client, paywallId: binding.paywallId, assets }),
           );
-          const pushed = await step("push", () =>
-            pushPaywallVersion(client, binding.paywallId, {
+          const pushed = await step("push", async () => {
+            const { stores } = await listApplicationCatalogue(client, target.applicationId);
+            return pushPaywallVersion(client, binding.paywallId, {
               html: built.html,
               surface: surface.id,
               assets: synced.assets,
-              products: versionProducts(built.products, target.platform),
+              products: versionProducts(built.products, target.platform, stores),
               settings: built.settings,
-            }),
-          );
+            });
+          });
           await step("source", async () => {
             if (!collected.ok) throw new Error(collected.reason);
             return pushSource({

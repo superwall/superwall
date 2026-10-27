@@ -311,6 +311,21 @@ export async function livePaywall(api: SuperwallApi, paywallId: string): Promise
   );
 }
 
+export async function pushedProducts(
+  api: SuperwallApi,
+  paywallId: string,
+  snapshotId: string,
+): Promise<PaywallProductRef[] | undefined> {
+  const body = await api.get<{ data?: unknown }>(
+    `/v2/paywalls/${encodeURIComponent(paywallId)}/versions`,
+  );
+  const rows = Array.isArray(body.data) ? body.data.filter(isRecord) : [];
+  const pushed = rows
+    .filter((row) => row.snapshot_id === snapshotId && typeof row.version === "number")
+    .sort((a, b) => Number(b.version) - Number(a.version))[0];
+  return pushed === undefined ? undefined : parseProductRefs(pushed.products);
+}
+
 export async function livePaywallVersion(
   api: SuperwallApi,
   paywallId: string,
@@ -331,23 +346,48 @@ export async function createHeadlessPaywall(
   return { id: String(row.id), identifier: opts.identifier, archived: false, metadata: {} };
 }
 
-interface VersionProduct {
-  store: "stripe" | "app-store" | "play-store" | "custom";
+export type VersionStore = "stripe" | "app-store" | "play-store" | "custom";
+
+export type ProductStores = Record<string, readonly VersionStore[]>;
+
+export interface VersionProduct {
+  store: VersionStore;
   identifier: string;
   reference_name: string;
 }
 
-function resolveStore(identifier: string, platform: string | undefined): VersionProduct["store"] {
-  if (/^(test|live):price_[^:]+/.test(identifier)) return "stripe";
+export function platformStore(platform: string | undefined): VersionStore {
   return platform === "android" ? "play-store" : "app-store";
+}
+
+function resolveStore(
+  identifier: string,
+  platform: string | undefined,
+  known: readonly VersionStore[],
+): VersionStore {
+  if (/^(test|live):price_[^:]+/.test(identifier)) return "stripe";
+  const fallback = platformStore(platform);
+  if (known.includes(fallback)) return fallback;
+  if (known.includes("custom")) return "custom";
+  if (known.includes("stripe")) return "stripe";
+  return fallback;
 }
 
 export function versionProducts(
   products: Record<string, string> | undefined,
   platform?: string,
+  stores: ProductStores = {},
 ): VersionProduct[] {
   return Object.entries(products ?? {}).map(([reference, identifier]) => {
-    return { store: resolveStore(identifier, platform), identifier, reference_name: reference };
+    return {
+      store: resolveStore(
+        identifier,
+        platform,
+        Object.hasOwn(stores, identifier) ? (stores[identifier] ?? []) : [],
+      ),
+      identifier,
+      reference_name: reference,
+    };
   });
 }
 

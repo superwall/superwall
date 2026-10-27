@@ -1,21 +1,59 @@
 import { productVariables, type DashboardProduct } from "@superwall/studio/products";
 import type { SuperwallApi } from "@/core/api/client";
+import type { ProductStores, VersionStore } from "@/core/api/resources";
 import { findApplication } from "@/core/api/lookup";
 
 export { productVariables };
+
+type CatalogueRow = DashboardProduct & { platform?: unknown; store?: unknown };
+
+export interface ProjectCatalogue {
+  variables: Record<string, Record<string, unknown>>;
+  stores: ProductStores;
+}
+
+function storeOf(row: CatalogueRow): VersionStore | undefined {
+  if (row.platform === "stripe") return "stripe";
+  if (row.store === "custom" || row.platform === "custom") return "custom";
+  if (row.store === "app_store") return "app-store";
+  if (row.store === "play_store") return "play-store";
+  return undefined;
+}
+
+export async function listProjectCatalogue(
+  api: SuperwallApi,
+  projectId: string,
+): Promise<ProjectCatalogue> {
+  const rows = await api.list<CatalogueRow>(
+    `/v2/products?project_id=${encodeURIComponent(projectId)}`,
+  );
+  const variables = new Map<string, Record<string, unknown>>();
+  const stores = new Map<string, VersionStore[]>();
+  for (const row of rows) {
+    if (!row.identifier) continue;
+    variables.set(row.identifier, productVariables(row));
+    const store = storeOf(row);
+    if (store === undefined) continue;
+    const known = stores.get(row.identifier) ?? [];
+    if (!known.includes(store)) stores.set(row.identifier, [...known, store]);
+  }
+  return { variables: Object.fromEntries(variables), stores: Object.fromEntries(stores) };
+}
 
 export async function listProjectProducts(
   api: SuperwallApi,
   projectId: string,
 ): Promise<Record<string, Record<string, unknown>>> {
-  const rows = await api.list<DashboardProduct>(
-    `/v2/products?project_id=${encodeURIComponent(projectId)}`,
-  );
-  const catalogue: Record<string, Record<string, unknown>> = {};
-  for (const row of rows) {
-    if (row.identifier) catalogue[row.identifier] = productVariables(row);
-  }
-  return catalogue;
+  return (await listProjectCatalogue(api, projectId)).variables;
+}
+
+export async function listApplicationCatalogue(
+  api: SuperwallApi,
+  applicationId: string,
+): Promise<ProjectCatalogue> {
+  const projectId = await projectForApplication(api, applicationId);
+  if (projectId === undefined) return { variables: {}, stores: {} };
+  return listProjectCatalogue(api, projectId);
 }
 
 export async function projectForApplication(
@@ -34,7 +72,7 @@ export function requireProducts(
 ): void {
   const gaps = surfaces.flatMap((surface) =>
     Object.entries(surface.products ?? {})
-      .filter(([, identifier]) => catalogue[identifier] === undefined)
+      .filter(([, identifier]) => !Object.hasOwn(catalogue, identifier))
       .map(([reference, identifier]) => `  ${surface.id}: ${reference} → ${identifier}`),
   );
   if (gaps.length === 0) return;

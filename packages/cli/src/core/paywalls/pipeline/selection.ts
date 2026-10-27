@@ -1,5 +1,6 @@
 import { globSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import type { PaywallProductRef, VersionProduct } from "@/core/api/resources";
 import type { FrameworkProject, FrameworkSurface } from "@/core/paywalls/project/framework";
 import { LAYOUT_HINT } from "./output";
 
@@ -86,6 +87,18 @@ export function requireClean(surfaces: readonly FrameworkSurface[]): void {
   throw new Error(
     [...problems, "", "Publishing is immutable — fix these first, then push again."].join("\n"),
   );
+}
+
+export function storesDiffer(
+  products: readonly VersionProduct[],
+  live: readonly PaywallProductRef[] | undefined,
+): boolean {
+  return products.some((product) => {
+    const pushed = live?.find(
+      (ref) => ref.reference === product.reference_name && ref.identifier === product.identifier,
+    );
+    return pushed?.store !== undefined && pushed.store !== product.store;
+  });
 }
 
 export function needsWork(
