@@ -11,6 +11,7 @@ import { useSuperwallSession } from "../provider/context";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
 import type { ProductReference } from "./index";
 import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
+import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
 import { checkoutModeFor } from "../checkout/host/sdk";
 import type { CheckoutMode, PurchaseOutcome } from "../checkout/types";
 
@@ -57,7 +58,7 @@ export const usePurchase = <
     typeof snapshot.device.publicApiKey === "string" && snapshot.device.publicApiKey !== "";
 
   const webMode: CheckoutMode | undefined = hasApiKey ? mode : undefined;
-  const warmMode = webMode === "sheet" || webMode === "applePay" ? webMode : undefined;
+  useAutoPrefetch();
 
   const purchase = React.useCallback(
     async (
@@ -83,11 +84,11 @@ export const usePurchase = <
   const prefetch = React.useCallback(
     (input?: ProductReference | SuperwallProduct<TVariables>) => {
       const reference = input === undefined ? first : referenceOf(input);
-      if (!warmMode || reference === undefined) return;
+      if (!webMode || reference === undefined) return;
       if (!sessionsFor(session).isStripeProduct(reference)) return;
-      void prefetchSession(session, reference, warmMode);
+      void prefetchSession(session, reference, webMode);
     },
-    [session, warmMode, first],
+    [session, webMode, first],
   );
 
   return React.useMemo(

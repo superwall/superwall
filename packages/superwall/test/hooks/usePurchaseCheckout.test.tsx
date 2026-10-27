@@ -33,7 +33,11 @@ const redirect: RedirectCheckoutSession = {
   referenceName: "primary",
 };
 
-const renderCheckout = async (checkout?: SuperwallCheckoutConfig, platform = "Android") => {
+const renderCheckout = async (
+  checkout?: SuperwallCheckoutConfig,
+  platform = "Android",
+  publicApiKey = "pk_test",
+) => {
   const outgoing: string[] = [];
   const rendered = renderWithProvider(
     () => ({ session: useSuperwallSession(), purchase: usePurchase() }),
@@ -41,7 +45,7 @@ const renderCheckout = async (checkout?: SuperwallCheckoutConfig, platform = "An
       config: { ...testConfig, checkout },
       host: {
         products,
-        device: { platform, publicApiKey: "pk_test" },
+        device: { platform, publicApiKey },
         onOutgoing: (message) => outgoing.push(message.event_name),
       },
     },
@@ -96,13 +100,49 @@ describe("usePurchase with a Stripe product inside an iOS app", () => {
     expect(result.current.purchase.transaction).toBeUndefined();
   });
 
-  it("warms nothing, since nothing in the app opens a sheet", async () => {
+  it("warms the hosted page for the product on selection, never the sheet", async () => {
     const { result, sessions } = await renderCheckout("sheet", "iOS");
-    const prefetch = vi.spyOn(sessions, "prefetch");
+    const prefetch = vi.spyOn(sessions, "prefetch").mockResolvedValue(null);
 
     act(() => result.current.purchase.prefetch("primary"));
 
-    expect(prefetch).not.toHaveBeenCalled();
+    expect(prefetch).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceName: "primary", mode: "external" }),
+    );
+  });
+
+  it("opens the session warmed for that product, and the same one again on the next tap", async () => {
+    const { result, sessions } = await renderCheckout("sheet", "iOS");
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            checkoutContextId: "ctx_9",
+            directive: {
+              directive: "redirect",
+              checkoutSessionId: "sw_checkout_9",
+              checkoutUrl: "#warm",
+            },
+          }),
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = () =>
+      fetchMock.mock.calls.filter(([, init]) => String(init?.body).includes('"isPrefetch":false'));
+    await act(async () => {
+      await sessions.prefetch({ referenceName: "primary", mode: "external", silent: true });
+    });
+
+    for (let tap = 0; tap < 2; tap++) {
+      await act(async () => {
+        await result.current.purchase.purchase("primary");
+      });
+      expect(window.location.hash).toBe("#warm");
+      window.location.hash = "";
+    }
+    expect(created()).toEqual([]);
+    vi.unstubAllGlobals();
   });
 });
 
@@ -231,16 +271,16 @@ describe("usePurchase prefetch", () => {
     unsubscribe();
   });
 
-  it("does nothing for store products or paywalls without web checkout", async () => {
+  it("does nothing for store products, or without a public API key", async () => {
     const sheet = await renderCheckout("sheet");
     const sheetWarm = vi.spyOn(sheet.sessions, "prefetch");
     act(() => sheet.result.current.purchase.prefetch("secondary"));
     expect(sheetWarm).not.toHaveBeenCalled();
 
-    const external = await renderCheckout("external");
-    const externalWarm = vi.spyOn(external.sessions, "prefetch");
-    act(() => external.result.current.purchase.prefetch());
-    expect(externalWarm).not.toHaveBeenCalled();
+    const keyless = await renderCheckout("external", "Android", "");
+    const keylessWarm = vi.spyOn(keyless.sessions, "prefetch");
+    act(() => keyless.result.current.purchase.prefetch());
+    expect(keylessWarm).not.toHaveBeenCalled();
   });
 });
 

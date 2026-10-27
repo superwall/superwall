@@ -169,13 +169,21 @@ export const autoPrefetchTargets = (paywall: PaywallSession, mode: CheckoutMode)
   );
 };
 
-export const reprefetch = (paywall: PaywallSession) => {
+export const reprefetch = (paywall: PaywallSession): boolean => {
+  if (!paywall.getSnapshot().device.publicApiKey) return false;
   const mode = checkoutModeFor(paywall.getSnapshot());
-  if (mode !== "sheet" && mode !== "applePay") return;
-  if (!paywall.getSnapshot().device.publicApiKey) return;
-  for (const reference of autoPrefetchTargets(paywall, mode)) {
+  const targets = autoPrefetchTargets(paywall, mode);
+  for (const reference of targets) {
     void prefetchSession(paywall, reference, mode);
   }
+  return targets.length > 0;
+};
+
+const warmedOpens = new WeakMap<object, object>();
+
+export const warmOnOpen = (paywall: PaywallSession, open: object) => {
+  if (warmedOpens.get(paywall) === open) return;
+  if (reprefetch(paywall)) warmedOpens.set(paywall, open);
 };
 
 export const prefetchSession = async (
@@ -220,6 +228,7 @@ export const reportCompletedCheckout = async (
   const host = hostFor(paywall);
   const context = contextFor(paywall, session.referenceName, session.checkoutContextId);
   const options = takePurchaseOptions(paywall, session.referenceName);
+  sessionsFor(paywall).invalidate();
 
   if (options.stripeMetadata) {
     try {

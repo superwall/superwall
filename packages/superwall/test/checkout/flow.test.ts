@@ -209,15 +209,17 @@ describe("autoPrefetchTargets", () => {
 });
 
 describe("reprefetch", () => {
-  it("does nothing without web checkout or without a public API key", () => {
-    const store = fakeSession({ checkout: "external" });
-    const warmStore = vi.spyOn(sessionsFor(store.session), "prefetch");
-    reprefetch(store.session);
-    expect(warmStore).not.toHaveBeenCalled();
+  it("warms the hosted page too, and nothing without a public API key", () => {
+    const external = fakeSession({ checkout: "external" });
+    const warmExternal = vi
+      .spyOn(sessionsFor(external.session), "prefetch")
+      .mockResolvedValue(null);
+    expect(reprefetch(external.session)).toBe(true);
+    expect(warmExternal).toHaveBeenCalledWith(expect.objectContaining({ mode: "external" }));
 
     const keyless = fakeSession({ checkout: "sheet", publicApiKey: "" });
     const warmKeyless = vi.spyOn(sessionsFor(keyless.session), "prefetch");
-    reprefetch(keyless.session);
+    expect(reprefetch(keyless.session)).toBe(false);
     expect(warmKeyless).not.toHaveBeenCalled();
   });
 });
@@ -447,6 +449,16 @@ describe("reporting a completed purchase", () => {
     // An SDK from 4.14.0 redeems the purchase itself.
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it("forgets the warmed sessions, so the next purchase never reopens a paid one", async () => {
+    const { session } = fakeSession({ sdkVersionPadded: "004.014.000" });
+    const sessions = sessionsFor(session);
+    sessions.cache.set("primary", embedded);
+
+    await reportCompletedCheckout(session, paid);
+
+    expect(sessions.cache.get("primary")).toBeNull();
   });
 
   it("redeems the purchase itself on an SDK too old to do it", async () => {
@@ -721,11 +733,11 @@ describe("an SDK that cannot host payment", () => {
     expect(wallet).not.toHaveBeenCalled();
   });
 
-  it("warms nothing, since nothing warm could be used", () => {
+  it("warms the hosted page it will send the shopper to, not the sheet", () => {
     const { session } = fakeSession({ sdkVersionPadded: "004.009.000", checkout: "sheet" });
-    const warm = vi.spyOn(sessionsFor(session), "prefetch");
+    const warm = vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(null);
     reprefetch(session);
-    expect(warm).not.toHaveBeenCalled();
+    expect(warm).toHaveBeenCalledWith(expect.objectContaining({ mode: "external" }));
   });
 });
 
