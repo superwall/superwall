@@ -20,7 +20,7 @@ export const command = defineCommand({
   auth: "required",
   json: true,
   prompts: false,
-  mcp: false,
+  mcp: "write",
   async run(ctx, { args, flags }) {
     const res = await runAsaRequest(ctx, ctx.api, { verb: "put", path: args.path, data: flags.d, orgId: flags.orgId, body: flags.body });
     ctx.output.data(res ?? { ok: true });

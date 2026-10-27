@@ -318,7 +318,7 @@ export function instructions(): string {
     "- bootstrap shows everything the user can reach in one call. Wherever a tool takes app, pass the app's id, name or dashboard link.",
     "- Analytics: query runs ClickHouse SQL over every event, transaction and user; use it for any question about revenue, conversion, retention or behaviour. apps_statistics, campaigns_counts and campaigns_audiences_readout return the dashboard's own figures.",
     "- App Store Connect: asc_ tools. Apple Search Ads: asa_ tools. Both reach Apple through Superwall with the keys already connected to the app; the user needs no Apple credentials of their own.",
-    "- Use only the named tools exposed here. Operations without a named tool require the CLI on the user's machine; API schema discovery and generic HTTP execution are not available through MCP.",
+    "- An endpoint with no tool of its own: api_docs finds it, then get, post, patch or delete calls it.",
     "- Destructive tools can delete, archive, replace existing configuration or publish changes to live users. Confirm with the user before calling one.",
   ].join("\n");
 }

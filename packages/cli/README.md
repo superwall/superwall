@@ -575,13 +575,6 @@ your access token and org context attached.
 
 ## MCP connector
 
-The MCP connector exposes named account, analytics, App Store Connect and Apple
-Search Ads operations. Generic HTTP commands (`get`, `post`, `patch`, `delete`,
-`asc get|post|patch|delete`, `asa get|post|put|delete`) and schema lookup commands
-(`api docs`, `asc docs`, `asa docs`) are available only in the CLI. An operation
-without a named MCP tool requires the installed CLI or a command for the user
-to run.
-
 Publishing a saved paywall draft replaces its deployed version and refreshes
 app configuration, which can affect campaign users. Product updates, placement
 moves, audience or variant replacements, build attachment and paywall publishing

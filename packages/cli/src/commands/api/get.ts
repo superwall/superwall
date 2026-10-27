@@ -18,7 +18,7 @@ export const command = defineCommand({
   auth: "required",
   json: true,
   prompts: false,
-  mcp: false,
+  mcp: "read",
   run(ctx, { args, flags }) {
     return runApiRequest(ctx, ctx.api, { verb: "get", path: args.path, data: flags.d });
   },

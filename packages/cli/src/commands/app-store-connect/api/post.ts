@@ -28,7 +28,7 @@ as-is). superwall asc docs <path> post lists the fields.`,
   auth: "required",
   json: true,
   prompts: true,
-  mcp: false,
+  mcp: "write",
   async run(ctx, { args, flags }) {
     const response = await sendAscRequest(ctx, "post", args.path, { data: flags.d, team: flags.team, force: flags.force });
     ctx.output.data(response);

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ApiError } from "@/core/api/client";
 import { readJsonInput } from "@/core/apple-search-ads/operations";
-import { GROUPS } from "@/commands/registry";
 import { memoryStore } from "@/core/state/store";
 import { apiFor, callResult, instructions, listTools, useToolCache, type Tool } from "@/tools";
 import { fakeResourceApi, op, type ApiCall } from "./helpers/resources";
@@ -35,9 +34,9 @@ const tool = (name: string): Tool => {
   return found;
 };
 
-test("named data operations are tools; generic APIs and machine work stay in the CLI", () => {
+test("every data command and catalog operation is a tool; work that needs the machine is not", () => {
   const names = new Set(tools.map((candidate) => candidate.name));
-  for (const name of ["products_list", "products_get", "products_create", "apps_get", "campaigns_variants_update", "query", "bootstrap", "asc_keys_list", "asc_notification_url_check", "asa_campaigns_list"]) {
+  for (const name of ["products_list", "products_get", "products_create", "apps_get", "campaigns_variants_update", "query", "bootstrap", "get", "api_docs", "asc_get", "asc_keys_list", "asc_notification_url_check", "asa_campaigns_list", "asa_get"]) {
     assert.ok(names.has(name), `${name} should be a tool`);
   }
   for (const name of ["integrate", "migrate", "login", "logout", "whoami", "doctor", "upgrade", "push", "dev", "apps_use", "products_storekit", "setup_apple", "asc_keys_create"]) {
@@ -49,6 +48,7 @@ test("every tool has a title a person can read", () => {
   assert.equal(tool("products_create").title, "Products create");
   assert.equal(tool("asc_keys_list").title, "ASC keys list");
   assert.equal(tool("asa_negative_keywords_find").title, "ASA negative keywords find");
+  assert.equal(tool("post").title, "POST");
 });
 
 test("a result becomes the protocol's answer: text, structured content for objects, the error flag", () => {
@@ -75,12 +75,12 @@ test("apiFor sends the caller's token to the host it names", async () => {
     return new Response(JSON.stringify({ id: "1" }), { headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   try {
-    const result = await tool("products_get").run({ id: "1" }, apiFor({ token: "tok_123", host: "https://api.example.com" }));
+    const result = await tool("get").run({ path: "/v2/projects/1" }, apiFor({ token: "tok_123", host: "https://api.example.com" }));
     assert.deepEqual(result, { ok: true, data: { id: "1" } });
   } finally {
     globalThis.fetch = original;
   }
-  assert.deepEqual(seen, [{ url: "https://api.example.com/v2/products/1", auth: "Bearer tok_123" }]);
+  assert.deepEqual(seen, [{ url: "https://api.example.com/v2/projects/1", auth: "Bearer tok_123" }]);
 });
 
 test("tools that reach Apple or a customer's endpoint say so", () => {
@@ -104,6 +104,9 @@ test("credentials stay out of MCP inputs", () => {
 test("hints follow what the command does", () => {
   assert.equal(tool("products_list").annotations.readOnlyHint, true);
   assert.equal(tool("products_delete").annotations.destructiveHint, true);
+  assert.equal(tool("post").annotations.readOnlyHint, false);
+  assert.equal(tool("post").annotations.destructiveHint, false);
+  assert.equal(tool("delete").annotations.destructiveHint, true);
   for (const name of ["products_update", "campaigns_placements_create", "campaigns_audiences_update", "campaigns_variants_update", "asc_builds_attach", "paywalls_publish"]) {
     assert.equal(tool(name).annotations.destructiveHint, true, name);
     assert.equal(tool(name).annotations.readOnlyHint, false, name);
@@ -119,8 +122,8 @@ test("inputs come from the command: arguments, flags, and the API's own fields",
   assert.deepEqual(update.required, ["id"]);
   assert.deepEqual(update.properties.name, { type: "string", description: "Display name" });
   assert.deepEqual(update.properties.price, { type: ["number", "null"] });
-  const get = tool("products_get").inputSchema;
-  assert.ok(get.required.includes("id"));
+  const get = tool("get").inputSchema;
+  assert.ok(get.required.includes("path"));
   assert.equal(get.properties.yes, undefined, "tools never ask, so --yes isn't an input");
   assert.equal(tool("query").inputSchema.properties.install_dir, undefined);
   assert.deepEqual(tool("query").inputSchema.required, ["sql"], "a tool has no stdin, so the SQL is required");
@@ -146,11 +149,11 @@ test("a destructive call goes ahead: the client asked the user before calling", 
   assert.deepEqual(calls, [{ method: "DELETE", path: "/v2/products/42" }]);
 });
 
-test("a named resource tool takes its arguments by name", async () => {
-  const { api, sent } = routedApi({ "GET /v2/products/1": { id: "1" } });
-  const result = await tool("products_get").run({ id: "1" }, api);
+test("a command tool takes its arguments by name", async () => {
+  const { api, sent } = routedApi({ "GET /v2/projects/1": { id: "1" } });
+  const result = await tool("get").run({ path: "/v2/projects/1" }, api);
   assert.deepEqual(result, { ok: true, data: { id: "1" } });
-  assert.deepEqual(sent, [{ method: "GET", path: "/v2/products/1" }]);
+  assert.deepEqual(sent, [{ method: "GET", path: "/v2/projects/1" }]);
 });
 
 test("a failure is the command's error, marked not ok", async () => {
@@ -175,20 +178,6 @@ test("the instructions send an agent with a shell to the CLI, and name the work 
   assert.doesNotMatch(text, /^- superwall /m);
 });
 
-const genericCommands = ["get", "post", "patch", "delete", "api docs", "asc get", "asc post", "asc patch", "asc delete", "asc docs", "asa get", "asa post", "asa put", "asa delete", "asa docs"];
-
-test("generic API commands remain registered for the CLI and are absent from MCP", () => {
-  const commands = GROUPS.flatMap((group) => group.commands);
-  for (const name of genericCommands) {
-    const command = commands.find((candidate) => candidate.name === name);
-    assert.ok(command, name);
-    assert.equal(command.mcp, false, name);
-    assert.ok(!tools.some((candidate) => candidate.name === name.replaceAll(" ", "_")), name);
-  }
-  assert.doesNotMatch(instructions(), /api_docs finds it/);
-  assert.match(instructions(), /Use only the named tools exposed here/);
-});
-
 test("publish and manual grants describe their live effects", () => {
   assert.match(tool("paywalls_publish").description, /latest saved draft/);
   assert.match(tool("paywalls_publish").description, /Replaces its currently deployed version and refreshes app configuration/);
@@ -197,4 +186,11 @@ test("publish and manual grants describe their live effects", () => {
   assert.match(tool("entitlements_grants_create").description, /expiry time/);
   assert.match(tool("entitlements_grants_create").description, /without charging the user or creating a paid subscription/);
   assert.match(tool("entitlements_grants_create").description, /error when an active grant already exists/);
+});
+
+test("the MCP retains generic API and schema tools with fallback guidance", () => {
+  for (const name of ["get", "post", "patch", "delete", "api_docs", "asc_get", "asc_post", "asc_patch", "asc_delete", "asc_docs", "asa_get", "asa_post", "asa_put", "asa_delete", "asa_docs"]) {
+    assert.ok(tools.some((candidate) => candidate.name === name), name);
+  }
+  assert.match(instructions(), /api_docs finds it, then get, post, patch or delete calls it/);
 });

@@ -17,7 +17,7 @@ export const command = defineCommand({
   auth: "required",
   json: true,
   prompts: false,
-  mcp: false,
+  mcp: "destructive",
   run(ctx, { args, flags }) {
     return runApiRequest(ctx, ctx.api, { verb: "delete", path: args.path, data: flags.d });
   },
