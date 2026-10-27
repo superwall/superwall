@@ -64,14 +64,44 @@ afterEach(() => {
   Reflect.deleteProperty(window, "__SW_TELEPORT__");
 });
 
-describe("the waiting screen in the app", () => {
+describe("preparing the teleport", () => {
+  it("prepares the paywall's route once it opens, and any route the paywall asks for", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        if (url.endsWith("checkout/teleport")) bodies.push(JSON.parse(String(init.body)));
+        return new Response(
+          JSON.stringify({
+            teleportId: "v1:tp",
+            url: "https://acme.superwall.app/sw-teleport/v1:tp",
+          }),
+        );
+      }),
+    );
+    const { teleport } = await mount({
+      products: { card: "live:price_1:14days-free" },
+      teleport: { route: "checkout" },
+    });
+    expect(bodies).toEqual([expect.objectContaining({ route: "checkout" })]);
+
+    await act(async () => {
+      teleport()?.prefetch("plans");
+      await Promise.resolve();
+    });
+    expect(bodies[1]).toMatchObject({ route: "plans", session: { query: {} } });
+    teleport()?.returnToApp();
+  });
+});
+
+describe("the teleport screen in the app", () => {
   it("goes up over the paywall and offers the browser, the store fallback and cancel", async () => {
     stubApi();
     const { session, teleport, outgoing } = await mount({
       products: { card: "live:price_1:14days-free", annual: "pro_year" },
       teleport: { route: "checkout", fallbacks: { card: "annual" } },
     });
-    expect(teleport()).toMatchObject({ onWeb: false, waiting: false, waitingScreen: false });
+    expect(teleport()).toMatchObject({ status: "idle" });
     expect(screen.queryByRole("dialog")).toBeNull();
 
     let outcome: Promise<unknown> = Promise.resolve();
@@ -86,10 +116,9 @@ describe("the waiting screen in the app", () => {
 
     expect(screen.getByRole("dialog", { name: "Finish in your browser" })).toBeTruthy();
     expect(teleport()).toMatchObject({
-      waiting: true,
-      waitingScreen: true,
+      status: "waiting",
       productReference: "card",
-      fallback: "annual",
+      fallbackReference: "annual",
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Complete in Browser" }));
@@ -98,7 +127,7 @@ describe("the waiting screen in the app", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Continue In-App Instead" }));
     });
-    await expect(outcome).resolves.toEqual({ fallback: "annual" });
+    await expect(outcome).resolves.toMatchObject({ reference: "annual" });
     expect(screen.queryByRole("dialog")).toBeNull();
 
     await act(async () => {
@@ -131,7 +160,7 @@ describe("the waiting screen in the app", () => {
     });
     expect(screen.getByRole("dialog", { name: "Termina en tu navegador" })).toBeTruthy();
     expect(screen.getAllByRole("button")).toHaveLength(2);
-    expect(teleport()?.fallback).toBeUndefined();
+    expect(teleport()).not.toHaveProperty("fallbackReference");
   });
 });
 
@@ -152,9 +181,9 @@ describe("the success screen on the web", () => {
     );
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     const { session, teleport } = await mount({
-      teleport: { route: "checkout", appLink: "scheme" },
+      teleport: { route: "checkout" },
     });
-    expect(teleport()).toMatchObject({ onWeb: true, completed: false, productReference: "card" });
+    expect(teleport()).toMatchObject({ status: "arrived", productReference: "card" });
 
     await act(async () => {
       await teleportFor(session).completePurchase("ctx");

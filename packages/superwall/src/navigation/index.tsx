@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   checkoutModeOf,
   detectSuperwallHost,
+  teleportOf,
   type SuperwallDeviceVariables,
   type SuperwallPlacementParams,
   type SuperwallUserVariables,
@@ -63,6 +64,13 @@ export type Transition = BuiltInTransition | (string & {});
 export type NavigateOptions = {
   /** The transition for this navigation, overriding the route's and the paywall's. */
   transition?: Transition;
+  /**
+   * Continue the flow on the web from this route: inside an iOS app the route
+   * opens in the shopper's browser instead of being pushed. Needs `teleport`
+   * in `definePaywall`; anywhere teleport can't run the route is pushed as
+   * usual. A push to `teleport.route` teleports without it. Default: `false`.
+   */
+  teleport?: boolean;
 };
 
 export type Router = {
@@ -309,9 +317,11 @@ const Router = ({
 
     const go = (name: string, options: NavigateOptions | undefined, keep: number | undefined) => {
       const target = resolve(name);
+      const { teleport, ...navigation } = options ?? {};
       const teleporter = teleportFor(session);
-      if (target === session.getSnapshot().config?.teleport?.route && teleporter.available()) {
-        void teleporter.begin({ query: flowQuery(store) });
+      const teleportRoute = teleportOf(session.getSnapshot().config?.teleport)?.route;
+      if ((teleport === true || target === teleportRoute) && teleporter.available()) {
+        void teleporter.begin({ route: target, query: flowQuery(store) });
         return;
       }
       const key = nextKey.current++;
@@ -320,7 +330,7 @@ const Router = ({
       setNav((current) => {
         const kept = keep === undefined ? current.entries : current.entries.slice(0, keep);
         return {
-          entries: [...kept, { key, name: target, ...options }],
+          entries: [...kept, { key, name: target, ...navigation }],
           exiting:
             kept.length === current.entries.length
               ? undefined
@@ -388,6 +398,21 @@ const Router = ({
       },
     };
   }, [entries, top, session, store]);
+
+  React.useEffect(() => {
+    teleportFor(session).landed(top.name);
+  }, [session, top.name]);
+
+  React.useEffect(() => {
+    if (readTeleportBoot() === undefined) return;
+    const follow = () => {
+      const query = readTeleportBoot()?.query ?? {};
+      const changed = Object.entries(query).filter(([key, value]) => store.get(key) !== value);
+      if (changed.length > 0) store.set(Object.fromEntries(changed), "replace");
+    };
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, [store]);
 
   React.useEffect(() => {
     const boot = readTeleportBoot();

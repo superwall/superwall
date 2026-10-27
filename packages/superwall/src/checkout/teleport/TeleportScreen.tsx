@@ -2,6 +2,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { teleportOf } from "@superwall/runtime";
 import { asString } from "../api/decode";
+import { usePurchase } from "../../hooks/usePurchase";
 import { useTeleport } from "../../hooks/useTeleport";
 import { useSuperwallSnapshot } from "../../hooks/useSuperwallSnapshot";
 import { useSuperwallSession } from "../../provider/context";
@@ -152,18 +153,23 @@ const Screen = ({ surface, title, body, dir, spinner, success, footer, actions }
 };
 
 /**
- * Superwall's own teleport screens: the waiting screen over the paywall in
- * the app while the shopper is in the browser, and "You're all set" on the
- * web once they paid. The build mounts it for a paywall with `teleport`; a
- * paywall drawing its own sets `teleport.overlay: false` and reads
- * `useTeleport()`.
+ * Superwall's own teleport screens: the one over the paywall in the app
+ * while the shopper is in the browser, and "You're all set" on the web once
+ * they paid. The build mounts it for a paywall with `teleport`; a paywall
+ * drawing its own sets `teleport.overlay: false` and reads `useTeleport()`.
  */
 export const TeleportScreen = () => {
   const session = useSuperwallSession();
-  const { config, device } = useSuperwallSnapshot();
+  const { config, device, paywall } = useSuperwallSnapshot();
   const teleport = useTeleport();
+  const { purchase } = usePurchase();
   const settings = teleportOf(config?.teleport);
   const copy = teleportCopyFor(asString(device.deviceLocale) || undefined);
+  const publicApiKey = device.publicApiKey;
+
+  React.useEffect(() => {
+    if (paywall !== undefined) teleportFor(session).prefetch();
+  }, [session, paywall, publicApiKey]);
   const dir = copy.dir ?? "ltr";
 
   const tapped = (action: () => void) => () => {
@@ -171,11 +177,18 @@ export const TeleportScreen = () => {
     action();
   };
 
-  if (settings?.overlay && teleport.waitingScreen) {
-    const payInApp: Action[] =
-      teleport.fallback === undefined
+  if (settings?.overlay && teleport.status === "waiting") {
+    const fallbackReference = teleport.fallbackReference;
+    const inApp: Action[] =
+      fallbackReference === undefined
         ? []
-        : [{ label: copy.waiting.payInApp, kind: "tinted", onClick: tapped(teleport.payInApp) }];
+        : [
+            {
+              label: copy.waiting.payInApp,
+              kind: "tinted",
+              onClick: tapped(() => void purchase(fallbackReference)),
+            },
+          ];
     return (
       <Screen
         surface="overlay"
@@ -185,14 +198,14 @@ export const TeleportScreen = () => {
         spinner
         actions={[
           { label: copy.waiting.continue, kind: "primary", onClick: tapped(teleport.reopen) },
-          ...payInApp,
+          ...inApp,
           { label: copy.waiting.cancel, kind: "secondary", onClick: tapped(teleport.cancel) },
         ]}
       />
     );
   }
 
-  if (teleport.onWeb && teleport.completed) {
+  if (teleport.status === "completed" && settings?.completion === "confirmation") {
     const boot = readTeleportBoot();
     const returns = boot?.returnUrl !== undefined || boot?.appLinkUrl !== undefined;
     return (

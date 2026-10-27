@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readTeleportBoot, seedTeleportUrl } from "../../../src/checkout/teleport/boot";
+import {
+  encodeQueryPatch,
+  readTeleportBoot,
+  seedTeleportUrl,
+} from "../../../src/checkout/teleport/boot";
 
 const boot = (value: unknown) => Reflect.set(window, "__SW_TELEPORT__", value);
 
@@ -68,6 +72,15 @@ describe("readTeleportBoot", () => {
     expect(readTeleportBoot()?.productReference).toBe("annual");
     window.history.replaceState(null, "", "/#ref=not%20a%20ref");
     expect(readTeleportBoot()?.productReference).toBe("card");
+  });
+
+  it("lays the flow the app changed since it prepared the teleport over the saved one", () => {
+    boot({ id: "v1:tp", route: "checkout", session: { query: { goal: "sleep", level: "1" } } });
+    window.location.hash = `#ref=card&s=${encodeQueryPatch({ goal: "fokus — überall", sw_nav: "x" })}`;
+    expect(readTeleportBoot()?.query).toEqual({ goal: "fokus — überall", level: "1" });
+
+    window.location.hash = "#s=%%%";
+    expect(readTeleportBoot()?.query).toEqual({ goal: "sleep", level: "1" });
   });
 
   it("is nothing where there is no window", () => {

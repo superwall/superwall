@@ -1,62 +1,89 @@
+import type { SuperwallIntroductoryOfferEligibility } from "./index";
+
 /**
- * Teleport: from one route on, a flow shown in an iOS app continues on the
- * web. Pushing to `route`, or buying a Stripe product, opens that route in
- * the shopper's browser on your project's web paywall domain, with the
- * flow's `useQueryState` values carried along; the shopper pays there with
- * Stripe and is sent back to the app, which is credited automatically.
- * Needs SuperwallKit 4.18.0 or later; on an older SDK the route opens in the
- * app as usual and a Stripe purchase goes to the hosted checkout page.
+ * How teleport behaves: from a route on, a flow shown in an iOS app
+ * continues on the web. `router.push(route, { teleport: true })`, a push to
+ * `route`, or buying a Stripe product opens the route in the shopper's
+ * browser on your project's web paywall domain, with the flow's
+ * `useQueryState` values carried along; the shopper pays there with Stripe
+ * and is sent back to the app, which is credited automatically. Needs
+ * SuperwallKit 4.18.0 or later; on an older SDK the route opens in the app as
+ * usual and a Stripe purchase goes to the hosted checkout page.
  */
-export type SuperwallTeleportConfig = {
-  /** The first route of the flow that runs on the web. Required. */
-  route: string;
+export type SuperwallTeleportOptions<
+  TStripeReference extends string = string,
+  TStoreReference extends string = string,
+  TRoute extends string = string,
+> = {
   /**
-   * Show Superwall's waiting screen over the paywall while the shopper is in
+   * The route the web half opens on by default: a push to it teleports, a
+   * Stripe purchase teleports to it, and it is warmed when the paywall
+   * opens. Default: none — a Stripe purchase teleports the route it was
+   * tapped on, and only `router.push(route, { teleport: true })` teleports a
+   * push.
+   */
+  route?: TRoute;
+  /**
+   * Show Superwall's teleport screen over the paywall while the shopper is in
    * the browser ("Finish in your browser", reopen, cancel). `false` keeps
-   * the paywall as it is, for a flow that leaves midway; build your own with
-   * `useTeleport()`. The purchase is watched either way. Default: `true`.
+   * the paywall as it is, for a flow that leaves midway, or for your own
+   * screen drawn from `useTeleport()`. The purchase is watched either way.
+   * Default: `true`.
    */
   overlay?: boolean;
   /**
-   * A store product to offer on the waiting screen in place of a Stripe one,
+   * A store product the teleport screen offers in place of a Stripe one,
    * keyed by the Stripe product's reference: "Continue In-App Instead" buys
-   * it natively. Shown only once the store has priced it. Default: none.
+   * it through the store. Shown only once the store has priced it.
+   * Default: none.
    */
-  fallbacks?: Record<string, string>;
+  fallbacks?: Partial<Record<TStripeReference, TStoreReference>>;
   /**
-   * What the web page does once the purchase completes: `"screen"` shows
-   * "You're all set" with a Return to App button, `"alert"` opens the app
-   * through its URL scheme (iOS asks first), `"universal"` opens it through
-   * its universal link. Default: `"screen"`.
+   * What the web page does once the purchase completes: `"confirmation"`
+   * shows "You're all set" with a Return to App button, `"direct"` opens the
+   * app at once. Either way the app is opened through its universal link,
+   * falling back to its URL scheme when the link doesn't open it.
+   * Default: `"confirmation"`.
    */
-  returnStyle?: "screen" | "alert" | "universal";
+  completion?: "confirmation" | "direct";
   /**
-   * How the web page returns to the app, from Return to App, from going back
-   * on the first web route, and after a purchase: `"universal"` through the
-   * universal link (falling back to the URL scheme when the app doesn't
-   * open), `"scheme"` through the URL scheme. Default: `"universal"`.
+   * Whether the web checkout offers the trial: `"automatic"` when the app's
+   * store says the shopper is eligible, `"eligible"` always, `"ineligible"`
+   * never. The App Store's trial history does not bind a Stripe purchase, so
+   * this is separate from the paywall's own `introductoryOfferEligibility`.
+   * Default: `"automatic"`.
    */
-  appLink?: "universal" | "scheme";
-  /**
-   * Whether the web checkout offers the trial: `"matchApp"` when the app's
-   * store says the shopper is eligible, `"always"` regardless.
-   * Default: `"matchApp"`.
-   */
-  trialEligibility?: "matchApp" | "always";
+  introductoryOfferEligibility?: SuperwallIntroductoryOfferEligibility;
 };
 
-export type ResolvedTeleport = Required<SuperwallTeleportConfig>;
+/**
+ * Turn teleport on: `true` for every default, or the options to change.
+ * Default: off.
+ */
+export type SuperwallTeleportConfig<
+  TStripeReference extends string = string,
+  TStoreReference extends string = string,
+  TRoute extends string = string,
+> = boolean | SuperwallTeleportOptions<TStripeReference, TStoreReference, TRoute>;
+
+export type ResolvedTeleport = {
+  route?: string;
+  overlay: boolean;
+  fallbacks: Partial<Record<string, string>>;
+  completion: "confirmation" | "direct";
+  introductoryOfferEligibility: SuperwallIntroductoryOfferEligibility;
+};
 
 export const teleportOf = (
   teleport: SuperwallTeleportConfig | undefined,
-): ResolvedTeleport | undefined =>
-  teleport === undefined
-    ? undefined
-    : {
-        route: teleport.route,
-        overlay: teleport.overlay ?? true,
-        fallbacks: teleport.fallbacks ?? {},
-        returnStyle: teleport.returnStyle ?? "screen",
-        appLink: teleport.appLink ?? "universal",
-        trialEligibility: teleport.trialEligibility ?? "matchApp",
-      };
+): ResolvedTeleport | undefined => {
+  if (teleport === undefined || teleport === false) return undefined;
+  const options = teleport === true ? {} : teleport;
+  return {
+    ...(options.route === undefined ? {} : { route: options.route }),
+    overlay: options.overlay ?? true,
+    fallbacks: options.fallbacks ?? {},
+    completion: options.completion ?? "confirmation",
+    introductoryOfferEligibility: options.introductoryOfferEligibility ?? "automatic",
+  };
+};

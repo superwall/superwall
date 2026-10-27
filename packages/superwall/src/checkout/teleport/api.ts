@@ -2,7 +2,7 @@ import { field, readCheckoutStatus } from "../api/decode";
 import type { CheckoutStatus } from "../types";
 import { fetchWithRetry } from "../api/fetch";
 import { subscriptionsApiUrl } from "../api/url";
-import { sessionQueryOf } from "./boot";
+import { SESSION_QUERY_FIELD, sessionQueryOf } from "./boot";
 
 export type CreatedTeleport = { teleportId: string; url: string };
 
@@ -106,6 +106,32 @@ export const readTeleportQuery = async (
     body: JSON.stringify({ teleportId }),
   });
   return sessionQueryOf(field(await response.json(), "session"));
+};
+
+export const saveTeleportQuery = async (
+  publicApiKey: string,
+  teleportId: string,
+  query: Record<string, string>,
+): Promise<void> => {
+  await fetchWithRetry(subscriptionsApiUrl("checkout/teleport/session"), {
+    method: "POST",
+    headers: headers(publicApiKey),
+    body: JSON.stringify({ teleportId, session: { [SESSION_QUERY_FIELD]: query } }),
+  });
+};
+
+const WARMED_PRODUCTS = 4;
+
+export const warmTeleportPage = (url: string, references: readonly string[]): void => {
+  const products = references.length > 0 ? references.slice(0, WARMED_PRODUCTS) : [undefined];
+  for (const reference of products) {
+    const warm = new URL(url);
+    warm.searchParams.set("sw_warm", "1");
+    if (reference !== undefined) warm.searchParams.set("sw_ref", reference);
+    fetch(warm.toString(), { method: "GET", mode: "no-cors", credentials: "omit" }).catch(
+      () => undefined,
+    );
+  }
 };
 
 export const completeTeleportCheckout = async (

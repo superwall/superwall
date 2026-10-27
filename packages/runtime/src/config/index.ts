@@ -94,11 +94,12 @@ export type SuperwallConfig<
   localization?: SuperwallLocalizationConfig<TLocale>;
 
   /**
-   * From one route on, continue the flow on the web when it is shown in an
-   * iOS app, and sell Stripe products there. Default: omitted, every route
-   * runs in the app. See `SuperwallTeleportConfig`.
+   * Continue the flow on the web when it is shown in an iOS app, and sell
+   * Stripe products there: `true` for every default, or the options to
+   * change. Default: off, every route runs in the app. See
+   * `SuperwallTeleportOptions`.
    */
-  teleport?: SuperwallTeleportConfig;
+  teleport?: SuperwallTeleportConfig<TStripeReference>;
 
   /**
    * Hosts this surface may reach over the network, as bare hostnames —
@@ -148,7 +149,12 @@ export type {
 export { normalizePlatform, SUPERWALL_PLATFORMS, type SuperwallPlatform } from "./platforms";
 export { dismissesOnPurchase, type SuperwallPostPurchase } from "./postPurchase";
 export type { SuperwallPresentationConfig, SuperwallPresentationStyle } from "./presentation";
-export { teleportOf, type ResolvedTeleport, type SuperwallTeleportConfig } from "./teleport";
+export {
+  teleportOf,
+  type ResolvedTeleport,
+  type SuperwallTeleportConfig,
+  type SuperwallTeleportOptions,
+} from "./teleport";
 export {
   isPlatformProductIds,
   productIdFor,

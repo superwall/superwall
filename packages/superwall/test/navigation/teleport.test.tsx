@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallConfig, TOutgoingMessage } from "@superwall/runtime";
+import { encodeQueryPatch } from "../../src/checkout/teleport/boot";
 import { pageNavigation, teleportFor } from "../../src/checkout/teleport/flow";
 import { useActions, usePurchase, useSuperwallSession } from "../../src/hooks";
 import { PaywallRouter, useQueryState, useRouter, type RouteMap } from "../../src/navigation/index";
@@ -27,6 +28,10 @@ type Captured = {
 
 const captured: Captured = {};
 
+const fail = (): never => {
+  throw new Error("no session");
+};
+
 const Page = ({ name }: { name: string }) => {
   captured.router = useRouter();
   captured.purchase = usePurchase().purchase;
@@ -50,10 +55,14 @@ const routes: RouteMap = {
   plans: { default: () => <Page name="plans" /> },
 };
 
-const mount = async (device: Record<string, unknown> = appDevice, queryState?: boolean) => {
+const mount = async (
+  device: Record<string, unknown> = appDevice,
+  queryState?: boolean,
+  surfaceConfig: SuperwallConfig = config,
+) => {
   const outgoing: TOutgoingMessage[] = [];
   const Wrapper = createWrapper({
-    config,
+    config: surfaceConfig,
     host: { products, device, onOutgoing: (message) => outgoing.push(message) },
   });
   render(
@@ -110,6 +119,52 @@ describe("teleporting from the app", () => {
     expect(screen.getByText("plans")).toBeTruthy();
   });
 
+  it("teleports any push asked to, and pushes the rest as usual", async () => {
+    const bodies = stubApi();
+    await mount();
+
+    await act(async () => {
+      captured.router?.push("plans", { teleport: true });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText("index")).toBeTruthy();
+    expect(bodies[0]).toMatchObject({ route: "plans" });
+
+    await act(async () => captured.router?.push("plans", { transition: "none" }));
+    expect(screen.getByText("plans")).toBeTruthy();
+  });
+
+  it("teleports a Stripe purchase to the route the shopper is on when the paywall names none", async () => {
+    const bodies = stubApi();
+    await mount(appDevice, undefined, { ...config, teleport: true });
+    await act(async () => captured.router?.push("plans"));
+
+    await act(async () => {
+      void captured.purchase?.("card");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(bodies[0]).toMatchObject({ route: "plans", productReference: "card" });
+    act(() => teleportFor(captured.session ?? fail()).cancel());
+  });
+
+  it("resolves a handed-off purchase with the product the store sold, or the one tapped", async () => {
+    stubApi();
+    await mount();
+    let result: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      result = captured.purchase?.("card") ?? Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await captured.purchase?.("unknown");
+      await flush();
+    });
+    await expect(result).resolves.toMatchObject({ product: { reference: "card" } });
+  });
+
   it("pushes the route as usual on an SDK that cannot teleport", async () => {
     await mount({ ...appDevice, sdkVersionPadded: "004.017.000" });
     await act(async () => captured.router?.push("checkout"));
@@ -140,7 +195,7 @@ describe("teleporting from the app", () => {
       await Promise.resolve();
     });
     await act(async () => {
-      teleportFor(session).payInApp();
+      await captured.purchase?.("annual");
       await flush();
     });
     await expect(result).resolves.toMatchObject({
@@ -180,6 +235,30 @@ describe("the web half of a teleport", () => {
 
     captured.close?.();
     expect(go).toHaveBeenCalledTimes(2);
+  });
+
+  it("follows the flow the app sends with a later tap, in the link's fragment", async () => {
+    bootWebHalf();
+    await mount({ platform: "iOS", publicApiKey: "pk_test" });
+    expect(screen.getByText("goal:sleep")).toBeTruthy();
+
+    await act(async () => {
+      window.location.hash = `#ref=card&s=${encodeQueryPatch({ goal: "focus" })}`;
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByText("goal:focus")).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByText("goal:focus")).toBeTruthy();
+
+    Reflect.deleteProperty(window, "__SW_TELEPORT__");
+    await act(async () => {
+      window.location.hash = `#s=${encodeQueryPatch({ goal: "rest" })}`;
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByText("goal:focus")).toBeTruthy();
   });
 
   it("keeps the answers the app carried when the paywall keeps its state out of the URL", async () => {

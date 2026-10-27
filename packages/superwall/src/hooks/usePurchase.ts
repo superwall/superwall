@@ -85,8 +85,10 @@ export const usePurchase = <
           postPurchase,
           stripeMetadata,
         });
-        if (typeof outcome === "object") return session.purchase(outcome.fallback, options);
-        return { status: outcome, product };
+        if (typeof outcome === "string") return { status: outcome, product };
+        const settled = await outcome.result;
+        const bought = session.getSnapshot().productsByReference[outcome.reference];
+        return { status: settled.status, product: bought ?? product };
       }
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
         const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
@@ -95,7 +97,9 @@ export const usePurchase = <
         });
         return { status, product };
       }
-      return session.purchase(input, options);
+      const bought = session.purchase(input, options);
+      if (teleporter.inFlight()) teleporter.handOff(reference, bought);
+      return bought;
     },
     [session, webMode, queryStore],
   );

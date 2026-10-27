@@ -12,9 +12,11 @@ import {
   type TeleportSession,
   restoreTeleportQuery,
 } from "../../../src/checkout/teleport/flow";
+import { warmTeleportPage } from "../../../src/checkout/teleport/api";
 
 type Fixture = {
   teleport?: SuperwallTeleportConfig | null;
+  trial?: { eligible: boolean };
   device?: Record<string, unknown>;
   postPurchase?: "dismiss" | "stay";
   fallbackPrice?: string;
@@ -41,6 +43,7 @@ const fakeSession = ({
   device = {},
   postPurchase,
   fallbackPrice = "$39.99",
+  trial = { eligible: false },
 }: Fixture = {}) => {
   const posted: Record<string, unknown>[] = [];
   const session: TeleportSession = {
@@ -55,7 +58,7 @@ const fakeSession = ({
         user: { appUserId: "user_1" },
         params: {},
         ...products(fallbackPrice),
-        introductoryOffer: { eligible: false },
+        introductoryOffer: trial,
         config: { teleport: teleport ?? undefined, postPurchase },
         paywall: { id: "7", identifier: "pw" },
       }) as never,
@@ -74,7 +77,12 @@ const api = (routes: Record<string, Reply[] | Reply>) => {
     ]),
   );
   const calls: { path: string; body: unknown; init: RequestInit }[] = [];
+  const warmed: string[] = [];
   const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+    if (init.method === "GET") {
+      warmed.push(url);
+      return new Response(null, { status: 204 });
+    }
     const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
     const body: unknown = JSON.parse(String(init.body));
     calls.push({ path, body, init });
@@ -87,7 +95,7 @@ const api = (routes: Record<string, Reply[] | Reply>) => {
     return new Response(JSON.stringify(value));
   });
   vi.stubGlobal("fetch", fetchMock);
-  return calls;
+  return Object.assign(calls, { warmed });
 };
 
 const created = {
@@ -172,7 +180,7 @@ describe("a teleport from the app", () => {
     const loading: boolean[] = [];
     const unsubscribe = subscribeLoading((value) => loading.push(value));
     const { session, posted, events } = fakeSession({
-      teleport: { route: "checkout", trialEligibility: "always" },
+      teleport: { route: "checkout", introductoryOfferEligibility: "eligible" },
       postPurchase: "stay",
     });
     const teleporter = teleportFor(session);
@@ -206,14 +214,10 @@ describe("a teleport from the app", () => {
     expect(opened.searchParams.get("sw_ref")).toBe("card");
     expect(new URLSearchParams(opened.hash.slice(1)).get("ref")).toBe("card");
     expect(posted[1]).toMatchObject({ teleport: true, waiting_screen: true });
-    expect(teleporter.getState()).toMatchObject({
-      waiting: true,
-      waitingScreen: false,
-      productReference: "card",
-    });
+    expect(teleporter.getStatus()).toEqual({ status: "idle" });
 
     setVisibility("hidden");
-    expect(teleporter.getState().waitingScreen).toBe(true);
+    expect(teleporter.getStatus()).toEqual({ status: "waiting", productReference: "card" });
     expect(posted.at(-1)).toMatchObject({
       event_name: "teleport_watch_start",
       teleport_id: "v1:tp",
@@ -234,12 +238,12 @@ describe("a teleport from the app", () => {
         should_dismiss: false,
       },
     ]);
-    expect(teleporter.getState()).toMatchObject({ waiting: false, waitingScreen: false });
+    expect(teleporter.getStatus()).toEqual({ status: "idle" });
     expect(changes).toHaveBeenCalled();
     unsubscribe();
   });
 
-  it("teleports a route with no product and no waiting screen, and waits out the fallback timer for nothing", async () => {
+  it("teleports a route with no product and no screen of its own, still waiting on the screen's timing", async () => {
     const calls = api({
       "checkout/teleport": created,
       "checkout/teleport/status": { status: "pending" },
@@ -256,26 +260,26 @@ describe("a teleport from the app", () => {
     expect(calls[0]?.body).toMatchObject({
       context: { presentment: { isFreeTrialAvailable: false } },
     });
-    expect(events()).toEqual(["open_url_external"]);
+    expect(events()).toEqual(["open_url_external", "teleport_watch_start"]);
     expect(posted[0]).not.toHaveProperty("waiting_screen");
     expect(new URL(String(posted[0]?.url)).searchParams.has("sw_ref")).toBe(false);
-    expect(teleporter.getState().waitingScreen).toBe(false);
+    expect(teleporter.getStatus()).toEqual({ status: "waiting" });
     expect(teleporter.showWaitingScreen()).toBe(false);
   });
 
-  it("shows the waiting screen on its own after a moment, or at once when the SDK asks", async () => {
+  it("starts waiting on its own after a moment, or at once when the SDK asks", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
     const first = fakeSession();
     void teleportFor(first.session).begin({ productReference: "card", query: {} });
     await settle(1_500);
-    expect(teleportFor(first.session).getState().waitingScreen).toBe(true);
+    expect(teleportFor(first.session).getStatus().status).toBe("waiting");
 
     const second = fakeSession();
     void teleportFor(second.session).begin({ productReference: "card", query: {} });
     await settle();
     const show = Reflect.get(window, "showTeleportWaitingScreen");
     await expect(show()).resolves.toBe(true);
-    expect(teleportFor(second.session).getState().waitingScreen).toBe(true);
+    expect(teleportFor(second.session).getStatus().status).toBe("waiting");
     expect(teleportFor(second.session).showWaitingScreen()).toBe(true);
   });
 
@@ -432,8 +436,11 @@ describe("a teleport from the app", () => {
     const first = teleporter.begin({ productReference: "card", query: {} });
     await settle();
     teleporter.reopen();
-    expect(posted.at(-1)).toMatchObject({ event_name: "open_url_external", teleport: true });
-    expect(posted.at(-1)).not.toHaveProperty("waiting_screen");
+    expect(posted.at(-1)).toMatchObject({
+      event_name: "open_url_external",
+      teleport: true,
+      waiting_screen: true,
+    });
 
     const second = teleporter.begin({ productReference: "card", query: {} });
     await expect(first).resolves.toBe("abandoned");
@@ -541,19 +548,24 @@ describe("a teleport from the app", () => {
     await expect(outcome).resolves.toBe("abandoned");
   });
 
-  it("buys the fallback in the app instead, once the store priced it", async () => {
+  it("hands the purchase to an in-app one bought while it is in flight, once the store priced the fallback", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
-    const { session } = fakeSession();
+    const { session, events } = fakeSession();
     const teleporter = teleportFor(session);
     expect(teleporter.fallback()).toBeUndefined();
-    teleporter.payInApp();
+    expect(teleporter.inFlight()).toBe(false);
+    teleporter.handOff("annual", Promise.resolve({ status: "completed" as const }));
 
     const outcome = teleporter.begin({ productReference: "card", query: {} });
-    await settle();
+    await settle(1_500);
     expect(teleporter.fallback()).toBe("annual");
-    teleporter.payInApp();
-    await expect(outcome).resolves.toEqual({ fallback: "annual" });
-    expect(teleporter.getState().waiting).toBe(false);
+    expect(teleporter.inFlight()).toBe(true);
+    const bought = Promise.resolve({ status: "completed" as const });
+    teleporter.handOff("annual", bought);
+    await expect(outcome).resolves.toEqual({ reference: "annual", result: bought });
+    expect(teleporter.getStatus()).toEqual({ status: "idle" });
+    expect(teleporter.inFlight()).toBe(false);
+    expect(events()).not.toContain("stripe_checkout_abandon");
   });
 
   it("offers no fallback the store hasn't priced, nor for a product without one", async () => {
@@ -562,8 +574,6 @@ describe("a teleport from the app", () => {
     void unpriced.begin({ productReference: "card", query: {} });
     await settle();
     expect(unpriced.fallback()).toBeUndefined();
-    unpriced.payInApp();
-    expect(unpriced.getState().waiting).toBe(true);
 
     const bare = teleportFor(fakeSession({ teleport: { route: "checkout" } }).session);
     void bare.begin({ productReference: "card", query: {} });
@@ -643,15 +653,242 @@ describe("a teleport from the app", () => {
     teleporter.cancel();
     fail?.(new Error("late"));
     await settle(10_000);
-    expect(teleporter.getState().waiting).toBe(false);
+    expect(teleporter.getStatus()).toEqual({ status: "idle" });
+  });
+});
+
+const fragmentOf = (message: Record<string, unknown> | undefined) =>
+  new URLSearchParams(new URL(String(message?.url)).hash.slice(1));
+
+const patchOf = (message: Record<string, unknown> | undefined): unknown => {
+  const encoded = fragmentOf(message).get("s");
+  if (encoded === null) return undefined;
+  const binary = atob(encoded.replaceAll("-", "+").replaceAll("_", "/"));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0))));
+};
+
+describe("a prepared teleport", () => {
+  const second = { teleportId: "v1:tp2", url: "https://acme.superwall.app/sw-teleport/v1:tp2" };
+
+  it("is created ahead of the tap with no product, warms the page per Stripe product, and opens at once", async () => {
+    const calls = api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": { status: "pending" },
+    });
+    const { session, posted } = fakeSession();
+    const teleporter = teleportFor(session);
+
+    teleporter.prefetch(undefined, { goal: "sleep" });
+    teleporter.prefetch();
+    await settle();
+
+    expect(calls.filter((call) => call.path === "checkout/teleport")).toHaveLength(1);
+    expect(calls[0]?.body).toMatchObject({
+      route: "checkout",
+      session: { query: { goal: "sleep" } },
+    });
+    expect(calls[0]?.body).not.toHaveProperty("productReference");
+    expect(calls.warmed).toEqual([
+      "https://acme.superwall.app/sw-teleport/v1:tp?sw_doc=x&sw_warm=1&sw_ref=card",
+    ]);
+
+    const outcome = teleporter.begin({ productReference: "card", query: { goal: "sleep" } });
+    let done = false;
+    void outcome.then(() => (done = true));
+    await settle();
+
+    expect(calls.filter((call) => call.path === "checkout/teleport")).toHaveLength(1);
+    expect(fragmentOf(posted.at(-1)).get("ref")).toBe("card");
+    expect(patchOf(posted.at(-1))).toBeUndefined();
+    expect(done).toBe(false);
+    teleporter.cancel();
+  });
+
+  it("carries the flow that changed since it was prepared in the link, or saves it when too long", async () => {
+    const calls = api({
+      "checkout/teleport": [created, second],
+      "checkout/teleport/status": { status: "pending" },
+      "checkout/teleport/session": { saved: true },
+    });
+    const { session, posted } = fakeSession();
+    const teleporter = teleportFor(session);
+
+    teleporter.prefetch(undefined, { goal: "sleep", level: "1" });
+    await settle();
+    void teleporter.begin({ productReference: "card", query: { goal: "focus", level: "1" } });
+    await settle();
+    expect(patchOf(posted.at(-1))).toEqual({ query: { goal: "focus" } });
+    teleporter.cancel();
+
+    teleporter.prefetch();
+    await settle();
+    const long = { essay: "x".repeat(3_000) };
+    void teleporter.begin({ productReference: "card", query: long });
+    await settle();
+    expect(patchOf(posted.at(-1))).toBeUndefined();
+    expect(calls.find((call) => call.path === "checkout/teleport/session")?.body).toEqual({
+      teleportId: "v1:tp2",
+      session: { query: long },
+    });
+    teleporter.cancel();
+  });
+
+  it("opens with what it had when the flow cannot be saved", async () => {
+    api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": { status: "pending" },
+      "checkout/teleport/session": new Response("no", { status: 400 }),
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { session, events } = fakeSession();
+    const teleporter = teleportFor(session);
+    teleporter.prefetch();
+    await settle();
+    void teleporter.begin({ productReference: "card", query: { essay: "x".repeat(3_000) } });
+    await settle();
+    expect(warn).toHaveBeenCalledWith(
+      "Saving the flow on the teleport failed; the page opens with what it had:",
+      expect.any(Error),
+    );
+    expect(events()).toContain("open_url_external");
+    teleporter.cancel();
+  });
+
+  it("is not used for another route, once stale, or once the trial offer changed", async () => {
+    const calls = api({
+      "checkout/teleport": [created, second, created, second, created],
+      "checkout/teleport/status": { status: "pending" },
+    });
+    const trial = { eligible: false };
+    const { session } = fakeSession({ trial });
+    const teleporter = teleportFor(session);
+    const creates = () => calls.filter((call) => call.path === "checkout/teleport").length;
+
+    teleporter.prefetch();
+    await settle();
+    void teleporter.begin({ route: "plans", query: {} });
+    await settle();
+    expect(creates()).toBe(2);
+    teleporter.cancel();
+
+    teleporter.prefetch();
+    await settle(10 * 60 * 1000);
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    expect(creates()).toBe(4);
+    teleporter.cancel();
+
+    trial.eligible = true;
+    teleporter.prefetch();
+    await settle();
+    expect(creates()).toBe(5);
+    teleporter.cancel();
+  });
+
+  it("is created again on the tap when the trial offer changed since, and warms one page with no Stripe product", async () => {
+    const calls = api({
+      "checkout/teleport": [created, second],
+      "checkout/teleport/status": { status: "pending" },
+    });
+    const trial = { eligible: false };
+    const { session } = fakeSession({ trial });
+    const teleporter = teleportFor(session);
+    teleporter.prefetch();
+    await settle();
+    trial.eligible = true;
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    expect(calls.filter((call) => call.path === "checkout/teleport")).toHaveLength(2);
+    expect(calls[1]?.body).toMatchObject({
+      context: { presentment: { isFreeTrialAvailable: true } },
+    });
+    teleporter.cancel();
+
+    warmTeleportPage("https://acme.superwall.app/sw-teleport/v1:tp", []);
+    expect(calls.warmed.at(-1)).toBe("https://acme.superwall.app/sw-teleport/v1:tp?sw_warm=1");
+  });
+
+  it("prepares a route the app pushes with teleport, and refreshes one prepared under another trial offer", async () => {
+    const calls = api({
+      "checkout/teleport": [created, second],
+      "checkout/teleport/status": { status: "pending" },
+    });
+    const trial = { eligible: false };
+    const { session } = fakeSession({ trial, teleport: true });
+    const teleporter = teleportFor(session);
+
+    teleporter.prefetch();
+    expect(calls).toHaveLength(0);
+
+    teleporter.prefetch("plans");
+    await settle();
+    expect(calls[0]?.body).toMatchObject({ route: "plans" });
+
+    trial.eligible = true;
+    teleporter.prefetch("plans");
+    await settle();
+    expect(calls[1]?.body).toMatchObject({
+      route: "plans",
+      context: { presentment: { isFreeTrialAvailable: true } },
+    });
+  });
+
+  it("does nothing where teleport can't run, and falls back to a tap-time teleport when preparing failed", async () => {
+    const calls = api({
+      "checkout/teleport": [new Response("{}", { status: 422 }), created],
+      "checkout/teleport/status": { status: "pending" },
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    teleportFor(fakeSession({ device: { platform: "Android" } }).session).prefetch();
+    teleportFor(fakeSession({ teleport: null }).session).prefetch("plans");
+    expect(calls).toHaveLength(0);
+
+    const { session, events } = fakeSession();
+    const teleporter = teleportFor(session);
+    teleporter.prefetch();
+    await settle();
+    expect(warn).toHaveBeenCalledWith(
+      "Preparing the teleport failed; a tap creates one instead:",
+      expect.any(Error),
+    );
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    expect(calls.filter((call) => call.path === "checkout/teleport")).toHaveLength(2);
+    expect(events()).toContain("open_url_external");
+    teleporter.cancel();
+  });
+});
+
+describe("which route a teleport opens", () => {
+  it("is the one asked for, then the paywall's, then the route the shopper is on, and fails without any", async () => {
+    const calls = api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": { status: "pending" },
+    });
+    const { session } = fakeSession({ teleport: { introductoryOfferEligibility: "ineligible" } });
+    const teleporter = teleportFor(session);
+
+    await expect(teleporter.begin({ productReference: "card", query: {} })).resolves.toBe("failed");
+    expect(calls).toHaveLength(0);
+
+    teleporter.landed("pricing");
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    expect(calls[0]?.body).toMatchObject({
+      route: "pricing",
+      context: { presentment: { isFreeTrialAvailable: false } },
+    });
+    teleporter.cancel();
   });
 });
 
 describe("the web half of a teleport", () => {
-  it("binds the purchase, then shows the success screen", async () => {
-    boot();
+  it("arrives with the product tapped in the app, binds the purchase, then completes", async () => {
+    boot({ productReference: "card" });
     const calls = api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     const teleporter = teleportFor(fakeSession().session);
+    expect(teleporter.getStatus()).toEqual({ status: "arrived", productReference: "card" });
 
     await teleporter.completePurchase("ctx_9");
 
@@ -660,22 +897,33 @@ describe("the web half of a teleport", () => {
       body: { checkoutContextId: "ctx_9" },
     });
     expect(calls[0]?.init.keepalive).toBe(true);
-    expect(teleporter.getState().completed).toBe(true);
+    expect(teleporter.getStatus()).toEqual({ status: "completed", productReference: "card" });
+    expect(go).not.toHaveBeenCalled();
   });
 
-  it("opens the app through its scheme for an alert, and through the universal link otherwise", async () => {
+  it("follows a product the app swaps in through the link's fragment", () => {
+    boot();
+    const teleporter = teleportFor(fakeSession().session);
+    expect(teleporter.getStatus()).toEqual({ status: "arrived" });
+    window.location.hash = "#ref=annual";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(teleporter.getStatus()).toEqual({ status: "arrived", productReference: "annual" });
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    window.location.hash = "#o=1";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(teleporter.getStatus()).toEqual({ status: "arrived", productReference: "annual" });
+  });
+
+  it("opens the app at once for a direct completion, through the universal link and then the scheme", async () => {
     boot();
     api({ "checkout/session/complete": {} });
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
 
-    await teleportFor(
-      fakeSession({ teleport: { route: "checkout", returnStyle: "alert" } }).session,
-    ).completePurchase("ctx");
-    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
-
-    await teleportFor(
-      fakeSession({ teleport: { route: "checkout", returnStyle: "universal" } }).session,
-    ).completePurchase("ctx");
+    const teleporter = teleportFor(
+      fakeSession({ teleport: { route: "checkout", completion: "direct" } }).session,
+    );
+    await teleporter.completePurchase("ctx");
+    expect(teleporter.getStatus()).toEqual({ status: "completed" });
     expect(go).toHaveBeenLastCalledWith(
       "https://acme.superwall.link/app-link/superwall/return?reason=purchased",
     );
@@ -693,16 +941,15 @@ describe("the web half of a teleport", () => {
       "Completing the teleport checkout failed:",
       expect.any(Error),
     );
-    expect(teleporter.getState().completed).toBe(true);
+    expect(teleporter.getStatus()).toEqual({ status: "completed" });
   });
 
-  it("returns to the app through the link the paywall asks for", () => {
-    boot();
+  it("returns to the app through the universal link, or the scheme when there is no link", () => {
+    boot({ appLinkUrl: undefined });
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
-    teleportFor(
-      fakeSession({ teleport: { route: "checkout", appLink: "scheme" } }).session,
-    ).returnToApp("closed");
+    teleportFor(fakeSession().session).returnToApp("closed");
     expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=closed");
+    boot();
     teleportFor(fakeSession().session).returnToApp();
     expect(go).toHaveBeenLastCalledWith("https://acme.superwall.link/app-link/superwall/return");
   });
@@ -741,20 +988,14 @@ describe("the web half of a teleport", () => {
 
   it("goes straight to a universal link that is the scheme itself", () => {
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
-    openApp(
-      { id: "v1", route: "r", returnUrl: "myapp://x", query: {}, loadSession: false },
-      "universal",
-    );
-    openApp(
-      {
-        id: "v1",
-        route: "r",
-        appLinkUrl: "https://a.superwall.link/x",
-        query: {},
-        loadSession: false,
-      },
-      "universal",
-    );
+    openApp({ id: "v1", route: "r", returnUrl: "myapp://x", query: {}, loadSession: false });
+    openApp({
+      id: "v1",
+      route: "r",
+      appLinkUrl: "https://a.superwall.link/x",
+      query: {},
+      loadSession: false,
+    });
     expect(go.mock.calls).toEqual([["myapp://x"], ["https://a.superwall.link/x"]]);
   });
 

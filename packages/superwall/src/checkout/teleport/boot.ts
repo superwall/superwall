@@ -12,7 +12,8 @@ export type TeleportBoot = {
 
 export const NAV_QUERY_KEY = "sw_nav";
 export const SESSION_QUERY_FIELD = "query";
-const TAPPED_PRODUCT_FRAGMENT_KEY = "ref";
+export const TAPPED_PRODUCT_FRAGMENT_KEY = "ref";
+export const QUERY_FRAGMENT_KEY = "s";
 const REFERENCE_NAME = /^[\w.-]{1,191}$/;
 
 const textOf = (value: unknown): string | undefined =>
@@ -39,11 +40,30 @@ export const sessionQueryOf = (session: unknown): Record<string, string> => {
   return entries;
 };
 
+const fragment = (): URLSearchParams => new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
 const tappedProduct = (): string | undefined => {
-  const reference = new URLSearchParams(window.location.hash.replace(/^#/, "")).get(
-    TAPPED_PRODUCT_FRAGMENT_KEY,
-  );
+  const reference = fragment().get(TAPPED_PRODUCT_FRAGMENT_KEY);
   return reference !== null && REFERENCE_NAME.test(reference) ? reference : undefined;
+};
+
+export const encodeQueryPatch = (query: Record<string, string>): string => {
+  const bytes = new TextEncoder().encode(JSON.stringify({ [SESSION_QUERY_FIELD]: query }));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+};
+
+const fragmentQuery = (): Record<string, string> => {
+  const encoded = fragment().get(QUERY_FRAGMENT_KEY);
+  if (encoded === null) return {};
+  try {
+    const binary = atob(encoded.replaceAll("-", "+").replaceAll("_", "/"));
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return sessionQueryOf(JSON.parse(new TextDecoder().decode(bytes)));
+  } catch {
+    return {};
+  }
 };
 
 export const readTeleportBoot = (): TeleportBoot | undefined => {
@@ -61,7 +81,7 @@ export const readTeleportBoot = (): TeleportBoot | undefined => {
     ...(returnUrl === undefined ? {} : { returnUrl }),
     ...(appLinkUrl === undefined ? {} : { appLinkUrl }),
     ...(productReference === undefined ? {} : { productReference }),
-    query: sessionQueryOf(field(value, "session")),
+    query: { ...sessionQueryOf(field(value, "session")), ...fragmentQuery() },
     loadSession: field(value, "loadSession") === true && field(value, "session") === undefined,
   };
 };

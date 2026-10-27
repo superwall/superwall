@@ -1,8 +1,27 @@
-import type { SuperwallConfig, SuperwallPlatform } from "@superwall/runtime";
-import type { StripeProductReference } from "../hooks";
-import type { Transition } from "../navigation/index";
+import type {
+  SuperwallConfig,
+  SuperwallPlatform,
+  SuperwallTeleportConfig,
+} from "@superwall/runtime";
+import type { ProductReference, StripeProductReference, SuperwallProducts } from "../hooks";
+import type { RouteName, Transition } from "../navigation/index";
 
-export type PaywallDefinition = SuperwallConfig<string, StripeProductReference> & {
+type StoreProductReference = keyof SuperwallProducts extends never
+  ? string
+  : Exclude<ProductReference, StripeProductReference>;
+
+export type PaywallDefinition = Omit<
+  SuperwallConfig<string, StripeProductReference>,
+  "teleport"
+> & {
+  /**
+   * Continue the flow on the web when it is shown in an iOS app, and sell
+   * Stripe products there: `true` for every default, or the options to
+   * change. `route` names one of this paywall's routes and `fallbacks` maps a
+   * Stripe product to a store product. Default: off. See
+   * `SuperwallTeleportOptions`.
+   */
+  teleport?: SuperwallTeleportConfig<StripeProductReference, StoreProductReference, RouteName>;
   /**
    * The platforms this paywall is pushed to. The project binds one Superwall
    * app per platform in `superwall.lock`, and one directory becomes one

@@ -3,6 +3,7 @@ import {
   teleportOf,
   type ResolvedTeleport,
   type SuperwallPostPurchase,
+  type SuperwallRuntimeSnapshot,
   type SuperwallSession,
 } from "@superwall/runtime";
 import { platformOf } from "../../device";
@@ -11,6 +12,7 @@ import { attachCheckoutMetadata } from "../api/metadata";
 import { asString } from "../api/decode";
 import { hostedInWebSdk } from "../host/surface";
 import { startLoading, stopLoading } from "../loading";
+import { isStripeProductIdentifier } from "../products";
 import type { PurchaseOutcome } from "../types";
 import {
   completeTeleportCheckout,
@@ -18,31 +20,45 @@ import {
   readCheckoutOf,
   readTeleportQuery,
   readTeleportStatus,
+  saveTeleportQuery,
   teleportStatusUrls,
+  warmTeleportPage,
+  type CreatedTeleport,
 } from "./api";
-import { NAV_QUERY_KEY, readTeleportBoot, type TeleportBoot } from "./boot";
+import {
+  encodeQueryPatch,
+  NAV_QUERY_KEY,
+  QUERY_FRAGMENT_KEY,
+  readTeleportBoot,
+  TAPPED_PRODUCT_FRAGMENT_KEY,
+  type TeleportBoot,
+} from "./boot";
 
 export const TELEPORT_SDK_VERSION = "004.018.000";
 export const TELEPORT_TTL_MS = 30 * 60 * 1000;
 const CLAIMED_WAIT_MS = 2 * TELEPORT_TTL_MS;
+const PREPARED_FRESH_MS = 10 * 60 * 1000;
 const FAST_POLL_MS = 2_000;
 const FAST_POLL_WINDOW_MS = 2 * 60 * 1000;
 const SLOW_POLL_MS = 5_000;
 const RETURN_GRACE_MS = 15_000;
-const OVERLAY_FALLBACK_MS = 1_500;
+const WAITING_FALLBACK_MS = 1_500;
+const QUERY_FRAGMENT_LIMIT = 2_048;
 export const APP_OPEN_WAIT_MS = 1_000;
 const TAPPED_PRODUCT_QUERY_KEY = "sw_ref";
 
-export type TeleportOutcome = PurchaseOutcome | { fallback: string };
+export type TeleportStatus =
+  | { status: "idle" }
+  | { status: "waiting"; productReference?: string }
+  | { status: "arrived"; productReference?: string }
+  | { status: "completed"; productReference?: string };
 
-export type TeleportState = {
-  waiting: boolean;
-  waitingScreen: boolean;
-  completed: boolean;
-  productReference?: string;
-};
+export type HandedOff = { reference: string; result: Promise<{ status: PurchaseOutcome }> };
+
+export type TeleportOutcome = PurchaseOutcome | HandedOff;
 
 export type TeleportRequest = {
+  route?: string;
   productReference?: string;
   query: Record<string, string>;
   postPurchase?: SuperwallPostPurchase;
@@ -50,13 +66,16 @@ export type TeleportRequest = {
 };
 
 export type Teleporter = {
-  getState(): TeleportState;
+  getStatus(): TeleportStatus;
   subscribe(listener: () => void): () => void;
   available(): boolean;
+  landed(route: string): void;
   begin(request: TeleportRequest): Promise<TeleportOutcome>;
+  prefetch(route?: string, query?: Record<string, string>): void;
+  inFlight(): boolean;
+  handOff(reference: string, result: Promise<{ status: PurchaseOutcome }>): void;
   reopen(): void;
   cancel(): void;
-  payInApp(): void;
   fallback(): string | undefined;
   showWaitingScreen(): boolean;
   handleReturn(): boolean;
@@ -68,11 +87,10 @@ export type ReturnReason = "purchased" | "closed";
 
 export type TeleportSession = Pick<SuperwallSession, "getSnapshot" | "postMessage">;
 
-type OpenTeleport = {
-  teleportId: string;
-  url: string;
+type OpenTeleport = CreatedTeleport & {
   productReference?: string;
   productIdentifier: string;
+  query: Record<string, string>;
   createdAt: number;
   checkoutContextId?: string;
   checkoutProductIdentifier?: string;
@@ -80,6 +98,14 @@ type OpenTeleport = {
   postPurchase?: SuperwallPostPurchase;
   stripeMetadata?: Readonly<Record<string, string>>;
   settle: (outcome: TeleportOutcome) => void;
+};
+
+type Prepared = {
+  route: string;
+  freeTrial: boolean;
+  query: Record<string, string>;
+  at: number;
+  teleport: Promise<CreatedTeleport | undefined>;
 };
 
 export const flowQuery = (
@@ -110,17 +136,28 @@ export const restoreTeleportQuery = async (
   if (missing.length > 0) store.set(Object.fromEntries(missing), "replace");
 };
 
+const changedQuery = (
+  saved: Record<string, string>,
+  now: Record<string, string>,
+): Record<string, string> =>
+  Object.fromEntries(Object.entries(now).filter(([key, value]) => saved[key] !== value));
+
 let opens = 0;
 
-export const checkoutUrlFor = (url: string, productReference: string | undefined): string => {
+export const checkoutUrlFor = (
+  url: string,
+  productReference: string | undefined,
+  queryPatch?: string,
+): string => {
   const next = new URL(url);
   if (productReference !== undefined && !next.searchParams.has(TAPPED_PRODUCT_QUERY_KEY)) {
     next.searchParams.set(TAPPED_PRODUCT_QUERY_KEY, productReference);
   }
   opens += 1;
   next.hash = new URLSearchParams({
-    ...(productReference === undefined ? {} : { ref: productReference }),
+    ...(productReference === undefined ? {} : { [TAPPED_PRODUCT_FRAGMENT_KEY]: productReference }),
     o: `${Date.now().toString(36)}${opens.toString(36)}`,
+    ...(queryPatch === undefined ? {} : { [QUERY_FRAGMENT_KEY]: queryPatch }),
   }).toString();
   return next.toString();
 };
@@ -138,12 +175,8 @@ export const pageNavigation = {
   },
 };
 
-export const openApp = (
-  boot: TeleportBoot,
-  appLink: ResolvedTeleport["appLink"],
-  reason?: ReturnReason,
-): void => {
-  const link = appLink === "universal" && boot.appLinkUrl ? boot.appLinkUrl : boot.returnUrl;
+export const openApp = (boot: TeleportBoot, reason?: ReturnReason): void => {
+  const link = boot.appLinkUrl ?? boot.returnUrl;
   if (link === undefined) return;
   pageNavigation.assign(withReason(link, reason));
   const scheme = boot.returnUrl;
@@ -166,22 +199,39 @@ export const openApp = (
   }, APP_OPEN_WAIT_MS);
 };
 
+const freeTrialFor = (resolved: ResolvedTeleport, snapshot: SuperwallRuntimeSnapshot): boolean => {
+  if (resolved.introductoryOfferEligibility === "eligible") return true;
+  if (resolved.introductoryOfferEligibility === "ineligible") return false;
+  return snapshot.introductoryOffer.eligible === true;
+};
+
+const stripeReferences = (snapshot: SuperwallRuntimeSnapshot): string[] =>
+  snapshot.products
+    .filter((product) => isStripeProductIdentifier(product.productId))
+    .map((product) => product.reference);
+
 const createTeleporter = (paywall: TeleportSession): Teleporter => {
   const listeners = new Set<() => void>();
-  let state: TeleportState = {
-    waiting: false,
-    waitingScreen: false,
-    completed: false,
-    productReference: readTeleportBoot()?.productReference,
-  };
+  const boot = readTeleportBoot();
+  let status: TeleportStatus =
+    boot === undefined
+      ? { status: "idle" }
+      : {
+          status: "arrived",
+          ...(boot.productReference === undefined
+            ? {}
+            : { productReference: boot.productReference }),
+        };
   let current: OpenTeleport | undefined;
+  let prepared: Prepared | undefined;
+  let route: string | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let overlayWait: (() => void) | undefined;
+  let waitAway: (() => void) | undefined;
   let windowApis = false;
   let creating: Promise<TeleportOutcome> | undefined;
 
-  const setState = (patch: Partial<TeleportState>) => {
-    state = { ...state, ...patch };
+  const setStatus = (next: TeleportStatus) => {
+    status = next;
     for (const listener of listeners) listener();
   };
 
@@ -189,15 +239,20 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
   const publicApiKey = () => asString(paywall.getSnapshot().device.publicApiKey);
   const post = paywall.postMessage;
 
-  const cancelOverlayWait = () => {
-    overlayWait?.();
-    overlayWait = undefined;
+  const stopWaitingAway = () => {
+    waitAway?.();
+    waitAway = undefined;
   };
 
-  const showOverlay = () => {
-    cancelOverlayWait();
-    if (current === undefined || state.waitingScreen || !settings()?.overlay) return;
-    setState({ waitingScreen: true });
+  const startWaiting = () => {
+    stopWaitingAway();
+    if (current === undefined || status.status === "waiting") return;
+    setStatus({
+      status: "waiting",
+      ...(current.productReference === undefined
+        ? {}
+        : { productReference: current.productReference }),
+    });
     post({
       event_name: "teleport_watch_start",
       teleport_id: current.teleportId,
@@ -206,20 +261,21 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
     });
   };
 
-  const hideOverlay = () => {
-    cancelOverlayWait();
-    if (!state.waitingScreen) return;
-    setState({ waitingScreen: false });
+  const stopWaiting = () => {
+    stopWaitingAway();
+    if (status.status !== "waiting") return;
+    setStatus({ status: "idle" });
     post({ event_name: "teleport_watch_end" });
   };
 
-  const showOnceAway = () => {
+  const waitOnceAway = () => {
+    stopWaitingAway();
     const away = () => {
-      if (document.visibilityState === "hidden") showOverlay();
+      if (document.visibilityState === "hidden") startWaiting();
     };
     document.addEventListener("visibilitychange", away);
-    const fallback = setTimeout(showOverlay, OVERLAY_FALLBACK_MS);
-    overlayWait = () => {
+    const fallback = setTimeout(startWaiting, WAITING_FALLBACK_MS);
+    waitAway = () => {
       document.removeEventListener("visibilitychange", away);
       clearTimeout(fallback);
     };
@@ -229,8 +285,7 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
     clearTimeout(timer);
     timer = undefined;
     current = undefined;
-    hideOverlay();
-    setState({ waiting: false, productReference: undefined });
+    stopWaiting();
   };
 
   const schedule = (record: OpenTeleport, delay: number) => {
@@ -311,13 +366,16 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
     schedule(record, age < FAST_POLL_WINDOW_MS ? FAST_POLL_MS : SLOW_POLL_MS);
   };
 
-  const open = (record: OpenTeleport, waitingScreen: boolean) =>
+  const open = (record: OpenTeleport, queryPatch?: string) => {
+    const overlay = settings()?.overlay === true;
     post({
       event_name: "open_url_external",
-      url: checkoutUrlFor(record.url, record.productReference),
+      url: checkoutUrlFor(record.url, record.productReference, queryPatch),
       teleport: true,
-      ...(waitingScreen ? { waiting_screen: true } : {}),
+      ...(overlay ? { waiting_screen: true } : {}),
     });
+    waitOnceAway();
+  };
 
   const fallback = (): string | undefined => {
     const reference = current?.productReference;
@@ -339,8 +397,54 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
     host.handleTeleportReturn = async () => teleporter.handleReturn();
   };
 
+  const create = (
+    resolved: ResolvedTeleport,
+    target: string,
+    query: Record<string, string>,
+    productReference?: string,
+  ) => {
+    const snapshot = paywall.getSnapshot();
+    return createTeleport(publicApiKey(), {
+      route: target,
+      ...(productReference === undefined ? {} : { productReference }),
+      presentationId: crypto.randomUUID(),
+      context: attributionOf(snapshot, { freeTrial: freeTrialFor(resolved, snapshot) }),
+      session: { query },
+    });
+  };
+
+  const takePrepared = (resolved: ResolvedTeleport, target: string): Prepared | undefined => {
+    const candidate = prepared;
+    prepared = undefined;
+    if (candidate === undefined || candidate.route !== target) return undefined;
+    if (Date.now() - candidate.at >= PREPARED_FRESH_MS) return undefined;
+    if (candidate.freeTrial !== freeTrialFor(resolved, paywall.getSnapshot())) return undefined;
+    return candidate;
+  };
+
+  const queryPatchFor = async (
+    teleport: CreatedTeleport,
+    saved: Record<string, string>,
+    query: Record<string, string>,
+  ): Promise<string | undefined> => {
+    const changed = changedQuery(saved, query);
+    if (Object.keys(changed).length === 0) return undefined;
+    const patch = encodeQueryPatch(changed);
+    if (patch.length <= QUERY_FRAGMENT_LIMIT) return patch;
+    try {
+      await saveTeleportQuery(publicApiKey(), teleport.teleportId, query);
+    } catch (error) {
+      console.warn(
+        "Saving the flow on the teleport failed; the page opens with what it had:",
+        error,
+      );
+    }
+    return undefined;
+  };
+
   const start = async (
     resolved: ResolvedTeleport,
+    target: string,
     { productReference, query, postPurchase, stripeMetadata }: TeleportRequest,
   ): Promise<TeleportOutcome> => {
     if (current !== undefined) abandon(current);
@@ -352,18 +456,16 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
         : (snapshot.productsByReference[productReference]?.productId ?? "");
 
     startLoading();
-    let created: Awaited<ReturnType<typeof createTeleport>>;
+    let created: CreatedTeleport | undefined;
+    let queryPatch: string | undefined;
     try {
-      created = await createTeleport(publicApiKey(), {
-        route: resolved.route,
-        productReference,
-        presentationId: crypto.randomUUID(),
-        context: attributionOf(
-          snapshot,
-          resolved.trialEligibility === "always" ? { freeTrial: true } : {},
-        ),
-        session: { query },
-      });
+      const reused = takePrepared(resolved, target);
+      created = await reused?.teleport;
+      if (created !== undefined && reused !== undefined) {
+        queryPatch = await queryPatchFor(created, reused.query, query);
+      } else {
+        created = await create(resolved, target, query, productReference);
+      }
     } catch (error) {
       console.error("Opening the web checkout failed:", error);
       return "failed";
@@ -371,12 +473,14 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
       stopLoading();
       creating = undefined;
     }
+    const teleport = created;
 
     return new Promise<TeleportOutcome>((settle) => {
       const record: OpenTeleport = {
-        ...created,
+        ...teleport,
         productReference,
         productIdentifier,
+        query,
         createdAt: Date.now(),
         postPurchase,
         stripeMetadata,
@@ -390,84 +494,125 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
           product_identifier: productIdentifier,
         });
       }
-      open(record, resolved.overlay);
-      setState({ waiting: true, productReference });
-      if (resolved.overlay) showOnceAway();
+      open(record, queryPatch);
       schedule(record, FAST_POLL_MS);
     });
   };
 
+  const available = () => {
+    const snapshot = paywall.getSnapshot();
+    return (
+      settings() !== undefined &&
+      boot === undefined &&
+      !hostedInWebSdk() &&
+      platformOf(snapshot.device) === "ios" &&
+      publicApiKey() !== "" &&
+      asString(snapshot.device.sdkVersionPadded) >= TELEPORT_SDK_VERSION
+    );
+  };
+
   const teleporter: Teleporter = {
-    getState: () => state,
+    getStatus: () => status,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
       };
     },
-    available: () => {
-      const snapshot = paywall.getSnapshot();
-      return (
-        snapshot.config?.teleport !== undefined &&
-        readTeleportBoot() === undefined &&
-        !hostedInWebSdk() &&
-        platformOf(snapshot.device) === "ios" &&
-        publicApiKey() !== "" &&
-        asString(snapshot.device.sdkVersionPadded) >= TELEPORT_SDK_VERSION
-      );
+    available,
+    landed: (name) => {
+      route = name;
     },
     begin: (request) => {
       if (creating !== undefined) return creating;
       const resolved = settings();
-      if (resolved === undefined) return Promise.resolve("failed");
-      const started = start(resolved, request);
+      const target = request.route ?? resolved?.route ?? route;
+      if (resolved === undefined || target === undefined) return Promise.resolve("failed");
+      const started = start(resolved, target, request);
       creating = started;
       return started;
+    },
+    prefetch: (requested, query = {}) => {
+      const resolved = settings();
+      const target = requested ?? resolved?.route;
+      if (resolved === undefined || target === undefined || !available()) return;
+      const snapshot = paywall.getSnapshot();
+      const freeTrial = freeTrialFor(resolved, snapshot);
+      if (
+        prepared !== undefined &&
+        prepared.route === target &&
+        prepared.freeTrial === freeTrial &&
+        Date.now() - prepared.at < PREPARED_FRESH_MS
+      ) {
+        return;
+      }
+      const teleport = create(resolved, target, query).then(
+        (created) => {
+          warmTeleportPage(created.url, stripeReferences(paywall.getSnapshot()));
+          return created;
+        },
+        (error: unknown) => {
+          console.warn("Preparing the teleport failed; a tap creates one instead:", error);
+          return undefined;
+        },
+      );
+      prepared = { route: target, freeTrial, query, at: Date.now(), teleport };
+    },
+    inFlight: () => current !== undefined,
+    handOff: (reference, result) => {
+      const record = current;
+      if (record === undefined) return;
+      stop();
+      record.settle({ reference, result });
     },
     reopen: () => {
       if (current === undefined) return;
       current.returnedAt = undefined;
-      open(current, false);
+      open(current);
     },
     cancel: () => {
       if (current !== undefined) abandon(current);
     },
-    payInApp: () => {
-      const record = current;
-      const reference = fallback();
-      if (record === undefined || reference === undefined) return;
-      stop();
-      record.settle({ fallback: reference });
-    },
     fallback,
     showWaitingScreen: () => {
-      showOverlay();
-      return state.waitingScreen;
+      startWaiting();
+      return status.status === "waiting" && settings()?.overlay === true;
     },
     handleReturn: () => {
       const record = current;
       if (record === undefined) return false;
       record.returnedAt ??= Date.now();
-      const shown = state.waitingScreen;
-      hideOverlay();
+      const shown = status.status === "waiting" && settings()?.overlay === true;
+      stopWaiting();
       void poll(record);
       return shown;
     },
     completePurchase: async (checkoutContextId) => {
-      const boot = readTeleportBoot();
       const resolved = settings();
       if (boot === undefined || resolved === undefined) return;
       await completeTeleportCheckout(publicApiKey(), checkoutContextId);
-      if (resolved.returnStyle === "screen") setState({ completed: true });
-      else openApp(boot, resolved.returnStyle === "alert" ? "scheme" : "universal", "purchased");
+      setStatus({
+        status: "completed",
+        ...(status.status !== "idle" && status.productReference !== undefined
+          ? { productReference: status.productReference }
+          : {}),
+      });
+      if (resolved.completion === "direct") openApp(boot, "purchased");
     },
     returnToApp: (reason) => {
-      const boot = readTeleportBoot();
-      const resolved = settings();
-      if (boot === undefined || resolved === undefined) return;
-      openApp(boot, resolved.appLink, reason);
+      if (boot === undefined || settings() === undefined) return;
+      openApp(boot, reason);
     },
   };
+
+  if (boot !== undefined) {
+    window.addEventListener("hashchange", () => {
+      const tapped = readTeleportBoot()?.productReference;
+      if (status.status !== "arrived" || tapped === undefined) return;
+      if (tapped === status.productReference) return;
+      setStatus({ status: "arrived", productReference: tapped });
+    });
+  }
 
   return teleporter;
 };
