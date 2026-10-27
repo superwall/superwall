@@ -87,6 +87,10 @@ test("tools that reach Apple or a customer's endpoint say so", () => {
   assert.equal(tool("asc_keys_list").annotations.openWorldHint, true);
   assert.equal(tool("asa_campaigns_list").annotations.openWorldHint, true);
   assert.equal(tool("products_list").annotations.openWorldHint, false);
+  assert.equal(tool("webhooks_create").annotations.openWorldHint, true);
+  assert.equal(tool("webhooks_update").annotations.openWorldHint, true);
+  assert.equal(tool("webhooks_list").annotations.openWorldHint, false);
+  assert.equal(tool("webhooks_delete").annotations.openWorldHint, false);
   assert.equal(tool("asa_negative_keywords_delete").annotations.destructiveHint, true);
 });
 
@@ -103,6 +107,14 @@ test("hints follow what the command does", () => {
   assert.equal(tool("post").annotations.readOnlyHint, false);
   assert.equal(tool("post").annotations.destructiveHint, false);
   assert.equal(tool("delete").annotations.destructiveHint, true);
+  for (const name of ["products_update", "campaigns_placements_create", "campaigns_audiences_update", "campaigns_variants_update", "asc_builds_attach", "paywalls_publish"]) {
+    assert.equal(tool(name).annotations.destructiveHint, true, name);
+    assert.equal(tool(name).annotations.readOnlyHint, false, name);
+  }
+  assert.equal(tool("entitlements_grants_create").annotations.readOnlyHint, false);
+  assert.equal(tool("entitlements_grants_create").annotations.destructiveHint, false);
+  assert.equal(tool("paywalls_publish").annotations.openWorldHint, false);
+  assert.equal(tool("paywalls_publish").annotations.idempotentHint, false);
 });
 
 test("inputs come from the command: arguments, flags, and the API's own fields", () => {
@@ -164,4 +176,21 @@ test("the instructions send an agent with a shell to the CLI, and name the work 
   assert.match(text, /npx superwall@latest login/);
   assert.match(text, /migrating from RevenueCat/);
   assert.doesNotMatch(text, /^- superwall /m);
+});
+
+test("publish and manual grants describe their live effects", () => {
+  assert.match(tool("paywalls_publish").description, /latest saved draft/);
+  assert.match(tool("paywalls_publish").description, /Replaces its currently deployed version and refreshes app configuration/);
+  assert.match(tool("paywalls_publish").description, /users by campaigns/);
+  assert.match(tool("entitlements_grants_create").description, /existing entitlement manually to a device, optionally linked to an app user ID/);
+  assert.match(tool("entitlements_grants_create").description, /expiry time/);
+  assert.match(tool("entitlements_grants_create").description, /without charging the user or creating a paid subscription/);
+  assert.match(tool("entitlements_grants_create").description, /error when an active grant already exists/);
+});
+
+test("the MCP retains generic API and schema tools with fallback guidance", () => {
+  for (const name of ["get", "post", "patch", "delete", "api_docs", "asc_get", "asc_post", "asc_patch", "asc_delete", "asc_docs", "asa_get", "asa_post", "asa_put", "asa_delete", "asa_docs"]) {
+    assert.ok(tools.some((candidate) => candidate.name === name), name);
+  }
+  assert.match(instructions(), /api_docs finds it, then get, post, patch or delete calls it/);
 });

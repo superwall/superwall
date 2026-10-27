@@ -50,6 +50,7 @@ export const command = defineResource({
           summary: "Trigger it on an event",
           method: "POST",
           path: "/v2/campaigns/{id}/placements",
+          destructive: true,
         },
         {
           name: "update",
@@ -76,6 +77,7 @@ export const command = defineResource({
           summary: "Change its rules or name",
           method: "PATCH",
           path: "/v2/campaigns/{id}/audiences/{audience_id}",
+          destructive: true,
         },
         {
           name: "delete",
@@ -142,6 +144,7 @@ export const command = defineResource({
           summary: "Change its paywall",
           method: "PATCH",
           path: "/v2/campaigns/{id}/audiences/{audience_id}/variants/{variant_id}",
+          destructive: true,
         },
         {
           name: "delete",

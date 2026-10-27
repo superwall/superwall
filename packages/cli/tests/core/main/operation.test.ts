@@ -170,7 +170,7 @@ test("apps update sends typed flags to the app's settings, its ids filled from t
 
 test("a nested operation takes its parent's id as a positional", async () => {
   const calls: Call[] = [];
-  await run(["campaigns", "placements", "create", "9081"], { eventName: "onboarding" }, fakeApi(calls));
+  await run(["campaigns", "placements", "create", "9081"], { eventName: "onboarding", yes: true }, fakeApi(calls));
   assert.deepEqual(calls, [
     { method: "POST", path: "/v2/campaigns/9081/placements", body: { event_name: "onboarding" } },
   ]);

@@ -159,7 +159,7 @@ function schemaOfFlag(spec: FlagSpec): JsonSchema {
   return spec.choices ? { ...base, enum: spec.choices } : base;
 }
 
-const OUTSIDE_SUPERWALL = new Set(["asc", "asa", "events retry"]);
+const OUTSIDE_SUPERWALL = new Set(["asc", "asa", "events retry", "webhooks create", "webhooks update"]);
 
 function annotationsOf(words: readonly string[], effect: Exclude<ToolEffect, false>): ToolAnnotations {
   return {
@@ -319,7 +319,7 @@ export function instructions(): string {
     "- Analytics: query runs ClickHouse SQL over every event, transaction and user; use it for any question about revenue, conversion, retention or behaviour. apps_statistics, campaigns_counts and campaigns_audiences_readout return the dashboard's own figures.",
     "- App Store Connect: asc_ tools. Apple Search Ads: asa_ tools. Both reach Apple through Superwall with the keys already connected to the app; the user needs no Apple credentials of their own.",
     "- An endpoint with no tool of its own: api_docs finds it, then get, post, patch or delete calls it.",
-    "- Destructive tools delete or archive. Confirm with the user before calling one.",
+    "- Destructive tools can delete, archive, replace existing configuration or publish changes to live users. Confirm with the user before calling one.",
   ].join("\n");
 }
 

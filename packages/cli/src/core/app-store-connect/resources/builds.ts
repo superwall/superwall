@@ -96,6 +96,7 @@ export async function runBuildsGet(session: AscSession, input: AscInput): Promis
 export async function runBuildsAttach(session: AscSession, input: AscInput): Promise<AscOutput> {
   const build = argOf(input, "id");
   const version = await resolveVersionId(session, input);
+  await assertConfirmed(session, input.yes, `Attach build ${build} to version ${version}, replacing its current build`);
   await session.send("patch", `/v1/appStoreVersions/${version}/relationships/build`, { data: { type: "builds", id: build } });
   return { value: { appStoreVersion: version, build }, heading: `Attached build ${build} to version ${version}` };
 }

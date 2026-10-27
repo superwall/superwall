@@ -35,7 +35,13 @@ export const command = defineResource({
           path: "/v2/entitlements/{id}/grants",
           list: true,
         },
-        { name: "create", summary: "Grant it to a user", method: "POST", path: "/v2/entitlements/{id}/grants" },
+        {
+          name: "create",
+          summary: "Grant an existing entitlement manually to a device, optionally linked to an app user ID",
+          details: "Grants promotional access, optionally until an expiry time, without charging the user or creating a paid subscription. Returns an error when an active grant already exists.",
+          method: "POST",
+          path: "/v2/entitlements/{id}/grants",
+        },
         {
           name: "delete",
           summary: "Take a grant back",

@@ -3,6 +3,8 @@ import { afterEach, test } from "node:test";
 import { command as builds } from "@/commands/app-store-connect/release/builds";
 import { ascRoutes, link, one, page } from "../../../helpers/asc-proxy";
 import { APP_BY_BUNDLE, BUILD_ID, VERSION_BY_STRING, VERSION_ID } from "../../../helpers/asc-store";
+import { answeringRenderer, said } from "../../../helpers/answers";
+import type { RendererCall } from "../../../helpers/renderer";
 import { runCommand } from "../../../helpers/command";
 
 afterEach(() => {
@@ -96,7 +98,7 @@ test("attach sets the version's build relationship, finding the version by its s
     [VERSION_BY_STRING()]: page([one("appStoreVersions", VERSION_ID)]),
     [`PATCH /v1/appStoreVersions/${VERSION_ID}/relationships/build`]: undefined,
   });
-  const result = await runCommand(builds, { api, words: ["attach", BUILD_ID, "1.2.0"], flags: { ascApp: "com.acme.app" } });
+  const result = await runCommand(builds, { api, words: ["attach", BUILD_ID, "1.2.0"], flags: { ascApp: "com.acme.app", yes: true } });
   assert.deepEqual(writes(), [{ method: "PATCH", path: `/v1/appStoreVersions/${VERSION_ID}/relationships/build`, body: { data: { type: "builds", id: BUILD_ID } } }]);
   assert.deepEqual(result.said("success"), [`Attached build ${BUILD_ID} to version ${VERSION_ID}`]);
 });
@@ -110,4 +112,21 @@ test("expire confirms, then marks the build expired", async () => {
   assert.deepEqual(writes(), []);
   await runCommand(builds, { api, words: ["expire", BUILD_ID], flags: { yes: true } });
   assert.deepEqual(writes(), [{ method: "PATCH", path: `/v1/builds/${BUILD_ID}`, body: { data: { type: "builds", id: BUILD_ID, attributes: { expired: true } } } }]);
+});
+
+test("attach requires confirmation before replacing the version's build", async () => {
+  const { api, writes } = ascRoutes({ [`PATCH /v1/appStoreVersions/${VERSION_ID}/relationships/build`]: undefined });
+  const words = ["attach", BUILD_ID, VERSION_ID];
+  const refused = await runCommand(builds, { api, words });
+  assert.deepEqual(refused.said("error"), [`Attach build ${BUILD_ID} to version ${VERSION_ID}, replacing its current build\nNothing was changed. Pass --yes to go ahead.`]);
+  assert.deepEqual(writes(), []);
+  const calls: RendererCall[] = [];
+  await runCommand(builds, { api, words, interactive: true, renderer: answeringRenderer({ select: ["no"] }, calls) });
+  assert.deepEqual(said(calls, "error"), ["Cancelled. Nothing was changed."]);
+  assert.deepEqual(writes(), []);
+  const planned = await runCommand(builds, { api, words, flags: { dryRun: true }, json: true });
+  assert.equal((planned.json as { requests: unknown[] }).requests.length, 1);
+  assert.deepEqual(writes(), []);
+  await runCommand(builds, { api, words, interactive: true, renderer: answeringRenderer({ select: ["yes"] }) });
+  assert.deepEqual(writes(), [{ method: "PATCH", path: `/v1/appStoreVersions/${VERSION_ID}/relationships/build`, body: { data: { type: "builds", id: BUILD_ID } } }]);
 });
