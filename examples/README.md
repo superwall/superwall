@@ -52,6 +52,7 @@ control), and only the rules the example needs follow it.
 | [`trial-reminders`](./trial-reminders)     | a local notification scheduled when the trial starts                 |
 | [`web-funnel`](./web-funnel)               | selling on the web: steps, then Stripe checkout in the page          |
 | [`apple-pay`](./apple-pay)                 | Apple Pay on the web, trials quoted to the sheet, a promo code       |
+| [`teleport`](./teleport)                   | finish an app flow on the web: the plan opens in the browser         |
 
 ## The host
 
