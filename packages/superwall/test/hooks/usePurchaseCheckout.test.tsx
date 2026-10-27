@@ -131,7 +131,12 @@ describe("usePurchase with a Stripe product inside an iOS app", () => {
     const created = () =>
       fetchMock.mock.calls.filter(([, init]) => String(init?.body).includes('"isPrefetch":false'));
     await act(async () => {
-      await sessions.prefetch({ referenceName: "primary", mode: "external", silent: true });
+      await sessions.prefetch({
+        referenceName: "primary",
+        mode: "external",
+        scope: "external",
+        silent: true,
+      });
     });
 
     for (let tap = 0; tap < 2; tap++) {
