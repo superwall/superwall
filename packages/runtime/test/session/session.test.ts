@@ -33,6 +33,53 @@ describe("products", () => {
     ]);
   });
 
+  it("opens with the products the build baked inline, and lets the host's variables win key by key", () => {
+    const transport = new TestTransport();
+    const session = createSuperwallSession({
+      transport,
+      config: { products: { card14: "live:price_1:14days-free", annual: "pro_3999_year" } },
+      inlineProducts: {
+        card14: { price: "$59.99", period: "year", trialPeriodDays: 14 },
+        stray: { price: "$1.00" },
+      },
+    });
+    session.start();
+
+    expect(session.getSnapshot().productsByReference.card14).toEqual({
+      reference: "card14",
+      productId: "live:price_1:14days-free",
+      source: "inline",
+      variables: expect.objectContaining({ price: "$59.99", period: "year", trialPeriodDays: 14 }),
+    });
+    expect(session.getSnapshot().productsByReference.stray?.productId).toBeUndefined();
+
+    transport.accept({
+      event_name: "products",
+      products: [
+        { product: "annual", productId: "pro_3999_year" },
+        { product: "card14", productId: "live:price_1:14days-free" },
+      ],
+    });
+    transport.accept({
+      event_name: "template_variables",
+      variables: {
+        products: [
+          { annual: { price: "$39.99" } },
+          { card14: { identifier: "card14", price: "$49.99" } },
+        ],
+      },
+    });
+
+    const { productsByReference } = session.getSnapshot();
+    expect(productsByReference.annual?.variables).toEqual({ price: "$39.99" });
+    expect(productsByReference.card14?.variables).toMatchObject({
+      identifier: "card14",
+      price: "$49.99",
+      period: "year",
+      trialPeriodDays: 14,
+    });
+  });
+
   it("has no products until a host delivers them, and then carries exactly what it sent", () => {
     const { session, transport } = createSession({
       products: { primary: "pro_3999_year", secondary: { productId: "pro_999_month" } },

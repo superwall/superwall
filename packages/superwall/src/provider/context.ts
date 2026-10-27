@@ -10,6 +10,7 @@ import {
   type ITransport,
   type SuperwallConfig,
   type SuperwallProduct,
+  type SuperwallProductVariables,
   type SuperwallSession,
   type ResolvedBackground,
 } from "@superwall/runtime";
@@ -43,15 +44,21 @@ const useHostState = (session: SuperwallSession): boolean => {
 export type SuperwallProviderProps = React.PropsWithChildren<{
   config?: SuperwallConfig;
   transport?: ITransport;
+  inlineProducts?: Readonly<Record<string, SuperwallProductVariables>>;
 }>;
 
-export const SuperwallProvider = ({ children, config, transport }: SuperwallProviderProps) => {
+export const SuperwallProvider = ({
+  children,
+  config,
+  transport,
+  inlineProducts,
+}: SuperwallProviderProps) => {
   const ownedSession = React.useRef<SuperwallSession | null>(null);
   const ownedTransport = React.useRef<ITransport | undefined>(undefined);
 
   if (ownedSession.current === null || ownedTransport.current !== transport) {
     ownedTransport.current = transport;
-    ownedSession.current = createSuperwallSession({ config, transport });
+    ownedSession.current = createSuperwallSession({ config, transport, inlineProducts });
   }
 
   const value = ownedSession.current;

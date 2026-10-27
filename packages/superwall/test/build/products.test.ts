@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { parseAst } from "vite";
-import { resolveProductIds, rewriteConfigProducts } from "../../src/build/products";
+import {
+  inlineProductsOf,
+  resolveProductIds,
+  rewriteConfigProducts,
+} from "../../src/build/products";
 import type { DiscoveredSurface } from "../../src/discover";
 
 const surface: DiscoveredSurface = {
@@ -49,6 +53,32 @@ describe("resolveProductIds", () => {
         "android",
       ),
     ).toThrow("`annual`, `weekly` have no product id for android");
+  });
+});
+
+describe("inlineProductsOf", () => {
+  it("bakes Superwall's variables for the Stripe slots it knows, and nothing for store products", () => {
+    const catalogue = {
+      "live:price_1:14days-free": { price: "$59.99", trialPeriodDays: 14 },
+      pro_year: { price: "$39.99" },
+    };
+    expect(
+      inlineProductsOf(
+        {
+          card14: "live:price_1:14days-free",
+          cardNow: "live:price_1:no-trial",
+          annual: "pro_year",
+        },
+        catalogue,
+      ),
+    ).toEqual({ card14: { price: "$59.99", trialPeriodDays: 14 } });
+    expect(inlineProductsOf({ card14: "live:price_1:14days-free" }, undefined)).toEqual({});
+    expect(
+      inlineProductsOf(
+        { card14: "live:price_1:14days-free" },
+        { "live:price_1:14days-free": { identifier: "live:price_1:14days-free" } },
+      ),
+    ).toEqual({});
   });
 });
 

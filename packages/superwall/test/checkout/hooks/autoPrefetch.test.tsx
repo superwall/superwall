@@ -1,9 +1,12 @@
-import { act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
+import * as React from "react";
+import { createHostTransport, recordingDelegate } from "@superwall/host";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallCheckoutConfig } from "@superwall/runtime";
 import { useSuperwallSession } from "../../../src/hooks";
 import { useAutoPrefetch } from "../../../src/checkout/hooks/useAutoPrefetch";
 import { sessionsFor } from "../../../src/checkout/flow";
+import { SuperwallProvider } from "../../../src";
 import { flush, renderWithProvider, testConfig } from "../../helpers";
 
 const products = [
@@ -30,7 +33,7 @@ const render = async (checkout: SuperwallCheckoutConfig | undefined) => {
     },
     {
       config: { ...testConfig, checkout },
-      host: { products, device: { publicApiKey: "pk_test" } },
+      host: { products, device: { platform: "Android", publicApiKey: "pk_test" } },
     },
   );
   await flush();
@@ -65,9 +68,11 @@ describe("useAutoPrefetch", () => {
     ]);
   });
 
-  it("does nothing when prefetch is off, or without web checkout", async () => {
+  it("does nothing when prefetch is off, and warms the hosted page with no checkout configured", async () => {
     expect((await render({ mode: "applePay", prefetch: false })).prefetched).toEqual([]);
-    expect((await render(undefined)).prefetched).toEqual([]);
+    expect((await render(undefined)).prefetched).toEqual([
+      expect.objectContaining({ referenceName: "primary", mode: "external", scope: "external" }),
+    ]);
   });
 });
 
@@ -92,5 +97,64 @@ describe("useAutoPrefetch and a changing snapshot", () => {
     });
 
     expect(prefetched).toHaveLength(1);
+  });
+});
+
+describe("useAutoPrefetch inside an app", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("warms nothing until the paywall opens, then once for each time it opens", async () => {
+    window.history.replaceState({}, "", "/?transport=editor");
+    vi.useFakeTimers();
+    const { transport } = createHostTransport({
+      latencyMs: 1_000,
+      delegate: recordingDelegate({}),
+      state: {
+        products: products.map((product) => ({ ...product, variables: {} })),
+        device: { platform: "Android", publicApiKey: "pk_test" },
+      },
+    });
+    const prefetched: unknown[] = [];
+    const { result } = renderHook(
+      () => {
+        const session = useSuperwallSession();
+        const controller = sessionsFor(session);
+        if (!vi.isMockFunction(controller.prefetch)) {
+          vi.spyOn(controller, "prefetch").mockImplementation(async (options) => {
+            prefetched.push(options);
+            return null;
+          });
+        }
+        useAutoPrefetch();
+        return session;
+      },
+      {
+        wrapper: ({ children }: React.PropsWithChildren) => (
+          <SuperwallProvider config={{ ...testConfig, checkout: "sheet" }} transport={transport}>
+            {children}
+          </SuperwallProvider>
+        ),
+      },
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(prefetched).toEqual([]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(prefetched).toHaveLength(1);
+
+    await act(async () => {
+      result.current.accept([
+        { event_name: "paywall_open", paywall_id: "8", paywall_identifier: "again" },
+      ]);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(prefetched).toHaveLength(2);
   });
 });

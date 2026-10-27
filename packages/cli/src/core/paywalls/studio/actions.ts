@@ -152,10 +152,12 @@ export function createStudioActions(
         let version = 0;
         const external = new Set<string>();
         for (const target of targets) {
+          const catalogue = await listApplicationCatalogue(client, target.applicationId);
           const built = await step("build", () =>
             framework.buildSnapshot(project, surface, {
               assetBaseUrl: assetBaseUrl(target.applicationId),
               platform: target.platform,
+              catalogue: catalogue.variables,
             }),
           );
           const binding = await resolveBinding({
@@ -170,16 +172,15 @@ export function createStudioActions(
           const synced = await step("assets", () =>
             syncAssets({ api: client, paywallId: binding.paywallId, assets }),
           );
-          const pushed = await step("push", async () => {
-            const { stores } = await listApplicationCatalogue(client, target.applicationId);
-            return pushPaywallVersion(client, binding.paywallId, {
+          const pushed = await step("push", () =>
+            pushPaywallVersion(client, binding.paywallId, {
               html: built.html,
               surface: surface.id,
               assets: synced.assets,
-              products: versionProducts(built.products, target.platform, stores),
+              products: versionProducts(built.products, target.platform, catalogue.stores),
               settings: built.settings,
-            });
-          });
+            }),
+          );
           await step("source", async () => {
             if (!collected.ok) throw new Error(collected.reason);
             return pushSource({

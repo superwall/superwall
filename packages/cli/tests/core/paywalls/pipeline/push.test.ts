@@ -301,7 +301,7 @@ test("a paywall with assets syncs them before the version push", async () => {
   ]);
 });
 
-test("a build failure stops the surface before anything reaches Superwall", async () => {
+test("a build failure stops the surface before anything is written to Superwall", async () => {
   const project = scaffold();
   const fake = await fakeApi();
 
@@ -317,7 +317,7 @@ test("a build failure stops the surface before anything reaches Superwall", asyn
     }),
     /vite exploded/,
   );
-  assert.deepEqual(fake.calls, []);
+  assert.deepEqual(fake.calls, ["projects", "products"], "only the catalogue the build needs is read");
 });
 
 test("a framework too old to report assets fails before the version push", async () => {
@@ -1342,6 +1342,36 @@ test("a product the catalogue records as custom is pushed as custom, and the pus
       (call) => typeof call.value === "string" && call.value.includes("stripePrimary → custom"),
     ),
   );
+});
+
+test("the build is handed the project's catalogue, so a Stripe product can be priced on device", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({
+    products: {
+      body: { data: [{ identifier: "live:price_1:14days-free", platform: "stripe", price: { amount: 5999, currency: "USD" } }] },
+    },
+  });
+  const catalogues: unknown[] = [];
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () =>
+      frameworkFor(project, {
+        buildSnapshot: async (_project, _surface, options) => {
+          catalogues.push(options?.catalogue);
+          return built({ products: { card14: "live:price_1:14days-free" } });
+        },
+      }),
+  });
+
+  assert.equal(
+    Reflect.get(Object(Reflect.get(Object(catalogues[0]), "live:price_1:14days-free")), "price"),
+    "$59.99",
+  );
+  const body: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  assert.deepEqual(Reflect.get(Object(body), "products"), [
+    { store: "stripe", identifier: "live:price_1:14days-free", reference_name: "card14" },
+  ]);
 });
 
 test("the settings a build resolves from config.ts travel with the version", async () => {
