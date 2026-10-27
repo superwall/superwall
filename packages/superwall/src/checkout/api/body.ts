@@ -63,8 +63,6 @@ export type SessionBodyOptions = {
   teleportId?: string;
 };
 
-export const UNKNOWN_PRESENTING_EVENT_ID = "fa3c2ba4-01c4-463d-ac3c-c58a32c6f0c6";
-
 export const attributionOf = (
   snapshot: SuperwallRuntimeSnapshot,
   { freeTrial = snapshot.introductoryOffer.eligible === true }: { freeTrial?: boolean } = {},
@@ -92,8 +90,7 @@ export const attributionOf = (
       presentedBy: presentation?.presentedBy ?? "placement",
       presentationSourceType: presentation?.sourceType ?? "register",
       presentedByEventName: presentation?.eventName ?? placement.name,
-      presentedByEventId:
-        presentation?.eventId ?? (placement.eventId || UNKNOWN_PRESENTING_EVENT_ID),
+      presentedByEventId: presentation?.eventId ?? placement.eventId,
     },
     placementParams: {
       placementParams: params,

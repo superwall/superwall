@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallConfig, SuperwallSession, TOutgoingMessage } from "@superwall/runtime";
 import { TeleportScreen } from "../../../src/checkout";
-import { pageNavigation, teleportFor } from "../../../src/checkout/teleport/flow";
+import { pageNavigation } from "../../../src/checkout/teleport/page";
 import {
   usePurchase,
   useSuperwallSession,
@@ -13,6 +13,7 @@ import {
 import { isLoading, startLoading } from "../../../src/checkout/loading";
 import { followTeleportPage } from "../../../src/checkout/flow";
 import { createWrapper, flush } from "../../helpers";
+import { appTeleport, teleportPage } from "./halves";
 
 const products = [
   { reference: "card", productId: "live:price_1:14days-free" },
@@ -134,12 +135,12 @@ describe("the teleport screen in the app", () => {
 
     let outcome: Promise<unknown> = Promise.resolve();
     await act(async () => {
-      outcome = teleportFor(session).begin({ productReference: "card", query: {} });
+      outcome = appTeleport(session).begin({ productReference: "card", query: {} });
       await Promise.resolve();
       await Promise.resolve();
     });
     await act(async () => {
-      await teleportFor(session).showWaitingScreen();
+      await appTeleport(session).showWaitingScreen();
     });
 
     const dialog = screen.getByRole("dialog", { name: "Finish in your browser" });
@@ -171,12 +172,12 @@ describe("the teleport screen in the app", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
 
     await act(async () => {
-      outcome = teleportFor(session).begin({ productReference: "card", query: {} });
+      outcome = appTeleport(session).begin({ productReference: "card", query: {} });
       await Promise.resolve();
       await Promise.resolve();
     });
     await act(async () => {
-      await teleportFor(session).showWaitingScreen();
+      await appTeleport(session).showWaitingScreen();
     });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -191,12 +192,12 @@ describe("the teleport screen in the app", () => {
       { deviceLocale: "es_ES" },
     );
     await act(async () => {
-      void teleportFor(session).begin({ productReference: "card", query: {} });
+      void appTeleport(session).begin({ productReference: "card", query: {} });
       await Promise.resolve();
       await Promise.resolve();
     });
     await act(async () => {
-      await teleportFor(session).showWaitingScreen();
+      await appTeleport(session).showWaitingScreen();
     });
     expect(screen.getByRole("dialog", { name: "Termina en tu navegador" })).toBeTruthy();
     expect(screen.getAllByRole("button")).toHaveLength(2);
@@ -226,7 +227,7 @@ describe("the success screen on the web", () => {
     expect(teleport()).toMatchObject({ status: "arrived", productReference: "card" });
 
     await act(async () => {
-      await teleportFor(session).completePurchase("ctx");
+      await teleportPage(session).completePurchase("ctx");
     });
 
     const status = screen.getByRole("status", { name: "You're all set" });
@@ -254,7 +255,7 @@ describe("the success screen on the web", () => {
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     const { session } = await mount({ teleport: { route: "checkout" } });
     await act(async () => {
-      await teleportFor(session).completePurchase("ctx");
+      await teleportPage(session).completePurchase("ctx");
     });
 
     expect(screen.getByText("Your purchase is complete.")).toBeTruthy();
@@ -272,7 +273,7 @@ describe("the success screen on the web", () => {
     );
     const { session } = await mount({ teleport: { route: "checkout" } }, { deviceLocale: "he_IL" });
     await act(async () => {
-      await teleportFor(session).completePurchase("ctx");
+      await teleportPage(session).completePurchase("ctx");
     });
     const status = screen.getByRole("status");
     expect(status.getAttribute("dir")).toBe("rtl");
@@ -315,24 +316,28 @@ describe("following a teleport from the paywall", () => {
       onCancel: vi.fn(),
       onComplete: vi.fn(),
     };
-    const { session } = await mount(
+    const { session, teleport } = await mount(
       { products: { card: "live:price_1:14days-free" }, teleport: { route: "checkout" } },
       {},
       callbacks,
     );
     await act(async () => {
-      void teleportFor(session).begin({ productReference: "card", query: {} });
+      void appTeleport(session).begin({ productReference: "card", query: {} });
       await Promise.resolve();
       await Promise.resolve();
     });
     expect(callbacks.onOpen).toHaveBeenCalledOnce();
     await act(async () => {
-      void teleportFor(session).handleReturn("closed");
+      teleport()?.open();
+    });
+    expect(callbacks.onOpen).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      void appTeleport(session).handleReturn("closed");
       await Promise.resolve();
     });
     expect(callbacks.onReturn).toHaveBeenCalledOnce();
     await act(async () => {
-      teleportFor(session).cancel();
+      teleport()?.cancel();
     });
     expect(callbacks.onCancel).toHaveBeenCalledOnce();
     await act(async () => {

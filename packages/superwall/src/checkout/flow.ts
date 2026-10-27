@@ -174,7 +174,8 @@ export const autoPrefetchTargets = (paywall: PaywallSession, mode: CheckoutMode)
 
 export const reprefetch = (paywall: PaywallSession): boolean => {
   if (!paywall.getSnapshot().device.publicApiKey) return false;
-  if (teleportFor(paywall).available()) return false;
+  const teleporter = teleportFor(paywall);
+  if (teleporter.kind === "app" && teleporter.available()) return false;
   const mode = checkoutModeFor(paywall.getSnapshot());
   const targets = autoPrefetchTargets(paywall, mode);
   for (const reference of targets) {
@@ -278,8 +279,9 @@ export const reportCompletedCheckout = async (
     completion,
   );
 
-  if (readTeleportBoot() !== undefined) {
-    await teleportFor(paywall).completePurchase(session.checkoutContextId);
+  const teleporter = teleportFor(paywall);
+  if (teleporter.kind === "page") {
+    await teleporter.completePurchase(session.checkoutContextId);
     return;
   }
   if (sdkRedeemsCheckout(paywall.getSnapshot())) return;

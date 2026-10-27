@@ -8,7 +8,9 @@ import {
   type SuperwallUserVariables,
 } from "@superwall/runtime";
 import { readTeleportBoot, seedTeleportUrl } from "../checkout/teleport/boot";
-import { flowQuery, restoreTeleportQuery, teleportFor } from "../checkout/teleport/flow";
+import { teleportFor } from "../checkout/teleport/flow";
+import { restoreTeleportQuery } from "../checkout/teleport/page";
+import { flowQuery } from "../checkout/teleport/teleporter";
 import { useHostStateArrived, useSuperwallSession } from "../provider/context";
 import {
   freeze,
@@ -320,7 +322,11 @@ const Router = ({
       const { teleport, ...navigation } = options ?? {};
       const teleporter = teleportFor(session);
       const teleportRoute = teleportOf(session.getSnapshot().config?.teleport)?.route;
-      if ((teleport === true || target === teleportRoute) && teleporter.available()) {
+      if (
+        (teleport === true || target === teleportRoute) &&
+        teleporter.kind === "app" &&
+        teleporter.available()
+      ) {
         void teleporter.begin({ route: target, query: flowQuery(store) });
         return;
       }
@@ -342,8 +348,9 @@ const Router = ({
     };
 
     const popBy = (count: number) => {
-      if (entries.length === 1 && readTeleportBoot() !== undefined) {
-        teleportFor(session).returnToApp("closed");
+      const teleporter = teleportFor(session);
+      if (entries.length === 1 && teleporter.kind === "page") {
+        teleporter.returnToApp("closed");
         return;
       }
       landing.current = undefined;
@@ -400,7 +407,8 @@ const Router = ({
   }, [entries, top, session, store]);
 
   React.useEffect(() => {
-    teleportFor(session).landed(top.name);
+    const teleporter = teleportFor(session);
+    if (teleporter.kind === "app") teleporter.landed(top.name);
   }, [session, top.name]);
 
   React.useEffect(() => {

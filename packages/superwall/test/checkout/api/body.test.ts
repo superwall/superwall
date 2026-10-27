@@ -167,7 +167,7 @@ describe("sessionBody", () => {
       presentedBy: "placement",
       presentationSourceType: "register",
       presentedByEventName: "",
-      presentedByEventId: "fa3c2ba4-01c4-463d-ac3c-c58a32c6f0c6",
+      presentedByEventId: "",
     });
     expect(body.context.device.platform).toBe("web");
     expect(body.context.device.appInstallDate).toBeUndefined();

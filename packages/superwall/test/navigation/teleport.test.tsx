@@ -2,10 +2,11 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallConfig, TOutgoingMessage } from "@superwall/runtime";
 import { encodeQueryPatch } from "../../src/checkout/teleport/boot";
-import { pageNavigation, teleportFor } from "../../src/checkout/teleport/flow";
+import { pageNavigation } from "../../src/checkout/teleport/page";
 import { useActions, usePurchase, useSuperwallSession } from "../../src/hooks";
 import { PaywallRouter, useQueryState, useRouter, type RouteMap } from "../../src/navigation/index";
 import { createWrapper, flush } from "../helpers";
+import { appTeleport } from "../checkout/teleport/halves";
 
 const config: SuperwallConfig = {
   products: { card: "live:price_1:14days-free", annual: "pro_year" },
@@ -153,7 +154,7 @@ describe("teleporting from the app", () => {
       await Promise.resolve();
     });
     expect(bodies[0]).toMatchObject({ route: "plans", productReference: "card" });
-    act(() => teleportFor(captured.session ?? fail()).cancel());
+    act(() => appTeleport(captured.session ?? fail()).cancel());
   });
 
   it("resolves a handed-off purchase with the product the store sold, or the one tapped", async () => {
@@ -190,7 +191,7 @@ describe("teleporting from the app", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    act(() => teleportFor(session).cancel());
+    act(() => appTeleport(session).cancel());
     await expect(result).resolves.toMatchObject({
       status: "abandoned",
       product: { reference: "card" },

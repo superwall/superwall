@@ -2,17 +2,17 @@ import { field, readCheckoutStatus } from "../api/decode";
 import type { CheckoutStatus } from "../types";
 import { fetchWithRetry } from "../api/fetch";
 import { subscriptionsApiUrl } from "../api/url";
-import { SESSION_QUERY_FIELD, sessionQueryOf } from "./boot";
+import { SESSION_QUERY_FIELD, sessionQueryOf, TAPPED_PRODUCT_QUERY_KEY } from "./boot";
 
 export type CreatedTeleport = { teleportId: string; url: string };
 
-export type TeleportStatus = {
+export type ServerTeleport = {
   status: "pending" | "claimed" | "completed" | "expired";
   checkoutContextId?: string;
   checkoutProductIdentifier?: string;
 };
 
-export type TeleportRequest = {
+export type NewTeleport = {
   route: string;
   productReference?: string;
   presentationId: string;
@@ -35,7 +35,7 @@ const text = (body: unknown, key: string): string | undefined => {
 
 export const createTeleport = async (
   publicApiKey: string,
-  request: TeleportRequest,
+  request: NewTeleport,
 ): Promise<CreatedTeleport> => {
   const response = await fetchWithRetry(subscriptionsApiUrl("checkout/teleport"), {
     method: "POST",
@@ -63,7 +63,7 @@ export const createTeleport = async (
 export const readTeleportStatus = async (
   publicApiKey: string,
   teleportId: string,
-): Promise<TeleportStatus> => {
+): Promise<ServerTeleport> => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
   let body: unknown;
@@ -155,7 +155,7 @@ export const warmTeleportPage = (url: string, references: readonly string[]): vo
   for (const reference of products) {
     const warm = new URL(url);
     warm.searchParams.set("sw_warm", "1");
-    if (reference !== undefined) warm.searchParams.set("sw_ref", reference);
+    if (reference !== undefined) warm.searchParams.set(TAPPED_PRODUCT_QUERY_KEY, reference);
     fetch(warm.toString(), { method: "GET", mode: "no-cors", credentials: "omit" }).catch(
       () => undefined,
     );

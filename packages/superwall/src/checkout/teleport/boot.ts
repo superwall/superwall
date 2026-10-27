@@ -16,6 +16,7 @@ export type TeleportBoot = {
 export const NAV_QUERY_KEY = "sw_nav";
 export const SESSION_QUERY_FIELD = "query";
 export const TAPPED_PRODUCT_FRAGMENT_KEY = "ref";
+export const TAPPED_PRODUCT_QUERY_KEY = "sw_ref";
 export const QUERY_FRAGMENT_KEY = "s";
 export const INTRODUCTORY_OFFER_FRAGMENT_KEY = "t";
 const REFERENCE_NAME = /^[\w.-]{1,191}$/;

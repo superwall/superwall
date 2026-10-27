@@ -1,7 +1,8 @@
 import * as React from "react";
 import type { SuperwallProduct } from "@superwall/runtime";
 import { isStripeProductIdentifier } from "../checkout/products";
-import { flowQuery, teleportFor } from "../checkout/teleport/flow";
+import { teleportFor } from "../checkout/teleport/flow";
+import { flowQuery } from "../checkout/teleport/teleporter";
 import { QueryStoreContext } from "../navigation/query";
 import type { RouteName } from "../navigation/index";
 import { useSuperwallSession } from "../provider/context";
@@ -141,7 +142,7 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
     teleporter.getStatus,
     teleporter.getStatus,
   );
-  const fallbackReference = teleporter.fallback();
+  const fallbackReference = teleporter.kind === "app" ? teleporter.fallback() : undefined;
   const callbacks = React.useRef(options);
   callbacks.current = options;
 
@@ -160,10 +161,18 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
   return React.useMemo(
     () => ({
       ...statusOf(status, fallbackReference, productsByReference),
-      prefetch: (route?: RouteName) => teleporter.prefetch(route, flowQuery(store)),
-      open: teleporter.open,
-      cancel: teleporter.cancel,
-      returnToApp: () => teleporter.returnToApp("closed"),
+      prefetch: (route?: RouteName) => {
+        if (teleporter.kind === "app") teleporter.prefetch(route, flowQuery(store));
+      },
+      open: () => {
+        if (teleporter.kind === "app") teleporter.open();
+      },
+      cancel: () => {
+        if (teleporter.kind === "app") teleporter.cancel();
+      },
+      returnToApp: () => {
+        if (teleporter.kind === "page") teleporter.returnToApp("closed");
+      },
     }),
     [status, fallbackReference, productsByReference, teleporter, store],
   );
