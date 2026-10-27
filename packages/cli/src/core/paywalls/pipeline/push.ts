@@ -201,13 +201,6 @@ async function prepare(
   spin?.start(`Building ${label}`);
   const at = Date.now();
   try {
-    const builds = await pooled(targets, BUILD_CONCURRENCY, (target) =>
-      framework.buildSnapshot(project, target.surface, {
-        assetBaseUrl: assetBaseUrl(target.applicationId),
-        platform: target.platform,
-      }),
-    );
-
     const projectIds = new Map<string, string | undefined>();
     for (const target of targets) {
       if (projectIds.has(target.applicationId)) continue;
@@ -225,6 +218,14 @@ async function prepare(
       const projectId = projectIds.get(target.applicationId);
       return projectId === undefined ? undefined : catalogues.get(projectId);
     };
+
+    const builds = await pooled(targets, BUILD_CONCURRENCY, (target) =>
+      framework.buildSnapshot(project, target.surface, {
+        assetBaseUrl: assetBaseUrl(target.applicationId),
+        platform: target.platform,
+        catalogue: catalogueOf(target)?.variables,
+      }),
+    );
 
     for (const [projectId, catalogue] of catalogues) {
       requireProducts(

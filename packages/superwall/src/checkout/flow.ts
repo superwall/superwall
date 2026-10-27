@@ -1,12 +1,12 @@
 import type { SuperwallPostPurchase, SuperwallSession } from "@superwall/runtime";
-import { checkoutModeOf, checkoutPrefetchOf, detectSuperwallHost } from "@superwall/runtime";
+import { checkoutPrefetchOf, detectSuperwallHost } from "@superwall/runtime";
 import { createApplePay, type ApplePay, type ApplePayOutcome } from "./applePay";
 import { asString, field } from "./api/decode";
 import { fetchWithRetry } from "./api/fetch";
 import { subscriptionsApiUrl } from "./api/url";
 import { checkoutEvents } from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
-import { sdkHostsCheckoutInPaywall, sdkRedeemsCheckout } from "./host/sdk";
+import { checkoutModeFor, sdkRedeemsCheckout } from "./host/sdk";
 import { presentingPlacement } from "./host/init";
 import { bindsEntitlement, hostedInWebSdk } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
@@ -19,6 +19,7 @@ import type {
   PostPurchaseBehavior,
   PurchaseOutcome,
   RedirectCheckoutSession,
+  SessionScope,
   WebappCompletion,
   WebPurchaseOptions,
 } from "./types";
@@ -169,14 +170,37 @@ export const autoPrefetchTargets = (paywall: PaywallSession, mode: CheckoutMode)
   );
 };
 
-export const reprefetch = (paywall: PaywallSession) => {
-  const mode = checkoutModeOf(paywall.getSnapshot().config?.checkout);
-  if (mode !== "sheet" && mode !== "applePay") return;
-  if (!paywall.getSnapshot().device.publicApiKey) return;
-  if (!sdkHostsCheckoutInPaywall(paywall.getSnapshot())) return;
-  for (const reference of autoPrefetchTargets(paywall, mode)) {
+export const reprefetch = (paywall: PaywallSession): boolean => {
+  if (!paywall.getSnapshot().device.publicApiKey) return false;
+  const mode = checkoutModeFor(paywall.getSnapshot());
+  const targets = autoPrefetchTargets(paywall, mode);
+  for (const reference of targets) {
     void prefetchSession(paywall, reference, mode);
   }
+  return targets.length > 0;
+};
+
+const identities = new WeakMap<object, string>();
+
+export const refreshIdentity = (paywall: PaywallSession, identity: string) => {
+  const seen = identities.get(paywall);
+  identities.set(paywall, identity);
+  if (seen === undefined || seen === identity) return;
+  invalidateSessions(paywall, "customer identity changed");
+  reprefetch(paywall);
+};
+
+const warmedOpens = new WeakMap<object, object>();
+
+export const warmOnOpen = (paywall: PaywallSession, open: object) => {
+  if (warmedOpens.get(paywall) === open) return;
+  if (reprefetch(paywall)) warmedOpens.set(paywall, open);
+};
+
+const scopeFor = (mode: CheckoutMode): SessionScope => {
+  if (mode === "applePay") return "apple-pay";
+  if (mode === "external") return "external";
+  return "default";
 };
 
 export const prefetchSession = async (
@@ -188,7 +212,7 @@ export const prefetchSession = async (
   const result = await sessions.prefetch({
     referenceName,
     mode,
-    scope: mode === "applePay" ? "apple-pay" : "default",
+    scope: scopeFor(mode),
     silent: true,
   });
   if (!result) return;
@@ -221,6 +245,7 @@ export const reportCompletedCheckout = async (
   const host = hostFor(paywall);
   const context = contextFor(paywall, session.referenceName, session.checkoutContextId);
   const options = takePurchaseOptions(paywall, session.referenceName);
+  sessionsFor(paywall).invalidate();
 
   if (options.stripeMetadata) {
     try {
@@ -396,7 +421,7 @@ export const purchaseOnWeb = async (
   options: WebPurchaseOptions = {},
 ): Promise<PurchaseOutcome> => {
   const sessions = sessionsFor(paywall);
-  const mode = sdkHostsCheckoutInPaywall(paywall.getSnapshot()) ? requested : "external";
+  const mode = checkoutModeFor(paywall.getSnapshot(), requested);
   rememberPurchaseOptions(paywall, referenceName, options);
   try {
     if (mode === "applePay") {
@@ -411,7 +436,7 @@ export const purchaseOnWeb = async (
         : await sessions.begin({
             referenceName,
             mode: mode === "external" ? "external" : "sheet",
-            scope: "default",
+            scope: mode === "external" ? "external" : "default",
           });
 
     if (result.directive === "embedded") {

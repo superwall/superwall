@@ -1,5 +1,7 @@
-import type { SuperwallRuntimeSnapshot } from "@superwall/runtime";
+import { checkoutModeOf, type SuperwallRuntimeSnapshot } from "@superwall/runtime";
+import { platformOf } from "../../device";
 import { asString } from "../api/decode";
+import type { CheckoutMode } from "../types";
 import { hostedInWebSdk } from "./surface";
 
 /**
@@ -38,3 +40,14 @@ export const sdkHostsCheckoutInPaywall = (snapshot: SuperwallRuntimeSnapshot): b
  */
 export const sdkRedeemsCheckout = (snapshot: SuperwallRuntimeSnapshot): boolean =>
   hostedInWebSdk() || paddedVersionOf(snapshot) >= CHECKOUT_EVENTS;
+
+export const checkoutModeFor = (
+  snapshot: SuperwallRuntimeSnapshot,
+  requested?: CheckoutMode,
+): CheckoutMode => {
+  if (!sdkHostsCheckoutInPaywall(snapshot)) return "external";
+  if (!hostedInWebSdk() && platformOf(snapshot.device) === "ios") return "external";
+  const configured = checkoutModeOf(snapshot.config?.checkout);
+  if (configured !== "sheet" && configured !== "applePay") return "external";
+  return requested ?? configured;
+};

@@ -14,6 +14,7 @@ export type EntrySourceOptions = {
   surface: DiscoveredSurface;
   config: SuperwallConfig;
   products?: Record<string, string>;
+  inlineProducts?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 };
 
 export const entrySource = ({
@@ -22,6 +23,7 @@ export const entrySource = ({
   surface,
   config,
   products,
+  inlineProducts,
 }: EntrySourceOptions): string => {
   const imp = (file: string) => JSON.stringify(relativeImport(entryDir, file));
   const checkout = checkoutNeedsPaymentUi(config.checkout);
@@ -79,7 +81,9 @@ export const entrySource = ({
     ``,
     `createRoot(document.getElementById("root")).render(`,
     `  <React.StrictMode>`,
-    `    <SuperwallProvider config={config}>`,
+    inlineProducts === undefined || Object.keys(inlineProducts).length === 0
+      ? `    <SuperwallProvider config={config}>`
+      : `    <SuperwallProvider config={config} inlineProducts={${JSON.stringify(inlineProducts)}}>`,
     `      <PaywallRouter ${routerProps} />`,
     ...(checkout ? [`      <SuperwallCheckout />`] : []),
     `    </SuperwallProvider>`,

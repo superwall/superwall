@@ -33,23 +33,215 @@ const redirect: RedirectCheckoutSession = {
   referenceName: "primary",
 };
 
-const renderCheckout = async (checkout?: SuperwallCheckoutConfig) => {
+const renderCheckout = async (
+  checkout?: SuperwallCheckoutConfig,
+  platform = "Android",
+  publicApiKey = "pk_test",
+) => {
+  const outgoing: string[] = [];
   const rendered = renderWithProvider(
     () => ({ session: useSuperwallSession(), purchase: usePurchase() }),
     {
       config: { ...testConfig, checkout },
-      host: { products, device: { publicApiKey: "pk_test" } },
+      host: {
+        products,
+        device: { platform, publicApiKey },
+        onOutgoing: (message) => outgoing.push(message.event_name),
+      },
     },
   );
   await flush();
   const session = rendered.result.current.session;
   const [product] = session.getSnapshot().products;
   if (!product) throw new Error("the mock host delivered no products");
-  return { ...rendered, sessions: sessionsFor(session), product };
+  return { ...rendered, sessions: sessionsFor(session), product, outgoing };
 };
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("usePurchase with a Stripe product inside an iOS app", () => {
+  it("sends the shopper to the hosted page even when the paywall asks for the sheet", async () => {
+    const { result, sessions, outgoing } = await renderCheckout("sheet", "iOS");
+    const begin = vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
+
+    let outcome: { status: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.purchase.purchase("primary");
+    });
+
+    expect(begin).toHaveBeenCalledWith({
+      referenceName: "primary",
+      mode: "external",
+      scope: "external",
+    });
+    expect(outgoing).toContain("initiate_web_checkout");
+    expect(window.location.hash).toBe("#hosted-checkout");
+    expect(outcome).toMatchObject({ status: "abandoned" });
+  });
+
+  it("buys it on the web when the paywall configures no checkout at all, never through the store", async () => {
+    const { result, sessions } = await renderCheckout(undefined, "iOS");
+    const begin = vi.spyOn(sessions, "begin").mockRejectedValue(new Error("offline"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    let outcome: { status: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.purchase.purchase("primary");
+    });
+
+    expect(begin).toHaveBeenCalledWith({
+      referenceName: "primary",
+      mode: "external",
+      scope: "external",
+    });
+    expect(outcome).toMatchObject({ status: "failed" });
+    expect(result.current.purchase.transaction).toBeUndefined();
+  });
+
+  it("warms the hosted page for the product on selection, never the sheet", async () => {
+    const { result, sessions } = await renderCheckout("sheet", "iOS");
+    const prefetch = vi.spyOn(sessions, "prefetch").mockResolvedValue(null);
+
+    act(() => result.current.purchase.prefetch("primary"));
+
+    expect(prefetch).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceName: "primary", mode: "external" }),
+    );
+  });
+
+  it("opens the session warmed for that product, and the same one again on the next tap", async () => {
+    const { result, sessions } = await renderCheckout("sheet", "iOS");
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            checkoutContextId: "ctx_9",
+            directive: {
+              directive: "redirect",
+              checkoutSessionId: "sw_checkout_9",
+              checkoutUrl: "#warm",
+            },
+          }),
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = () =>
+      fetchMock.mock.calls.filter(([, init]) => String(init?.body).includes('"isPrefetch":false'));
+    await act(async () => {
+      await sessions.prefetch({
+        referenceName: "primary",
+        mode: "external",
+        scope: "external",
+        silent: true,
+      });
+    });
+
+    for (let tap = 0; tap < 2; tap++) {
+      await act(async () => {
+        await result.current.purchase.purchase("primary");
+      });
+      expect(window.location.hash).toBe("#warm");
+      window.location.hash = "";
+    }
+    expect(created()).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("a purchase that picks its own checkout mode", () => {
+  it("opens the sheet for this call on a paywall whose default is Apple Pay", async () => {
+    const { result, sessions } = await renderCheckout("applePay");
+    const wallet = vi.spyOn(applePayFor(result.current.session), "purchase");
+    const begin = vi.spyOn(sessions, "begin").mockResolvedValue(embedded);
+
+    let outcome: Promise<{ status: string }> | undefined;
+    act(() => {
+      outcome = result.current.purchase.purchase("primary", { checkout: "sheet" });
+    });
+    await flush();
+
+    expect(wallet).not.toHaveBeenCalled();
+    expect(begin).toHaveBeenCalledWith({
+      referenceName: "primary",
+      mode: "sheet",
+      scope: "default",
+    });
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+    checkoutEvents.dispatch("SHEET_CLOSE", undefined);
+    await expect(outcome).resolves.toMatchObject({ status: "abandoned" });
+  });
+
+  it("never reuses a session warmed for another mode", async () => {
+    const { result, sessions } = await renderCheckout("sheet");
+    const directives: Record<string, unknown> = {
+      embedded: {
+        directive: "embedded",
+        checkoutSessionId: "sw_checkout_sheet",
+        clientSecret: "cs_sheet",
+        publishableKey: "pk_test",
+      },
+      redirect: {
+        directive: "redirect",
+        checkoutSessionId: "sw_checkout_page",
+        checkoutUrl: "#hosted-page",
+      },
+    };
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body: unknown = JSON.parse(String(init?.body));
+      const allowed = Reflect.get(Object(body), "allowedCheckoutDirectives");
+      const directive =
+        Array.isArray(allowed) && allowed[0] === "redirect" ? "redirect" : "embedded";
+      return new Response(
+        JSON.stringify({ checkoutContextId: `ctx_${directive}`, directive: directives[directive] }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      await sessions.prefetch({ referenceName: "primary", mode: "sheet", silent: true });
+    });
+    let outcome: { status: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.purchase.purchase("primary", { checkout: "external" });
+    });
+
+    expect(window.location.hash).toBe("#hosted-page");
+    expect(outcome).toMatchObject({ status: "abandoned" });
+    vi.unstubAllGlobals();
+    window.location.hash = "";
+  });
+
+  it("still sends the shopper to the hosted page inside an iOS app", async () => {
+    const { result, sessions } = await renderCheckout("applePay", "iOS");
+    const begin = vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
+
+    await act(async () => {
+      await result.current.purchase.purchase("primary", { checkout: "sheet" });
+    });
+
+    expect(begin).toHaveBeenCalledWith({
+      referenceName: "primary",
+      mode: "external",
+      scope: "external",
+    });
+  });
+
+  it("warms the mode the button will use, under the same iOS rule", async () => {
+    const android = await renderCheckout("applePay");
+    const warmAndroid = vi.spyOn(android.sessions, "prefetch").mockResolvedValue(null);
+    act(() => android.result.current.purchase.prefetch("primary", { checkout: "sheet" }));
+    expect(warmAndroid).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceName: "primary", mode: "sheet", scope: "default" }),
+    );
+
+    const ios = await renderCheckout("applePay", "iOS");
+    const warmIos = vi.spyOn(ios.sessions, "prefetch").mockResolvedValue(null);
+    act(() => ios.result.current.purchase.prefetch("primary", { checkout: "sheet" }));
+    expect(warmIos).toHaveBeenCalledWith(expect.objectContaining({ mode: "external" }));
+  });
 });
 
 describe("usePurchase with web checkout", () => {
@@ -177,16 +369,16 @@ describe("usePurchase prefetch", () => {
     unsubscribe();
   });
 
-  it("does nothing for store products or paywalls without web checkout", async () => {
+  it("does nothing for store products, or without a public API key", async () => {
     const sheet = await renderCheckout("sheet");
     const sheetWarm = vi.spyOn(sheet.sessions, "prefetch");
     act(() => sheet.result.current.purchase.prefetch("secondary"));
     expect(sheetWarm).not.toHaveBeenCalled();
 
-    const external = await renderCheckout("external");
-    const externalWarm = vi.spyOn(external.sessions, "prefetch");
-    act(() => external.result.current.purchase.prefetch());
-    expect(externalWarm).not.toHaveBeenCalled();
+    const keyless = await renderCheckout("external", "Android", "");
+    const keylessWarm = vi.spyOn(keyless.sessions, "prefetch");
+    act(() => keyless.result.current.purchase.prefetch());
+    expect(keylessWarm).not.toHaveBeenCalled();
   });
 });
 
@@ -299,7 +491,7 @@ describe("usePurchase with hosted checkout", () => {
     expect(begin).toHaveBeenCalledWith({
       referenceName: "primary",
       mode: "external",
-      scope: "default",
+      scope: "external",
     });
     expect(outcome).toMatchObject({ status: "abandoned" });
   });

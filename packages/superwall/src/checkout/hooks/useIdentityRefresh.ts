@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useSuperwallSession } from "../../provider/context";
 import { useSuperwallSnapshot } from "../../hooks/useSuperwallSnapshot";
-import { invalidateSessions, reprefetch } from "../flow";
+import { refreshIdentity } from "../flow";
 
 /**
  * A checkout session is made for one shopper. The backend reads the identity
@@ -27,16 +27,8 @@ export const useIdentityRefresh = () => {
   const ready = typeof device.publicApiKey === "string" && device.publicApiKey !== "";
   const email = typeof user.email === "string" ? user.email : "";
   const customerId = typeof user.stripe_customer_id === "string" ? user.stripe_customer_id : "";
-  const seen = React.useRef<string | undefined>(undefined);
 
   React.useEffect(() => {
-    if (!ready) return;
-    const identity = `${email} ${customerId}`;
-    if (seen.current === identity) return;
-    const first = seen.current === undefined;
-    seen.current = identity;
-    if (first) return;
-    invalidateSessions(session, "customer identity changed");
-    reprefetch(session);
+    if (ready) refreshIdentity(session, `${email} ${customerId}`);
   }, [session, ready, email, customerId]);
 };
