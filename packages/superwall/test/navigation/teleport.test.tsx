@@ -28,6 +28,13 @@ type Captured = {
 
 const captured: Captured = {};
 
+const setFragment = (fragment: string) =>
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${window.location.search}#${fragment}`,
+  );
+
 const fail = (): never => {
   throw new Error("no session");
 };
@@ -243,7 +250,7 @@ describe("the web half of a teleport", () => {
     expect(screen.getByText("goal:sleep")).toBeTruthy();
 
     await act(async () => {
-      window.location.hash = `#ref=card&s=${encodeQueryPatch({ goal: "focus" })}`;
+      setFragment(`ref=card&s=${encodeQueryPatch({ goal: "focus" })}`);
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     });
     expect(screen.getByText("goal:focus")).toBeTruthy();
@@ -255,7 +262,7 @@ describe("the web half of a teleport", () => {
 
     Reflect.deleteProperty(window, "__SW_TELEPORT__");
     await act(async () => {
-      window.location.hash = `#s=${encodeQueryPatch({ goal: "rest" })}`;
+      setFragment(`s=${encodeQueryPatch({ goal: "rest" })}`);
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     });
     expect(screen.getByText("goal:focus")).toBeTruthy();
