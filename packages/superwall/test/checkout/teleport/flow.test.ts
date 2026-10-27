@@ -474,7 +474,9 @@ describe("a teleport from the app", () => {
     attach(session);
     await settle();
     const returned = vi.fn();
+    const cancelled = vi.fn();
     teleporter.on("return", returned);
+    teleporter.on("cancel", cancelled);
     const outcome = teleporter.begin({ productReference: "card", query: {} });
     await settle(1_500);
     const loading: boolean[] = [];
@@ -498,6 +500,7 @@ describe("a teleport from the app", () => {
     await settle(16_000);
 
     await expect(outcome).resolves.toBe("abandoned");
+    expect(cancelled).not.toHaveBeenCalled();
     expect(teleporter.getStatus()).toEqual({ status: "idle" });
     await expect(handleReturn()).resolves.toBe(false);
     unsubscribe();

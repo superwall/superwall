@@ -392,7 +392,6 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
   const cancel = (record: OpenTeleport) => {
     settleAbandoned(record);
     park(record);
-    emit("cancel");
   };
 
   const payInApp = (
@@ -829,7 +828,9 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       if (phase.kind === "waiting") reopen(phase.record);
     },
     cancel: () => {
-      if (phase.kind === "waiting") cancel(phase.record);
+      if (phase.kind !== "waiting") return;
+      cancel(phase.record);
+      emit("cancel");
     },
     fallback: () => (phase.kind === "waiting" ? fallbackFor(phase.record) : undefined),
     showWaitingScreen: async () => {
