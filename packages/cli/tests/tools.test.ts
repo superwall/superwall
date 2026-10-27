@@ -182,7 +182,7 @@ test("publish and manual grants describe their live effects", () => {
   assert.match(tool("paywalls_publish").description, /latest saved draft/);
   assert.match(tool("paywalls_publish").description, /Replaces its currently deployed version and refreshes app configuration/);
   assert.match(tool("paywalls_publish").description, /users by campaigns/);
-  assert.match(tool("entitlements_grants_create").description, /existing entitlement manually to an app user or device/);
+  assert.match(tool("entitlements_grants_create").description, /existing entitlement manually to a device, optionally linked to an app user ID/);
   assert.match(tool("entitlements_grants_create").description, /expiry time/);
   assert.match(tool("entitlements_grants_create").description, /without charging the user or creating a paid subscription/);
   assert.match(tool("entitlements_grants_create").description, /error when an active grant already exists/);
