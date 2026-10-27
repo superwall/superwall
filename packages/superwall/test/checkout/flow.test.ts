@@ -718,7 +718,7 @@ describe("an SDK that cannot host payment", () => {
     expect(begin).toHaveBeenCalledWith({
       referenceName: "primary",
       mode: "external",
-      scope: "default",
+      scope: "external",
     });
     expect(window.location.hash).toBe("#hosted");
   });

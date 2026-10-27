@@ -71,7 +71,7 @@ describe("useAutoPrefetch", () => {
   it("does nothing when prefetch is off, and warms the hosted page with no checkout configured", async () => {
     expect((await render({ mode: "applePay", prefetch: false })).prefetched).toEqual([]);
     expect((await render(undefined)).prefetched).toEqual([
-      expect.objectContaining({ referenceName: "primary", mode: "external", scope: "default" }),
+      expect.objectContaining({ referenceName: "primary", mode: "external", scope: "external" }),
     ]);
   });
 });

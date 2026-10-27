@@ -23,7 +23,7 @@ export type WebPurchaseOptions = {
   stripeMetadata?: Readonly<Record<string, string>>;
 };
 
-export type SessionScope = "default" | "apple-pay";
+export type SessionScope = "default" | "apple-pay" | "external";
 
 export type SubscriptionDetails = {
   amount: number;

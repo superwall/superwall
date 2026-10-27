@@ -19,6 +19,7 @@ import type {
   PostPurchaseBehavior,
   PurchaseOutcome,
   RedirectCheckoutSession,
+  SessionScope,
   WebappCompletion,
   WebPurchaseOptions,
 } from "./types";
@@ -196,6 +197,12 @@ export const warmOnOpen = (paywall: PaywallSession, open: object) => {
   if (reprefetch(paywall)) warmedOpens.set(paywall, open);
 };
 
+const scopeFor = (mode: CheckoutMode): SessionScope => {
+  if (mode === "applePay") return "apple-pay";
+  if (mode === "external") return "external";
+  return "default";
+};
+
 export const prefetchSession = async (
   paywall: PaywallSession,
   referenceName: string,
@@ -205,7 +212,7 @@ export const prefetchSession = async (
   const result = await sessions.prefetch({
     referenceName,
     mode,
-    scope: mode === "applePay" ? "apple-pay" : "default",
+    scope: scopeFor(mode),
     silent: true,
   });
   if (!result) return;
@@ -429,7 +436,7 @@ export const purchaseOnWeb = async (
         : await sessions.begin({
             referenceName,
             mode: mode === "external" ? "external" : "sheet",
-            scope: "default",
+            scope: mode === "external" ? "external" : "default",
           });
 
     if (result.directive === "embedded") {

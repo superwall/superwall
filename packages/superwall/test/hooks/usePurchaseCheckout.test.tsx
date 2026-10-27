@@ -74,7 +74,7 @@ describe("usePurchase with a Stripe product inside an iOS app", () => {
     expect(begin).toHaveBeenCalledWith({
       referenceName: "primary",
       mode: "external",
-      scope: "default",
+      scope: "external",
     });
     expect(outgoing).toContain("initiate_web_checkout");
     expect(window.location.hash).toBe("#hosted-checkout");
@@ -94,7 +94,7 @@ describe("usePurchase with a Stripe product inside an iOS app", () => {
     expect(begin).toHaveBeenCalledWith({
       referenceName: "primary",
       mode: "external",
-      scope: "default",
+      scope: "external",
     });
     expect(outcome).toMatchObject({ status: "failed" });
     expect(result.current.purchase.transaction).toBeUndefined();
@@ -169,6 +169,46 @@ describe("a purchase that picks its own checkout mode", () => {
     await expect(outcome).resolves.toMatchObject({ status: "abandoned" });
   });
 
+  it("never reuses a session warmed for another mode", async () => {
+    const { result, sessions } = await renderCheckout("sheet");
+    const directives: Record<string, unknown> = {
+      embedded: {
+        directive: "embedded",
+        checkoutSessionId: "sw_checkout_sheet",
+        clientSecret: "cs_sheet",
+        publishableKey: "pk_test",
+      },
+      redirect: {
+        directive: "redirect",
+        checkoutSessionId: "sw_checkout_page",
+        checkoutUrl: "#hosted-page",
+      },
+    };
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body: unknown = JSON.parse(String(init?.body));
+      const allowed = Reflect.get(Object(body), "allowedCheckoutDirectives");
+      const directive =
+        Array.isArray(allowed) && allowed[0] === "redirect" ? "redirect" : "embedded";
+      return new Response(
+        JSON.stringify({ checkoutContextId: `ctx_${directive}`, directive: directives[directive] }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      await sessions.prefetch({ referenceName: "primary", mode: "sheet", silent: true });
+    });
+    let outcome: { status: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.purchase.purchase("primary", { checkout: "external" });
+    });
+
+    expect(window.location.hash).toBe("#hosted-page");
+    expect(outcome).toMatchObject({ status: "abandoned" });
+    vi.unstubAllGlobals();
+    window.location.hash = "";
+  });
+
   it("still sends the shopper to the hosted page inside an iOS app", async () => {
     const { result, sessions } = await renderCheckout("applePay", "iOS");
     const begin = vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
@@ -180,7 +220,7 @@ describe("a purchase that picks its own checkout mode", () => {
     expect(begin).toHaveBeenCalledWith({
       referenceName: "primary",
       mode: "external",
-      scope: "default",
+      scope: "external",
     });
   });
 
@@ -446,7 +486,7 @@ describe("usePurchase with hosted checkout", () => {
     expect(begin).toHaveBeenCalledWith({
       referenceName: "primary",
       mode: "external",
-      scope: "default",
+      scope: "external",
     });
     expect(outcome).toMatchObject({ status: "abandoned" });
   });
