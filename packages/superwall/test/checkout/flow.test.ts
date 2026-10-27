@@ -354,7 +354,7 @@ describe("openEmbeddedSheet", () => {
 
 describe("purchaseOnWeb", () => {
   it("takes the wallet's outcome when the wallet could open", async () => {
-    const { session } = fakeSession();
+    const { session } = fakeSession({ checkout: "applePay" });
     vi.spyOn(applePayFor(session), "purchase").mockResolvedValue({ status: "abandoned" });
     const begin = vi.spyOn(sessionsFor(session), "begin");
 
@@ -363,7 +363,7 @@ describe("purchaseOnWeb", () => {
   });
 
   it("reuses an embedded session the wallet warm-up already produced", async () => {
-    const { session } = fakeSession();
+    const { session } = fakeSession({ checkout: "applePay" });
     vi.spyOn(applePayFor(session), "purchase").mockResolvedValue({
       status: "unavailable",
       reason: "no_apple_pay_quote",
@@ -400,7 +400,7 @@ describe("purchaseOnWeb", () => {
   });
 
   it("asks the wallet with an empty context id when nothing was warmed", async () => {
-    const { session } = fakeSession();
+    const { session } = fakeSession({ checkout: "applePay" });
     const wallet = vi
       .spyOn(applePayFor(session), "purchase")
       .mockResolvedValue({ status: "completed" });

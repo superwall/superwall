@@ -58,6 +58,13 @@ describe("checkoutModeFor", () => {
     expect(checkoutModeFor(app("Android", "sheet"), "applePay")).toBe("applePay");
   });
 
+  it("opens a per-call sheet or wallet only where the paywall ships the payment UI", () => {
+    expect(checkoutModeFor(app("Android", "external"), "sheet")).toBe("external");
+    expect(checkoutModeFor(app("Android"), "applePay")).toBe("external");
+    expect(checkoutModeFor(app("Android", "applePay"), "sheet")).toBe("sheet");
+    expect(checkoutModeFor(app("Android", "sheet"), "external")).toBe("external");
+  });
+
   it("is the hosted page for an SDK too old to host payment", () => {
     expect(
       checkoutModeFor({

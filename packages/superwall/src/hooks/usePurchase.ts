@@ -34,7 +34,10 @@ export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
   pendingProduct?: SuperwallProduct<TVariables>;
   transaction?: SuperwallTransaction<SuperwallProduct<TVariables>>;
   failure?: SuperwallPurchaseFailure<SuperwallProduct<TVariables>>;
-  prefetch: (input?: ProductReference | SuperwallProduct<TVariables>) => void;
+  prefetch: (
+    input?: ProductReference | SuperwallProduct<TVariables>,
+    options?: Pick<SuperwallPurchaseOptions, "checkout">,
+  ) => void;
 };
 
 const referenceOf = (input: string | { reference: string }): string =>
@@ -45,8 +48,9 @@ const referenceOf = (input: string | { reference: string }): string =>
  * always bought on the web. With `checkout: "sheet"` it opens Stripe's
  * embedded sheet; with `"applePay"` it opens the wallet where the device
  * offers it and falls back to the sheet; otherwise, and always inside an iOS
- * app, it opens Superwall's hosted checkout in the browser. Web checkout only
- * runs when a host supplied a public API key.
+ * app, it opens Superwall's hosted checkout in the browser. A `purchase()` or
+ * `prefetch()` call can pass its own `checkout` mode, under the same iOS
+ * rule. Web checkout only runs when a host supplied a public API key.
  */
 export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
@@ -71,7 +75,7 @@ export const usePurchase = <
       const product = session.getSnapshot().productsByReference[reference];
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
         const { postPurchase, stripeMetadata } = options ?? {};
-        const status = await purchaseOnWeb(session, reference, webMode, {
+        const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
           postPurchase,
           stripeMetadata,
         });
@@ -84,11 +88,19 @@ export const usePurchase = <
 
   const first = snapshot.products[0]?.reference;
   const prefetch = React.useCallback(
-    (input?: ProductReference | SuperwallProduct<TVariables>) => {
+    (
+      input?: ProductReference | SuperwallProduct<TVariables>,
+      options?: Pick<SuperwallPurchaseOptions, "checkout">,
+    ) => {
       const reference = input === undefined ? first : referenceOf(input);
       if (!webMode || reference === undefined) return;
       if (!sessionsFor(session).isStripeProduct(reference)) return;
-      void prefetchSession(session, reference, webMode);
+      const snapshot = session.getSnapshot();
+      void prefetchSession(
+        session,
+        reference,
+        checkoutModeFor(snapshot, options?.checkout ?? webMode),
+      );
     },
     [session, webMode, first],
   );

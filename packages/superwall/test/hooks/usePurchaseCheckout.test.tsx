@@ -146,6 +146,59 @@ describe("usePurchase with a Stripe product inside an iOS app", () => {
   });
 });
 
+describe("a purchase that picks its own checkout mode", () => {
+  it("opens the sheet for this call on a paywall whose default is Apple Pay", async () => {
+    const { result, sessions } = await renderCheckout("applePay");
+    const wallet = vi.spyOn(applePayFor(result.current.session), "purchase");
+    const begin = vi.spyOn(sessions, "begin").mockResolvedValue(embedded);
+
+    let outcome: Promise<{ status: string }> | undefined;
+    act(() => {
+      outcome = result.current.purchase.purchase("primary", { checkout: "sheet" });
+    });
+    await flush();
+
+    expect(wallet).not.toHaveBeenCalled();
+    expect(begin).toHaveBeenCalledWith({
+      referenceName: "primary",
+      mode: "sheet",
+      scope: "default",
+    });
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+    checkoutEvents.dispatch("SHEET_CLOSE", undefined);
+    await expect(outcome).resolves.toMatchObject({ status: "abandoned" });
+  });
+
+  it("still sends the shopper to the hosted page inside an iOS app", async () => {
+    const { result, sessions } = await renderCheckout("applePay", "iOS");
+    const begin = vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
+
+    await act(async () => {
+      await result.current.purchase.purchase("primary", { checkout: "sheet" });
+    });
+
+    expect(begin).toHaveBeenCalledWith({
+      referenceName: "primary",
+      mode: "external",
+      scope: "default",
+    });
+  });
+
+  it("warms the mode the button will use, under the same iOS rule", async () => {
+    const android = await renderCheckout("applePay");
+    const warmAndroid = vi.spyOn(android.sessions, "prefetch").mockResolvedValue(null);
+    act(() => android.result.current.purchase.prefetch("primary", { checkout: "sheet" }));
+    expect(warmAndroid).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceName: "primary", mode: "sheet", scope: "default" }),
+    );
+
+    const ios = await renderCheckout("applePay", "iOS");
+    const warmIos = vi.spyOn(ios.sessions, "prefetch").mockResolvedValue(null);
+    act(() => ios.result.current.purchase.prefetch("primary", { checkout: "sheet" }));
+    expect(warmIos).toHaveBeenCalledWith(expect.objectContaining({ mode: "external" }));
+  });
+});
+
 describe("usePurchase with web checkout", () => {
   it("opens the embedded sheet for a Stripe product and resolves with its outcome", async () => {
     const { result, sessions } = await renderCheckout("sheet");

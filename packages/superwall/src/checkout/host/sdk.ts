@@ -43,9 +43,11 @@ export const sdkRedeemsCheckout = (snapshot: SuperwallRuntimeSnapshot): boolean 
 
 export const checkoutModeFor = (
   snapshot: SuperwallRuntimeSnapshot,
-  requested: CheckoutMode | undefined = checkoutModeOf(snapshot.config?.checkout),
+  requested?: CheckoutMode,
 ): CheckoutMode => {
   if (!sdkHostsCheckoutInPaywall(snapshot)) return "external";
   if (!hostedInWebSdk() && platformOf(snapshot.device) === "ios") return "external";
-  return requested ?? "external";
+  const configured = checkoutModeOf(snapshot.config?.checkout);
+  if (configured !== "sheet" && configured !== "applePay") return "external";
+  return requested ?? configured;
 };

@@ -10,7 +10,7 @@ import type {
   TPermissionTypeMessage,
   TransportKind,
 } from "@superwall/protocol";
-import type { SuperwallConfig, SuperwallPostPurchase } from "../config";
+import type { SuperwallCheckoutMode, SuperwallConfig, SuperwallPostPurchase } from "../config";
 import type { SuperwallTranslateValues } from "../localization";
 import type {
   SuperwallProduct,
@@ -125,6 +125,15 @@ export type SuperwallPurchaseOptions = {
    * store purchases, which have no Stripe object to write to.
    */
   stripeMetadata?: Readonly<Record<string, string>>;
+  /**
+   * How this purchase checks out on the web when the product is a Stripe
+   * product, overriding the config's `checkout` mode for this call — a
+   * button that always opens the sheet on a paywall whose default is
+   * `"applePay"`. Inside an iOS app a Stripe purchase always opens the
+   * hosted checkout whatever this says. Ignored by store purchases.
+   * Default: the config's `checkout` mode.
+   */
+  checkout?: SuperwallCheckoutMode;
 };
 
 export type SuperwallCallbackOptions = {
