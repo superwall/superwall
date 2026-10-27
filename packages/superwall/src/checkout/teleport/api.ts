@@ -21,7 +21,7 @@ export type TeleportRequest = {
 };
 
 const STATUSES = ["pending", "claimed", "completed", "expired"] as const;
-const COMPLETE_TIMEOUT_MS = 8_000;
+const STATUS_TIMEOUT_MS = 10_000;
 
 const headers = (publicApiKey: string): HeadersInit => ({
   "Content-Type": "application/json",
@@ -64,12 +64,24 @@ export const readTeleportStatus = async (
   publicApiKey: string,
   teleportId: string,
 ): Promise<TeleportStatus> => {
-  const response = await fetchWithRetry(
-    subscriptionsApiUrl("checkout/teleport/status"),
-    { method: "POST", headers: headers(publicApiKey), body: JSON.stringify({ teleportId }) },
-    { retries: 0 },
-  );
-  const body: unknown = await response.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
+  let body: unknown;
+  try {
+    const response = await fetchWithRetry(
+      subscriptionsApiUrl("checkout/teleport/status"),
+      {
+        method: "POST",
+        headers: headers(publicApiKey),
+        body: JSON.stringify({ teleportId }),
+        signal: controller.signal,
+      },
+      { retries: 0 },
+    );
+    body = await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
   const status = STATUSES.find((candidate) => candidate === field(body, "status")) ?? "pending";
   const checkoutContextId = text(body, "checkoutContextId");
   const checkoutProductIdentifier = text(body, "checkoutProductIdentifier");
@@ -112,12 +124,28 @@ export const saveTeleportQuery = async (
   publicApiKey: string,
   teleportId: string,
   query: Record<string, string>,
-): Promise<void> => {
-  await fetchWithRetry(subscriptionsApiUrl("checkout/teleport/session"), {
+): Promise<boolean> => {
+  const response = await fetch(subscriptionsApiUrl("checkout/teleport/session"), {
     method: "POST",
     headers: headers(publicApiKey),
     body: JSON.stringify({ teleportId, session: { [SESSION_QUERY_FIELD]: query } }),
   });
+  if (!response.ok) return false;
+  return field(await response.json(), "saved") === true;
+};
+
+export const moveTeleportIntroductoryOffer = async (
+  publicApiKey: string,
+  teleportId: string,
+  hasIntroductoryOffer: boolean,
+): Promise<boolean> => {
+  const response = await fetch(subscriptionsApiUrl("checkout/teleport/introductory-offer"), {
+    method: "POST",
+    headers: headers(publicApiKey),
+    body: JSON.stringify({ teleportId, hasIntroductoryOffer }),
+  });
+  if (!response.ok) return false;
+  return field(await response.json(), "updated") === true;
 };
 
 const WARMED_PRODUCTS = 4;
@@ -138,21 +166,12 @@ export const completeTeleportCheckout = async (
   publicApiKey: string,
   checkoutContextId: string,
 ): Promise<void> => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), COMPLETE_TIMEOUT_MS);
-  try {
-    await fetch(subscriptionsApiUrl("checkout/session/complete"), {
-      method: "POST",
-      headers: headers(publicApiKey),
-      body: JSON.stringify({ checkoutContextId }),
-      keepalive: true,
-      signal: controller.signal,
-    });
-  } catch (error) {
-    console.error("Completing the teleport checkout failed:", error);
-  } finally {
-    clearTimeout(timer);
-  }
+  await fetchWithRetry(subscriptionsApiUrl("checkout/session/complete"), {
+    method: "POST",
+    keepalive: true,
+    headers: headers(publicApiKey),
+    body: JSON.stringify({ checkoutContextId }),
+  });
 };
 
 export const teleportStatusUrls = () => ({

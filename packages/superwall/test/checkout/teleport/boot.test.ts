@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   encodeQueryPatch,
+  introductoryOfferFromFragment,
   readTeleportBoot,
   seedTeleportUrl,
 } from "../../../src/checkout/teleport/boot";
@@ -38,6 +39,7 @@ describe("readTeleportBoot", () => {
       route: "checkout",
       returnUrl: "myapp://superwall/return",
       productReference: "card",
+      shared: false,
       query: { goal: "sleep" },
       loadSession: false,
     });
@@ -52,9 +54,36 @@ describe("readTeleportBoot", () => {
     expect(readTeleportBoot()).toEqual({
       id: "v1:tp",
       route: "checkout",
+      shared: false,
       query: {},
       loadSession: false,
     });
+  });
+
+  it("reads the trial offer, from the link over the worker, and the shopper's email and shared presentation", () => {
+    boot({
+      id: "v1:tp",
+      route: "checkout",
+      hasIntroductoryOffer: true,
+      email: "ada@example.com",
+      shared: true,
+    });
+    expect(readTeleportBoot()).toMatchObject({
+      hasIntroductoryOffer: true,
+      email: "ada@example.com",
+      shared: true,
+    });
+    window.location.hash = "#t=0";
+    expect(readTeleportBoot()?.hasIntroductoryOffer).toBe(false);
+    expect(introductoryOfferFromFragment()).toBe(false);
+    window.location.hash = "#t=1";
+    expect(introductoryOfferFromFragment()).toBe(true);
+    window.location.hash = "#t=maybe";
+    expect(introductoryOfferFromFragment()).toBeUndefined();
+    boot({ id: "v1:tp", route: "checkout", hasIntroductoryOffer: "yes", email: "" });
+    window.location.hash = "";
+    expect(readTeleportBoot()).not.toHaveProperty("hasIntroductoryOffer");
+    expect(readTeleportBoot()).not.toHaveProperty("email");
   });
 
   it("asks for the saved flow only when the worker sent none with a link boot", () => {

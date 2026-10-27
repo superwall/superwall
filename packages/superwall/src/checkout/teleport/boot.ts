@@ -6,6 +6,9 @@ export type TeleportBoot = {
   returnUrl?: string;
   appLinkUrl?: string;
   productReference?: string;
+  hasIntroductoryOffer?: boolean;
+  email?: string;
+  shared: boolean;
   query: Record<string, string>;
   loadSession: boolean;
 };
@@ -14,6 +17,7 @@ export const NAV_QUERY_KEY = "sw_nav";
 export const SESSION_QUERY_FIELD = "query";
 export const TAPPED_PRODUCT_FRAGMENT_KEY = "ref";
 export const QUERY_FRAGMENT_KEY = "s";
+export const INTRODUCTORY_OFFER_FRAGMENT_KEY = "t";
 const REFERENCE_NAME = /^[\w.-]{1,191}$/;
 
 const textOf = (value: unknown): string | undefined =>
@@ -54,6 +58,13 @@ export const encodeQueryPatch = (query: Record<string, string>): string => {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 };
 
+export const introductoryOfferFromFragment = (): boolean | undefined => {
+  const value = fragment().get(INTRODUCTORY_OFFER_FRAGMENT_KEY);
+  if (value === "1") return true;
+  if (value === "0") return false;
+  return undefined;
+};
+
 const fragmentQuery = (): Record<string, string> => {
   const encoded = fragment().get(QUERY_FRAGMENT_KEY);
   if (encoded === null) return {};
@@ -75,12 +86,19 @@ export const readTeleportBoot = (): TeleportBoot | undefined => {
   const returnUrl = navigable(field(value, "returnUrl"));
   const appLinkUrl = navigable(field(value, "appLinkUrl"));
   const productReference = tappedProduct() ?? textOf(field(value, "productReference"));
+  const booted = field(value, "hasIntroductoryOffer");
+  const hasIntroductoryOffer =
+    introductoryOfferFromFragment() ?? (typeof booted === "boolean" ? booted : undefined);
+  const email = textOf(field(value, "email"));
   return {
     id,
     route,
     ...(returnUrl === undefined ? {} : { returnUrl }),
     ...(appLinkUrl === undefined ? {} : { appLinkUrl }),
     ...(productReference === undefined ? {} : { productReference }),
+    ...(hasIntroductoryOffer === undefined ? {} : { hasIntroductoryOffer }),
+    ...(email === undefined ? {} : { email }),
+    shared: field(value, "shared") === true,
     query: { ...sessionQueryOf(field(value, "session")), ...fragmentQuery() },
     loadSession: field(value, "loadSession") === true && field(value, "session") === undefined,
   };

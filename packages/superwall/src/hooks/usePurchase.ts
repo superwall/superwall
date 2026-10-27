@@ -14,6 +14,7 @@ import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
 import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
 import { useIdentityRefresh } from "../checkout/hooks/useIdentityRefresh";
 import { checkoutModeFor } from "../checkout/host/sdk";
+import { readTeleportBoot } from "../checkout/teleport/boot";
 import { flowQuery, teleportFor } from "../checkout/teleport/flow";
 import { QueryStoreContext } from "../navigation/query";
 import type { CheckoutMode, PurchaseOutcome } from "../checkout/types";
@@ -90,16 +91,25 @@ export const usePurchase = <
         const bought = session.getSnapshot().productsByReference[outcome.reference];
         return { status: settled.status, product: bought ?? product };
       }
+      const onTeleportPage = readTeleportBoot() !== undefined;
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
+        if (onTeleportPage && !(await teleporter.whenUnsettled())) {
+          return { status: "abandoned", product };
+        }
         const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
           postPurchase,
           stripeMetadata,
         });
         return { status, product };
       }
-      const bought = session.purchase(input, options);
-      if (teleporter.inFlight()) teleporter.handOff(reference, bought);
-      return bought;
+      if (onTeleportPage && product) {
+        console.warn(
+          `A teleport page sells only Stripe products, so "${reference}" can't be bought here.`,
+        );
+        return { status: "failed", product };
+      }
+      if (!teleporter.inFlight()) return session.purchase(input, options);
+      return teleporter.handOff(reference, () => session.purchase(input, options));
     },
     [session, webMode, queryStore],
   );

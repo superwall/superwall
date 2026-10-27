@@ -131,7 +131,10 @@ export const sessionBody = ({
     currencyCode: "USD",
     store: "stripe",
     productIdentifier,
-    allowedCheckoutDirectives: allowedDirectivesFor(mode),
+    allowedCheckoutDirectives:
+      teleportId === undefined
+        ? allowedDirectivesFor(mode)
+        : allowedDirectivesFor(mode).filter((directive) => directive !== "redirect"),
     shouldRespectIsFreeTrialAvailable: false,
     isPrefetch: silent,
     deferElementsIntentCreation: mode === "applePay",

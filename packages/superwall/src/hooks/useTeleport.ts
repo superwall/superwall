@@ -18,12 +18,19 @@ export type TeleportIdle = {
  * In the app: the shopper is in the browser and the purchase is being
  * watched. It turns on exactly when Superwall's teleport screen would go up:
  * once the app is in the background, after a moment if it never is, or when
- * the SDK asks just before it opens the browser. It turns off when the
- * shopper comes back or the purchase settles.
+ * the SDK asks just before it opens the browser. It lasts until the purchase
+ * settles: once the shopper is back, `returned` turns on while it is checked
+ * one last time.
  */
 export type TeleportWaiting = {
   /** Always `"waiting"`. */
   status: "waiting";
+  /**
+   * Whether the shopper came back to the app. It stays `"waiting"` while the
+   * purchase is checked once more, for a moment after they return; Superwall's
+   * teleport screen hides then and a loader covers the check.
+   */
+  returned: boolean;
   /** The Stripe product being bought in the browser; absent for a teleported push. */
   productReference?: StripeProductReference;
   /** The store product `teleport.fallbacks` offers instead, once the store has priced it. Buy it with `purchase()`. */
@@ -42,6 +49,8 @@ export type TeleportArrived = {
 export type TeleportCompleted = {
   /** Always `"completed"`. */
   status: "completed";
+  /** Whether another checkout of the same presentation was paid, not this page's. */
+  paidElsewhere: boolean;
   /** The product the shopper tapped in the app; absent for a teleported push. */
   productReference?: StripeProductReference;
 };
@@ -60,7 +69,7 @@ export type TeleportActions = {
    */
   prefetch: (route?: RouteName) => void;
   /** In the app, while `waiting`: opens the browser again on the same checkout. */
-  reopen: () => void;
+  open: () => void;
   /** In the app, while `waiting`: gives up on the web checkout; the `purchase()` resolves `abandoned`. */
   cancel: () => void;
   /** On the web: returns to the app, as going back from the first web route does. */
@@ -69,6 +78,18 @@ export type TeleportActions = {
 
 /** The result of `useTeleport()`: the status, and the actions. */
 export type UseTeleportResult = TeleportStatus & TeleportActions;
+
+/** Callbacks for what happens to a teleport, each optional. */
+export type UseTeleportOptions = {
+  /** In the app: the browser opened, the first time or again. */
+  onOpen?: () => void;
+  /** In the app: the shopper came back to the app while the purchase was open. */
+  onReturn?: () => void;
+  /** In the app: the purchase was given up, from Cancel or once it went unpaid. */
+  onCancel?: () => void;
+  /** In the app: the web purchase was paid and is being redeemed. */
+  onComplete?: () => void;
+};
 
 type Products = Readonly<Record<string, SuperwallProduct>>;
 
@@ -92,9 +113,13 @@ const statusOf = (
   const product = isStripeReference(products, internal.productReference)
     ? { productReference: internal.productReference }
     : {};
-  if (internal.status !== "waiting") return { status: internal.status, ...product };
+  if (internal.status === "arrived") return { status: "arrived", ...product };
+  if (internal.status === "completed") {
+    return { status: "completed", paidElsewhere: internal.paidElsewhere, ...product };
+  }
   return {
     status: "waiting",
+    returned: internal.returned,
     ...product,
     ...(isProductReference(products, fallback) ? { fallbackReference: fallback } : {}),
   };
@@ -106,7 +131,7 @@ const statusOf = (
  * app, or prepares a teleport ahead of `router.push(route, { teleport: true })`.
  * See `teleport` in `definePaywall`.
  */
-export const useTeleport = (): UseTeleportResult => {
+export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult => {
   const session = useSuperwallSession();
   const store = React.useContext(QueryStoreContext);
   const { productsByReference } = useSuperwallSnapshot();
@@ -117,12 +142,26 @@ export const useTeleport = (): UseTeleportResult => {
     teleporter.getStatus,
   );
   const fallbackReference = teleporter.fallback();
+  const callbacks = React.useRef(options);
+  callbacks.current = options;
+
+  React.useEffect(() => {
+    const unsubscribers = [
+      teleporter.on("open", () => callbacks.current.onOpen?.()),
+      teleporter.on("return", () => callbacks.current.onReturn?.()),
+      teleporter.on("cancel", () => callbacks.current.onCancel?.()),
+      teleporter.on("complete", () => callbacks.current.onComplete?.()),
+    ];
+    return () => {
+      for (const unsubscribe of unsubscribers) unsubscribe();
+    };
+  }, [teleporter]);
 
   return React.useMemo(
     () => ({
       ...statusOf(status, fallbackReference, productsByReference),
       prefetch: (route?: RouteName) => teleporter.prefetch(route, flowQuery(store)),
-      reopen: teleporter.reopen,
+      open: teleporter.open,
       cancel: teleporter.cancel,
       returnToApp: () => teleporter.returnToApp("closed"),
     }),
