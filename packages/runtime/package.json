@@ -1,6 +1,6 @@
 {
   "name": "@superwall/runtime",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Framework-agnostic runtime for headless Superwall paywalls: bridge, session, products, localization, mock host.",
   "keywords": [
     "paywall",
