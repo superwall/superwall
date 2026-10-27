@@ -86,7 +86,7 @@ export type UseTeleportOptions = {
   onOpen?: () => void;
   /** In the app: the shopper came back to the app while the purchase was open. */
   onReturn?: () => void;
-  /** In the app: the purchase was given up, from Cancel or once it went unpaid. */
+  /** In the app: the shopper tapped Cancel, or the paywall called `cancel()`. */
   onCancel?: () => void;
   /** In the app: the web purchase was paid and is being redeemed. */
   onComplete?: () => void;
