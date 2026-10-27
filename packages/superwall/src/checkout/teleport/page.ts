@@ -249,8 +249,8 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     attach: () => {
       const follow = () => teleporter.followFragment();
       window.addEventListener("hashchange", follow);
-      const stopWatching = teleporter.watchPresentation();
       if (boot.loadSession) void checkSettled(true);
+      const stopWatching = teleporter.watchPresentation();
       return () => {
         stopWatching();
         window.removeEventListener("hashchange", follow);

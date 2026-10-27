@@ -487,6 +487,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     } catch (error) {
       console.warn("Checking for a late web payment failed; retrying:", error);
     }
+    if (!isParked(record)) return state;
     if (state === "closed") stopParked();
     else if (Date.now() < record.watchUntil) {
       const fast = Date.now() - record.parkedAt < LATE_PAYMENT_FAST_WINDOW_MS;

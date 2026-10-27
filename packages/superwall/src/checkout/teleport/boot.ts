@@ -109,11 +109,10 @@ export const seedTeleportUrl = (routes: readonly string[]): void => {
   const boot = readTeleportBoot();
   if (boot === undefined || !routes.includes(boot.route)) return;
   const params = new URLSearchParams(window.location.search);
-  if (params.has(NAV_QUERY_KEY)) return;
-  for (const [key, value] of Object.entries(boot.query)) {
-    if (!params.has(key)) params.set(key, value);
-  }
-  params.set(NAV_QUERY_KEY, boot.route);
+  const missing = Object.entries(boot.query).filter(([key]) => !params.has(key));
+  if (missing.length === 0 && params.has(NAV_QUERY_KEY)) return;
+  for (const [key, value] of missing) params.set(key, value);
+  if (!params.has(NAV_QUERY_KEY)) params.set(NAV_QUERY_KEY, boot.route);
   try {
     window.history.replaceState(
       window.history.state,

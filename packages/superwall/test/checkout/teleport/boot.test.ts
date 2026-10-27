@@ -145,6 +145,16 @@ describe("seedTeleportUrl", () => {
     expect(window.location.search).toBe("?sw_nav=checkout,plans");
   });
 
+  it("fills in the flow's answers beside a stack the URL already has, and keeps the stack", () => {
+    boot({ id: "v1:tp", route: "checkout", session: { query: { goal: "sleep", plan: "app" } } });
+    window.history.replaceState(null, "", "/?sw_nav=checkout,plans&plan=web");
+    seedTeleportUrl(["checkout", "plans"]);
+    const params = new URL(window.location.href).searchParams;
+    expect(params.get("sw_nav")).toBe("checkout,plans");
+    expect(params.get("goal")).toBe("sleep");
+    expect(params.get("plan")).toBe("web");
+  });
+
   it("gives up quietly when the history refuses the write", () => {
     boot({ id: "v1:tp", route: "checkout" });
     vi.spyOn(window.history, "replaceState").mockImplementation(() => {

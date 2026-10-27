@@ -1658,6 +1658,18 @@ describe("the teleport page's presentation", () => {
     expect(other.getStatus().status).toBe("arrived");
   });
 
+  it("reloads an expired shared teleport from its lookup, though the presentation watch asked first", async () => {
+    boot({ loadSession: true, shared: true });
+    window.history.replaceState(null, "", "/sw-teleport/v1:tp?sw_boot=a&sw_sig=b&x=1#ref=card");
+    api({ "checkout/teleport/status": { status: "expired" } });
+    const replace = vi.spyOn(pageNavigation, "replace").mockImplementation(() => undefined);
+    const { session } = fakeSession();
+    const detach = attach(session);
+    await settle();
+    expect(replace).toHaveBeenCalledWith("http://localhost:3000/sw-teleport/v1:tp?x=1");
+    detach();
+  });
+
   it("watches a shared presentation and switches to the paid screen once paid elsewhere", async () => {
     boot({ shared: true });
     const calls = api({
@@ -1802,6 +1814,46 @@ describe("teleport races, as paywall.js settles them", () => {
     expect(calls.filter((path) => path === "checkout/teleport/status")).toHaveLength(1);
     answer("checkout/teleport/status", { status: "completed", checkoutContextId: "ctx" });
     await expect(tap).resolves.toBe("completed");
+  });
+
+  it("leaves a resumed teleport alone when the late-payment check it outlived answers", async () => {
+    const held: ((response: Response) => void)[] = [];
+    let hold = false;
+    let reply: unknown = { status: "pending" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        if (init.method === "GET") return new Response(null, { status: 204 });
+        const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
+        if (path !== "checkout/teleport/status") return new Response(JSON.stringify(created));
+        if (hold) return new Promise<Response>((resolve) => held.push(resolve));
+        return new Response(JSON.stringify(reply));
+      }),
+    );
+    const { session, events } = fakeSession();
+    const teleporter = appTeleport(session);
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    teleporter.cancel();
+    hold = true;
+    await settle(2_000);
+    expect(held).toHaveLength(1);
+    const tap = teleporter.begin({ productReference: "card", query: {} });
+    await settle(1_500);
+    hold = false;
+    const opened = events().filter((name) => name === "open_url_external").length;
+    expect(opened).toBe(2);
+
+    const abandons = () => events().filter((name) => name === "stripe_checkout_abandon").length;
+    const before = abandons();
+    held[0]?.(new Response(JSON.stringify({ status: "expired" })));
+    await settle();
+    expect(abandons()).toBe(before);
+
+    reply = { status: "completed", checkoutContextId: "ctx" };
+    await settle(2_000);
+    await expect(tap).resolves.toBe("completed");
+    expect(events()).toContain("stripe_checkout_complete");
   });
 
   it("reuses a parked teleport when its check can't tell, and checks a waiting one only once at a time", async () => {
