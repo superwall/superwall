@@ -179,6 +179,16 @@ export const reprefetch = (paywall: PaywallSession): boolean => {
   return targets.length > 0;
 };
 
+const identities = new WeakMap<object, string>();
+
+export const refreshIdentity = (paywall: PaywallSession, identity: string) => {
+  const seen = identities.get(paywall);
+  identities.set(paywall, identity);
+  if (seen === undefined || seen === identity) return;
+  invalidateSessions(paywall, "customer identity changed");
+  reprefetch(paywall);
+};
+
 const warmedOpens = new WeakMap<object, object>();
 
 export const warmOnOpen = (paywall: PaywallSession, open: object) => {

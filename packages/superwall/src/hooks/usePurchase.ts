@@ -12,6 +12,7 @@ import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
 import type { ProductReference } from "./index";
 import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
 import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
+import { useIdentityRefresh } from "../checkout/hooks/useIdentityRefresh";
 import { checkoutModeFor } from "../checkout/host/sdk";
 import type { CheckoutMode, PurchaseOutcome } from "../checkout/types";
 
@@ -59,6 +60,7 @@ export const usePurchase = <
 
   const webMode: CheckoutMode | undefined = hasApiKey ? mode : undefined;
   useAutoPrefetch();
+  useIdentityRefresh();
 
   const purchase = React.useCallback(
     async (

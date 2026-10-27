@@ -5,7 +5,7 @@ import { SuperwallProvider, type SuperwallSession } from "../../../src";
 import { checkoutEvents } from "../../../src/checkout/events";
 import { sessionsFor } from "../../../src/checkout/flow";
 import { useIdentityRefresh } from "../../../src/checkout/hooks/useIdentityRefresh";
-import { useSuperwallSession } from "../../../src/hooks";
+import { usePurchase, useSuperwallSession } from "../../../src/hooks";
 import { createHost, flush, testConfig, type HostProps } from "../../helpers";
 
 const sheetConfig = {
@@ -133,6 +133,47 @@ describe("useIdentityRefresh", () => {
     await flush();
 
     expect(invalidated).not.toHaveBeenCalled();
+    unsubscribe();
+    unmount();
+  });
+});
+
+describe("identity changes on a paywall that buys on the hosted page", () => {
+  it("re-warms for the new shopper with only usePurchase mounted, and once for every caller", async () => {
+    const invalidated = vi.fn();
+    const unsubscribe = checkoutEvents.subscribe("SESSION_INVALIDATED", invalidated);
+    const { transport } = createHost({
+      ...sheetHost,
+      device: { platform: "iOS", publicApiKey: "pk_test", sdkVersionPadded: "004.017.000" },
+    });
+    const wrapper = ({ children }: React.PropsWithChildren) => (
+      <SuperwallProvider
+        config={{ ...testConfig, products: { primary: "test:price_1:no-trial" } }}
+        transport={transport}
+      >
+        {children}
+      </SuperwallProvider>
+    );
+    const { result, unmount } = renderHook(
+      () => {
+        usePurchase();
+        usePurchase();
+        return useSuperwallSession();
+      },
+      { wrapper },
+    );
+    await flush();
+    const prefetch = vi.spyOn(sessionsFor(result.current), "prefetch").mockResolvedValue(null);
+
+    act(() => {
+      result.current.setUserAttributes({ email: "ada@example.com" });
+    });
+
+    expect(invalidated).toHaveBeenCalledTimes(1);
+    expect(prefetch).toHaveBeenCalledTimes(1);
+    expect(prefetch).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceName: "primary", mode: "external" }),
+    );
     unsubscribe();
     unmount();
   });
