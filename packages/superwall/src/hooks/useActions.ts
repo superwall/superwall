@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { SuperwallSession } from "@superwall/runtime";
+import { teleportFor } from "../checkout/teleport/flow";
 import { useSuperwallSession } from "../provider/context";
 
 export type UseActionsResult = Pick<
@@ -23,7 +24,11 @@ export const useActions = (): UseActionsResult => {
 
   return React.useMemo(
     () => ({
-      close: session.close.bind(session),
+      close: () => {
+        const teleporter = teleportFor(session);
+        if (teleporter.kind === "page") teleporter.returnToApp("closed");
+        else session.close();
+      },
       restore: session.restore.bind(session),
       openUrl: session.openUrl.bind(session),
       openExternalUrl: session.openExternalUrl.bind(session),

@@ -23,6 +23,42 @@ describe("snapshotPatchFor", () => {
     });
   });
 
+  it("keeps the presentation the SDK reports, and drops values it doesn't know", () => {
+    const patch = snapshotPatchFor(snapshotWith(), {
+      event_name: "paywall_open",
+      paywall_id: "1",
+      paywall_identifier: "pw",
+      presentation_id: "p-1",
+      presented_by: "event",
+      presentation_source_type: "getPaywall",
+      presented_by_event_id: "e-1",
+      presented_by_event_name: "campaign_trigger",
+    });
+    expect(patch?.paywall).toEqual({
+      id: "1",
+      identifier: "pw",
+      presentation: {
+        id: "p-1",
+        presentedBy: "event",
+        sourceType: "getPaywall",
+        eventId: "e-1",
+        eventName: "campaign_trigger",
+      },
+    });
+
+    const unknown = snapshotPatchFor(snapshotWith(), {
+      event_name: "paywall_open",
+      paywall_id: "1",
+      paywall_identifier: "pw",
+      presentation_id: "",
+      presented_by: "someone",
+      presentation_source_type: "magic",
+      presented_by_event_id: "",
+      presented_by_event_name: "",
+    });
+    expect(unknown?.paywall).toEqual({ id: "1", identifier: "pw" });
+  });
+
   it("splits template variables into device, user and params", () => {
     const variables = { device: { platform: "iOS" }, user: { firstName: "Ada" }, params: 3 };
     expect(

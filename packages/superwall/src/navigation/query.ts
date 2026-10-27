@@ -31,6 +31,7 @@ export type QueryPatch = Record<string, string | null>;
 
 export type QueryStore = {
   get(key: string): string | null;
+  entries(): Record<string, string>;
   subscribe(listener: () => void): () => void;
   set(patch: QueryPatch, history: QueryHistory): void;
 };
@@ -73,9 +74,12 @@ const apply = (params: URLSearchParams, patch: QueryPatch): boolean => {
  * hosts, servers) it is plain state with the same shape, so a paywall reads
  * identically everywhere.
  */
-export const createQueryStore = (url: boolean): QueryStore => {
+export const createQueryStore = (
+  url: boolean,
+  seed: Readonly<Record<string, string>> = {},
+): QueryStore => {
   const live = url && typeof window !== "undefined";
-  let params = new URLSearchParams(live ? window.location.search : "");
+  let params = new URLSearchParams(live ? window.location.search : seed);
   const listeners = new Set<() => void>();
   const pending = new Map<string, string | null>();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -121,6 +125,7 @@ export const createQueryStore = (url: boolean): QueryStore => {
 
   return {
     get: (key) => params.get(key),
+    entries: () => Object.fromEntries(params),
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {

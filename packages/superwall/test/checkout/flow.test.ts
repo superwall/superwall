@@ -33,8 +33,10 @@ const stripeProduct = (reference: string, index: number) => ({
 
 type SessionOverrides = {
   checkout?: SuperwallCheckoutConfig;
+  teleport?: import("@superwall/runtime").SuperwallTeleportConfig;
   postPurchase?: import("@superwall/runtime").SuperwallPostPurchase;
   sdkVersionPadded?: string;
+  platform?: string;
   publicApiKey?: string;
   references?: string[];
   store?: string[];
@@ -45,8 +47,10 @@ type SessionOverrides = {
 
 const fakeSession = ({
   checkout,
+  teleport,
   postPurchase,
   sdkVersionPadded,
+  platform,
   publicApiKey = "pk_test",
   references = ["primary", "secondary"],
   store = [],
@@ -67,7 +71,11 @@ const fakeSession = ({
   const session: PaywallSession = {
     getSnapshot: () =>
       ({
-        device: { publicApiKey, ...(sdkVersionPadded ? { sdkVersionPadded } : {}) },
+        device: {
+          publicApiKey,
+          ...(sdkVersionPadded ? { sdkVersionPadded } : {}),
+          ...(platform ? { platform } : {}),
+        },
         user: {},
         params: eventName === undefined ? {} : { event_name: eventName },
         products,
@@ -75,7 +83,7 @@ const fakeSession = ({
           products.map((product) => [product.reference, product]),
         ),
         introductoryOffer: { eligible: false },
-        config: { checkout, postPurchase },
+        config: { checkout, postPurchase, teleport },
         paywall,
         experiment,
       }) as never,
@@ -221,6 +229,17 @@ describe("reprefetch", () => {
     const warmKeyless = vi.spyOn(sessionsFor(keyless.session), "prefetch");
     expect(reprefetch(keyless.session)).toBe(false);
     expect(warmKeyless).not.toHaveBeenCalled();
+  });
+
+  it("warms no hosted page in an app that teleports, since a tap opens the teleport instead", () => {
+    const { session } = fakeSession({
+      teleport: { route: "checkout" },
+      platform: "iOS",
+      sdkVersionPadded: "004.018.000",
+    });
+    const warm = vi.spyOn(sessionsFor(session), "prefetch");
+    expect(reprefetch(session)).toBe(false);
+    expect(warm).not.toHaveBeenCalled();
   });
 });
 
@@ -459,6 +478,31 @@ describe("reporting a completed purchase", () => {
     await reportCompletedCheckout(session, paid);
 
     expect(sessions.cache.get("primary")).toBeNull();
+  });
+
+  it("binds a purchase made on the web half of a teleport to it instead of redeeming it here", async () => {
+    Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout" });
+    try {
+      const { session, postMessage } = fakeSession({
+        sdkVersionPadded: "004.013.999",
+        teleport: { route: "checkout" },
+      });
+      const fetchMock = vi.fn(async () => new Response("{}"));
+      vi.stubGlobal("fetch", fetchMock);
+
+      await reportCompletedCheckout(session, paid);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toContain("checkout/session/complete");
+      expect(init.keepalive).toBe(true);
+      expect(postMessage.mock.calls.map(([message]) => message.event_name)).toEqual([
+        "stripe_checkout_complete",
+      ]);
+    } finally {
+      Reflect.deleteProperty(window, "__SW_TELEPORT__");
+      vi.unstubAllGlobals();
+    }
   });
 
   it("redeems the purchase itself on an SDK too old to do it", async () => {

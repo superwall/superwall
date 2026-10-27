@@ -14,6 +14,9 @@ import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
 import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
 import { useIdentityRefresh } from "../checkout/hooks/useIdentityRefresh";
 import { checkoutModeFor } from "../checkout/host/sdk";
+import { teleportFor } from "../checkout/teleport/flow";
+import { flowQuery } from "../checkout/teleport/teleporter";
+import { QueryStoreContext } from "../navigation/query";
 import type { CheckoutMode, PurchaseOutcome } from "../checkout/types";
 
 export type WebCheckoutResult<TProduct extends SuperwallProduct = SuperwallProduct> = {
@@ -56,6 +59,7 @@ export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
 >(): UsePurchaseResult<TVariables> => {
   const session = useSuperwallSession<SuperwallProduct<TVariables>>();
+  const queryStore = React.useContext(QueryStoreContext);
   const snapshot = useSuperwallSnapshot<SuperwallProduct<TVariables>>();
 
   const mode = checkoutModeFor(snapshot);
@@ -73,17 +77,47 @@ export const usePurchase = <
     ): Promise<PurchaseResult<TVariables>> => {
       const reference = referenceOf(input);
       const product = session.getSnapshot().productsByReference[reference];
+      const teleporter = teleportFor(session);
+      const { postPurchase, stripeMetadata } = options ?? {};
+      if (
+        product &&
+        sessionsFor(session).isStripeProduct(reference) &&
+        teleporter.kind === "app" &&
+        teleporter.available()
+      ) {
+        const outcome = await teleporter.begin({
+          productReference: reference,
+          query: flowQuery(queryStore),
+          postPurchase,
+          stripeMetadata,
+        });
+        if (typeof outcome === "string") return { status: outcome, product };
+        const settled = await outcome.result;
+        const bought = session.getSnapshot().productsByReference[outcome.reference];
+        return { status: settled.status, product: bought ?? product };
+      }
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
-        const { postPurchase, stripeMetadata } = options ?? {};
+        if (teleporter.kind === "page" && !(await teleporter.whenUnsettled())) {
+          return { status: "abandoned", product };
+        }
         const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
           postPurchase,
           stripeMetadata,
         });
         return { status, product };
       }
-      return session.purchase(input, options);
+      if (teleporter.kind === "page" && product) {
+        console.warn(
+          `A teleport page sells only Stripe products, so "${reference}" can't be bought here.`,
+        );
+        return { status: "failed", product };
+      }
+      if (teleporter.kind === "page" || !teleporter.inFlight()) {
+        return session.purchase(input, options);
+      }
+      return teleporter.handOff(reference, () => session.purchase(input, options));
     },
-    [session, webMode],
+    [session, webMode, queryStore],
   );
 
   const first = snapshot.products[0]?.reference;

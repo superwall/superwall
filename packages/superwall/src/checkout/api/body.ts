@@ -43,8 +43,7 @@ export const identityOf = (snapshot: SuperwallRuntimeSnapshot): SessionIdentity 
   const vendorId = asString(device.vendorId);
 
   // Android reports a non-UUID vendorId, so its deviceId is the stable one.
-  const rawDeviceId =
-    platform === "android" ? providedDeviceId || vendorId : vendorId || providedDeviceId;
+  const rawDeviceId = platform === "android" ? providedDeviceId || vendorId : vendorId;
   const deviceIdValue = rawDeviceId || crypto.randomUUID();
   const deviceId = deviceIdValue.startsWith("$SuperwallDevice:")
     ? deviceIdValue
@@ -61,6 +60,56 @@ export type SessionBodyOptions = {
   productIdentifier: string;
   mode: CheckoutMode;
   silent: boolean;
+  teleportId?: string;
+};
+
+export const attributionOf = (
+  snapshot: SuperwallRuntimeSnapshot,
+  { freeTrial = snapshot.introductoryOffer.eligible === true }: { freeTrial?: boolean } = {},
+) => {
+  const { device, params } = snapshot;
+  const placement = presentingPlacement(params);
+  const presentation = snapshot.paywall?.presentation;
+  return {
+    paywall: {
+      paywallId: snapshot.paywall?.id ?? "0",
+      paywallIdentifier: snapshot.paywall?.identifier ?? "",
+      paywallName: "",
+      paywallUrl: window.location.href,
+      paywallProductIds: snapshot.products
+        .map((entry) => entry.productId ?? "")
+        .filter(Boolean)
+        .join(","),
+    },
+    experiment: {
+      experimentId: snapshot.experiment?.experimentId ?? "0",
+      variantId: snapshot.experiment?.variantId ?? "0",
+    },
+    presentment: {
+      isFreeTrialAvailable: freeTrial,
+      presentedBy: presentation?.presentedBy ?? "placement",
+      presentationSourceType: presentation?.sourceType ?? "register",
+      presentedByEventName: presentation?.eventName ?? placement.name,
+      presentedByEventId: presentation?.eventId ?? placement.eventId,
+    },
+    placementParams: {
+      placementParams: params,
+    },
+    identity: identityOf(snapshot),
+    device: {
+      appInstallDate: asString(device.appInstallDate) || undefined,
+      publicApiKey: asString(device.publicApiKey),
+      platform: asString(device.platform) || "web",
+      appVersion: asString(device.appVersion),
+      osVersion: asString(device.osVersion),
+      deviceModel: asString(device.deviceModel),
+      deviceLocale: asString(device.deviceLocale),
+      deviceLanguageCode: asString(device.deviceLanguageCode),
+      deviceCurrencyCode: asString(device.deviceCurrencyCode),
+      deviceCurrencySymbol: asString(device.deviceCurrencySymbol),
+      timezoneOffset: asString(device.timezoneOffset),
+    },
+  };
 };
 
 export const sessionBody = ({
@@ -69,61 +118,27 @@ export const sessionBody = ({
   productIdentifier,
   mode,
   silent,
+  teleportId,
 }: SessionBodyOptions) => {
-  const { device, user, params } = snapshot;
+  const { user } = snapshot;
   const variables = product.variables;
   const managedPayments = checkoutManagedPaymentsOf(snapshot.config?.checkout);
-  const placement = presentingPlacement(params);
 
   return {
     currencyCode: "USD",
     store: "stripe",
     productIdentifier,
-    allowedCheckoutDirectives: allowedDirectivesFor(mode),
+    allowedCheckoutDirectives:
+      teleportId === undefined
+        ? allowedDirectivesFor(mode)
+        : allowedDirectivesFor(mode).filter((directive) => directive !== "redirect"),
     shouldRespectIsFreeTrialAvailable: false,
     isPrefetch: silent,
     deferElementsIntentCreation: mode === "applePay",
+    ...(teleportId === undefined ? {} : { teleportId }),
     context: {
-      paywall: {
-        paywallId: snapshot.paywall?.id ?? "0",
-        paywallIdentifier: snapshot.paywall?.identifier ?? "",
-        paywallName: "",
-        paywallUrl: window.location.href,
-        paywallProductIds: snapshot.products
-          .map((entry) => entry.productId ?? "")
-          .filter(Boolean)
-          .join(","),
-      },
-      experiment: {
-        experimentId: snapshot.experiment?.experimentId ?? "0",
-        variantId: snapshot.experiment?.variantId ?? "0",
-      },
-      presentment: {
-        isFreeTrialAvailable: snapshot.introductoryOffer.eligible === true,
-        presentedBy: "placement",
-        presentationSourceType: "register",
-        presentedByEventName: placement.name,
-        presentedByEventId: placement.eventId || crypto.randomUUID(),
-        presentedByEventTimestamp: new Date().toISOString(),
-      },
-      placementParams: {
-        placementParams: params,
-      },
-      identity: identityOf(snapshot),
+      ...attributionOf(snapshot),
       ...(managedPayments === undefined ? {} : { paywallManagedPaymentsOverride: managedPayments }),
-      device: {
-        appInstallDate: asString(device.appInstallDate) || undefined,
-        publicApiKey: asString(device.publicApiKey),
-        platform: asString(device.platform) || "web",
-        appVersion: asString(device.appVersion),
-        osVersion: asString(device.osVersion),
-        deviceModel: asString(device.deviceModel),
-        deviceLocale: asString(device.deviceLocale),
-        deviceLanguageCode: asString(device.deviceLanguageCode),
-        deviceCurrencyCode: asString(device.deviceCurrencyCode),
-        deviceCurrencySymbol: asString(device.deviceCurrencySymbol),
-        timezoneOffset: asString(device.timezoneOffset),
-      },
       product: {
         identifier: productIdentifier,
         currencyCode: variables.currencyCode || "USD",

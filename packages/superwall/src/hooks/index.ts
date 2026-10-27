@@ -24,6 +24,7 @@ export * from "./usePurchase";
 export * from "./useCheckoutRedemption";
 export * from "./useSuperwallEvent";
 export * from "./useSuperwallSnapshot";
+export * from "./useTeleport";
 export * from "./useTranslation";
 export * from "./useUserAttribute";
 export * from "./useVariables";

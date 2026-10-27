@@ -7,6 +7,7 @@ import type { SuperwallNotificationsConfig } from "./notifications";
 import type { SuperwallPresentationConfig } from "./presentation";
 import type { SuperwallPostPurchase } from "./postPurchase";
 import type { SuperwallProductSlotInput } from "./products";
+import type { SuperwallTeleportConfig } from "./teleport";
 
 export type SuperwallIntroductoryOfferEligibility = "automatic" | "eligible" | "ineligible";
 
@@ -93,6 +94,14 @@ export type SuperwallConfig<
   localization?: SuperwallLocalizationConfig<TLocale>;
 
   /**
+   * Continue the flow on the web when it is shown in an iOS app, and sell
+   * Stripe products there: `true` for every default, or the options to
+   * change. Default: off, every route runs in the app. See
+   * `SuperwallTeleportOptions`.
+   */
+  teleport?: SuperwallTeleportConfig<TStripeReference>;
+
+  /**
    * Hosts this surface may reach over the network, as bare hostnames —
    * `["api.example.com"]`. Superwall and Stripe are always reachable;
    * everything else is refused by the browser until it is named here.
@@ -140,6 +149,12 @@ export type {
 export { normalizePlatform, SUPERWALL_PLATFORMS, type SuperwallPlatform } from "./platforms";
 export { dismissesOnPurchase, type SuperwallPostPurchase } from "./postPurchase";
 export type { SuperwallPresentationConfig, SuperwallPresentationStyle } from "./presentation";
+export {
+  teleportOf,
+  type ResolvedTeleport,
+  type SuperwallTeleportConfig,
+  type SuperwallTeleportOptions,
+} from "./teleport";
 export {
   isPlatformProductIds,
   productIdFor,

@@ -80,6 +80,20 @@ describe("entrySource", () => {
     expect(none).toContain("<SuperwallProvider config={config}>");
   });
 
+  it("mounts checkout and the teleport screens for a paywall that teleports", () => {
+    const source = entrySource({
+      entryDir,
+      project,
+      surface: surface(),
+      config: { teleport: { route: "checkout" } },
+    });
+    expect(source).toContain(
+      'import { SuperwallCheckout, TeleportScreen } from "superwall/checkout";',
+    );
+    expect(source).toContain("<SuperwallCheckout />");
+    expect(source).toContain("<TeleportScreen />");
+  });
+
   it("prefixes ./ for a file that sits beside the entry", () => {
     const source = entrySource({
       entryDir,

@@ -23,6 +23,8 @@ const openUrl = z.object({
 const openUrlExternal = z.object({
   event_name: z.literal("open_url_external"),
   url: z.string(),
+  teleport: z.boolean().optional(),
+  waiting_screen: z.boolean().optional(),
 });
 
 const requestStoreReview = z.object({
@@ -153,7 +155,18 @@ const stripeCheckoutComplete = z.object({
   post_purchase_resolution: postCheckoutResolution.optional(),
   post_purchase_behavior: postPurchaseBehavior.optional(),
   entitlements_token: z.string().optional(),
+  should_dismiss: z.boolean().optional(),
 });
+
+const teleportWatchStart = z.object({
+  event_name: z.literal("teleport_watch_start"),
+  teleport_id: z.string(),
+  teleport_status_url: z.string(),
+  checkout_status_url: z.string(),
+  public_api_key: z.string(),
+});
+
+const teleportWatchEnd = z.object({ event_name: z.literal("teleport_watch_end") });
 
 const postCheckoutComplete = z.object({
   event_name: z.literal("post_checkout_complete"),
@@ -223,6 +236,8 @@ export const OutgoingMessageSchema = z.union([
   postCheckoutComplete,
   discountRedemptionResult,
   pageView,
+  teleportWatchStart,
+  teleportWatchEnd,
 ]);
 
 export type TOutgoingMessage = z.infer<typeof OutgoingMessageSchema>;

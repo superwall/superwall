@@ -2,10 +2,15 @@ import * as React from "react";
 import {
   checkoutModeOf,
   detectSuperwallHost,
+  teleportOf,
   type SuperwallDeviceVariables,
   type SuperwallPlacementParams,
   type SuperwallUserVariables,
 } from "@superwall/runtime";
+import { readTeleportBoot, seedTeleportUrl } from "../checkout/teleport/boot";
+import { teleportFor } from "../checkout/teleport/flow";
+import { restoreTeleportQuery } from "../checkout/teleport/page";
+import { flowQuery } from "../checkout/teleport/teleporter";
 import { useHostStateArrived, useSuperwallSession } from "../provider/context";
 import {
   freeze,
@@ -61,6 +66,13 @@ export type Transition = BuiltInTransition | (string & {});
 export type NavigateOptions = {
   /** The transition for this navigation, overriding the route's and the paywall's. */
   transition?: Transition;
+  /**
+   * Continue the flow on the web from this route: inside an iOS app the route
+   * opens in the shopper's browser instead of being pushed. Needs `teleport`
+   * in `definePaywall`; anywhere teleport can't run the route is pushed as
+   * usual. A push to `teleport.route` teleports without it. Default: `false`.
+   */
+  teleport?: boolean;
 };
 
 export type Router = {
@@ -72,11 +84,14 @@ export type Router = {
   push: (route: RouteName, options?: NavigateOptions) => void;
   /** Swaps the top route, so going back skips the one it replaced. */
   replace: (route: RouteName, options?: NavigateOptions) => void;
-  /** Goes back one route. A no-op at the first. */
+  /**
+   * Goes back one route. A no-op at the first, except on the web half of a
+   * teleport, where it returns to the app.
+   */
   back: () => void;
-  /** Whether anything is underneath the current route. */
+  /** Whether anything is underneath the current route, or, on the web half of a teleport, the app. */
   canGoBack: () => boolean;
-  /** Goes back `count` routes, stopping at the first. */
+  /** Goes back `count` routes, stopping at the first (on a teleport's web half, returning to the app). */
   dismiss: (count?: number) => void;
   /** Returns to the first route. */
   dismissAll: () => void;
@@ -247,6 +262,7 @@ export type PaywallRouterProps = {
 type LayerState = "active" | "behind" | "below" | "exiting";
 
 export const PaywallRouter = (props: PaywallRouterProps) => {
+  seedTeleportUrl(Object.keys(props.routes));
   const arrived = useHostStateArrived();
   if (props.entry && !arrived && !askedStack(props.routes)) return null;
   return <Router {...props} />;
@@ -264,8 +280,11 @@ const Router = ({
   const session = useSuperwallSession();
   const [store] = React.useState<QueryStore>(() =>
     createQueryStore(
-      (queryState ?? checkoutModeOf(session.getSnapshot().config?.checkout) !== undefined) &&
+      (queryState ??
+        (checkoutModeOf(session.getSnapshot().config?.checkout) !== undefined ||
+          readTeleportBoot() !== undefined)) &&
         !detectSuperwallHost(),
+      readTeleportBoot()?.query,
     ),
   );
 
@@ -300,13 +319,24 @@ const Router = ({
 
     const go = (name: string, options: NavigateOptions | undefined, keep: number | undefined) => {
       const target = resolve(name);
+      const { teleport, ...navigation } = options ?? {};
+      const teleporter = teleportFor(session);
+      const teleportRoute = teleportOf(session.getSnapshot().config?.teleport)?.route;
+      if (
+        (teleport === true || target === teleportRoute) &&
+        teleporter.kind === "app" &&
+        teleporter.available()
+      ) {
+        void teleporter.begin({ route: target, query: flowQuery(store) });
+        return;
+      }
       const key = nextKey.current++;
       landing.current = undefined;
       freeze(layers.current);
       setNav((current) => {
         const kept = keep === undefined ? current.entries : current.entries.slice(0, keep);
         return {
-          entries: [...kept, { key, name: target, ...options }],
+          entries: [...kept, { key, name: target, ...navigation }],
           exiting:
             kept.length === current.entries.length
               ? undefined
@@ -318,6 +348,11 @@ const Router = ({
     };
 
     const popBy = (count: number) => {
+      const teleporter = teleportFor(session);
+      if (entries.length === 1 && teleporter.kind === "page") {
+        teleporter.returnToApp("closed");
+        return;
+      }
       landing.current = undefined;
       freeze(layers.current);
       setNav((current) => {
@@ -338,7 +373,7 @@ const Router = ({
       push: (name, options) => go(name, options, undefined),
       replace: (name, options) => go(name, options, entries.length - 1),
       back: () => popBy(1),
-      canGoBack: () => entries.length > 1,
+      canGoBack: () => entries.length > 1 || readTeleportBoot() !== undefined,
       dismiss: (count = 1) => popBy(count),
       dismissAll: () => popBy(Number.MAX_SAFE_INTEGER),
       dismissTo: (name, options) => {
@@ -369,7 +404,41 @@ const Router = ({
         });
       },
     };
-  }, [entries, top]);
+  }, [entries, top, session, store]);
+
+  React.useEffect(() => {
+    const teleporter = teleportFor(session);
+    if (teleporter.kind === "app") teleporter.landed(top.name);
+  }, [session, top.name]);
+
+  React.useEffect(() => {
+    if (readTeleportBoot() === undefined) return;
+    const follow = () => {
+      const query = readTeleportBoot()?.query ?? {};
+      const changed = Object.entries(query).filter(([key, value]) => store.get(key) !== value);
+      if (changed.length > 0) store.set(Object.fromEntries(changed), "replace");
+    };
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, [store]);
+
+  React.useEffect(() => {
+    const boot = readTeleportBoot();
+    if (!boot?.loadSession) return;
+    let pending = true;
+    const load = () => {
+      const key = session.getSnapshot().device.publicApiKey;
+      if (!pending || typeof key !== "string" || key === "") return;
+      pending = false;
+      void restoreTeleportQuery(boot, key, store);
+    };
+    const unsubscribe = session.subscribe(load);
+    load();
+    return () => {
+      pending = false;
+      unsubscribe();
+    };
+  }, [session, store]);
 
   React.useEffect(() => {
     if (nav.sync === "skip") return;

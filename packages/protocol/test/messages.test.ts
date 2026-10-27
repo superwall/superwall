@@ -30,6 +30,22 @@ describe("IncomingMessageSchema", () => {
   it("parses paywall_open and paywall_close", () => {
     accepts({ event_name: "paywall_open", paywall_id: "123", paywall_identifier: "my_paywall" });
     rejects({ event_name: "paywall_open" });
+    accepts({
+      event_name: "paywall_open",
+      paywall_id: "123",
+      paywall_identifier: "my_paywall",
+      presentation_id: "p-1",
+      presented_by: "event",
+      presentation_source_type: "getPaywall",
+      presented_by_event_id: "e-1",
+      presented_by_event_name: "campaign_trigger",
+    });
+    rejects({
+      event_name: "paywall_open",
+      paywall_id: "123",
+      paywall_identifier: "x",
+      presentation_id: 7,
+    });
     accepts({ event_name: "paywall_close" });
     accepts({ event_name: "paywall_close", paywall_id: "123", paywall_identifier: "my_paywall" });
     rejects({ event_name: "paywall_close", paywall_id: 123 });

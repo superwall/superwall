@@ -11,6 +11,8 @@ import { presentingPlacement } from "./host/init";
 import { bindsEntitlement, hostedInWebSdk } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
+import { introductoryOfferFromFragment, readTeleportBoot } from "./teleport/boot";
+import { teleportFor } from "./teleport/flow";
 import type {
   CheckoutMode,
   DiscountValidationResult,
@@ -172,6 +174,8 @@ export const autoPrefetchTargets = (paywall: PaywallSession, mode: CheckoutMode)
 
 export const reprefetch = (paywall: PaywallSession): boolean => {
   if (!paywall.getSnapshot().device.publicApiKey) return false;
+  const teleporter = teleportFor(paywall);
+  if (teleporter.kind === "app" && teleporter.available()) return false;
   const mode = checkoutModeFor(paywall.getSnapshot());
   const targets = autoPrefetchTargets(paywall, mode);
   for (const reference of targets) {
@@ -275,6 +279,11 @@ export const reportCompletedCheckout = async (
     completion,
   );
 
+  const teleporter = teleportFor(paywall);
+  if (teleporter.kind === "page") {
+    await teleporter.completePurchase(session.checkoutContextId);
+    return;
+  }
   if (sdkRedeemsCheckout(paywall.getSnapshot())) return;
   if (redemptionUrl !== undefined) {
     host.redeem(redemptionUrl);
@@ -448,4 +457,55 @@ export const purchaseOnWeb = async (
     console.error("Error beginning web checkout:", error);
     return "failed";
   }
+};
+
+const clearRestoredLoader = (event: PageTransitionEvent) => {
+  if (event.persisted) stopLoading();
+};
+
+export type TeleportPage = PaywallSession &
+  Pick<SuperwallSession, "accept" | "setUserAttributes" | "on">;
+
+const applyIntroductoryOffer = (paywall: TeleportPage, eligible: boolean) =>
+  paywall.accept([
+    { event_name: "template_substitutions_prefix", prefix: eligible ? "freeTrial" : "default" },
+  ]);
+
+export const followTeleportPage = (paywall: TeleportPage): (() => void) => {
+  const boot = readTeleportBoot();
+  if (boot === undefined) return () => undefined;
+  let eligible = boot.hasIntroductoryOffer;
+  const holdOffer = () => {
+    if (eligible === undefined) return;
+    if (paywall.getSnapshot().introductoryOffer.eligible !== eligible) {
+      applyIntroductoryOffer(paywall, eligible);
+    }
+  };
+  const email = boot.email;
+  const fillEmail = () => {
+    if (email !== undefined && asString(paywall.getSnapshot().user.email) === "") {
+      paywall.setUserAttributes({ email });
+    }
+  };
+  holdOffer();
+  if (Object.keys(paywall.getSnapshot().variables).length > 0) fillEmail();
+  const unsubscribers = [
+    paywall.on("template_substitutions_prefix", holdOffer),
+    paywall.on("template_variables", fillEmail),
+  ];
+  const followOffer = () => {
+    const next = introductoryOfferFromFragment();
+    if (next === undefined || next === eligible) return;
+    eligible = next;
+    applyIntroductoryOffer(paywall, next);
+    invalidateSessions(paywall, "introductory offer changed");
+    reprefetch(paywall);
+  };
+  window.addEventListener("hashchange", followOffer);
+  window.addEventListener("pageshow", clearRestoredLoader);
+  return () => {
+    for (const unsubscribe of unsubscribers) unsubscribe();
+    window.removeEventListener("hashchange", followOffer);
+    window.removeEventListener("pageshow", clearRestoredLoader);
+  };
 };
