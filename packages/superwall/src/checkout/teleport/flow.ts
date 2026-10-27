@@ -122,6 +122,7 @@ export type AttachedSession = Pick<
 >;
 
 type OpenTeleport = CreatedTeleport & {
+  route: string;
   createdAt: number;
   queryBase: Record<string, string>;
   productReference?: string;
@@ -155,7 +156,11 @@ type Prepared = {
   teleport: Promise<Created | undefined>;
 };
 
-type Created = CreatedTeleport & { freeTrial: boolean; queryBase: Record<string, string> };
+type Created = CreatedTeleport & {
+  route: string;
+  freeTrial: boolean;
+  queryBase: Record<string, string>;
+};
 
 export const flowQuery = (
   store: { entries(): Record<string, string> } | null,
@@ -702,7 +707,7 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
       context: attributionOf(snapshot, { freeTrial }),
       session: { query },
     });
-    return { ...created, freeTrial, queryBase: query };
+    return { ...created, route: target, freeTrial, queryBase: query };
   };
 
   const saveQuery = async (record: OpenTeleport, query: Record<string, string>) => {
@@ -809,6 +814,7 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
     const record: OpenTeleport = {
       teleportId: teleport.teleportId,
       url: withTappedProduct(teleport.url, request.productReference),
+      route: teleport.route,
       createdAt: teleport.createdAt,
       freeTrial: teleport.freeTrial,
       queryBase: teleport.queryBase,
@@ -865,6 +871,7 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
     target: string,
     request: TeleportRequest,
   ): Promise<TeleportOutcome> => {
+    if (phase.kind === "parked" && phase.record.route !== target) stopParked();
     if (phase.kind === "parked") {
       const parked = phase.record;
       const state = await reusable(parked, resolved);
@@ -1037,6 +1044,9 @@ const createTeleporter = (paywall: TeleportSession): Teleporter => {
       const resolved = settings();
       const target = request.route ?? resolved?.route ?? route;
       if (resolved === undefined || target === undefined) return Promise.resolve("failed");
+      if (phase.kind === "waiting" && phase.record.route !== target) {
+        settleAbandoned(phase.record);
+      }
       if (phase.kind === "waiting") {
         const record = phase.record;
         if (record.freeTrial === freeTrialFor(resolved, paywall.getSnapshot())) {

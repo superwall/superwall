@@ -1527,6 +1527,50 @@ describe("a parked teleport", () => {
     expect(events().at(-1)).toBe("stripe_checkout_complete");
   });
 
+  it("reuses a teleport only for its own route: another route gets a teleport of its own", async () => {
+    let made = 0;
+    const calls = api({
+      "checkout/teleport": () => {
+        made += 1;
+        return {
+          teleportId: `v1:tp${made}`,
+          url: `https://acme.superwall.app/sw-teleport/v1:tp${made}?sw_doc=x`,
+        };
+      },
+      "checkout/teleport/status": { status: "pending" },
+    });
+    const { session, posted } = fakeSession();
+    const teleporter = teleportFor(session);
+    const routes = () =>
+      calls
+        .filter((call) => call.path === "checkout/teleport")
+        .map((call) => (call.body as { route: string }).route);
+    const opened = () =>
+      posted
+        .filter((message) => message.event_name === "open_url_external")
+        .map((message) => new URL(String(message.url)).pathname);
+
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    teleporter.cancel();
+    await settle();
+    const before = routes().length;
+
+    const plans = teleporter.begin({ route: "plans", query: {} });
+    await settle();
+    expect(routes().slice(before)).toContain("plans");
+    const plansPath = opened().at(-1);
+    expect(plansPath).not.toBe("/sw-teleport/v1:tp1");
+
+    const card = teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    await expect(plans).resolves.toBe("abandoned");
+    expect(routes().at(-1)).toBe("checkout");
+    expect(opened().at(-1)).not.toBe(plansPath);
+    teleporter.cancel();
+    await expect(card).resolves.toBe("abandoned");
+  });
+
   it("starts a new teleport once the parked one closed, or its reuse window is over", async () => {
     const calls = api({
       "checkout/teleport": created,
