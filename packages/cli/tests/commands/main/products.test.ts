@@ -41,7 +41,7 @@ test("products list --project reads that project's products", async () => {
 test("updating a product types each field from the API reference", async () => {
   const calls: ApiCall[] = [];
 
-  await runLine("products update 12 --name Pro --trial-days 7 --json", { api: fakeResourceApi(calls) });
+  await runLine("products update 12 --name Pro --trial-days 7 --yes --json", { api: fakeResourceApi(calls) });
 
   assert.deepEqual(calls, [{ method: "PATCH", path: "/v2/products/12", body: { name: "Pro", trial_days: 7 } }]);
 });

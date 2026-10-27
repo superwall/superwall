@@ -20,12 +20,14 @@ export const command = defineResource({
     {
       name: "create",
       summary: "Add an endpoint",
+      details: "Delivers subscribed events to the HTTPS URL you specify.",
       method: "POST",
       path: "/v2/projects/{project_id}/webhook_endpoints",
     },
     {
       name: "update",
       summary: "Change an endpoint",
+      details: "Changes where or which subscribed events are delivered; the destination can be any HTTPS URL you specify.",
       method: "PATCH",
       path: "/v2/projects/{project_id}/webhook_endpoints/{endpoint_id}",
     },

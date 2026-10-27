@@ -32,7 +32,7 @@ export const command = defineAscResource({
       summary: "Attach a build to an App Store version, replacing its current one",
       args: [{ name: "id", describe: "The build's id", required: true }, VERSION_ARG],
       flags: VERSION_FLAGS,
-      effect: "write",
+      effect: "destructive",
       run: runBuildsAttach,
     },
     {

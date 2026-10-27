@@ -23,7 +23,7 @@ export const command = defineResource({
         ["--entitlement <id>", "Entitlement to grant (repeatable)"],
       ],
     },
-    { name: "update", summary: "Change a product", method: "PATCH", path: "/v2/products/{id}" },
+    { name: "update", summary: "Change a product", method: "PATCH", path: "/v2/products/{id}", destructive: true },
     {
       name: "delete",
       summary: "Delete a product",

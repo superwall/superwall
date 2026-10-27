@@ -17,7 +17,7 @@ export const command = defineCommand({
   auth: "none",
   json: true,
   prompts: false,
-  mcp: "read",
+  mcp: false,
   async run(ctx, { args }) {
     const md = await renderDocs(ctx, args.resource, args.operation);
     if (ctx.json) return ctx.output.data({ markdown: md });

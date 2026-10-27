@@ -573,6 +573,24 @@ Writes take typed flags (money flags pick up the account's currency),
 not covered is `asa get|post|put|delete /path`, sent straight to Apple with
 your access token and org context attached.
 
+## MCP connector
+
+The MCP connector exposes named account, analytics, App Store Connect and Apple
+Search Ads operations. Generic HTTP commands (`get`, `post`, `patch`, `delete`,
+`asc get|post|patch|delete`, `asa get|post|put|delete`) and schema lookup commands
+(`api docs`, `asc docs`, `asa docs`) are available only in the CLI. An operation
+without a named MCP tool requires the installed CLI or a command for the user
+to run.
+
+Publishing a saved paywall draft replaces its deployed version and refreshes
+app configuration, which can affect campaign users. Product updates, placement
+moves, audience or variant replacements, build attachment and paywall publishing
+require destructive-operation confirmation (`--yes` outside a terminal).
+Manual entitlement grants provide promotional access with optional expiry,
+without charging or creating a paid subscription; an active grant already
+present returns an error. Webhook creation and updates can deliver subscribed
+events to the HTTPS destination you specify.
+
 ## For agents and scripts
 
 Pass `--json` to any command: stable output shape, structured errors, never

@@ -28,7 +28,7 @@ sent (--force sends it as-is). superwall asc docs <path> patch lists the fields.
   auth: "required",
   json: true,
   prompts: true,
-  mcp: "write",
+  mcp: false,
   async run(ctx, { args, flags }) {
     const response = await sendAscRequest(ctx, "patch", args.path, { data: flags.d, team: flags.team, force: flags.force });
     ctx.output.data(response);

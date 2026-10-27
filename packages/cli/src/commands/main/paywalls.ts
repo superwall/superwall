@@ -9,7 +9,14 @@ export const command = defineResource({
     { name: "get", summary: "One paywall", method: "GET", path: "/v2/paywalls/{id}" },
     { name: "create", summary: "Create a paywall", method: "POST", path: "/v2/paywalls" },
     { name: "duplicate", summary: "Copy a paywall", method: "POST", path: "/v2/paywalls/{id}/duplicate" },
-    { name: "publish", summary: "Publish its draft", method: "POST", path: "/v2/paywalls/{id}/publish" },
+    {
+      name: "publish",
+      summary: "Publish the latest saved draft of a paywall",
+      details: "Replaces its currently deployed version and refreshes app configuration. This can change the paywall shown to users by campaigns that use it.",
+      method: "POST",
+      path: "/v2/paywalls/{id}/publish",
+      destructive: true,
+    },
     {
       name: "archive",
       summary: "Archive it",

@@ -22,7 +22,7 @@ in the background; --refresh downloads it now.`,
   auth: "none",
   json: true,
   prompts: false,
-  mcp: "read",
+  mcp: false,
   run(ctx, input) {
     return runAscDocs(ctx, input);
   },

@@ -18,7 +18,7 @@ export const command = defineCommand({
   auth: "none",
   json: true,
   prompts: false,
-  mcp: "read",
+  mcp: false,
   async run(ctx, { args, flags }) {
     const found = args.query.find((word) => METHOD.test(word));
     const query = args.query.filter((word) => word !== found).join(" ");

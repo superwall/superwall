@@ -19,7 +19,7 @@ export const command = defineCommand({
   auth: "required",
   json: true,
   prompts: true,
-  mcp: "destructive",
+  mcp: false,
   async run(ctx, { args, flags }) {
     const response = await sendAscRequest(ctx, "delete", args.path, { data: [], team: flags.team, force: false });
     ctx.output.data(response);
