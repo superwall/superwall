@@ -11,6 +11,13 @@ describe("what a second host can reach", () => {
     for (const name of [
       "HostedIframe",
       "DeviceFrame",
+      "Canvas",
+      "useCanvasScale",
+      "percent",
+      "deviceVariablesFor",
+      "chromeFor",
+      "isWebOnly",
+      "webViewportFor",
       "hostStateFor",
       "studioDefaults",
       "createHostState",
@@ -19,6 +26,11 @@ describe("what a second host can reach", () => {
       "createStudioDelegate",
       "hostedUrl",
       "snapshotPreviewUrl",
+      "parseStudioCommands",
+      "findDevice",
+      "editVariable",
+      "HostPanel",
+      "TopBar",
     ]) {
       expect(studio, name).toHaveProperty(name);
     }

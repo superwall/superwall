@@ -17,6 +17,7 @@ export type {
   StudioActionProgress,
   StudioActionRequest,
   StudioActionResult,
+  StudioResume,
   StudioStatus,
   StudioVersion,
 } from "./contract";
@@ -70,8 +71,26 @@ export const hasOriginal = (surface: StudioSurface): boolean =>
 
 export type PreviewUrlBuilder = (surface: StudioSurface) => string;
 
+/**
+ * A build the host holds that is no pushed version: an agent chat's unsaved
+ * paywall, say. The stage compares it beside the surface on it, and
+ * `StudioSource.selectDraft` puts it on stage.
+ */
+export type StudioDraft = {
+  /** Stable across newer builds of the same draft (its folder, say). */
+  key: string;
+  label: string;
+  /** Its preview, hosted the way a pushed version's snapshot is. */
+  url: string;
+  hint?: string;
+  presentation?: StudioPresentation;
+  /** It is the surface on stage. */
+  onStage?: boolean;
+};
+
 export type CompareTarget =
   | { type: "version"; version: number }
+  | { type: "draft"; draft: StudioDraft }
   | { type: "surface"; surface: StudioSurface }
   | { type: "origin" };
 
@@ -99,6 +118,10 @@ export type StudioSource = {
   previewLink?: (surface: StudioSurface) => Promise<string>;
   screenshotUrl?: (surface: StudioSurface) => Promise<string | undefined>;
   compareHint?: string;
+  /** Unsaved builds, oldest first. The stage compares the newest beside the one on it. */
+  drafts?: readonly StudioDraft[];
+  /** Puts a draft on stage; the host moves the editor to it. */
+  selectDraft?: (key: string) => void;
 };
 
 export const hasActions = (source: StudioSource): boolean => source.actions !== undefined;

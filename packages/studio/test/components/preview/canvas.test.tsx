@@ -106,6 +106,42 @@ describe("Canvas", () => {
     expect(zoom.current).toEqual({ scale: 904 / 2000, fitted: true });
   });
 
+  it("refits a panned stage when it changes size, and re-centres a zoomed one", () => {
+    const observers: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          observers.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const resize = (viewport: Size) => {
+      sizes.canvas = viewport;
+      act(() => observers.forEach((callback) => callback([], {} as ResizeObserver)));
+    };
+    const { layer, api, zoom } = mount();
+
+    act(() => api().pan(120, 40));
+    expect(zoom.current.fitted).toBe(false);
+    resize({ width: 680, height: 800 });
+    expect(zoom.current.fitted).toBe(true);
+    expect(transformOf(layer).scale).toBeCloseTo(584 / 2000);
+
+    act(() => api().zoomStep(1));
+    act(() => api().pan(-200, 30));
+    const zoomed = transformOf(layer).scale;
+    resize({ width: 1000, height: 800 });
+    expect(zoom.current.fitted).toBe(false);
+    expect(transformOf(layer)).toEqual({
+      scale: zoomed,
+      x: 48 + (904 - 2000 * zoomed) / 2,
+      y: 48 + (704 - 1000 * zoomed) / 2,
+    });
+  });
+
   it("zooms around the cursor on a pinch or ctrl-wheel, and pans on a plain wheel", () => {
     const { canvas, layer, zoom } = mount();
     const before = transformOf(layer);
@@ -478,5 +514,99 @@ describe("Canvas", () => {
     act(() => api().zoomStep(1));
     view.rerender(tree("b"));
     expect(transformOf(layer)).toEqual(fitted);
+  });
+
+  describe("contained in a scrolling page", () => {
+    const mountContained = (inset?: number) => {
+      setUp({ width: 400, height: 600 }, { width: 402, height: 874 });
+      const handle = React.createRef<CanvasHandle>();
+      render(
+        <Canvas fitKey="a" ref={handle} contained inset={inset}>
+          <iframe title="paywall" src="about:blank" />
+          <button type="button">inside</button>
+        </Canvas>,
+      );
+      const canvas = screen.getByTestId("canvas");
+      const layer = screen.getByTestId("canvas-content");
+      const frame = screen.getByTitle("paywall");
+      if (!(frame instanceof HTMLIFrameElement) || !frame.contentWindow) {
+        throw new Error("paywall is not an iframe");
+      }
+      return { canvas, layer, target: frame.contentWindow, api: () => handle.current! };
+    };
+
+    it("fits inside its own inset", () => {
+      const { layer } = mountContained(16);
+      expect(transformOf(layer).scale).toBeCloseTo(568 / 874);
+      expect(transformOf(layer).y).toBeCloseTo(16);
+    });
+
+    it("leaves a plain wheel to the page and still zooms on a pinch", () => {
+      const { canvas, layer, target } = mountContained();
+      const before = transformOf(layer);
+
+      const scroll = new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true });
+      act(() => {
+        canvas.dispatchEvent(scroll);
+      });
+      const framed = new WheelEvent("wheel", { deltaY: 40, cancelable: true });
+      act(() => {
+        target.dispatchEvent(framed);
+      });
+      expect(scroll.defaultPrevented).toBe(false);
+      expect(framed.defaultPrevented).toBe(false);
+      expect(transformOf(layer)).toEqual(before);
+
+      fireEvent.wheel(canvas, { deltaY: -100, ctrlKey: true, clientX: 200, clientY: 300 });
+      expect(transformOf(layer).scale).toBeGreaterThan(before.scale);
+    });
+
+    it("lets a finger scroll the page until zoomed, then moves the stage instead of the paywall", () => {
+      const { canvas, api } = mountContained();
+      expect(canvas.className).toContain("touch-pan-y");
+      expect(canvas.className).not.toContain("pointer-coarse");
+
+      act(() => api().zoomStep(1));
+      expect(canvas.className).toContain("touch-none");
+      expect(canvas.className).toContain("pointer-coarse:[&_iframe]:pointer-events-none");
+
+      act(() => api().fit());
+      expect(canvas.className).toContain("touch-pan-y");
+    });
+
+    it("answers the keyboard only while hovered or focused", () => {
+      const { canvas, layer } = mountContained();
+      const fitted = transformOf(layer);
+      const press = (init: KeyboardEventInit) =>
+        act(() => {
+          window.dispatchEvent(new KeyboardEvent("keydown", init));
+        });
+
+      press({ key: "=", metaKey: true });
+      press({ code: "Space" });
+      expect(transformOf(layer)).toEqual(fitted);
+      expect(canvas.hasAttribute("data-panning")).toBe(false);
+
+      fireEvent.pointerEnter(canvas);
+      press({ key: "=", metaKey: true });
+      expect(transformOf(layer).scale).toBeGreaterThan(fitted.scale);
+      fireEvent.pointerLeave(canvas);
+      press({ key: "0", metaKey: true });
+      expect(transformOf(layer).scale).toBeGreaterThan(fitted.scale);
+
+      const inside = screen.getByRole("button", { name: "inside" });
+      fireEvent.focusIn(inside);
+      press({ key: "0", metaKey: true });
+      expect(transformOf(layer)).toEqual(fitted);
+
+      fireEvent.focusOut(inside, { relatedTarget: document.body });
+      press({ key: "=", metaKey: true });
+      expect(transformOf(layer)).toEqual(fitted);
+
+      fireEvent.focusIn(inside);
+      fireEvent.focusOut(inside, { relatedTarget: canvas });
+      press({ key: "=", metaKey: true });
+      expect(transformOf(layer).scale).toBeGreaterThan(fitted.scale);
+    });
   });
 });

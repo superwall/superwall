@@ -22,12 +22,41 @@ const askForScheme = (initial: string): string | undefined => {
 export const PreviewOnDevice = ({
   source,
   surface,
+  autoOpen = false,
+  pushFirst,
+  disabled = false,
+  request,
+  onOpenChange,
 }: {
   source: StudioSource;
   surface: StudioSurface;
+  /** Opens with the dialog showing, as a push made for it lands here. */
+  autoOpen?: boolean;
+  /**
+   * Set while the surface is not in the account yet: a device has nothing to
+   * open, so Preview asks to push it first and this runs the push.
+   */
+  pushFirst?: () => void;
+  disabled?: boolean;
+  /** A host's ask (`previewOnDevice`), handled as a click on Preview or a close; a new `key` asks again. */
+  request?: { open: boolean; key: number };
+  /** Whether the dialog, or the push it asks for first, is showing. */
+  onOpenChange?: (open: boolean) => void;
 }) => {
   const hosted = useStudioMode() === "hosted";
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(autoOpen);
+  const [confirming, setConfirming] = React.useState(false);
+  const showing = open || confirming;
+  React.useEffect(() => onOpenChange?.(showing), [showing]);
+  React.useEffect(() => {
+    if (!request || request.key === 0) return;
+    if (!request.open) {
+      setOpen(false);
+      setConfirming(false);
+    } else if (pushFirst) setConfirming(true);
+    else setOpen(true);
+    // Only a new ask acts; `pushFirst` changes every render.
+  }, [request?.key]);
   const [scheme, setScheme] = React.useState(() => readScheme() ?? source.scheme);
   const [link, setLink] = React.useState<LinkState>({ status: "loading" });
 
@@ -74,11 +103,37 @@ export const PreviewOnDevice = ({
         className="sw-btn sw-btn--sm max-sm:w-7 max-sm:px-0"
         type="button"
         aria-label="Preview"
-        onClick={() => setOpen(true)}
+        disabled={disabled}
+        onClick={() => (pushFirst ? setConfirming(true) : setOpen(true))}
       >
         <QrCodeIcon />
         <span className="max-sm:hidden">Preview</span>
       </button>
+
+      {confirming && pushFirst && (
+        <Dialog
+          title="Push this paywall first?"
+          description="Previewing on a device needs a saved version. This pushes it as a draft: a new version, nothing live changes."
+          onClose={() => setConfirming(false)}
+          footer={
+            <>
+              <button className="sw-btn" type="button" onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+              <button
+                className="sw-btn sw-btn--primary"
+                type="button"
+                onClick={() => {
+                  setConfirming(false);
+                  pushFirst();
+                }}
+              >
+                Push and preview
+              </button>
+            </>
+          }
+        />
+      )}
 
       {open && (
         <Dialog

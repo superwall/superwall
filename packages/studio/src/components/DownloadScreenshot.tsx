@@ -15,7 +15,7 @@ type Shot =
 
 const HINTS: Record<Exclude<Shot["status"], "ready">, string> = {
   checking: "Looking for a screenshot…",
-  none: "This paywall has no live version yet. Screenshots are captured from the published document, so promote a pushed version before downloading one.",
+  none: "This paywall has no live version yet. Screenshots are captured from the live version, so publish it, or promote a pushed version, first.",
   unreachable: "Couldn’t reach the screenshot service.",
 };
 
@@ -41,7 +41,6 @@ export const DownloadScreenshot = ({
   const hosted = useStudioMode() === "hosted";
   const [shot, setShot] = React.useState<Shot>({ status: "checking" });
   const [saving, setSaving] = React.useState(false);
-
   const resolve = hosted ? source.screenshotUrl : fetchScreenshot;
 
   React.useEffect(() => {

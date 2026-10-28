@@ -2,6 +2,7 @@ import * as React from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SurfaceEditor } from "../../src/screens/SurfaceEditor";
+import type { StudioHandle } from "../../src/lib/commands";
 import { StudioHostProvider } from "../../src/lib/studio-host";
 
 const renderEditor = (element: React.ReactElement<React.ComponentProps<typeof SurfaceEditor>>) =>
@@ -344,9 +345,7 @@ describe("SurfaceEditor shipping a local surface", () => {
     });
 
   const ship = async (label: string) => {
-    const menu = screen.getByRole("button", { name: /push|publish|promote/i });
-    fireEvent.click(menu);
-    fireEvent.click(screen.getByRole("button", { name: new RegExp(label, "i") }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${label}$`, "i") }));
     await act(async () => {});
   };
 
@@ -775,5 +774,428 @@ describe("SurfaceEditor promoting and rolling back", () => {
       expect(screen.getByText("Roll back failed")).toBeDefined();
       expect(screen.getByRole("alert").textContent).toBe("paywalls:write is missing");
     });
+  });
+});
+
+describe("SurfaceEditor driven by its host", () => {
+  const surfaceWithLocales: StudioSurface = { ...live, locales: ["en", "de-DE"] };
+
+  const drive = async (
+    handle: React.RefObject<StudioHandle | null>,
+    commands: Parameters<StudioHandle["run"]>[0],
+  ) => {
+    let result: Awaited<ReturnType<StudioHandle["run"]>> | undefined;
+    let running: ReturnType<StudioHandle["run"]> | undefined;
+    // Two acts: the run resolves after the commit its commands cause, which an
+    // async act awaiting it would hold back until it returned.
+    act(() => {
+      running = handle.current?.run(commands);
+    });
+    await act(async () => {
+      result = await running;
+    });
+    if (!result) throw new Error("the editor did not answer");
+    return result;
+  };
+
+  it("applies commands to the controls a person uses, and reports what is on stage", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(
+      <SurfaceEditor ref={handle} source={source} surface={surfaceWithLocales} samples={{}} />,
+    );
+    const host = hostOf(preview());
+    host.ping();
+
+    const result = await drive(handle, [
+      { type: "device", device: "iPhone 17 Pro Max" },
+      { type: "orientation", orientation: "landscape" },
+      { type: "theme", theme: "dark" },
+      { type: "locale", locale: "de_de" },
+      { type: "introductoryOffer", eligible: true },
+      { type: "variable", path: "user.name", value: "Ada" },
+      { type: "variable", path: "products.annual.price", value: "$1" },
+      { type: "variablesPanel", open: true },
+      { type: "zoom", to: 50 },
+    ]);
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.state).toMatchObject({
+      surface: { id: "plus-upgrade", label: "v12 · Live" },
+      device: { id: "iphone-17-pro-max", name: "iPhone 17 Pro Max", width: 956, height: 440 },
+      orientation: "landscape",
+      theme: "dark",
+      locale: "de-DE",
+      locales: ["en", "de-DE"],
+      introductoryOffer: { eligible: true, overridden: true },
+      zoom: { percent: 50, fitted: false },
+      variables: { user: { name: "Ada" }, products: { annual: { price: "$1" } } },
+      variablesPanel: true,
+      stage: "surface:paywall/plus-upgrade",
+      compare: [],
+      compareMax: 2,
+      drafts: [],
+      previewOnDevice: false,
+    });
+    expect((screen.getByLabelText("Device") as HTMLSelectElement).value).toBe("iphone-17-pro-max");
+    expect(screen.getByRole("button", { name: "Rotate device" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(
+      screen.getByRole("switch", { name: "Introductory offer" }).getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(screen.getByRole("button", { name: /Variables/ }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    expect(host.sent().at(-1)?.[0]).toMatchObject({
+      variables: {
+        device: { interfaceStyle: "Dark", deviceLocale: "de-DE" },
+        user: { name: "Ada" },
+      },
+    });
+    expect(handle.current?.state().theme).toBe("dark");
+  });
+
+  it("says which commands it could not apply, and still applies the rest", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(
+      <SurfaceEditor
+        ref={handle}
+        source={source}
+        surface={{ ...live, version: 12 }}
+        samples={{}}
+      />,
+    );
+
+    const result = await drive(handle, [
+      { type: "device", device: "Nokia 3310" },
+      { type: "locale", locale: "fr" },
+      { type: "variable", path: "experiment.id", value: 1 },
+      { type: "version", version: 4 },
+      { type: "compare", with: "nothing" },
+      { type: "theme", theme: "dark" },
+    ]);
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual([
+      { index: 0, type: "device", error: 'no device "Nokia 3310"; see state.devices' },
+      { index: 1, type: "locale", error: "this paywall has one language only" },
+      {
+        index: 2,
+        type: "variable",
+        error:
+          "experiment.id is not user.<key>, device.<key>, params.<key> or products.<reference>.<key>",
+      },
+      { index: 3, type: "version", error: "this studio cannot switch versions" },
+      {
+        index: 4,
+        type: "compare",
+        error: 'nothing to compare called "nothing"; see state.compareOptions',
+      },
+    ]);
+    expect(result.state.theme).toBe("dark");
+  });
+
+  it("names the locales it has when asked for another", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(
+      <SurfaceEditor ref={handle} source={source} surface={surfaceWithLocales} samples={{}} />,
+    );
+    const result = await drive(handle, [
+      { type: "locale", locale: "fr" },
+      { type: "locale", locale: null },
+    ]);
+    expect(result.errors).toEqual([
+      { index: 0, type: "locale", error: "this paywall has no fr locale; it has en, de-DE" },
+    ]);
+    expect(result.state.locale).toBeNull();
+  });
+
+  it("zooms, resizes, compares and reloads like the toolbar", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(<SurfaceEditor ref={handle} source={source} surface={live} samples={{}} />);
+
+    const zoomed = await drive(handle, [{ type: "zoom", to: "in" }]);
+    expect(zoomed.state.zoom.fitted).toBe(false);
+    await drive(handle, [{ type: "zoom", to: "out" }]);
+    await drive(handle, [{ type: "zoom", to: "actual" }]);
+    const fitted = await drive(handle, [{ type: "zoom", to: "fit" }]);
+    expect(fitted.state.zoom.fitted).toBe(true);
+
+    const sized = await drive(handle, [
+      { type: "size", width: 900 },
+      { type: "size", height: 5000 },
+    ]);
+    expect(sized.state.device).toEqual({
+      id: "responsive",
+      name: "Responsive",
+      width: 900,
+      height: 3000,
+    });
+    const back = await drive(handle, [
+      { type: "device", device: "responsive" },
+      { type: "orientation", orientation: "portrait" },
+    ]);
+    expect(back.state.device.id).toBe("responsive");
+
+    const compared = await drive(handle, [{ type: "compare", with: "V13" }]);
+    expect(compared.state.compare).toEqual(["surface:paywall/plus-upgrade"]);
+    expect(compared.state.compareOptions).toEqual([
+      { key: "surface:paywall/plus-upgrade", label: "v13", kind: "surface" },
+    ]);
+    expect(screen.getByTitle("v13 preview")).toBeTruthy();
+    const ended = await drive(handle, [{ type: "compare", with: null }, { type: "reload" }]);
+    expect(ended.state.compare).toEqual([]);
+    expect(screen.queryByTitle("v13 preview")).toBeNull();
+  });
+
+  it("resets the variables but keeps the offer switch, and clears the switch alone", async () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(<SurfaceEditor ref={handle} source={source} surface={live} samples={{}} />);
+    await drive(handle, [
+      { type: "variable", path: "params.source", value: "push" },
+      { type: "introductoryOffer", eligible: false },
+    ]);
+    const reset = await drive(handle, [{ type: "resetVariables" }]);
+    expect(reset.state.variables).toEqual({});
+    expect(reset.state.introductoryOffer).toEqual({ eligible: false, overridden: true });
+    const cleared = await drive(handle, [
+      { type: "introductoryOffer", eligible: null },
+      { type: "resetVariables" },
+    ]);
+    expect(cleared.state.introductoryOffer.overridden).toBe(false);
+  });
+
+  it("switches pushed versions through the host's picker, and compares the original", async () => {
+    const pick = vi.fn();
+    const rebuilt: StudioSurface = {
+      ...live,
+      version: 12,
+      origin: { paywallId: "1", url: "https://editor.test/1" },
+    };
+    const hosted: StudioSource = {
+      ...source,
+      surfaces: [rebuilt],
+      actions: {
+        offered: ["promote"],
+        run: vi.fn(),
+        status: async () => ({
+          paywallId: "208540",
+          versions: [
+            { version: 13, url: "https://cdn.test/13.html", live: false },
+            { version: 12, url: "https://cdn.test/12.html", live: true },
+          ],
+        }),
+        pick,
+      },
+    };
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(<SurfaceEditor ref={handle} source={hosted} surface={rebuilt} samples={{}} />);
+    await act(async () => {});
+
+    const result = await drive(handle, [
+      { type: "version", version: 13 },
+      { type: "version", version: 9 },
+      { type: "compare", with: "Original" },
+    ]);
+    expect(pick).toHaveBeenCalledWith(13);
+    expect(result.errors).toEqual([
+      { index: 1, type: "version", error: "there is no v9; see state.versions" },
+    ]);
+    expect(result.state.versions).toEqual([
+      { version: 13, live: false },
+      { version: 12, live: true },
+    ]);
+    expect(result.state.compare).toEqual(["origin"]);
+    expect(result.state.surface).toEqual({ id: "plus-upgrade", label: "v12 · Live", version: 12 });
+
+    const version = await drive(handle, [{ type: "compare", with: "version:13" }]);
+    expect(version.state.compare).toEqual(["version:13"]);
+  });
+
+  it("reports the zoom it last heard before the canvas mounts a handle", () => {
+    const handle = React.createRef<StudioHandle>();
+    renderEditor(<SurfaceEditor ref={handle} source={source} surface={live} samples={{}} />);
+    expect(handle.current?.state().zoom).toEqual({ percent: 100, fitted: true });
+  });
+
+  it("lays the host's panel at the start of the stage row, open or closed", () => {
+    const view = renderEditor(
+      <SurfaceEditor
+        source={source}
+        surface={live}
+        samples={{}}
+        panel={{ open: false, label: "Chat", content: <div data-testid="slot" /> }}
+      />,
+    );
+    const panel = screen.getByTestId("host-panel");
+    expect(panel.getAttribute("aria-label")).toBe("Chat");
+    expect(panel.getAttribute("aria-hidden")).toBe("true");
+    expect(panel.className).toContain("w-0");
+    // The panel runs the full height; the stage and its toolbar sit beside it.
+    const column = screen.getByTestId("stage-column");
+    expect(panel.nextElementSibling).toBe(column);
+    expect(column.contains(screen.getByTestId("canvas"))).toBe(true);
+    expect(column.contains(screen.getByRole("group", { name: "Zoom" }))).toBe(true);
+    expect(panel.contains(screen.getByRole("group", { name: "Zoom" }))).toBe(false);
+    expect(screen.queryByRole("separator", { name: "Resize chat" })).toBeNull();
+    expect(within(panel).getByTestId("slot")).toBeTruthy();
+
+    view.rerender(
+      <StudioHostProvider mode="local" home={{ href: "/", navigate: () => {} }}>
+        <SurfaceEditor
+          source={source}
+          surface={live}
+          samples={{}}
+          panel={{ open: true, label: "Chat", content: <div data-testid="slot" /> }}
+        />
+      </StudioHostProvider>,
+    );
+    expect(screen.getByTestId("host-panel").getAttribute("aria-hidden")).toBe("false");
+    expect(screen.getByTestId("host-panel").className).toContain("w-(--sw-host-panel)");
+    expect(screen.getByTestId("stage-column").previousElementSibling).toBe(
+      screen.getByRole("separator", { name: "Resize chat" }).parentElement,
+    );
+  });
+
+  it("lets the host own the panel's width, and reserves the Variables panel beside the stage", () => {
+    const onWidthChange = vi.fn();
+    renderEditor(
+      <SurfaceEditor
+        source={source}
+        surface={live}
+        samples={{}}
+        panel={{ open: true, label: "Chat", content: null, width: 500, onWidthChange }}
+      />,
+    );
+    const panel = screen.getByTestId("host-panel");
+    expect(panel.style.getPropertyValue("--sw-host-panel")).toContain("500px");
+    expect(panel.style.getPropertyValue("--sw-host-panel")).toContain("100cqw - 400px");
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+    expect(panel.style.getPropertyValue("--sw-host-panel")).toContain("100cqw - 720px");
+    // Variables mirrors the chat: full height on the right, the toolbar only under the stage.
+    const variables = screen.getByRole("button", { name: "Close variables" }).closest("aside")!;
+    const column = screen.getByTestId("stage-column");
+    expect(column.nextElementSibling).toBe(variables);
+    expect(variables.contains(screen.getByRole("group", { name: "Zoom" }))).toBe(false);
+    fireEvent.keyDown(screen.getByRole("separator", { name: "Resize chat" }), {
+      key: "ArrowRight",
+    });
+    expect(onWidthChange).toHaveBeenCalledWith(516);
+    expect(window.localStorage.getItem("sw-studio-panel-width")).toBeNull();
+  });
+});
+
+const renderHosted = (element: React.ReactElement<React.ComponentProps<typeof SurfaceEditor>>) =>
+  render(
+    <StudioHostProvider mode="hosted" home={{ href: "/", navigate: () => {} }}>
+      {element}
+    </StudioHostProvider>,
+  );
+
+describe("a surface the account does not have yet", () => {
+  const draft: StudioSurface = { ...live, label: "Draft", paywallId: undefined };
+  const draftSource = (run: NonNullable<StudioSource["actions"]>["run"]) =>
+    ({
+      ...source,
+      surfaces: [draft],
+      actions: { offered: ["push", "publish"], run, status: async () => ({}) },
+    }) satisfies StudioSource;
+
+  it("ships through the normal menu: Push and Publish, with nothing to pick", async () => {
+    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: false }));
+    renderHosted(<SurfaceEditor source={draftSource(run)} surface={draft} samples={{}} />);
+    await act(async () => {});
+
+    expect(screen.queryByRole("button", { name: "Version" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
+    expect(screen.getByText("New version, nothing live changes")).toBeDefined();
+    expect(screen.getByText("Push and make it live")).toBeDefined();
+  });
+
+  it("names a draft titled by its own id once, with its label in the version slot", async () => {
+    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: false }));
+    const named = {
+      ...draft,
+      project: undefined,
+      id: "monthly-yearly",
+      label: "Draft · from chat",
+    };
+    renderHosted(
+      <SurfaceEditor
+        source={{ ...draftSource(run), title: "monthly-yearly", surfaces: [named] }}
+        surface={named}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    expect(screen.getByText("monthly-yearly / Draft · from chat")).toBeTruthy();
+  });
+
+  it("asks before pushing it to preview, and pushes for the preview once confirmed", async () => {
+    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: false }));
+    renderHosted(<SurfaceEditor source={draftSource(run)} surface={draft} samples={{}} />);
+    await act(async () => {});
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    expect(screen.getByRole("dialog", { name: "Push this paywall first?" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(run).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Push and preview" }));
+    });
+    expect(run).toHaveBeenCalledWith(
+      draft,
+      { action: "push", version: undefined, resume: "preview" },
+      expect.any(Function),
+    );
+    expect(screen.queryByRole("dialog", { name: "Push this paywall first?" })).toBeNull();
+  });
+
+  it("holds Preview while the push runs", async () => {
+    let finish: ((value: { ok: true; version: number; live: boolean }) => void) | undefined;
+    const run = vi.fn(
+      () => new Promise<{ ok: true; version: number; live: boolean }>((done) => (finish = done)),
+    );
+    renderHosted(<SurfaceEditor source={draftSource(run)} surface={draft} samples={{}} />);
+    await act(async () => {});
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Push and preview" }));
+    expect(screen.getByRole("button", { name: "Preview" }).hasAttribute("disabled")).toBe(true);
+    await act(async () => finish?.({ ok: true, version: 1, live: false }));
+    expect(screen.getByRole("button", { name: "Preview" }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("keeps the screenshot disabled until a version is live", async () => {
+    const run = vi.fn(async () => ({ ok: true as const, version: 1, live: false }));
+    renderHosted(<SurfaceEditor source={draftSource(run)} surface={draft} samples={{}} />);
+    await act(async () => {});
+    expect(
+      screen.getByRole("button", { name: "Download screenshot" }).getAttribute("aria-disabled"),
+    ).toBe("true");
+  });
+});
+
+describe("finishing a push made to preview", () => {
+  const saved: StudioSurface = { ...live, label: "v1", version: 1 };
+
+  it("opens Preview on a device once, and says so", async () => {
+    const onResumed = vi.fn();
+    renderEditor(
+      <SurfaceEditor
+        source={source}
+        surface={saved}
+        samples={{}}
+        resume="preview"
+        onResumed={onResumed}
+      />,
+    );
+    await act(async () => {});
+    expect(screen.getByRole("dialog", { name: "Preview on a device" })).toBeDefined();
+    expect(onResumed).toHaveBeenCalledTimes(1);
   });
 });

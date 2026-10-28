@@ -62,7 +62,11 @@ export const Dialog = ({
         >
           <XIcon />
         </button>
-        <div className="flex flex-col gap-4 px-5 pt-1 pb-5">{children}</div>
+        {children === undefined ? (
+          <div className="pb-2" />
+        ) : (
+          <div className="flex flex-col gap-4 px-5 pt-1 pb-5">{children}</div>
+        )}
         {footer !== undefined && (
           <div className="flex flex-col-reverse gap-2 rounded-b-[calc(var(--radius-2xl)-1px)] border-t border-border bg-card px-5 py-3 sm:flex-row sm:justify-end">
             {footer}

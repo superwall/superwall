@@ -160,8 +160,8 @@ describe("while it runs", () => {
     );
     expect(screen.getAllByText("Rolling back…")).toHaveLength(2);
     expect(screen.getByText("Roll back to v11")).toBeDefined();
-    expect(screen.getByRole("button", { name: /Rolling back/ }).hasAttribute("disabled")).toBe(
-      true,
+    expect(screen.getByRole("button", { name: /Rolling back/ }).getAttribute("aria-busy")).toBe(
+      "true",
     );
   });
 
@@ -227,5 +227,96 @@ describe("while it runs", () => {
     );
     expect(screen.getByText("Roll back failed")).toBeDefined();
     expect(screen.getByRole("alert").textContent).toBe("nope");
+  });
+});
+
+describe("the progress panel", () => {
+  const failed: ActionProgress = {
+    action: "push",
+    steps: { link: "done", build: "failed" },
+    error: "Superwall answered 404.",
+  };
+  const running: ActionProgress = { action: "push", steps: { link: "done", build: "active" } };
+  const panel = () =>
+    screen.queryByText(/^Push (failed|complete)$|^Pushing…$/, { selector: "div span" });
+
+  it("closes a failure on an outside click, and a retry opens it again", () => {
+    const onRun = mount({ target: 13, live: 12, versions }, { progress: failed });
+    expect(screen.getByText("Push failed")).toBeDefined();
+
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByText("Push failed")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Push" }));
+    expect(onRun).toHaveBeenCalledWith("push");
+    expect(screen.getByText("Push failed")).toBeDefined();
+  });
+
+  it("closes on Escape, focus moving elsewhere and the window blurring", () => {
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    mount({ target: 13, live: 12, versions }, { progress: failed });
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByText("Push failed")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
+    expect(screen.getByText("Publish")).toBeDefined();
+    fireEvent.focusIn(outside);
+    expect(screen.queryByText("Publish")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
+    fireEvent.blur(window);
+    expect(screen.queryByText("Publish")).toBeNull();
+    outside.remove();
+  });
+
+  it("swaps a failure for the chooser on the chevron, and reopens on the next failure", () => {
+    const view = render(
+      <ActionMenu
+        offered={LOCAL}
+        promotion={{ target: 13, live: 12, versions }}
+        progress={failed}
+        onRun={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
+    expect(screen.queryByText("Push failed")).toBeNull();
+    expect(screen.getByText("Publish")).toBeDefined();
+
+    view.rerender(
+      <ActionMenu
+        offered={LOCAL}
+        promotion={{ target: 13, live: 12, versions }}
+        progress={running}
+        onRun={() => {}}
+      />,
+    );
+    expect(panel()).not.toBeNull();
+    fireEvent.mouseDown(document.body);
+    expect(panel()).toBeNull();
+    view.rerender(
+      <ActionMenu
+        offered={LOCAL}
+        promotion={{ target: 13, live: 12, versions }}
+        progress={failed}
+        onRun={() => {}}
+      />,
+    );
+    expect(screen.getByText("Push failed")).toBeDefined();
+  });
+
+  it("brings a running panel back from the button or the chevron, without starting another run", () => {
+    const onRun = mount({ target: 13, live: 12, versions }, { progress: running });
+    fireEvent.mouseDown(document.body);
+    expect(panel()).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Pushing/ }));
+    expect(panel()).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Pushing/ }));
+    expect(panel()).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Choose action" }));
+    expect(panel()).not.toBeNull();
+    expect(onRun).not.toHaveBeenCalled();
   });
 });

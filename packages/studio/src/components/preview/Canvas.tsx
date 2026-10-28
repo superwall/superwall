@@ -1,11 +1,14 @@
 import * as React from "react";
 import {
   centered,
+  clampScale,
+  FIT_INSET,
   fitTransform,
   panBy,
   stepScale,
   zoomAt,
   type CanvasTransform,
+  type Inset,
   type Size,
 } from "../../lib/canvas";
 
@@ -108,12 +111,13 @@ const useLatest = <T,>(value: T): React.RefObject<T> => {
   return ref;
 };
 
-const useSpaceHeld = (): boolean => {
+const useSpaceHeld = (engaged: React.RefObject<boolean>): boolean => {
   const [held, setHeld] = React.useState(false);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.code !== "Space" || event.repeat || isTyping(event.target)) return;
+      if (!engaged.current) return;
       event.preventDefault();
       setHeld(true);
     };
@@ -129,7 +133,7 @@ const useSpaceHeld = (): boolean => {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", release);
     };
-  }, []);
+  }, [engaged]);
 
   return held;
 };
@@ -138,21 +142,38 @@ export type CanvasZoom = { scale: number; fitted: boolean };
 
 export type CanvasHandle = {
   zoomStep: (direction: 1 | -1) => void;
+  /** Zooms to `scale` with the stage centred. */
+  zoomTo: (scale: number) => void;
+  /** The zoom on stage now, for a host that reports it. */
+  zoom: () => CanvasZoom;
   actualSize: () => void;
   fit: () => void;
   hold: () => void;
   pan: (dx: number, dy: number) => void;
 };
 
+const insetOf = (inset: number | undefined): Inset =>
+  inset === undefined ? FIT_INSET : { top: inset, right: inset, bottom: inset, left: inset };
+
+/**
+ * `contained` is for a canvas that sits inside a page that scrolls (a chat
+ * transcript): a plain wheel and, until the stage is zoomed, a one-finger
+ * drag scroll the page, and the keyboard only reaches the canvas the pointer
+ * is over or that holds focus, so several on one page never zoom together.
+ */
 export const Canvas = ({
   fitKey,
   ref,
   onZoom,
+  inset,
+  contained = false,
   children,
 }: React.PropsWithChildren<{
   fitKey: string;
   ref?: React.Ref<CanvasHandle>;
   onZoom?: (zoom: CanvasZoom) => void;
+  inset?: number;
+  contained?: boolean;
 }>) => {
   const [viewport, setViewport] = React.useState<HTMLDivElement | null>(null);
   const [content, setContent] = React.useState<HTMLDivElement | null>(null);
@@ -160,19 +181,37 @@ export const Canvas = ({
   const [dragging, setDragging] = React.useState(false);
   const viewportSize = useSize(viewport);
   const contentSize = useSize(content);
-  const handTool = useSpaceHeld();
+  const engaged = React.useRef(!contained);
+  const handTool = useSpaceHeld(engaged);
+  const room = React.useMemo(() => insetOf(inset), [inset]);
 
-  const transform = mode.kind === "fit" ? fitTransform(contentSize, viewportSize) : mode.transform;
+  const transform =
+    mode.kind === "fit" ? fitTransform(contentSize, viewportSize, room) : mode.transform;
   const latest = useLatest(transform);
   const pointers = React.useRef(new Map<number, Point>());
   const pinch = React.useRef<Pinch | null>(null);
   const lastFitKey = React.useRef(fitKey);
 
+  // The mode last asked for, ahead of the render that shows it, so a host
+  // chaining zoom commands (or reading the zoom back) never sees a stale one.
+  const requested = React.useRef<Mode>(mode);
+  const measured = useLatest({ contentSize, viewportSize, room });
+  const current = React.useCallback((): CanvasTransform => {
+    const asked = requested.current;
+    if (asked.kind === "manual") return asked.transform;
+    const sizes = measured.current;
+    return fitTransform(sizes.contentSize, sizes.viewportSize, sizes.room);
+  }, [measured]);
+
   const apply = React.useCallback((next: CanvasTransform) => {
-    setMode({ kind: "manual", transform: next });
+    requested.current = { kind: "manual", transform: next };
+    setMode(requested.current);
   }, []);
 
-  const fit = React.useCallback(() => setMode({ kind: "fit" }), []);
+  const fit = React.useCallback(() => {
+    requested.current = { kind: "fit" };
+    setMode(requested.current);
+  }, []);
 
   const toViewport = React.useCallback(
     (clientX: number, clientY: number): Point => {
@@ -193,15 +232,28 @@ export const Canvas = ({
   const zoomStep = React.useCallback(
     (direction: 1 | -1) => {
       const centre = { x: viewportSize.width / 2, y: viewportSize.height / 2 };
-      const next = stepScale(latest.current.scale, direction);
-      apply(zoomAt(latest.current, next / latest.current.scale, centre));
+      const from = current();
+      apply(zoomAt(from, stepScale(from.scale, direction) / from.scale, centre));
     },
-    [apply, latest, viewportSize],
+    [apply, current, viewportSize],
+  );
+
+  const zoomTo = React.useCallback(
+    (scale: number) => {
+      const sizes = measured.current;
+      apply(centered(clampScale(scale), sizes.contentSize, sizes.viewportSize, sizes.room));
+    },
+    [apply, measured],
+  );
+
+  const zoom = React.useCallback(
+    (): CanvasZoom => ({ scale: current().scale, fitted: requested.current.kind === "fit" }),
+    [current],
   );
 
   const actualSize = React.useCallback(() => {
-    apply(centered(1, contentSize, viewportSize));
-  }, [apply, contentSize, viewportSize]);
+    apply(centered(1, contentSize, viewportSize, room));
+  }, [apply, contentSize, viewportSize, room]);
 
   const hold = React.useCallback(() => apply(latest.current), [apply, latest]);
 
@@ -210,8 +262,10 @@ export const Canvas = ({
     [apply, latest],
   );
 
-  React.useImperativeHandle(ref, () => ({ zoomStep, actualSize, fit, hold, pan }), [
+  React.useImperativeHandle(ref, () => ({ zoomStep, zoomTo, zoom, actualSize, fit, hold, pan }), [
     zoomStep,
+    zoomTo,
+    zoom,
     actualSize,
     fit,
     hold,
@@ -221,6 +275,22 @@ export const Canvas = ({
   React.useEffect(() => {
     onZoom?.({ scale: transform.scale, fitted: mode.kind === "fit" });
   }, [onZoom, transform.scale, mode.kind]);
+
+  // The stage changing size (a side panel opening, a window resize) puts the
+  // paywall back in the middle: a pan alone refits, a manual zoom is kept.
+  const lastViewport = React.useRef(viewportSize);
+  React.useLayoutEffect(() => {
+    const before = lastViewport.current;
+    lastViewport.current = viewportSize;
+    if (before.width === viewportSize.width && before.height === viewportSize.height) return;
+    const asked = requested.current;
+    if (asked.kind !== "manual" || before.width <= 0 || before.height <= 0) return;
+    const { contentSize: size, room: inset } = measured.current;
+    const wasFitted =
+      Math.abs(asked.transform.scale - fitTransform(size, before, inset).scale) < 1e-3;
+    if (wasFitted) fit();
+    else apply(centered(asked.transform.scale, size, viewportSize, inset));
+  }, [viewportSize, measured, fit, apply]);
 
   React.useEffect(() => {
     if (lastFitKey.current === fitKey) return;
@@ -235,12 +305,49 @@ export const Canvas = ({
         zoomWheel(event, toViewport(event.clientX, event.clientY));
         return;
       }
+      if (contained) return;
       event.preventDefault();
       apply(panBy(latest.current, -event.deltaX, -event.deltaY));
     };
     viewport.addEventListener("wheel", onWheel, { passive: false });
     return () => viewport.removeEventListener("wheel", onWheel);
-  }, [viewport, apply, latest, toViewport, zoomWheel]);
+  }, [viewport, contained, apply, latest, toViewport, zoomWheel]);
+
+  React.useEffect(() => {
+    engaged.current = !contained;
+    if (!contained || !viewport) return undefined;
+    let hovered = false;
+    let focused = false;
+    const update = () => {
+      engaged.current = hovered || focused;
+    };
+    const enter = () => {
+      hovered = true;
+      update();
+    };
+    const leave = () => {
+      hovered = false;
+      update();
+    };
+    const focus = () => {
+      focused = true;
+      update();
+    };
+    const blur = (event: FocusEvent) => {
+      focused = event.relatedTarget instanceof Node && viewport.contains(event.relatedTarget);
+      update();
+    };
+    viewport.addEventListener("pointerenter", enter);
+    viewport.addEventListener("pointerleave", leave);
+    viewport.addEventListener("focusin", focus);
+    viewport.addEventListener("focusout", blur);
+    return () => {
+      viewport.removeEventListener("pointerenter", enter);
+      viewport.removeEventListener("pointerleave", leave);
+      viewport.removeEventListener("focusin", focus);
+      viewport.removeEventListener("focusout", blur);
+    };
+  }, [contained, viewport]);
 
   React.useEffect(() => {
     if (!content) return undefined;
@@ -262,7 +369,7 @@ export const Canvas = ({
           );
           return;
         }
-        if (pageClaimsWheel(event)) return;
+        if (contained || pageClaimsWheel(event)) return;
         event.preventDefault();
         apply(panBy(latest.current, -event.deltaX, -event.deltaY));
       };
@@ -321,11 +428,11 @@ export const Canvas = ({
       content.removeEventListener("load", onLoad, true);
       attached.forEach((detach) => detach());
     };
-  }, [content, apply, latest, toViewport, zoomWheel]);
+  }, [content, contained, apply, latest, toViewport, zoomWheel]);
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || isTyping(event.target)) return;
+      if (!(event.metaKey || event.ctrlKey) || isTyping(event.target) || !engaged.current) return;
       if (event.key === "=" || event.key === "+") zoomStep(1);
       else if (event.key === "-") zoomStep(-1);
       else if (event.key === "0") fit();
@@ -389,10 +496,16 @@ export const Canvas = ({
 
   const cursor = dragging ? "cursor-grabbing" : handTool ? "cursor-grab" : "";
   const framesInert = handTool || dragging ? "[&_iframe]:pointer-events-none" : "";
+  // A finger that lands on a zoomed-in paywall moves the stage, not the paywall.
+  const touch = !contained
+    ? "touch-none"
+    : mode.kind === "fit"
+      ? "touch-pan-y"
+      : "touch-none pointer-coarse:[&_iframe]:pointer-events-none";
 
   return (
     <div
-      className={`relative min-h-0 min-w-0 flex-1 overflow-hidden touch-none select-none ${cursor} ${framesInert}`}
+      className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${touch} select-none ${cursor} ${framesInert}`}
       data-testid="canvas"
       data-panning={handTool || undefined}
       data-dragging={dragging || undefined}
