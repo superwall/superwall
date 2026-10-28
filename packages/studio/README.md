@@ -133,16 +133,32 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   preview server, importable from node without DOM types.
   `@superwall/studio/styles.css` is the Tailwind source for hosts that run
   their own v4 pipeline.
+- `StudioSource.drafts` are builds the host holds that are no pushed
+  version (an agent chat's unsaved paywalls), oldest first, each `{ key,
+label, url, onStage? }`. The Compare menu lists them first, and the stage
+  opens comparing the newest ones beside the surface on it; a draft the host
+  adds later joins the comparison, replacing the one compared longest. At
+  most three panes stand side by side (`COMPARE_MAX` beside the one on
+  stage); the rest stay in the menu. A draft compares against pushed
+  versions too. `StudioSource.selectDraft(key)` puts a draft on stage (the
+  host moves the editor to it); each compared draft's pane offers it as
+  Open, and every compared pane has a close.
 - `SurfaceEditor`'s `ref` is a `StudioHandle`: `run(commands)` applies
   `StudioCommand`s (zoom, device, size, orientation, theme, locale,
   introductory offer, a Variables panel value, reset, the Variables panel,
-  version, compare, reload) through the same state the toolbar drives, and
-  resolves once the stage has settled with `{ ok, errors, state }`;
+  version, compare as a list, compareAdd, compareRemove, compareSwap,
+  select, previewOnDevice, reload) through the same state the controls drive, and
+  resolves once the stage has settled with `{ ok, errors, state }`
+  (`state.stage`, `state.compare`, `state.drafts` and `state.compareOptions`
+  name what to pass; a command that moves the host elsewhere still resolves);
   `state()` reads the same `StudioState` without changing anything. Commands
   that arrive as untrusted JSON (an agent's, over a bridge) go through
   `parseStudioCommands` first. A bad command is reported by index and the
   rest still apply. Zoom applies after everything else, so it lands on the
-  stage a device or orientation change refits.
+  stage a device or orientation change refits. Every control a person can
+  change has a command: `test/screens/controlCoherence.test.tsx` renders the
+  editor with all of them showing and fails on one with no command and no
+  stated reason it is the person's alone (shipping, downloads, new windows).
 - `SurfaceEditor`'s `panel` (`{ open, label, content, width?, onWidthChange? }`)
   is a host-owned panel at the start of the editor's row, from under the top
   bar to the bottom of the studio; the stage and its toolbar sit to its right.
@@ -176,8 +192,9 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   nothing ever flashes white. Shipping happens here too: an action menu runs
   Push, Publish and Promote beside a picker of the pushed versions, reading
   **Roll back** when the picked one is older than what is live, and a Compare
-  menu splits the stage against any pushed version of the paywall (the live one
-  marked) or another local one. The progress panel a run opens closes like
+  menu puts up to two more beside the stage, toggled from the menu: the host's
+  unsaved drafts, any pushed version of the paywall (the live one marked) or
+  another local one. The progress panel a run opens closes like
   any popover (outside click, Escape, focus or the window leaving); the
   action button or its chevron brings a running one back, and a failure
   reopens it. When the stage changes size (a side panel opening or closing,

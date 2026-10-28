@@ -129,8 +129,8 @@ describe("studio actions", () => {
       expect(pushed?.getAttribute("src")).toContain("https://runtime.test/v4.html");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-    fireEvent.click(screen.getByText("Off"));
+    // The menu stays open for another pick; Off closes it.
+    fireEvent.click(popup().getByText("Off"));
     expect(screen.queryByText("Local")).toBeNull();
   });
 

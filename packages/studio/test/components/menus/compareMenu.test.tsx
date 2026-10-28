@@ -31,10 +31,19 @@ const options = (count: number): CompareOption[] => [
 ];
 
 const open = (props: Partial<React.ComponentProps<typeof CompareMenu>> = {}) => {
-  const onSelect = vi.fn();
-  render(<CompareMenu active={undefined} options={options(3)} onSelect={onSelect} {...props} />);
+  const onToggle = vi.fn();
+  const onClear = vi.fn();
+  render(
+    <CompareMenu
+      active={[]}
+      options={options(3)}
+      onToggle={onToggle}
+      onClear={onClear}
+      {...props}
+    />,
+  );
   fireEvent.click(screen.getByRole("button", { name: /Compare/ }));
-  return onSelect;
+  return { onToggle, onClear };
 };
 
 describe("CompareMenu", () => {
@@ -113,14 +122,50 @@ describe("CompareMenu", () => {
   });
 
   it("checks what is being compared at the row's end, and switching back off is one click", () => {
-    const onSelect = open({ active: { type: "version", version: 5 } });
+    const { onClear } = open({ active: ["version:5"] });
 
     const liveRow = screen.getByText("v5 · Live").closest("button") as HTMLElement;
     expect(liveRow.getAttribute("aria-current")).toBe("true");
     expect(liveRow.lastElementChild?.matches("svg.text-primary")).toBe(true);
 
     fireEvent.click(screen.getByText("Off"));
-    expect(onSelect).toHaveBeenCalledWith(undefined);
+    expect(onClear).toHaveBeenCalledOnce();
+    expect(document.querySelector("[data-menu-popup]")).toBeNull();
+  });
+
+  it("toggles several options, staying open, and counts them on its button", () => {
+    const { onToggle } = open({ active: ["version:5", "surface:paywall/paywall-0"], limit: 2 });
+    expect(screen.getByRole("button", { name: /Compare/ }).textContent).toContain("2");
+    expect(screen.getByText("Up to 3 side by side. A new one replaces the oldest.")).toBeDefined();
+
+    fireEvent.click(screen.getByText("paywall/paywall-1"));
+    expect(onToggle).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "surface:paywall/paywall-1" }),
+    );
+    expect(document.querySelector("[data-menu-popup]")).not.toBeNull();
+  });
+
+  it("lists a host's drafts first, under their own heading, and searches them", () => {
+    open({
+      options: [
+        {
+          key: "draft:variant-b",
+          label: "variant-b · draft",
+          hint: "Not pushed yet",
+          target: {
+            type: "draft",
+            draft: { key: "variant-b", label: "variant-b · draft", url: "https://x.test/b" },
+          },
+        },
+        ...options(1),
+      ],
+    });
+    const labels = [...document.querySelectorAll(".overflow-y-auto button")].map(
+      (button) => button.querySelector("span span")?.textContent,
+    );
+    expect(labels[0]).toBe("variant-b · draft");
+    expect(screen.getByText("Drafts")).toBeDefined();
+    expect(screen.getByRole("searchbox", { name: "Search drafts and versions" })).toBeDefined();
   });
 
   it("forgets the search when reopened, so the list is never mysteriously short", () => {
@@ -154,10 +199,12 @@ describe("inside a shadow root", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const shadow = host.attachShadow({ mode: "open" });
-    const onSelect = vi.fn();
+    const onToggle = vi.fn();
     const root = createRoot(shadow);
     await act(async () => {
-      root.render(<CompareMenu active={undefined} options={options(1)} onSelect={onSelect} />);
+      root.render(
+        <CompareMenu active={[]} options={options(1)} onToggle={onToggle} onClear={() => {}} />,
+      );
     });
 
     const toggle = shadow.querySelector("button");
@@ -178,7 +225,9 @@ describe("inside a shadow root", () => {
     await act(async () => {
       fireEvent.click(option);
     });
-    expect(onSelect).toHaveBeenCalledWith({ type: "surface", surface: surface("paywall-0") });
+    expect(onToggle).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { type: "surface", surface: surface("paywall-0") } }),
+    );
 
     await act(async () => {
       root.unmount();

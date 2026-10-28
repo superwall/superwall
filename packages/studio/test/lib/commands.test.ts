@@ -27,6 +27,12 @@ describe("parseStudioCommands", () => {
       { type: "version", version: 12 },
       { type: "compare", with: "origin" },
       { type: "compare" },
+      { type: "compare", with: ["draft:b", "v12"] },
+      { type: "compareAdd", with: "draft:c" },
+      { type: "compareRemove", with: "draft:b" },
+      { type: "compareSwap", from: "draft:c", to: "origin" },
+      { type: "select", with: "variant-b" },
+      { type: "previewOnDevice", open: true },
       { type: "reload" },
     ]);
     expect(parsed).toEqual({
@@ -49,6 +55,12 @@ describe("parseStudioCommands", () => {
         { type: "version", version: 12 },
         { type: "compare", with: "origin" },
         { type: "compare", with: null },
+        { type: "compare", with: ["draft:b", "v12"] },
+        { type: "compareAdd", with: "draft:c" },
+        { type: "compareRemove", with: "draft:b" },
+        { type: "compareSwap", from: "draft:c", to: "origin" },
+        { type: "select", with: "variant-b" },
+        { type: "previewOnDevice", open: true },
         { type: "reload" },
       ],
     });
@@ -81,8 +93,26 @@ describe("parseStudioCommands", () => {
     [[{ type: "version", version: "12" }], "commands[0]: version.version is a version number"],
     [
       [{ type: "compare", with: 12 }],
-      "commands[0]: compare.with is a compare option's key or label, or null",
+      "commands[0]: compare.with is a compare option's key or label, a list of them, or null",
     ],
+    [
+      [{ type: "compare", with: ["a", 1] }],
+      "commands[0]: compare.with is a compare option's key or label, a list of them, or null",
+    ],
+    [
+      [{ type: "compareAdd", with: " " }],
+      "commands[0]: compareAdd.with is a compare option's key or label",
+    ],
+    [
+      [{ type: "compareRemove" }],
+      "commands[0]: compareRemove.with is a compare option's key or label",
+    ],
+    [[{ type: "select", with: 3 }], "commands[0]: select.with is a draft's key or label"],
+    [
+      [{ type: "compareSwap", from: "a" }],
+      "commands[0]: compareSwap.from and compareSwap.to are compare options' keys or labels",
+    ],
+    [[{ type: "previewOnDevice" }], "commands[0]: previewOnDevice.open is true or false"],
   ])("refuses %j", (value, error) => {
     expect(parseStudioCommands(value)).toEqual({ ok: false, error });
   });

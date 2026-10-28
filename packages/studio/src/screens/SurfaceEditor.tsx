@@ -2,6 +2,7 @@ import * as React from "react";
 import { hasIntroductoryOffer, type HostDelegate, type HostState } from "@superwall/host";
 import { ActionMenu, type ActionProgress } from "../components/menus/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/menus/CompareMenu";
+import { compareAdded, compareSwapped, followDrafts } from "../lib/compare";
 import {
   Canvas,
   useCanvasScale,
@@ -25,6 +26,7 @@ import {
   RotateIcon,
   SlidersIcon,
   SunIcon,
+  XIcon,
 } from "../components/icons";
 import { Tooltip } from "../components/Tooltip";
 import { HostPanel, SidePanel } from "../components/panels/SidePanel";
@@ -48,9 +50,11 @@ import {
   type DeviceChromeSpec,
 } from "../lib/devices";
 import {
+  COMPARE_MAX,
   editVariable,
   findDevice,
   variableOverrides,
+  type CompareOptionKind,
   type StudioCommand,
   type StudioCommandError,
   type StudioHandle,
@@ -68,6 +72,7 @@ import {
   type CompareTarget,
   type Samples,
   type StudioActionName,
+  type StudioDraft,
   type StudioPresentation,
   type StudioResume,
   type StudioSource,
@@ -122,6 +127,8 @@ const SizeInput = ({
 
 const StagePane = ({
   label,
+  labelActions,
+  order,
   width,
   height,
   title,
@@ -139,6 +146,10 @@ const StagePane = ({
   canvas,
 }: {
   label?: string;
+  /** Controls beside the label, at the label's size whatever the zoom. */
+  labelActions?: React.ReactNode;
+  /** Its place on the stage; set by order rather than position so moving it never reloads it. */
+  order?: number;
   width: number;
   height: number;
   title: string;
@@ -159,14 +170,22 @@ const StagePane = ({
   const [broken, setBroken] = React.useState(false);
   React.useEffect(() => setBroken(false), [image]);
   return (
-    <div className="flex flex-none flex-col gap-2">
+    <div
+      className="flex flex-none flex-col gap-2"
+      style={order === undefined ? undefined : { order }}
+    >
       {label && (
-        <span
-          className="origin-bottom-left text-xs whitespace-nowrap text-fg-tertiary"
-          style={{ transform: `scale(${1 / scale})` }}
+        <div
+          className="flex origin-bottom-left items-center gap-1.5 text-xs whitespace-nowrap text-fg-tertiary"
+          // Drawn at its own size whatever the zoom, and never wider than the pane under it.
+          style={{ transform: `scale(${1 / scale})`, maxWidth: width * scale }}
+          onPointerDown={labelActions ? (event) => event.stopPropagation() : undefined}
         >
-          {label}
-        </span>
+          <span className="min-w-0 truncate">{label}</span>
+          {labelActions && (
+            <span className="flex flex-none items-center gap-1">{labelActions}</span>
+          )}
+        </div>
       )}
       <div className="relative">
         {image && !broken ? (
@@ -239,6 +258,19 @@ const editorTitle = (surface: StudioSurface, sourceTitle: string): string => {
 
 const nameOf = (surface: StudioSurface): string => surface.label ?? `${surface.kind}/${surface.id}`;
 
+const draftKey = (draft: StudioDraft): string => `draft:${draft.key}`;
+
+const NO_DRAFTS: readonly StudioDraft[] = [];
+
+const unknownOption = (wanted: string) =>
+  `nothing to compare called ${JSON.stringify(wanted)}; see state.compareOptions`;
+
+const optionKind = (target: CompareTarget): CompareOptionKind => target.type;
+
+// A compared draft sits where it was built among the others; the rest sit first, as compared.
+const DRAFT_RANK = 100;
+const STAGE_RANK = 1000;
+
 /**
  * A host's panel beside the stage (an agent chat): its content is the host's.
  * Its width is the studio's (remembered) unless the host passes
@@ -292,11 +324,25 @@ export const SurfaceEditor = ({
   const [locale, setLocale] = React.useState<string | undefined>(undefined);
   const [edited, setEdited] = React.useState<VariableOverrides>({});
   const [panelOpen, setPanelOpen] = React.useState(false);
-  const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(() =>
+  const drafts = source.drafts ?? NO_DRAFTS;
+  const offStage = drafts.filter((draft) => !draft.onStage).map(draftKey);
+  // Compared options' keys. The newest drafts open compared beside the one on stage.
+  const [compared, setCompared] = React.useState<string[]>(() =>
     hasOriginal(surface) && new URLSearchParams(window.location.search).get("compare") === "origin"
-      ? { type: "origin" }
-      : undefined,
+      ? ["origin"]
+      : offStage.slice(-COMPARE_MAX),
   );
+  const seenDrafts = React.useRef<ReadonlySet<string>>(new Set(offStage));
+  const offStageKey = offStage.join("\n");
+  React.useEffect(() => {
+    const seen = seenDrafts.current;
+    if (offStage.every((key) => seen.has(key))) return;
+    seenDrafts.current = new Set([...seen, ...offStage]);
+    setCompared((current) => followDrafts(current, seen, offStage));
+    // `offStage` is rebuilt every render; its keys are what matter.
+  }, [offStageKey]);
+  const [deviceRequest, setDeviceRequest] = React.useState({ open: false, key: 0 });
+  const [deviceOpen, setDeviceOpen] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [landscape, setLandscape] = React.useState(false);
   const canvas = React.useRef<CanvasHandle>(null);
@@ -444,6 +490,14 @@ export const SurfaceEditor = ({
   };
 
   const compareOptions: CompareOption[] = [
+    ...drafts
+      .filter((draft) => !draft.onStage)
+      .map((draft) => ({
+        key: draftKey(draft),
+        label: draft.label,
+        hint: draft.hint ?? "Not pushed yet",
+        target: { type: "draft", draft } as const,
+      })),
     ...(surface.origin && hasOriginal(surface)
       ? [
           {
@@ -474,37 +528,64 @@ export const SurfaceEditor = ({
   const compareNotice = status.unreachable
     ? `Couldn’t read the pushed versions — ${status.unreachable}`
     : undefined;
-  const compared =
-    compareWith?.type === "version"
-      ? versions.find((entry) => entry.version === compareWith.version)
-      : undefined;
+  const stageDraft = drafts.find((draft) => draft.onStage);
+  const comparedOptions = compared.flatMap((key) => {
+    const option = compareOptions.find((entry) => entry.key === key);
+    return option ? [option] : [];
+  });
 
-  const comparePane =
-    compareWith &&
-    (compareWith.type === "version"
-      ? {
-          label: compared ? versionLabel(compared) : `v${compareWith.version}`,
-          src: compared ? hostedUrl(compared.url) : undefined,
-          title: `${surface.id} v${compareWith.version}`,
-          empty: compareNotice ?? "This version is no longer on the dashboard.",
-        }
-      : compareWith.type === "origin"
-        ? {
-            label: "Original",
-            ...(surface.origin && isScreenOrigin(surface.origin)
-              ? { image: surface.origin.screenshot ? originalUrl(surface) : undefined }
-              : { src: surface.origin?.url }),
-            title: `${surface.id} original`,
-            empty:
-              surface.origin && isScreenOrigin(surface.origin)
-                ? "The original’s screenshot is missing — capture it again with `superwall migrate --screen <path> --screenshot <file>`."
-                : "This paywall was not rebuilt from a dashboard paywall or a native screen.",
-          }
-        : {
-            label: nameOf(compareWith.surface),
-            src: source.previewUrl(compareWith.surface),
-            title: `${nameOf(compareWith.surface)} preview`,
-          });
+  const paneFor = (target: CompareTarget) => {
+    if (target.type === "version") {
+      const entry = versions.find((candidate) => candidate.version === target.version);
+      return {
+        label: entry ? versionLabel(entry) : `v${target.version}`,
+        src: entry ? hostedUrl(entry.url) : undefined,
+        title: `${surface.id} v${target.version}`,
+        empty: compareNotice ?? "This version is no longer on the dashboard.",
+        presentation,
+      };
+    }
+    if (target.type === "draft") {
+      return {
+        label: target.draft.label,
+        src: hostedUrl(target.draft.url),
+        title: `${target.draft.label} preview`,
+        presentation: web ? undefined : (target.draft.presentation ?? presentation),
+      };
+    }
+    if (target.type === "origin") {
+      return {
+        label: "Original",
+        ...(surface.origin && isScreenOrigin(surface.origin)
+          ? { image: surface.origin.screenshot ? originalUrl(surface) : undefined }
+          : { src: surface.origin?.url }),
+        title: `${surface.id} original`,
+        empty:
+          surface.origin && isScreenOrigin(surface.origin)
+            ? "The original’s screenshot is missing — capture it again with `superwall migrate --screen <path> --screenshot <file>`."
+            : "This paywall was not rebuilt from a dashboard paywall or a native screen.",
+        presentation,
+      };
+    }
+    return {
+      label: nameOf(target.surface),
+      src: source.previewUrl(target.surface),
+      title: `${nameOf(target.surface)} preview`,
+      presentation: web ? undefined : target.surface.presentation,
+    };
+  };
+
+  const draftRank = (key: string) =>
+    DRAFT_RANK + drafts.findIndex((draft) => draftKey(draft) === key);
+  const comparePanes = comparedOptions
+    .map((option, index) => ({
+      option,
+      pane: paneFor(option.target),
+      rank: option.target.type === "draft" ? draftRank(option.key) : index,
+    }))
+    .toSorted((a, b) => a.rank - b.rank);
+  const stageRank = stageDraft ? draftRank(draftKey(stageDraft)) : STAGE_RANK;
+  const comparing = comparePanes.length > 0;
 
   const groups = React.useMemo((): VariableGroups => {
     const rows = (prefix: string, record: Record<string, unknown> | undefined): VariableRow[] =>
@@ -546,13 +627,36 @@ export const SurfaceEditor = ({
     Object.keys(edited.params ?? {}).length +
     Object.keys(edited.device ?? {}).length;
 
-  const compareKey = !compareWith
-    ? null
-    : compareWith.type === "origin"
-      ? "origin"
-      : compareWith.type === "version"
-        ? `version:${compareWith.version}`
-        : `surface:${compareWith.surface.kind}/${compareWith.surface.id}`;
+  const stageKey = stageDraft
+    ? draftKey(stageDraft)
+    : surface.version !== undefined
+      ? `version:${surface.version}`
+      : `surface:${surface.kind}/${surface.id}`;
+
+  const findOption = (wanted: string): CompareOption | undefined => {
+    const needle = wanted.trim().toLowerCase();
+    return compareOptions.find(
+      (entry) =>
+        entry.key.toLowerCase() === needle ||
+        entry.label.toLowerCase() === needle ||
+        (entry.target.type === "draft" && entry.target.draft.key.toLowerCase() === needle),
+    );
+  };
+  const isStage = (wanted: string): boolean => {
+    const needle = wanted.trim().toLowerCase();
+    return (
+      stageKey.toLowerCase() === needle ||
+      (stageDraft !== undefined &&
+        (stageDraft.key.toLowerCase() === needle || stageDraft.label.toLowerCase() === needle))
+    );
+  };
+
+  const selectDraft = (draft: StudioDraft): string | undefined => {
+    if (draft.onStage) return undefined;
+    if (!source.selectDraft) return "this studio cannot put another build on stage";
+    source.selectDraft(draft.key);
+    return undefined;
+  };
 
   const readState = (): StudioState => {
     const shown = canvas.current?.zoom() ?? zoom;
@@ -581,8 +685,20 @@ export const SurfaceEditor = ({
       variables: variableOverrides(edited),
       variablesPanel: panelOpen,
       versions: versions.map((entry) => ({ version: entry.version, live: entry.live === true })),
-      compare: compareKey,
-      compareOptions: compareOptions.map((option) => ({ key: option.key, label: option.label })),
+      stage: stageKey,
+      compare: comparePanes.map(({ option }) => option.key),
+      compareMax: COMPARE_MAX,
+      compareOptions: compareOptions.map((option) => ({
+        key: option.key,
+        label: option.label,
+        kind: optionKind(option.target),
+      })),
+      drafts: drafts.map((draft) => ({
+        key: draftKey(draft),
+        label: draft.label,
+        onStage: draft.onStage === true,
+      })),
+      previewOnDevice: deviceOpen,
     };
   };
 
@@ -669,19 +785,59 @@ export const SurfaceEditor = ({
         promotion.pick(command.version);
         return undefined;
       case "compare": {
-        if (command.with === null) {
-          setCompareWith(undefined);
-          return undefined;
+        const wanted =
+          command.with === null
+            ? []
+            : typeof command.with === "string"
+              ? [command.with]
+              : command.with;
+        const besides = wanted.filter((entry) => !isStage(entry));
+        const unknown = besides.filter((entry) => !findOption(entry));
+        if (unknown.length > 0) return unknownOption(unknown[0]!);
+        const keys = [...new Set(besides.map((entry) => findOption(entry)!.key))];
+        if (keys.length > COMPARE_MAX) {
+          return `the stage compares at most ${COMPARE_MAX} beside the one on it; put another on stage with select`;
         }
-        const wanted = command.with.trim().toLowerCase();
-        const option = compareOptions.find(
-          (entry) => entry.key.toLowerCase() === wanted || entry.label.toLowerCase() === wanted,
-        );
-        if (!option)
-          return `nothing to compare called ${JSON.stringify(command.with)}; see state.compareOptions`;
-        setCompareWith(option.target);
+        setCompared(keys);
         return undefined;
       }
+      case "compareAdd": {
+        if (isStage(command.with)) return `${command.with} is on stage already`;
+        const option = findOption(command.with);
+        if (!option) return unknownOption(command.with);
+        setCompared((current) => compareAdded(current, option.key));
+        return undefined;
+      }
+      case "compareRemove": {
+        const option = findOption(command.with);
+        if (!option) return unknownOption(command.with);
+        setCompared((current) => current.filter((key) => key !== option.key));
+        return undefined;
+      }
+      case "compareSwap": {
+        const from = findOption(command.from);
+        if (!from || !compared.includes(from.key)) {
+          return `${JSON.stringify(command.from)} is not compared; see state.compare`;
+        }
+        if (isStage(command.to)) return `${command.to} is on stage already`;
+        const to = findOption(command.to);
+        if (!to) return unknownOption(command.to);
+        setCompared((current) => compareSwapped(current, from.key, to.key));
+        return undefined;
+      }
+      case "select": {
+        if (isStage(command.with)) return undefined;
+        const option = findOption(command.with);
+        if (option?.target.type !== "draft") {
+          return option?.target.type === "version"
+            ? `${command.with} is a pushed version; show it with version`
+            : `no draft called ${JSON.stringify(command.with)}; see state.drafts`;
+        }
+        return selectDraft(option.target.draft);
+      }
+      case "previewOnDevice":
+        setDeviceRequest((current) => ({ open: command.open, key: current.key + 1 }));
+        return undefined;
       case "reload":
         setReloadKey((key) => key + 1);
         return undefined;
@@ -698,6 +854,16 @@ export const SurfaceEditor = ({
     waiting.current.delete(commits);
     ready();
   }, [commits]);
+  // A command that moved the host elsewhere (select) unmounts the editor
+  // before its commit: answer with what it showed last rather than never.
+  React.useEffect(
+    () => () => {
+      const pending = [...waiting.current.values()];
+      waiting.current.clear();
+      pending.forEach((ready) => ready());
+    },
+    [],
+  );
 
   React.useImperativeHandle(
     ref,
@@ -793,6 +959,8 @@ export const SurfaceEditor = ({
               autoOpen={resuming === "preview"}
               pushFirst={unsaved ? () => void ship("push", "preview") : undefined}
               disabled={unsaved && shippingBusy}
+              request={deviceRequest}
+              onOpenChange={setDeviceOpen}
             />
             {shipping && (
               <ActionMenu
@@ -846,36 +1014,62 @@ export const SurfaceEditor = ({
               fitKey={[
                 deviceId,
                 responsive ? "" : `${frame.width}x${frame.height}`,
-                comparePane ? "compare" : "single",
+                comparing ? `compare:${comparePanes.length}` : "single",
                 presentation?.style ?? "",
               ].join(":")}
             >
               <div className="flex flex-col gap-2">
                 <div className="flex items-start gap-16">
-                  {comparePane && (
+                  {comparePanes.map(({ option, pane, rank }) => (
                     <StagePane
-                      label={comparePane.label}
+                      key={option.key}
+                      order={rank}
+                      label={pane.label}
+                      labelActions={
+                        <>
+                          {option.target.type === "draft" && source.selectDraft && (
+                            <button
+                              type="button"
+                              className="sw-btn sw-btn--sm sw-btn--ghost h-5 px-1.5 text-xs"
+                              aria-label={`Open ${pane.label}`}
+                              onClick={() => {
+                                if (option.target.type === "draft")
+                                  selectDraft(option.target.draft);
+                              }}
+                            >
+                              Open
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="sw-btn sw-btn--sm sw-btn--icon sw-btn--ghost size-5"
+                            aria-label={`Stop comparing ${pane.label}`}
+                            onClick={() =>
+                              setCompared((current) => current.filter((key) => key !== option.key))
+                            }
+                          >
+                            <XIcon />
+                          </button>
+                        </>
+                      }
                       width={frame.width}
                       height={frame.height}
-                      title={comparePane.title}
-                      src={"src" in comparePane ? comparePane.src : undefined}
-                      image={"image" in comparePane ? comparePane.image : undefined}
-                      presentation={
-                        compareWith?.type === "surface" && !web
-                          ? compareWith.surface.presentation
-                          : presentation
-                      }
+                      title={pane.title}
+                      src={"src" in pane ? pane.src : undefined}
+                      image={"image" in pane ? pane.image : undefined}
+                      presentation={pane.presentation}
                       hostState={hostState}
                       delegate={delegate}
                       reloadKey={reloadKey}
-                      empty={"empty" in comparePane ? comparePane.empty : undefined}
+                      empty={"empty" in pane ? pane.empty : undefined}
                       chrome={chrome}
                       landscape={landscape}
                       theme={theme}
                     />
-                  )}
+                  ))}
                   <StagePane
-                    label={comparePane ? (surface.label ?? "Local") : undefined}
+                    order={stageRank}
+                    label={comparing ? (stageDraft?.label ?? surface.label ?? "Local") : undefined}
                     width={frame.width}
                     height={frame.height}
                     title={`${surface.id} preview`}
@@ -1015,10 +1209,18 @@ export const SurfaceEditor = ({
             <ToolbarDivider />
             {(shipping || compareOptions.length > 0) && (
               <CompareMenu
-                active={compareWith}
+                active={comparePanes.map(({ option }) => option.key)}
                 options={compareOptions}
                 notice={compareNotice}
-                onSelect={setCompareWith}
+                limit={COMPARE_MAX}
+                onToggle={(option) =>
+                  setCompared((current) =>
+                    current.includes(option.key)
+                      ? current.filter((key) => key !== option.key)
+                      : compareAdded(current, option.key),
+                  )
+                }
+                onClear={() => setCompared([])}
               />
             )}
             <button

@@ -28,8 +28,21 @@ export type StudioCommand =
   | { type: "variablesPanel"; open: boolean }
   /** A pushed version, as the version picker lists it. */
   | { type: "version"; version: number }
-  /** A compare option's key or label (`state.compareOptions`); null ends the comparison. */
-  | { type: "compare"; with: string | null }
+  /**
+   * What the stage compares beside the one on it: compare options' keys or
+   * labels (`state.compareOptions`), at most `COMPARE_MAX`, kept in order.
+   * One option sets that one; null or an empty list ends the comparison.
+   */
+  | { type: "compare"; with: string | readonly string[] | null }
+  /** Adds an option; at the limit it replaces the one compared longest. */
+  | { type: "compareAdd"; with: string }
+  | { type: "compareRemove"; with: string }
+  /** Swaps a compared option for another in the same place. */
+  | { type: "compareSwap"; from: string; to: string }
+  /** Puts a draft (`state.drafts`) on stage, the build Push and Publish ship. */
+  | { type: "select"; with: string }
+  /** Opens or closes Preview on a device; an unsaved paywall asks to push first. */
+  | { type: "previewOnDevice"; open: boolean }
   | { type: "reload" };
 
 export type StudioCommandType = StudioCommand["type"];
@@ -47,8 +60,16 @@ export const STUDIO_COMMAND_TYPES: readonly StudioCommandType[] = [
   "variablesPanel",
   "version",
   "compare",
+  "compareAdd",
+  "compareRemove",
+  "compareSwap",
+  "select",
+  "previewOnDevice",
   "reload",
 ];
+
+/** How many options the stage compares beside the one on it: three side by side. */
+export const COMPARE_MAX = 2;
 
 /** What the editor shows, as a host reports it back after commands. */
 export type StudioState = {
@@ -64,9 +85,18 @@ export type StudioState = {
   variables: VariableOverrides;
   variablesPanel: boolean;
   versions: { version: number; live: boolean }[];
-  compare: string | null;
-  compareOptions: { key: string; label: string }[];
+  /** What is on stage: `draft:<key>` for a draft, else `version:<n>` or `surface:<kind>/<id>`. */
+  stage: string;
+  /** The compared options' keys, in the order they sit on the stage beside it. */
+  compare: string[];
+  compareMax: number;
+  compareOptions: { key: string; label: string; kind: CompareOptionKind }[];
+  /** The host's unsaved builds, oldest first; `select` puts one on stage. */
+  drafts: { key: string; label: string; onStage: boolean }[];
+  previewOnDevice: boolean;
 };
+
+export type CompareOptionKind = "origin" | "version" | "draft" | "surface";
 
 export type StudioCommandError = { index: number; type: string; error: string };
 
@@ -153,10 +183,33 @@ const parseOne = (value: unknown): StudioCommand | string => {
       return finite(entry.version)
         ? { type, version: entry.version }
         : "version.version is a version number";
-    case "compare":
-      return entry.with === undefined || nullableString(entry.with)
-        ? { type, with: entry.with ?? null }
-        : "compare.with is a compare option's key or label, or null";
+    case "compare": {
+      const wanted = entry.with;
+      if (wanted === undefined || nullableString(wanted)) return { type, with: wanted ?? null };
+      if (Array.isArray(wanted) && wanted.every((item) => typeof item === "string")) {
+        return { type, with: wanted as string[] };
+      }
+      return "compare.with is a compare option's key or label, a list of them, or null";
+    }
+    case "compareAdd":
+    case "compareRemove":
+    case "select":
+      return typeof entry.with === "string" && entry.with.trim()
+        ? { type, with: entry.with }
+        : type === "select"
+          ? "select.with is a draft's key or label"
+          : `${type}.with is a compare option's key or label`;
+    case "compareSwap":
+      return typeof entry.from === "string" &&
+        entry.from.trim() &&
+        typeof entry.to === "string" &&
+        entry.to.trim()
+        ? { type, from: entry.from, to: entry.to }
+        : "compareSwap.from and compareSwap.to are compare options' keys or labels";
+    case "previewOnDevice":
+      return typeof entry.open === "boolean"
+        ? { type, open: entry.open }
+        : "previewOnDevice.open is true or false";
     default:
       return `unknown command type ${JSON.stringify(type)}; use one of ${STUDIO_COMMAND_TYPES.join(", ")}`;
   }

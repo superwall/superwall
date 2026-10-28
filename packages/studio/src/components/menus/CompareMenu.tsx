@@ -17,16 +17,27 @@ export type CompareOption = {
   target: CompareTarget;
 };
 
+/**
+ * What the stage compares beside the surface on it, several at once: a row
+ * toggles its option, and Off ends the comparison. At the limit, the host
+ * replaces the option compared longest.
+ */
 export const CompareMenu = ({
   active,
   options,
   notice,
-  onSelect,
+  limit,
+  onToggle,
+  onClear,
 }: {
-  active: CompareTarget | undefined;
+  /** The compared options' keys. */
+  active: readonly string[];
   options: CompareOption[];
   notice?: string;
-  onSelect: (target: CompareTarget | undefined) => void;
+  /** How many fit beside the one on stage, said in the menu when more than one. */
+  limit?: number;
+  onToggle: (option: CompareOption) => void;
+  onClear: () => void;
 }) => {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -41,22 +52,18 @@ export const CompareMenu = ({
     if (!open) setQuery("");
   }, [open]);
 
-  const activeKey =
-    active &&
-    (active.type === "version"
-      ? `version:${active.version}`
-      : active.type === "origin"
-        ? "origin"
-        : `surface:${active.surface.kind}/${active.surface.id}`);
-
-  const choose = (target: CompareTarget | undefined) => {
+  const clear = () => {
     setOpen(false);
-    onSelect(target);
+    onClear();
   };
 
   const needle = query.trim().toLowerCase();
   const matches = (option: CompareOption) =>
     needle === "" || `${option.label} ${option.hint}`.toLowerCase().includes(needle);
+  const searchLabel = options.some((option) => option.target.type === "draft")
+    ? "Search drafts and versions"
+    : "Search versions and paywalls";
+  const drafts = options.filter((option) => option.target.type === "draft").filter(matches);
   const origins = options.filter((option) => option.target.type === "origin").filter(matches);
   const versions = options.filter((option) => option.target.type === "version").filter(matches);
   const paywalls = options.filter((option) => option.target.type === "surface").filter(matches);
@@ -66,11 +73,12 @@ export const CompareMenu = ({
         key={option.key}
         label={option.label}
         hint={option.hint}
-        selected={option.key === activeKey}
-        onSelect={() => choose(option.target)}
+        selected={active.includes(option.key)}
+        onSelect={() => onToggle(option)}
       />
     ));
   const groups = [
+    { label: "Drafts", options: drafts },
     { label: "Rebuilt from", options: origins },
     { label: "Versions", options: versions },
     { label: "Paywalls", options: paywalls },
@@ -82,12 +90,13 @@ export const CompareMenu = ({
       <button
         type="button"
         className="sw-btn"
-        aria-pressed={active !== undefined}
+        aria-pressed={active.length > 0}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         <ColumnsIcon />
         Compare
+        {active.length > 1 && <span className="text-primary tabular-nums">{active.length}</span>}
       </button>
 
       {open && (
@@ -98,8 +107,8 @@ export const CompareMenu = ({
               className="h-9 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-fg-muted"
               type="search"
               value={query}
-              placeholder="Search versions and paywalls"
-              aria-label="Search versions and paywalls"
+              placeholder={searchLabel}
+              aria-label={searchLabel}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
@@ -133,11 +142,16 @@ export const CompareMenu = ({
                 <MenuSeparator />
               </>
             )}
+            {limit !== undefined && limit > 1 && (
+              <span className="block px-2.5 py-1.5 text-xs text-fg-tertiary">
+                {`Up to ${limit + 1} side by side. A new one replaces the oldest.`}
+              </span>
+            )}
             <MenuItem
               label="Off"
               hint="A single preview"
-              selected={active === undefined}
-              onSelect={() => choose(undefined)}
+              selected={active.length === 0}
+              onSelect={clear}
             />
           </div>
         </MenuPopup>

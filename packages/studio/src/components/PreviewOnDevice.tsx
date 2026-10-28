@@ -25,6 +25,8 @@ export const PreviewOnDevice = ({
   autoOpen = false,
   pushFirst,
   disabled = false,
+  request,
+  onOpenChange,
 }: {
   source: StudioSource;
   surface: StudioSurface;
@@ -36,10 +38,25 @@ export const PreviewOnDevice = ({
    */
   pushFirst?: () => void;
   disabled?: boolean;
+  /** A host's ask (`previewOnDevice`), handled as a click on Preview or a close; a new `key` asks again. */
+  request?: { open: boolean; key: number };
+  /** Whether the dialog, or the push it asks for first, is showing. */
+  onOpenChange?: (open: boolean) => void;
 }) => {
   const hosted = useStudioMode() === "hosted";
   const [open, setOpen] = React.useState(autoOpen);
   const [confirming, setConfirming] = React.useState(false);
+  const showing = open || confirming;
+  React.useEffect(() => onOpenChange?.(showing), [showing]);
+  React.useEffect(() => {
+    if (!request || request.key === 0) return;
+    if (!request.open) {
+      setOpen(false);
+      setConfirming(false);
+    } else if (pushFirst) setConfirming(true);
+    else setOpen(true);
+    // Only a new ask acts; `pushFirst` changes every render.
+  }, [request?.key]);
   const [scheme, setScheme] = React.useState(() => readScheme() ?? source.scheme);
   const [link, setLink] = React.useState<LinkState>({ status: "loading" });
 

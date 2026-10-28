@@ -831,7 +831,11 @@ describe("SurfaceEditor driven by its host", () => {
       zoom: { percent: 50, fitted: false },
       variables: { user: { name: "Ada" }, products: { annual: { price: "$1" } } },
       variablesPanel: true,
-      compare: null,
+      stage: "surface:paywall/plus-upgrade",
+      compare: [],
+      compareMax: 2,
+      drafts: [],
+      previewOnDevice: false,
     });
     expect((screen.getByLabelText("Device") as HTMLSelectElement).value).toBe("iphone-17-pro-max");
     expect(screen.getByRole("button", { name: "Rotate device" }).getAttribute("aria-pressed")).toBe(
@@ -935,13 +939,13 @@ describe("SurfaceEditor driven by its host", () => {
     expect(back.state.device.id).toBe("responsive");
 
     const compared = await drive(handle, [{ type: "compare", with: "V13" }]);
-    expect(compared.state.compare).toBe("surface:paywall/plus-upgrade");
+    expect(compared.state.compare).toEqual(["surface:paywall/plus-upgrade"]);
     expect(compared.state.compareOptions).toEqual([
-      { key: "surface:paywall/plus-upgrade", label: "v13" },
+      { key: "surface:paywall/plus-upgrade", label: "v13", kind: "surface" },
     ]);
     expect(screen.getByTitle("v13 preview")).toBeTruthy();
     const ended = await drive(handle, [{ type: "compare", with: null }, { type: "reload" }]);
-    expect(ended.state.compare).toBeNull();
+    expect(ended.state.compare).toEqual([]);
     expect(screen.queryByTitle("v13 preview")).toBeNull();
   });
 
@@ -1002,11 +1006,11 @@ describe("SurfaceEditor driven by its host", () => {
       { version: 13, live: false },
       { version: 12, live: true },
     ]);
-    expect(result.state.compare).toBe("origin");
+    expect(result.state.compare).toEqual(["origin"]);
     expect(result.state.surface).toEqual({ id: "plus-upgrade", label: "v12 · Live", version: 12 });
 
     const version = await drive(handle, [{ type: "compare", with: "version:13" }]);
-    expect(version.state.compare).toBe("version:13");
+    expect(version.state.compare).toEqual(["version:13"]);
   });
 
   it("reports the zoom it last heard before the canvas mounts a handle", () => {

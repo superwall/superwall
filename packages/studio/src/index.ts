@@ -5,8 +5,10 @@ export { SurfaceEditor, type StudioPanel } from "./screens/SurfaceEditor";
 export {
   editVariable,
   findDevice,
+  COMPARE_MAX,
   parseStudioCommands,
   STUDIO_COMMAND_TYPES,
+  type CompareOptionKind,
   type StudioCommand,
   type StudioCommandError,
   type StudioCommandResult,
@@ -81,6 +83,7 @@ export type {
   StudioActionRequest,
   StudioActionResult,
   StudioActions,
+  StudioDraft,
   StudioPresentation,
   StudioResume,
   StudioSource,
