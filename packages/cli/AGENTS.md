@@ -144,7 +144,25 @@ skill.
   push reruns on top of it. With no sync point, a remote whose tree differs
   is refused, naming the files, unless `--overwrite-source`. Git runs with
   hooks, signing and autocrlf off and the caller's `GIT_DIR`-style variables
-  dropped, so the user's setup never changes what is committed.
+  dropped, so the user's setup never changes what is committed. `--source`
+  also pushes every reached app whose paywalls built the same, through any
+  of its bound paywalls, as a `publish project source` commit that no version
+  links (`pushProjectSource`): the source repo is per app, so a shared change
+  such as the design system would otherwise stay behind on it. `--existing`
+  narrows to the platforms `superwall.lock` already binds before any app is
+  resolved, so a declared but unbound platform never asks for an app.
+- **Product stores come from the catalogue.** A version's product store is
+  the one the app's `/v2/products` lists for that identifier (`custom` and
+  Stripe products included), falling back to the platform's store. The
+  catalogue is keyed by identifiers users choose, so it is a null-prototype
+  object and read with `Object.hasOwn`: a product named `constructor` must
+  not resolve to `Object.prototype`.
+- **The design-token lint** (`project/design-lint.ts`) is a warning on `build`
+  and `push`, never a stop, so a project from before the design system still
+  ships. It reads declarations line by line from CSS and style objects alike;
+  a comma ends a value only where another `property:` follows, because style
+  objects separate properties with commas while CSS values (`box-shadow`,
+  `rgb()`) contain them.
 - **Help is one renderer** (`src/program/help.ts`): the root page, topic pages
   and command pages are all drawn from the registry and the specs, in one
   layout (`src/ui/help-layout.ts`). A catalog's `help(words)` uses the same

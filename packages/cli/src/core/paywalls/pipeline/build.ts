@@ -8,6 +8,7 @@ import {
   type FrameworkProject,
   type FrameworkSurface,
 } from "@/core/paywalls/project/framework";
+import { formatTokenFinding, lintDesignTokens } from "@/core/paywalls/project/design-lint";
 import { readLock } from "@/core/paywalls/project/lock";
 import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
 import { VERSION } from "@/environment";
@@ -84,6 +85,7 @@ export async function runBuildPipeline(context: BuildContext, options: BuildInpu
   for (const surface of surfaces) {
     for (const problem of surface.diagnostics ?? []) ui.warn(problem);
   }
+  for (const finding of lintDesignTokens(project, surfaces)) ui.warn(formatTokenFinding(finding));
 
   const outcomes: BuildOutcome[] = [];
   const at = Date.now();

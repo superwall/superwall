@@ -11,7 +11,7 @@ import type { SourceFile } from "@/core/paywalls/source/source";
 import { readLock } from "@/core/paywalls/project/lock";
 import { readSourceBase } from "@/core/paywalls/source/base";
 import { SourceConflictError } from "@/core/paywalls/source/git";
-import { assertGit, pushSource } from "@/core/paywalls/source/source-push";
+import { assertGit, pushProjectSource, pushSource } from "@/core/paywalls/source/source-push";
 
 const dirs: string[] = [];
 const servers: http.Server[] = [];
@@ -462,4 +462,37 @@ test("a 409 retry lands on top of the other publish instead of reverting it", as
     "paywalls/a/app/index.tsx",
     "paywalls/b/app/index.tsx",
   ]);
+});
+
+test("a project source push mints access through a paywall, commits, and links no version", async () => {
+  const fake = await fakeApi();
+  const superwallDir = temp("superwall-project-");
+
+  const result = await pushProjectSource({
+    api: fake.api,
+    superwallDir,
+    paywallId: "208540",
+    applicationId: "42",
+    files: [file("design/tokens.css", ":root { --color-accent: #46d7d4; }\n")],
+    framework: "0.4.2",
+    cli: "1.0.0",
+    note: "Teal accent",
+  });
+
+  assert.equal(result.status, "committed");
+  assert.deepEqual(fake.calls, ["access"]);
+  const log = execFileSync("git", ["--git-dir", fake.bare, "log", "-1", "--format=%B"]).toString();
+  assert.match(log, /^publish project source\n\nTeal accent\n\nSuperwall-Application: 42\n/);
+  assert.equal(readSourceBase(superwallDir, "org1-app42"), result.syncedTo);
+});
+
+test("a project source push with nothing new records no base", async () => {
+  const fake = await fakeApi();
+  const superwallDir = temp("superwall-project-");
+  const files = [file("a.ts", "1\n")];
+  const push = () =>
+    pushProjectSource({ api: fake.api, superwallDir: temp("superwall-other-"), paywallId: "1", applicationId: "42", files, framework: "0.4.2" });
+  await push();
+  const again = await pushProjectSource({ api: fake.api, superwallDir, paywallId: "1", applicationId: "42", files, framework: "0.4.2", overwrite: true });
+  assert.equal(again.status, "unchanged");
 });

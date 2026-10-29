@@ -53,7 +53,22 @@ self-describing npm project — clone it, install, `superwall dev`:
   for that surface; nothing is inherited or merged from above. Shared settings
   are composed explicitly — export a plain object, spread it into
   `definePaywall`.
-- `superwall/components|messages|assets/` — the shared design system, strings
+- `superwall/DESIGN.md` + `superwall/design/` — the project's design system.
+  `DESIGN.md` is the brand in words (fixed headings: Brand, Colour, Type,
+  Spacing and corners, Components, Voice, Rules); `design/tokens.css` holds
+  the values as custom properties in `:root`/`:root.dark` under the prefixes
+  the dashboard's Design system page groups (`--color-*`, `--font-*`,
+  `--text-*`, `--leading-*`, `--weight-*`, `--tracking-*`, `--space-*`,
+  `--radius-*`; anything else lands in "Other"); `design/base.css` holds
+  element defaults and shared classes built only from tokens. Every surface's
+  `app/theme.css` starts with `@import "@/design/tokens.css";` and
+  `@import "@/design/base.css";` (the build's `@` alias resolves CSS imports
+  too) and then holds only its own layout. The scaffold writes them
+  write-if-absent with every surface (`writeDesignSystem` in the CLI's
+  `project/template.ts`), so an older project gains them when a surface is
+  added and a user's own files are never replaced.
+- `superwall/components|messages|assets/` — shared React components
+  (imported as `@/components/<Name>`; the starter ships `Button`), strings
   (auto-discovered per locale, inherited by every surface), and assets. All
   three also work per-surface, inside `paywalls/<id>/`.
 - `superwall/paywalls/<id>/` and `superwall/funnels/<id>/` — each surface is a
