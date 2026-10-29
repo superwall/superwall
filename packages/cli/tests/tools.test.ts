@@ -107,7 +107,12 @@ test("hints follow what the command does", () => {
   assert.equal(tool("post").annotations.readOnlyHint, false);
   assert.equal(tool("post").annotations.destructiveHint, true);
   assert.equal(tool("delete").annotations.destructiveHint, true);
-  for (const name of ["products_update", "campaigns_placements_create", "campaigns_audiences_update", "campaigns_variants_update", "asc_builds_attach", "paywalls_publish"]) {
+  for (const name of [
+    "products_update", "campaigns_placements_create", "campaigns_audiences_update", "campaigns_variants_update", "asc_builds_attach", "paywalls_publish",
+    "apps_update", "campaigns_variants_create", "campaigns_variants_weights", "users_update",
+    "asc_keys_import", "asc_notification_url_set", "asc_prices_set", "asc_availability_set",
+    "asc_offers_create", "asc_release_phased", "feedback", "events_retry",
+  ]) {
     assert.equal(tool(name).annotations.destructiveHint, true, name);
     assert.equal(tool(name).annotations.readOnlyHint, false, name);
   }
@@ -193,4 +198,37 @@ test("the MCP retains generic API and schema tools with fallback guidance", () =
     assert.ok(tools.some((candidate) => candidate.name === name), name);
   }
   assert.match(instructions(), /api_docs finds it, then get, post, patch or delete calls it/);
+});
+
+test("POST lookups are reads while report jobs persist state", () => {
+  for (const name of ["asa_ad_rejections_assets", "asa_apps_eligibility", "asa_geo_get", "asa_reports_campaigns"]) {
+    assert.equal(tool(name).annotations.readOnlyHint, true, name);
+    assert.equal(tool(name).annotations.destructiveHint, false, name);
+    assert.equal(tool(name).annotations.idempotentHint, true, name);
+  }
+  assert.equal(tool("asa_impression_share_create").annotations.readOnlyHint, false);
+  assert.equal(tool("asa_impression_share_create").annotations.destructiveHint, false);
+});
+
+test("generic execution covers destructive branches and arbitrary webhook destinations", () => {
+  for (const name of ["patch", "asc_post", "asc_patch", "asa_post", "asa_put", "asa_keywords_delete"]) {
+    assert.equal(tool(name).annotations.destructiveHint, true, name);
+  }
+  assert.equal(tool("post").annotations.openWorldHint, true);
+  assert.equal(tool("patch").annotations.openWorldHint, true);
+});
+
+test("creation can enable spend or rewrite ranks while appended audiences stay additive", () => {
+  for (const name of ["asa_campaigns_create", "asa_adgroups_create", "asa_keywords_create", "asa_ads_create", "asa_budget_orders_create"]) {
+    assert.equal(tool(name).annotations.destructiveHint, true, name);
+  }
+  assert.equal(tool("campaigns_audiences_create").annotations.destructiveHint, false);
+  assert.equal(tool("campaigns_audiences_duplicate").annotations.destructiveHint, true);
+});
+
+test("SQL read-only mode does not hide credential provisioning and access-policy reconciliation", () => {
+  for (const name of ["query", "get"]) {
+    assert.equal(tool(name).annotations.readOnlyHint, false, name);
+    assert.equal(tool(name).annotations.destructiveHint, true, name);
+  }
 });

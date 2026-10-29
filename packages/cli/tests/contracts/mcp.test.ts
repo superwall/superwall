@@ -83,6 +83,9 @@ test("tool names are unique and valid MCP names, and every tool describes itself
   for (const tool of tools) {
     assert.match(tool.name, /^[a-z0-9_]{1,64}$/, `${tool.name}: MCP tool names are lowercase words and underscores`);
     assert.ok(tool.description.trim(), `${tool.name} needs a description`);
+    for (const hint of [tool.annotations.readOnlyHint, tool.annotations.destructiveHint, tool.annotations.idempotentHint, tool.annotations.openWorldHint]) {
+      assert.equal(typeof hint, "boolean", `${tool.name}: hints must be explicit booleans`);
+    }
     for (const required of tool.inputSchema.required) {
       assert.ok(tool.inputSchema.properties[required], `${tool.name}: required "${required}" isn't a property`);
     }

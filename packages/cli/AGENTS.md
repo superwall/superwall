@@ -310,9 +310,9 @@ server at mcp.superwall.com run the same commands; `@superwall/cli/tools`
   A tool spanning endpoint variants is destructive if any branch is destructive,
   read-only only if all branches are reads, and otherwise a write. Account for
   overwrites, policy reconciliation, live traffic, spend and irreversible sends;
-  POST selector lookups can still be reads. The reviewed expectations live in
-  `tests/fixtures/mcp-annotations.json`. Update it when effects change; explain
-  behavior evidence and remaining qualifications in the pull request.
+  POST selector lookups can still be reads. Test specific effect boundaries rather
+  than snapshotting the catalog; explain behavior evidence and remaining
+  qualifications in the pull request.
 - **A tool is the command**: its name is the command words joined by `_`,
   its input the arguments and flags (catalog operations: positionals, `app`
   and the API's own fields from the live reference), and its result the
