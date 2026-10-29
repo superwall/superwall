@@ -102,6 +102,10 @@ async function parseApiError(request: string, res: Response): Promise<ApiError> 
   return new ApiError(request, res.status, text);
 }
 
+// Fetch joins differently cased duplicates ("a, b"), so a caller's own User-Agent must replace ours by name.
+const namesUserAgent = (headers: Record<string, string> | undefined): boolean =>
+  Object.keys(headers ?? {}).some((name) => name.toLowerCase() === "user-agent");
+
 function retryDelay(res: Response, retry: number): number {
   const after = Number(res.headers.get("retry-after"));
   if (Number.isFinite(after) && after >= 0 && res.headers.has("retry-after")) return after * 1000;
@@ -141,7 +145,7 @@ export const createSuperwallApi = (
       return send(`${host()}${path}`, {
         method,
         headers: {
-          "user-agent": userAgent,
+          ...(namesUserAgent(options.headers) ? {} : { "user-agent": userAgent }),
           ...options.headers,
           authorization: `Bearer ${token}`,
           accept: "application/json",

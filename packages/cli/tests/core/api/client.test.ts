@@ -214,6 +214,12 @@ test("every request carries the CLI's User-Agent, or the one the client was made
   );
 });
 
+test("a request's own User-Agent replaces the client's whatever its casing", async () => {
+  const calls = mockFetch(() => ({ body: {} }));
+  await createSuperwallApi(SESSION).get("/v2/thing", { headers: { "User-Agent": "Superwall-MCP/1.0" } });
+  assert.equal(new Headers(calls[0]!.init.headers).get("user-agent"), "Superwall-MCP/1.0");
+});
+
 test("postText() includes the raw ClickHouse error in ApiError", async () => {
   mockTextFetch(() => ({ status: 403, body: "data:read scope required" }));
   const api = createSuperwallApi(SESSION);
