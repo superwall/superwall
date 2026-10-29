@@ -328,6 +328,7 @@ function coerce(raw: unknown, type: string): unknown {
       return text;
     }
   }
+  if (type === "null") return null;
   // A nullable field takes the literal null to clear it (`--end-at null`).
   if (text === "null" && type.split("|").some((part) => part.trim() === "null")) return null;
   return typeof raw === "number" && !/\b(number|integer)\b/.test(type) ? text : raw;
