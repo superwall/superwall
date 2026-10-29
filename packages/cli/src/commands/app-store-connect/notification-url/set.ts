@@ -6,7 +6,9 @@ export const command = defineCommand({
   name: "asc notification-url set",
   summary: "Write this app's URL where Apple has none",
   details: `Never replaces another server's URL: a conflict is reported and left alone (exit 1).
-It leaves the revenue provider alone unless --set-revenue-provider is passed.`,
+It leaves the revenue provider alone unless --set-revenue-provider is passed.
+
+Passing --set-revenue-provider overwrites the app's existing revenue-provider selection.`,
   flags: {
     setRevenueProvider: {
       type: "boolean",
@@ -20,7 +22,7 @@ It leaves the revenue provider alone unless --set-revenue-provider is passed.`,
   auth: "required",
   json: true,
   prompts: true,
-  mcp: "write",
+  mcp: "destructive",
   run(ctx, input) {
     return runAscNotificationUrlSet(ctx, input);
   },

@@ -37,6 +37,7 @@ export interface AscOperation {
   details?: string;
   args?: readonly AscArg[];
   flags?: Readonly<Record<string, AscFlag>>;
+  confirm?: boolean;
   effect: ToolEffect;
   run: (session: AscSession, input: AscInput) => Promise<AscOutput>;
 }

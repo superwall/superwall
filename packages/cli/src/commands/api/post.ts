@@ -5,6 +5,7 @@ import { runApiRequest } from "@/core/api/request";
 export const command = defineCommand({
   name: "post",
   summary: "Make POST requests to the Superwall API",
+  details: "Executes an arbitrary Superwall POST endpoint. Depending on the path, it can archive, reset, publish, resend events or create a webhook to a caller-supplied HTTPS destination. Repeating a call may repeat its effects.",
   args: {
     path: { describe: "API path, e.g. /v2/products", required: true },
   },
@@ -17,7 +18,7 @@ export const command = defineCommand({
   auth: "required",
   json: true,
   prompts: false,
-  mcp: "write",
+  mcp: "destructive",
   run(ctx, { args, flags }) {
     return runApiRequest(ctx, ctx.api, { verb: "post", path: args.path, data: flags.d });
   },

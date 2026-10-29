@@ -31,6 +31,7 @@ of the product; changes go to its editable version, and an approved product gets
     {
       name: "update",
       summary: "Change the localization in --locale",
+      details: "Overwrites the existing localization. Updating can also create a missing editable draft.",
       flags: {
         ...TARGET_FLAGS,
         locale: { type: "string", value: "locale", describe: "The locale to change", required: true },
@@ -38,13 +39,14 @@ of the product; changes go to its editable version, and an approved product gets
         description: { type: "string", value: "text", describe: "The description (subscriptions and in-app purchases)" },
         customAppName: { type: "string", value: "name", describe: "The app name shown with a group (groups only)" },
       },
-      effect: "write",
+      effect: "destructive",
       run: runLocalizationsUpdate,
     },
     {
       name: "delete",
       summary: "Delete the localization in --locale",
       flags: { ...TARGET_FLAGS, locale: { type: "string", value: "locale", describe: "The locale to delete", required: true } },
+      confirm: true,
       effect: "destructive",
       run: runLocalizationsDelete,
     },

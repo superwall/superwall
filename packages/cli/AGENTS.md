@@ -303,6 +303,17 @@ server at mcp.superwall.com run the same commands; `@superwall/cli/tools`
   Anything needing the user's machine (a project on disk, a browser, Apple
   sign-in, agents) is `false`. A catalog describes its operations with
   `tools()`; an operation that only works locally is `mcp: false`.
+- **Effects describe behavior, not HTTP verbs.** Each main resource operation and
+  Apple Ads endpoint declares `effect`. Main resources keep CLI confirmation in
+  `destructive` separately; App Store Connect uses `confirm` for its confirmation
+  help. Metadata corrections do not change terminal prompts.
+  A tool spanning endpoint variants is destructive if any branch is destructive,
+  read-only only if all branches are reads, and otherwise a write. Account for
+  overwrites, live traffic, spend and irreversible sends. Internal provisioning or
+  authorization maintenance can make a tool a write without making it destructive.
+  POST selector lookups can still be reads. Test specific effect boundaries rather
+  than snapshotting the catalog; explain behavior evidence and remaining
+  qualifications in the pull request.
 - **A tool is the command**: its name is the command words joined by `_`,
   its input the arguments and flags (catalog operations: positionals, `app`
   and the API's own fields from the live reference), and its result the

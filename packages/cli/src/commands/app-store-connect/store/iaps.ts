@@ -48,19 +48,21 @@ export const command = defineAscResource({
     {
       name: "update",
       summary: "Change an in-app purchase",
+      details: "PATCH replaces existing IAP fields, including family-sharing configuration when accepted by Apple.",
       args: [{ name: "id", describe: "The in-app purchase's id", required: true }],
       flags: {
         name: { type: "string", value: "name", describe: "Its name in App Store Connect" },
         familySharable: { type: "boolean", describe: "Family Sharing" },
         reviewNote: { type: "string", value: "text", describe: "A note for App Review" },
       },
-      effect: "write",
+      effect: "destructive",
       run: runIapsUpdate,
     },
     {
       name: "delete",
       summary: "Delete an in-app purchase",
       args: [{ name: "id", describe: "The in-app purchase's id", required: true }],
+      confirm: true,
       effect: "destructive",
       run: runIapsDelete,
     },

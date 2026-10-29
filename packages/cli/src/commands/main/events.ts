@@ -4,16 +4,18 @@ export const command = defineResource({
   name: "events",
   summary: "Events sent to your webhooks",
   operations: [
-    { name: "list", summary: "Recent events", method: "GET", path: "/v2/projects/{project_id}/events", list: true },
+    { name: "list", summary: "Recent events", effect: "read", method: "GET", path: "/v2/projects/{project_id}/events", list: true },
     {
       name: "get",
       summary: "One event",
+      effect: "read",
       method: "GET",
       path: "/v2/projects/{project_id}/events/{event_id}",
     },
     {
       name: "attempts",
       summary: "Its delivery attempts",
+      effect: "read",
       method: "GET",
       path: "/v2/projects/{project_id}/events/{event_id}/attempts",
       list: true,
@@ -21,6 +23,8 @@ export const command = defineResource({
     {
       name: "retry",
       summary: "Deliver it again",
+      details: "Resends an event to its configured webhook destination. Delivery cannot be recalled and may duplicate downstream processing.",
+      effect: "destructive",
       method: "POST",
       path: "/v2/projects/{project_id}/events/{event_id}/retry",
     },

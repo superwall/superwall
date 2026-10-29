@@ -7,7 +7,9 @@ export const command = defineCommand({
   summary: "Submit subscriptions, groups and in-app purchases for App Review",
   details: `Adds the latest version of each to the app's open review submission, or a new one,
 then submits it. Apple reviews a first subscription or in-app purchase together with
-an app version.`,
+an app version.
+
+Starts Apple review for products/groups and submits the review submission. This is an outbound workflow transition, not only creation of a local draft.`,
   flags: {
     ascApp: { type: "string", value: "id|bundle id", describe: "The App Store app", mcp: "required" },
     subscription: { type: "list", value: "id", describe: "A subscription to submit (repeatable)" },
@@ -22,7 +24,7 @@ an app version.`,
   auth: "required",
   json: true,
   prompts: true,
-  mcp: "write",
+  mcp: "destructive",
   run(ctx, { flags }) {
     return runAscSubmit(ctx, { ascApp: flags.ascApp, subscription: flags.subscription, group: flags.group, iap: flags.iap, team: flags.team });
   },

@@ -1,4 +1,4 @@
-import type { Example } from "@/program/command";
+import type { Example, ToolEffect } from "@/program/command";
 import { resolveApiIndex, type DocOperation } from "@/core/api/reference";
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -7,6 +7,7 @@ export type ScopeKind = "app" | "project" | "organization";
 export interface Operation {
   name: string;
   summary: string;
+  effect: Exclude<ToolEffect, false>;
   method?: Method;
   path?: string;
   args?: string[];

@@ -159,7 +159,7 @@ function schemaOfFlag(spec: FlagSpec): JsonSchema {
   return spec.choices ? { ...base, enum: spec.choices } : base;
 }
 
-const OUTSIDE_SUPERWALL = new Set(["asc", "asa", "events retry", "webhooks create", "webhooks update"]);
+const OUTSIDE_SUPERWALL = new Set(["asc", "asa", "post", "patch", "events retry", "webhooks create", "webhooks update"]);
 
 function annotationsOf(words: readonly string[], effect: Exclude<ToolEffect, false>): ToolAnnotations {
   return {
