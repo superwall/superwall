@@ -46,6 +46,7 @@ of the product; changes go to its editable version, and an approved product gets
       name: "delete",
       summary: "Delete the localization in --locale",
       flags: { ...TARGET_FLAGS, locale: { type: "string", value: "locale", describe: "The locale to delete", required: true } },
+      confirm: true,
       effect: "destructive",
       run: runLocalizationsDelete,
     },

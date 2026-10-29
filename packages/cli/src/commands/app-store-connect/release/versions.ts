@@ -73,6 +73,7 @@ off iOS, --platform. --earliest-release-date (2026-11-01T08:00:00-07:00) goes wi
       summary: "Delete a version while it is still editable",
       args: [VERSION_ARG],
       flags: VERSION_FLAGS,
+      confirm: true,
       effect: "destructive",
       run: runVersionsDelete,
     },

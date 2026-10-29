@@ -51,6 +51,7 @@ export const command = defineAscResource({
       name: "delete",
       summary: "Delete a group",
       args: [{ name: "id", describe: "The subscription group's id", required: true }],
+      confirm: true,
       effect: "destructive",
       run: runSubscriptionGroupsDelete,
     },

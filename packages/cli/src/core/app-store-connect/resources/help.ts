@@ -39,7 +39,7 @@ function renderOperationHelp(spec: AscResourceSpec, operation: AscOperation): st
     [cmd("--team <id>"), "Apple team id, when your organization has several"],
   ];
   if (operation.effect !== "read") common.push([cmd("--dry-run"), "Print every request it would send; send no change"]);
-  if (operation.effect === "destructive") common.push([cmd("-y, --yes"), "Go ahead without asking"]);
+  if (operation.confirm) common.push([cmd("-y, --yes"), "Go ahead without asking"]);
   common.push([cmd("--json"), "Machine-readable output"]);
   return renderPage({
     name: `${spec.name} ${operation.name}`,

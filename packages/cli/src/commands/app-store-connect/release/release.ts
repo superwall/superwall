@@ -31,6 +31,7 @@ release on before the version is released; pause, resume and complete steer it a
       summary: "Release a version that is pending developer release",
       args: [VERSION_ARG],
       flags: VERSION_FLAGS,
+      confirm: true,
       effect: "destructive",
       run: runReleaseRelease,
     },

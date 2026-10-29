@@ -38,7 +38,8 @@ test("an operation page shows its arguments, typed flags, body options and the c
   assert.match(create, /\n {2}-d key=value +Another body field/);
   assert.match(create, /\n {2}--body <json\|@file\|@-> +The whole request body\n/);
   assert.match(create, /\nCommon\n {2}--json +Machine-readable output\n {2}--no-interactive +No prompts/);
-  assert.match(create, /\nDetails\n {2}Apple's schema for it: superwall asa docs adgroups create\n$/);
+  assert.match(create, /\nDetails\n {2}Creates a bid-bearing ad group\./);
+  assert.match(create, /\n {2}Apple's schema for it: superwall asa docs adgroups create\n$/);
   assert.match(page("campaigns", "create"), /\n {2}--countries <a,b,c> +Comma-separated country codes\n {2}--budget <amount>/);
   assert.match(page("campaigns", "create"), /\n {2}--adam-id <n> +App Store app id/);
 });
@@ -70,4 +71,13 @@ test("selector, report, paging and field options appear only where they apply", 
   assert.doesNotMatch(page("campaigns", "get"), /--limit/);
   assert.match(page("negative-keywords", "find"), /\n {2}--adgroup-level +Ad group negatives instead of the campaign's\n/);
   assert.doesNotMatch(page("campaigns", "find"), /--adgroup-level/);
+});
+
+test("operation help discloses activation, spending, financial orders and read-only POST lookups", () => {
+  assert.match(page("campaigns", "create"), /ENABLED permits advertising/);
+  assert.match(page("adgroups", "create"), /begin serving and spending/);
+  assert.match(page("keywords", "create"), /ACTIVE with bids/);
+  assert.match(page("ads", "create"), /begin serving and spending/);
+  assert.match(page("budget-orders", "create"), /financial budget order/);
+  assert.match(page("geo", "get"), /does not create locations or start a job/);
 });

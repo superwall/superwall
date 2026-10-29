@@ -62,6 +62,7 @@ export const command = defineAscResource({
       name: "delete",
       summary: "Delete an in-app purchase",
       args: [{ name: "id", describe: "The in-app purchase's id", required: true }],
+      confirm: true,
       effect: "destructive",
       run: runIapsDelete,
     },
