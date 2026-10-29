@@ -89,15 +89,13 @@ async function toolOf(owner: Resource, resource: Resource, op: Operation, flags:
     delete properties[name];
   }
 
-  const readOnly = op.method === "GET" || op.name === "list" || op.name === "get";
-  const effect = op.destructive ? "destructive" : readOnly ? "read" : "write";
   return {
     words,
     summary: op.summary,
     details: op.details,
     positionals,
     input: { properties, required },
-    effect: op.mcp ?? effect,
+    effect: op.mcp ?? op.effect,
   };
 }
 

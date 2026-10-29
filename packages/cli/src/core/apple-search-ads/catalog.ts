@@ -1,3 +1,5 @@
+import type { ToolEffect } from "@/program/command";
+
 type AsaMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 type AsaBody = "object" | "array" | "selector" | "report" | "ids" | "geo";
@@ -14,9 +16,11 @@ export interface AsaFlag {
 export interface AsaOperation {
   group: string;
   action: string;
+  effect: Exclude<ToolEffect, false>;
   method: AsaMethod;
   path: string;
   summary: string;
+  details?: string;
   doc: string;
   positional?: "id" | "ids" | "query" | "adam-id";
   body?: AsaBody;
@@ -93,23 +97,24 @@ const LIST_QUERY = ["fields", "limit", "offset", "all"];
 const op = (
   group: string,
   action: string,
+  effect: Exclude<ToolEffect, false>,
   method: AsaMethod,
   path: string,
   summary: string,
   doc: string,
   rest: Partial<AsaOperation> = {},
-): AsaOperation => ({ group, action, method, path, summary, doc, ...rest });
+): AsaOperation => ({ group, action, method, path, summary, doc, ...rest, effect });
 
 const list = (group: string, path: string, summary: string, doc: string, rest: Partial<AsaOperation> = {}) => {
-  return op(group, "list", "GET", path, summary, doc, { paged: "query", query: LIST_QUERY, ...rest });
+  return op(group, "list", "read", "GET", path, summary, doc, { paged: "query", query: LIST_QUERY, ...rest });
 };
 
 const byId = (group: string, path: string, summary: string, doc: string, rest: Partial<AsaOperation> = {}) => {
-  return op(group, "get", "GET", path, summary, doc, { positional: "id", query: ["fields"], ...rest });
+  return op(group, "get", "read", "GET", path, summary, doc, { positional: "id", query: ["fields"], ...rest });
 };
 
 const find = (group: string, path: string, summary: string, doc: string, rest: Partial<AsaOperation> = {}) => {
-  return op(group, "find", "POST", path, summary, doc, {
+  return op(group, "find", "read", "POST", path, summary, doc, {
     body: "selector",
     paged: "selector",
     query: SELECTOR_QUERY,
@@ -121,17 +126,19 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   list("campaigns", "/campaigns", "List campaigns", "get-all-campaigns"),
   byId("campaigns", "/campaigns/{id}", "Get a campaign", "get-a-campaign"),
   find("campaigns", "/campaigns/find", "Find campaigns with a selector", "find-campaigns"),
-  op("campaigns", "create", "POST", "/campaigns", "Create a campaign", "create-a-campaign", {
+  op("campaigns", "create", "destructive", "POST", "/campaigns", "Create a campaign", "create-a-campaign", {
+    details: "Creates a campaign with a budget and caller-selected status. ENABLED permits advertising once Apple’s serving requirements are met; this is not restricted to paused drafts.",
     body: "object",
     flags: CAMPAIGN_FIELDS,
   }),
-  op("campaigns", "update", "PUT", "/campaigns/{id}", "Update a campaign", "update-a-campaign", {
+  op("campaigns", "update", "destructive", "PUT", "/campaigns/{id}", "Update a campaign", "update-a-campaign", {
+    details: "Overwrites campaign status, countries and daily/lifetime budgets; can enable spending or pause delivery.",
     positional: "id",
     body: "object",
     envelope: "campaign",
     flags: CAMPAIGN_FIELDS,
   }),
-  op("campaigns", "delete", "DELETE", "/campaigns/{id}", "Delete a campaign", "delete-a-campaign", {
+  op("campaigns", "delete", "destructive", "DELETE", "/campaigns/{id}", "Delete a campaign", "delete-a-campaign", {
     positional: "id",
   }),
 
@@ -139,16 +146,18 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   byId("adgroups", "/campaigns/{campaign}/adgroups/{id}", "Get an ad group", "get-an-ad-group"),
   find("adgroups", "/campaigns/{campaign}/adgroups/find", "Find ad groups in a campaign", "find-ad-groups"),
   find("adgroups", "/adgroups/find", "Find ad groups across the org", "find-ad-groups-(org-level)"),
-  op("adgroups", "create", "POST", "/campaigns/{campaign}/adgroups", "Create an ad group", "create-an-ad-group", {
+  op("adgroups", "create", "destructive", "POST", "/campaigns/{campaign}/adgroups", "Create an ad group", "create-an-ad-group", {
+    details: "Creates a bid-bearing ad group. An enabled group in an eligible live campaign can begin serving and spending immediately.",
     body: "object",
     flags: ADGROUP_FIELDS,
   }),
-  op("adgroups", "update", "PUT", "/campaigns/{campaign}/adgroups/{id}", "Update an ad group", "update-an-ad-group", {
+  op("adgroups", "update", "destructive", "PUT", "/campaigns/{campaign}/adgroups/{id}", "Update an ad group", "update-an-ad-group", {
+    details: "Overwrites ad-group status, bids, CPA goal, dates and Search Match behavior.",
     positional: "id",
     body: "object",
     flags: ADGROUP_FIELDS,
   }),
-  op("adgroups", "delete", "DELETE", "/campaigns/{campaign}/adgroups/{id}", "Delete an ad group", "delete-an-ad-group", {
+  op("adgroups", "delete", "destructive", "DELETE", "/campaigns/{campaign}/adgroups/{id}", "Delete an ad group", "delete-an-ad-group", {
     positional: "id",
   }),
 
@@ -173,24 +182,27 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "keywords",
     "create",
+    "destructive",
     "POST",
     "/campaigns/{campaign}/adgroups/{adgroup}/targetingkeywords/bulk",
     "Create targeting keywords (bulk)",
     "create-targeting-keywords",
-    { body: "array", flags: KEYWORD_FIELDS },
+    { details: "Creates targeting keywords, which can be ACTIVE with bids in a live ad group and enable spending.", body: "array", flags: KEYWORD_FIELDS },
   ),
   op(
     "keywords",
     "update",
+    "destructive",
     "PUT",
     "/campaigns/{campaign}/adgroups/{adgroup}/targetingkeywords/bulk",
     "Update targeting keywords (bulk)",
     "update-targeting-keywords",
-    { positional: "id", body: "array", flags: KEYWORD_FIELDS },
+    { details: "Bulk-overwrites targeting keyword status, match type or bids.", positional: "id", body: "array", flags: KEYWORD_FIELDS },
   ),
   op(
     "keywords",
     "delete",
+    "destructive",
     "DELETE",
     "/campaigns/{campaign}/adgroups/{adgroup}/targetingkeywords/{id}",
     "Delete a targeting keyword",
@@ -200,6 +212,7 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "keywords",
     "delete",
+    "destructive",
     "POST",
     "/campaigns/{campaign}/adgroups/{adgroup}/targetingkeywords/delete/bulk",
     "Delete targeting keywords (bulk)",
@@ -247,6 +260,7 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "negative-keywords",
     "create",
+    "write",
     "POST",
     "/campaigns/{campaign}/negativekeywords/bulk",
     "Create campaign negative keywords (bulk)",
@@ -256,6 +270,7 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "negative-keywords",
     "create",
+    "write",
     "POST",
     "/campaigns/{campaign}/adgroups/{adgroup}/negativekeywords/bulk",
     "Create ad group negative keywords (bulk)",
@@ -265,24 +280,27 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "negative-keywords",
     "update",
+    "destructive",
     "PUT",
     "/campaigns/{campaign}/negativekeywords/bulk",
     "Update campaign negative keywords (bulk)",
     "update-campaign-negative-keywords",
-    { positional: "id", body: "array", flags: NEGATIVE_FIELDS },
+    { details: "Bulk-overwrites negative keyword configuration and can change which traffic is excluded.", positional: "id", body: "array", flags: NEGATIVE_FIELDS },
   ),
   op(
     "negative-keywords",
     "update",
+    "destructive",
     "PUT",
     "/campaigns/{campaign}/adgroups/{adgroup}/negativekeywords/bulk",
     "Update ad group negative keywords (bulk)",
     "update-ad-group-negative-keywords",
-    { positional: "id", body: "array", flags: NEGATIVE_FIELDS },
+    { details: "Bulk-overwrites negative keyword configuration and can change which traffic is excluded.", positional: "id", body: "array", flags: NEGATIVE_FIELDS },
   ),
   op(
     "negative-keywords",
     "delete",
+    "destructive",
     "POST",
     "/campaigns/{campaign}/negativekeywords/delete/bulk",
     "Delete campaign negative keywords",
@@ -292,6 +310,7 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "negative-keywords",
     "delete",
+    "destructive",
     "POST",
     "/campaigns/{campaign}/adgroups/{adgroup}/negativekeywords/delete/bulk",
     "Delete ad group negative keywords",
@@ -303,16 +322,18 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   byId("ads", "/campaigns/{campaign}/adgroups/{adgroup}/ads/{id}", "Get an ad", "get-an-ad"),
   find("ads", "/campaigns/{campaign}/ads/find", "Find ads in a campaign", "find-ads"),
   find("ads", "/ads/find", "Find ads across the org", "find-ads-(org-level)"),
-  op("ads", "create", "POST", "/campaigns/{campaign}/adgroups/{adgroup}/ads", "Create an ad", "create-an-ad", {
+  op("ads", "create", "destructive", "POST", "/campaigns/{campaign}/adgroups/{adgroup}/ads", "Create an ad", "create-an-ad", {
+    details: "Creates an ad assigned to a creative. An ENABLED ad in an eligible live group can begin serving and spending immediately.",
     body: "object",
     flags: AD_FIELDS,
   }),
-  op("ads", "update", "PUT", "/campaigns/{campaign}/adgroups/{adgroup}/ads/{id}", "Update an ad", "update-an-ad", {
+  op("ads", "update", "destructive", "PUT", "/campaigns/{campaign}/adgroups/{adgroup}/ads/{id}", "Update an ad", "update-an-ad", {
+    details: "Overwrites ad status/name; pausing or enabling changes delivery.",
     positional: "id",
     body: "object",
     flags: [NAME, STATUS],
   }),
-  op("ads", "delete", "DELETE", "/campaigns/{campaign}/adgroups/{adgroup}/ads/{id}", "Delete an ad", "delete-an-ad", {
+  op("ads", "delete", "destructive", "DELETE", "/campaigns/{campaign}/adgroups/{adgroup}/ads/{id}", "Delete an ad", "delete-an-ad", {
     positional: "id",
   }),
 
@@ -321,7 +342,7 @@ export const ASA_OPERATIONS: AsaOperation[] = [
     query: ["fields", "include-deleted-assets"],
   }),
   find("creatives", "/creatives/find", "Find creatives with a selector", "find-creatives"),
-  op("creatives", "create", "POST", "/creatives", "Create a creative", "create-a-creative", {
+  op("creatives", "create", "write", "POST", "/creatives", "Create a creative", "create-a-creative", {
     body: "object",
     flags: [
       ADAM_ID,
@@ -341,6 +362,7 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "product-pages",
     "locales",
+    "read",
     "GET",
     "/apps/{adamId}/product-pages/{id}/locale-details",
     "Get a product page's locales",
@@ -350,6 +372,7 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "product-pages",
     "countries",
+    "read",
     "GET",
     "/countries-or-regions",
     "List supported countries or regions",
@@ -359,6 +382,7 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "product-pages",
     "device-sizes",
+    "read",
     "GET",
     "/creativeappmappings/devices",
     "List app preview device sizes",
@@ -369,24 +393,26 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   byId("ad-rejections", "/product-page-reasons/{id}", "Get an ad creative rejection reason", "gets-a-product-page-reason"),
   find("ad-rejections", "/apps/{adamId}/assets/find", "Find an app's assets", "find-app-assets", {
     action: "assets",
+    details: "Retrieves asset metadata with a selector using POST; does not modify assets or start a job.",
     query: [...SELECTOR_QUERY, "adam-id"],
   }),
 
-  op("reports", "campaigns", "POST", "/reports/campaigns", "Campaign-level report", "get-campaign-level-reports", {
+  op("reports", "campaigns", "read", "POST", "/reports/campaigns", "Campaign-level report", "get-campaign-level-reports", {
     body: "report",
     flags: REPORT_FLAGS,
   }),
-  op("reports", "adgroups", "POST", "/reports/campaigns/{campaign}/adgroups", "Ad group-level report", "get-ad-group-level-reports", {
+  op("reports", "adgroups", "read", "POST", "/reports/campaigns/{campaign}/adgroups", "Ad group-level report", "get-ad-group-level-reports", {
     body: "report",
     flags: REPORT_FLAGS,
   }),
-  op("reports", "keywords", "POST", "/reports/campaigns/{campaign}/keywords", "Keyword-level report", "get-keyword-level-reports", {
+  op("reports", "keywords", "read", "POST", "/reports/campaigns/{campaign}/keywords", "Keyword-level report", "get-keyword-level-reports", {
     body: "report",
     flags: REPORT_FLAGS,
   }),
   op(
     "reports",
     "keywords",
+    "read",
     "POST",
     "/reports/campaigns/{campaign}/adgroups/{adgroup}/keywords",
     "Keyword-level report within an ad group",
@@ -396,6 +422,7 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "reports",
     "searchterms",
+    "read",
     "POST",
     "/reports/campaigns/{campaign}/searchterms",
     "Search term-level report",
@@ -405,20 +432,21 @@ export const ASA_OPERATIONS: AsaOperation[] = [
   op(
     "reports",
     "searchterms",
+    "read",
     "POST",
     "/reports/campaigns/{campaign}/adgroups/{adgroup}/searchterms",
     "Search term-level report within an ad group",
     "get-search-term-level-within-ad-group-reports",
     { body: "report", flags: REPORT_FLAGS },
   ),
-  op("reports", "ads", "POST", "/reports/campaigns/{campaign}/ads", "Ad-level report", "get-ad-level-reports", {
+  op("reports", "ads", "read", "POST", "/reports/campaigns/{campaign}/ads", "Ad-level report", "get-ad-level-reports", {
     body: "report",
     flags: REPORT_FLAGS,
   }),
 
   list("impression-share", "/custom-reports", "List impression share reports", "get-all-impression-share-reports"),
   byId("impression-share", "/custom-reports/{id}", "Get an impression share report", "get-a-single-impression-share-report"),
-  op("impression-share", "create", "POST", "/custom-reports", "Request an impression share report", "impression-share-report", {
+  op("impression-share", "create", "write", "POST", "/custom-reports", "Request an impression share report", "impression-share-report", {
     body: "object",
     flags: [
       NAME,
@@ -430,26 +458,28 @@ export const ASA_OPERATIONS: AsaOperation[] = [
     ],
   }),
 
-  op("apps", "search", "GET", "/search/apps", "Search the App Store for apps", "search-for-ios-apps", {
+  op("apps", "search", "read", "GET", "/search/apps", "Search the App Store for apps", "search-for-ios-apps", {
     positional: "query",
     paged: "query",
     query: ["owned", "limit", "offset", "all"],
   }),
   find("apps", "/apps/{adamId}/eligibilities/find", "Find an app's eligibility records", "find-app-eligibility-records", {
     action: "eligibility",
+    details: "Retrieves app eligibility records using POST; does not change eligibility or start a job.",
     positional: "adam-id",
   }),
-  op("apps", "get", "GET", "/apps/{adamId}", "Get app details", "get-app-details", { positional: "adam-id" }),
-  op("apps", "localized", "GET", "/apps/{adamId}/locale-details", "Get localized app details", "get-localized-app-details", {
+  op("apps", "get", "read", "GET", "/apps/{adamId}", "Get app details", "get-app-details", { positional: "adam-id" }),
+  op("apps", "localized", "read", "GET", "/apps/{adamId}/locale-details", "Get localized app details", "get-localized-app-details", {
     positional: "adam-id",
   }),
 
-  op("geo", "search", "GET", "/search/geo", "Search geolocations", "search-for-geolocations", {
+  op("geo", "search", "read", "GET", "/search/geo", "Search geolocations", "search-for-geolocations", {
     positional: "query",
     paged: "query",
     query: ["country", "entity", "limit", "offset", "all"],
   }),
-  op("geo", "get", "POST", "/search/geo", "Look up geolocations by id", "get-a-list-of-geo-locations", {
+  op("geo", "get", "read", "POST", "/search/geo", "Look up geolocations by id", "get-a-list-of-geo-locations", {
+    details: "Retrieves geolocations by ID using POST; does not create locations or start a job.",
     positional: "ids",
     body: "geo",
     query: ["entity"],
@@ -457,16 +487,18 @@ export const ASA_OPERATIONS: AsaOperation[] = [
 
   list("budget-orders", "/budgetorders", "List budget orders", "get-all-budget-orders"),
   byId("budget-orders", "/budgetorders/{id}", "Get a budget order", "get-a-budget-order"),
-  op("budget-orders", "create", "POST", "/budgetorders", "Create a budget order", "create-a-budget-order", {
+  op("budget-orders", "create", "destructive", "POST", "/budgetorders", "Create a budget order", "create-a-budget-order", {
+    details: "Creates a financial budget order for the organization. Apple can return it ACTIVE; the request is not restricted to a draft allocation.",
     body: "object",
   }),
-  op("budget-orders", "update", "PUT", "/budgetorders/{id}", "Update a budget order", "update-a-budget-order", {
+  op("budget-orders", "update", "destructive", "PUT", "/budgetorders/{id}", "Update a budget order", "update-a-budget-order", {
+    details: "Overwrites a financial budget order using an unrestricted request body.",
     positional: "id",
     body: "object",
   }),
 
-  op("acls", "list", "GET", "/acls", "List the orgs this API user can access", "get-user-acl"),
-  op("me", "get", "GET", "/me", "Show the calling API user", "get-me-details"),
+  op("acls", "list", "read", "GET", "/acls", "List the orgs this API user can access", "get-user-acl"),
+  op("me", "get", "read", "GET", "/me", "Show the calling API user", "get-me-details"),
 ];
 
 const PLACEHOLDERS = ["campaign", "adgroup", "adamId", "id"] as const;

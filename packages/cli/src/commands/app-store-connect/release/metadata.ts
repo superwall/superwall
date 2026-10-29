@@ -25,9 +25,10 @@ export const command = defineAscResource({
     {
       name: "update",
       summary: "Change the version's text in one locale",
+      details: "PATCH overwrites existing App Store version localization text and URLs.",
       args: [VERSION_ARG],
       flags: { ...VERSION_FLAGS, locale: { type: "string", value: "locale", describe: "The locale to change, e.g. en-US", required: true }, ...METADATA_FIELDS },
-      effect: "write",
+      effect: "destructive",
       run: runMetadataUpdate,
     },
     {

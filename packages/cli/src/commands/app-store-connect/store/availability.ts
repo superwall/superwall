@@ -16,13 +16,14 @@ export const command = defineAscResource({
     {
       name: "set",
       summary: "Sell it in these territories",
+      details: "Replaces the set of available territories and can remove existing sale availability.",
       flags: {
         subscription: TARGET_FLAGS.subscription,
         iap: TARGET_FLAGS.iap,
         availableTerritories: { type: "string", value: "all|USA,CAN", describe: "Every territory, or a list", required: true },
         availableInNewTerritories: { type: "boolean", describe: "Also territories Apple adds later (default: with all)" },
       },
-      effect: "write",
+      effect: "destructive",
       run: runAvailabilitySet,
     },
   ],

@@ -8,6 +8,7 @@ export const command = defineResource({
     {
       name: "list",
       summary: "Every app, by organization and project",
+      effect: "read",
       handler: "resource",
       usage: "",
       flags: [
@@ -18,12 +19,14 @@ export const command = defineResource({
     {
       name: "get",
       summary: "Everything about one app: bundle ID, Apple team, keys, URLs",
+      effect: "read",
       handler: "apps.get",
       usage: "<app>",
     },
     {
       name: "create",
       summary: "Add an app to a project",
+      effect: "write",
       handler: "resource",
       usage: "--name <name> --platform <platform>",
       flags: [
@@ -36,6 +39,7 @@ export const command = defineResource({
     {
       name: "update",
       summary: "Change its bundle ID, Apple team ID, URL scheme, support URL, ...",
+      effect: "destructive",
       handler: "apps.update",
       method: "PATCH",
       path: "/v2/projects/{id}/applications/{application_id}/settings",
@@ -49,11 +53,14 @@ export const command = defineResource({
 run in test mode under it, it says how many and asks.
 --revenue-provider chooses which events the dashboard's revenue figures count. Events from
 both sources keep arriving and being stored; it says what changes and asks first.
-Outside a terminal both need --yes.`,
+Outside a terminal both need --yes.
+
+Overwrites app settings, including routing, revenue provider and bundle ID. Changing the bundle ID can put deployed builds into test mode.`,
     },
     {
       name: "use",
       summary: "Make it the app commands use when --app is left out",
+      effect: "write",
       handler: "resource",
       usage: "<app>",
       mcp: false,
@@ -61,6 +68,7 @@ Outside a terminal both need --yes.`,
     {
       name: "statistics",
       summary: "Users, revenue and conversion, as the dashboard's overview shows them",
+      effect: "read",
       method: "GET",
       path: "/v2/projects/{id}/applications/{application_id}/statistics",
       details: `The overview figures, computed as the dashboard computes them. Pass --environment and
@@ -71,6 +79,7 @@ For anything the overview doesn't show, run SQL with \`superwall query\`.`,
     {
       name: "transactions",
       summary: "Its most recent transactions, as the dashboard lists them",
+      effect: "read",
       method: "GET",
       path: "/v2/projects/{id}/applications/{application_id}/recent-transactions",
       details: `The dashboard's recent-transactions list. Pass --environment, --from and --to.
@@ -81,6 +90,7 @@ To count, group or filter transactions, run SQL with \`superwall query\`.`,
     {
       name: "notices",
       summary: "What the dashboard warns about on its overview",
+      effect: "read",
       method: "GET",
       path: "/v2/projects/{id}/applications/{application_id}/overview-notices",
       bind: { id: "project", application_id: "app" },

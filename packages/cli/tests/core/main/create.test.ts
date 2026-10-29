@@ -164,7 +164,7 @@ test("a resource with no create of its own refuses rather than guessing", async 
   const paywalls = defineResource({
     name: "paywalls",
     summary: "Paywalls",
-    operations: [{ name: "create", summary: "Create", handler: "resource", usage: "" }],
+    operations: [{ name: "create", summary: "Create", effect: "write", handler: "resource", usage: "" }],
     examples: [["paywalls create", "Create"]],
   });
   const { error, writes } = await create(paywalls, { project: "1", app: "10" }, {}, { json: true });

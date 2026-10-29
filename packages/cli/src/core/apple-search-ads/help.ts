@@ -148,6 +148,6 @@ export function renderAsaHelp(words: readonly string[]): string {
     usage: formatAsaUsage(op),
     summary: variants.map((variant) => variant.summary).join("; "),
     flags: formatAsaFlags(op, variants),
-    details: `Apple's schema for it: superwall asa docs ${group} ${action}`,
+    details: [...new Set(variants.map((variant) => variant.details).filter(Boolean)), `Apple's schema for it: superwall asa docs ${group} ${action}`].join("\n\n"),
   });
 }

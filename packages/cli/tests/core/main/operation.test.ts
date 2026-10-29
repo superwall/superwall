@@ -139,10 +139,10 @@ async function run(words: string[], flags: Record<string, unknown>, api: Superwa
 test("every operation is either an API call or a known hand-written handler, named once", () => {
   const define = (operations: Parameters<typeof defineResource>[0]["operations"]) =>
     defineResource({ name: "things", summary: "Things", operations, examples: [["things list", "Things"]] });
-  assert.throws(() => define([{ name: "list", summary: "List", handler: "nope" }]), /neither an API call nor a known handler/);
-  assert.throws(() => define([{ name: "get", summary: "Get" }]), /neither an API call nor a known handler/);
+  assert.throws(() => define([{ name: "list", summary: "List", effect: "read", handler: "nope" }]), /neither an API call nor a known handler/);
+  assert.throws(() => define([{ name: "get", summary: "Get", effect: "read" }]), /neither an API call nor a known handler/);
   assert.throws(
-    () => define([{ name: "list", summary: "List", handler: "resource" }, { name: "list", summary: "Again", handler: "resource" }]),
+    () => define([{ name: "list", summary: "List", effect: "read", handler: "resource" }, { name: "list", summary: "Again", effect: "read", handler: "resource" }]),
     /repeats an operation name/,
   );
   assert.equal(Object.keys(CATALOGS).length, 8);
@@ -534,9 +534,9 @@ const gadgets = defineResource({
   name: "gadgets",
   summary: "Gadgets",
   operations: [
-    { name: "create", summary: "Make one", method: "POST", path: "/v2/gadgets" },
-    { name: "members", summary: "Who is in the organization", method: "GET", path: "/v2/organizations/{organization_id}/members" },
-    { name: "spin", summary: "Spin it", handler: "resource" },
+    { name: "create", summary: "Make one", effect: "write", method: "POST", path: "/v2/gadgets" },
+    { name: "members", summary: "Who is in the organization", effect: "read", method: "GET", path: "/v2/organizations/{organization_id}/members" },
+    { name: "spin", summary: "Spin it", effect: "write", handler: "resource" },
   ],
   examples: [["gadgets create", "Make one"]],
 });
@@ -603,7 +603,7 @@ test("a hand-written operation of a resource the CLI doesn't know is refused", a
   const spinning = defineResource({
     name: "products",
     summary: "Products",
-    operations: [{ name: "spin", summary: "Spin it", handler: "resource" }],
+    operations: [{ name: "spin", summary: "Spin it", effect: "write", handler: "resource" }],
     examples: [["products spin", "Spin"]],
   });
   const result = await runCommand(spinning, { words: ["spin"], json: true, api: fakeApi([]) });

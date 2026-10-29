@@ -26,14 +26,14 @@ const gadgets = defineResource({
   name: "gadgets",
   summary: "Gadgets",
   operations: [
-    { name: "get", summary: "One gadget", method: "GET", path: "/v2/gadgets/{id}" },
-    { name: "archive", summary: "Archive one", method: "POST", path: "/v2/gadgets/{id}/archive" },
+    { name: "get", summary: "One gadget", effect: "read", method: "GET", path: "/v2/gadgets/{id}" },
+    { name: "archive", summary: "Archive one", effect: "write", method: "POST", path: "/v2/gadgets/{id}/archive" },
   ],
   nested: [
     {
       name: "parts",
       summary: "Its parts",
-      operations: [{ name: "create", summary: "Add a part", method: "POST", path: "/v2/gadgets/{id}/parts" }],
+      operations: [{ name: "create", summary: "Add a part", effect: "write", method: "POST", path: "/v2/gadgets/{id}/parts" }],
     },
   ],
   examples: [["gadgets get <gadget>", "One"]],

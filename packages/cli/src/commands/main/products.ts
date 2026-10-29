@@ -5,11 +5,12 @@ export const command = defineResource({
   name: "products",
   summary: "Products and their store prices",
   operations: [
-    { name: "list", summary: "Products of a project", handler: "resource", flags: LIST_FLAGS },
-    { name: "get", summary: "One product", method: "GET", path: "/v2/products/{id}" },
+    { name: "list", summary: "Products of a project", effect: "read", handler: "resource", flags: LIST_FLAGS },
+    { name: "get", summary: "One product", effect: "read", method: "GET", path: "/v2/products/{id}" },
     {
       name: "create",
       summary: "Create a product",
+      effect: "write",
       handler: "resource",
       usage: "--identifier <identifier>",
       flags: [
@@ -23,10 +24,11 @@ export const command = defineResource({
         ["--entitlement <id>", "Entitlement to grant (repeatable)"],
       ],
     },
-    { name: "update", summary: "Change a product", method: "PATCH", path: "/v2/products/{id}", destructive: true },
+    { name: "update", summary: "Change a product", effect: "destructive", method: "PATCH", path: "/v2/products/{id}", destructive: true },
     {
       name: "delete",
       summary: "Delete a product",
+      effect: "destructive",
       method: "DELETE",
       path: "/v2/products/{id}",
       destructive: true,
@@ -34,12 +36,14 @@ export const command = defineResource({
     {
       name: "impact",
       summary: "What deleting it would break",
+      effect: "read",
       method: "GET",
       path: "/v2/products/{id}/delete-impact",
     },
     {
       name: "storekit",
       summary: "Write a StoreKit configuration file for Xcode",
+      effect: "write",
       handler: "resource",
       flags: [["--out <file>", "Where to write it"]],
       mcp: false,

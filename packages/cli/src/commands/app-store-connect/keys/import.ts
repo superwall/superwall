@@ -9,7 +9,9 @@ export const command = defineCommand({
   details: `Without --from it tries every key your organization has and saves the first Apple
 confirms, both kinds when none is named; exit 1 when a kind is still missing. With --from
 it copies that app's key. Never saves an unconfirmed key unless a person passes
---allow-unconfirmed, and creates nothing at Apple.`,
+--allow-unconfirmed, and creates nothing at Apple.
+
+With --from, replaces the target app's saved key.`,
   args: {
     kind: { describe: "api_key or purchase_key (both when left out; needed with --from)", choices: KEY_KINDS },
   },
@@ -30,7 +32,7 @@ it copies that app's key. Never saves an unconfirmed key unless a person passes
   auth: "required",
   json: true,
   prompts: true,
-  mcp: "write",
+  mcp: "destructive",
   run(ctx, { args, flags }) {
     const kind = keyKind(args.kind);
     const app = { app: flags.app, project: flags.project };

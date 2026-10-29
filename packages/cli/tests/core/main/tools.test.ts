@@ -45,9 +45,9 @@ const resource: Resource = {
   name: "things",
   summary: "Things",
   operations: [
-    { name: "aliases", summary: "Aliases", method: "GET", path: "/v3/users/{app_user_id}/aliases" },
-    { name: "create", summary: "Create", method: "POST", path: "/v2/paywalls" },
-    { name: "get", summary: "One", method: "GET", path: "/v2/paywalls/{id}" },
+    { name: "aliases", summary: "Aliases", effect: "read", method: "GET", path: "/v3/users/{app_user_id}/aliases" },
+    { name: "create", summary: "Create", effect: "write", method: "POST", path: "/v2/paywalls" },
+    { name: "get", summary: "One", effect: "read", method: "GET", path: "/v2/paywalls/{id}" },
   ],
 };
 
@@ -58,4 +58,16 @@ test("an operation whose app id is a query or body field takes the app as an inp
   assert.equal(tools.get("create")?.properties.application_id, undefined);
   assert.deepEqual(tools.get("create")?.required, ["name"]);
   assert.equal(tools.get("get")?.properties.app, undefined, "an operation with no app in it takes none");
+});
+
+test("declared effects determine safety even when HTTP methods or names suggest otherwise", async () => {
+  const operations = await listResourceTools({
+    name: "effects",
+    summary: "Effects",
+    operations: [
+      { name: "lookup", summary: "Read with POST", method: "POST", path: "/lookup", effect: "read" },
+      { name: "get", summary: "Provision before reading", method: "GET", path: "/query", effect: "destructive" },
+    ],
+  }, {});
+  assert.deepEqual(operations.map((operation) => operation.effect), ["read", "destructive"]);
 });
