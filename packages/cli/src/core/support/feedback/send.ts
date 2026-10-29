@@ -7,7 +7,7 @@ import { orgIdOf } from "@/core/api/orgs";
 import { readSession } from "@/core/account/storage";
 import { readAnonymousId, readOnboardedApp } from "@/core/state/config";
 import { readInput } from "@/program/host";
-import { TELEMETRY_HOST, TELEMETRY_KEY, VERSION } from "@/environment";
+import { detectAgent, TELEMETRY_HOST, TELEMETRY_KEY, VERSION } from "@/environment";
 
 type FeedbackVia = "human" | "agent";
 
@@ -52,17 +52,6 @@ function linkedApp(cwd = proc?.cwd() ?? ""): {
 } {
   const app = readOnboardedApp(cwd);
   return { projectId: app?.projectId, applicationId: app?.applicationId };
-}
-
-const AGENT_ENV: [string, string][] = [
-  ["CLAUDECODE", "claude-code"],
-  ["CODEX_SANDBOX", "codex"],
-  ["CURSOR_AGENT", "cursor"],
-  ["GEMINI_CLI", "gemini-cli"],
-];
-
-export function detectAgent(env: NodeJS.ProcessEnv = proc?.env ?? {}): string | undefined {
-  return AGENT_ENV.find(([key]) => env[key])?.[1];
 }
 
 export function readAttachments(paths: string[]): FeedbackAttachment[] {

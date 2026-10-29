@@ -1,6 +1,7 @@
 import { NotLoggedInError } from "@/core/account/errors";
 import { readSession, resolveApiHost, type Session } from "@/core/account/storage";
 import { resolveAuthToken } from "@/core/account/token";
+import { USER_AGENT } from "@/environment";
 
 interface ApiErrorDetail {
   type?: string;
@@ -101,13 +102,20 @@ async function parseApiError(request: string, res: Response): Promise<ApiError> 
   return new ApiError(request, res.status, text);
 }
 
+// Fetch joins differently cased duplicates ("a, b"), so a caller's own User-Agent must replace ours by name.
+const namesUserAgent = (headers: Record<string, string> | undefined): boolean =>
+  Object.keys(headers ?? {}).some((name) => name.toLowerCase() === "user-agent");
+
 function retryDelay(res: Response, retry: number): number {
   const after = Number(res.headers.get("retry-after"));
   if (Number.isFinite(after) && after >= 0 && res.headers.has("retry-after")) return after * 1000;
   return 400 * 2 ** retry;
 }
 
-export const createSuperwallApi = (initial: Session): SuperwallApi => {
+export const createSuperwallApi = (
+  initial: Session,
+  { userAgent = USER_AGENT() }: { userAgent?: string } = {},
+): SuperwallApi => {
   let session = initial;
 
   const host = (): string => resolveApiHost(session);
@@ -137,6 +145,7 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
       return send(`${host()}${path}`, {
         method,
         headers: {
+          ...(namesUserAgent(options.headers) ? {} : { "user-agent": userAgent }),
           ...options.headers,
           authorization: `Bearer ${token}`,
           accept: "application/json",
@@ -179,6 +188,7 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
         method: "POST",
         headers: {
           authorization: `Bearer ${token}`,
+          "user-agent": userAgent,
           accept: "text/plain",
           "content-type": "text/plain; charset=utf-8",
         },

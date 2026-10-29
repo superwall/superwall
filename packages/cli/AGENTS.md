@@ -365,6 +365,12 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
 - **Telemetry is anonymous by design**: a random persisted id, enum/boolean/
   number properties only, no person profiles, and a fetch timeout shorter than
   the exit flush so an unreachable endpoint can't hold the process open.
+- **Every Superwall API request names its client** in `User-Agent`, which the
+  API's audit log records: `USER_AGENT()` (`superwall-cli/<version>`, plus
+  `(<agent>)` when `detectAgent()` finds Claude Code, Codex, Cursor or Gemini
+  driving the CLI) unless `createSuperwallApi`/`apiFor` is given a `userAgent`
+  (the MCP passes `Superwall-MCP/1.0 (<mcp client>/<version>)`); a request's own
+  `user-agent` header still wins. Apple requests keep a bare `superwall-cli/<version>`.
 - **Apple keys:** the ASC proxy signs with the org's stored key, so nothing
   signs a `.p8` or JWT locally. Apple names key files `AuthKey_<KEYID>.p8`, and
   drag-and-drop escapes spaces as `"\ "`. ASC products walk subscription
