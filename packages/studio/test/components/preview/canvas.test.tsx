@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import * as React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   Canvas,
   useCanvasScale,
@@ -9,6 +9,12 @@ import {
 } from "../../../src/components/preview/Canvas";
 
 type Size = { width: number; height: number };
+
+let clock = 0;
+
+const nextGesture = () => {
+  clock += 1000;
+};
 
 const sizes: Record<string, Size> = {};
 
@@ -92,6 +98,10 @@ const transformOf = (layer: HTMLElement) => {
   if (!match) throw new Error(`unexpected transform ${layer.style.transform}`);
   return { x: Number(match[1]), y: Number(match[2]), scale: Number(match[3]) };
 };
+
+beforeEach(() => {
+  vi.spyOn(performance, "now").mockImplementation(() => clock);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -333,6 +343,7 @@ describe("Canvas", () => {
     Object.defineProperty(page, "clientHeight", { value: 800 });
     body.appendChild(page);
     const wheel = (node: EventTarget, init: WheelEventInit) => {
+      nextGesture();
       const event = new WheelEvent("wheel", { cancelable: true, bubbles: true, ...init });
       act(() => {
         node.dispatchEvent(event);
@@ -359,6 +370,7 @@ describe("Canvas", () => {
     const doc = frame.contentDocument;
     if (!doc) throw new Error("iframe without a document");
     const wheel = (node: EventTarget, init: WheelEventInit) => {
+      nextGesture();
       const event = new WheelEvent("wheel", { cancelable: true, bubbles: true, ...init });
       act(() => {
         node.dispatchEvent(event);

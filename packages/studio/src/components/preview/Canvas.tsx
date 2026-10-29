@@ -13,8 +13,19 @@ const WHEEL_ZOOM_SENSITIVITY = 0.01;
 const WHEEL_ZOOM_STEP_LIMIT = { min: 0.6, max: 1.6 };
 const DRAG_THRESHOLD = 4;
 const GRAB_STYLE_ATTRIBUTE = "data-studio-grab";
+const WHEEL_GESTURE_GAP_MS = 120;
+const WHEEL_GESTURE_DECIDE_PX = 4;
+const WHEEL_LINE_PX = 16;
+const WHEEL_PAGE_PX = 800;
 
 type Point = { x: number; y: number };
+
+type Axes = { x: boolean; y: boolean };
+
+type WheelGesture = { at: number; sum: Point; pans: Axes | null };
+
+const PANS_NONE: Axes = { x: false, y: false };
+const PANS_BOTH: Axes = { x: true, y: true };
 
 type Mode = { kind: "fit" } | { kind: "manual"; transform: CanvasTransform };
 
@@ -77,14 +88,29 @@ const claimsWheel = (element: Element, axis: "x" | "y"): boolean => {
   );
 };
 
-const pageClaimsWheel = (event: WheelEvent): boolean => {
-  if (event.defaultPrevented) return true;
-  const axis = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? "x" : "y";
+const pageClaimedAxes = (event: WheelEvent): Axes => {
+  const claimed = { x: false, y: false };
   for (let node = isElement(event.target) ? event.target : null; node; node = node.parentElement) {
-    if (claimsWheel(node, axis)) return true;
+    claimed.x ||= claimsWheel(node, "x");
+    claimed.y ||= claimsWheel(node, "y");
   }
-  return false;
+  return claimed;
 };
+
+const wheelPixels = (event: WheelEvent): Point => {
+  const unit = event.deltaMode === 1 ? WHEEL_LINE_PX : event.deltaMode === 2 ? WHEEL_PAGE_PX : 1;
+  return { x: event.deltaX * unit, y: event.deltaY * unit };
+};
+
+const ownerOverPage = (sum: Point, claimed: Axes): Axes => {
+  const axis = Math.abs(sum.x) > Math.abs(sum.y) ? "x" : "y";
+  return claimed[axis] ? PANS_NONE : { x: !claimed.x, y: !claimed.y };
+};
+
+const panDelta = (event: WheelEvent, pans: Axes): Point => ({
+  x: pans.x ? -event.deltaX : 0,
+  y: pans.y ? -event.deltaY : 0,
+});
 
 const useSize = (element: HTMLElement | null): Size => {
   const [size, setSize] = React.useState<Size>({ width: 0, height: 0 });
@@ -167,6 +193,18 @@ export const Canvas = ({
   const pointers = React.useRef(new Map<number, Point>());
   const pinch = React.useRef<Pinch | null>(null);
   const lastFitKey = React.useRef(fitKey);
+  const gesture = React.useRef<WheelGesture | null>(null);
+
+  const wheelGesture = React.useCallback((): WheelGesture => {
+    const now = performance.now();
+    const ongoing = gesture.current;
+    if (ongoing && now - ongoing.at <= WHEEL_GESTURE_GAP_MS) {
+      ongoing.at = now;
+      return ongoing;
+    }
+    gesture.current = { at: now, sum: { x: 0, y: 0 }, pans: null };
+    return gesture.current;
+  }, []);
 
   const apply = React.useCallback((next: CanvasTransform) => {
     setMode({ kind: "manual", transform: next });
@@ -232,15 +270,20 @@ export const Canvas = ({
     if (!viewport) return undefined;
     const onWheel = (event: WheelEvent) => {
       if (isZoomGesture(event)) {
+        gesture.current = null;
         zoomWheel(event, toViewport(event.clientX, event.clientY));
         return;
       }
+      const current = wheelGesture();
+      current.pans ??= PANS_BOTH;
+      if (!current.pans.x && !current.pans.y) return;
       event.preventDefault();
-      apply(panBy(latest.current, -event.deltaX, -event.deltaY));
+      const delta = panDelta(event, current.pans);
+      apply(panBy(latest.current, delta.x, delta.y));
     };
     viewport.addEventListener("wheel", onWheel, { passive: false });
     return () => viewport.removeEventListener("wheel", onWheel);
-  }, [viewport, apply, latest, toViewport, zoomWheel]);
+  }, [viewport, apply, latest, toViewport, zoomWheel, wheelGesture]);
 
   React.useEffect(() => {
     if (!content) return undefined;
@@ -254,6 +297,7 @@ export const Canvas = ({
       const { signal } = controller;
       const onWheel = (event: WheelEvent) => {
         if (isZoomGesture(event)) {
+          gesture.current = null;
           const rect = frame.getBoundingClientRect();
           const scale = latest.current.scale;
           zoomWheel(
@@ -262,9 +306,18 @@ export const Canvas = ({
           );
           return;
         }
-        if (pageClaimsWheel(event)) return;
+        const current = wheelGesture();
+        if (event.defaultPrevented) return;
+        if (!current.pans) {
+          const pixels = wheelPixels(event);
+          current.sum = { x: current.sum.x + pixels.x, y: current.sum.y + pixels.y };
+          if (Math.hypot(current.sum.x, current.sum.y) < WHEEL_GESTURE_DECIDE_PX) return;
+          current.pans = ownerOverPage(current.sum, pageClaimedAxes(event));
+        }
+        if (!current.pans.x && !current.pans.y) return;
         event.preventDefault();
-        apply(panBy(latest.current, -event.deltaX, -event.deltaY));
+        const delta = panDelta(event, current.pans);
+        apply(panBy(latest.current, delta.x, delta.y));
       };
       let press: { at: Point; panning: boolean } | null = null;
       let grabStyle: HTMLStyleElement | null = null;
@@ -321,7 +374,7 @@ export const Canvas = ({
       content.removeEventListener("load", onLoad, true);
       attached.forEach((detach) => detach());
     };
-  }, [content, apply, latest, toViewport, zoomWheel]);
+  }, [content, apply, latest, toViewport, zoomWheel, wheelGesture]);
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
