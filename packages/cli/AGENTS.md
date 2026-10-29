@@ -309,7 +309,8 @@ server at mcp.superwall.com run the same commands; `@superwall/cli/tools`
   help. Metadata corrections do not change terminal prompts.
   A tool spanning endpoint variants is destructive if any branch is destructive,
   read-only only if all branches are reads, and otherwise a write. Account for
-  overwrites, policy reconciliation, live traffic, spend and irreversible sends;
+  overwrites, live traffic, spend and irreversible sends. Internal provisioning or
+  authorization maintenance can make a tool a write without making it destructive.
   POST selector lookups can still be reads. Test specific effect boundaries rather
   than snapshotting the catalog; explain behavior evidence and remaining
   qualifications in the pull request.

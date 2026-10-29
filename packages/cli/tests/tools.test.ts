@@ -226,9 +226,9 @@ test("creation can enable spend or rewrite ranks while appended audiences stay a
   assert.equal(tool("campaigns_audiences_duplicate").annotations.destructiveHint, true);
 });
 
-test("SQL read-only mode does not hide credential provisioning and access-policy reconciliation", () => {
+test("analytics setup makes query a nondestructive write", () => {
   for (const name of ["query", "get"]) {
     assert.equal(tool(name).annotations.readOnlyHint, false, name);
-    assert.equal(tool(name).annotations.destructiveHint, true, name);
+    assert.equal(tool(name).annotations.destructiveHint, false, name);
   }
 });

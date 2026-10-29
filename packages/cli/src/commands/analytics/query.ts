@@ -39,7 +39,7 @@ The backend forces SQL to readonly=1. Before executing SQL it may provision a Cl
   auth: "required",
   json: true,
   prompts: false,
-  mcp: "destructive",
+  mcp: "write",
   run(ctx, input) {
     return runQuery(ctx, input);
   },
