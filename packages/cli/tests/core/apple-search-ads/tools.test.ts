@@ -30,3 +30,21 @@ test("tool inputs carry the query flags each operation reads", async () => {
   assert.ok((await inputOf("apps", "search")).owned);
   assert.ok((await inputOf("geo", "search")).country);
 });
+
+test("a combined tool accounts for every reachable endpoint variant", async () => {
+  const { ASA_OPERATIONS } = await import("@/core/apple-search-ads/catalog");
+  const first = ASA_OPERATIONS.find((operation) => operation.group === "campaigns" && operation.action === "get");
+  assert.ok(first);
+  ASA_OPERATIONS.push({ ...first, path: "/other/{id}", effect: "destructive" });
+  try {
+    assert.equal((await listAsaTools()).find((tool) => tool.words.join(" ") === "campaigns get")?.effect, "destructive");
+  } finally {
+    ASA_OPERATIONS.pop();
+  }
+  ASA_OPERATIONS.push({ ...first, path: "/other/{id}", effect: "write" });
+  try {
+    assert.equal((await listAsaTools()).find((tool) => tool.words.join(" ") === "campaigns get")?.effect, "write");
+  } finally {
+    ASA_OPERATIONS.pop();
+  }
+});

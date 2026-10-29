@@ -97,14 +97,16 @@ function toolOf(group: string, action: string): CatalogTool {
       properties.adgroup_level = { type: "boolean", description: "Ad group negative keywords instead of the campaign's" };
     }
   }
-  const method = first?.method ?? "GET";
+  const effect = variants.some((variant) => variant.effect === "destructive")
+    ? "destructive"
+    : variants.every((variant) => variant.effect === "read") ? "read" : "write";
   return {
     words: [group, action],
     summary: variants.map((variant) => variant.summary).join("; "),
-    details: `Apple's schema for it: the asa_docs tool with "${group} ${action}".`,
+    details: [...new Set(variants.map((variant) => variant.details).filter(Boolean)), `Apple's schema for it: the asa_docs tool with "${group} ${action}".`].join("\n\n"),
     positionals,
     input: { properties, required: [...new Set(required)] },
-    effect: method === "DELETE" || action === "delete" ? "destructive" : method === "GET" || action === "find" || group === "reports" ? "read" : "write",
+    effect,
   };
 }
 

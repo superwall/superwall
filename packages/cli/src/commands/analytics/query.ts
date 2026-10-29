@@ -14,7 +14,9 @@ arrive twice. Count revenue the way the dashboard does:
   WHERE applicationId = {app:UInt64}
     AND (integration IN {revenue_integrations:Array(String)} OR source = 'sdk')
     AND NOT (coalesce(integration, '') = 'revenue_cat' AND store = 'STRIPE')
---param name=value adds any other parameter.`,
+--param name=value adds any other parameter.
+
+The backend forces SQL to readonly=1. Before executing SQL it may provision a ClickHouse user and role, persist credentials and reconcile access policies for the organization. SQL read-only mode does not prevent these setup changes.`,
   args: {
     sql: { describe: "SQL query (or pass it with --file / stdin)", mcp: "required" },
   },
@@ -37,7 +39,7 @@ arrive twice. Count revenue the way the dashboard does:
   auth: "required",
   json: true,
   prompts: false,
-  mcp: "read",
+  mcp: "destructive",
   run(ctx, input) {
     return runQuery(ctx, input);
   },

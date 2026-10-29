@@ -41,9 +41,10 @@ export const command = defineAscResource({
     {
       name: "update",
       summary: "Rename a group",
+      details: "PATCH replaces the existing group reference name.",
       args: [{ name: "id", describe: "The subscription group's id", required: true }],
       flags: { referenceName: { type: "string", value: "name", describe: "The group's new name in App Store Connect", required: true } },
-      effect: "write",
+      effect: "destructive",
       run: runSubscriptionGroupsUpdate,
     },
     {

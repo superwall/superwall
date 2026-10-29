@@ -46,12 +46,13 @@ const widgets = defineResource({
   name: "widgets",
   summary: "Widgets of an app",
   operations: [
-    { name: "list", summary: "Every widget", method: "GET", path: "/v2/widgets", list: true },
-    { name: "update", summary: "Change one", method: "PATCH", path: "/v2/projects/{project_id}/widgets/{id}" },
-    { name: "delete", summary: "Remove one", method: "DELETE", path: "/v2/widgets/{id}", destructive: true },
+    { name: "list", summary: "Every widget", effect: "read", method: "GET", path: "/v2/widgets", list: true },
+    { name: "update", summary: "Change one", effect: "write", method: "PATCH", path: "/v2/projects/{project_id}/widgets/{id}" },
+    { name: "delete", summary: "Remove one", effect: "destructive", method: "DELETE", path: "/v2/widgets/{id}", destructive: true },
     {
       name: "make",
       summary: "Make one by hand",
+      effect: "write",
       handler: "resource",
       usage: "--name <name>",
       flags: [["--name <name>", "What it is called"]],
@@ -62,7 +63,7 @@ const widgets = defineResource({
     {
       name: "parts",
       summary: "Parts of a widget",
-      operations: [{ name: "create", summary: "Add a part", method: "POST", path: "/v2/widgets/{id}/parts/{part_id}" }],
+      operations: [{ name: "create", summary: "Add a part", effect: "write", method: "POST", path: "/v2/widgets/{id}/parts/{part_id}" }],
     },
   ],
   related: [["widgets list --app <app>", "Every widget of an app"]],

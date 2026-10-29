@@ -1,0 +1,37 @@
+diff --git a/skills/superwall/SKILL.md b/skills/superwall/SKILL.md
+index 093436e..3421472 100644
+--- a/skills/superwall/SKILL.md
++++ b/skills/superwall/SKILL.md
+@@ -11,6 +11,8 @@ and current documentation; account commands need the `superwall` CLI. When the
+ Superwall MCP connector is available, use its tools directly for account data
+ and configuration. Use the CLI for capabilities the connector does not expose.
+ 
++For account tools, review replacement, live traffic, advertising spend and outbound delivery effects before acting. The [API reference](references/api.md#mcp-effects) explains destructive annotations and the analytics provisioning caveat.
++
+ ## MCP tools - the same commands, without a terminal
+ 
+ Every MCP tool is a CLI command: its name is the command's words joined by
+diff --git a/skills/superwall/references/api.md b/skills/superwall/references/api.md
+index eb147e4..8291084 100644
+--- a/skills/superwall/references/api.md
++++ b/skills/superwall/references/api.md
+@@ -310,6 +310,10 @@ superwall post /v2/products -d 'price[amount]:=4999' -d 'price[currency]=USD' --
+ Raw paths need explicit scope params (`project_id`, ...) - the nicely-named
+ resource commands above resolve scope for you; the verbs do not.
+ 
++## MCP effects
++
++Confirm destructive changes with the user before calling a tool. Overwriting settings, replacing traffic weights, prices or availability, enabling advertising spend, and irreversible sends such as feedback or event retries have destructive effects even when they can later be changed again. Generic API tools cover every reachable endpoint; use the actual operation's effects, not its HTTP method, to assess a request. Selector POST lookups can be read-only; report-job creation is a write.
++
+ ## Data query - ClickHouse SQL
+ 
+ `query` runs read-only SQL against the logged-in organization's ClickHouse
+@@ -318,6 +322,8 @@ agent workflows. Prefer `--json` when another tool or agent will consume the
+ result; it returns ClickHouse's native JSON envelope (`meta`, `data`, `rows`, and
+ statistics).
+ 
++The backend may provision a ClickHouse user and role, persist credentials and reconcile access policies before executing the SQL. These are state changes despite read-only SQL. The MCP `query` tool and generic `get` (which can reach the same analytics endpoint) disclose these setup effects; do not promise that executing them leaves the environment unchanged.
++
+ ```bash
+ superwall query "SELECT applicationId, name FROM sw.applications_rep FINAL LIMIT 20" --json
+ superwall query "SELECT count() AS active FROM sw.subscription_status_rep FINAL WHERE applicationId = 123 AND isSandbox = 0" --json

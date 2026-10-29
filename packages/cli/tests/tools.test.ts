@@ -105,7 +105,7 @@ test("hints follow what the command does", () => {
   assert.equal(tool("products_list").annotations.readOnlyHint, true);
   assert.equal(tool("products_delete").annotations.destructiveHint, true);
   assert.equal(tool("post").annotations.readOnlyHint, false);
-  assert.equal(tool("post").annotations.destructiveHint, false);
+  assert.equal(tool("post").annotations.destructiveHint, true);
   assert.equal(tool("delete").annotations.destructiveHint, true);
   for (const name of ["products_update", "campaigns_placements_create", "campaigns_audiences_update", "campaigns_variants_update", "asc_builds_attach", "paywalls_publish"]) {
     assert.equal(tool(name).annotations.destructiveHint, true, name);

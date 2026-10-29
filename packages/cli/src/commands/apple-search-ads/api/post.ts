@@ -5,6 +5,7 @@ import { runAsaRequest } from "@/core/apple-search-ads/request";
 export const command = defineCommand({
   name: "asa post",
   summary: "Any POST request to the Apple Search Ads API",
+  details: "Executes an arbitrary Apple Ads POST. It can bulk-delete resources, activate advertising or create financial budget orders; repeating a call may repeat its effects.",
   args: {
     path: { describe: "Apple Search Ads API path, e.g. /campaigns (the /api/v5 prefix is added)", required: true },
   },
@@ -20,7 +21,7 @@ export const command = defineCommand({
   auth: "required",
   json: true,
   prompts: false,
-  mcp: "write",
+  mcp: "destructive",
   async run(ctx, { args, flags }) {
     const res = await runAsaRequest(ctx, ctx.api, { verb: "post", path: args.path, data: flags.d, orgId: flags.orgId, body: flags.body });
     ctx.output.data(res ?? { ok: true });

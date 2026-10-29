@@ -15,6 +15,7 @@ release on before the version is released; pause, resume and complete steer it a
     {
       name: "submit",
       summary: "Submit a version for App Review, with in-app products alongside",
+      details: "Adds the version and optional products to a review submission and sets submitted=true, changing the existing review workflow.",
       args: [VERSION_ARG],
       flags: {
         ...VERSION_FLAGS,
@@ -22,7 +23,7 @@ release on before the version is released; pause, resume and complete steer it a
         iap: { ...TARGET_FLAGS.iap, type: "list", describe: "An in-app purchase to submit with it (repeatable)" },
         group: { ...TARGET_FLAGS.group, type: "list", describe: "A subscription group to submit with it (repeatable)" },
       },
-      effect: "write",
+      effect: "destructive",
       run: runReleaseSubmit,
     },
     {
@@ -36,9 +37,10 @@ release on before the version is released; pause, resume and complete steer it a
     {
       name: "phased",
       summary: "Start, pause, resume or complete the version's phased release",
+      details: "Starts, pauses, resumes or completes phased distribution. Completing releases to all users; other actions replace rollout state, subject to Apple’s transition guards.",
       args: [{ name: "action", describe: "What to do", required: true, choices: PHASED_ACTIONS }, VERSION_ARG],
       flags: VERSION_FLAGS,
-      effect: "write",
+      effect: "destructive",
       run: runReleasePhased,
     },
     {

@@ -1,0 +1,32 @@
+diff --git a/content/docs/agents/mcp.mdx b/content/docs/agents/mcp.mdx
+index 202cb04..edd1622 100644
+--- a/content/docs/agents/mcp.mdx
++++ b/content/docs/agents/mcp.mdx
+@@ -65,7 +65,7 @@ Every tool is a command of the [Superwall CLI](/agents/cli). The MCP serves the
+ 
+ ## What you can do
+ 
+-There are 208 tools:
++The tools cover these areas:
+ 
+ | Area | Tools |
+ | --- | --- |
+@@ -98,9 +98,15 @@ Every tool says what kind of change it makes, so your client knows when to ask y
+ 
+ | Kind | Examples | Hint |
+ | --- | --- | --- |
+-| Read | `apps_get`, `query`, `campaigns_audiences_readout` | Read-only |
+-| Write | `products_create`, `campaigns_update`, `asc_subscriptions_create` | Neither read-only nor destructive |
+-| Destructive | `products_delete`, `campaigns_archive`, `webhooks_rotate_secret`, `asc_release_release` | Destructive |
++| Read | `apps_get`, `campaigns_audiences_readout`, `asa_geo_get` | Read-only |
++| Write | `products_create`, `entitlements_grants_create`, `asc_subscriptions_create` | Neither read-only nor destructive |
++| Destructive | `products_delete`, `campaigns_update`, `events_retry`, `asc_prices_set`, `asc_release_phased` | Destructive |
++
++Destructive includes overwriting existing settings, reallocating live traffic, replacing prices or availability, enabling advertising spend, and irreversible sends such as feedback or webhook retries. A reversible change can still overwrite existing state. Generic API tools advertise the effects of every operation they can reach; POST alone does not mean an operation is additive, and a POST lookup can be read-only.
++
++`query` forces SQL to read-only mode, but its backend can provision analytics credentials and reconcile access policies before running SQL. Generic `get` can reach the same analytics endpoint. Those setup effects are separate from the SQL's read-only guarantee.
++
++The hints your client sees depend on the CLI version deployed by the MCP server. Keep destructive approvals enabled and review the tool's description and inputs.
+ 
+ The CLI asks before deleting, archiving, or anything else that can't be undone. A tool doesn't ask: your MCP client's approval prompt is the confirmation, so keep approvals on for destructive tools.
+ 

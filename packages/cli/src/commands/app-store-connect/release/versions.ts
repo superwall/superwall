@@ -56,6 +56,7 @@ off iOS, --platform. --earliest-release-date (2026-11-01T08:00:00-07:00) goes wi
     {
       name: "update",
       summary: "Change a version",
+      details: "PATCH overwrites version fields, release type and earliest release date; it can change automatic-release behavior.",
       args: [VERSION_ARG],
       flags: {
         ...VERSION_FLAGS,
@@ -64,7 +65,7 @@ off iOS, --platform. --earliest-release-date (2026-11-01T08:00:00-07:00) goes wi
         earliestReleaseDate: { type: "string", value: "date", describe: "With SCHEDULED: the earliest release, ISO 8601" },
         copyright: { type: "string", value: "text", describe: "The copyright line" },
       },
-      effect: "write",
+      effect: "destructive",
       run: runVersionsUpdate,
     },
     {

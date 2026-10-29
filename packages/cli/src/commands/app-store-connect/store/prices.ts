@@ -31,6 +31,7 @@ an in-app purchase replaces its price schedule; Apple equalizes the other territ
     {
       name: "set",
       summary: "Price it in one territory and equalize every other",
+      details: "Replaces an IAP price schedule or updates subscription prices across available territories. Existing-subscriber price preservation is optional.",
       flags: {
         subscription: TARGET_FLAGS.subscription,
         iap: TARGET_FLAGS.iap,
@@ -39,7 +40,7 @@ an in-app purchase replaces its price schedule; Apple equalizes the other territ
         preserveCurrentPrice: { type: "boolean", describe: "Subscriptions: existing subscribers keep their price" },
         startDate: { type: "string", value: "yyyy-mm-dd", describe: "Subscriptions: when the price takes effect (default now)" },
       },
-      effect: "write",
+      effect: "destructive",
       run: runPricesSet,
     },
   ],

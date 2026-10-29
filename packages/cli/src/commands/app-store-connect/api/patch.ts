@@ -7,7 +7,9 @@ export const command = defineCommand({
   summary: "Any App Store Connect PATCH request, its body checked against Apple's schema",
   details: `Each -d names an attribute or a relationship of the body; its type comes from Apple's
 schema and its id from the path. A body the schema would refuse is stopped before it is
-sent (--force sends it as-is). superwall asc docs <path> patch lists the fields.`,
+sent (--force sends it as-is). superwall asc docs <path> patch lists the fields.
+
+Executes an arbitrary App Store Connect PATCH through the signed proxy, with schema validation unless force is set. It can overwrite attributes, relationships and distribution settings.`,
   args: {
     path: { describe: "The App Store Connect path, e.g. /v1/apps", required: true },
   },
@@ -28,7 +30,7 @@ sent (--force sends it as-is). superwall asc docs <path> patch lists the fields.
   auth: "required",
   json: true,
   prompts: true,
-  mcp: "write",
+  mcp: "destructive",
   async run(ctx, { args, flags }) {
     const response = await sendAscRequest(ctx, "patch", args.path, { data: flags.d, team: flags.team, force: flags.force });
     ctx.output.data(response);

@@ -6,7 +6,9 @@ export const command = defineCommand({
   name: "feedback",
   summary: "Report a bug or send feedback to the Superwall team",
   details:
-    "Goes straight to the Superwall team. Pass the app it happened in so the team can find the account. Report anything you confirm doesn't work, as a reproducible report with every ID and version in context. Without a shell, paste the relevant part of a log into the message: a tool cannot attach files.",
+    `Goes straight to the Superwall team. Pass the app it happened in so the team can find the account. Report anything you confirm doesn't work, as a reproducible report with every ID and version in context. Without a shell, paste the relevant part of a log into the message: a tool cannot attach files.
+
+Sends the supplied message and context to the Superwall team as a persisted event. Sending cannot be undone; repeating the call can send duplicate feedback.`,
   args: {
     message: { describe: "What happened: what you ran, what you expected, what you got (asked when left out)" },
   },
@@ -27,6 +29,6 @@ export const command = defineCommand({
   auth: "optional",
   json: true,
   prompts: true,
-  mcp: "write",
+  mcp: "destructive",
   run: (ctx, input) => runFeedback(ctx, input),
 });

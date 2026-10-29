@@ -6,10 +6,10 @@ const gadgets = defineResource({
   name: "gadgets",
   summary: "Gadgets",
   operations: [
-    { name: "list", summary: "All", handler: "resource" },
-    { name: "get", summary: "One", method: "GET", path: "/v2/gadgets/{id}" },
+    { name: "list", summary: "All", effect: "read", handler: "resource" },
+    { name: "get", summary: "One", effect: "read", method: "GET", path: "/v2/gadgets/{id}" },
   ],
-  nested: [{ name: "parts", summary: "Parts", operations: [{ name: "create", summary: "Add", method: "POST", path: "/v2/gadgets/{id}/parts" }] }],
+  nested: [{ name: "parts", summary: "Parts", operations: [{ name: "create", summary: "Add", effect: "write", method: "POST", path: "/v2/gadgets/{id}/parts" }] }],
   examples: [["gadgets get <gadget>", "One"]],
 });
 

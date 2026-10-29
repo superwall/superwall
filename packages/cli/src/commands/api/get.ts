@@ -5,6 +5,7 @@ import { runApiRequest } from "@/core/api/request";
 export const command = defineCommand({
   name: "get",
   summary: "Make GET requests to the Superwall API",
+  details: "Executes an arbitrary Superwall GET endpoint. Most retrieve account data, but the analytics query endpoint can provision credentials and reconcile existing access policies before running read-only SQL.",
   args: {
     path: { describe: "API path, e.g. /v2/products", required: true },
   },
@@ -18,7 +19,7 @@ export const command = defineCommand({
   auth: "required",
   json: true,
   prompts: false,
-  mcp: "read",
+  mcp: "destructive",
   run(ctx, { args, flags }) {
     return runApiRequest(ctx, ctx.api, { verb: "get", path: args.path, data: flags.d });
   },

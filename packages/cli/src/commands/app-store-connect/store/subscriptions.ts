@@ -59,6 +59,7 @@ state and what is still missing.`,
     {
       name: "update",
       summary: "Change a subscription",
+      details: "PATCH replaces subscription attributes, including period, group level and family-sharing configuration when accepted by Apple.",
       args: [{ name: "id", describe: "The subscription's id", required: true }],
       flags: {
         name: { type: "string", value: "name", describe: "Its name in App Store Connect" },
@@ -67,7 +68,7 @@ state and what is still missing.`,
         groupLevel: { type: "number", value: "n", describe: "Its rank in the group: 1 is the highest" },
         reviewNote: { type: "string", value: "text", describe: "A note for App Review" },
       },
-      effect: "write",
+      effect: "destructive",
       run: runSubscriptionsUpdate,
     },
     {
