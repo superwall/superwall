@@ -51,6 +51,7 @@ import { command as dev } from "./paywalls/dev";
 import { command as promote } from "./paywalls/promote";
 import { command as publish } from "./paywalls/publish";
 import { command as push } from "./paywalls/push";
+import { command as annotations } from "./main/annotations";
 import { command as apps } from "./main/apps";
 import { command as bootstrap } from "./main/bootstrap";
 import { command as campaigns } from "./main/campaigns";
@@ -112,7 +113,7 @@ export const GROUPS: readonly Group[] = [
     id: "main",
     title: "Commands",
     notes: ["superwall <command> --help lists its operations; <operation> --help, its flags."],
-    commands: [bootstrap, apps, products, entitlements, campaigns, paywalls, users, webhooks, events],
+    commands: [bootstrap, apps, products, entitlements, campaigns, paywalls, users, webhooks, events, annotations],
   },
   {
     id: "analytics",

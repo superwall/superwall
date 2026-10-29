@@ -1280,5 +1280,86 @@
       },
       "ok": false
     }
+  ],
+  "annotations_list": [
+    {
+      "input": {
+        "app": "5861"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "annotations_get": [
+    {
+      "input": {
+        "app": "5861",
+        "chart_annotation_id": "999999999"
+      },
+      "ok": false
+    }
+  ],
+  "annotations_create": [
+    {
+      "input": {
+        "app": "5861",
+        "label": "parity",
+        "start_at": "2026-10-28T14:00:00Z"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "label": "parity",
+        "start_at": "2026-10-28T14:00:00Z",
+        "end_at": "2026-10-29T14:00:00Z",
+        "description": "parity"
+      },
+      "dryRun": true,
+      "ok": true
+    }
+  ],
+  "annotations_update": [
+    {
+      "input": {
+        "app": "5861",
+        "chart_annotation_id": "999999999",
+        "end_at": null
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "chart_annotation_id": "999999999",
+        "label": "parity"
+      },
+      "ok": false
+    }
+  ],
+  "annotations_delete": [
+    {
+      "input": {
+        "app": "5861",
+        "chart_annotation_id": "999999999"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "5861",
+        "chart_annotation_id": "999999999"
+      },
+      "ok": false
+    }
   ]
 }

@@ -101,7 +101,8 @@ skill.
   confirm (`--yes` outside a TTY); every operation takes `--dry-run` and
   `--json`. The parser never converts numbers, so a request field is sent as
   typed (`1e3`, `1.10`, a long id); only flags declared `type: "number"`
-  become numbers. `--limit` caps projects on `apps list`, rows
+  become numbers. A field the spec marks nullable takes the literal
+  `null` to clear it (`annotations update --end-at null`). `--limit` caps projects on `apps list`, rows
   everywhere else.
 - **One way to do each thing.** A field of a resource is changed with that
   resource's `update`, never a command of its own (`apps update --bundle-id`,

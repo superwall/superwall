@@ -24,7 +24,13 @@ import { parseRevenueProvider, updateRevenueProvider } from "./revenue-provider"
 import { renderRows, renderValue, rowsOf } from "./views";
 
 type Context = CommandContext<"required">;
-type Handler = (ctx: Context, resource: Resource, op: Operation, args: string[], flags: ResourceFlags) => Promise<void>;
+type Handler = (
+  ctx: Context,
+  resource: Resource,
+  op: Operation,
+  args: string[],
+  flags: ResourceFlags,
+) => Promise<void>;
 
 function withApp(ctx: Context, app: string | undefined): Context {
   return { ...ctx, target: { ...ctx.target, app } };
@@ -39,7 +45,8 @@ const HANDLERS: Record<string, Handler> = {
     const others = { ...flags, fields };
     const bundleId = fields.bundleId;
     const checksBundleId = typeof bundleId === "string" && bundleId.trim() !== "";
-    if (!checksBundleId && provider === undefined) return callOperation(named, resource, resource, op, rest, others);
+    if (!checksBundleId && provider === undefined)
+      return callOperation(named, resource, resource, op, rest, others);
 
     const scope = await pickScope(named, named.api, true);
     const applicationId = scope.applicationId;
@@ -52,9 +59,16 @@ const HANDLERS: Record<string, Handler> = {
     if (provider === undefined) return callOperation(bound, resource, resource, op, rest, others);
 
     const app = { id: applicationId, name: scope.appName ?? applicationId };
-    const change = await updateRevenueProvider(bound, app, parseRevenueProvider(provider), flags.yes);
+    const change = await updateRevenueProvider(
+      bound,
+      app,
+      parseRevenueProvider(provider),
+      flags.yes,
+    );
     if (Object.keys(fields).length > 0) {
-      return callOperation(bound, resource, resource, op, rest, others, { revenue_provider: change });
+      return callOperation(bound, resource, resource, op, rest, others, {
+        revenue_provider: change,
+      });
     }
     if (bound.json) bound.output.data({ application_id: app.id, revenue_provider: change });
   },
@@ -68,7 +82,8 @@ const HANDLERS: Record<string, Handler> = {
 export function assertOperations(owner: Resource): void {
   for (const resource of [owner, ...(owner.nested ?? [])]) {
     const names = resource.operations.map((op) => op.name);
-    if (new Set(names).size !== names.length) throw new Error(`${resource.name} repeats an operation name.`);
+    if (new Set(names).size !== names.length)
+      throw new Error(`${resource.name} repeats an operation name.`);
     for (const op of resource.operations) {
       if (op.handler ? !HANDLERS[op.handler] : !op.method || !op.path) {
         throw new Error(`${resource.name} ${op.name} is neither an API call nor a known handler.`);
@@ -88,9 +103,16 @@ const CREATE_FLAGS: Record<string, string[]> = {
   campaigns: ["description", "placement"],
 };
 
-function createValues(resource: Resource, op: Operation, args: string[], flags: ResourceFlags): unknown[] {
+function createValues(
+  resource: Resource,
+  op: Operation,
+  args: string[],
+  flags: ResourceFlags,
+): unknown[] {
   if (args.length > 0) {
-    throw new Error(`Usage: superwall ${resource.name} create ${op.usage}\nRun \`superwall ${resource.name} create --help\` for its flags.`);
+    throw new Error(
+      `Usage: superwall ${resource.name} create ${op.usage}\nRun \`superwall ${resource.name} create --help\` for its flags.`,
+    );
   }
   return (CREATE_FLAGS[resource.name] ?? []).map((flag) => flags.fields[flag]);
 }
@@ -123,7 +145,10 @@ export async function runOperation(
 ): Promise<void> {
   if (!op.handler) return callOperation(ctx, owner, resource, op, args, flags);
   const handler = HANDLERS[op.handler];
-  const name = owner === resource ? `${resource.name} ${op.name}` : `${owner.name} ${resource.name} ${op.name}`;
+  const name =
+    owner === resource
+      ? `${resource.name} ${op.name}`
+      : `${owner.name} ${resource.name} ${op.name}`;
   if (!handler) throw new Error(`${name} has no handler "${op.handler}".`);
   return handler(ctx, resource, op, args, flags);
 }
@@ -145,18 +170,25 @@ async function callOperation(
   const spec = await apiCall(context, "Loading the API reference", () => findSpec(op));
 
   const args = [...ids];
-  const ctx = owner.appArg && args[0] && !context.target.app ? withApp(context, args.shift()) : context;
+  const ctx =
+    owner.appArg && args[0] && !context.target.app ? withApp(context, args.shift()) : context;
   const positional = positionalParams(op);
   if (args.length < positional.length) {
-    throw new Error(`Usage: ${command} ${usageOf(owner, op)}\nRun \`${command} --help\` for its flags.`);
+    throw new Error(
+      `Usage: ${command} ${usageOf(owner, op)}\nRun \`${command} --help\` for its flags.`,
+    );
   }
   if (args.length > positional.length) {
-    throw new Error(`${command} takes ${positional.length || "no"} argument${positional.length === 1 ? "" : "s"}; got "${args.slice(positional.length).join(" ")}".`);
+    throw new Error(
+      `${command} takes ${positional.length || "no"} argument${positional.length === 1 ? "" : "s"}; got "${args.slice(positional.length).join(" ")}".`,
+    );
   }
 
   const pathValues = new Map<string, string>();
   const query: Record<string, unknown> = {};
-  const queryNames = new Set(spec?.params.filter((param) => param.in === "query").map((param) => param.name));
+  const queryNames = new Set(
+    spec?.params.filter((param) => param.in === "query").map((param) => param.name),
+  );
   for (const [index, param] of positional.entries()) {
     const value = args[index];
     if (value === undefined) continue;
@@ -174,7 +206,10 @@ async function callOperation(
     if (queryParam) query[field] = coerce(raw, queryParam.type);
     else if (bodyField) body[field] = coerce(raw, bodyField.type);
     else if (!spec) (sendsBody ? body : query)[field] = raw;
-    else throw new Error(`${command} has no ${toFlag(field)}. \`${command} --help\` lists what it takes.`);
+    else
+      throw new Error(
+        `${command} has no ${toFlag(field)}. \`${command} --help\` lists what it takes.`,
+      );
   }
   Object.assign(sendsBody ? body : query, parseParams(flags.data));
   await fillScope(ctx, op, spec, pathValues, query, body);
@@ -182,7 +217,9 @@ async function callOperation(
     return param.in === "query" && param.required && query[param.name] === undefined;
   });
   if (missing.length > 0) {
-    const needs = missing.map((param) => `${toFlag(param.name)} <${param.type.replace(/"/g, "").replace(/ \| /g, "|")}>`);
+    const needs = missing.map(
+      (param) => `${toFlag(param.name)} <${param.type.replace(/"/g, "").replace(/ \| /g, "|")}>`,
+    );
     throw new Error(`${command} needs ${needs.join(" and ")}.`);
   }
 
@@ -194,7 +231,11 @@ async function callOperation(
   const url = withQuery(path, query);
 
   if (ctx.dryRun) {
-    return renderValue(ctx, { method, path: url, ...(sendsBody ? { body } : {}) }, "Dry run: nothing was sent");
+    return renderValue(
+      ctx,
+      { method, path: url, ...(sendsBody ? { body } : {}) },
+      "Dry run: nothing was sent",
+    );
   }
   if (op.destructive) await confirm(ctx, flags.yes, `${op.summary}: ${method} ${url}`);
 
@@ -215,7 +256,8 @@ async function callOperation(
     }
   });
 
-  if (op.list) return renderRows(ctx, rowsOf(response), singular(resource.name).replace(/-/g, " "), flags);
+  if (op.list)
+    return renderRows(ctx, rowsOf(response), singular(resource.name).replace(/-/g, " "), flags);
   const done = method === "GET" ? undefined : `${op.summary} — done`;
   if (Object.keys(merged).length === 0) return renderValue(ctx, response, done);
   renderValue(ctx, { ...(response as Record<string, unknown>), ...merged }, done);
@@ -231,13 +273,18 @@ async function fillScope(
 ): Promise<void> {
   const wanted = new Map<string, { kind: ScopeKind; assign: (value: string) => void }>();
   for (const [param, kind] of scopeParams(op)) {
-    if (!pathValues.has(param)) wanted.set(`path:${param}`, { kind, assign: (v) => pathValues.set(param, v) });
+    if (!pathValues.has(param))
+      wanted.set(`path:${param}`, { kind, assign: (v) => pathValues.set(param, v) });
   }
   for (const field of scopeFields(op, spec)) {
     const target = field.location === "query" ? query : body;
     if (target[field.name] !== undefined) continue;
-    const typed = (value: string) => (field.location === "query" ? value : coerce(value, field.type));
-    wanted.set(`${field.location}:${field.name}`, { kind: field.kind, assign: (value) => (target[field.name] = typed(value)) });
+    const typed = (value: string) =>
+      field.location === "query" ? value : coerce(value, field.type);
+    wanted.set(`${field.location}:${field.name}`, {
+      kind: field.kind,
+      assign: (value) => (target[field.name] = typed(value)),
+    });
   }
   if (wanted.size === 0) return;
 
@@ -249,7 +296,8 @@ async function fillScope(
     values.app = scope.applicationId;
   }
   if (kinds.has("organization")) {
-    values.organization = (await boundOrganization(ctx, ctx.api)) ?? (await pickOrganization(ctx, ctx.api));
+    values.organization =
+      (await boundOrganization(ctx, ctx.api)) ?? (await pickOrganization(ctx, ctx.api));
   }
   for (const { kind, assign } of wanted.values()) {
     const value = values[kind];
@@ -264,7 +312,9 @@ function coerce(raw: unknown, type: string): unknown {
     const item = type.slice(0, -2);
     const parsed = item === "object" || item === "any" ? coerce(raw, "any") : raw;
     if (parsed !== raw) return Array.isArray(parsed) ? parsed : [parsed];
-    return String(raw).split(",").map((part) => coerce(part.trim(), item));
+    return String(raw)
+      .split(",")
+      .map((part) => coerce(part.trim(), item));
   }
   const text = String(raw);
   if (/\bboolean\b/.test(type) && /^(true|false)$/.test(text)) return text === "true";
@@ -278,7 +328,8 @@ function coerce(raw: unknown, type: string): unknown {
       return text;
     }
   }
-  if (type === "null") return null;
+  // A nullable field takes the literal null to clear it (`--end-at null`).
+  if (text === "null" && type.split("|").some((part) => part.trim() === "null")) return null;
   return typeof raw === "number" && !/\b(number|integer)\b/.test(type) ? text : raw;
 }
 
@@ -293,7 +344,12 @@ function withQuery(path: string, params: Record<string, unknown>): string {
   return text ? `${path}${path.includes("?") ? "&" : "?"}${text}` : path;
 }
 
-async function confirm(ctx: Context, yes: boolean, what: string, question = `${what}?`): Promise<void> {
+async function confirm(
+  ctx: Context,
+  yes: boolean,
+  what: string,
+  question = `${what}?`,
+): Promise<void> {
   if (yes) return;
   if (!ctx.interactive) throw new Error(`${what}\nNothing was changed. Pass --yes to go ahead.`);
   const answer = await ctx.ui.select({
