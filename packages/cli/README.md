@@ -238,12 +238,13 @@ superwall campaigns placements create <campaign-id> --event-name onboarding_comp
 superwall campaigns audiences readout <campaign-id> <audience-id>
 superwall users subscriptions <app-user-id> --app <app>
 superwall webhooks list --app <app>
+superwall annotations create --app <app> --label "v4.2.0 released" --start-at 2026-10-28T14:00:00Z
 superwall bootstrap                       # the whole account tree at a glance
 ```
 
 Resources: `apps`, `products`, `entitlements` (+ `grants`),
 `campaigns` (+ `placements`, `audiences`, `variants`), `paywalls`, `users`,
-`webhooks`, `events`. Each has `list`, `get`, `create`, `update`, `delete` where
+`webhooks`, `events`, `annotations`. Each has `list`, `get`, `create`, `update`, `delete` where
 the API does, plus its own actions (`archive`, `publish`, `duplicate`, ...).
 
 - Every command, and every subcommand of `asc`, `asa`, `setup` and `api`,
@@ -620,7 +621,7 @@ packages/cli/
 │   ├── commands/         registry.ts + one directory per section of `superwall --help`
 │   │   ├── workflows/          integrate, review, migrate
 │   │   ├── paywalls/           create, dev, build, push, promote, publish
-│   │   ├── main/               bootstrap, apps, products, entitlements, campaigns, paywalls, users, webhooks, events
+│   │   ├── main/               bootstrap, apps, products, entitlements, campaigns, paywalls, users, webhooks, events, annotations
 │   │   ├── analytics/          query
 │   │   ├── api/                docs, get, post, patch, delete
 │   │   ├── app-store-connect/  setup/, keys/, notification-url/, store/ (apps, products, …), api/ (get, post, …, docs)
