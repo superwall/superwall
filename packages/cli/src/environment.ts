@@ -60,6 +60,26 @@ export function appleCredentialsFromEnv(): { appleId?: string; password?: string
   };
 }
 
+const AGENT_ENV: [string, string][] = [
+  ["CLAUDECODE", "claude-code"],
+  ["CODEX_SANDBOX", "codex"],
+  ["CURSOR_AGENT", "cursor"],
+  ["GEMINI_CLI", "gemini-cli"],
+];
+
+// The MCP and hosted agents run the API client in a Worker, where Node's process may be absent.
+export function detectAgent(
+  env: NodeJS.ProcessEnv = typeof process === "undefined" ? {} : process.env,
+): string | undefined {
+  return AGENT_ENV.find(([key]) => env[key])?.[1];
+}
+
+// The API's audit log records it, so requests split by CLI version and by the agent driving the CLI.
+export const USER_AGENT = (): string => {
+  const agent = detectAgent();
+  return agent ? `superwall-cli/${VERSION} (${agent})` : `superwall-cli/${VERSION}`;
+};
+
 export function resolveEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value === "" ? undefined : value;

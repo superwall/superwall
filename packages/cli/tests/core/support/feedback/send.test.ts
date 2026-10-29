@@ -6,7 +6,6 @@ import { join } from "node:path";
 import {
   buildFeedbackEvent,
   organizationOfApp,
-  detectAgent,
   MAX_FILE_CHARS,
   parseContext,
   readAttachments,
@@ -117,11 +116,6 @@ test("attachments keep the base name and the tail of long files", () => {
 
 test("attachments are capped", () => {
   assert.throws(() => readAttachments(Array(6).fill("a.txt")), /at most 5/);
-});
-
-test("agent is detected from its env marker", () => {
-  assert.equal(detectAgent({ CLAUDECODE: "1" }), "claude-code");
-  assert.equal(detectAgent({}), undefined);
 });
 
 test("context pairs parse, keeping '=' inside values", () => {

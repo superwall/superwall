@@ -4,6 +4,7 @@ import { ApiError, createSuperwallApi, superwallApi, withQuery, ApiUnreachableEr
 import { NotLoggedInError } from "@/core/account/errors";
 import { clearHomes, useHome } from "../../helpers/home";
 import type { Session } from "@/core/account/storage";
+import { USER_AGENT } from "@/environment";
 
 const SESSION: Session = {
   apiKey: "sk_test123",
@@ -193,6 +194,23 @@ test("postText() sends a raw text body and returns the raw response", async () =
   assert.equal(
     (calls[0]!.init.headers as Record<string, string>)["content-type"],
     "text/plain; charset=utf-8",
+  );
+});
+
+test("every request carries the CLI's User-Agent, or the one the client was made with", async () => {
+  const calls = mockFetch(() => ({ body: { data: [], has_more: false } }));
+  await createSuperwallApi(SESSION).get("/v2/thing");
+  const custom = createSuperwallApi(SESSION, { userAgent: "Superwall-MCP/1.0 (claude-ai/0.1.0)" });
+  await custom.list("/v2/projects");
+  await custom.forOrg("7").post("/v2/thing", {}, { headers: { "user-agent": "per-request/1" } });
+  const agents = calls.map((call) => (call.init.headers as Record<string, string>)["user-agent"]);
+  assert.deepEqual(agents, [USER_AGENT(), "Superwall-MCP/1.0 (claude-ai/0.1.0)", "per-request/1"]);
+
+  const text = mockTextFetch(() => ({ body: "1" }));
+  await custom.postText("/v2/organizations/1/query", "SELECT 1");
+  assert.equal(
+    (text[0]!.init.headers as Record<string, string>)["user-agent"],
+    "Superwall-MCP/1.0 (claude-ai/0.1.0)",
   );
 });
 

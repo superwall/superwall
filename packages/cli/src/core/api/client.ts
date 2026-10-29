@@ -1,6 +1,7 @@
 import { NotLoggedInError } from "@/core/account/errors";
 import { readSession, resolveApiHost, type Session } from "@/core/account/storage";
 import { resolveAuthToken } from "@/core/account/token";
+import { USER_AGENT } from "@/environment";
 
 interface ApiErrorDetail {
   type?: string;
@@ -107,7 +108,10 @@ function retryDelay(res: Response, retry: number): number {
   return 400 * 2 ** retry;
 }
 
-export const createSuperwallApi = (initial: Session): SuperwallApi => {
+export const createSuperwallApi = (
+  initial: Session,
+  { userAgent = USER_AGENT() }: { userAgent?: string } = {},
+): SuperwallApi => {
   let session = initial;
 
   const host = (): string => resolveApiHost(session);
@@ -137,6 +141,7 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
       return send(`${host()}${path}`, {
         method,
         headers: {
+          "user-agent": userAgent,
           ...options.headers,
           authorization: `Bearer ${token}`,
           accept: "application/json",
@@ -179,6 +184,7 @@ export const createSuperwallApi = (initial: Session): SuperwallApi => {
         method: "POST",
         headers: {
           authorization: `Bearer ${token}`,
+          "user-agent": userAgent,
           accept: "text/plain",
           "content-type": "text/plain; charset=utf-8",
         },

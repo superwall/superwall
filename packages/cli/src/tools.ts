@@ -65,8 +65,8 @@ const mcpHost: Host = {
 
 let cacheStore: Store | undefined;
 
-export function apiFor({ token, host }: { token: string; host: string }): SuperwallApi {
-  return createSuperwallApi({ apiKey: token, host, createdAt: new Date().toISOString() });
+export function apiFor({ token, host, userAgent }: { token: string; host: string; userAgent?: string }): SuperwallApi {
+  return createSuperwallApi({ apiKey: token, host, createdAt: new Date().toISOString() }, { userAgent });
 }
 
 export function useToolCache(store: Store): void {
