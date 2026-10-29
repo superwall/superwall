@@ -14,7 +14,8 @@ const WHEEL_ZOOM_STEP_LIMIT = { min: 0.6, max: 1.6 };
 const DRAG_THRESHOLD = 4;
 const GRAB_STYLE_ATTRIBUTE = "data-studio-grab";
 const WHEEL_GESTURE_GAP_MS = 120;
-const WHEEL_GESTURE_DECIDE_PX = 4;
+const WHEEL_GESTURE_DECIDE_PX = 8;
+const WHEEL_PAGE_AXIS_BIAS = 2;
 const WHEEL_LINE_PX = 16;
 const WHEEL_PAGE_PX = 800;
 
@@ -103,8 +104,11 @@ const wheelPixels = (event: WheelEvent): Point => {
 };
 
 const ownerOverPage = (sum: Point, claimed: Axes): Axes => {
-  const axis = Math.abs(sum.x) > Math.abs(sum.y) ? "x" : "y";
-  return claimed[axis] ? PANS_NONE : { x: !claimed.x, y: !claimed.y };
+  const x = Math.abs(sum.x);
+  const y = Math.abs(sum.y);
+  const pageTakes =
+    (claimed.y && y * WHEEL_PAGE_AXIS_BIAS >= x) || (claimed.x && x * WHEEL_PAGE_AXIS_BIAS >= y);
+  return pageTakes ? PANS_NONE : { x: !claimed.x, y: !claimed.y };
 };
 
 const panDelta = (event: WheelEvent, pans: Axes): Point => ({

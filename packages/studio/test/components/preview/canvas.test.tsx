@@ -91,6 +91,50 @@ const mountWithFrame = () => {
   return { view, layer, frame, target };
 };
 
+const TRACKPAD_SWIPE_DOWN: ReadonlyArray<[number, number]> = [
+  [1, 0],
+  [2, 1],
+  [1, 4],
+  [2, 9],
+  [1, 14],
+  [3, 18],
+  [2, 22],
+  [1, 19],
+  [2, 15],
+  [1, 11],
+  [2, 7],
+  [2, 4],
+  [1, 2],
+  [2, 1],
+  [1, 1],
+  [1, 0],
+  [0, 0],
+  [1, 0],
+];
+
+const appendPage = (frame: HTMLIFrameElement, scrollHeight: number) => {
+  const body = frame.contentDocument?.body;
+  if (!body) throw new Error("iframe without a body");
+  const page = body.ownerDocument.createElement("div");
+  page.style.overflowY = "auto";
+  Object.defineProperty(page, "scrollHeight", { value: scrollHeight });
+  Object.defineProperty(page, "clientHeight", { value: 800 });
+  body.appendChild(page);
+  return page;
+};
+
+const wheelAt = (node: EventTarget, init: WheelEventInit) => {
+  clock += 16;
+  const event = new WheelEvent("wheel", { cancelable: true, bubbles: true, ...init });
+  act(() => {
+    node.dispatchEvent(event);
+  });
+  return event.defaultPrevented;
+};
+
+const swipe = (node: EventTarget, trace: ReadonlyArray<[number, number]>) =>
+  trace.map(([deltaX, deltaY]) => wheelAt(node, { deltaX, deltaY }));
+
 const transformOf = (layer: HTMLElement) => {
   const match = /translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([\d.]+)\)/.exec(
     layer.style.transform,
@@ -357,8 +401,9 @@ describe("Canvas", () => {
     expect(wheel(page, { deltaY: 40 })).toBe(false);
     expect(transformOf(layer)).toEqual(before);
 
-    expect(wheel(page, { deltaX: 25 })).toBe(true);
+    expect(wheel(page, { deltaX: 25, deltaY: 10 })).toBe(true);
     expect(transformOf(layer).x).toBeCloseTo(before.x - 25);
+    expect(transformOf(layer).y).toBeCloseTo(before.y);
 
     expect(wheel(target, { deltaY: 40 })).toBe(true);
     expect(transformOf(layer).y).toBeCloseTo(before.y - 40);
@@ -426,6 +471,126 @@ describe("Canvas", () => {
     });
     expect(mostlyDown.defaultPrevented).toBe(false);
     expect(transformOf(layer)).toEqual(before);
+  });
+
+  it("leaves a whole trackpad swipe, sideways start and momentum included, to a paywall that scrolls", () => {
+    const { layer, frame } = mountWithFrame();
+    const before = transformOf(layer);
+    const page = appendPage(frame, 2000);
+
+    nextGesture();
+    expect(swipe(page, TRACKPAD_SWIPE_DOWN)).not.toContain(true);
+    expect(transformOf(layer)).toEqual(before);
+
+    nextGesture();
+    expect(
+      swipe(page, [
+        [3, 0],
+        [4, 1],
+        [2, 30],
+      ]),
+    ).not.toContain(true);
+    expect(transformOf(layer)).toEqual(before);
+  });
+
+  it("pans for a whole trackpad swipe over a paywall that cannot scroll, once it has moved 8 px", () => {
+    const { layer, frame } = mountWithFrame();
+    const before = transformOf(layer);
+    const page = appendPage(frame, 800);
+
+    nextGesture();
+    const prevented = swipe(page, TRACKPAD_SWIPE_DOWN);
+    expect(prevented.slice(0, 3)).toEqual([false, false, false]);
+    expect(prevented.slice(3, 16)).not.toContain(false);
+    const panned = TRACKPAD_SWIPE_DOWN.slice(3).reduce(
+      (sum, [deltaX, deltaY]) => ({ x: sum.x + deltaX, y: sum.y + deltaY }),
+      { x: 0, y: 0 },
+    );
+    expect(transformOf(layer).x).toBeCloseTo(before.x - panned.x);
+    expect(transformOf(layer).y).toBeCloseTo(before.y - panned.y);
+  });
+
+  it("leaves a mostly sideways swipe to a carousel, and a clearly vertical one to the stage", () => {
+    const { layer, frame } = mountWithFrame();
+    const before = transformOf(layer);
+    const body = frame.contentDocument?.body;
+    if (!body) throw new Error("iframe without a body");
+    const carousel = body.ownerDocument.createElement("div");
+    carousel.style.overflowX = "auto";
+    Object.defineProperty(carousel, "scrollWidth", { value: 1200 });
+    Object.defineProperty(carousel, "clientWidth", { value: 400 });
+    body.appendChild(carousel);
+
+    nextGesture();
+    expect(
+      swipe(carousel, [
+        [15, 10],
+        [20, 12],
+      ]),
+    ).toEqual([false, false]);
+    expect(transformOf(layer)).toEqual(before);
+
+    nextGesture();
+    expect(
+      swipe(carousel, [
+        [3, 20],
+        [4, 30],
+      ]),
+    ).toEqual([true, true]);
+    expect(transformOf(layer).x).toBeCloseTo(before.x);
+    expect(transformOf(layer).y).toBeCloseTo(before.y - 50);
+  });
+
+  it("decides at once on a line- or page-mode wheel too small in raw units", () => {
+    const { layer, frame } = mountWithFrame();
+    const before = transformOf(layer);
+    const page = appendPage(frame, 800);
+
+    nextGesture();
+    expect(wheelAt(page, { deltaY: 3, deltaMode: 1 })).toBe(true);
+    expect(transformOf(layer).y).toBeCloseTo(before.y - 3);
+
+    nextGesture();
+    expect(wheelAt(page, { deltaY: 0.1, deltaMode: 2 })).toBe(true);
+    expect(transformOf(layer).y).toBeCloseTo(before.y - 3.1);
+  });
+
+  it("keeps panning a swipe that started on the stage after it reaches the paywall", () => {
+    const { layer, frame, target } = mountWithFrame();
+    const before = transformOf(layer);
+    const page = appendPage(frame, 2000);
+    const stage = screen.getByTestId("canvas");
+
+    nextGesture();
+    expect(wheelAt(stage, { deltaX: 2, deltaY: 20 })).toBe(true);
+    expect(wheelAt(page, { deltaX: 1, deltaY: 30 })).toBe(true);
+    expect(wheelAt(target, { deltaX: 1, deltaY: 10 })).toBe(true);
+    expect(transformOf(layer).x).toBeCloseTo(before.x - 4);
+    expect(transformOf(layer).y).toBeCloseTo(before.y - 60);
+
+    nextGesture();
+    const after = transformOf(layer);
+    expect(wheelAt(page, { deltaY: 30 })).toBe(false);
+    expect(transformOf(layer)).toEqual(after);
+  });
+
+  it("never pans the stage during a swipe the paywall owns, until a pinch ends it", () => {
+    const { layer, frame } = mountWithFrame();
+    const before = transformOf(layer);
+    const page = appendPage(frame, 2000);
+    const stage = screen.getByTestId("canvas");
+
+    nextGesture();
+    expect(wheelAt(page, { deltaY: 30 })).toBe(false);
+    expect(wheelAt(stage, { deltaY: 30 })).toBe(false);
+    expect(transformOf(layer)).toEqual(before);
+
+    act(() => {
+      fireEvent.wheel(stage, { deltaY: -40, ctrlKey: true, clientX: 500, clientY: 400 });
+    });
+    const zoomed = transformOf(layer);
+    expect(wheelAt(stage, { deltaY: 30 })).toBe(true);
+    expect(transformOf(layer).y).toBeCloseTo(zoomed.y - 30);
   });
 
   it("shows a hand while Space is held and a grabbing hand while dragging, keeping frames inert", () => {
