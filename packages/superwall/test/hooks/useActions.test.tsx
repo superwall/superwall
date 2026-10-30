@@ -22,6 +22,18 @@ describe("useActions", () => {
     );
   });
 
+  it("sends a custom action to the host by name", async () => {
+    const onOutgoing = vi.fn<(message: TOutgoingMessage) => void>();
+    const { result } = renderWithProvider(() => useActions(), { host: { onOutgoing } });
+    await flush();
+
+    act(() => {
+      result.current.customAction("open_settings");
+    });
+
+    expect(onOutgoing).toHaveBeenCalledWith({ event_name: "custom", data: "open_settings" });
+  });
+
   it("sets user attributes on the host and on the paywall's own user record", async () => {
     const onOutgoing = vi.fn<(message: TOutgoingMessage) => void>();
     const { result } = renderWithProvider(() => ({ actions: useActions(), user: useUser() }), {
