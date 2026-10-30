@@ -29,7 +29,6 @@ const SUBJECT: Partial<Record<PaywallEventName, readonly string[]>> = {
   custom: ["name", "data"],
   request_permission: ["permission_type"],
   request_callback: ["name"],
-  schedule_notification: ["title"],
   discount_redemption_result: ["code"],
 };
 

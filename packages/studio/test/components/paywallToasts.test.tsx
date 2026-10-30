@@ -284,18 +284,10 @@ describe("a scheduled trial reminder", () => {
 });
 
 describe("the events that get their own icon", () => {
-  it("names a scheduled notification, a review request and an attribute change", async () => {
+  it("names a review request and an attribute change", async () => {
     const delegate = mount();
 
     await act(async () => {
-      delegate.event({
-        event_name: "schedule_notification",
-        id: "trial-ending",
-        type: "TRIAL_STARTED",
-        title: "Trial ending",
-        body: "2 days left",
-        delay: 172_800_000,
-      });
       delegate.event({ event_name: "request_store_review", review_type: "in-app" });
       delegate.event({
         event_name: "user_attribute_updated",
@@ -303,7 +295,6 @@ describe("the events that get their own icon", () => {
       });
     });
 
-    expect(await screen.findByText("Trial ending")).toBeDefined();
     expect(await screen.findByText("request_store_review")).toBeDefined();
     expect(await screen.findByText("user_attribute_updated")).toBeDefined();
   });

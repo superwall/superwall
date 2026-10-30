@@ -52,10 +52,11 @@ const ICON: Partial<Record<PaywallMessageName, IconComponent>> = {
   custom: BoltIcon,
   request_permission: BoltIcon,
   request_callback: BoltIcon,
-  schedule_notification: BellIcon,
   request_store_review: StarIcon,
   user_attribute_updated: UserIcon,
 };
+
+const SURFACE = "rounded-sm border border-border bg-popover font-sans text-sm text-foreground";
 
 export const ToastCard = ({
   icon: Icon,
@@ -69,7 +70,7 @@ export const ToastCard = ({
   description?: React.ReactNode;
   actions?: React.ReactNode;
 }>) => (
-  <div className="w-90 max-w-[calc(100vw-2rem)] rounded-sm border border-border bg-popover py-3 ps-[calc(--spacing(3)-1px)] pe-3 font-sans text-sm text-foreground">
+  <div className={`w-90 max-w-[calc(100vw-2rem)] py-3 ps-[calc(--spacing(3)-1px)] pe-3 ${SURFACE}`}>
     <div className="grid grid-cols-[0.875rem_1fr] items-start gap-x-2">
       <span className={`flex h-5 items-center justify-center ${TINT[tone]}`}>
         <Icon />
@@ -262,7 +263,7 @@ const ReminderToast = ({
   onDismiss: () => void;
 }) => (
   <div
-    className="relative left-1/2 -translate-x-1/2 rounded-sm border border-border bg-popover p-3 font-sans text-sm text-foreground"
+    className={`relative left-1/2 -translate-x-1/2 p-3 ${SURFACE}`}
     style={{ width: notificationWidth(target.platform, target.screenWidth) + TOAST_FRAME }}
   >
     <div className="mb-3 grid grid-cols-[0.875rem_1fr_auto] items-center gap-x-2">

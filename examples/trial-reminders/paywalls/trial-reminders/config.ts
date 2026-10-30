@@ -18,7 +18,7 @@ export default definePaywall({
   notifications: {
     trialReminder: {
       title: "Your trial ends tomorrow",
-      body: "Keep Pro, or cancel in Settings — no charge either way.",
+      body: "Keep Pro and everything you set up during your trial, or cancel any time in Settings before tomorrow — there is no charge either way.",
       beforeTrialEndDays: 1,
     },
   },
