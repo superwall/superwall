@@ -143,13 +143,13 @@ export async function pollLogin(
     return { status: "pending", pending };
   }
 
+  pending.tokens = tokens;
+  writePendingLogin(pending);
   const finished = await finishLogin(pending, tokens, { ...opts, orgName: pending.orgName, app: pending.app });
   if ("session" in finished) {
     removePendingLogin();
     return { status: "logged_in", session: finished.session };
   }
-  pending.tokens = tokens;
-  writePendingLogin(pending);
   return { status: "needs_organization", pending };
 }
 

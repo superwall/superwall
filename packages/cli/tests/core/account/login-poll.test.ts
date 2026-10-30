@@ -28,6 +28,8 @@ interface Auth {
   created: string[];
   refreshed: number;
   refreshedWith: string[];
+  createFails?: boolean;
+  deviceGrants: number;
 }
 
 const auth = (overrides: Partial<Auth> = {}): Auth => ({
@@ -36,6 +38,7 @@ const auth = (overrides: Partial<Auth> = {}): Auth => ({
   created: [],
   refreshed: 0,
   refreshedWith: [],
+  deviceGrants: 0,
   ...overrides,
 });
 
@@ -66,6 +69,7 @@ function fakeAuth(state: Auth): void {
         if (state.refreshFails) return json({ error: "invalid_grant" }, 400);
         return json({ access_token: `token-${state.refreshed + 1}`, refresh_token: `refresh-${state.refreshed + 1}`, expires_in: 900 });
       }
+      state.deviceGrants++;
       if (state.tokenError) return json({ error: state.tokenError }, 400);
       return state.approved
         ? json({ access_token: "token-1", refresh_token: "refresh-1", expires_in: 300 })
@@ -73,6 +77,7 @@ function fakeAuth(state: Auth): void {
     }
     if (url.endsWith("/v2/me")) return json({ email: "new@example.com" });
     if (url.endsWith("/v2/me/organizations") && init?.method === "POST") {
+      if (state.createFails) return json({ error: "unavailable" }, 503);
       const { name } = JSON.parse(String(init.body)) as { name: string };
       state.created.push(name);
       return json({ id: 9, name });
@@ -206,4 +211,24 @@ test("a poll whose timeout ends before the next allowed request returns pending 
   assert.equal(result.status, "pending");
   assert.equal(readSession(), null);
   assert.equal(readPendingLogin()?.interval, 30);
+});
+
+test("an approval survives a failed organization create, and the retry reuses it", async () => {
+  useHome();
+  const state = auth({ approved: true, createFails: true });
+  fakeAuth(state);
+  await start({ orgName: "Acme" });
+
+  await assert.rejects(pollLogin({ timeoutMs: 1000 }), /HTTP 503/);
+  assert.equal(readPendingLogin()?.tokens?.accessToken, "token-1");
+  assert.equal(readSession(), null);
+  assert.equal(state.deviceGrants, 1);
+
+  state.createFails = false;
+  state.approved = false;
+  const done = await pollLogin({ timeoutMs: 1000 });
+  assert.equal(done.status, "logged_in");
+  assert.equal(state.deviceGrants, 1);
+  assert.deepEqual(state.created, ["Acme"]);
+  assert.equal(readPendingLogin(), null);
 });
