@@ -20,6 +20,7 @@ const part = (name: string) => {
 describe("NotificationPreview", () => {
   it("sits on a slice of the previewed screen, inset like a real banner", () => {
     expect(notificationWidth("iOS", 402)).toBe(374);
+    expect(notificationWidth("iOS", 375)).toBe(347);
     expect(notificationWidth("Android", 412)).toBe(388);
     expect(notificationWidth("iOS", 10)).toBe(0);
 
