@@ -63,13 +63,14 @@ control), and only the rules the example needs follow it.
 
 ## Look and feel
 
-| example                            | teaches                                            |
-| ---------------------------------- | -------------------------------------------------- |
-| [`custom-fonts`](./custom-fonts)   | a typeface you supply, from a file in your project |
-| [`with-tailwind`](./with-tailwind) | Tailwind v4 with zero framework configuration      |
-| [`with-motion`](./with-motion)     | in-page animation; transitions stay the router's   |
-| [`with-rive`](./with-rive)         | interactive vector animation on a canvas           |
-| [`orientation`](./orientation)     | a layout that answers to the device                |
+| example                            | teaches                                               |
+| ---------------------------------- | ----------------------------------------------------- |
+| [`custom-fonts`](./custom-fonts)   | a typeface you supply, from a file in your project    |
+| [`with-tailwind`](./with-tailwind) | Tailwind v4 with zero framework configuration         |
+| [`with-motion`](./with-motion)     | in-page animation; transitions stay the router's      |
+| [`with-rive`](./with-rive)         | interactive vector animation on a canvas              |
+| [`orientation`](./orientation)     | a layout that answers to the device                   |
+| [`scrolling`](./scrolling)         | a page that scrolls, with a row that scrolls sideways |
 
 ## Localization
 
