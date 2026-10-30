@@ -27,6 +27,7 @@ interface Auth {
   orgs: Array<{ id: number; name: string }>;
   created: string[];
   refreshed: number;
+  refreshedWith: string[];
 }
 
 const auth = (overrides: Partial<Auth> = {}): Auth => ({
@@ -34,6 +35,7 @@ const auth = (overrides: Partial<Auth> = {}): Auth => ({
   orgs: [],
   created: [],
   refreshed: 0,
+  refreshedWith: [],
   ...overrides,
 });
 
@@ -60,7 +62,9 @@ function fakeAuth(state: Auth): void {
       const body = new URLSearchParams(String(init?.body ?? ""));
       if (body.get("grant_type") === "refresh_token") {
         state.refreshed++;
-        return state.refreshFails ? json({ error: "invalid_grant" }, 400) : json({ access_token: "token-2" });
+        state.refreshedWith.push(body.get("refresh_token") ?? "");
+        if (state.refreshFails) return json({ error: "invalid_grant" }, 400);
+        return json({ access_token: `token-${state.refreshed + 1}`, refresh_token: `refresh-${state.refreshed + 1}`, expires_in: 900 });
       }
       if (state.tokenError) return json({ error: state.tokenError }, 400);
       return state.approved
@@ -124,7 +128,11 @@ test("a new account without an organization keeps its approval until --org-name 
   assert.equal(done.status, "logged_in");
   assert.deepEqual(state.created, ["Acme"]);
   assert.equal(readPendingLogin(), null);
-  assert.equal(readSession()?.accessToken, "token-2");
+  assert.deepEqual(state.refreshedWith, ["refresh-1", "refresh-2"]);
+  const session = readSession();
+  assert.equal(session?.accessToken, "token-3");
+  assert.equal(session?.refreshToken, "refresh-3");
+  assert.ok((session?.accessTokenExpiresAt ?? 0) > Date.now() + 890_000);
 });
 
 test("an organization name given at the start is used once the login is approved", async () => {

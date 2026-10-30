@@ -161,7 +161,7 @@ async function resolvePollTokens(
   if (held) {
     if (!held.refreshToken) return held;
     const fresh = await refreshAccessToken(pending.tokenEndpoint, pending.clientId, held.refreshToken);
-    return fresh ? { ...held, accessToken: fresh } : held;
+    return fresh ? { ...held, ...fresh, expiresIn: fresh.expiresIn } : held;
   }
   if (Date.now() >= pending.expiresAt) {
     removePendingLogin();
@@ -191,7 +191,8 @@ async function finishLogin(
   opts: LoginOptions,
 ): Promise<FinishResult> {
   const { apiHost, clientId, tokenEndpoint } = pending;
-  const { refreshToken, expiresIn, idToken } = tokens;
+  const { idToken } = tokens;
+  let { refreshToken, expiresIn } = tokens;
   let apiToken = tokens.accessToken;
 
   if (idToken) await findJson(`${apiHost}/v2/me`, idToken).catch(() => null);
@@ -230,7 +231,11 @@ async function finishLogin(
   if (createdNewOrg && refreshToken) {
     opts.onStatus?.("Activating your organization…");
     const fresh = await refreshAccessToken(tokenEndpoint, clientId, refreshToken);
-    if (fresh) apiToken = fresh;
+    if (fresh) {
+      apiToken = fresh.accessToken;
+      refreshToken = fresh.refreshToken;
+      expiresIn = fresh.expiresIn;
+    }
   }
 
   const session: Session = {
@@ -395,7 +400,7 @@ async function refreshAccessToken(
   tokenEndpoint: string,
   clientId: string,
   refreshToken: string,
-): Promise<string | null> {
+): Promise<{ accessToken: string; refreshToken: string; expiresIn?: number } | null> {
   try {
     const r = await fetch(tokenEndpoint, {
       method: "POST",
@@ -407,8 +412,13 @@ async function refreshAccessToken(
       }),
     });
     if (!r.ok) return null;
-    const d = (await r.json()) as { access_token?: string };
-    return d.access_token ?? null;
+    const d = (await r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
+    if (!d.access_token) return null;
+    return {
+      accessToken: d.access_token,
+      refreshToken: d.refresh_token ?? refreshToken,
+      ...(d.expires_in === undefined ? {} : { expiresIn: d.expires_in }),
+    };
   } catch {
     return null;
   }

@@ -355,7 +355,7 @@ test("onboarding without an app creates the organization and activates it with a
     ...DEVICE,
     "/oauth2/token": [
       { body: { access_token: "at_1", refresh_token: "rt_1" } },
-      { body: { access_token: "at_2" } },
+      { body: { access_token: "at_2", refresh_token: "rt_2", expires_in: 900 } },
     ],
     ...ME,
     "/v2/me/organizations": [{ body: { data: [] } }, { body: { id: 42, name: "Acme Inc" } }],
@@ -378,6 +378,9 @@ test("onboarding without an app creates the organization and activates it with a
   assert.deepEqual(statuses, ["Creating your account…", "Activating your organization…"]);
   assert.deepEqual(readOnboardedOrg(), { id: "42", name: "Acme Inc" });
   assert.equal(session.accessToken, "at_2");
+  assert.equal(session.refreshToken, "rt_2");
+  assert.ok((session.accessTokenExpiresAt ?? 0) > Date.now() + 890_000);
+  assert.deepEqual(readSession(), session);
 });
 
 test("onboarding with an app provisions it and keeps the old token when the refresh fails", async () => {
