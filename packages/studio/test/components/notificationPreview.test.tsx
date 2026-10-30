@@ -132,5 +132,15 @@ describe("NotificationPreview", () => {
       />,
     );
     expect(screen.getByTestId("notification-icon-fallback").textContent).toBe("?");
+
+    rerender(
+      <NotificationPreview
+        platform="iOS"
+        screenWidth={402}
+        app={{ name: "👩‍🚀 rocket" }}
+        notification={notification}
+      />,
+    );
+    expect(screen.getByTestId("notification-icon-fallback").textContent).toBe("👩‍🚀");
   });
 });

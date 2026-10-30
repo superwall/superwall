@@ -41,6 +41,13 @@ const oneLine: React.CSSProperties = {
   minWidth: 0,
 };
 
+const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+const initialOf = (name: string): string => {
+  const [first] = segmenter.segment(name.trim());
+  return first ? first.segment.toUpperCase() : "?";
+};
+
 const AppIcon = ({
   app,
   size,
@@ -83,7 +90,7 @@ const AppIcon = ({
         color: "#fff",
       }}
     >
-      {app.name.trim().charAt(0).toUpperCase() || "?"}
+      {initialOf(app.name)}
     </span>
   );
 };
