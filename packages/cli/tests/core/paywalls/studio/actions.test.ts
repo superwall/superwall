@@ -821,20 +821,20 @@ test("every captured page is a screenshot, the last one the App Store review ren
   });
 
   assert.deepEqual(await createStudioActions(framework, boundProject()).screenshots?.(surface), [
-    { label: "Welcome", url: "https://img.test/welcome.png", appStore: false },
-    { label: "Page 2", url: "https://img.test/page-2.png", appStore: false },
-    { label: "Plans", url: "https://img.test/review.png", appStore: true },
+    { label: "Welcome", url: "https://img.test/welcome.png" },
+    { label: "Page 2", url: "https://img.test/page-2.png" },
+    { label: "Plans", url: "https://img.test/review.png" },
   ]);
 });
 
-test("overlays are listed under the page they open on, numbered per page", async () => {
+test("overlays keep the capture's name, else are numbered under the page they open on", async () => {
   const api = await startApi();
   api.gate = previewImages({
     status: "ready",
     pages: [
       { page_index: 0, page_name: "Plans", kind: "page", url: "https://img.test/plans.png" },
       { page_index: 0, kind: "overlay", url: "https://img.test/discount.png" },
-      { page_index: 0, kind: "overlay", url: "https://img.test/exit.png" },
+      { page_index: 0, page_name: "Plans — Exit offer", kind: "overlay", url: "https://img.test/exit.png" },
       { page_index: 3, kind: "overlay", url: "https://img.test/orphan.png" },
       { page_index: 0, kind: "overlay" },
     ],
@@ -842,14 +842,14 @@ test("overlays are listed under the page they open on, numbered per page", async
   });
 
   assert.deepEqual(await createStudioActions(framework, boundProject()).screenshots?.(surface), [
-    { label: "Plans", url: "https://img.test/review.png", appStore: true },
-    { label: "Plans · Overlay 1", url: "https://img.test/discount.png", appStore: false },
-    { label: "Plans · Overlay 2", url: "https://img.test/exit.png", appStore: false },
-    { label: "Page 4 · Overlay 1", url: "https://img.test/orphan.png", appStore: false },
+    { label: "Plans", url: "https://img.test/review.png" },
+    { label: "Plans · Overlay 1", url: "https://img.test/discount.png" },
+    { label: "Plans — Exit offer", url: "https://img.test/exit.png" },
+    { label: "Page 4 · Overlay 1", url: "https://img.test/orphan.png" },
   ]);
 });
 
-test("the review render falls back to the last page, or stands alone when no page matches", async () => {
+test("the review render falls back to the last page, or is the only page when no page matches", async () => {
   const api = await startApi();
   const actions = createStudioActions(framework, boundProject());
 
@@ -862,13 +862,32 @@ test("the review render falls back to the last page, or stands alone when no pag
     apple_review_image: { url: "https://img.test/review.png", page_index: 7 },
   });
   assert.deepEqual(await actions.screenshots?.(surface), [
-    { label: "Page 1", url: "https://img.test/page-1.png", appStore: false },
-    { label: "Page 2", url: "https://img.test/review.png", appStore: true },
+    { label: "Page 1", url: "https://img.test/page-1.png" },
+    { label: "Page 2", url: "https://img.test/review.png" },
   ]);
 
   api.gate = previewImages({ status: "ready", pages: [], apple_review_image: { url: "https://img.test/review.png" } });
   assert.deepEqual(await actions.screenshots?.(surface), [
-    { label: "App Store", url: "https://img.test/review.png", appStore: true },
+    { label: "Page 1", url: "https://img.test/review.png" },
+  ]);
+});
+
+test("a page's own App Store render wins over its phone-sized capture", async () => {
+  const api = await startApi();
+  api.gate = previewImages({
+    status: "ready",
+    pages: [
+      { page_index: 0, page_name: "Welcome", url: "https://img.test/welcome.png", app_store_image: { url: "https://img.test/welcome-1290.png" } },
+      { page_index: 0, kind: "overlay", url: "https://img.test/sheet.png", app_store_image: { url: "https://img.test/sheet-1290.png" } },
+      { page_index: 1, page_name: "Plans", url: "https://img.test/plans.png", app_store_image: null },
+    ],
+    apple_review_image: { url: "https://img.test/review.png", page_index: 1 },
+  });
+
+  assert.deepEqual(await createStudioActions(framework, boundProject()).screenshots?.(surface), [
+    { label: "Welcome", url: "https://img.test/welcome-1290.png" },
+    { label: "Welcome · Overlay 1", url: "https://img.test/sheet-1290.png" },
+    { label: "Plans", url: "https://img.test/review.png" },
   ]);
 });
 
@@ -881,7 +900,7 @@ test("without a review render every page keeps its own capture", async () => {
   });
 
   assert.deepEqual(await createStudioActions(framework, boundProject()).screenshots?.(surface), [
-    { label: "Page 1", url: "https://img.test/page-1.png", appStore: false },
+    { label: "Page 1", url: "https://img.test/page-1.png" },
   ]);
 });
 

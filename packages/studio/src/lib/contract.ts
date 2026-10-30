@@ -41,5 +41,4 @@ export type AppScheme = {
 export type StudioScreenshot = {
   label: string;
   url: string;
-  appStore: boolean;
 };

@@ -33,7 +33,13 @@ import { VERSION } from "@/environment";
 
 type Sample = { properties?: Record<string, unknown>; live?: boolean };
 
-type PreviewPage = { url?: string; kind?: string; page_index?: number; page_name?: string | null };
+type PreviewPage = {
+  url?: string;
+  kind?: string;
+  page_index?: number;
+  page_name?: string | null;
+  app_store_image?: { url?: string } | null;
+};
 
 type PreviewImages = {
   status?: string;
@@ -55,23 +61,22 @@ const resolveScreenshots = (session: PreviewImages): StudioScreenshot[] => {
   let ordinal = 0;
 
   for (const page of pages) {
+    const url = page.app_store_image?.url ?? (page === reviewed ? reviewUrl : page.url);
     if (page.kind === "overlay") {
       const host = hosts.get(page.page_index) ?? { label: `Page ${(page.page_index ?? 0) + 1}`, overlays: 0 };
       host.overlays += 1;
       hosts.set(page.page_index, host);
-      if (page.url !== undefined) {
-        shots.push({ label: `${host.label} · Overlay ${host.overlays}`, url: page.url, appStore: false });
-      }
+      const label = page.page_name?.trim() || `${host.label} · Overlay ${host.overlays}`;
+      if (url !== undefined) shots.push({ label, url });
       continue;
     }
     ordinal += 1;
     const label = page.page_name?.trim() || `Page ${ordinal}`;
     hosts.set(page.page_index, { label, overlays: 0 });
-    const url = page === reviewed ? reviewUrl : page.url;
-    if (url !== undefined) shots.push({ label, url, appStore: page === reviewed });
+    if (url !== undefined) shots.push({ label, url });
   }
   if (reviewed === undefined && reviewUrl !== undefined) {
-    shots.push({ label: "App Store", url: reviewUrl, appStore: true });
+    shots.push({ label: `Page ${ordinal + 1}`, url: reviewUrl });
   }
   return shots;
 };

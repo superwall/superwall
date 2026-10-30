@@ -13,12 +13,12 @@ afterEach(() => {
 
 const surface: StudioSurface = { kind: "paywall", id: "pro" } as StudioSurface;
 
-const one = { label: "Plans", url: "https://cdn/shot.png", appStore: true };
+const one = { label: "Plans", url: "https://cdn/shot.png" };
 
 const pages = [
-  { label: "Welcome", url: "https://cdn/welcome.png", appStore: false },
-  { label: "Your goal?", url: "https://cdn/goal.png", appStore: false },
-  { label: "Plans", url: "https://cdn/review.png", appStore: true },
+  { label: "Welcome", url: "https://cdn/welcome.png" },
+  { label: "Your goal?", url: "https://cdn/goal.png" },
+  { label: "Plans", url: "https://cdn/review.png" },
 ];
 
 const sourceWith = (extra: Partial<StudioSource> = {}): StudioSource =>
@@ -207,7 +207,7 @@ describe("downloading a paywall's screenshot", () => {
     expect(await hoverHint()).toContain("promote a pushed version");
   });
 
-  it("lists every page of a multi-page paywall, the App Store render marked, and closes on Escape", async () => {
+  it("lists every page of a multi-page paywall by name alone, and closes on Escape", async () => {
     const { clicked } = captureAnchor();
     mount("hosted", sourceWith({ screenshots: async () => pages }));
 
@@ -217,11 +217,7 @@ describe("downloading a paywall's screenshot", () => {
 
     expect(button().getAttribute("aria-expanded")).toBe("true");
     const items = screen.getAllByRole("button").filter((item) => item !== button());
-    expect(items.map((item) => item.textContent)).toEqual([
-      "Welcome",
-      "Your goal?",
-      "PlansApp Store size, 1290 × 2796",
-    ]);
+    expect(items.map((item) => item.textContent)).toEqual(["Welcome", "Your goal?", "Plans"]);
     fireEvent.mouseEnter(button().parentElement!);
     expect(screen.queryByRole("tooltip")).toBeNull();
     expect(clicked).not.toHaveBeenCalled();
@@ -257,7 +253,7 @@ describe("downloading a paywall's screenshot", () => {
         ? { ok: true, blob: async () => new Blob(["png"]) }
         : {
             json: async () => ({
-              shots: [...pages, { label: "···", url: "https://cdn/x.png", appStore: false }],
+              shots: [...pages, { label: "···", url: "https://cdn/x.png" }],
             }),
           },
     );

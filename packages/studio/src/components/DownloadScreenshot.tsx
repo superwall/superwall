@@ -177,7 +177,6 @@ export const DownloadScreenshot = ({
               <MenuItem
                 key={`${index}:${page.url}`}
                 label={page.label}
-                hint={page.appStore ? "App Store size, 1290 × 2796" : undefined}
                 onSelect={() => void save(pages, page, index)}
               />
             ))}
