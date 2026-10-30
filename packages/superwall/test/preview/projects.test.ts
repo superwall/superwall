@@ -11,6 +11,7 @@ import {
   projectModule,
   readActionRequest,
   readProjects,
+  readScreenshotPage,
   resolvableFrom,
   slugFor,
   type PreviewProject,
@@ -175,6 +176,19 @@ describe("resolvableFrom", () => {
     const resolvable = resolvableFrom(process.cwd());
     expect(resolvable("react")).toBe(true);
     expect(resolvable("@superwall/not-a-package")).toBe(false);
+  });
+});
+
+describe("readScreenshotPage", () => {
+  it("asks for the list unless the request downloads a page", () => {
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro")).toBeUndefined();
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro?page=2")).toBeUndefined();
+  });
+
+  it("reads the page a download names, the first when it names none", () => {
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro?download=1&page=2")).toBe(2);
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro?download=1")).toBe(0);
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro?download=1&page=x")).toBeNaN();
   });
 });
 

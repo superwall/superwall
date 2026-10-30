@@ -151,6 +151,11 @@ const versionField = (value: unknown, key: string): number | undefined => {
   return typeof found === "number" && Number.isInteger(found) && found >= 0 ? found : undefined;
 };
 
+export const readScreenshotPage = (rawUrl: string): number | undefined => {
+  const query = new URL(rawUrl, "http://studio").searchParams;
+  return query.get("download") === "1" ? Number(query.get("page") ?? "0") : undefined;
+};
+
 export const readActionRequest = (body: string): ActionRequest => {
   const parsed: unknown = JSON.parse(body);
   return {

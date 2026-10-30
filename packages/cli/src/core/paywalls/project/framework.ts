@@ -8,6 +8,7 @@ import type {
   StudioActionName,
   StudioActionProgress,
   StudioActionResult,
+  StudioScreenshot,
   StudioStatus,
 } from "@superwall/studio/contract";
 
@@ -93,12 +94,13 @@ export type {
   StudioActionName,
   StudioActionProgress,
   StudioActionResult,
+  StudioScreenshot,
   StudioStatus,
 } from "@superwall/studio/contract";
 
 export interface StudioActions {
   appScheme?(): Promise<AppScheme>;
-  screenshot?(surface: FrameworkSurface): Promise<string | undefined>;
+  screenshots?(surface: FrameworkSurface): Promise<StudioScreenshot[] | undefined>;
   samples?(): Promise<Samples>;
   run(
     action: StudioActionName,
