@@ -16,7 +16,8 @@ export function hasDisplay(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): b
 
 export function openBrowser(url: string, deps: BrowserDeps = {}): Promise<boolean> {
   const platform = deps.platform ?? process.platform;
-  if (!hasDisplay(deps.env ?? process.env, platform)) return Promise.resolve(false);
+  const env = deps.env ?? process.env;
+  if (env.BROWSER === "none" || !hasDisplay(env, platform)) return Promise.resolve(false);
   const cmd = platform === "darwin" ? "open" : platform === "win32" ? "cmd" : "xdg-open";
   const args = platform === "win32" ? ["/c", "start", "", url] : [url];
   return new Promise((resolve) => {

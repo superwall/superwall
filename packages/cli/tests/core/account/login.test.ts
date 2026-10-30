@@ -297,12 +297,12 @@ test("slow_down backs the polling off by five seconds", async () => {
   const polls = () => sent.filter((request) => request.url.endsWith("/oauth2/token")).length;
 
   const pending = login();
-  for (let i = 0; i < 20 && polls() < 1; i++) {
+  for (let i = 0; i < 200 && polls() < 1; i++) {
     mock.timers.tick(0);
     await waitForImmediate();
   }
   assert.equal(polls(), 1);
-  for (let i = 0; i < 5; i++) await waitForImmediate();
+  for (let i = 0; i < 50; i++) await waitForImmediate();
   mock.timers.tick(4999);
   await waitForImmediate();
   assert.equal(polls(), 1);
@@ -355,7 +355,7 @@ test("onboarding without an app creates the organization and activates it with a
     ...DEVICE,
     "/oauth2/token": [
       { body: { access_token: "at_1", refresh_token: "rt_1" } },
-      { body: { access_token: "at_2" } },
+      { body: { access_token: "at_2", refresh_token: "rt_2", expires_in: 900 } },
     ],
     ...ME,
     "/v2/me/organizations": [{ body: { data: [] } }, { body: { id: 42, name: "Acme Inc" } }],
@@ -378,6 +378,9 @@ test("onboarding without an app creates the organization and activates it with a
   assert.deepEqual(statuses, ["Creating your account…", "Activating your organization…"]);
   assert.deepEqual(readOnboardedOrg(), { id: "42", name: "Acme Inc" });
   assert.equal(session.accessToken, "at_2");
+  assert.equal(session.refreshToken, "rt_2");
+  assert.ok((session.accessTokenExpiresAt ?? 0) > Date.now() + 890_000);
+  assert.deepEqual(readSession(), session);
 });
 
 test("onboarding with an app provisions it and keeps the old token when the refresh fails", async () => {

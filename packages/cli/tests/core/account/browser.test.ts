@@ -113,3 +113,17 @@ test("the platform defaults to this machine's", async () => {
   assert.equal(opened, true);
   assert.deepEqual(commands, [expected]);
 });
+
+test("BROWSER=none never opens a browser", async () => {
+  let spawned = false;
+  const opened = await openBrowser(URL, {
+    platform: "darwin",
+    env: { BROWSER: "none" },
+    spawn: (() => {
+      spawned = true;
+      return fakeChild("spawn");
+    }) as typeof spawn,
+  });
+  assert.equal(opened, false);
+  assert.equal(spawned, false);
+});
