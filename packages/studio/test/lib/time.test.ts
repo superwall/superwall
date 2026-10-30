@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { timeAgo } from "../../src/lib/time";
+import { timeAgo, timeUntil } from "../../src/lib/time";
 
 describe("timeAgo", () => {
   const now = Date.parse("2026-07-27T12:00:00Z");
@@ -13,7 +13,29 @@ describe("timeAgo", () => {
     expect(timeAgo("2024-07-27T12:00:00Z", now)).toBe("2 years ago");
   });
 
+  it("says now for a moment in the future", () => {
+    expect(timeAgo("2026-07-27T12:00:05Z", now)).toBe("now");
+  });
+
   it("rejects garbage", () => {
     expect(timeAgo("not-a-date")).toBeUndefined();
+  });
+});
+
+describe("timeUntil", () => {
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+
+  it("says how far ahead a delay lands", () => {
+    expect(timeUntil(45 * 1000)).toBe("in 45 seconds");
+    expect(timeUntil(3 * HOUR)).toBe("in 3 hours");
+    expect(timeUntil(DAY)).toBe("tomorrow");
+    expect(timeUntil(6 * DAY)).toBe("in 6 days");
+    expect(timeUntil(14 * DAY)).toBe("in 2 weeks");
+  });
+
+  it("treats a delay already due as now", () => {
+    expect(timeUntil(0)).toBe("now");
+    expect(timeUntil(-DAY)).toBe("now");
   });
 });
