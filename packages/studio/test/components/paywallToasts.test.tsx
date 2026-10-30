@@ -191,7 +191,7 @@ describe("a scheduled trial reminder", () => {
     expect(screen.getByText("· in 6 days")).toBeDefined();
     const card = await preview();
     expect(card.querySelector("[data-platform]")?.getAttribute("data-platform")).toBe("iOS");
-    expect(card.style.width).toBe("386px");
+    expect(card.style.width).toBe("402px");
     expect(card.textContent).toContain("Your trial ends tomorrow");
     expect(card.textContent).toContain("Pulse Pro");
     expect(card.textContent).toContain("Keep Pro, or cancel in Settings.");
@@ -202,7 +202,6 @@ describe("a scheduled trial reminder", () => {
     let target: ReminderTarget = {
       platform: "Android",
       screenWidth: 412,
-      theme: "dark",
       app: { name: "Pulse" },
     };
     const delegate = createStudioDelegate(() => target);
@@ -213,7 +212,7 @@ describe("a scheduled trial reminder", () => {
 
     const card = await preview();
     expect(card.querySelector("[data-platform]")?.getAttribute("data-platform")).toBe("Android");
-    expect(card.style.width).toBe("388px");
+    expect(card.style.width).toBe("412px");
     expect(screen.getByTestId("notification-icon-fallback").textContent).toBe("P");
 
     target = { ...target, platform: "iOS", screenWidth: 375 };
@@ -223,7 +222,7 @@ describe("a scheduled trial reminder", () => {
     await waitFor(() =>
       expect(
         screen.getAllByTestId("notification-preview").map((each) => each.style.width),
-      ).toContain("359px"),
+      ).toContain("375px"),
     );
   });
 
@@ -264,13 +263,9 @@ describe("a scheduled trial reminder", () => {
     await act(async () => {
       delegate?.event(reminder);
     });
-    expect((await preview()).style.width).toBe("386px");
+    expect((await preview()).style.width).toBe("402px");
 
-    rerender(
-      <Probe
-        target={{ platform: "Android", screenWidth: 360, theme: "light", app: { name: "x" } }}
-      />,
-    );
+    rerender(<Probe target={{ platform: "Android", screenWidth: 360, app: { name: "x" } }} />);
     expect(delegate).toBe(first);
     await act(async () => {
       delegate?.event({ ...reminder, id: "android" });
@@ -278,7 +273,7 @@ describe("a scheduled trial reminder", () => {
     await waitFor(() =>
       expect(
         screen.getAllByTestId("notification-preview").map((each) => each.style.width),
-      ).toContain("336px"),
+      ).toContain("360px"),
     );
   });
 });

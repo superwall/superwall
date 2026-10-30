@@ -18,8 +18,8 @@ const part = (name: string) => {
 };
 
 describe("NotificationPreview", () => {
-  it("is as wide as a banner on the previewed screen", () => {
-    expect(notificationWidth("iOS", 402)).toBe(386);
+  it("sits on a slice of the previewed screen, inset like a real banner", () => {
+    expect(notificationWidth("iOS", 402)).toBe(374);
     expect(notificationWidth("Android", 412)).toBe(388);
     expect(notificationWidth("iOS", 10)).toBe(0);
 
@@ -31,7 +31,8 @@ describe("NotificationPreview", () => {
         notification={notification}
       />,
     );
-    expect(screen.getByTestId("notification-preview").style.width).toBe("386px");
+    expect(screen.getByTestId("notification-preview").style.width).toBe("402px");
+    expect(part("card").style.width).toBe("374px");
   });
 
   it("lays out iOS: title with now, subtitle on its own line, body clamped at 4 lines", () => {
@@ -56,7 +57,7 @@ describe("NotificationPreview", () => {
     expect(part("subtitle").textContent).toBe("Pulse Pro");
     expect(part("subtitle").style.fontWeight).toBe("600");
     expect(part("body").style.webkitLineClamp).toBe("4");
-    expect(screen.getByTestId("notification-icon").style.borderRadius).toBe("9px");
+    expect(screen.getByTestId("notification-icon").style.borderRadius).toBe("8px");
   });
 
   it("lays out Android: app • subtitle • now, then title, body clamped at 2 lines", () => {
@@ -66,7 +67,6 @@ describe("NotificationPreview", () => {
         screenWidth={412}
         app={app}
         notification={notification}
-        theme="dark"
       />,
     );
 
@@ -107,7 +107,6 @@ describe("NotificationPreview", () => {
         screenWidth={402}
         app={{ name: "pulse" }}
         notification={notification}
-        theme="dark"
       />,
     );
     expect(screen.getByTestId("notification-icon-fallback").textContent).toBe("P");

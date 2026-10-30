@@ -173,7 +173,7 @@ describe("SurfaceEditor hosting a published paywall", () => {
 
     const card = await screen.findByTestId("notification-preview");
     expect(card.querySelector("[data-platform]")?.getAttribute("data-platform")).toBe("Android");
-    expect(card.style.width).toBe("388px");
+    expect(card.style.width).toBe("412px");
     expect(screen.getByTestId("notification-icon-fallback").textContent).toBe("P");
     expect(screen.getByText("· in 6 days")).toBeDefined();
     await act(async () => {

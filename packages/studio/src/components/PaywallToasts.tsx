@@ -18,10 +18,8 @@ import {
 import { InlineCode } from "./InlineCode";
 import {
   NotificationPreview,
-  notificationWidth,
   type NotificationApp,
   type NotificationPlatform,
-  type NotificationTheme,
 } from "./NotificationPreview";
 import { DEFAULT_DEVICE_ID, deviceById, notificationScreenFor } from "../lib/devices";
 import { noticeFor, type EventNotice, type PaywallMessageName } from "../lib/notices";
@@ -236,7 +234,6 @@ const CALLBACK: readonly Choice<"success" | "failure">[] = [
 export type ReminderTarget = {
   platform: NotificationPlatform;
   screenWidth: number;
-  theme: NotificationTheme;
   app: NotificationApp;
 };
 
@@ -245,7 +242,6 @@ const defaultScreen = notificationScreenFor(deviceById(DEFAULT_DEVICE_ID), false
 const DEFAULT_TARGET: ReminderTarget = {
   platform: defaultScreen.platform,
   screenWidth: defaultScreen.width,
-  theme: "light",
   app: { name: "superwall" },
 };
 
@@ -264,7 +260,7 @@ const ReminderToast = ({
 }) => (
   <div
     className={`relative left-1/2 -translate-x-1/2 p-3 ${SURFACE}`}
-    style={{ width: notificationWidth(target.platform, target.screenWidth) + TOAST_FRAME }}
+    style={{ width: target.screenWidth + TOAST_FRAME }}
   >
     <div className="mb-3 grid grid-cols-[0.875rem_1fr_auto] items-center gap-x-2">
       <span className={`flex h-5 items-center justify-center ${TINT.info}`}>
@@ -286,7 +282,6 @@ const ReminderToast = ({
     <NotificationPreview
       platform={target.platform}
       screenWidth={target.screenWidth}
-      theme={target.theme}
       app={target.app}
       notification={{
         title: message.title,

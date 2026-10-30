@@ -325,7 +325,6 @@ export const SurfaceEditor = ({
   const delegate = useStudioDelegate({
     platform: reminderScreen.platform,
     screenWidth: reminderScreen.width,
-    theme,
     app: source.app ?? { name: surface.project ?? source.title },
   });
   const frame = landscape ? { width: upright.height, height: upright.width } : upright;
