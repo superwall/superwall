@@ -20,7 +20,41 @@ export interface Session {
   oauthClientId?: string;
 }
 
+export interface Tokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  idToken?: string;
+}
+
+export interface PendingLogin {
+  apiHost: string;
+  clientId: string;
+  tokenEndpoint: string;
+  deviceCode: string;
+  userCode: string;
+  url: string;
+  interval: number;
+  expiresAt: number;
+  lastPolledAt: number;
+  orgName?: string;
+  tokens?: Tokens;
+}
+
 const FILE = "auth.json";
+const PENDING_FILE = "pending-login.json";
+
+export function writePendingLogin(pending: PendingLogin): void {
+  state().write(PENDING_FILE, `${formatJson(pending)}\n`);
+}
+
+export function readPendingLogin(): PendingLogin | null {
+  return readJson<PendingLogin>(state(), PENDING_FILE) ?? null;
+}
+
+export function removePendingLogin(): void {
+  state().remove(PENDING_FILE);
+}
 
 export function writeSession(session: Session): void {
   state().write(FILE, `${formatJson(session)}\n`);

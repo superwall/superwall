@@ -297,12 +297,12 @@ test("slow_down backs the polling off by five seconds", async () => {
   const polls = () => sent.filter((request) => request.url.endsWith("/oauth2/token")).length;
 
   const pending = login();
-  for (let i = 0; i < 20 && polls() < 1; i++) {
+  for (let i = 0; i < 200 && polls() < 1; i++) {
     mock.timers.tick(0);
     await waitForImmediate();
   }
   assert.equal(polls(), 1);
-  for (let i = 0; i < 5; i++) await waitForImmediate();
+  for (let i = 0; i < 50; i++) await waitForImmediate();
   mock.timers.tick(4999);
   await waitForImmediate();
   assert.equal(polls(), 1);
