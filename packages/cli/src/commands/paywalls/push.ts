@@ -30,6 +30,14 @@ export const command = defineCommand({
       type: "boolean",
       describe: "Replace the remote source with yours even though it can't be merged",
     },
+    existing: {
+      type: "boolean",
+      describe: "Only paywalls already on Superwall - skip any not in superwall.lock instead of creating them",
+    },
+    source: {
+      type: "boolean",
+      describe: "Push the project source to every app, also those whose paywalls did not change (shared files such as the design system)",
+    },
   },
   examples: [
     ["push", "Push every changed paywall and funnel as a new version"],
