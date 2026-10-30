@@ -13,6 +13,14 @@ afterEach(() => {
 
 const surface: StudioSurface = { kind: "paywall", id: "pro" } as StudioSurface;
 
+const one = { label: "Plans", url: "https://cdn/shot.png" };
+
+const pages = [
+  { label: "Welcome", url: "https://cdn/welcome.png" },
+  { label: "Your goal?", url: "https://cdn/goal.png" },
+  { label: "Plans", url: "https://cdn/review.png" },
+];
+
 const sourceWith = (extra: Partial<StudioSource> = {}): StudioSource =>
   ({ title: "app", surfaces: [surface], previewUrl: () => "", ...extra }) as StudioSource;
 
@@ -47,9 +55,7 @@ const captureAnchor = () => {
 describe("downloading a paywall's screenshot", () => {
   const localFetcher = (download: () => Promise<unknown>) =>
     vi.fn(async (input: unknown) =>
-      String(input).includes("download=1")
-        ? download()
-        : { json: async () => ({ url: "https://cdn/local.png" }) },
+      String(input).includes("download=1") ? download() : { json: async () => ({ shots: [one] }) },
     );
 
   it("saves the image through its own origin, named after the surface", async () => {
@@ -64,7 +70,7 @@ describe("downloading a paywall's screenshot", () => {
 
     await waitFor(() => expect(clicked).toHaveBeenCalled());
     expect(String(fetcher.mock.calls.at(-1)?.[0])).toBe(
-      "/__studio/screenshot/paywall/pro?download=1",
+      "/__studio/screenshot/paywall/pro?download=1&page=0",
     );
     expect(anchor.getAttribute("href")).toBe("blob:shot");
     expect(anchor.download).toBe("pro.png");
@@ -121,7 +127,7 @@ describe("downloading a paywall's screenshot", () => {
   });
 
   it("stays disabled and says what is missing when nothing has been promoted", async () => {
-    mount("hosted", sourceWith({ screenshotUrl: async () => undefined }));
+    mount("hosted", sourceWith({ screenshots: async () => undefined }));
 
     await waitFor(() => expect(blocked()).toBe(true));
     expect(await hoverHint()).toContain("promote a pushed version");
@@ -131,7 +137,7 @@ describe("downloading a paywall's screenshot", () => {
     mount(
       "hosted",
       sourceWith({
-        screenshotUrl: async () => {
+        screenshots: async () => {
           throw new Error("preview API responded 503");
         },
       }),
@@ -162,7 +168,7 @@ describe("downloading a paywall's screenshot", () => {
       blob: async () => new Blob(["png"]),
     }));
     vi.stubGlobal("fetch", fetcher);
-    mount("hosted", sourceWith({ screenshotUrl: async () => "https://cdn/shot.png" }));
+    mount("hosted", sourceWith({ screenshots: async () => [one] }));
 
     await waitFor(() => expect(blocked()).toBe(false));
     fireEvent.click(button());
@@ -182,7 +188,7 @@ describe("downloading a paywall's screenshot", () => {
       }),
     );
     const toasted = vi.spyOn(toast, "custom").mockReturnValue(1);
-    mount("hosted", sourceWith({ screenshotUrl: async () => "https://cdn/shot.png" }));
+    mount("hosted", sourceWith({ screenshots: async () => [one] }));
 
     await waitFor(() => expect(blocked()).toBe(false));
     fireEvent.click(button());
@@ -192,5 +198,90 @@ describe("downloading a paywall's screenshot", () => {
     expect(anchor.target).toBe("_blank");
     expect(toasted).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(blocked()).toBe(false));
+  });
+
+  it("stays disabled when the capture finished without an image", async () => {
+    mount("hosted", sourceWith({ screenshots: async () => [] }));
+
+    await waitFor(() => expect(blocked()).toBe(true));
+    expect(await hoverHint()).toContain("promote a pushed version");
+  });
+
+  it("lists every page of a multi-page paywall by name alone, and closes on Escape", async () => {
+    const { clicked } = captureAnchor();
+    mount("hosted", sourceWith({ screenshots: async () => pages }));
+
+    await waitFor(() => expect(blocked()).toBe(false));
+    expect(button().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(button());
+
+    expect(button().getAttribute("aria-expanded")).toBe("true");
+    const items = screen.getAllByRole("button").filter((item) => item !== button());
+    expect(items.map((item) => item.textContent)).toEqual(["Welcome", "Your goal?", "Plans"]);
+    fireEvent.mouseEnter(button().parentElement!);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(clicked).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(button().getAttribute("aria-expanded")).toBe("false"));
+    expect(screen.queryByText("Welcome")).toBeNull();
+  });
+
+  it("downloads the page picked, named after it, and closes the picker", async () => {
+    const { anchor, clicked } = captureAnchor();
+    const fetcher = vi.fn(async (_input: unknown) => ({
+      ok: true,
+      blob: async () => new Blob(["png"]),
+    }));
+    vi.stubGlobal("fetch", fetcher);
+    mount("hosted", sourceWith({ screenshots: async () => pages }));
+
+    await waitFor(() => expect(blocked()).toBe(false));
+    fireEvent.click(button());
+    fireEvent.click(screen.getByText("Your goal?"));
+
+    await waitFor(() => expect(clicked).toHaveBeenCalled());
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe("https://cdn/goal.png");
+    expect(anchor.download).toBe("pro-your-goal.png");
+    expect(screen.queryByText("Welcome")).toBeNull();
+  });
+
+  it("asks its dev server for the page picked by its place in the list", async () => {
+    const { anchor, clicked } = captureAnchor();
+    const fetcher = vi.fn(async (input: unknown) =>
+      String(input).includes("download=1")
+        ? { ok: true, blob: async () => new Blob(["png"]) }
+        : {
+            json: async () => ({
+              shots: [...pages, { label: "···", url: "https://cdn/x.png" }],
+            }),
+          },
+    );
+    vi.stubGlobal("fetch", fetcher);
+    mount("local", sourceWith());
+
+    await waitFor(() => expect(blocked()).toBe(false));
+    fireEvent.click(button());
+    fireEvent.click(screen.getByText("Plans"));
+    await waitFor(() => expect(clicked).toHaveBeenCalledTimes(1));
+    expect(String(fetcher.mock.calls.at(-1)?.[0])).toBe(
+      "/__studio/screenshot/paywall/pro?download=1&page=2",
+    );
+    expect(anchor.download).toBe("pro-plans.png");
+
+    fireEvent.click(button());
+    fireEvent.click(screen.getByText("···"));
+    await waitFor(() => expect(clicked).toHaveBeenCalledTimes(2));
+    expect(anchor.download).toBe("pro-page-4.png");
+  });
+
+  it("toggles the picker closed when the button is pressed again", async () => {
+    mount("hosted", sourceWith({ screenshots: async () => pages }));
+
+    await waitFor(() => expect(blocked()).toBe(false));
+    fireEvent.click(button());
+    expect(screen.getByText("Welcome")).not.toBeNull();
+    fireEvent.click(button());
+    expect(screen.queryByText("Welcome")).toBeNull();
   });
 });

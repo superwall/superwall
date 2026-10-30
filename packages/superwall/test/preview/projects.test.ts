@@ -5,12 +5,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { DiscoveredSurface, Project } from "../../src/discover";
 import {
   findSurface,
+  listScreenshots,
   moduleUrl,
   postcssSearchDir,
   projectDependencies,
   projectModule,
   readActionRequest,
   readProjects,
+  readScreenshotPage,
   resolvableFrom,
   slugFor,
   type PreviewProject,
@@ -175,6 +177,36 @@ describe("resolvableFrom", () => {
     const resolvable = resolvableFrom(process.cwd());
     expect(resolvable("react")).toBe(true);
     expect(resolvable("@superwall/not-a-package")).toBe(false);
+  });
+});
+
+describe("listScreenshots", () => {
+  const pro = surface("/tmp/app", "pro");
+
+  it("reads the page list from a CLI that offers one", async () => {
+    const shots = [{ label: "Plans", url: "https://img.test/plans.png" }];
+    expect(await listScreenshots({ screenshots: async () => shots }, pro)).toBe(shots);
+  });
+
+  it("wraps the single image of an older CLI as one page", async () => {
+    expect(
+      await listScreenshots({ screenshot: async () => "https://img.test/review.png" }, pro),
+    ).toEqual([{ label: "Screenshot", url: "https://img.test/review.png" }]);
+    expect(await listScreenshots({ screenshot: async () => undefined }, pro)).toBeUndefined();
+    expect(await listScreenshots({}, pro)).toBeUndefined();
+  });
+});
+
+describe("readScreenshotPage", () => {
+  it("asks for the list unless the request downloads a page", () => {
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro")).toBeUndefined();
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro?page=2")).toBeUndefined();
+  });
+
+  it("reads the page a download names, the first when it names none", () => {
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro?download=1&page=2")).toBe(2);
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro?download=1")).toBe(0);
+    expect(readScreenshotPage("/__studio/screenshot/paywall/pro?download=1&page=x")).toBeNaN();
   });
 });
 

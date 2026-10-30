@@ -5,6 +5,7 @@ import type {
   StudioActionRequest,
   StudioActionResult,
   StudioActions,
+  StudioScreenshot,
   StudioStatus,
   StudioSurface,
 } from "./surfaces";
@@ -77,11 +78,13 @@ export const devServerActions: StudioActions = {
   status: fetchStatus,
 };
 
-export const fetchScreenshot = async (surface: StudioSurface): Promise<string | undefined> => {
+export const fetchScreenshots = async (
+  surface: StudioSurface,
+): Promise<StudioScreenshot[] | undefined> => {
   const response = await fetch(`/__studio/screenshot${surfacePath(surface)}`);
-  const value = (await response.json()) as { url?: string; unreachable?: string };
+  const value = (await response.json()) as { shots?: StudioScreenshot[]; unreachable?: string };
   if (value.unreachable !== undefined) throw new Error(value.unreachable);
-  return value.url;
+  return value.shots;
 };
 
 export const fetchSamples = async (): Promise<Samples> => {

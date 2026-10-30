@@ -383,6 +383,12 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   driving the CLI) unless `createSuperwallApi`/`apiFor` is given a `userAgent`
   (the MCP passes `Superwall-MCP/1.0 (<mcp client>/<version>)`); a request's own
   `user-agent` header still wins. Apple requests keep a bare `superwall-cli/<version>`.
+- **The studio's actions span two versions.** `dev` hands its actions to the
+  framework the project has installed, which can be older or newer than the
+  CLI. So the actions keep `screenshot` (one image, what a framework before
+  the page picker asks for) beside `screenshots` (every page), and the
+  framework's dev server wraps a lone `screenshot` as a one-page list.
+  Remove `screenshot` once no supported framework calls it.
 - **Apple keys:** the ASC proxy signs with the org's stored key, so nothing
   signs a `.p8` or JWT locally. Apple names key files `AuthKey_<KEYID>.p8`, and
   drag-and-drop escapes spaces as `"\ "`. ASC products walk subscription

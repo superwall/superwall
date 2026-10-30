@@ -37,3 +37,8 @@ export type AppScheme = {
   source?: "dashboard" | "app";
   blocksLocalNetworking?: string;
 };
+
+export type StudioScreenshot = {
+  label: string;
+  url: string;
+};

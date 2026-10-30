@@ -20,6 +20,7 @@ import {
   type FrameworkProject,
   type FrameworkSurface,
   type StudioActions,
+  type StudioScreenshot,
 } from "@/core/paywalls/project/framework";
 import { readLock } from "@/core/paywalls/project/lock";
 import { appScheme, detectAppTransportSecurity, schemeSearchRoots } from "@/core/paywalls/project/scheme";
@@ -32,6 +33,54 @@ import { VERSION } from "@/environment";
 
 type Sample = { properties?: Record<string, unknown>; live?: boolean };
 
+type PreviewPage = {
+  url?: string;
+  kind?: string;
+  page_index?: number;
+  page_name?: string | null;
+  app_store_image?: { url?: string } | null;
+};
+
+type PreviewImages = {
+  status?: string;
+  pages?: PreviewPage[];
+  apple_review_image?: { url?: string; page_index?: number } | null;
+};
+
+const resolveScreenshots = (session: PreviewImages): StudioScreenshot[] => {
+  const pages = session.pages ?? [];
+  const reviewUrl = session.apple_review_image?.url;
+  const regular = pages.filter((page) => page.kind !== "overlay");
+  const reviewed =
+    reviewUrl === undefined
+      ? undefined
+      : ([...regular].reverse().find((page) => page.page_index === session.apple_review_image?.page_index) ??
+        regular.at(-1));
+  const hosts = new Map<number | undefined, { label: string; overlays: number }>();
+  const shots: StudioScreenshot[] = [];
+  let ordinal = 0;
+
+  for (const page of pages) {
+    const url = page.app_store_image?.url ?? (page === reviewed ? reviewUrl : page.url);
+    if (page.kind === "overlay") {
+      const host = hosts.get(page.page_index) ?? { label: `Page ${(page.page_index ?? 0) + 1}`, overlays: 0 };
+      host.overlays += 1;
+      hosts.set(page.page_index, host);
+      const label = page.page_name?.trim() || `${host.label} · Overlay ${host.overlays}`;
+      if (url !== undefined) shots.push({ label, url });
+      continue;
+    }
+    ordinal += 1;
+    const label = page.page_name?.trim() || `Page ${ordinal}`;
+    hosts.set(page.page_index, { label, overlays: 0 });
+    if (url !== undefined) shots.push({ label, url });
+  }
+  if (reviewed === undefined && reviewUrl !== undefined) {
+    shots.push({ label: `Page ${ordinal + 1}`, url: reviewUrl });
+  }
+  return shots;
+};
+
 const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 const firstApp = (apps: Record<string, string>): string | undefined =>
@@ -43,6 +92,21 @@ export function createStudioActions(
 ): StudioActions {
   let api: SuperwallApi | undefined;
   const ensureApi = async () => (api ??= await requireApi(false));
+
+  const readPreviewImages = async (surface: FrameworkSurface): Promise<PreviewImages | undefined> => {
+    const lock = readLock(project.superwallDir);
+    const bindings = (surface.kind === "paywall" ? lock.paywalls : lock.funnels)[surface.id];
+    const bound = bindings === undefined ? undefined : Object.values(bindings)[0];
+    if (!bound) return undefined;
+    const client = await ensureApi();
+    const session = await client
+      .get<PreviewImages>(`/v2/paywalls/${encodeURIComponent(bound.paywallId)}/preview-images`)
+      .catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 400) return undefined;
+        throw error;
+      });
+    return session?.status === "ready" ? session : undefined;
+  };
 
   const targetsFor = async (client: SuperwallApi, surface: FrameworkSurface) => {
     const declared = (await collectProjectDeclarations(framework, project.root)).platforms;
@@ -213,24 +277,16 @@ export function createStudioActions(
       }
     },
 
+    async screenshots(surface: FrameworkSurface) {
+      const session = await readPreviewImages(surface);
+      if (session === undefined) return undefined;
+      const shots = resolveScreenshots(session);
+      return shots.length === 0 ? undefined : shots;
+    },
+
     async screenshot(surface: FrameworkSurface) {
-      const lock = readLock(project.superwallDir);
-      const bindings = (surface.kind === "paywall" ? lock.paywalls : lock.funnels)[surface.id];
-      const bound = bindings === undefined ? undefined : Object.values(bindings)[0];
-      if (!bound) return undefined;
-      const client = await ensureApi();
-      const session = await client
-        .get<{
-          status?: string;
-          pages?: { url?: string }[];
-          apple_review_image?: { url?: string } | null;
-        }>(`/v2/paywalls/${encodeURIComponent(bound.paywallId)}/preview-images`)
-        .catch((error: unknown) => {
-          if (error instanceof ApiError && error.status === 400) return undefined;
-          throw error;
-        });
-      if (session?.status !== "ready") return undefined;
-      return session.apple_review_image?.url ?? session.pages?.[0]?.url;
+      const session = await readPreviewImages(surface);
+      return session?.apple_review_image?.url ?? session?.pages?.[0]?.url;
     },
 
     async status(surface: FrameworkSurface) {

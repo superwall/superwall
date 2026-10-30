@@ -3,6 +3,7 @@ import type {
   StudioActionProgress,
   StudioActionRequest,
   StudioActionResult,
+  StudioScreenshot,
   StudioStatus,
 } from "./contract";
 import type { StudioPresentation } from "./presentation";
@@ -17,6 +18,7 @@ export type {
   StudioActionProgress,
   StudioActionRequest,
   StudioActionResult,
+  StudioScreenshot,
   StudioStatus,
   StudioVersion,
 } from "./contract";
@@ -97,7 +99,7 @@ export type StudioSource = {
   standaloneUrl?: PreviewUrlBuilder;
   actions?: StudioActions;
   previewLink?: (surface: StudioSurface) => Promise<string>;
-  screenshotUrl?: (surface: StudioSurface) => Promise<string | undefined>;
+  screenshots?: (surface: StudioSurface) => Promise<StudioScreenshot[] | undefined>;
   compareHint?: string;
 };
 

@@ -26,13 +26,16 @@ import {
 import { buildStudioProjects } from "./project";
 import {
   findSurface,
+  listScreenshots,
   postcssSearchDir,
   projectDependencies,
   projectModule,
   readActionRequest,
   readProjects,
+  readScreenshotPage,
   resolvableFrom,
   type PreviewProject,
+  type ScreenshotSource,
 } from "./projects";
 import { injectWebviewSimulation } from "./webview";
 
@@ -92,10 +95,9 @@ const STUDIO_MISSING = `superwall studio is not built.
 Run: bun run --filter '@superwall/studio' build
 (or reinstall — the workspace postinstall builds it)`;
 
-export type StudioActions = {
+export type StudioActions = ScreenshotSource & {
   appScheme?(): Promise<AppScheme>;
   samples?(): Promise<Samples>;
-  screenshot?(surface: DiscoveredSurface): Promise<string | undefined>;
   run(
     action: StudioActionName,
     surface: DiscoveredSurface,
@@ -260,21 +262,26 @@ const previewPlugin = (
             screenshot[2] ?? "",
             screenshot[3] ?? "",
           )?.surface;
-          if (!surface || !studio?.screenshot) {
+          if (!surface || !studio) {
             return json(res, {});
           }
-          const wantsFile = (req.url ?? "").includes("download=1");
-          studio
-            .screenshot(surface)
-            .then(async (value) => {
-              if (value === undefined) return json(res, {});
-              if (!wantsFile) return json(res, { url: value });
-              const image = await fetch(value);
+          const page = readScreenshotPage(req.url ?? "");
+          listScreenshots(studio, surface)
+            .then(async (shots) => {
+              if (shots === undefined) return json(res, {});
+              if (page === undefined) return json(res, { shots });
+              const shot = shots.find((_, index) => index === page);
+              if (shot === undefined)
+                return json(res, { unreachable: "The capture has no such page" });
+              const image = await fetch(shot.url);
               if (!image.ok) {
                 return json(res, { unreachable: `Screenshot host answered ${image.status}` });
               }
               res.setHeader("Content-Type", image.headers.get("content-type") ?? "image/png");
-              res.setHeader("Content-Disposition", `attachment; filename="${surface.id}.png"`);
+              res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="${surface.id}-${String(page + 1)}.png"`,
+              );
               res.setHeader("Cache-Control", "no-store");
               res.end(Buffer.from(await image.arrayBuffer()));
             })

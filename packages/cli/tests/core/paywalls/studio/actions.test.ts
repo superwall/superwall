@@ -808,22 +808,100 @@ test("status reads a funnel's binding and lists no versions when the API returns
 const previewImages = (body: unknown, status = 200) => (url: string) =>
   url === "/v2/paywalls/208540/preview-images" ? { status, body } : undefined;
 
-test("the screenshot is the App Store review image once the capture is ready", async () => {
+test("every captured page is a screenshot, the last one the App Store review render", async () => {
   const api = await startApi();
   api.gate = previewImages({
     status: "ready",
-    pages: [{ url: "https://img.test/page-1.png" }],
-    apple_review_image: { url: "https://img.test/review.png" },
+    pages: [
+      { page_index: 0, page_name: "Welcome", kind: "page", url: "https://img.test/welcome.png" },
+      { page_index: 1, page_name: null, kind: "page", url: "https://img.test/page-2.png" },
+      { page_index: 2, page_name: "  Plans ", kind: "page", url: "https://img.test/plans.png" },
+    ],
+    apple_review_image: { url: "https://img.test/review.png", page_index: 2 },
   });
 
-  assert.equal(await createStudioActions(framework, boundProject()).screenshot?.(surface), "https://img.test/review.png");
+  assert.deepEqual(await createStudioActions(framework, boundProject()).screenshots?.(surface), [
+    { label: "Welcome", url: "https://img.test/welcome.png" },
+    { label: "Page 2", url: "https://img.test/page-2.png" },
+    { label: "Plans", url: "https://img.test/review.png" },
+  ]);
 });
 
-test("without a review image the screenshot is the first page", async () => {
+test("overlays keep the capture's name, else are numbered under the page they open on", async () => {
   const api = await startApi();
-  api.gate = previewImages({ status: "ready", pages: [{ url: "https://img.test/page-1.png" }], apple_review_image: null });
+  api.gate = previewImages({
+    status: "ready",
+    pages: [
+      { page_index: 0, page_name: "Plans", kind: "page", url: "https://img.test/plans.png" },
+      { page_index: 0, kind: "overlay", url: "https://img.test/discount.png" },
+      { page_index: 0, page_name: "Plans — Exit offer", kind: "overlay", url: "https://img.test/exit.png" },
+      { page_index: 3, kind: "overlay", url: "https://img.test/orphan.png" },
+      { page_index: 0, kind: "overlay" },
+    ],
+    apple_review_image: { url: "https://img.test/review.png", page_index: 0 },
+  });
 
-  assert.equal(await createStudioActions(framework, boundProject()).screenshot?.(surface), "https://img.test/page-1.png");
+  assert.deepEqual(await createStudioActions(framework, boundProject()).screenshots?.(surface), [
+    { label: "Plans", url: "https://img.test/review.png" },
+    { label: "Plans · Overlay 1", url: "https://img.test/discount.png" },
+    { label: "Plans — Exit offer", url: "https://img.test/exit.png" },
+    { label: "Page 4 · Overlay 1", url: "https://img.test/orphan.png" },
+  ]);
+});
+
+test("the review render falls back to the last page, or is the only page when no page matches", async () => {
+  const api = await startApi();
+  const actions = createStudioActions(framework, boundProject());
+
+  api.gate = previewImages({
+    status: "ready",
+    pages: [
+      { page_index: 0, url: "https://img.test/page-1.png" },
+      { page_index: 1, url: "https://img.test/page-2.png" },
+    ],
+    apple_review_image: { url: "https://img.test/review.png", page_index: 7 },
+  });
+  assert.deepEqual(await actions.screenshots?.(surface), [
+    { label: "Page 1", url: "https://img.test/page-1.png" },
+    { label: "Page 2", url: "https://img.test/review.png" },
+  ]);
+
+  api.gate = previewImages({ status: "ready", pages: [], apple_review_image: { url: "https://img.test/review.png" } });
+  assert.deepEqual(await actions.screenshots?.(surface), [
+    { label: "Page 1", url: "https://img.test/review.png" },
+  ]);
+});
+
+test("a page's own App Store render wins over its phone-sized capture", async () => {
+  const api = await startApi();
+  api.gate = previewImages({
+    status: "ready",
+    pages: [
+      { page_index: 0, page_name: "Welcome", url: "https://img.test/welcome.png", app_store_image: { url: "https://img.test/welcome-1290.png" } },
+      { page_index: 0, kind: "overlay", url: "https://img.test/sheet.png", app_store_image: { url: "https://img.test/sheet-1290.png" } },
+      { page_index: 1, page_name: "Plans", url: "https://img.test/plans.png", app_store_image: null },
+    ],
+    apple_review_image: { url: "https://img.test/review.png", page_index: 1 },
+  });
+
+  assert.deepEqual(await createStudioActions(framework, boundProject()).screenshots?.(surface), [
+    { label: "Welcome", url: "https://img.test/welcome-1290.png" },
+    { label: "Welcome · Overlay 1", url: "https://img.test/sheet-1290.png" },
+    { label: "Plans", url: "https://img.test/review.png" },
+  ]);
+});
+
+test("without a review render every page keeps its own capture", async () => {
+  const api = await startApi();
+  api.gate = previewImages({
+    status: "ready",
+    pages: [{ url: "https://img.test/page-1.png" }, { page_name: "Paywall" }],
+    apple_review_image: null,
+  });
+
+  assert.deepEqual(await createStudioActions(framework, boundProject()).screenshots?.(surface), [
+    { label: "Page 1", url: "https://img.test/page-1.png" },
+  ]);
 });
 
 test("there is no screenshot while the capture runs, when the API refuses one, or for an unbound surface", async () => {
@@ -832,19 +910,40 @@ test("there is no screenshot while the capture runs, when the API refuses one, o
   const actions = createStudioActions(framework, project);
 
   api.gate = previewImages({ status: "pending" });
-  assert.equal(await actions.screenshot?.(surface), undefined);
+  assert.equal(await actions.screenshots?.(surface), undefined);
 
   api.gate = previewImages({ error: "no capture for this paywall" }, 400);
-  assert.equal(await actions.screenshot?.(surface), undefined);
+  assert.equal(await actions.screenshots?.(surface), undefined);
+
+  api.gate = previewImages({ status: "ready", pages: [], apple_review_image: null });
+  assert.equal(await actions.screenshots?.(surface), undefined);
 
   const calls = api.calls.length;
-  assert.equal(await actions.screenshot?.(funnel), undefined);
+  assert.equal(await actions.screenshots?.(funnel), undefined);
   assert.equal(api.calls.length, calls);
+});
+
+test("a framework older than the page list still gets the single image it asks for", async () => {
+  const api = await startApi();
+  const actions = createStudioActions(framework, boundProject());
+
+  api.gate = previewImages({
+    status: "ready",
+    pages: [{ url: "https://img.test/page-1.png" }],
+    apple_review_image: { url: "https://img.test/review.png" },
+  });
+  assert.equal(await actions.screenshot?.(surface), "https://img.test/review.png");
+
+  api.gate = previewImages({ status: "ready", pages: [{ url: "https://img.test/page-1.png" }], apple_review_image: null });
+  assert.equal(await actions.screenshot?.(surface), "https://img.test/page-1.png");
+
+  api.gate = previewImages({ status: "pending" });
+  assert.equal(await actions.screenshot?.(surface), undefined);
 });
 
 test("a screenshot request that fails for any other reason is not swallowed", async () => {
   const api = await startApi();
   api.gate = previewImages({ error: "boom" }, 500);
 
-  await assert.rejects(createStudioActions(framework, boundProject()).screenshot?.(surface) ?? Promise.resolve(), /500/);
+  await assert.rejects(createStudioActions(framework, boundProject()).screenshots?.(surface) ?? Promise.resolve(), /500/);
 });
