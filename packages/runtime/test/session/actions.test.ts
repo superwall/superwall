@@ -42,6 +42,12 @@ describe("actions", () => {
     });
   });
 
+  it("custom actions send the name as the custom message's data", () => {
+    const { session, transport } = createSession();
+    session.customAction("open_settings");
+    expect(lastOutgoing(transport)).toEqual({ event_name: "custom", data: "open_settings" });
+  });
+
   it("custom placements, store review and haptics", () => {
     const { session, transport } = createSession();
 

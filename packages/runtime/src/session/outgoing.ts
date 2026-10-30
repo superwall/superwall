@@ -35,6 +35,8 @@ export const openDeepLink = (link: string): Outgoing<"open_deep_link"> => ({
   link,
 });
 
+export const custom = (name: string): Outgoing<"custom"> => ({ event_name: "custom", data: name });
+
 export const customPlacement = (
   name: string,
   params: Record<string, unknown>,

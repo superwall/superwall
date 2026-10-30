@@ -331,6 +331,7 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
     openUrl: (url, urlOptions = {}) => post(outgoing.openUrl(url, urlOptions.browserType)),
     openExternalUrl: (url) => post(outgoing.openExternalUrl(url)),
     openDeepLink: (link) => post(outgoing.openDeepLink(link)),
+    customAction: (name) => post(outgoing.custom(name)),
     customPlacement: (name, params = {}) => post(outgoing.customPlacement(name, params)),
     setUserAttributes: (attributes) => {
       const entries = Object.entries(attributes).map(([key, value]) => ({
