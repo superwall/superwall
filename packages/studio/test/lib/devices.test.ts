@@ -5,6 +5,7 @@ import {
   deviceById,
   deviceVariablesFor,
   isWebOnly,
+  notificationScreenFor,
   safeAreaFor,
   STUDIO_DEVICES,
   webViewportFor,
@@ -115,5 +116,29 @@ describe("iPhone Duo", () => {
       ...deviceById("iphone-duo-open").device,
       platform: "web",
     });
+  });
+});
+
+describe("where a notification preview is drawn", () => {
+  it("uses the previewed phone's platform and width", () => {
+    expect(notificationScreenFor(deviceById("pixel-10"), false)).toEqual({
+      platform: "Android",
+      width: 412,
+    });
+    expect(notificationScreenFor(deviceById("iphone-se"), false)).toEqual({
+      platform: "iOS",
+      width: 375,
+    });
+  });
+
+  it("caps tablets and an open Duo at the widest phone", () => {
+    expect(notificationScreenFor(deviceById("ipad-pro-11"), false).width).toBe(440);
+    expect(notificationScreenFor(deviceById("iphone-duo-open"), false).width).toBe(440);
+  });
+
+  it("falls back to the default iPhone for web paywalls and the desktop", () => {
+    const fallback = { platform: "iOS", width: deviceById(DEFAULT_DEVICE_ID).width };
+    expect(notificationScreenFor(deviceById("pixel-10"), true)).toEqual(fallback);
+    expect(notificationScreenFor(deviceById("desktop"), false)).toEqual(fallback);
   });
 });

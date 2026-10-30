@@ -200,3 +200,15 @@ const DEFAULT_DEVICE: StudioDevice =
 
 export const deviceById = (id: string): StudioDevice =>
   STUDIO_DEVICES.find((device) => device.id === id) ?? DEFAULT_DEVICE;
+
+const WIDEST_PHONE = 440;
+
+export const notificationScreenFor = (
+  device: StudioDevice,
+  web: boolean,
+): { platform: "iOS" | "Android"; width: number } => {
+  const host = web ? undefined : device.device;
+  return host
+    ? { platform: host.platform, width: Math.min(device.width, WIDEST_PHONE) }
+    : { platform: "iOS", width: DEFAULT_DEVICE.width };
+};

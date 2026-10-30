@@ -53,6 +53,7 @@ export type {
   StudioActionRequest,
   StudioActionResult,
   StudioActions,
+  StudioAppIdentity,
   StudioPresentation,
   StudioScreenshot,
   StudioSource,

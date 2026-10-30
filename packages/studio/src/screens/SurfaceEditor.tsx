@@ -41,6 +41,7 @@ import {
   deviceById,
   deviceVariablesFor,
   isWebOnly,
+  notificationScreenFor,
   webViewportFor,
   RESPONSIVE_DEFAULT,
   RESPONSIVE_ID,
@@ -254,7 +255,6 @@ export const SurfaceEditor = ({
   React.useEffect(() => () => window.clearTimeout(dismissTimer.current), []);
 
   const shipping = source.actions;
-  const delegate = useStudioDelegate();
   const defaults = React.useMemo(studioDefaults, [surface]);
 
   const locales = surface.locales;
@@ -321,6 +321,13 @@ export const SurfaceEditor = ({
       ? webViewportFor(device)
       : { width: device.width, height: device.height };
   const presentation = web ? undefined : surface.presentation;
+  const reminderScreen = notificationScreenFor(device, web || responsive);
+  const delegate = useStudioDelegate({
+    platform: reminderScreen.platform,
+    screenWidth: reminderScreen.width,
+    theme,
+    app: source.app ?? { name: surface.project ?? source.title },
+  });
   const frame = landscape ? { width: upright.height, height: upright.width } : upright;
 
   const openPreview = () => {

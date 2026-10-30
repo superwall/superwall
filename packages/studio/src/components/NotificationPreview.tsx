@@ -13,7 +13,7 @@ export type NotificationApp = {
   iconUrl?: string;
 };
 
-type Theme = "light" | "dark";
+export type NotificationTheme = "light" | "dark";
 
 const IOS_FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif';
 const ANDROID_FONT = 'Roboto, "Google Sans", system-ui, sans-serif';
@@ -47,7 +47,7 @@ const AppIcon = ({
   app: NotificationApp;
   size: number;
   radius: number | string;
-  theme: Theme;
+  theme: NotificationTheme;
 }) => {
   const [failed, setFailed] = React.useState(false);
   const shape: React.CSSProperties = {
@@ -87,7 +87,10 @@ const AppIcon = ({
   );
 };
 
-const IOS_COLORS: Record<Theme, { background: string; text: string; secondary: string }> = {
+const IOS_COLORS: Record<
+  NotificationTheme,
+  { background: string; text: string; secondary: string }
+> = {
   light: {
     background: "rgba(246, 246, 246, 0.92)",
     text: "#000",
@@ -107,7 +110,7 @@ const IosNotification = ({
 }: {
   app: NotificationApp;
   notification: NotificationContent;
-  theme: Theme;
+  theme: NotificationTheme;
 }) => {
   const colors = IOS_COLORS[theme];
   return (
@@ -148,7 +151,10 @@ const IosNotification = ({
   );
 };
 
-const ANDROID_COLORS: Record<Theme, { background: string; text: string; secondary: string }> = {
+const ANDROID_COLORS: Record<
+  NotificationTheme,
+  { background: string; text: string; secondary: string }
+> = {
   light: { background: "#f4f0f4", text: "#1d1b20", secondary: "#49454f" },
   dark: { background: "#2b2930", text: "#e6e0e9", secondary: "#cac4d0" },
 };
@@ -160,7 +166,7 @@ const AndroidNotification = ({
 }: {
   app: NotificationApp;
   notification: NotificationContent;
-  theme: Theme;
+  theme: NotificationTheme;
 }) => {
   const colors = ANDROID_COLORS[theme];
   return (
@@ -225,7 +231,7 @@ export const NotificationPreview = ({
   screenWidth: number;
   app: NotificationApp;
   notification: NotificationContent;
-  theme?: Theme;
+  theme?: NotificationTheme;
 }) => (
   <div
     data-testid="notification-preview"

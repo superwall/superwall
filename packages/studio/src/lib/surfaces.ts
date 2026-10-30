@@ -88,10 +88,16 @@ export type StudioActions = {
   pick?(version: number): void;
 };
 
+export type StudioAppIdentity = {
+  name: string;
+  iconUrl?: string;
+};
+
 export type StudioSource = {
   scheme?: string;
   networkOrigin?: string;
   title: string;
+  app?: StudioAppIdentity;
   surfaces: StudioSurface[];
   diagnostics?: string[];
   samples?: SampleDefaults;
