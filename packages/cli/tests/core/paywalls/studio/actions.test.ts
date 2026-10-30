@@ -923,6 +923,24 @@ test("there is no screenshot while the capture runs, when the API refuses one, o
   assert.equal(api.calls.length, calls);
 });
 
+test("a framework older than the page list still gets the single image it asks for", async () => {
+  const api = await startApi();
+  const actions = createStudioActions(framework, boundProject());
+
+  api.gate = previewImages({
+    status: "ready",
+    pages: [{ url: "https://img.test/page-1.png" }],
+    apple_review_image: { url: "https://img.test/review.png" },
+  });
+  assert.equal(await actions.screenshot?.(surface), "https://img.test/review.png");
+
+  api.gate = previewImages({ status: "ready", pages: [{ url: "https://img.test/page-1.png" }], apple_review_image: null });
+  assert.equal(await actions.screenshot?.(surface), "https://img.test/page-1.png");
+
+  api.gate = previewImages({ status: "pending" });
+  assert.equal(await actions.screenshot?.(surface), undefined);
+});
+
 test("a screenshot request that fails for any other reason is not swallowed", async () => {
   const api = await startApi();
   api.gate = previewImages({ error: "boom" }, 500);

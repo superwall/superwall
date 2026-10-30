@@ -10,7 +10,6 @@ import type {
   StudioActionName,
   StudioActionProgress,
   StudioActionResult,
-  StudioScreenshot,
   StudioStatus,
 } from "@superwall/studio/contract";
 import { loadSurfaceConfig } from "../config/load";
@@ -27,6 +26,7 @@ import {
 import { buildStudioProjects } from "./project";
 import {
   findSurface,
+  listScreenshots,
   postcssSearchDir,
   projectDependencies,
   projectModule,
@@ -35,6 +35,7 @@ import {
   readScreenshotPage,
   resolvableFrom,
   type PreviewProject,
+  type ScreenshotSource,
 } from "./projects";
 import { injectWebviewSimulation } from "./webview";
 
@@ -94,10 +95,9 @@ const STUDIO_MISSING = `superwall studio is not built.
 Run: bun run --filter '@superwall/studio' build
 (or reinstall — the workspace postinstall builds it)`;
 
-export type StudioActions = {
+export type StudioActions = ScreenshotSource & {
   appScheme?(): Promise<AppScheme>;
   samples?(): Promise<Samples>;
-  screenshots?(surface: DiscoveredSurface): Promise<StudioScreenshot[] | undefined>;
   run(
     action: StudioActionName,
     surface: DiscoveredSurface,
@@ -262,12 +262,11 @@ const previewPlugin = (
             screenshot[2] ?? "",
             screenshot[3] ?? "",
           )?.surface;
-          if (!surface || !studio?.screenshots) {
+          if (!surface || !studio) {
             return json(res, {});
           }
           const page = readScreenshotPage(req.url ?? "");
-          studio
-            .screenshots(surface)
+          listScreenshots(studio, surface)
             .then(async (shots) => {
               if (shots === undefined) return json(res, {});
               if (page === undefined) return json(res, { shots });

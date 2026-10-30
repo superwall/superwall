@@ -93,6 +93,21 @@ export function createStudioActions(
   let api: SuperwallApi | undefined;
   const ensureApi = async () => (api ??= await requireApi(false));
 
+  const readPreviewImages = async (surface: FrameworkSurface): Promise<PreviewImages | undefined> => {
+    const lock = readLock(project.superwallDir);
+    const bindings = (surface.kind === "paywall" ? lock.paywalls : lock.funnels)[surface.id];
+    const bound = bindings === undefined ? undefined : Object.values(bindings)[0];
+    if (!bound) return undefined;
+    const client = await ensureApi();
+    const session = await client
+      .get<PreviewImages>(`/v2/paywalls/${encodeURIComponent(bound.paywallId)}/preview-images`)
+      .catch((error: unknown) => {
+        if (error instanceof ApiError && error.status === 400) return undefined;
+        throw error;
+      });
+    return session?.status === "ready" ? session : undefined;
+  };
+
   const targetsFor = async (client: SuperwallApi, surface: FrameworkSurface) => {
     const declared = (await collectProjectDeclarations(framework, project.root)).platforms;
     const apps = await resolveApps({
@@ -263,20 +278,15 @@ export function createStudioActions(
     },
 
     async screenshots(surface: FrameworkSurface) {
-      const lock = readLock(project.superwallDir);
-      const bindings = (surface.kind === "paywall" ? lock.paywalls : lock.funnels)[surface.id];
-      const bound = bindings === undefined ? undefined : Object.values(bindings)[0];
-      if (!bound) return undefined;
-      const client = await ensureApi();
-      const session = await client
-        .get<PreviewImages>(`/v2/paywalls/${encodeURIComponent(bound.paywallId)}/preview-images`)
-        .catch((error: unknown) => {
-          if (error instanceof ApiError && error.status === 400) return undefined;
-          throw error;
-        });
-      if (session?.status !== "ready") return undefined;
+      const session = await readPreviewImages(surface);
+      if (session === undefined) return undefined;
       const shots = resolveScreenshots(session);
       return shots.length === 0 ? undefined : shots;
+    },
+
+    async screenshot(surface: FrameworkSurface) {
+      const session = await readPreviewImages(surface);
+      return session?.apple_review_image?.url ?? session?.pages?.[0]?.url;
     },
 
     async status(surface: FrameworkSurface) {

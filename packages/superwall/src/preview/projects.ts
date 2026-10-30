@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
+import type { StudioScreenshot } from "@superwall/studio/contract";
 import { discoverProject, type DiscoveredSurface, type Project } from "../discover";
 
 export type PreviewProject = { slug: string; root: string; project: Project };
@@ -154,6 +155,20 @@ const versionField = (value: unknown, key: string): number | undefined => {
 export const readScreenshotPage = (rawUrl: string): number | undefined => {
   const query = new URL(rawUrl, "http://studio").searchParams;
   return query.get("download") === "1" ? Number(query.get("page") ?? "0") : undefined;
+};
+
+export type ScreenshotSource = {
+  screenshots?(surface: DiscoveredSurface): Promise<StudioScreenshot[] | undefined>;
+  screenshot?(surface: DiscoveredSurface): Promise<string | undefined>;
+};
+
+export const listScreenshots = async (
+  studio: ScreenshotSource,
+  surface: DiscoveredSurface,
+): Promise<StudioScreenshot[] | undefined> => {
+  if (studio.screenshots) return studio.screenshots(surface);
+  const url = await studio.screenshot?.(surface);
+  return url === undefined ? undefined : [{ label: "Screenshot", url }];
 };
 
 export const readActionRequest = (body: string): ActionRequest => {
