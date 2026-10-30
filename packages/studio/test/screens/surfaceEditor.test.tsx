@@ -138,6 +138,50 @@ describe("SurfaceEditor hosting a published paywall", () => {
     expect(burst?.[0]).toMatchObject({ variables: { products: [{ annual: {} }] } });
   });
 
+  it("previews a scheduled reminder on the picked device, as the app the host names", async () => {
+    renderEditor(
+      <SurfaceEditor source={{ ...source, app: { name: "Pulse" } }} surface={live} samples={{}} />,
+    );
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "pixel-10" } });
+    const [, dark] = within(screen.getByRole("group", { name: "Theme" })).getAllByRole("button");
+    if (!dark) throw new Error("no dark theme button");
+    fireEvent.click(dark);
+    const target = preview().contentWindow;
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            version: 1,
+            direction: "from_paywall",
+            payload: {
+              events: [
+                {
+                  event_name: "schedule_notification",
+                  id: "plus_upgrade_TRIAL_STARTED",
+                  type: "TRIAL_STARTED",
+                  title: "Your trial ends tomorrow",
+                  body: "Keep Plus, or cancel in Settings.",
+                  delay: 6 * 24 * 60 * 60 * 1000,
+                },
+              ],
+            },
+          }),
+          source: target,
+        }),
+      );
+    });
+
+    const card = await screen.findByTestId("notification-preview");
+    expect(card.querySelector("[data-platform]")?.getAttribute("data-platform")).toBe("Android");
+    expect(card.style.width).toBe("412px");
+    expect(screen.getByTestId("notification-icon-fallback").textContent).toBe("P");
+    expect(screen.getByText("· in 6 days")).toBeDefined();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+  });
+
   it("switches theme and locale by re-sending device variables, not by reloading", () => {
     renderEditor(
       <SurfaceEditor source={source} surface={{ ...live, locales: ["en", "de"] }} samples={{}} />,

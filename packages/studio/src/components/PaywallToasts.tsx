@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast, Toaster } from "sonner";
-import type { HostDelegate } from "@superwall/host";
+import type { HostDelegate, TOutgoingMessage } from "@superwall/host";
 import {
   AlertTriangleIcon,
   BellIcon,
@@ -16,7 +16,14 @@ import {
   type IconComponent,
 } from "./icons";
 import { InlineCode } from "./InlineCode";
+import {
+  NotificationPreview,
+  type NotificationApp,
+  type NotificationPlatform,
+} from "./NotificationPreview";
+import { DEFAULT_DEVICE_ID, deviceById, notificationScreenFor } from "../lib/devices";
 import { noticeFor, type EventNotice, type PaywallMessageName } from "../lib/notices";
+import { timeUntil } from "../lib/time";
 
 const TINT: Record<EventNotice["tone"], string> = {
   info: "text-info",
@@ -43,10 +50,11 @@ const ICON: Partial<Record<PaywallMessageName, IconComponent>> = {
   custom: BoltIcon,
   request_permission: BoltIcon,
   request_callback: BoltIcon,
-  schedule_notification: BellIcon,
   request_store_review: StarIcon,
   user_attribute_updated: UserIcon,
 };
+
+const SURFACE = "rounded-sm border border-border bg-popover font-sans text-sm text-foreground";
 
 export const ToastCard = ({
   icon: Icon,
@@ -60,7 +68,7 @@ export const ToastCard = ({
   description?: React.ReactNode;
   actions?: React.ReactNode;
 }>) => (
-  <div className="w-90 max-w-[calc(100vw-2rem)] rounded-sm border border-border bg-popover py-3 ps-[calc(--spacing(3)-1px)] pe-3 font-sans text-sm text-foreground">
+  <div className={`w-90 max-w-[calc(100vw-2rem)] py-3 ps-[calc(--spacing(3)-1px)] pe-3 ${SURFACE}`}>
     <div className="grid grid-cols-[0.875rem_1fr] items-start gap-x-2">
       <span className={`flex h-5 items-center justify-center ${TINT[tone]}`}>
         <Icon />
@@ -223,6 +231,75 @@ const CALLBACK: readonly Choice<"success" | "failure">[] = [
   },
 ];
 
+export type ReminderTarget = {
+  platform: NotificationPlatform;
+  screenWidth: number;
+  app: NotificationApp;
+};
+
+const defaultScreen = notificationScreenFor(deviceById(DEFAULT_DEVICE_ID), false);
+
+const DEFAULT_TARGET: ReminderTarget = {
+  platform: defaultScreen.platform,
+  screenWidth: defaultScreen.width,
+  app: { name: "superwall" },
+};
+
+type ScheduledNotification = Extract<TOutgoingMessage, { event_name: "schedule_notification" }>;
+
+const TOAST_FRAME = 26;
+
+const ReminderToast = ({
+  message,
+  target,
+  onDismiss,
+}: {
+  message: ScheduledNotification;
+  target: ReminderTarget;
+  onDismiss: () => void;
+}) => (
+  <div
+    className={`relative left-1/2 -translate-x-1/2 p-3 ${SURFACE}`}
+    style={{ width: target.screenWidth + TOAST_FRAME }}
+  >
+    <div className="mb-3 grid grid-cols-[0.875rem_1fr_auto] items-center gap-x-2">
+      <span className={`flex h-5 items-center justify-center ${TINT.info}`}>
+        <BellIcon />
+      </span>
+      <span className="min-w-0 font-medium">
+        Trial reminder scheduled{" "}
+        <span className="font-normal text-fg-secondary">· {timeUntil(message.delay)}</span>
+      </span>
+      <button
+        type="button"
+        aria-label="Dismiss"
+        className="sw-btn sw-btn--xs sw-btn--icon sw-btn--ghost"
+        onClick={onDismiss}
+      >
+        <XIcon />
+      </button>
+    </div>
+    <NotificationPreview
+      platform={target.platform}
+      screenWidth={target.screenWidth}
+      app={target.app}
+      notification={{
+        title: message.title,
+        ...(message.subtitle === undefined ? {} : { subtitle: message.subtitle }),
+        body: message.body,
+      }}
+    />
+  </div>
+);
+
+const showReminder = (message: ScheduledNotification, target: ReminderTarget) => {
+  const id = `reminder-${message.id}`;
+  toast.custom(
+    () => <ReminderToast message={message} target={target} onDismiss={() => toast.dismiss(id)} />,
+    { id, duration: Number.POSITIVE_INFINITY },
+  );
+};
+
 let asked = 0;
 
 const ask = <T,>(
@@ -251,8 +328,14 @@ const ask = <T,>(
     );
   });
 
-export const createStudioDelegate = (): HostDelegate => ({
+export const createStudioDelegate = (
+  reminderTarget: () => ReminderTarget = () => DEFAULT_TARGET,
+): HostDelegate => ({
   event: (message) => {
+    if (message.event_name === "schedule_notification") {
+      showReminder(message, reminderTarget());
+      return;
+    }
     const notice = noticeFor(message);
     if (notice) toast.custom(() => <Notice notice={notice} />);
   },
@@ -267,7 +350,11 @@ export const createStudioDelegate = (): HostDelegate => ({
     ask("request_callback", "callback", name, CALLBACK).then((status) => ({ status })),
 });
 
-export const useStudioDelegate = (): HostDelegate => React.useMemo(createStudioDelegate, []);
+export const useStudioDelegate = (reminderTarget?: ReminderTarget): HostDelegate => {
+  const latest = React.useRef(reminderTarget);
+  latest.current = reminderTarget;
+  return React.useMemo(() => createStudioDelegate(() => latest.current ?? DEFAULT_TARGET), []);
+};
 
 export const PaywallToasts = ({
   surfaceKey,

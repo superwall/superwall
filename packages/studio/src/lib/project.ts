@@ -1,5 +1,6 @@
 import { parsePresentation } from "./presentation";
 import type {
+  StudioAppIdentity,
   StudioOrigin,
   StudioScreenFramework,
   StudioSurface,
@@ -9,6 +10,7 @@ import type { SampleDefaults } from "./variables";
 
 export type StudioProjectPayload = {
   title: string;
+  app?: StudioAppIdentity;
   scheme?: string;
   networkOrigin?: string;
   surfaces: StudioSurface[];
@@ -53,6 +55,13 @@ const parseSurface = (value: unknown): StudioSurface | undefined => {
   };
 };
 
+const parseApp = (value: unknown): StudioAppIdentity | undefined => {
+  if (!isRecord(value) || typeof value.name !== "string" || value.name === "") return undefined;
+  return typeof value.iconUrl === "string" && value.iconUrl !== ""
+    ? { name: value.name, iconUrl: value.iconUrl }
+    : { name: value.name };
+};
+
 const isFileName = (value: unknown): value is string =>
   typeof value === "string" && value !== "" && !/[\\/]/.test(value) && !value.startsWith(".");
 
@@ -94,8 +103,10 @@ export const parseProjectPayload = (data: unknown): StudioProjectPayload => {
   const samples = isRecord(data.samples) ? data.samples : {};
   const group = (key: string): Record<string, unknown> =>
     isRecord(samples[key]) ? (samples[key] as Record<string, unknown>) : {};
+  const app = parseApp(data.app);
   return {
     title: typeof data.title === "string" ? data.title : "superwall",
+    ...(app === undefined ? {} : { app }),
     scheme: typeof data.scheme === "string" ? data.scheme : undefined,
     networkOrigin: typeof data.networkOrigin === "string" ? data.networkOrigin : undefined,
     surfaces,

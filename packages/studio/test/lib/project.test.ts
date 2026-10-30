@@ -180,6 +180,18 @@ describe("parseProjectPayload", () => {
     });
   });
 
+  it("keeps the app a host names, with its icon only when it has one", () => {
+    expect(
+      parseProjectPayload({ app: { name: "Pulse", iconUrl: "https://x/icon.png" } }).app,
+    ).toEqual({ name: "Pulse", iconUrl: "https://x/icon.png" });
+    expect(parseProjectPayload({ app: { name: "Pulse", iconUrl: "" } }).app).toEqual({
+      name: "Pulse",
+    });
+    expect(parseProjectPayload({ app: { name: "" } }).app).toBeUndefined();
+    expect(parseProjectPayload({ app: "Pulse" }).app).toBeUndefined();
+    expect(parseProjectPayload({}).app).toBeUndefined();
+  });
+
   it("throws only when the payload itself is not an object", () => {
     expect(() => parseProjectPayload("nope")).toThrow(/not an object/);
     expect(() => parseProjectPayload(null)).toThrow(/not an object/);
