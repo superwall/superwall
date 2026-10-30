@@ -360,6 +360,14 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   60s), so login refreshes its token after creating an org, and `integrate`
   reuses the org and app this machine created (`readOnboardedApp`) instead of
   asking the API. A failed organizations list on a new account means "no org".
+- **Agents log in in two steps.** An agent sees a command's output only once
+  it exits, so without a terminal `login` starts the device flow, writes
+  `pending-login.json` to the state store and returns; `login --poll` reads it
+  and polls until `--timeout`. The file keeps `lastPolledAt` and the interval,
+  so separate `--poll` runs never trip WorkOS's `slow_down`, and the approved
+  tokens when the account still needs `--org-name`. `pending` and
+  `needs_organization` exit 1, so `until superwall login --poll; do …; done`
+  works. Terminal login runs the same start, poll and finish steps back to back.
 - **Login is lazy.** Local agents (Claude Code, Codex) run without a session;
   the bundled Superwall Agent needs a browser login because its hosted grant is
   per user, so an `--api-key` login can't use it. `migrate` exports the
