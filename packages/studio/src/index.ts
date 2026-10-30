@@ -54,6 +54,7 @@ export type {
   StudioActionResult,
   StudioActions,
   StudioPresentation,
+  StudioScreenshot,
   StudioSource,
   StudioStatus,
   StudioSurface,
