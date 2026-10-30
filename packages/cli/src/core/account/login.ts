@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import type { CommandContext } from "@/program/command";
+import { UsageError, type CommandContext } from "@/program/command";
 import { onboardingHooks } from "@/core/account/onboarding";
 import { ensureSkillsCurrent } from "@/core/support/skills";
 import { BROWSER_UNAVAILABLE } from "@/core/account/browser";
@@ -45,6 +45,7 @@ interface LoginOptions {
   apiHost?: string;
   clientId?: string;
   orgName?: string;
+  app?: OnboardSetup["app"];
   onVerify?: (info: { url: string; userCode: string; browserOpened: boolean }) => void;
   onStatus?: (message: string) => void;
   onOnboard?: () => Promise<OnboardSetup | null>;
@@ -99,6 +100,7 @@ async function createPendingLogin(
       expiresAt: now + (dev.expires_in ?? 600) * 1000,
       lastPolledAt: now,
       ...(opts.orgName ? { orgName: opts.orgName } : {}),
+      ...(opts.app ? { app: opts.app } : {}),
     },
   };
 }
@@ -133,6 +135,7 @@ export async function pollLogin(
   const pending = readPendingLogin();
   if (!pending) throw new Error("No login in progress. Run `superwall login` first.");
   if (opts.orgName) pending.orgName = opts.orgName;
+  if (opts.app) pending.app = opts.app;
 
   const tokens = await resolvePollTokens(pending, opts);
   if (!tokens) {
@@ -140,7 +143,7 @@ export async function pollLogin(
     return { status: "pending", pending };
   }
 
-  const finished = await finishLogin(pending, tokens, { ...opts, orgName: pending.orgName });
+  const finished = await finishLogin(pending, tokens, { ...opts, orgName: pending.orgName, app: pending.app });
   if ("session" in finished) {
     removePendingLogin();
     return { status: "logged_in", session: finished.session };
@@ -178,7 +181,7 @@ async function resolvePollTokens(
 
 async function resolveOnboardSetup(opts: LoginOptions): Promise<OnboardSetup | null | undefined> {
   if (opts.onOnboard) return opts.onOnboard();
-  if (opts.orgName) return { orgName: opts.orgName };
+  if (opts.orgName) return { orgName: opts.orgName, ...(opts.app ? { app: opts.app } : {}) };
   return undefined;
 }
 
@@ -440,8 +443,145 @@ async function postJson(url: string, accessToken: string, body: unknown): Promis
 }
 
 interface LoginInput {
-  flags: { apiKey: string | undefined; host: string | undefined; clientId: string | undefined; };
+  flags: {
+    apiKey: string | undefined;
+    host: string | undefined;
+    clientId: string | undefined;
+    poll?: boolean;
+    timeout?: number;
+    orgName?: string;
+    appName?: string;
+    platform?: string;
+    bundleId?: string;
+  };
   openBrowser?: (url: string) => Promise<boolean>;
+}
+
+type AgentLogin = { orgName?: string; app?: OnboardSetup["app"]; issuer?: string; clientId?: string };
+
+const POLL_HINT = "superwall login --poll";
+const POLL_TIMEOUT_SECONDS = 60;
+
+function isPlatform(value: string): value is NonNullable<OnboardSetup["app"]>["platform"] {
+  return value === "ios" || value === "android" || value === "web";
+}
+
+function resolveAgentLogin(flags: LoginInput["flags"]): AgentLogin {
+  const orgName = flags.orgName?.trim() || undefined;
+  const appName = flags.appName?.trim() || undefined;
+  const base = { orgName, issuer: flags.host, clientId: flags.clientId };
+  if (!appName) {
+    if (flags.platform || flags.bundleId) throw new UsageError("--platform and --bundle-id need --app-name.");
+    return base;
+  }
+  if (!orgName) throw new UsageError("--app-name needs --org-name.");
+  if (!flags.platform || !isPlatform(flags.platform)) {
+    throw new UsageError("--app-name needs --platform ios, android or web.");
+  }
+  const bundleId = flags.bundleId?.trim() || undefined;
+  return { ...base, app: { name: appName, platform: flags.platform, ...(bundleId ? { bundleId } : {}) } };
+}
+
+const formatExpiry = (pending: PendingLogin): string => new Date(pending.expiresAt).toISOString();
+
+async function runAgentLoginStart(
+  ctx: CommandContext<"none">,
+  agent: AgentLogin,
+  openBrowser: LoginInput["openBrowser"],
+): Promise<void> {
+  const { pending, browserOpened } = await startLogin({ ...agent, ...(openBrowser ? { openBrowser } : {}) });
+  track("login started", { method: "oauth_poll" });
+  if (ctx.json) {
+    return ctx.output.data({
+      status: "pending",
+      verification_url: pending.url,
+      user_code: pending.userCode,
+      expires_at: formatExpiry(pending),
+      browser_opened: browserOpened,
+      next: POLL_HINT,
+    });
+  }
+  ctx.ui.info(`Approve this login in your browser · code \`${pending.userCode}\`\n${pending.url}`);
+  if (!browserOpened) ctx.ui.warn(BROWSER_UNAVAILABLE);
+  ctx.ui.outro(`Once it's approved, run \`${POLL_HINT}\` to finish. The code expires at ${formatExpiry(pending)}.`);
+}
+
+async function runAgentLoginPoll(
+  ctx: CommandContext<"none">,
+  agent: AgentLogin,
+  timeoutSeconds: number | undefined,
+): Promise<void> {
+  const { ui } = ctx;
+  const seconds = timeoutSeconds !== undefined && timeoutSeconds >= 0 ? timeoutSeconds : POLL_TIMEOUT_SECONDS;
+  const scan = await scanProject(ctx.installDir).catch(() => null);
+  const hooks = onboardingHooks(scan?.apps[0]);
+  const spin = ui.spinner();
+  spin.start("Waiting for you to approve in the browser");
+  let result: PollResult;
+  try {
+    result = await pollLogin({
+      ...agent,
+      timeoutMs: seconds * 1000,
+      onStatus: (m) => spin.message(m),
+      onProvisioned: hooks.onProvisioned,
+    });
+  } catch (e) {
+    spin.stop("Login failed");
+    track("login finished", { status: "error", method: "oauth_poll" });
+    throw e;
+  }
+
+  if (result.status === "logged_in") {
+    spin.stop(`Logged in as \`${result.session.userEmail ?? "you"}\``);
+    track("login finished", { status: "success", method: "oauth_poll" });
+    const provisioned = hooks.provisioned();
+    if (ctx.json) {
+      return ctx.output.data({
+        status: "logged_in",
+        ...serializeSession(result.session),
+        ...(provisioned?.publicApiKey
+          ? {
+              app: {
+                public_api_key: provisioned.publicApiKey,
+                application_id: provisioned.applicationId ?? null,
+                project_id: provisioned.projectId ?? null,
+              },
+            }
+          : {}),
+      });
+    }
+    await ensureSkillsCurrent(false, "login").catch(() => {});
+    ui.outro(
+      provisioned?.publicApiKey
+        ? "Your app is ready - run `superwall integrate` to set up the SDK."
+        : "You're all set - run `superwall integrate` to set up your app.",
+    );
+    return;
+  }
+
+  ctx.fail();
+  if (result.status === "needs_organization") {
+    spin.stop("Approved");
+    const next = `${POLL_HINT} --org-name "<name>"`;
+    const message = `This account has no organization yet. Run \`${next}\` to create one, with --app-name and --platform to create its first app too.`;
+    if (ctx.json) return ctx.output.data({ status: "needs_organization", message, next });
+    ui.warn(message);
+    return;
+  }
+  const { pending } = result;
+  spin.stop("Not approved yet");
+  if (ctx.json) {
+    return ctx.output.data({
+      status: "pending",
+      verification_url: pending.url,
+      user_code: pending.userCode,
+      expires_at: formatExpiry(pending),
+      next: POLL_HINT,
+    });
+  }
+  ui.info(
+    `Still waiting for approval · code \`${pending.userCode}\`\n${pending.url}\nRun \`${POLL_HINT}\` again. The code expires at ${formatExpiry(pending)}.`,
+  );
 }
 
 export async function runLogin(
@@ -472,10 +612,9 @@ export async function runLogin(
     return;
   }
 
-  if (!ctx.interactive)
-    throw new Error(
-      "Browser login requires an interactive terminal. Use `superwall login --api-key <key>`.",
-    );
+  const agent = resolveAgentLogin(flags);
+  if (flags.poll) return runAgentLoginPoll(ctx, agent, flags.timeout);
+  if (!ctx.interactive) return runAgentLoginStart(ctx, agent, openBrowser);
 
   const scan = await scanProject(ctx.installDir).catch(() => null);
   const hooks = onboardingHooks(scan?.apps[0]);

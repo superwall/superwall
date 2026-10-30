@@ -1,6 +1,7 @@
 import { readJson, state } from "@/core/state/store";
 import { API_HOST, API_HOST_OVERRIDE } from "@/environment";
 import { formatJson } from "@/program/output";
+import type { OnboardSetup } from "./login";
 
 export const sessionOrgName = (session: Session | null | undefined): string | undefined => {
   return session?.authMethod === "api_key" ? session.orgName : undefined;
@@ -38,6 +39,7 @@ export interface PendingLogin {
   expiresAt: number;
   lastPolledAt: number;
   orgName?: string;
+  app?: OnboardSetup["app"];
   tokens?: Tokens;
 }
 
