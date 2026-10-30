@@ -14,6 +14,7 @@ describe("outgoing message builders", () => {
     outgoing.openUrl("https://superwall.com", "payment_sheet"),
     outgoing.openExternalUrl("https://superwall.com/docs"),
     outgoing.openDeepLink("app://settings"),
+    outgoing.custom("open_settings"),
     outgoing.customPlacement("upsell_shown", { source: "footer" }),
     outgoing.requestStoreReview("in-app"),
     outgoing.hapticFeedback("selection"),
