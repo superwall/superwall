@@ -92,7 +92,7 @@ export const usePurchase = <
           query: flowQuery(queryStore),
           postPurchase,
           stripeMetadata,
-          ...(prepaidCards === undefined ? {} : { prepaidCards }),
+          prepaidCards,
         });
         if (typeof outcome === "string") return { status: outcome, product };
         const settled = await outcome.result;

@@ -69,7 +69,6 @@ export const introductoryOfferFromFragment = (): boolean | undefined => {
 };
 
 export const prepaidCardsFromFragment = (): SuperwallPrepaidCards | undefined => {
-  if (typeof window === "undefined") return undefined;
   const value = fragment().get(PREPAID_CARDS_FRAGMENT_KEY);
   return value === "block" || value === "allow" ? value : undefined;
 };
