@@ -331,6 +331,8 @@ describe("per-platform product ids", () => {
 
     expect(ios.products).toEqual({ monthly: "pro_999_month", annual: "pro_5999_year" });
     expect(android.products).toEqual({ monthly: "pro_999_month", annual: "pro_5999_year_play" });
+    expect(ios.billingPlans).toEqual({ annual: "upFront" });
+    expect(android.billingPlans).toEqual({});
   }, 120_000);
 
   it("refuses a platform a per-platform slot has no id for", async () => {

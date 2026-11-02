@@ -270,8 +270,9 @@ async function prepare(
       const storesChanged =
         !stale &&
         storesDiffer(
-          versionProducts(build.products, target.platform, stores),
+          versionProducts(build.products, target.platform, stores, build.billingPlans),
           await pushedProducts(context.api, bind.paywallId, build.snapshotId),
+          build.billingPlans !== undefined,
         );
       const changed = unsourced !== undefined || stale || storesChanged;
       return {
@@ -328,7 +329,7 @@ async function pushVersion(
     );
   }
 
-  const products = versionProducts(build.products, target.platform, input.stores);
+  const products = versionProducts(build.products, target.platform, input.stores, build.billingPlans);
   const elsewhere = products.filter((product) => product.store !== platformStore(target.platform));
   if (elsewhere.length > 0) {
     lines.push(

@@ -324,7 +324,11 @@ export function originConfigSource(origin: OriginPaywall): string {
       const key = /^[A-Za-z_$][\w$]*$/.test(product.reference)
         ? product.reference
         : literal(product.reference);
-      lines.push(`    ${key}: ${literal(product.identifier)},`);
+      lines.push(
+        product.billingPlan === undefined
+          ? `    ${key}: ${literal(product.identifier)},`
+          : `    ${key}: { productId: ${literal(product.identifier)}, billingPlan: ${literal(product.billingPlan)} },`,
+      );
     }
     lines.push(`  },`);
   }

@@ -65,6 +65,7 @@ export interface PaywallSettings {
 export interface BuiltSnapshot {
   name: string;
   products?: Record<string, string>;
+  billingPlans?: Record<string, "monthly" | "upFront">;
   checkout?: string;
   background?: { light: string; dark?: string };
   settings?: PaywallSettings;

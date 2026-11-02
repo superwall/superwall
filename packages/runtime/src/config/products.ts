@@ -1,4 +1,13 @@
-import type { SuperwallPlatform } from "./platforms";
+import { SUPERWALL_PLATFORMS, type SuperwallPlatform } from "./platforms";
+
+/**
+ * How an App Store slot bills a product that offers Apple's monthly plan
+ * (a 12-month commitment paid monthly): `"monthly"` sells that plan,
+ * `"upFront"` sells the year paid at once.
+ */
+export type SuperwallBillingPlan = "monthly" | "upFront";
+
+export const SUPERWALL_BILLING_PLANS: readonly SuperwallBillingPlan[] = ["monthly", "upFront"];
 
 /**
  * A product slot the paywall renders, keyed by reference in
@@ -8,6 +17,13 @@ import type { SuperwallPlatform } from "./platforms";
 export type SuperwallProductSlot = {
   /** Store product identifier this slot maps to (e.g. "pro_3999_year"). */
   productId?: string;
+  /**
+   * Which Apple billing plan this slot sells, when its App Store product
+   * offers the monthly plan. iOS only: Android and web have no such plan and
+   * ignore it. Defaults to `"monthly"` for a product that offers the monthly
+   * plan; has no effect on one that does not.
+   */
+  billingPlan?: SuperwallBillingPlan;
 };
 
 /**
@@ -15,7 +31,14 @@ export type SuperwallProductSlot = {
  * underlying product differs by store — the same `purchase("annual")` buys
  * the App Store product on iOS and the Play product on Android.
  */
-export type SuperwallPlatformProductIds = Partial<Record<SuperwallPlatform, string>>;
+export type SuperwallPlatformProductIds = Partial<Record<SuperwallPlatform, string>> & {
+  /**
+   * Which Apple billing plan the iOS product sells, when it offers the
+   * monthly plan. Android and web ignore it. Defaults to `"monthly"` for a
+   * product that offers the monthly plan; has no effect on one that does not.
+   */
+  billingPlan?: SuperwallBillingPlan;
+};
 
 /**
  * A slot object, the store product identifier as shorthand, or one
@@ -28,6 +51,15 @@ export const isPlatformProductIds = (
 ): input is SuperwallPlatformProductIds =>
   typeof input === "object" && input !== null && !("productId" in input);
 
+const isPlatformKey = (key: string): key is SuperwallPlatform =>
+  SUPERWALL_PLATFORMS.some((platform) => platform === key);
+
+const platformIdsOf = (input: SuperwallPlatformProductIds): string[] =>
+  Object.keys(input)
+    .filter(isPlatformKey)
+    .map((platform) => input[platform])
+    .filter((id): id is string => typeof id === "string");
+
 export const productIdFor = (
   input: SuperwallProductSlotInput,
   platform?: SuperwallPlatform,
@@ -35,5 +67,27 @@ export const productIdFor = (
   if (typeof input === "string") return input;
   if (!isPlatformProductIds(input)) return input.productId;
   if (platform !== undefined) return input[platform];
-  return Object.values(input).find((id) => typeof id === "string");
+  return platformIdsOf(input)[0];
+};
+
+export const productIdsOf = (input: SuperwallProductSlotInput): string[] => {
+  if (typeof input === "string") return [input];
+  if (isPlatformProductIds(input)) return [...new Set(platformIdsOf(input))];
+  return [input.productId].filter((id): id is string => typeof id === "string");
+};
+
+export const billingPlanFor = (
+  input: SuperwallProductSlotInput,
+  label = "billingPlan",
+): SuperwallBillingPlan | undefined => {
+  if (typeof input === "string") return undefined;
+  const plan: unknown = input.billingPlan;
+  if (plan === undefined) return undefined;
+  const known = SUPERWALL_BILLING_PLANS.find((candidate) => candidate === plan);
+  if (known === undefined) {
+    throw new Error(
+      `${label} must be one of ${SUPERWALL_BILLING_PLANS.map((value) => `"${value}"`).join(", ")}, got ${JSON.stringify(plan)}.`,
+    );
+  }
+  return known;
 };

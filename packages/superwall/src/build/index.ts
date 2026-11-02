@@ -4,6 +4,7 @@ import {
   backgroundOf,
   checkoutModeOf,
   normalizePlatform,
+  type SuperwallBillingPlan,
   type SuperwallConfig,
 } from "@superwall/runtime";
 import react from "@vitejs/plugin-react-swc";
@@ -24,6 +25,7 @@ import { assertBundlerBuilds } from "./bundler";
 import { entrySource } from "./entry";
 import {
   inlineProductsOf,
+  resolveBillingPlans,
   resolveConfigProducts,
   resolveProductIds,
   type ProductCatalogue,
@@ -43,6 +45,7 @@ export type BuiltSnapshot = {
   surface: DiscoveredSurface;
   name: string;
   products: Record<string, string>;
+  billingPlans: Record<string, SuperwallBillingPlan>;
   checkout: ReturnType<typeof checkoutModeOf>;
   background: ReturnType<typeof backgroundOf>;
   settings: PaywallSettings;
@@ -98,6 +101,7 @@ export const buildSnapshot = async (
 
   const { definition, config } = await loadSurfaceConfig(surface);
   const products = resolveProductIds(config, surface, platform);
+  const billingPlans = resolveBillingPlans(config, surface, platform);
   const settings = paywallSettingsOf(config);
   const locales = localesOf(project, surface, definition);
 
@@ -174,6 +178,7 @@ export const buildSnapshot = async (
     surface,
     name: definition?.name?.trim() || titleCase(surface.id),
     products,
+    billingPlans,
     checkout: checkoutModeOf(config.checkout),
     background: backgroundOf(config.background),
     settings,
