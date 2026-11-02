@@ -3,6 +3,7 @@ import {
   teleportOf,
   type ResolvedTeleport,
   type SuperwallPostPurchase,
+  type SuperwallPrepaidCards,
   type SuperwallRuntimeSnapshot,
 } from "@superwall/runtime";
 import { platformOf } from "../../device";
@@ -25,6 +26,7 @@ import {
 import {
   encodeQueryPatch,
   INTRODUCTORY_OFFER_FRAGMENT_KEY,
+  PREPAID_CARDS_FRAGMENT_KEY,
   QUERY_FRAGMENT_KEY,
   TAPPED_PRODUCT_FRAGMENT_KEY,
   TAPPED_PRODUCT_QUERY_KEY,
@@ -72,6 +74,7 @@ type OpenTeleport = CreatedTeleport & {
   queryPatch?: string;
   postPurchase?: SuperwallPostPurchase;
   stripeMetadata?: Readonly<Record<string, string>>;
+  prepaidCards?: SuperwallPrepaidCards;
   paid?: boolean;
   outcome: Promise<TeleportOutcome>;
   settle: (outcome: TeleportOutcome) => void;
@@ -113,6 +116,7 @@ export const checkoutUrlFor = (
   productReference: string | undefined,
   queryPatch?: string,
   freeTrial?: boolean,
+  prepaidCards?: SuperwallPrepaidCards,
 ): string => {
   const next = new URL(url);
   opens += 1;
@@ -123,6 +127,7 @@ export const checkoutUrlFor = (
     ...(freeTrial === undefined
       ? {}
       : { [INTRODUCTORY_OFFER_FRAGMENT_KEY]: freeTrial ? "1" : "0" }),
+    ...(prepaidCards === undefined ? {} : { [PREPAID_CARDS_FRAGMENT_KEY]: prepaidCards }),
   }).toString();
   return next.toString();
 };
@@ -508,7 +513,13 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     record.returnedAt = undefined;
     post({
       event_name: "open_url_external",
-      url: checkoutUrlFor(record.url, record.productReference, record.queryPatch, record.freeTrial),
+      url: checkoutUrlFor(
+        record.url,
+        record.productReference,
+        record.queryPatch,
+        record.freeTrial,
+        record.prepaidCards,
+      ),
       teleport: true,
       ...(settings()?.overlay && overlay === undefined ? { waiting_screen: true } : {}),
     });
@@ -648,6 +659,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       productIdentifier: productIdentifierOf(request.productReference),
       postPurchase: request.postPurchase,
       stripeMetadata: request.stripeMetadata,
+      ...(request.prepaidCards === undefined ? {} : { prepaidCards: request.prepaidCards }),
       outcome,
       settle: resolve,
     };

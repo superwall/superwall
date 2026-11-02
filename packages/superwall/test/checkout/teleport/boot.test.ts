@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   encodeQueryPatch,
   introductoryOfferFromFragment,
+  prepaidCardsFromFragment,
   readTeleportBoot,
   seedTeleportUrl,
 } from "../../../src/checkout/teleport/boot";
@@ -84,6 +85,17 @@ describe("readTeleportBoot", () => {
     window.location.hash = "";
     expect(readTeleportBoot()).not.toHaveProperty("hasIntroductoryOffer");
     expect(readTeleportBoot()).not.toHaveProperty("email");
+  });
+
+  it("reads the prepaid-card rule the app's tap put in the link, and nothing it does not know", () => {
+    window.location.hash = "#ref=card&p=block";
+    expect(prepaidCardsFromFragment()).toBe("block");
+    window.location.hash = "#p=allow";
+    expect(prepaidCardsFromFragment()).toBe("allow");
+    window.location.hash = "#p=prepaid";
+    expect(prepaidCardsFromFragment()).toBeUndefined();
+    window.location.hash = "";
+    expect(prepaidCardsFromFragment()).toBeUndefined();
   });
 
   it("asks for the saved flow only when the worker sent none with a link boot", () => {

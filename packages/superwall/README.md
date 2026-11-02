@@ -198,7 +198,9 @@ Once a purchase completes, `postPurchase` (in `config.ts`, or per
 `{ redirect: url }`. Pass `stripeMetadata` to `purchase()` to write key/values
 onto the Stripe subscription. `checkout: { prepaidCards: "block" }` makes
 Stripe refuse prepaid cards (`"allow"` is the default), and a `purchase()` or
-`prefetch()` call can pass its own `prepaidCards` to override it; an Apple Pay
+`prefetch()` call can pass its own `prepaidCards` to override it (a teleport
+carries the call's rule to the web page, where it holds unless the page's own
+call sets one); an Apple Pay
 payment can't be filtered by card type, so in `applePay` mode only the sheet
 fallback refuses them. `checkout: { managedPayments }` and
 `introductoryOfferEligibility` round out the config.

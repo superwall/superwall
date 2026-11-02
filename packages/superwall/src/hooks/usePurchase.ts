@@ -14,6 +14,7 @@ import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
 import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
 import { useIdentityRefresh } from "../checkout/hooks/useIdentityRefresh";
 import { checkoutModeFor } from "../checkout/host/sdk";
+import { prepaidCardsFromFragment } from "../checkout/teleport/boot";
 import { teleportFor } from "../checkout/teleport/flow";
 import { flowQuery } from "../checkout/teleport/teleporter";
 import { QueryStoreContext } from "../navigation/query";
@@ -91,6 +92,7 @@ export const usePurchase = <
           query: flowQuery(queryStore),
           postPurchase,
           stripeMetadata,
+          ...(prepaidCards === undefined ? {} : { prepaidCards }),
         });
         if (typeof outcome === "string") return { status: outcome, product };
         const settled = await outcome.result;
@@ -101,10 +103,12 @@ export const usePurchase = <
         if (teleporter.kind === "page" && !(await teleporter.whenUnsettled())) {
           return { status: "abandoned", product };
         }
+        const rule =
+          prepaidCards ?? (teleporter.kind === "page" ? prepaidCardsFromFragment() : undefined);
         const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
           postPurchase,
           stripeMetadata,
-          ...(prepaidCards === undefined ? {} : { prepaidCards }),
+          ...(rule === undefined ? {} : { prepaidCards: rule }),
         });
         return { status, product };
       }

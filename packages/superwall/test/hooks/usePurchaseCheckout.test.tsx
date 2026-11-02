@@ -279,6 +279,45 @@ describe("a purchase that sets its own prepaid-card rule", () => {
     window.location.hash = "";
   });
 
+  it("takes the rule the app's tap carried to a teleport page, unless the page's call sets its own", async () => {
+    Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout" });
+    window.location.hash = "#ref=primary&p=block";
+    const blockedFor = async (options?: { prepaidCards: "allow" | "block" }) => {
+      const { result } = await renderCheckout("external");
+      const fetchMock = vi.fn(
+        async (_url: string, _init?: RequestInit) =>
+          new Response(
+            JSON.stringify({
+              checkoutContextId: "ctx_page",
+              directive: {
+                directive: "redirect",
+                checkoutSessionId: "sw_checkout_page",
+                checkoutUrl: "#hosted-page",
+              },
+            }),
+          ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      await act(async () => {
+        await result.current.purchase.purchase("primary", options);
+      });
+      vi.unstubAllGlobals();
+      return fetchMock.mock.calls
+        .filter(([url]) => String(url).endsWith("checkout/session"))
+        .map(([, init]) => JSON.parse(String(init?.body)).context.blockPrepaidCards)
+        .at(-1);
+    };
+
+    try {
+      expect(await blockedFor()).toBe(true);
+      window.location.hash = "#ref=primary&p=block";
+      expect(await blockedFor({ prepaidCards: "allow" })).toBeUndefined();
+    } finally {
+      Reflect.deleteProperty(window, "__SW_TELEPORT__");
+      window.location.hash = "";
+    }
+  });
+
   it("allows them for this call on a paywall that blocks them", async () => {
     const { result, sessions } = await renderCheckout({ mode: "sheet", prepaidCards: "block" });
     const begin = vi.spyOn(sessions, "begin").mockResolvedValue(redirect);

@@ -1,4 +1,8 @@
-import type { SuperwallPostPurchase, SuperwallSession } from "@superwall/runtime";
+import type {
+  SuperwallPostPurchase,
+  SuperwallPrepaidCards,
+  SuperwallSession,
+} from "@superwall/runtime";
 import type { PurchaseOutcome } from "../types";
 import { NAV_QUERY_KEY } from "./boot";
 
@@ -20,6 +24,7 @@ export type TeleportRequest = {
   query: Record<string, string>;
   postPurchase?: SuperwallPostPurchase;
   stripeMetadata?: Readonly<Record<string, string>>;
+  prepaidCards?: SuperwallPrepaidCards;
 };
 
 export type ReturnReason = "purchased" | "closed";
