@@ -235,14 +235,14 @@ export const prefetchSession = async (
     const applePay = applePayFor(paywall);
     try {
       await applePay.prepare(result, sessions.identity());
-    } catch {
-      applePay.markUnavailable(referenceName, "prepare_failed");
+    } catch (error) {
+      applePay.markUnavailable(referenceName, "session_failed", error);
     }
     return;
   }
   if (result.directive === "embedded") {
     if (mode === "applePay") {
-      applePayFor(paywall).markUnavailable(referenceName, "no_apple_pay_quote");
+      applePayFor(paywall).markUnavailable(referenceName, "session_unsupported");
     }
     checkoutEvents.dispatch("SESSION_CREATED", result);
   }

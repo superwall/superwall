@@ -168,16 +168,18 @@ and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedempt
 `cancel` and `returnToApp`, for a paywall that draws its own teleport screen),
 `useApplePay` says whether direct Apple Pay, the wallet the browser opens
 itself, is available on a web host (Web SDK, hosted web paywall, teleport page
-or browser): `{ available: true }`, or `{ available: false, reason }` with
-`unsupported_browser` (no Apple Pay JS, as in desktop Chrome, whose card sheet
-may still offer Apple Pay by QR code), `insecure_context` (not HTTPS),
-`device_unsupported`, `cross_origin_frame` or `check_failed`; `undefined`
-inside the iOS and Android SDKs and in Studio. With a product it adds
-`product.status`, `preparing`, `ready` or `unavailable` with a `reason`: only
-Stripe's check, made when it prepares the product, knows whether a card is in
-Wallet and the domain is registered, and it reports both as
-`apple_pay_not_available`. The wallet opens only for a product prepared before
-the tap: a config `checkout: "applePay"` prepares it on its own, and on a
+or browser): `{ available: true }`, or `{ available: false, reason, message,
+error? }` with a typed `ApplePayUnavailableReason` (`unsupported_browser`, as
+in desktop Chrome, whose card sheet may still offer Apple Pay by QR code;
+`insecure_context`, not HTTPS, `http://localhost` included;
+`device_unsupported`; `cross_origin_frame`; `check_failed`) and the browser's
+own `error` when its check threw; `undefined` inside the iOS and Android SDKs
+and in Studio. With a product it adds `product`: `preparing`, `ready`, or
+`unavailable` with a typed `ApplePayProductReason`, `message` and `error?`.
+Only Stripe's check, made when it prepares the product, sees the cards in
+Wallet and the domain's registration, and reports a refusal as
+`stripe_declined`. The wallet opens only for a product prepared before the
+tap: a config `checkout: "applePay"` prepares it on its own, and on a
 `checkout: "sheet"` paywall `prefetch(reference, { checkout: "applePay" })`
 does; a `purchase(reference, { checkout: "applePay" })` of anything else opens
 the sheet, with `reason` `not_prepared`.

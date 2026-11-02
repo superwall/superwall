@@ -339,7 +339,7 @@ describe("a purchase that sets its own prepaid-card rule", () => {
     const { result, sessions } = await renderCheckout("applePay");
     vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue({
       status: "unavailable",
-      reason: "no_apple_pay_quote",
+      reason: "session_unsupported",
     });
     sessions.cache.set("primary", embedded, "apple-pay");
     const begin = vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
@@ -533,7 +533,7 @@ describe("usePurchase with Apple Pay", () => {
     const { result, sessions } = await renderCheckout("applePay");
     vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue({
       status: "unavailable",
-      reason: "apple_pay_not_available",
+      reason: "stripe_declined",
     });
     const begin = vi.spyOn(sessions, "begin").mockResolvedValue(embedded);
 
@@ -557,7 +557,7 @@ describe("usePurchase with Apple Pay", () => {
     const { result, sessions } = await renderCheckout("applePay");
     vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue({
       status: "unavailable",
-      reason: "no_apple_pay_quote",
+      reason: "session_unsupported",
     });
     sessions.cache.set("primary", embedded, "apple-pay");
     const begin = vi.spyOn(sessions, "begin");

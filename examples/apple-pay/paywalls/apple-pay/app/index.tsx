@@ -107,6 +107,13 @@ export default function Index() {
           ? t("wallet.unavailable", { reason: applePay.product.reason })
           : t(`wallet.${applePay.product.status}`);
 
+  const walletError =
+    applePay && !applePay.available
+      ? applePay.error
+      : applePay?.product.status === "unavailable"
+        ? applePay.product.error
+        : undefined;
+
   const description = applied
     ? describeDiscount(applied.discount, getDiscountedProduct(selected), t)
     : undefined;
@@ -223,6 +230,11 @@ export default function Index() {
         <p className="notice" data-apple-pay={applePay ? String(applePay.available) : "undefined"}>
           {wallet}
         </p>
+        {walletError ? (
+          <p className="notice" data-apple-pay-error={walletError.name}>
+            {walletError.name}: {walletError.message}
+          </p>
+        ) : null}
         <button
           type="button"
           className="link"

@@ -299,7 +299,8 @@ describe("prefetchSession", () => {
 
     expect(wallet.availability("primary")).toEqual({
       status: "unavailable",
-      reason: "prepare_failed",
+      reason: "session_failed",
+      error: { name: "Error", message: "stripe down" },
     });
   });
 
@@ -312,7 +313,7 @@ describe("prefetchSession", () => {
 
     expect(wallet.availability("primary")).toEqual({
       status: "unavailable",
-      reason: "no_apple_pay_quote",
+      reason: "session_unsupported",
     });
   });
 });
@@ -385,7 +386,7 @@ describe("purchaseOnWeb", () => {
     const { session } = fakeSession({ checkout: "applePay" });
     vi.spyOn(applePayFor(session), "purchase").mockResolvedValue({
       status: "unavailable",
-      reason: "no_apple_pay_quote",
+      reason: "session_unsupported",
     });
     sessionsFor(session).cache.set("primary", embedded, "apple-pay");
     const begin = vi.spyOn(sessionsFor(session), "begin");
