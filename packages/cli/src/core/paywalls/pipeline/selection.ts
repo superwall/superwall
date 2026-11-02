@@ -92,6 +92,7 @@ export function requireClean(surfaces: readonly FrameworkSurface[]): void {
 export function storesDiffer(
   products: readonly VersionProduct[],
   live: readonly PaywallProductRef[] | undefined,
+  comparePlans = true,
 ): boolean {
   return products.some((product) => {
     const pushed = live?.find(
@@ -99,7 +100,7 @@ export function storesDiffer(
     );
     if (pushed === undefined) return false;
     if (pushed.store !== undefined && pushed.store !== product.store) return true;
-    return pushed.billingPlan !== billingPlanOf(product.billing_plan_type);
+    return comparePlans && pushed.billingPlan !== billingPlanOf(product.billing_plan_type);
   });
 }
 

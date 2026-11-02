@@ -188,6 +188,16 @@ test("storesDiffer flags a slot whose billing plan changed since it was pushed",
   assert.equal(storesDiffer([upFront], pushed("upFront")), false, "same plan");
   assert.equal(storesDiffer([annual], pushed()), false, "no plan either side");
   assert.equal(
+    storesDiffer([annual], pushed("upFront"), false),
+    false,
+    "an older framework reports no plans, so a pushed plan is not a removal",
+  );
+  assert.equal(
+    storesDiffer([{ ...annual, store: "play-store" as const }], pushed("upFront"), false),
+    true,
+    "a store change still counts without plans",
+  );
+  assert.equal(
     storesDiffer([upFront], [{ reference: "annual", identifier: "pro_annual", billingPlan: "upFront" }]),
     false,
     "no store recorded, same plan",

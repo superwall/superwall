@@ -272,6 +272,7 @@ async function prepare(
         storesDiffer(
           versionProducts(build.products, target.platform, stores, build.billingPlans),
           await pushedProducts(context.api, bind.paywallId, build.snapshotId),
+          build.billingPlans !== undefined,
         );
       const changed = unsourced !== undefined || stale || storesChanged;
       return {
