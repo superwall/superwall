@@ -74,6 +74,7 @@ export const productIdsOf = (input: SuperwallProductSlotInput): string[] => {
 
 export const billingPlanFor = (
   input: SuperwallProductSlotInput,
+  label = "billingPlan",
 ): SuperwallBillingPlan | undefined => {
   if (typeof input === "string") return undefined;
   const plan: unknown = input.billingPlan;
@@ -81,7 +82,7 @@ export const billingPlanFor = (
   const known = SUPERWALL_BILLING_PLANS.find((candidate) => candidate === plan);
   if (known === undefined) {
     throw new Error(
-      `billingPlan must be one of ${SUPERWALL_BILLING_PLANS.map((value) => `"${value}"`).join(", ")}, got ${JSON.stringify(plan)}.`,
+      `${label} must be one of ${SUPERWALL_BILLING_PLANS.map((value) => `"${value}"`).join(", ")}, got ${JSON.stringify(plan)}.`,
     );
   }
   return known;

@@ -76,6 +76,9 @@ describe("billingPlanFor", () => {
     expect(() => billingPlanFor(slot)).toThrow(
       'billingPlan must be one of "monthly", "upFront", got "yearly".',
     );
+    expect(() => billingPlanFor(slot, "`annual` billingPlan")).toThrow(
+      '`annual` billingPlan must be one of "monthly", "upFront", got "yearly".',
+    );
   });
 });
 

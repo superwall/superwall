@@ -56,15 +56,10 @@ export const resolveBillingPlans = (
 ): Record<string, SuperwallBillingPlan> => {
   const plans: Record<string, SuperwallBillingPlan> = {};
   for (const [reference, input] of Object.entries(config.products ?? {})) {
-    let plan: SuperwallBillingPlan | undefined;
-    try {
-      plan = billingPlanFor(input);
-    } catch (error) {
-      throw new Error(
-        `${surface.kind}s/${surface.id}: \`${reference}\` ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
-      );
-    }
+    const plan = billingPlanFor(
+      input,
+      `${surface.kind}s/${surface.id}: \`${reference}\` billingPlan`,
+    );
     if (plan !== undefined && platform !== "android") plans[reference] = plan;
   }
   return plans;
