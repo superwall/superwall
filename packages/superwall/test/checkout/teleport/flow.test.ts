@@ -217,6 +217,54 @@ describe("whether a paywall can teleport", () => {
   });
 });
 
+const withoutRandomUUID = () =>
+  vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
+
+describe("a paywall outside a secure context", () => {
+  it("builds its teleporter without crypto.randomUUID, so the paywall still renders", () => {
+    withoutRandomUUID();
+    expect(typeof crypto.randomUUID).toBe("undefined");
+    expect(() => teleportFor(fakeSession().session)).not.toThrow();
+    expect(() => teleportFor(fakeSession({ teleport: null }).session)).not.toThrow();
+  });
+
+  it("cannot teleport when the page is not a secure context, as over http on a LAN address", () => {
+    vi.stubGlobal("isSecureContext", false);
+    expect(appTeleport(fakeSession().session).available()).toBe(false);
+    vi.stubGlobal("isSecureContext", true);
+    expect(appTeleport(fakeSession().session).available()).toBe(true);
+  });
+
+  it("makes its own presentation id on the first create, keeps it, and makes a new one per presentation", async () => {
+    withoutRandomUUID();
+    const calls = api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": { status: "pending" },
+    });
+    const { session, fire } = fakeSession();
+    attach(session);
+    await settle();
+    const ids = () =>
+      calls
+        .filter((call) => call.path === "checkout/teleport")
+        .map((call) => (call.body as { presentationId?: string }).presentationId);
+    const v4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    expect(ids()).toHaveLength(1);
+    const first = ids()[0];
+    expect(first).toMatch(v4);
+
+    fire("template_substitutions_prefix");
+    await settle();
+    expect(ids()).toEqual([first, first]);
+
+    fire("paywall_open");
+    await settle();
+    expect(ids()).toHaveLength(3);
+    expect(ids()[2]).toMatch(v4);
+    expect(ids()[2]).not.toBe(first);
+  });
+});
+
 describe("a teleport from the app", () => {
   it("creates the teleport, opens it, shows the waiting screen once away, and redeems once paid", async () => {
     const calls = api({
