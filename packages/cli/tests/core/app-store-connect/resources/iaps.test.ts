@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { command as iaps } from "@/commands/app-store-connect/store/iaps";
 import { ascRoutes, link, one, page } from "../../../helpers/asc-proxy";
-import { APP_BY_BUNDLE, iapView } from "../../../helpers/asc-store";
+import { APP_BY_BUNDLE, iapView, versionMadeOnPost } from "../../../helpers/asc-store";
 import { runCommand } from "../../../helpers/command";
 
 afterEach(() => {
@@ -11,7 +11,7 @@ afterEach(() => {
 
 const IAP_POINTS = "GET /v2/inAppPurchases/701/pricePoints?filter[territory]=USA&limit=200&fields[inAppPurchasePricePoints]=customerPrice,proceeds";
 
-test("create makes the purchase, its localization, availability and price schedule, then reads it back", async () => {
+test("create makes the purchase, its first version, its localization, availability and price schedule, then reads it back", async () => {
   const { api, writes } = ascRoutes({
     [APP_BY_BUNDLE]: page([one("apps", "555")]),
     "POST /v2/inAppPurchases": { data: one("inAppPurchases", "701") },
@@ -21,6 +21,7 @@ test("create makes the purchase, its localization, availability and price schedu
     [IAP_POINTS]: page([one("inAppPurchasePricePoints", "IP-USA", { customerPrice: "0.99" })]),
     "POST /v1/inAppPurchasePriceSchedules": { data: one("inAppPurchasePriceSchedules", "SCH") },
     ...iapView("701"),
+    ...versionMadeOnPost("/v2/inAppPurchases/701/versions", "/v1/inAppPurchaseVersions", one("inAppPurchaseVersions", "IV1", { version: 1, state: "PREPARE_FOR_SUBMISSION" })),
   });
   const result = await runCommand(iaps, {
     api,
@@ -49,6 +50,11 @@ test("create makes the purchase, its localization, availability and price schedu
           relationships: { app: link("apps", "555") },
         },
       },
+    },
+    {
+      method: "POST",
+      path: "/v1/inAppPurchaseVersions",
+      body: { data: { type: "inAppPurchaseVersions", relationships: { inAppPurchase: link("inAppPurchases", "701") } } },
     },
     {
       method: "POST",
@@ -136,14 +142,36 @@ test("create without a price or display name, in some territories, skips those s
   assert.deepEqual(human.said("success"), ["Created unlock (state unknown); still missing: localization, price, availability, review screenshot"]);
 });
 
-test("create stops when Apple returns no purchase or no version to localize", async () => {
+test("create stops when Apple returns no purchase, or refuses its version naming the purchase already created", async () => {
+  const { ApiError } = await import("@/core/api/client");
   const empty = ascRoutes({ "POST /v2/inAppPurchases": {} });
   const flags = { ascApp: "555", productId: "p", name: "P", inAppPurchaseType: "CONSUMABLE", displayName: "P" };
   assert.deepEqual((await runCommand(iaps, { api: empty.api, words: ["create"], flags })).said("error"), ["Apple created no in-app purchase."]);
-  const noVersion = ascRoutes({ "POST /v2/inAppPurchases": { data: one("inAppPurchases", "701") }, "GET /v2/inAppPurchases/701/versions": page([]) });
-  assert.deepEqual((await runCommand(iaps, { api: noVersion.api, words: ["create"], flags })).said("error"), [
-    "Apple made no version of in-app purchase 701 to localize.",
+  const refused = ascRoutes({
+    "POST /v2/inAppPurchases": { data: one("inAppPurchases", "701") },
+    "GET /v2/inAppPurchases/701/versions": page([]),
+    "POST /v1/inAppPurchaseVersions": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
+  });
+  assert.deepEqual((await runCommand(iaps, { api: refused.api, words: ["create"], flags })).said("error"), [
+    "App Store Connect refused POST x (409):\n  • Not allowed\nAlready created: inAppPurchases 701.",
   ]);
+});
+
+test("a dry-run create with a display name plans the new version before the localization on it", async () => {
+  const { api } = ascRoutes({});
+  const result = await runCommand(iaps, {
+    api,
+    words: ["create"],
+    flags: { ascApp: "555", productId: "p", name: "P", inAppPurchaseType: "CONSUMABLE", availableTerritories: "USA", displayName: "P", dryRun: true },
+    json: true,
+  });
+  const { requests } = result.json as { requests: { method: string; path: string; body?: unknown }[] };
+  assert.deepEqual(
+    requests.slice(0, 4).map((request) => `${request.method} ${request.path}`),
+    ["POST /v2/inAppPurchases", "GET /v2/inAppPurchases/${iap}/versions", "POST /v1/inAppPurchaseVersions", "POST /v2/inAppPurchaseLocalizations"],
+  );
+  const localization = requests[3]?.body as { data: { relationships: unknown } };
+  assert.deepEqual(localization.data.relationships, { version: link("inAppPurchaseVersions", "${version}") });
 });
 
 test("a dry-run create plans the price lookup on the purchase it would create", async () => {

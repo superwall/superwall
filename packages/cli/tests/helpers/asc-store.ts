@@ -1,5 +1,16 @@
 import { link, one, page } from "./asc-proxy";
 
+export function versionMadeOnPost(versions: string, create: string, version: ReturnType<typeof one>): Record<string, () => unknown> {
+  let made = false;
+  return {
+    [`GET ${versions}`]: () => page(made ? [version] : []),
+    [`POST ${create}`]: () => {
+      made = true;
+      return { data: version };
+    },
+  };
+}
+
 export const APP_BY_BUNDLE = "GET /v1/apps?filter[bundleId]=com.acme.app&fields[apps]=bundleId&limit=10";
 export const GROUPS_OF_APP = "GET /v1/apps/555/subscriptionGroups?limit=200";
 export const USA_POINTS = (id: string) =>

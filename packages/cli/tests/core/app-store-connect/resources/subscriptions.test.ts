@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { command as subscriptions } from "@/commands/app-store-connect/store/subscriptions";
 import { ascRoutes, link, one, page } from "../../../helpers/asc-proxy";
-import { APP_BY_BUNDLE, EQUALIZATIONS, GROUPS_OF_APP, subscriptionView, USA_POINTS } from "../../../helpers/asc-store";
+import { APP_BY_BUNDLE, EQUALIZATIONS, GROUPS_OF_APP, subscriptionView, USA_POINTS, versionMadeOnPost } from "../../../helpers/asc-store";
 import { runCommand } from "../../../helpers/command";
 
 afterEach(() => {
@@ -37,6 +37,7 @@ const CREATE_ROUTES = {
   ]),
   "PATCH /v1/subscriptions/S1": { data: one("subscriptions", "S1") },
   ...subscriptionView("S1"),
+  ...versionMadeOnPost("/v1/subscriptions/S1/versions", "/v1/subscriptionVersions", one("subscriptionVersions", "V1", { version: 1, state: "PREPARE_FOR_SUBMISSION" })),
 };
 
 const price = (territory: string, point: string) => ({
@@ -53,7 +54,7 @@ const trial = (territory: string) => ({
   relationships: { subscription: link("subscriptions", "S1"), territory: link("territories", territory) },
 });
 
-test("create runs every step in order: subscription, localization, availability, prices with the trial in one PATCH", async () => {
+test("create runs every step in order: subscription, its first version, localization, availability, prices with the trial in one PATCH", async () => {
   const { api, sent, writes } = ascRoutes(CREATE_ROUTES);
   const result = await runCommand(subscriptions, { api, words: ["create"], flags: CREATE_FLAGS, json: true });
   assert.deepEqual(writes(), [
@@ -67,6 +68,11 @@ test("create runs every step in order: subscription, localization, availability,
           relationships: { group: link("subscriptionGroups", "G1") },
         },
       },
+    },
+    {
+      method: "POST",
+      path: "/v1/subscriptionVersions",
+      body: { data: { type: "subscriptionVersions", relationships: { subscription: link("subscriptions", "S1") } } },
     },
     {
       method: "POST",
@@ -240,14 +246,60 @@ test("Apple answering a create without the subscription stops there", async () =
   assert.deepEqual(result.said("error"), ["Apple created no subscription."]);
 });
 
-test("a new subscription with no version yet can't be localized", async () => {
-  const { api } = ascRoutes({ "POST /v1/subscriptions": { data: one("subscriptions", "S1") }, "GET /v1/subscriptions/S1/versions": page([]) });
+test("a new subscription keeps the editable version Apple already has instead of making another", async () => {
+  const { api, writes } = ascRoutes({
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    "GET /v1/subscriptions/S1/versions": page([one("subscriptionVersions", "V7", { version: 1, state: "PREPARE_FOR_SUBMISSION" })]),
+    "POST /v2/subscriptionLocalizations": new Error("stop after the localization"),
+  });
+  await runCommand(subscriptions, {
+    api,
+    words: ["create"],
+    flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", displayName: "P" },
+  });
+  assert.deepEqual(
+    writes().map((request) => request.path),
+    ["/v1/subscriptions", "/v2/subscriptionLocalizations"],
+  );
+  const localization = writes()[1]?.body as { data: { relationships: unknown } };
+  assert.deepEqual(localization.data.relationships, { version: link("subscriptionVersions", "V7") });
+});
+
+test("a refused version names the subscription already created", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api, writes } = ascRoutes({
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    "GET /v1/subscriptions/S1/versions": page([]),
+    "POST /v1/subscriptionVersions": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
+  });
   const result = await runCommand(subscriptions, {
     api,
     words: ["create"],
     flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", displayName: "P" },
   });
-  assert.deepEqual(result.said("error"), ["Apple made no version of subscription S1 to localize."]);
+  assert.deepEqual(result.said("error"), ["App Store Connect refused POST x (409):\n  • Not allowed\nAlready created: subscriptions S1."]);
+  assert.deepEqual(
+    writes().map((request) => request.path),
+    ["/v1/subscriptions", "/v1/subscriptionVersions"],
+  );
+});
+
+test("a dry run with a display name plans the new version before the localization on it", async () => {
+  const { api } = ascRoutes({});
+  const result = await runCommand(subscriptions, {
+    api,
+    words: ["create"],
+    flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", availableTerritories: "USA", displayName: "P", dryRun: true },
+    json: true,
+  });
+  const { requests } = result.json as { requests: { method: string; path: string; body?: unknown }[] };
+  assert.deepEqual(
+    requests.slice(0, 4).map((request) => `${request.method} ${request.path}`),
+    ["POST /v1/subscriptions", "GET /v1/subscriptions/${subscription}/versions", "POST /v1/subscriptionVersions", "POST /v2/subscriptionLocalizations"],
+  );
+  assert.deepEqual(requests[2]?.body, { data: { type: "subscriptionVersions", relationships: { subscription: link("subscriptions", "${subscription}") } } });
+  const localization = requests[3]?.body as { data: { relationships: unknown } };
+  assert.deepEqual(localization.data.relationships, { version: link("subscriptionVersions", "${version}") });
 });
 
 test("list walks every group of the app, or one group by id", async () => {
