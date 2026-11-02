@@ -6,6 +6,8 @@ import { hostOf, type SuperwallHost } from "../host";
 import { useSuperwallSession } from "../provider/context";
 import type { ProductReference } from "./index";
 
+export type { ApplePayWalletReason };
+
 /**
  * Why the browser cannot open the Apple Pay wallet itself.
  *
@@ -74,25 +76,7 @@ export type ApplePayProductStatus =
   | {
       /** A `purchase()` of the product with `checkout: "applePay"` opens the sheet instead. */
       status: "unavailable";
-      /**
-       * Why.
-       *
-       * - `"not_prepared"`: nothing prepared the wallet for the product yet,
-       *   neither the config's `checkout: "applePay"` nor a
-       *   `prefetch(product, { checkout: "applePay" })`. It says nothing about
-       *   the device.
-       * - `"apple_pay_not_available"`: Stripe found no way to pay with Apple
-       *   Pay here. With `available: true` that means no card is set up in
-       *   Wallet, the domain is not registered for Apple Pay with Stripe, or
-       *   Safari's "Allow websites to check for Apple Pay" setting is off.
-       * - `"missing_public_api_key"`: the host supplied no public API key.
-       * - `"no_apple_pay_quote"`: the backend's checkout session for the
-       *   product cannot be paid with Apple Pay.
-       * - `"prepare_failed"`: fetching the checkout session failed.
-       * - `"stripe_js_load_failed"`: Stripe.js did not load.
-       * - `"can_make_payment_failed"`: Stripe's own check threw.
-       * - `"show_failed"`: the wallet failed to open on the last tap.
-       */
+      /** Why. See `ApplePayWalletReason`. */
       reason: ApplePayWalletReason;
     };
 
@@ -172,7 +156,7 @@ const productStatusReader = (applePay: ApplePay | undefined, reference: string |
  * const applePay = useApplePay(reference);
  * useEffect(() => {
  *   if (applePay?.available) prefetch(reference, { checkout: "applePay" });
- * }, [applePay?.available, reference]);
+ * }, [applePay?.available, prefetch, reference]);
  * return applePay?.available && applePay.product.status === "ready" ? (
  *   <button onClick={() => purchase(reference, { checkout: "applePay" })}>Apple Pay</button>
  * ) : (

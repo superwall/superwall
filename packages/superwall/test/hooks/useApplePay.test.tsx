@@ -2,6 +2,7 @@ import { act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallHost } from "../../src/host";
 import type { ElementsCheckoutSession } from "../../src/checkout/types";
+import type { ApplePayWalletReason } from "../../src/hooks";
 
 const stripe = vi.hoisted(() => {
   const answer = { value: undefined as unknown };
@@ -214,7 +215,10 @@ describe("useApplePay for a product", () => {
     await act(() => applePay.prepare(quote));
     expect(result.current.value).toEqual({
       available: true,
-      product: { status: "unavailable", reason: "apple_pay_not_available" },
+      product: {
+        status: "unavailable",
+        reason: "apple_pay_not_available" satisfies ApplePayWalletReason,
+      },
     });
   });
 

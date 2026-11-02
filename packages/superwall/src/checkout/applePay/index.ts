@@ -20,6 +20,25 @@ import {
 } from "../session/id";
 import type { ApplePaySession, CustomerIdentity, ElementsCheckoutSession } from "../types";
 
+/**
+ * Why the Apple Pay wallet is not ready to open for a product.
+ *
+ * - `"not_prepared"`: nothing prepared the wallet for the product yet,
+ *   neither the config's `checkout: "applePay"` nor a
+ *   `prefetch(product, { checkout: "applePay" })`. It says nothing about the
+ *   device.
+ * - `"apple_pay_not_available"`: Stripe found no way to pay with Apple Pay
+ *   here. With `available: true` that means no card is set up in Wallet, the
+ *   domain is not registered for Apple Pay with Stripe, or Safari's "Allow
+ *   websites to check for Apple Pay" setting is off.
+ * - `"missing_public_api_key"`: the host supplied no public API key.
+ * - `"no_apple_pay_quote"`: the backend's checkout session for the product
+ *   cannot be paid with Apple Pay.
+ * - `"prepare_failed"`: fetching the checkout session failed.
+ * - `"stripe_js_load_failed"`: Stripe.js did not load.
+ * - `"can_make_payment_failed"`: Stripe's own check threw.
+ * - `"show_failed"`: the wallet failed to open on the last tap.
+ */
 export type ApplePayWalletReason =
   | "not_prepared"
   | "missing_public_api_key"
