@@ -442,7 +442,9 @@ Set `SUPERWALL_CHANNEL=next` to opt into experimental and beta features:
 commands that are not in the stable set yet, and the matching agent skills
 from the `next` branch of the skills repo. Everything else is unchanged.
 Export it in your shell rc so every terminal and agent sees it. Unset it to
-go back to the stable set.
+go back to the stable set. The framework (`create`, `dev`, `build`, `push`,
+`promote`, `publish`, `migrate <paywall-id>`, `migrate --screen`) is in public
+beta on the stable set and needs no channel.
 
 ## Telemetry
 

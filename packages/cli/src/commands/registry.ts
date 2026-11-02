@@ -102,7 +102,6 @@ export const GROUPS: readonly Group[] = [
   {
     id: "paywalls",
     title: "Paywalls & funnels",
-    channel: "next",
     notes: [
       "push and publish take -m <note> to record why, in the source commit.",
       "All four take --platform <p> when a project pushes to several platforms.",

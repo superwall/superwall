@@ -26,7 +26,7 @@ in [superwall/docs](https://github.com/superwall/docs) under
 `main` branch now that the framework is in public beta. `next` is the
 channel for future betas: `main` is merged into `next` on every push, so
 `next` only adds what is not public yet. The CLI selects the branch with
-`SUPERWALL_CHANNEL=next`, which also unlocks the framework commands. Both are
+`SUPERWALL_CHANNEL=next`; the framework commands exist on every channel. Both are
 conventionally checked out beside this repository (`../docs`, `../skills`) —
 find them there rather than assuming an absolute path. A change here that
 alters behavior, a command, a flag, a config key, an error message, or a file

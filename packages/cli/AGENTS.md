@@ -51,20 +51,22 @@ agent reads on its own.
 **Channels.** `SUPERWALL_CHANNEL` (`CHANNEL()` in `src/environment.ts`, the
 only reader) names a key of `CHANNELS`, `latest` unless set to a known one;
 `CHANNELS` is the single definition of what a channel is (today: which
-skills branch it reads). Skills declare the channel they ship on; commands
-that exist only on a channel check `CHANNEL()` where they register. On
-`next` the framework
-commands (`create`/`dev`/`push`/`promote`/`publish`, `migrate <paywall-id>`,
-`migrate --screen`) register and appear in `superwall --help`, and every skills
-source (`npx skills add`, the picker listing, the staleness SHA) points at the
-skills repo's `next` branch instead of `main`, and the bundled copy installed
-at login includes `superwall-framework`; off it only the skills bundled from
-`main` are installed (`bundledSkillsForChannel()`), and the commands do not
-exist: unknown command, not hidden. The channel is set globally by the
-user (shell rc); the CLI never writes it anywhere. Tests run
-with the channel set (`tests/setup.ts`); `tests/contracts/channel.test.ts` covers
-both states. Nothing framework-shaped may leak to the `latest` surface: no
-help row, no skill name, no playbook sentence. The workflow playbooks are nested inside those skills
+skills branch it reads). Skills declare the channel they ship on; commands,
+flags and examples that exist only on a channel carry `channel: "next"` where
+they register (`visible()`, `onChannel()`, `summaryOn`), and off it they do not
+exist: unknown command, not hidden. The framework commands
+(`create`/`dev`/`build`/`push`/`promote`/`publish`, `migrate <paywall-id>`,
+`migrate --screen`) are public beta and carry no channel; `next` is for future
+betas. On `next` every skills source (`npx skills add`, the picker listing, the
+staleness SHA) points at the skills repo's `next` branch instead of `main`, and
+the bundled copy installed at login includes the skills marked `next`; off it
+only the skills bundled from `main` are installed (`bundledSkillsForChannel()`).
+The channel is set globally by the user (shell rc); the CLI never writes it
+anywhere. Tests run with the channel set (`tests/setup.ts`);
+`tests/contracts/channel.test.ts` asserts the framework surface on both
+channels, and the help and parse tests cover the gating with fixtures tagged
+`next`. Nothing tagged `next` may leak to the `latest` surface: no help row, no
+skill name, no playbook sentence. The workflow playbooks are nested inside those skills
 (`superwall/workflows/<job>/playbook.md` + one file per framework or provider,
 `superwall-framework/references/migrate-from-*.md` + `native/<framework>.md`),
 and `PLAYBOOKS` maps each `BundledSkillId` to its path. `superwall login`

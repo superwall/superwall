@@ -39,7 +39,6 @@ export const command = defineCommand({
   json: false,
   prompts: true,
   mcp: false,
-  channel: "next",
   async run(ctx, input) {
     const { runPush } = await import("@/core/paywalls/pipeline/push");
     return runPush(ctx, input, false);

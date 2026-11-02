@@ -19,7 +19,6 @@ export const command = defineCommand({
   json: false,
   prompts: true,
   mcp: false,
-  channel: "next",
   async run(ctx, { args, flags }) {
     const { runStudio } = await import("@/core/paywalls/studio/server");
     await runStudio({
