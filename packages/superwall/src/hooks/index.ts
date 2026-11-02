@@ -13,6 +13,7 @@ export type StripeProductReference = keyof SuperwallProducts extends never
 export { createSuperwall } from "../provider/create";
 export { useSuperwallSession } from "../provider/context";
 export * from "./useActions";
+export * from "./useApplePay";
 export * from "./useColorScheme";
 export * from "./useDevice";
 export * from "./useDiscount";

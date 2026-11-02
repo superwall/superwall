@@ -165,7 +165,12 @@ and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedempt
 `useUserAttribute`, `useLocalResource`, `useSuperwallEvent`,
 `useGameController`, `useTeleport` (a teleport's typed `status` —
 `idle`, `waiting`, `arrived`, `completed` — with `prefetch`, `reopen`,
-`cancel` and `returnToApp`, for a paywall that draws its own teleport screen).
+`cancel` and `returnToApp`, for a paywall that draws its own teleport screen),
+`useApplePay` (on a web host — Web SDK, hosted web paywall, teleport page or
+browser — `{ available }` from the browser's own Apple Pay
+check, to show an Apple Pay button only where the wallet opens; with a product
+also its wallet `status`, `preparing`, `ready` or `unavailable`; `undefined`
+inside the iOS and Android SDKs and in Studio).
 
 `useUserAttribute(key, parser)` is one user attribute as typed state —
 `useQueryState`'s API with the same parsers, kept by the host SDK across
