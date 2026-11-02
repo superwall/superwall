@@ -24,7 +24,6 @@ export const command = defineCommand({
   json: true,
   prompts: true,
   mcp: false,
-  channel: "next",
   async run(ctx, { args, flags }) {
     const { runBuildPipeline } = await import("@/core/paywalls/pipeline/build");
     await runBuildPipeline(

@@ -30,7 +30,6 @@ export const command = defineCommand({
   json: false,
   prompts: true,
   mcp: false,
-  channel: "next",
   async run(ctx, { args, flags }) {
     const { runCreate } = await import("@/core/paywalls/project/create");
     return runCreate(ctx, { dir: args.dir, ...flags });

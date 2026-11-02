@@ -27,7 +27,6 @@ export const command = defineCommand({
   json: false,
   prompts: true,
   mcp: false,
-  channel: "next",
   async run(ctx, input) {
     const { runPromote } = await import("@/core/paywalls/promote");
     return runPromote(ctx, input);

@@ -88,3 +88,11 @@ test("a starter config carries the paywall's name, quoted as code, and nothing e
   assert.equal(named.replace('name: "Say \\"Hi\\""', 'name: "Pro"'), pro);
   assert.equal(starterConfig("Pro"), pro);
 });
+
+test("the README installs the framework skill from the skills repo's main and asks for no channel", () => {
+  const target = scratch("readme");
+  writeTemplate(target);
+  const readme = fs.readFileSync(path.join(target, "README.md"), "utf8");
+  assert.match(readme, /npx skills add superwall\/skills --skill superwall-framework /);
+  assert.doesNotMatch(readme, /tree\/next|SUPERWALL_CHANNEL/);
+});
