@@ -123,6 +123,57 @@ describe("productVariables", () => {
     expect(variables.periodDays).toBeUndefined();
   });
 
+  it.each([
+    { period: "month", period_count: 1, label: "month", periodly: "monthly", monthly: "$29.99" },
+    {
+      period: "month",
+      period_count: 3,
+      label: "quarter",
+      periodly: "quarterly",
+      monthly: "$10.00",
+    },
+    {
+      period: "month",
+      period_count: 6,
+      label: "6 months",
+      periodly: "every 6 months",
+      monthly: "$5.00",
+    },
+    {
+      period: "week",
+      period_count: 2,
+      label: "2 weeks",
+      periodly: "every 2 weeks",
+      monthly: "$64.98",
+    },
+    {
+      period: "year",
+      period_count: 2,
+      label: "2 years",
+      periodly: "every 2 years",
+      monthly: "$1.25",
+    },
+  ])(
+    "a $period × $period_count price reads as $label / $periodly",
+    ({ period, period_count, label, periodly, monthly }) => {
+      const variables = productVariables({
+        price: { amount: 2999, currency: "USD" },
+        subscription: { period, period_count },
+      });
+
+      expect(variables).toMatchObject({ period: label, periodly, monthlyPrice: monthly });
+    },
+  );
+
+  it("a period it has never heard of keeps its own name whatever the count", () => {
+    const variables = productVariables({
+      price: { amount: 100, currency: "USD" },
+      subscription: { period: "fortnight", period_count: 2 },
+    });
+
+    expect(variables).toMatchObject({ period: "fortnight", periodly: "fortnightly" });
+  });
+
   it("falls back to a symbol when the currency is unknown to Intl", () => {
     const variables = productVariables({
       identifier: "odd",

@@ -47,6 +47,31 @@ describe("getLocalizedPeriod", () => {
     expect(getLocalizedPeriod("2 month", [])).toBe("2 months");
   });
 
+  it.each([
+    ["en", "quarter", "quarter"],
+    ["en", "quarterly", "quarterly"],
+    ["en", "3 months", "3 months"],
+    ["en", "every 6 months", "every 6 months"],
+    ["en", "2 weeks", "2 weeks"],
+    ["en", "every 2 weeks", "every 2 weeks"],
+    ["es", "quarter", "trimestre"],
+    ["es", "quarterly", "trimestral"],
+    ["es", "3 months", "3 meses"],
+    ["es", "6 months", "6 meses"],
+    ["es", "every 6 months", "cada 6 meses"],
+    ["es", "2 weeks", "2 semanas"],
+    ["es", "every 2 weeks", "cada 2 semanas"],
+    ["de", "quarter", "quartal"],
+    ["de", "quarterly", "vierteljährlich"],
+    ["de", "3 months", "3 Monate"],
+    ["de", "6 months", "6 monate"],
+    ["de", "every 6 months", "alle 6 Monate"],
+    ["de", "2 weeks", "2 Wochen"],
+    ["de", "every 2 weeks", "alle 2 Wochen"],
+  ])("localizes the multi-count label %s %j as %j", (language, value, expected) => {
+    expect(getLocalizedPeriod(value, [language])).toBe(expected);
+  });
+
   it("skips blank languages when choosing a periodly formatter", () => {
     expect(getLocalizedPeriod("every 2 year", ["  ", "de-AT"])).toBe("alle 2 Jahre");
   });

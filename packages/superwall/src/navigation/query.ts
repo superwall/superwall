@@ -210,12 +210,10 @@ export function useQueryState(
   const current = React.useRef(parser);
   current.current = parser;
   const value = React.useMemo(() => parseValue(parser, raw), [parser, raw]);
-  const latest = React.useRef(value);
-  latest.current = value;
 
   const set = React.useCallback<SetQueryState<unknown>>(
     (update, options = {}) => {
-      const next = isUpdater(update) ? update(latest.current) : update;
+      const next = isUpdater(update) ? update(parseValue(current.current, store.get(key))) : update;
       store.set(
         { [key]: encode(current.current, next, options) },
         options.history ?? current.current.history ?? "replace",

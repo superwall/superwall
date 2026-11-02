@@ -8,7 +8,7 @@ import { listSubscriptionPrices, type PriceView } from "./prices";
 import { bulkSubscriptionPatch, findPricePoint, introductoryOfferEntries, resolveTerritoryPoints, subscriptionPriceEntries } from "./pricing";
 import { selectScreenshot, type ScreenshotView } from "./screenshots";
 import { assertConfirmed, type AscSession } from "./session";
-import { selectLatestVersion, resolveAscAppId, resolveGroupId, resolveTerritories, type VersionView } from "./targets";
+import { resolveDraftVersion, selectLatestVersion, resolveAscAppId, resolveGroupId, resolveTerritories, type VersionView } from "./targets";
 
 export const SUBSCRIPTION_PERIODS = ["ONE_WEEK", "ONE_MONTH", "TWO_MONTHS", "THREE_MONTHS", "SIX_MONTHS", "ONE_YEAR"] as const;
 const DEFAULT_LOCALE = "en-US";
@@ -153,10 +153,9 @@ export async function runSubscriptionsCreate(session: AscSession, input: AscInpu
 
   const displayName = textOf(input, "displayName");
   if (displayName) {
-    const version = await selectLatestVersion(session, "subscription", id);
-    if (!version) throw new Error(`Apple made no version of subscription ${id} to localize.`);
+    const version = await resolveDraftVersion(session, "subscription", id);
     const description = textOf(input, "description");
-    await createLocalization(session, "subscription", version.id, {
+    await createLocalization(session, "subscription", version, {
       locale: textOf(input, "locale") ?? DEFAULT_LOCALE,
       name: displayName,
       ...(description ? { description } : {}),

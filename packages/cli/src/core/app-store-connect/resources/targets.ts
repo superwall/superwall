@@ -131,7 +131,7 @@ export async function selectLatestVersion(session: AscSession, kind: ProductKind
 
 export async function resolveDraftVersion(session: AscSession, kind: ProductKind, id: string): Promise<string> {
   const latest = await selectLatestVersion(session, kind, id);
-  if (latest && (isPlaceholder(latest.id) || EDITABLE.has(latest.state ?? ""))) return latest.id;
+  if (latest && EDITABLE.has(latest.state ?? "")) return latest.id;
   const spec = KINDS[kind];
   const created = await session.send(
     "post",
