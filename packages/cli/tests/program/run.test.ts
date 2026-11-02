@@ -53,7 +53,8 @@ test("no command, help, and a lone --help print the root help, marked with the c
   }
   process.env.SUPERWALL_CHANNEL = "latest";
   const { stdout } = await runWith();
-  assert.doesNotMatch(stdout, /next channel|Paywalls & funnels/);
+  assert.doesNotMatch(stdout, /next channel/);
+  assert.match(stdout, /^Paywalls & funnels$/m);
 });
 
 test("an unknown command is refused in one line, with no help dump", async () => {

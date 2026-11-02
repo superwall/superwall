@@ -3,15 +3,11 @@ import { defineCommand } from "@/program/command";
 
 export const command = defineCommand({
   name: "migrate",
-  summary: "Migrate from RevenueCat / Adapty / Qonversion",
-  summaryOn: {
-    next: "Migrate from RevenueCat / Adapty / Qonversion, or rebuild a dashboard paywall or a native screen as code",
-  },
+  summary: "Migrate from RevenueCat / Adapty / Qonversion, or rebuild a paywall or native screen as code",
   args: {
     paywall: {
       describe:
         "A dashboard paywall id: scaffold it as code (if not already) and rebuild its pages with your agent, or copy the prompt",
-      channel: "next",
     },
   },
   flags: {
@@ -24,20 +20,18 @@ export const command = defineCommand({
       bare: true,
       describe:
         "A SwiftUI, UIKit, Kotlin (Compose or Views), React Native or Flutter file to rebuild as a Superwall screen (no path: pick from likely candidates)",
-      channel: "next",
     },
     screenshot: {
       type: "string",
       value: "path",
       describe: "A screenshot of the native screen, shown as Compare › Original in the studio",
-      channel: "next",
     },
   },
   examples: [
     ["migrate", "Move this app off RevenueCat / Adapty / Qonversion"],
     ["migrate --skill", "Print the migration playbook for your own agent"],
-    ["migrate 65920", "Rebuild dashboard paywall 65920 as code", "next"],
-    ["migrate --screen App/UpdateRequiredView.swift", "Rebuild a native screen as a Superwall surface", "next"],
+    ["migrate 65920", "Rebuild dashboard paywall 65920 as code"],
+    ["migrate --screen App/UpdateRequiredView.swift", "Rebuild a native screen as a Superwall surface"],
   ],
   auth: "optional",
   json: false,
