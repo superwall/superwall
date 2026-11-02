@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { command as groups } from "@/commands/app-store-connect/store/subscription-groups";
 import { ascRoutes, link, one, page } from "../../../helpers/asc-proxy";
-import { APP_BY_BUNDLE, GROUPS_OF_APP } from "../../../helpers/asc-store";
+import { APP_BY_BUNDLE, GROUPS_OF_APP, versionMadeOnPost } from "../../../helpers/asc-store";
 import { runCommand } from "../../../helpers/command";
 
 afterEach(() => {
@@ -21,12 +21,13 @@ const VIEW = {
   "GET /v1/subscriptionGroups/201/subscriptions?limit=200": page([one("subscriptions", "601", { productId: "pro.monthly", name: "Monthly", state: "APPROVED" })]),
 };
 
-test("create makes the group and its localization on the version Apple made", async () => {
+test("create makes the group, its first version and the localization on it", async () => {
   const { api, writes } = ascRoutes({
     [APP_BY_BUNDLE]: page([one("apps", "555")]),
     "POST /v1/subscriptionGroups": { data: one("subscriptionGroups", "201") },
     "POST /v2/subscriptionGroupLocalizations": { data: one("subscriptionGroupLocalizations", "GL1") },
     ...VIEW,
+    ...versionMadeOnPost("/v1/subscriptionGroups/201/versions", "/v1/subscriptionGroupVersions", one("subscriptionGroupVersions", "GV2", { version: 2, state: "PREPARE_FOR_SUBMISSION" })),
   });
   const result = await runCommand(groups, {
     api,
@@ -39,6 +40,11 @@ test("create makes the group and its localization on the version Apple made", as
       method: "POST",
       path: "/v1/subscriptionGroups",
       body: { data: { type: "subscriptionGroups", attributes: { referenceName: "Pro" }, relationships: { app: link("apps", "555") } } },
+    },
+    {
+      method: "POST",
+      path: "/v1/subscriptionGroupVersions",
+      body: { data: { type: "subscriptionGroupVersions", relationships: { subscriptionGroup: link("subscriptionGroups", "201") } } },
     },
     {
       method: "POST",
@@ -74,14 +80,45 @@ test("create without a display name makes only the group, which then misses a lo
   assert.deepEqual(human.said("success"), ["Created the subscription group Basic"]);
 });
 
-test("create stops when Apple returns no group, or no version to localize", async () => {
+test("create stops when Apple returns no group, or refuses its version naming the group already created", async () => {
+  const { ApiError } = await import("@/core/api/client");
   const flags = { ascApp: "555", referenceName: "Pro", displayName: "Pro" };
   const none = ascRoutes({ "POST /v1/subscriptionGroups": {} });
   assert.deepEqual((await runCommand(groups, { api: none.api, words: ["create"], flags })).said("error"), ["Apple created no subscription group."]);
-  const noVersion = ascRoutes({ "POST /v1/subscriptionGroups": { data: one("subscriptionGroups", "201") }, "GET /v1/subscriptionGroups/201/versions": page([]) });
-  assert.deepEqual((await runCommand(groups, { api: noVersion.api, words: ["create"], flags })).said("error"), [
-    "Apple made no version of subscription group 201 to localize.",
+  const refused = ascRoutes({
+    "POST /v1/subscriptionGroups": { data: one("subscriptionGroups", "201") },
+    "GET /v1/subscriptionGroups/201/versions": page([]),
+    "POST /v1/subscriptionGroupVersions": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
+  });
+  assert.deepEqual((await runCommand(groups, { api: refused.api, words: ["create"], flags })).said("error"), [
+    "App Store Connect refused POST x (409):\n  • Not allowed\nAlready created: subscriptionGroups 201.",
   ]);
+});
+
+test("create localizes the editable version a group already has without making another", async () => {
+  const { api, writes } = ascRoutes({
+    "POST /v1/subscriptionGroups": { data: one("subscriptionGroups", "201") },
+    "POST /v2/subscriptionGroupLocalizations": { data: one("subscriptionGroupLocalizations", "GL1") },
+    ...VIEW,
+  });
+  await runCommand(groups, { api, words: ["create"], flags: { ascApp: "555", referenceName: "Pro", displayName: "Pro" } });
+  assert.deepEqual(
+    writes().map((request) => request.path),
+    ["/v1/subscriptionGroups", "/v2/subscriptionGroupLocalizations"],
+  );
+});
+
+test("a dry-run create with a display name plans the new version before the localization on it", async () => {
+  const { api, writes } = ascRoutes({});
+  const result = await runCommand(groups, { api, words: ["create"], flags: { ascApp: "555", referenceName: "Pro", displayName: "Pro", dryRun: true }, json: true });
+  assert.deepEqual(writes(), []);
+  const { requests } = result.json as { requests: { method: string; path: string; body?: unknown }[] };
+  assert.deepEqual(
+    requests.map((request) => `${request.method} ${request.path}`),
+    ["POST /v1/subscriptionGroups", "GET /v1/subscriptionGroups/${group}/versions", "POST /v1/subscriptionGroupVersions", "POST /v2/subscriptionGroupLocalizations"],
+  );
+  const localization = requests[3]?.body as { data: { relationships: unknown } };
+  assert.deepEqual(localization.data.relationships, { version: link("subscriptionGroupVersions", "${version}") });
 });
 
 test("list, get, update and delete", async () => {

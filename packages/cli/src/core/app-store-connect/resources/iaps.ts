@@ -6,7 +6,7 @@ import { argOf, booleanOf, numberOf, requireText, textOf, type AscInput, type As
 import { selectIapPriceSchedule, replaceIapPrice, type IapPriceSchedule } from "./prices";
 import { selectScreenshot, type ScreenshotView } from "./screenshots";
 import { assertConfirmed, type AscSession } from "./session";
-import { selectLatestVersion, resolveAscAppId, resolveTerritories, type VersionView } from "./targets";
+import { resolveDraftVersion, selectLatestVersion, resolveAscAppId, resolveTerritories, type VersionView } from "./targets";
 
 export const IAP_TYPES = ["CONSUMABLE", "NON_CONSUMABLE", "NON_RENEWING_SUBSCRIPTION"] as const;
 const DEFAULT_LOCALE = "en-US";
@@ -113,10 +113,9 @@ export async function runIapsCreate(session: AscSession, input: AscInput): Promi
 
   const displayName = textOf(input, "displayName");
   if (displayName) {
-    const version = await selectLatestVersion(session, "iap", id);
-    if (!version) throw new Error(`Apple made no version of in-app purchase ${id} to localize.`);
+    const version = await resolveDraftVersion(session, "iap", id);
     const description = textOf(input, "description");
-    await createLocalization(session, "iap", version.id, {
+    await createLocalization(session, "iap", version, {
       locale: textOf(input, "locale") ?? DEFAULT_LOCALE,
       name: displayName,
       ...(description ? { description } : {}),

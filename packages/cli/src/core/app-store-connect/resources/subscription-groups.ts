@@ -2,7 +2,7 @@ import { attribute, linkTo } from "./json-api";
 import { createLocalization, listVersionLocalizations, type LocalizationView } from "./localizations";
 import { argOf, requireText, textOf, type AscInput, type AscOutput } from "./operation";
 import { assertConfirmed, type AscSession } from "./session";
-import { selectLatestVersion, resolveAscAppId, type VersionView } from "./targets";
+import { resolveDraftVersion, selectLatestVersion, resolveAscAppId, type VersionView } from "./targets";
 
 const DEFAULT_LOCALE = "en-US";
 
@@ -60,10 +60,9 @@ export async function runSubscriptionGroupsCreate(session: AscSession, input: As
   );
   if (!group) throw new Error("Apple created no subscription group.");
   if (displayName) {
-    const version = await selectLatestVersion(session, "group", group.id);
-    if (!version) throw new Error(`Apple made no version of subscription group ${group.id} to localize.`);
+    const version = await resolveDraftVersion(session, "group", group.id);
     const customAppName = textOf(input, "customAppName");
-    await createLocalization(session, "group", version.id, {
+    await createLocalization(session, "group", version, {
       locale: textOf(input, "locale") ?? DEFAULT_LOCALE,
       name: displayName,
       ...(customAppName ? { customAppName } : {}),
