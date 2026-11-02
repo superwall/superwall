@@ -43,6 +43,7 @@ export type ApplePay = {
   prepare(quote: ElementsCheckoutSession, identity?: CustomerIdentity): Promise<void>;
   purchase(referenceName: string, context: HostContext): Promise<ApplePayOutcome>;
   clear(): void;
+  subscribe(listener: () => void): () => void;
 };
 
 type ConfirmResponse = {
@@ -110,6 +111,11 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
   const prepared = new Map<string, Prepared>();
   const unavailable = new Map<string, string>();
   const pending = new Map<string, Pending>();
+  const listeners = new Set<() => void>();
+
+  const notify = () => {
+    for (const listener of listeners) listener();
+  };
 
   const stateOf = (referenceName: string): WalletState => {
     const ready = prepared.get(referenceName);
@@ -127,6 +133,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
   const markUnavailable = (referenceName: string, reason: string) => {
     prepared.delete(referenceName);
     unavailable.set(referenceName, reason);
+    notify();
     const waiting = takePending(referenceName);
     if (!waiting) return;
     stopLoading();
@@ -321,9 +328,17 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
 
     markUnavailable,
 
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+
     clear: () => {
       prepared.clear();
       unavailable.clear();
+      notify();
       for (const waiting of pending.values()) {
         waiting.resolve({ status: "unavailable", reason: "cleared" });
       }
@@ -344,6 +359,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
       const { referenceName } = quote;
       prepared.delete(referenceName);
       unavailable.set(referenceName, "preparing");
+      notify();
 
       if (!options.publicApiKey()) {
         markUnavailable(referenceName, "missing_public_api_key");
@@ -413,6 +429,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
       ready.ready = true;
       unavailable.delete(referenceName);
       prepared.set(referenceName, ready);
+      notify();
       const waiting = takePending(referenceName);
       if (waiting) void show(ready, waiting.context).then(waiting.resolve);
     },

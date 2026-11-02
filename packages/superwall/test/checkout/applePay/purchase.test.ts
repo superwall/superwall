@@ -780,3 +780,51 @@ describe("failures the wallet reports verbatim", () => {
     expect(failure.mock.calls[0]![0].error.message).toBe("Apple Pay failed");
   });
 });
+
+const watch = (controller: ReturnType<typeof makeController>["controller"]) => {
+  const seen: unknown[] = [];
+  const stop = controller.subscribe(() => seen.push(controller.availability("primary")));
+  return { seen, stop };
+};
+
+describe("watching a product's wallet availability", () => {
+  it("tells a listener when the wallet starts preparing and when it is ready", async () => {
+    const { controller } = makeController();
+    const { seen } = watch(controller);
+    await controller.prepare(quote());
+    expect(seen).toEqual([{ status: "preparing" }, { status: "ready" }]);
+  });
+
+  it("tells a listener when the device cannot pay", async () => {
+    const { controller } = makeController({ canMakePayment: { applePay: false } });
+    const { seen } = watch(controller);
+    await controller.prepare(quote());
+    expect(seen).toEqual([
+      { status: "preparing" },
+      { status: "unavailable", reason: "apple_pay_not_available" },
+    ]);
+  });
+
+  it("tells a listener when the flow gives up on a product", () => {
+    const { controller } = makeController();
+    const { seen } = watch(controller);
+    controller.markUnavailable("primary", "no_apple_pay_quote");
+    expect(seen).toEqual([{ status: "unavailable", reason: "no_apple_pay_quote" }]);
+  });
+
+  it("tells a listener when the quotes are cleared", async () => {
+    const { controller } = makeController();
+    await controller.prepare(quote());
+    const { seen } = watch(controller);
+    controller.clear();
+    expect(seen).toEqual([{ status: "unavailable", reason: "not_prepared" }]);
+  });
+
+  it("stops telling a listener once it unsubscribes", async () => {
+    const { controller } = makeController();
+    const { seen, stop } = watch(controller);
+    stop();
+    await controller.prepare(quote());
+    expect(seen).toEqual([]);
+  });
+});
