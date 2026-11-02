@@ -10,7 +10,12 @@ import type {
   TPermissionTypeMessage,
   TransportKind,
 } from "@superwall/protocol";
-import type { SuperwallCheckoutMode, SuperwallConfig, SuperwallPostPurchase } from "../config";
+import type {
+  SuperwallCheckoutMode,
+  SuperwallConfig,
+  SuperwallPostPurchase,
+  SuperwallPrepaidCards,
+} from "../config";
 import type { SuperwallTranslateValues } from "../localization";
 import type {
   SuperwallProduct,
@@ -143,6 +148,13 @@ export type SuperwallPurchaseOptions = {
    * Default: the config's `checkout` mode.
    */
   checkout?: SuperwallCheckoutMode;
+  /**
+   * Whether this purchase's web checkout accepts prepaid cards, overriding
+   * the config's `checkout.prepaidCards` for this call. See
+   * `SuperwallPrepaidCards`. Ignored by store purchases.
+   * Default: the config's `checkout.prepaidCards`, else `"allow"`.
+   */
+  prepaidCards?: SuperwallPrepaidCards;
 };
 
 export type SuperwallCallbackOptions = {

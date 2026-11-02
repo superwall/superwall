@@ -126,9 +126,11 @@ export {
   checkoutManagedPaymentsOf,
   checkoutModeOf,
   checkoutPrefetchOf,
+  checkoutPrepaidCardsOf,
   type SuperwallCheckoutConfig,
   type SuperwallCheckoutMode,
   type SuperwallManagedPaymentsOverride,
+  type SuperwallPrepaidCards,
 } from "./checkout";
 export {
   INSET_EDGES,

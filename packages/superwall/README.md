@@ -196,7 +196,11 @@ Once a purchase completes, `postPurchase` (in `config.ts`, or per
 `purchase()` call) decides what happens: `"dismiss"` (the default),
 `"stay"` to keep the paywall in control, and on the web `"redeem"` or
 `{ redirect: url }`. Pass `stripeMetadata` to `purchase()` to write key/values
-onto the Stripe subscription. `checkout: { managedPayments }` and
+onto the Stripe subscription. `checkout: { prepaidCards: "block" }` makes
+Stripe refuse prepaid cards (`"allow"` is the default), and a `purchase()` or
+`prefetch()` call can pass its own `prepaidCards` to override it; an Apple Pay
+payment can't be filtered by card type, so in `applePay` mode only the sheet
+fallback refuses them. `checkout: { managedPayments }` and
 `introductoryOfferEligibility` round out the config.
 
 ### Insets

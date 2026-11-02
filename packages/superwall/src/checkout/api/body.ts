@@ -1,5 +1,7 @@
 import {
   checkoutManagedPaymentsOf,
+  checkoutPrepaidCardsOf,
+  type SuperwallPrepaidCards,
   type SuperwallProduct,
   type SuperwallRuntimeSnapshot,
 } from "@superwall/runtime";
@@ -61,6 +63,7 @@ export type SessionBodyOptions = {
   mode: CheckoutMode;
   silent: boolean;
   teleportId?: string;
+  prepaidCards?: SuperwallPrepaidCards;
 };
 
 export const attributionOf = (
@@ -119,6 +122,7 @@ export const sessionBody = ({
   mode,
   silent,
   teleportId,
+  prepaidCards = checkoutPrepaidCardsOf(snapshot.config?.checkout),
 }: SessionBodyOptions) => {
   const { user } = snapshot;
   const variables = product.variables;
@@ -139,6 +143,7 @@ export const sessionBody = ({
     context: {
       ...attributionOf(snapshot),
       ...(managedPayments === undefined ? {} : { paywallManagedPaymentsOverride: managedPayments }),
+      ...(prepaidCards === "block" ? { blockPrepaidCards: true } : {}),
       product: {
         identifier: productIdentifier,
         currencyCode: variables.currencyCode || "USD",

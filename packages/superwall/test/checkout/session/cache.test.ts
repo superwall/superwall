@@ -18,6 +18,15 @@ describe("the checkout session cache", () => {
     referenceName: "monthly",
   };
 
+  it("keys a session by its prepaid-card rule, allowing by default", () => {
+    const cache = createSessionCache();
+    cache.set("monthly", session, "default", "block");
+    expect(cache.get("monthly")).toBeNull();
+    expect(cache.get("monthly", "default", "block")).toEqual(session);
+    cache.set("monthly", session);
+    expect(cache.get("monthly", "default", "allow")).toEqual(session);
+  });
+
   it("forgets a session once its TTL has passed", () => {
     vi.useFakeTimers();
     sessionCache.set("monthly", session);

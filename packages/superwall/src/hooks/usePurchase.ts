@@ -39,7 +39,7 @@ export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
   failure?: SuperwallPurchaseFailure<SuperwallProduct<TVariables>>;
   prefetch: (
     input?: ProductReference | SuperwallProduct<TVariables>,
-    options?: Pick<SuperwallPurchaseOptions, "checkout">,
+    options?: Pick<SuperwallPurchaseOptions, "checkout" | "prepaidCards">,
   ) => void;
 };
 
@@ -53,7 +53,8 @@ const referenceOf = (input: string | { reference: string }): string =>
  * offers it and falls back to the sheet; otherwise, and always inside an iOS
  * app, it opens Superwall's hosted checkout in the browser. A `purchase()` or
  * `prefetch()` call can pass its own `checkout` mode, under the same iOS
- * rule. Web checkout only runs when a host supplied a public API key.
+ * rule, and its own `prepaidCards`. Web checkout only runs when a host
+ * supplied a public API key.
  */
 export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
@@ -78,7 +79,7 @@ export const usePurchase = <
       const reference = referenceOf(input);
       const product = session.getSnapshot().productsByReference[reference];
       const teleporter = teleportFor(session);
-      const { postPurchase, stripeMetadata } = options ?? {};
+      const { postPurchase, stripeMetadata, prepaidCards } = options ?? {};
       if (
         product &&
         sessionsFor(session).isStripeProduct(reference) &&
@@ -103,6 +104,7 @@ export const usePurchase = <
         const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
           postPurchase,
           stripeMetadata,
+          ...(prepaidCards === undefined ? {} : { prepaidCards }),
         });
         return { status, product };
       }
@@ -124,7 +126,7 @@ export const usePurchase = <
   const prefetch = React.useCallback(
     (
       input?: ProductReference | SuperwallProduct<TVariables>,
-      options?: Pick<SuperwallPurchaseOptions, "checkout">,
+      options?: Pick<SuperwallPurchaseOptions, "checkout" | "prepaidCards">,
     ) => {
       const reference = input === undefined ? first : referenceOf(input);
       if (!webMode || reference === undefined) return;
@@ -134,6 +136,7 @@ export const usePurchase = <
         session,
         reference,
         checkoutModeFor(snapshot, options?.checkout ?? webMode),
+        options?.prepaidCards,
       );
     },
     [session, webMode, first],

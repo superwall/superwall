@@ -239,6 +239,26 @@ describe("createCheckoutSessions.createSession", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps a session per prepaid-card rule, so an override never reuses the default", async () => {
+    const fetchMock = mockSession({
+      checkoutContextId: "ctx_4",
+      directive: { directive: "redirect", checkoutSessionId: "cs_1", checkoutUrl: "https://x" },
+    });
+    const sessions = createCheckoutSessions(() =>
+      snapshot({ config: { checkout: { mode: "sheet", prepaidCards: "block" } } }),
+    );
+
+    await sessions.begin({ referenceName: "monthly", mode: "sheet" });
+    await sessions.begin({ referenceName: "monthly", mode: "sheet", prepaidCards: "block" });
+    await sessions.begin({ referenceName: "monthly", mode: "sheet", prepaidCards: "allow" });
+
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+    expect(bodies.map((body) => body.context.blockPrepaidCards)).toEqual([true, undefined]);
+    expect(sessions.warmed("monthly", "default")?.checkoutContextId).toBe("ctx_4");
+    expect(sessions.warmed("monthly", "default", "allow")?.checkoutContextId).toBe("ctx_4");
+    expect(sessions.warmed("monthly", "apple-pay")).toBeNull();
+  });
 });
 
 describe("openEmbeddedSheet", () => {

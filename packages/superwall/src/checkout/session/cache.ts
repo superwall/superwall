@@ -1,17 +1,31 @@
+import type { SuperwallPrepaidCards } from "@superwall/runtime";
 import type { CheckoutSessionResult, SessionScope } from "../types";
 
 export const SESSION_CACHE_TTL = 10 * 60 * 1000;
 
 export type SessionCache = {
-  get(referenceName: string, scope?: SessionScope): CheckoutSessionResult | null;
-  set(referenceName: string, session: CheckoutSessionResult, scope?: SessionScope): void;
+  get(
+    referenceName: string,
+    scope?: SessionScope,
+    prepaidCards?: SuperwallPrepaidCards,
+  ): CheckoutSessionResult | null;
+  set(
+    referenceName: string,
+    session: CheckoutSessionResult,
+    scope?: SessionScope,
+    prepaidCards?: SuperwallPrepaidCards,
+  ): void;
   cleanupExpired(): void;
   clear(): void;
 };
 
 type Entry = { session: CheckoutSessionResult; createdAt: number };
 
-const keyFor = (referenceName: string, scope: SessionScope) => `${scope}:${referenceName}`;
+export const sessionKeyFor = (
+  referenceName: string,
+  scope: SessionScope = "default",
+  prepaidCards: SuperwallPrepaidCards = "allow",
+) => `${scope}:${prepaidCards}:${referenceName}`;
 
 const expired = (entry: Entry) => Date.now() - entry.createdAt > SESSION_CACHE_TTL;
 
@@ -19,8 +33,8 @@ export const createSessionCache = (): SessionCache => {
   const entries = new Map<string, Entry>();
 
   return {
-    get: (referenceName, scope = "default") => {
-      const key = keyFor(referenceName, scope);
+    get: (referenceName, scope, prepaidCards) => {
+      const key = sessionKeyFor(referenceName, scope, prepaidCards);
       const entry = entries.get(key);
       if (!entry) return null;
       if (expired(entry)) {
@@ -29,8 +43,11 @@ export const createSessionCache = (): SessionCache => {
       }
       return entry.session;
     },
-    set: (referenceName, session, scope = "default") => {
-      entries.set(keyFor(referenceName, scope), { session, createdAt: Date.now() });
+    set: (referenceName, session, scope, prepaidCards) => {
+      entries.set(sessionKeyFor(referenceName, scope, prepaidCards), {
+        session,
+        createdAt: Date.now(),
+      });
     },
     cleanupExpired: () => {
       for (const [key, entry] of entries) {
