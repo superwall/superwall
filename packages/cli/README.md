@@ -239,9 +239,9 @@ Stripe-style: `superwall <resource> <operation> [ids] [--field value]`.
 superwall apps get <app>                  # everything about one app: bundle ID, Apple team, keys
 superwall apps <app>                      # the same: an id where the operation goes means get
 superwall apps update <app> --team-id <team-id>
-superwall products create --identifier pro_monthly --price 9.99 --period month
+superwall entitlements create --identifier pro --app <app>
+superwall products create --identifier pro_monthly --price 9.99 --period month --entitlement pro
 superwall products storekit               # generate a local .storekit file
-superwall entitlements create --identifier pro
 superwall campaigns create --description "Onboarding upsell" --placement onboarding_complete
 superwall campaigns placements create <campaign-id> --event-name onboarding_complete
 superwall campaigns audiences readout <campaign-id> <audience-id>

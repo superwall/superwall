@@ -18,7 +18,7 @@ const FLAGS = {
   price: { type: "number", value: "amount", describe: "products create: price in major units" },
   periodCount: { type: "number", describe: "products create: periods per cycle" },
   trialDays: { type: "number", describe: "products create: free-trial days" },
-  entitlement: { type: "list", value: "id", describe: "products create: entitlement ids to grant" },
+  entitlement: { type: "list", value: "id", describe: "products create: entitlement ids or identifiers to grant" },
 } as const satisfies Record<string, FlagSpec>;
 
 export function defineResource(resource: Resource & { examples: readonly Example[] }): Catalog {
