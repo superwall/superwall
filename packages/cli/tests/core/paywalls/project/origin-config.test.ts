@@ -212,6 +212,47 @@ test("web checkout is written only for web paywalls, from the editor's destinati
   assert.equal(native.checkout, undefined);
 });
 
+test("the editor's prepaid card block is read from the document", () => {
+  const blocked = parseOriginDocument(
+    fixture("force-update").replace(
+      '"webCheckoutDestination":"EXTERNAL",',
+      '"webCheckoutDestination":"EXTERNAL","prepaidCards":"BLOCKED",',
+    ),
+  );
+  assert.equal(blocked?.settings.prepaidCards, "block");
+  const allowed = parseOriginDocument(
+    fixture("force-update").replace(
+      '"webCheckoutDestination":"EXTERNAL",',
+      '"webCheckoutDestination":"EXTERNAL","prepaidCards":"ALLOWED",',
+    ),
+  );
+  assert.ok(allowed);
+  assert.equal("prepaidCards" in allowed.settings, false);
+});
+
+test("blocked prepaid cards are written into a web paywall's checkout, in its mode", () => {
+  const web = (settings: OriginDocument["settings"]) =>
+    evaluate(originConfigSource(originOf(detail({ platform: "web", products: [] }), documentWith(settings))));
+  assert.deepEqual(web({ webCheckoutDestination: "PAYWALL_EMBEDDED", prepaidCards: "block" }).checkout, {
+    mode: "sheet",
+    prepaidCards: "block",
+  });
+  assert.deepEqual(web({ webCheckoutDestination: "PAYWALL_APPLE_PAY", prepaidCards: "block" }).checkout, {
+    mode: "applePay",
+    prepaidCards: "block",
+  });
+  assert.deepEqual(web({ webCheckoutDestination: "EXTERNAL", prepaidCards: "block" }).checkout, {
+    mode: "external",
+    prepaidCards: "block",
+  });
+  assert.deepEqual(web({ prepaidCards: "block" }).checkout, { mode: "external", prepaidCards: "block" });
+  assert.equal(web({ webCheckoutDestination: "PAYWALL_EMBEDDED" }).checkout, "sheet");
+  const native = evaluate(
+    originConfigSource(originOf(detail({ products: [] }), documentWith({ prepaidCards: "block" }))),
+  );
+  assert.equal(native.checkout, undefined);
+});
+
 test("product references that are not identifiers are quoted, and every product survives", () => {
   const origin = originOf(
     detail({

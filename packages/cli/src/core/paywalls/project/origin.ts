@@ -12,6 +12,7 @@ interface OriginSettings {
   gameControllerEnabled: boolean;
   onDeviceCacheEnabled: boolean;
   webCheckoutDestination?: string;
+  prepaidCards?: "block";
 }
 
 interface OriginInventory {
@@ -160,6 +161,7 @@ export function parseOriginDocument(html: string): OriginDocument | undefined {
     if (typeof paywall.webCheckoutDestination === "string") {
       settings.webCheckoutDestination = paywall.webCheckoutDestination;
     }
+    if (paywall.prepaidCards === "BLOCKED") settings.prepaidCards = "block";
   }
 
   const locales = ofType("paywall_language")
@@ -258,6 +260,9 @@ export function originOf(detail: PaywallDetail, document?: OriginDocument): Orig
       ...(document?.settings.webCheckoutDestination === undefined
         ? {}
         : { webCheckoutDestination: document.settings.webCheckoutDestination }),
+      ...(document?.settings.prepaidCards === undefined
+        ? {}
+        : { prepaidCards: document.settings.prepaidCards }),
     },
     background: document?.background,
     locales: document?.locales ?? [],
@@ -295,11 +300,19 @@ const presentationSource = (presentation: OriginPresentation): string | undefine
   return `{ style: ${literal(presentation.style)} }`;
 };
 
+const checkoutModeOf = (destination: string | undefined): string | undefined => {
+  if (destination === "PAYWALL_APPLE_PAY") return "applePay";
+  if (destination === "PAYWALL_EMBEDDED") return "sheet";
+  return undefined;
+};
+
 const checkoutSource = (origin: OriginPaywall): string | undefined => {
   if (origin.platform !== "web") return undefined;
-  if (origin.settings.webCheckoutDestination === "PAYWALL_APPLE_PAY") return `"applePay"`;
-  if (origin.settings.webCheckoutDestination === "PAYWALL_EMBEDDED") return `"sheet"`;
-  return undefined;
+  const mode = checkoutModeOf(origin.settings.webCheckoutDestination);
+  if (origin.settings.prepaidCards === "block") {
+    return `{ mode: ${literal(mode ?? "external")}, prepaidCards: "block" }`;
+  }
+  return mode === undefined ? undefined : literal(mode);
 };
 
 export function originConfigSource(origin: OriginPaywall): string {
