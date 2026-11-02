@@ -3,12 +3,7 @@ import { paywallSettingsOf, type PaywallSettings } from "../build/settings";
 import { importDefault } from "../config/load";
 import { localesOf } from "../config/messages";
 import type { PaywallDefinition } from "../config";
-import {
-  isPlatformProductIds,
-  normalizePlatform,
-  productIdFor,
-  type SuperwallProductSlotInput,
-} from "@superwall/runtime";
+import { normalizePlatform, productIdFor, productIdsOf } from "@superwall/runtime";
 import { DEFAULT_PARAMS, DEFAULT_USER, defaultDevice } from "@superwall/host/defaults";
 import { discoverProject } from "../discover";
 import { firstBinding, originOf, readLock, type SurfaceOrigin } from "../lock";
@@ -33,14 +28,6 @@ export type StudioSurfacePayload = {
 
 const declaredPlatforms = (value: unknown): string[] | undefined =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : undefined;
-
-const productIdsOf = (input: SuperwallProductSlotInput): string[] => {
-  if (typeof input === "string") return [input];
-  if (isPlatformProductIds(input)) {
-    return [...new Set(Object.values(input).filter((id) => typeof id === "string"))];
-  }
-  return [input.productId].filter((id) => typeof id === "string");
-};
 
 export type StudioProjectPayload = {
   title: string;

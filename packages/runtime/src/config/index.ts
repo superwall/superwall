@@ -158,8 +158,12 @@ export {
   type SuperwallTeleportOptions,
 } from "./teleport";
 export {
+  billingPlanFor,
   isPlatformProductIds,
   productIdFor,
+  productIdsOf,
+  SUPERWALL_BILLING_PLANS,
+  type SuperwallBillingPlan,
   type SuperwallPlatformProductIds,
   type SuperwallProductSlot,
   type SuperwallProductSlotInput,
