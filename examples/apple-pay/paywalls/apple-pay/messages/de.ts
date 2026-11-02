@@ -24,8 +24,27 @@ export default {
   },
   purchase: {
     continue: "Weiter",
+    applePay: "Mit Apple Pay bezahlen",
     restore: "Käufe wiederherstellen",
     failed: "Das hat nicht geklappt. Bitte erneut versuchen.",
+  },
+  wallet: {
+    native: "Apple Pay: in dieser App nicht angeboten (undefined).",
+    none: {
+      unsupported_browser:
+        "Apple Pay: dieser Browser kann die Wallet nicht selbst öffnen (false, unsupported_browser).",
+      insecure_context:
+        "Apple Pay: die Seite wird nicht über HTTPS geladen (false, insecure_context).",
+      device_unsupported:
+        "Apple Pay: dieses Gerät kann nicht mit Apple Pay zahlen (false, device_unsupported).",
+      cross_origin_frame:
+        "Apple Pay: in einem Frame einer anderen Seite blockiert (false, cross_origin_frame).",
+      check_failed: "Apple Pay: die Prüfung des Browsers ist fehlgeschlagen (false, check_failed).",
+    },
+    preparing: "Apple Pay: verfügbar (true), Wallet wird vorbereitet…",
+    ready: "Apple Pay: verfügbar (true), die Wallet öffnet sich beim Tippen.",
+    unavailable:
+      "Apple Pay: verfügbar (true), aber die Wallet ist nicht bereit ({reason}), daher öffnet sich das Kartenformular.",
   },
   restore: {
     restored: "Käufe wiederhergestellt.",

@@ -29,7 +29,7 @@ describe("a controller with no Stripe loader injected", () => {
     });
     expect(controller.availability("primary")).toEqual({
       status: "unavailable",
-      reason: "stripe_js_load_failed",
+      reason: "stripe_load_failed",
     });
   });
 });

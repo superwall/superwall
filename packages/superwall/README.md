@@ -165,7 +165,24 @@ and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedempt
 `useUserAttribute`, `useLocalResource`, `useSuperwallEvent`,
 `useGameController`, `useTeleport` (a teleport's typed `status` —
 `idle`, `waiting`, `arrived`, `completed` — with `prefetch`, `reopen`,
-`cancel` and `returnToApp`, for a paywall that draws its own teleport screen).
+`cancel` and `returnToApp`, for a paywall that draws its own teleport screen),
+`useApplePay` says whether direct Apple Pay, the wallet the browser opens
+itself, is available on a web host (Web SDK, hosted web paywall, teleport page
+or browser): `{ available: true }`, or `{ available: false, reason, message,
+error? }` with a typed `ApplePayUnavailableReason` (`unsupported_browser`, as
+in desktop Chrome, whose card sheet may still offer Apple Pay by QR code;
+`insecure_context`, not HTTPS, `http://localhost` included;
+`device_unsupported`; `cross_origin_frame`; `check_failed`) and the browser's
+own `error` when its check threw; `undefined` inside the iOS and Android SDKs
+and in Studio. With a product it adds `product`: `preparing`, `ready`, or
+`unavailable` with a typed `ApplePayProductReason`, `message` and `error?`.
+Only Stripe's check, made when it prepares the product, sees the cards in
+Wallet and the domain's registration, and reports a refusal as
+`stripe_declined`. The wallet opens only for a product prepared before the
+tap: a config `checkout: "applePay"` prepares it on its own, and on a
+`checkout: "sheet"` paywall `prefetch(reference, { checkout: "applePay" })`
+does; a `purchase(reference, { checkout: "applePay" })` of anything else opens
+the sheet, with `reason` `not_prepared`.
 
 `useUserAttribute(key, parser)` is one user attribute as typed state —
 `useQueryState`'s API with the same parsers, kept by the host SDK across

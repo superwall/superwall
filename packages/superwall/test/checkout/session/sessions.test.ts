@@ -685,6 +685,33 @@ describe("createCheckoutSessions identity and guards", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("hands a failed warm-up's error to the caller", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    const sessions = createCheckoutSessions(snapshot);
+    await expect(sessions.prefetch({ referenceName: "monthly", mode: "sheet" })).rejects.toThrow(
+      "Failed to fetch",
+    );
+  });
+
+  it("drops the error of a warm-up whose cache was cleared while it was in flight", async () => {
+    const sessions = createCheckoutSessions(snapshot);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        sessions.invalidate();
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    await expect(
+      sessions.prefetch({ referenceName: "monthly", mode: "sheet" }),
+    ).resolves.toBeNull();
+  });
+
   it("throws away a warm-up whose cache was cleared while it was in flight", async () => {
     const sessions = createCheckoutSessions(snapshot);
     vi.stubGlobal(

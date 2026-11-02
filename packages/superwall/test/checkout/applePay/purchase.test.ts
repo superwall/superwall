@@ -213,7 +213,7 @@ describe("createApplePay", () => {
     await controller.prepare(quote());
     await expect(controller.purchase("primary", context)).resolves.toEqual({
       status: "unavailable",
-      reason: "apple_pay_not_available",
+      reason: "stripe_declined",
     });
     expect(paymentRequest.show).not.toHaveBeenCalled();
   });
@@ -248,7 +248,7 @@ describe("createApplePay", () => {
     await preparing;
     await expect(outcome).resolves.toEqual({
       status: "unavailable",
-      reason: "apple_pay_not_available",
+      reason: "stripe_declined",
     });
     expect(isLoading()).toBe(false);
   });
@@ -391,14 +391,13 @@ describe("createApplePay", () => {
     paymentRequest.show.mockImplementation(() => {
       throw new Error("not allowed");
     });
-    await expect(controller.purchase("primary", context)).resolves.toEqual({
+    const unavailable = {
       status: "unavailable",
       reason: "show_failed",
-    });
-    expect(controller.availability("primary")).toEqual({
-      status: "unavailable",
-      reason: "show_failed",
-    });
+      error: { name: "Error", message: "not allowed" },
+    };
+    await expect(controller.purchase("primary", context)).resolves.toEqual(unavailable);
+    expect(controller.availability("primary")).toEqual(unavailable);
   });
 });
 
@@ -408,7 +407,7 @@ describe("createApplePay preparation failures", () => {
     await controller.prepare(quote());
     expect(controller.availability("primary")).toEqual({
       status: "unavailable",
-      reason: "stripe_js_load_failed",
+      reason: "stripe_load_failed",
     });
   });
 
@@ -418,7 +417,8 @@ describe("createApplePay preparation failures", () => {
     await controller.prepare(quote());
     expect(controller.availability("primary")).toEqual({
       status: "unavailable",
-      reason: "can_make_payment_failed",
+      reason: "stripe_check_failed",
+      error: { name: "Error", message: "blocked" },
     });
   });
 
@@ -778,5 +778,53 @@ describe("failures the wallet reports verbatim", () => {
     off();
 
     expect(failure.mock.calls[0]![0].error.message).toBe("Apple Pay failed");
+  });
+});
+
+const watch = (controller: ReturnType<typeof makeController>["controller"]) => {
+  const seen: unknown[] = [];
+  const stop = controller.subscribe(() => seen.push(controller.availability("primary")));
+  return { seen, stop };
+};
+
+describe("watching a product's wallet availability", () => {
+  it("tells a listener when the wallet starts preparing and when it is ready", async () => {
+    const { controller } = makeController();
+    const { seen } = watch(controller);
+    await controller.prepare(quote());
+    expect(seen).toEqual([{ status: "preparing" }, { status: "ready" }]);
+  });
+
+  it("tells a listener when the device cannot pay", async () => {
+    const { controller } = makeController({ canMakePayment: { applePay: false } });
+    const { seen } = watch(controller);
+    await controller.prepare(quote());
+    expect(seen).toEqual([
+      { status: "preparing" },
+      { status: "unavailable", reason: "stripe_declined" },
+    ]);
+  });
+
+  it("tells a listener when the flow gives up on a product", () => {
+    const { controller } = makeController();
+    const { seen } = watch(controller);
+    controller.markUnavailable("primary", "session_unsupported");
+    expect(seen).toEqual([{ status: "unavailable", reason: "session_unsupported" }]);
+  });
+
+  it("tells a listener when the quotes are cleared", async () => {
+    const { controller } = makeController();
+    await controller.prepare(quote());
+    const { seen } = watch(controller);
+    controller.clear();
+    expect(seen).toEqual([{ status: "unavailable", reason: "not_prepared" }]);
+  });
+
+  it("stops telling a listener once it unsubscribes", async () => {
+    const { controller } = makeController();
+    const { seen, stop } = watch(controller);
+    stop();
+    await controller.prepare(quote());
+    expect(seen).toEqual([]);
   });
 });

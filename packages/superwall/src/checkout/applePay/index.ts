@@ -20,14 +20,60 @@ import {
 } from "../session/id";
 import type { ApplePaySession, CustomerIdentity, ElementsCheckoutSession } from "../types";
 
+/**
+ * Why the Apple Pay wallet is not ready to open for a product, once the
+ * browser itself can open it.
+ *
+ * - `"not_prepared"`: nothing prepared the wallet for the product yet,
+ *   neither the config's `checkout: "applePay"` nor a
+ *   `prefetch(product, { checkout: "applePay" })`. It says nothing about the
+ *   device.
+ * - `"stripe_declined"`: Stripe's check found no way to pay with Apple Pay:
+ *   no card is set up in Wallet, the domain is not registered for Apple Pay
+ *   with Stripe, or Safari's "Allow websites to check for Apple Pay" setting
+ *   is off. Stripe does not say which.
+ * - `"stripe_check_failed"`: Stripe's check threw; `error` holds it.
+ * - `"stripe_load_failed"`: Stripe.js did not load or could not set up the
+ *   wallet; `error` holds what it threw, when it threw.
+ * - `"missing_public_api_key"`: the host supplied no public API key.
+ * - `"session_failed"`: fetching the product's checkout session failed;
+ *   `error` holds it.
+ * - `"session_unsupported"`: the backend's checkout session for the product
+ *   cannot be paid with Apple Pay.
+ * - `"show_failed"`: the wallet failed to open on the last tap; `error`
+ *   holds it.
+ */
+export type ApplePayWalletReason =
+  | "not_prepared"
+  | "stripe_declined"
+  | "stripe_check_failed"
+  | "stripe_load_failed"
+  | "missing_public_api_key"
+  | "session_failed"
+  | "session_unsupported"
+  | "show_failed";
+
+/** An error a browser or Stripe threw, as its name and message. */
+export type ApplePayError = {
+  /** The error's name, such as `"InvalidAccessError"`. */
+  name: string;
+  /** The error's message, as the browser or Stripe wrote it. */
+  message: string;
+};
+
+export const applePayErrorOf = (error: unknown): ApplePayError =>
+  error instanceof Error
+    ? { name: error.name, message: error.message }
+    : { name: "Error", message: String(error) };
+
+type Unavailable = { status: "unavailable"; reason: ApplePayWalletReason; error?: ApplePayError };
+
 export type ApplePayOutcome =
   | { status: "completed" | "abandoned" | "failed" }
-  | { status: "unavailable"; reason: string };
+  | Unavailable
+  | { status: "unavailable"; reason: "cleared" };
 
-export type ApplePayAvailability =
-  | { status: "preparing" }
-  | { status: "ready" }
-  | { status: "unavailable"; reason: string };
+export type ApplePayAvailability = { status: "preparing" } | { status: "ready" } | Unavailable;
 
 export type ApplePayOptions = {
   publicApiKey: () => string;
@@ -39,10 +85,11 @@ export type ApplePayOptions = {
 
 export type ApplePay = {
   availability(referenceName: string): ApplePayAvailability;
-  markUnavailable(referenceName: string, reason: string): void;
+  markUnavailable(referenceName: string, reason: ApplePayWalletReason, error?: unknown): void;
   prepare(quote: ElementsCheckoutSession, identity?: CustomerIdentity): Promise<void>;
   purchase(referenceName: string, context: HostContext): Promise<ApplePayOutcome>;
   clear(): void;
+  subscribe(listener: () => void): () => void;
 };
 
 type ConfirmResponse = {
@@ -83,10 +130,7 @@ type Prepared = {
 
 type Pending = { context: HostContext; resolve: (outcome: ApplePayOutcome) => void };
 
-type WalletState =
-  | { status: "ready"; prepared: Prepared }
-  | { status: "preparing" }
-  | { status: "unavailable"; reason: string };
+type WalletState = { status: "ready"; prepared: Prepared } | { status: "preparing" } | Unavailable;
 
 type Complete = (status: "success" | "fail") => void;
 
@@ -106,16 +150,23 @@ const totalAmountOf = (quote: ElementsCheckoutSession): number => {
 
 const defaultManagementUrl = (): string => new URL("/manage", window.location.origin).toString();
 
+const NOT_PREPARED: Unavailable = { status: "unavailable", reason: "not_prepared" };
+
 export const createApplePay = (options: ApplePayOptions): ApplePay => {
   const prepared = new Map<string, Prepared>();
-  const unavailable = new Map<string, string>();
+  const unavailable = new Map<string, Unavailable | "preparing">();
   const pending = new Map<string, Pending>();
+  const listeners = new Set<() => void>();
+
+  const notify = () => {
+    for (const listener of listeners) listener();
+  };
 
   const stateOf = (referenceName: string): WalletState => {
     const ready = prepared.get(referenceName);
     if (ready?.ready) return { status: "ready", prepared: ready };
-    const reason = unavailable.get(referenceName) ?? "not_prepared";
-    return reason === "preparing" ? { status: "preparing" } : { status: "unavailable", reason };
+    const state = unavailable.get(referenceName) ?? NOT_PREPARED;
+    return state === "preparing" ? { status: "preparing" } : state;
   };
 
   const takePending = (referenceName: string): Pending | undefined => {
@@ -124,13 +175,22 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
     return waiting;
   };
 
-  const markUnavailable = (referenceName: string, reason: string) => {
+  const markUnavailable = (
+    referenceName: string,
+    reason: ApplePayWalletReason,
+    error?: unknown,
+  ) => {
+    const state: Unavailable =
+      error === undefined
+        ? { status: "unavailable", reason }
+        : { status: "unavailable", reason, error: applePayErrorOf(error) };
     prepared.delete(referenceName);
-    unavailable.set(referenceName, reason);
+    unavailable.set(referenceName, state);
+    notify();
     const waiting = takePending(referenceName);
     if (!waiting) return;
     stopLoading();
-    waiting.resolve({ status: "unavailable", reason });
+    waiting.resolve(state);
   };
 
   const confirm = async (
@@ -294,10 +354,14 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
 
     try {
       ready.paymentRequest.show();
-    } catch {
+    } catch (error) {
       ready.inProgress = false;
-      markUnavailable(ready.quote.referenceName, "show_failed");
-      return Promise.resolve({ status: "unavailable", reason: "show_failed" });
+      markUnavailable(ready.quote.referenceName, "show_failed", error);
+      return Promise.resolve({
+        status: "unavailable",
+        reason: "show_failed",
+        error: applePayErrorOf(error),
+      });
     }
 
     startLoading();
@@ -321,9 +385,17 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
 
     markUnavailable,
 
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+
     clear: () => {
       prepared.clear();
       unavailable.clear();
+      notify();
       for (const waiting of pending.values()) {
         waiting.resolve({ status: "unavailable", reason: "cleared" });
       }
@@ -344,6 +416,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
       const { referenceName } = quote;
       prepared.delete(referenceName);
       unavailable.set(referenceName, "preparing");
+      notify();
 
       if (!options.publicApiKey()) {
         markUnavailable(referenceName, "missing_public_api_key");
@@ -355,7 +428,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
         developerTools: { assistant: { enabled: false } },
       });
       if (!stripe) {
-        markUnavailable(referenceName, "stripe_js_load_failed");
+        markUnavailable(referenceName, "stripe_load_failed");
         return;
       }
 
@@ -402,17 +475,18 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
       try {
         const canMakePayment = await paymentRequest.canMakePayment();
         if (canMakePayment?.applePay !== true) {
-          markUnavailable(referenceName, "apple_pay_not_available");
+          markUnavailable(referenceName, "stripe_declined");
           return;
         }
-      } catch {
-        markUnavailable(referenceName, "can_make_payment_failed");
+      } catch (error) {
+        markUnavailable(referenceName, "stripe_check_failed", error);
         return;
       }
 
       ready.ready = true;
       unavailable.delete(referenceName);
       prepared.set(referenceName, ready);
+      notify();
       const waiting = takePending(referenceName);
       if (waiting) void show(ready, waiting.context).then(waiting.resolve);
     },

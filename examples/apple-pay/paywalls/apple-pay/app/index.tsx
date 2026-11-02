@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   useActions,
+  useApplePay,
   useDiscount,
   useHaptics,
   useProducts,
@@ -50,6 +51,7 @@ export default function Index() {
   const haptics = useHaptics();
 
   const [selected, setSelected] = useState<PlanReference>("trial");
+  const applePay = useApplePay(selected);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string>();
   // One line of copy for an outcome worth saying; nothing for an abandoned sheet.
@@ -95,6 +97,22 @@ export default function Index() {
     const price = getProduct("intro")?.variables.price;
     return price ? t("plans.intro", { price }) : t("plans.introBare");
   };
+
+  const wallet =
+    applePay === undefined
+      ? t("wallet.native")
+      : !applePay.available
+        ? t(`wallet.none.${applePay.reason}`)
+        : applePay.product.status === "unavailable"
+          ? t("wallet.unavailable", { reason: applePay.product.reason })
+          : t(`wallet.${applePay.product.status}`);
+
+  const walletError =
+    applePay && !applePay.available
+      ? applePay.error
+      : applePay?.product.status === "unavailable"
+        ? applePay.product.error
+        : undefined;
 
   const description = applied
     ? describeDiscount(applied.discount, getDiscountedProduct(selected), t)
@@ -205,8 +223,18 @@ export default function Index() {
             // abandoned: the shopper closed the sheet — nothing changes, nothing is said
           }}
         >
-          {t("purchase.continue")}
+          {applePay?.available && applePay.product.status === "ready"
+            ? t("purchase.applePay")
+            : t("purchase.continue")}
         </button>
+        <p className="notice" data-apple-pay={applePay ? String(applePay.available) : "undefined"}>
+          {wallet}
+        </p>
+        {walletError ? (
+          <p className="notice" data-apple-pay-error={walletError.name}>
+            {walletError.name}: {walletError.message}
+          </p>
+        ) : null}
         <button
           type="button"
           className="link"
