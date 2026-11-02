@@ -175,6 +175,25 @@ test("storesDiffer flags a product production has under another store, and nothi
   assert.equal(storesDiffer(products, undefined), false, "never published");
 });
 
+test("storesDiffer flags a slot whose billing plan changed since it was pushed", () => {
+  const annual = { store: "app-store" as const, identifier: "pro_annual", reference_name: "annual" };
+  const upFront = { ...annual, billing_plan_type: "UP_FRONT" as const };
+  const pushed = (billingPlan?: "monthly" | "upFront") => [
+    { reference: "annual", identifier: "pro_annual", store: "app-store", ...(billingPlan ? { billingPlan } : {}) },
+  ];
+
+  assert.equal(storesDiffer([upFront], pushed()), true, "plan added");
+  assert.equal(storesDiffer([upFront], pushed("monthly")), true, "plan flipped");
+  assert.equal(storesDiffer([annual], pushed("upFront")), true, "plan removed");
+  assert.equal(storesDiffer([upFront], pushed("upFront")), false, "same plan");
+  assert.equal(storesDiffer([annual], pushed()), false, "no plan either side");
+  assert.equal(
+    storesDiffer([upFront], [{ reference: "annual", identifier: "pro_annual", billingPlan: "upFront" }]),
+    false,
+    "no store recorded, same plan",
+  );
+});
+
 test("needsWork compares against the last pushed snapshot, never the live one", () => {
   const built = "a".repeat(64);
   const other = "b".repeat(64);

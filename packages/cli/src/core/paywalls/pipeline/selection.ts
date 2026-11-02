@@ -1,6 +1,6 @@
 import { globSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import type { PaywallProductRef, VersionProduct } from "@/core/api/resources";
+import { billingPlanOf, type PaywallProductRef, type VersionProduct } from "@/core/api/resources";
 import type { FrameworkProject, FrameworkSurface } from "@/core/paywalls/project/framework";
 import { LAYOUT_HINT } from "./output";
 
@@ -97,7 +97,9 @@ export function storesDiffer(
     const pushed = live?.find(
       (ref) => ref.reference === product.reference_name && ref.identifier === product.identifier,
     );
-    return pushed?.store !== undefined && pushed.store !== product.store;
+    if (pushed === undefined) return false;
+    if (pushed.store !== undefined && pushed.store !== product.store) return true;
+    return pushed.billingPlan !== billingPlanOf(product.billing_plan_type);
   });
 }
 

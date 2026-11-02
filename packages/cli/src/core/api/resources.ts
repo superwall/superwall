@@ -219,10 +219,26 @@ export async function listAppPaywalls(
   }));
 }
 
+export type BillingPlan = "monthly" | "upFront";
+
+export type BillingPlanType = "MONTHLY" | "UP_FRONT";
+
+const BILLING_PLAN_TYPES: Record<BillingPlan, BillingPlanType> = {
+  monthly: "MONTHLY",
+  upFront: "UP_FRONT",
+};
+
+export function billingPlanOf(type: unknown): BillingPlan | undefined {
+  if (type === "MONTHLY") return "monthly";
+  if (type === "UP_FRONT") return "upFront";
+  return undefined;
+}
+
 export interface PaywallProductRef {
   reference: string;
   identifier: string;
   store?: string;
+  billingPlan?: BillingPlan;
 }
 
 export interface PaywallDetail extends HeadlessPaywallRef {
@@ -254,10 +270,12 @@ function parseProductRefs(value: unknown): PaywallProductRef[] {
   for (const row of value) {
     if (!isRecord(row)) continue;
     if (typeof row.reference_name !== "string" || typeof row.identifier !== "string") continue;
+    const billingPlan = billingPlanOf(row.billing_plan_type);
     refs.push({
       reference: row.reference_name,
       identifier: row.identifier,
       ...(typeof row.store === "string" ? { store: row.store } : {}),
+      ...(billingPlan === undefined ? {} : { billingPlan }),
     });
   }
   return refs;
@@ -356,6 +374,7 @@ export interface VersionProduct {
   store: VersionStore;
   identifier: string;
   reference_name: string;
+  billing_plan_type?: BillingPlanType;
 }
 
 export function platformStore(platform: string | undefined): VersionStore {
@@ -379,16 +398,22 @@ export function versionProducts(
   products: Record<string, string> | undefined,
   platform?: string,
   stores: ProductStores = {},
+  billingPlans: Readonly<Record<string, BillingPlan>> = {},
 ): VersionProduct[] {
   return Object.entries(products ?? {}).map(([reference, identifier]) => {
+    const store = resolveStore(
+      identifier,
+      platform,
+      Object.hasOwn(stores, identifier) ? (stores[identifier] ?? []) : [],
+    );
+    const plan = Object.hasOwn(billingPlans, reference) ? billingPlans[reference] : undefined;
     return {
-      store: resolveStore(
-        identifier,
-        platform,
-        Object.hasOwn(stores, identifier) ? (stores[identifier] ?? []) : [],
-      ),
+      store,
       identifier,
       reference_name: reference,
+      ...(store === "app-store" && plan !== undefined
+        ? { billing_plan_type: BILLING_PLAN_TYPES[plan] }
+        : {}),
     };
   });
 }

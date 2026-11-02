@@ -189,6 +189,60 @@ test("pushedProducts reads the newest version of a snapshot, and nothing for one
   assert.equal(await pushedProducts(api, "208540", "s1"), undefined);
 });
 
+test("pushedProducts and findPaywall read each slot's Apple billing plan, and ignore anything else", async () => {
+  const products = [
+    { reference_name: "annual", identifier: "pro_annual", store: "app-store", billing_plan_type: "UP_FRONT" },
+    { reference_name: "annualMonthly", identifier: "pro_annual", store: "app-store", billing_plan_type: "MONTHLY" },
+    { reference_name: "weekly", identifier: "pro_week", store: "app-store", billing_plan_type: null },
+    { reference_name: "odd", identifier: "pro_odd", billing_plan_type: "up_front" },
+  ];
+  const expected = [
+    { reference: "annual", identifier: "pro_annual", store: "app-store", billingPlan: "upFront" },
+    { reference: "annualMonthly", identifier: "pro_annual", store: "app-store", billingPlan: "monthly" },
+    { reference: "weekly", identifier: "pro_week", store: "app-store" },
+    { reference: "odd", identifier: "pro_odd" },
+  ];
+  mockFetch(() => ({ object: "list", data: [{ version: 1, snapshot_id: "s1", products }] }));
+  assert.deepEqual(await pushedProducts(api, "208540", "s1"), expected);
+
+  mockFetch(() => ({ id: 208540, products }));
+  assert.deepEqual((await findPaywall(api, "208540")).products, expected);
+});
+
+test("versionProducts sends each App Store slot's billing plan, and none for a slot without one", () => {
+  assert.deepEqual(
+    versionProducts(
+      { annual: "pro_annual", annualMonthly: "pro_annual", weekly: "pro_week" },
+      "ios",
+      {},
+      { annual: "upFront", annualMonthly: "monthly" },
+    ),
+    [
+      { store: "app-store", identifier: "pro_annual", reference_name: "annual", billing_plan_type: "UP_FRONT" },
+      { store: "app-store", identifier: "pro_annual", reference_name: "annualMonthly", billing_plan_type: "MONTHLY" },
+      { store: "app-store", identifier: "pro_week", reference_name: "weekly" },
+    ],
+  );
+});
+
+test("versionProducts never sends a billing plan to a store other than the App Store", () => {
+  const plans = { monthly: "upFront", web: "upFront", custom: "monthly", constructor: "upFront" } as const;
+  assert.deepEqual(
+    versionProducts(
+      { monthly: "pro_month", web: "live:price_abc", custom: "custom_pro" },
+      "android",
+      { custom_pro: ["custom"] },
+      plans,
+    ).map((product) => product.billing_plan_type),
+    [undefined, undefined, undefined],
+  );
+  assert.equal(
+    versionProducts({ a: "pro" }, "ios", {}, Object.fromEntries([["b", "upFront"]]))[0]?.billing_plan_type,
+    undefined,
+    "a plan for another slot",
+  );
+});
+
 test("versionProducts reads only the catalogue's own entries, whatever an identifier is called", () => {
   assert.deepEqual(
     versionProducts({ a: "constructor", b: "toString", c: "__proto__" }, "ios", {}).map(

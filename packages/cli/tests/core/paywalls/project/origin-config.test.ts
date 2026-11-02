@@ -273,6 +273,24 @@ test("product references that are not identifiers are quoted, and every product 
   });
 });
 
+test("a slot with a billing plan migrates as a product object that keeps the plan", () => {
+  const origin = originOf(
+    detail({
+      products: [
+        { reference: "annual", identifier: "pro_annual", store: "app-store", billingPlan: "upFront" },
+        { reference: "annualMonthly", identifier: "pro_annual", store: "app-store", billingPlan: "monthly" },
+        { reference: "weekly", identifier: "pro_week", store: "app-store" },
+      ],
+    }),
+  );
+  const config = evaluate(originConfigSource(origin));
+  assert.deepEqual(config.products, {
+    annual: { productId: "pro_annual", billingPlan: "upFront" },
+    annualMonthly: { productId: "pro_annual", billingPlan: "monthly" },
+    weekly: "pro_week",
+  });
+});
+
 test("a name with quotes or backslashes still produces valid source", () => {
   const config = evaluate(
     originConfigSource(originOf(detail({ name: 'Pro "Plus" \\ Deluxe', products: [] }))),
