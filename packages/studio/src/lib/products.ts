@@ -78,6 +78,15 @@ const periodCounts = (period: string, count: number): Record<string, number> | u
   };
 };
 
+const periodLabels = (period: string, count: number): { period: string; periodly: string } => {
+  if (count === 1 || !PERIOD_UNITS[period]) {
+    return { period, periodly: PERIODLY[period] ?? `${period}ly` };
+  }
+  if (period === "month" && count === 3) return { period: "quarter", periodly: "quarterly" };
+  const label = `${count} ${period}s`;
+  return { period: label, periodly: `every ${label}` };
+};
+
 export const productVariables = (product: DashboardProduct): Record<string, unknown> => {
   const variables: Record<string, unknown> = {};
   if (product.identifier) variables.identifier = product.identifier;
@@ -96,8 +105,7 @@ export const productVariables = (product: DashboardProduct): Record<string, unkn
   if (!period) return variables;
 
   const count = product.subscription?.period_count ?? 1;
-  variables.period = period;
-  variables.periodly = PERIODLY[period] ?? `${period}ly`;
+  Object.assign(variables, periodLabels(period, count));
   Object.assign(variables, periodCounts(period, count) ?? {});
 
   const perYear = (PER_YEAR[period] ?? 1) / count;
