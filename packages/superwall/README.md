@@ -166,16 +166,21 @@ and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedempt
 `useGameController`, `useTeleport` (a teleport's typed `status` —
 `idle`, `waiting`, `arrived`, `completed` — with `prefetch`, `reopen`,
 `cancel` and `returnToApp`, for a paywall that draws its own teleport screen),
-`useApplePay` (on a web host — Web SDK, hosted web paywall, teleport page or
-browser — `{ available }` from the browser's own Apple Pay
-check, to show an Apple Pay button only where the wallet opens; with a product
-also its wallet `status`, `preparing`, `ready` or `unavailable`; `undefined`
-inside the iOS and Android SDKs and in Studio). The wallet opens only for a
-product prepared before the tap: a config `checkout: "applePay"` prepares it on
-its own, and on a `checkout: "sheet"` paywall
-`prefetch(reference, { checkout: "applePay" })` does; a `purchase(reference,
-{ checkout: "applePay" })` of anything else opens the sheet, with `status`
-`unavailable` and `reason` `not_prepared`.
+`useApplePay` says whether direct Apple Pay, the wallet the browser opens
+itself, is available on a web host (Web SDK, hosted web paywall, teleport page
+or browser): `{ available: true }`, or `{ available: false, reason }` with
+`unsupported_browser` (no Apple Pay JS, as in desktop Chrome, whose card sheet
+may still offer Apple Pay by QR code), `insecure_context` (not HTTPS),
+`device_unsupported`, `cross_origin_frame` or `check_failed`; `undefined`
+inside the iOS and Android SDKs and in Studio. With a product it adds
+`product.status`, `preparing`, `ready` or `unavailable` with a `reason`: only
+Stripe's check, made when it prepares the product, knows whether a card is in
+Wallet and the domain is registered, and it reports both as
+`apple_pay_not_available`. The wallet opens only for a product prepared before
+the tap: a config `checkout: "applePay"` prepares it on its own, and on a
+`checkout: "sheet"` paywall `prefetch(reference, { checkout: "applePay" })`
+does; a `purchase(reference, { checkout: "applePay" })` of anything else opens
+the sheet, with `reason` `not_prepared`.
 
 `useUserAttribute(key, parser)` is one user attribute as typed state —
 `useQueryState`'s API with the same parsers, kept by the host SDK across

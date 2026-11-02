@@ -20,14 +20,24 @@ import {
 } from "../session/id";
 import type { ApplePaySession, CustomerIdentity, ElementsCheckoutSession } from "../types";
 
+export type ApplePayWalletReason =
+  | "not_prepared"
+  | "missing_public_api_key"
+  | "stripe_js_load_failed"
+  | "apple_pay_not_available"
+  | "can_make_payment_failed"
+  | "prepare_failed"
+  | "no_apple_pay_quote"
+  | "show_failed";
+
 export type ApplePayOutcome =
   | { status: "completed" | "abandoned" | "failed" }
-  | { status: "unavailable"; reason: string };
+  | { status: "unavailable"; reason: ApplePayWalletReason | "cleared" };
 
 export type ApplePayAvailability =
   | { status: "preparing" }
   | { status: "ready" }
-  | { status: "unavailable"; reason: string };
+  | { status: "unavailable"; reason: ApplePayWalletReason };
 
 export type ApplePayOptions = {
   publicApiKey: () => string;
@@ -39,7 +49,7 @@ export type ApplePayOptions = {
 
 export type ApplePay = {
   availability(referenceName: string): ApplePayAvailability;
-  markUnavailable(referenceName: string, reason: string): void;
+  markUnavailable(referenceName: string, reason: ApplePayWalletReason): void;
   prepare(quote: ElementsCheckoutSession, identity?: CustomerIdentity): Promise<void>;
   purchase(referenceName: string, context: HostContext): Promise<ApplePayOutcome>;
   clear(): void;
@@ -87,7 +97,7 @@ type Pending = { context: HostContext; resolve: (outcome: ApplePayOutcome) => vo
 type WalletState =
   | { status: "ready"; prepared: Prepared }
   | { status: "preparing" }
-  | { status: "unavailable"; reason: string };
+  | { status: "unavailable"; reason: ApplePayWalletReason };
 
 type Complete = (status: "success" | "fail") => void;
 
@@ -109,7 +119,7 @@ const defaultManagementUrl = (): string => new URL("/manage", window.location.or
 
 export const createApplePay = (options: ApplePayOptions): ApplePay => {
   const prepared = new Map<string, Prepared>();
-  const unavailable = new Map<string, string>();
+  const unavailable = new Map<string, ApplePayWalletReason | "preparing">();
   const pending = new Map<string, Pending>();
   const listeners = new Set<() => void>();
 
@@ -130,7 +140,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
     return waiting;
   };
 
-  const markUnavailable = (referenceName: string, reason: string) => {
+  const markUnavailable = (referenceName: string, reason: ApplePayWalletReason) => {
     prepared.delete(referenceName);
     unavailable.set(referenceName, reason);
     notify();

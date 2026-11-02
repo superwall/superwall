@@ -98,24 +98,66 @@ describe("useApplePay on each host", () => {
 });
 
 describe("useApplePay's device answer", () => {
-  it("is false when the browser has no ApplePaySession", async () => {
+  it("is an unsupported browser when there is no ApplePaySession, as in Chrome on a desktop", async () => {
     const { result } = await render(() => useApplePay());
-    expect(result.current.value).toEqual({ available: false });
+    expect(result.current.value).toEqual({ available: false, reason: "unsupported_browser" });
   });
 
-  it("is false when the browser says it cannot pay, or answers with anything but true", async () => {
+  it("is an insecure context on a page not served over HTTPS, before asking the browser", async () => {
+    vi.stubGlobal("isSecureContext", false);
+    const canMakePayments = vi.fn(() => true);
+    withApplePaySession(canMakePayments);
+    const { result } = await render(() => useApplePay());
+    expect(result.current.value).toEqual({ available: false, reason: "insecure_context" });
+    expect(canMakePayments).not.toHaveBeenCalled();
+  });
+
+  it("is an unsupported device when the browser says it cannot pay, or answers with anything but true", async () => {
+    const unsupported = { available: false, reason: "device_unsupported" };
     withApplePaySession(() => false);
-    expect((await render(() => useApplePay())).result.current.value).toEqual({ available: false });
+    expect((await render(() => useApplePay())).result.current.value).toEqual(unsupported);
     withApplePaySession(() => "yes");
-    expect((await render(() => useApplePay())).result.current.value).toEqual({ available: false });
+    expect((await render(() => useApplePay())).result.current.value).toEqual(unsupported);
   });
 
-  it("is false, never an exception, when the check throws", async () => {
+  it("names a failed check and logs the browser's error, never throwing", async () => {
+    const error = new Error("user agent scripts were evaluated");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     withApplePaySession(() => {
-      throw new Error("insecure document");
+      throw error;
     });
     const { result } = await render(() => useApplePay());
-    expect(result.current.value).toEqual({ available: false });
+    expect(result.current.value).toEqual({ available: false, reason: "check_failed" });
+    expect(warn).toHaveBeenCalledWith("ApplePaySession.canMakePayments() threw:", error);
+  });
+
+  it.each([
+    [
+      "a frame whose parent is out of reach",
+      {
+        get location(): never {
+          throw new Error("blocked");
+        },
+      },
+    ],
+    ["a frame of another origin", { location: { origin: "https://merchant.example" } }],
+  ])("names a cross-origin frame when the check throws in %s", async (_, top) => {
+    vi.stubGlobal("top", top);
+    withApplePaySession(() => {
+      throw new Error("different security origin");
+    });
+    const { result } = await render(() => useApplePay());
+    expect(result.current.value).toEqual({ available: false, reason: "cross_origin_frame" });
+  });
+
+  it("is a failed check, not a cross-origin frame, in a frame of the same origin", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("top", { location: { origin: window.location.origin } });
+    withApplePaySession(() => {
+      throw new Error("other");
+    });
+    const { result } = await render(() => useApplePay());
+    expect(result.current.value).toEqual({ available: false, reason: "check_failed" });
   });
 
   it("asks the browser once, not on every render", async () => {
@@ -135,8 +177,7 @@ describe("useApplePay for a product", () => {
     const { result } = await render(() => useApplePay("primary"));
     expect(result.current.value).toEqual({
       available: true,
-      status: "unavailable",
-      reason: "not_prepared",
+      product: { status: "unavailable", reason: "not_prepared" },
     });
   });
 
@@ -150,19 +191,18 @@ describe("useApplePay for a product", () => {
     act(() => {
       preparing = applePay.prepare(quote);
     });
-    expect(result.current.value).toEqual({ available: true, status: "preparing" });
+    expect(result.current.value).toEqual({ available: true, product: { status: "preparing" } });
 
     await act(async () => {
       stripe.release();
       await preparing;
     });
-    expect(result.current.value).toEqual({ available: true, status: "ready" });
+    expect(result.current.value).toEqual({ available: true, product: { status: "ready" } });
 
     act(() => applePay.clear());
     expect(result.current.value).toEqual({
       available: true,
-      status: "unavailable",
-      reason: "not_prepared",
+      product: { status: "unavailable", reason: "not_prepared" },
     });
   });
 
@@ -174,8 +214,7 @@ describe("useApplePay for a product", () => {
     await act(() => applePay.prepare(quote));
     expect(result.current.value).toEqual({
       available: true,
-      status: "unavailable",
-      reason: "apple_pay_not_available",
+      product: { status: "unavailable", reason: "apple_pay_not_available" },
     });
   });
 
@@ -186,7 +225,11 @@ describe("useApplePay for a product", () => {
     act(() => applePay.markUnavailable("primary", "prepare_failed"));
     rerender();
     expect(result.current.value).toBe(first);
-    expect(first).toEqual({ available: false, status: "unavailable", reason: "prepare_failed" });
+    expect(first).toEqual({
+      available: false,
+      reason: "unsupported_browser",
+      product: { status: "unavailable", reason: "prepare_failed" },
+    });
   });
 });
 
@@ -202,8 +245,7 @@ describe("useApplePay with a per-call Apple Pay purchase", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
 
     expect(result.current.value.applePay).toMatchObject({
-      status: "unavailable",
-      reason: "not_prepared",
+      product: { status: "unavailable", reason: "not_prepared" },
     });
     await act(() => result.current.value.purchase.purchase("primary", { checkout: "applePay" }));
     expect(begin).toHaveBeenCalledWith(expect.objectContaining({ mode: "sheet" }));
@@ -225,7 +267,10 @@ describe("useApplePay with a per-call Apple Pay purchase", () => {
       await flush();
     });
     expect(prefetch).toHaveBeenCalledWith(expect.objectContaining({ mode: "applePay" }));
-    expect(result.current.value.applePay).toEqual({ available: true, status: "ready" });
+    expect(result.current.value.applePay).toEqual({
+      available: true,
+      product: { status: "ready" },
+    });
 
     act(() => {
       void result.current.value.purchase.purchase("primary", { checkout: "applePay" });

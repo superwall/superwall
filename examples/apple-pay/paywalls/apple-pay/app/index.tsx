@@ -102,10 +102,10 @@ export default function Index() {
     applePay === undefined
       ? t("wallet.native")
       : !applePay.available
-        ? t("wallet.none")
-        : applePay.status === "unavailable"
-          ? t("wallet.unavailable", { reason: applePay.reason })
-          : t(`wallet.${applePay.status}`);
+        ? t(`wallet.none.${applePay.reason}`)
+        : applePay.product.status === "unavailable"
+          ? t("wallet.unavailable", { reason: applePay.product.reason })
+          : t(`wallet.${applePay.product.status}`);
 
   const description = applied
     ? describeDiscount(applied.discount, getDiscountedProduct(selected), t)
@@ -216,7 +216,9 @@ export default function Index() {
             // abandoned: the shopper closed the sheet — nothing changes, nothing is said
           }}
         >
-          {applePay?.available ? t("purchase.applePay") : t("purchase.continue")}
+          {applePay?.available && applePay.product.status === "ready"
+            ? t("purchase.applePay")
+            : t("purchase.continue")}
         </button>
         <p className="notice" data-apple-pay={applePay ? String(applePay.available) : "undefined"}>
           {wallet}
