@@ -27,7 +27,7 @@ export const command = defineResource({
     {
       name: "update",
       summary: "Change a campaign",
-      details: "Overwrites supplied campaign fields, including description, notes and delivery mode.",
+      details: "Overwrites supplied campaign description and notes. To change delivery mode, use placement update tools.",
       effect: "destructive",
       method: "PATCH",
       path: "/v2/campaigns/{id}",
