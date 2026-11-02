@@ -20,6 +20,7 @@ import { introductoryOfferFromFragment, readTeleportBoot } from "./teleport/boot
 import { teleportFor } from "./teleport/flow";
 import type {
   CheckoutMode,
+  CheckoutSessionResult,
   DiscountValidationResult,
   EmbeddedCheckoutSession,
   PostCheckoutResolution,
@@ -219,13 +220,20 @@ export const prefetchSession = async (
   prepaidCards?: SuperwallPrepaidCards,
 ): Promise<void> => {
   const sessions = sessionsFor(paywall);
-  const result = await sessions.prefetch({
-    referenceName,
-    mode,
-    scope: scopeFor(mode),
-    silent: true,
-    ...(prepaidCards === undefined ? {} : { prepaidCards }),
-  });
+  let result: CheckoutSessionResult | null;
+  try {
+    result = await sessions.prefetch({
+      referenceName,
+      mode,
+      scope: scopeFor(mode),
+      silent: true,
+      ...(prepaidCards === undefined ? {} : { prepaidCards }),
+    });
+  } catch (error) {
+    if (mode === "applePay")
+      applePayFor(paywall).markUnavailable(referenceName, "session_failed", error);
+    return;
+  }
   if (!result) return;
 
   hostFor(paywall).prefetched(contextFor(paywall, referenceName, result.checkoutContextId));
@@ -236,7 +244,7 @@ export const prefetchSession = async (
     try {
       await applePay.prepare(result, sessions.identity());
     } catch (error) {
-      applePay.markUnavailable(referenceName, "session_failed", error);
+      applePay.markUnavailable(referenceName, "stripe_load_failed", error);
     }
     return;
   }

@@ -116,7 +116,7 @@ const MESSAGES: Record<ApplePayProductReason, string> = {
   stripe_declined:
     "Stripe found no way to pay with Apple Pay: no card in Wallet, the domain is not registered with Stripe, or Safari's Apple Pay check setting is off.",
   stripe_check_failed: "Stripe's Apple Pay check threw.",
-  stripe_load_failed: "Stripe.js did not load.",
+  stripe_load_failed: "Stripe.js did not load or could not set up the wallet.",
   missing_public_api_key: "The host supplied no public API key.",
   session_failed: "Fetching the product's checkout session failed.",
   session_unsupported: "The product's checkout session cannot be paid with Apple Pay.",

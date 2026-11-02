@@ -33,7 +33,8 @@ import type { ApplePaySession, CustomerIdentity, ElementsCheckoutSession } from 
  *   with Stripe, or Safari's "Allow websites to check for Apple Pay" setting
  *   is off. Stripe does not say which.
  * - `"stripe_check_failed"`: Stripe's check threw; `error` holds it.
- * - `"stripe_load_failed"`: Stripe.js did not load.
+ * - `"stripe_load_failed"`: Stripe.js did not load or could not set up the
+ *   wallet; `error` holds what it threw, when it threw.
  * - `"missing_public_api_key"`: the host supplied no public API key.
  * - `"session_failed"`: fetching the product's checkout session failed;
  *   `error` holds it.

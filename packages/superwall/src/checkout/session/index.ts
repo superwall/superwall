@@ -195,8 +195,9 @@ export const createCheckoutSessions = (
       try {
         const result = await begin({ ...request, silent: true });
         return asked === generation ? result : null;
-      } catch {
-        return null;
+      } catch (error) {
+        if (asked !== generation) return null;
+        throw error;
       }
     },
     status: async (checkoutContextId) => {

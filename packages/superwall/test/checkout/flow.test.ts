@@ -299,8 +299,34 @@ describe("prefetchSession", () => {
 
     expect(wallet.availability("primary")).toEqual({
       status: "unavailable",
-      reason: "session_failed",
+      reason: "stripe_load_failed",
       error: { name: "Error", message: "stripe down" },
+    });
+  });
+
+  it("marks the wallet unavailable with the error when fetching the session fails", async () => {
+    const { session } = fakeSession();
+    vi.spyOn(sessionsFor(session), "prefetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const wallet = applePayFor(session);
+
+    await expect(prefetchSession(session, "primary", "applePay")).resolves.toBeUndefined();
+
+    expect(wallet.availability("primary")).toEqual({
+      status: "unavailable",
+      reason: "session_failed",
+      error: { name: "TypeError", message: "Failed to fetch" },
+    });
+  });
+
+  it("swallows a failed session fetch for any other mode, touching no wallet", async () => {
+    const { session } = fakeSession();
+    vi.spyOn(sessionsFor(session), "prefetch").mockRejectedValue(new Error("offline"));
+
+    await expect(prefetchSession(session, "primary", "sheet")).resolves.toBeUndefined();
+
+    expect(applePayFor(session).availability("primary")).toEqual({
+      status: "unavailable",
+      reason: "not_prepared",
     });
   });
 
