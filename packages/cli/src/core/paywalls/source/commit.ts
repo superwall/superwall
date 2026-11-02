@@ -1,4 +1,4 @@
-export interface CommitMessageInput {
+interface PublishCommitInput {
   kind: "paywall" | "funnel";
   surface: string;
   version: number;
@@ -11,7 +11,27 @@ export interface CommitMessageInput {
   external?: readonly string[];
 }
 
+interface ProjectCommitInput {
+  kind: "project";
+  applicationId: string;
+  framework: string;
+  cli?: string;
+  note?: string;
+}
+
+export type CommitMessageInput = PublishCommitInput | ProjectCommitInput;
+
+const noteBody = (note: string | undefined): string => {
+  const text = note?.replace(/\r\n?/g, "\n").trim();
+  return text ? `\n${text}\n` : "";
+};
+
 export const buildCommitMessage = (input: CommitMessageInput): string => {
+  if (input.kind === "project") {
+    const trailers = [`Superwall-Application: ${input.applicationId}`, `Superwall-Framework: ${input.framework}`];
+    if (input.cli) trailers.push(`Superwall-Cli: ${input.cli}`);
+    return `publish project source\n${noteBody(input.note)}\n${trailers.join("\n")}\n`;
+  }
   const surface = `${input.kind}/${input.surface}`;
   const subject = `publish ${surface} v${input.version}`;
 
@@ -29,9 +49,7 @@ export const buildCommitMessage = (input: CommitMessageInput): string => {
   trailers.push(`Superwall-Framework: ${input.framework}`);
   if (input.cli) trailers.push(`Superwall-Cli: ${input.cli}`);
 
-  const note = input.note?.replace(/\r\n?/g, "\n").trim();
-  const body = note ? `\n${note}\n` : "";
-  return `${subject}\n${body}\n${trailers.join("\n")}\n`;
+  return `${subject}\n${noteBody(input.note)}\n${trailers.join("\n")}\n`;
 };
 
 export const tokenSecret = (token: string): string => token.split("?")[0] ?? token;

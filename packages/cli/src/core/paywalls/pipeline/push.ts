@@ -17,6 +17,7 @@ import { parseRenameFlags, resolveRenames } from "@/core/paywalls/binding/rename
 import {
   parsePlatformFlags,
   planTargets,
+  surfaceKey,
   targetLabel,
   wantedPlatforms,
   type DeclaredPlatforms,
@@ -39,12 +40,13 @@ import {
   type FrameworkProject,
   type FrameworkSurface,
 } from "@/core/paywalls/project/framework";
-import { describeBindings, readLock, writeSnapshot } from "@/core/paywalls/project/lock";
+import { describeBindings, readLock, writeSnapshot, type LockFile } from "@/core/paywalls/project/lock";
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
 import { warnNotPortable } from "@/core/paywalls/source/portability";
 import { collectSourceFiles } from "@/core/paywalls/source/source";
-import { assertGit, pushSource } from "@/core/paywalls/source/source-push";
+import { assertGit, pushProjectSource, pushSource } from "@/core/paywalls/source/source-push";
+import { formatTokenFinding, lintDesignTokens } from "@/core/paywalls/project/design-lint";
 import { VERSION } from "@/environment";
 import type { CommandContext } from "@/program/command";
 import type { OutputMode } from "@/program/output";
@@ -83,6 +85,8 @@ export interface PushOptions {
   renames?: readonly string[];
   message?: string;
   overwriteSource?: boolean;
+  existing?: boolean;
+  source?: boolean;
   load?: (dir: string) => Promise<Framework>;
 }
 
@@ -167,6 +171,39 @@ interface Prepared {
 
 const BUILD_CONCURRENCY = Math.max(2, Math.min(8, cpus().length - 1));
 
+type UnboundTarget = Pick<SurfaceTarget, "surface" | "platform">;
+
+const isBound = (lock: LockFile, target: UnboundTarget): boolean => {
+  const section = target.surface.kind === "paywall" ? lock.paywalls : lock.funnels;
+  return section[target.surface.id]?.[target.platform] !== undefined;
+};
+
+function boundScope(
+  lock: LockFile,
+  surfaces: readonly FrameworkSurface[],
+  declared: DeclaredPlatforms,
+  only: readonly string[],
+): { surfaces: FrameworkSurface[]; declared: DeclaredPlatforms; unbound: UnboundTarget[] } {
+  const scoped: FrameworkSurface[] = [];
+  const narrowed: DeclaredPlatforms = { ...declared };
+  const unbound: UnboundTarget[] = [];
+  for (const surface of surfaces) {
+    const platforms = declared[surfaceKey(surface)];
+    if (platforms === undefined) {
+      scoped.push(surface);
+      continue;
+    }
+    const kept = platforms.filter((platform) => isBound(lock, { surface, platform }));
+    for (const platform of platforms) {
+      const wanted = only.length === 0 || only.includes(platform);
+      if (wanted && !kept.includes(platform)) unbound.push({ surface, platform });
+    }
+    narrowed[surfaceKey(surface)] = kept;
+    if (kept.length > 0) scoped.push(surface);
+  }
+  return { surfaces: scoped, declared: narrowed, unbound };
+}
+
 async function prepare(
   context: PushContext,
   input: {
@@ -175,23 +212,31 @@ async function prepare(
     surfaces: FrameworkSurface[];
     declared: DeclaredPlatforms;
     platforms: readonly string[];
+    existing: boolean;
   },
-): Promise<{ prepared: Prepared[]; multi: boolean }> {
-  const { framework, project, surfaces, declared } = input;
+): Promise<{ prepared: Prepared[]; multi: boolean; unbound: UnboundTarget[] }> {
+  const { framework, project } = input;
+  const only = parsePlatformFlags(input.platforms);
+  const lock = readLock(project.superwallDir);
+  const scope = input.existing
+    ? boundScope(lock, input.surfaces, input.declared, only)
+    : { surfaces: input.surfaces, declared: input.declared, unbound: [] };
 
-  const apps = await resolveApps({
-    api: context.api,
-    superwallDir: project.superwallDir,
-    wanted: wantedPlatforms(surfaces, declared),
-    pickApplication: context.interactive ? pickApplicationOption : undefined,
-  });
+  const apps = input.existing
+    ? lock.apps
+    : await resolveApps({
+        api: context.api,
+        superwallDir: project.superwallDir,
+        wanted: wantedPlatforms(scope.surfaces, scope.declared),
+        pickApplication: context.interactive ? pickApplicationOption : undefined,
+      });
   const multi = Object.keys(apps).length > 1;
-  const targets = planTargets({
-    surfaces,
-    declared,
-    apps,
-    only: parsePlatformFlags(input.platforms),
-  });
+  const planned =
+    scope.surfaces.length === 0
+      ? []
+      : planTargets({ surfaces: scope.surfaces, declared: scope.declared, apps, only });
+  const targets = input.existing ? planned.filter((target) => isBound(lock, target)) : planned;
+  const unbound = [...scope.unbound, ...planned.filter((target) => !targets.includes(target))];
 
   const spin = context.outputMode === "rich" ? ui.spinner() : undefined;
   const label =
@@ -260,8 +305,8 @@ async function prepare(
       if (!bind || !build) throw new Error(`Missing binding for ${target.surface.id}`);
       requireAssets(build);
       const live = await livePaywall(context.api, bind.paywallId);
-      const lock = readLock(project.superwallDir);
-      const section = target.surface.kind === "paywall" ? lock.paywalls : lock.funnels;
+      const current = readLock(project.superwallDir);
+      const section = target.surface.kind === "paywall" ? current.paywalls : current.funnels;
       const recorded = section[target.surface.id]?.[target.platform];
       const stores = catalogueOf(target)?.stores ?? {};
       const unsourced =
@@ -289,7 +334,7 @@ async function prepare(
     spin?.stop(
       `${pc.bold(`Built ${label}`)} ${pc.dim(`${modified} modified · ${prepared.length - modified} unchanged`)} ${took(at)}`,
     );
-    return { prepared, multi };
+    return { prepared, multi, unbound };
   } catch (error) {
     spin?.stop(pc.red(`Building ${label} failed`));
     throw error;
@@ -400,13 +445,21 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
   const outcomes: PushOutcome[] = [];
   const external = new Set<string>();
 
-  const { prepared, multi } = await prepare(context, {
+  for (const finding of lintDesignTokens(project, surfaces)) ui.warn(formatTokenFinding(finding));
+
+  const { prepared, multi, unbound } = await prepare(context, {
     framework,
     project,
     surfaces,
     declared: declarations.platforms,
     platforms: options.platforms ?? [],
+    existing: options.existing === true,
   });
+  for (const target of unbound) {
+    ui.step(
+      `${targetLabel(target, multi)} skipped ${pc.dim("(not on Superwall yet; --existing never creates one)")}`,
+    );
+  }
 
   for (const entry of prepared) {
     for (const source of entry.build.externalSources ?? []) external.add(source);
@@ -491,13 +544,82 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
     outcomes.push({ id: targetLabel(target, multi), version, live });
   }
 
+  if (options.source) {
+    await pushSourceAlone(context, {
+      project,
+      prepared,
+      synced: new Set(changed.map((entry) => entry.bind.applicationId)),
+      multi,
+      files: source,
+      framework: installed,
+      note: publishNote,
+      overwrite: options.overwriteSource,
+    });
+  }
+
   warnNotPortable(external);
   summary(outcomes, skipped, options.promote);
 }
 
+async function pushSourceAlone(
+  context: PushContext,
+  input: {
+    project: FrameworkProject;
+    prepared: readonly Prepared[];
+    synced: ReadonlySet<string>;
+    multi: boolean;
+    files: Awaited<ReturnType<typeof collectSourceFiles>>;
+    framework: string;
+    note: string | undefined;
+    overwrite: boolean | undefined;
+  },
+): Promise<void> {
+  if (input.prepared.length === 0) {
+    throw new Error("--source needs a paywall that is already on Superwall to push the source through.");
+  }
+  const through = new Map<string, Prepared>();
+  for (const entry of input.prepared) {
+    const { applicationId } = entry.bind;
+    if (!input.synced.has(applicationId) && !through.has(applicationId)) through.set(applicationId, entry);
+  }
+  if (through.size === 0) return;
+  if (!input.files.ok) throw new Error(input.files.reason);
+  await assertGit();
+  const files = input.files.files;
+
+  for (const { bind, target } of through.values()) {
+    const label = input.multi ? `Project source · ${target.platform}` : "Project source";
+    await group(context.outputMode, label, async () => {
+      const pushed = await timed(() =>
+        pushProjectSource({
+          api: context.api,
+          superwallDir: input.project.superwallDir,
+          paywallId: bind.paywallId,
+          applicationId: bind.applicationId,
+          files,
+          framework: input.framework,
+          cli: VERSION,
+          note: input.note,
+          overwrite: input.overwrite,
+        }),
+      );
+      const sha = pc.dim(pushed.value.commitSha.slice(0, 7));
+      return [`Source ${pushed.value.status === "unchanged" ? "unchanged" : "pushed"} ${sha} ${pushed.took}`];
+    });
+  }
+}
+
 interface PushInput {
   args: { dir: string | undefined };
-  flags: { id: string[]; platform: string[]; rename: string[]; message: string | undefined; overwriteSource: boolean };
+  flags: {
+    id: string[];
+    platform: string[];
+    rename: string[];
+    message: string | undefined;
+    overwriteSource: boolean;
+    existing: boolean;
+    source: boolean;
+  };
 }
 
 export async function runPush(ctx: CommandContext, { args, flags }: PushInput, promote: boolean): Promise<void> {
@@ -512,6 +634,8 @@ export async function runPush(ctx: CommandContext, { args, flags }: PushInput, p
       renames: flags.rename,
       message: flags.message,
       overwriteSource: flags.overwriteSource,
+      existing: flags.existing,
+      source: flags.source,
     },
   );
 }

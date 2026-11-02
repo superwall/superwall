@@ -55,6 +55,7 @@ interface Route {
 
 interface Fake {
   calls: string[];
+  paths: string[];
   bodies: Record<string, string>;
   routes: Record<string, Route>;
   api: SuperwallApi;
@@ -65,7 +66,7 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
   const bare = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pipeline-bare-"));
   dirs.push(bare);
   execFileSync("git", ["init", "--bare", "--initial-branch", "main", bare]);
-  const fake: Fake = { calls: [], bodies: {}, routes, api: createSuperwallApi({} as never), bare };
+  const fake: Fake = { calls: [], paths: [], bodies: {}, routes, api: createSuperwallApi({} as never), bare };
   const server = http.createServer((req, res) => {
     let raw = "";
     req.on("data", (chunk) => (raw += String(chunk)));
@@ -95,6 +96,7 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
                           ? "live"
                           : "other";
       fake.calls.push(kind);
+      fake.paths.push(url);
       fake.bodies[kind] = raw;
 
       const route = fake.routes[kind] ?? {};
@@ -1600,4 +1602,197 @@ test("--overwrite-source replaces a remote source this project never synced with
   });
   assert.ok(!tracked.includes("theirs.ts"));
   assert.match(tracked, /superwall\.lock/);
+});
+
+const unchanged = {
+  live: { body: { id: "2080", version: 7, paywall_url: `https://r/x/headless/2080/${"a".repeat(64)}.html` } },
+};
+/** The calls after the catalogue lookups, whose count depends on what earlier tests cached. */
+const writes = (fake: Fake) => fake.calls.filter((call) => call !== "projects" && call !== "products");
+const sameBuild = (project: FrameworkProject) => async () =>
+  frameworkFor(project, { buildSnapshot: async () => built({ snapshotId: "a".repeat(64) }) });
+
+test("--existing skips a surface superwall.lock does not bind instead of creating it", async () => {
+  const project = scaffold(["bound"]);
+  project.surfaces.push(surfaceOf("fresh"));
+  const fake = await fakeApi();
+  const calls: RendererCall[] = [];
+  useRenderer(recordingRenderer(calls));
+
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      existing: true,
+      load: async () => frameworkFor(project),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.ok(!fake.calls.includes("create"));
+  assert.equal(fake.calls.filter((call) => call === "versions").length, 1);
+  assert.equal(readLock(project.superwallDir).paywalls.fresh, undefined);
+  assert.ok(JSON.stringify(calls).includes("fresh skipped"));
+});
+
+test("--source pushes the project source on its own when no paywall built differently", async () => {
+  const project = scaffold();
+  fs.mkdirSync(path.join(project.superwallDir, "design"));
+  fs.writeFileSync(path.join(project.superwallDir, "DESIGN.md"), "# Design system\n");
+  const fake = await fakeApi(unchanged);
+
+  await runPushPipeline(contextFor(fake.api), { promote: true, source: true, message: "Docs", load: sameBuild(project) });
+
+  assert.deepEqual(writes(fake), ["live", "history", "access"]);
+  const log = execFileSync("git", ["--git-dir", fake.bare, "log", "-1", "--format=%B", "main"], { encoding: "utf8" });
+  assert.match(log, /^publish project source\n\nDocs\n/);
+  const tracked = execFileSync("git", ["--git-dir", fake.bare, "ls-tree", "-r", "--name-only", "main"], { encoding: "utf8" });
+  assert.match(tracked, /DESIGN\.md/);
+
+  fake.calls.length = 0;
+  await runPushPipeline(
+    { ...contextFor(fake.api), outputMode: "rich" },
+    { promote: false, source: true, load: sameBuild(project) },
+  );
+  assert.deepEqual(writes(fake), ["live", "history", "access"], "nothing new: the source is unchanged");
+});
+
+test("--source rides along with a paywall that changed: one source push, linked to its version", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api), { promote: false, source: true, load: async () => frameworkFor(project) });
+
+  assert.deepEqual(writes(fake), ["live", "versions", "access", "link"]);
+});
+
+test("--source needs a paywall on Superwall to push through, and a source tree it can send", async () => {
+  const project = scaffold([]);
+  project.surfaces.push(surfaceOf("fresh"));
+  const fake = await fakeApi(unchanged);
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: false, existing: true, source: true, load: sameBuild(project) }),
+    /--source needs a paywall that is already on Superwall/,
+  );
+
+  const big = scaffold();
+  const fd = fs.openSync(path.join(big.superwallDir, "dump.bin"), "w");
+  fs.ftruncateSync(fd, 300 * 1024 * 1024);
+  fs.closeSync(fd);
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: false, source: true, load: sameBuild(big) }),
+    /over the 250 MB limit/,
+  );
+});
+
+test("a literal a design token holds is a warning, never a stop", async () => {
+  const project = scaffold();
+  fs.mkdirSync(path.join(project.superwallDir, "design"));
+  fs.writeFileSync(path.join(project.superwallDir, "design", "tokens.css"), ":root { --color-accent: #46d7d4; }\n");
+  const surface = project.surfaces[0]!;
+  surface.dir = path.join(project.superwallDir, "paywalls", surface.id);
+  fs.mkdirSync(path.join(surface.dir, "app"), { recursive: true });
+  fs.writeFileSync(path.join(surface.dir, "app", "theme.css"), ".a { color: #46d7d4; }\n");
+  const fake = await fakeApi();
+  const calls: RendererCall[] = [];
+  useRenderer(recordingRenderer(calls));
+
+  try {
+    await runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.ok(JSON.stringify(calls).includes("var(--color-accent)"));
+  assert.ok(fake.calls.includes("versions"));
+});
+
+test("--existing skips a platform superwall.lock does not bind without asking for an app on it", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+  const calls: RendererCall[] = [];
+  useRenderer(recordingRenderer(calls));
+
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      existing: true,
+      load: async () => declaring(project, { "plus-upgrade": ["ios", "android"] }),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.equal(fake.calls.filter((call) => call === "versions").length, 1);
+  assert.deepEqual(readLock(project.superwallDir).apps, { ios: "42" });
+  assert.ok(JSON.stringify(calls).includes("plus-upgrade skipped"));
+});
+
+test("--existing with nothing bound pushes nothing and binds no app", async () => {
+  const project = scaffold([]);
+  project.surfaces.push(surfaceOf("fresh"));
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    existing: true,
+    platforms: ["android"],
+    load: async () => declaring(project, { fresh: ["ios", "android"] }),
+  });
+
+  assert.deepEqual(fake.calls, []);
+  assert.deepEqual(readLock(project.superwallDir).apps, { ios: "42" });
+});
+
+const twoApps = (project: FrameworkProject) => {
+  writeApp(project.superwallDir, "android", "43");
+  writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "3080" });
+};
+
+test("--source pushes every app's source repo, through one of its paywalls", async () => {
+  const project = scaffold();
+  twoApps(project);
+  const fake = await fakeApi(unchanged);
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    source: true,
+    load: async () => declaring(project, { "plus-upgrade": ["ios", "android"] }, { buildSnapshot: async () => built({ snapshotId: "a".repeat(64) }) }),
+  });
+
+  assert.deepEqual(
+    fake.paths.filter((url) => url.endsWith("/source-access")),
+    ["/v2/paywalls/2080/source-access", "/v2/paywalls/3080/source-access"],
+  );
+  assert.ok(!fake.calls.includes("versions"));
+});
+
+test("--source still pushes the source of an app whose paywall did not change when another app's did", async () => {
+  const project = scaffold();
+  twoApps(project);
+  const fake = await fakeApi(unchanged);
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    source: true,
+    load: async () =>
+      declaring(
+        project,
+        { "plus-upgrade": ["ios", "android"] },
+        {
+          buildSnapshot: async (_project, _surface, options) =>
+            built({ snapshotId: options?.platform === "android" ? "a".repeat(64) : "b".repeat(64) }),
+        },
+      ),
+  });
+
+  assert.deepEqual(
+    fake.paths.filter((url) => url.endsWith("/source-access") || url.endsWith("/source-commit")),
+    [
+      "/v2/paywalls/2080/source-access",
+      "/v2/paywalls/2080/versions/7/source-commit",
+      "/v2/paywalls/3080/source-access",
+    ],
+  );
 });

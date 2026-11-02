@@ -153,3 +153,14 @@ test("redact removes every form of the token from text a user could see", () => 
 test("redact leaves short strings alone rather than blanking the message", () => {
   assert.equal(redact("nothing to hide", "abc"), "nothing to hide");
 });
+
+test("a project source commit names the app and framework, with the note as its body", () => {
+  assert.equal(
+    buildCommitMessage({ kind: "project", applicationId: "42", framework: "0.4.2", cli: "2.0.0", note: " Rounder\r\ncorners " }),
+    "publish project source\n\nRounder\ncorners\n\nSuperwall-Application: 42\nSuperwall-Framework: 0.4.2\nSuperwall-Cli: 2.0.0\n",
+  );
+  assert.equal(
+    buildCommitMessage({ kind: "project", applicationId: "42", framework: "0.4.2" }),
+    "publish project source\n\nSuperwall-Application: 42\nSuperwall-Framework: 0.4.2\n",
+  );
+});
