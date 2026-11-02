@@ -212,6 +212,15 @@ const Goal = () => {
       <button type="button" onClick={() => setCount((current) => current + 1)}>
         more
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          setCount((current) => current + 1);
+          setCount((current) => current + 1);
+        }}
+      >
+        twice
+      </button>
       <button type="button" onClick={() => setCount(0)}>
         zero
       </button>
@@ -257,6 +266,22 @@ describe("useQueryState", () => {
     fireEvent.click(screen.getByText("plan"));
     expect(text("plan-goal")).toBe("focus");
     expect(search()).toBe("");
+  });
+
+  it("applies every functional update made in the same tick", () => {
+    mount(false);
+    fireEvent.click(screen.getByText("twice"));
+    expect(text("count")).toBe("2");
+    fireEvent.click(screen.getByText("twice"));
+    expect(text("count")).toBe("4");
+  });
+
+  it("applies every functional update made in the same tick to the URL", () => {
+    mount(true);
+    fireEvent.click(screen.getByText("twice"));
+    expect(text("count")).toBe("2");
+    act(() => vi.advanceTimersByTime(REPLACE_THROTTLE_MS));
+    expect(search()).toBe("?count=2");
   });
 
   it("writes the URL, clears on null and on the default, and honours per-call options", () => {
