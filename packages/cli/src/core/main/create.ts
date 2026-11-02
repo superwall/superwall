@@ -54,7 +54,7 @@ export async function create(
     isAppScoped(resource) || (resource === "products" && context.target.app !== undefined),
   );
   const grants =
-    resource === "products" ? await productEntitlements(context, api, scope, entitlementValues(flags.fields)) : undefined;
+    resource === "products" ? await resolveProductEntitlements(context, api, scope, entitlementValues(flags.fields)) : undefined;
   if (dryRun) {
     const { projectCount: _projects, appCount: _apps, ...where } = scope;
     const plan = {
@@ -279,7 +279,7 @@ function grantsFrom(product: Application, entitlementApp: Application | undefine
   return entitlementApp !== undefined && String(entitlementApp.id) === String(product.id);
 }
 
-async function productEntitlements(
+async function resolveProductEntitlements(
   context: CommandContext,
   api: SuperwallApi,
   scope: PickedScope,
@@ -304,15 +304,16 @@ async function productEntitlements(
   const wanted = values.map((value) => {
     const byId = rows.filter((row) => String(row.id) === value);
     const found = byId.length > 0 ? byId : rows.filter((row) => row.identifier === value);
-    if (found.length === 0) {
+    const [first] = found;
+    if (!first) {
       throw new Error(
         `${projectLabel} has no entitlement "${value}" - create it first: superwall entitlements create --identifier ${value} --app <app>`,
       );
     }
-    return found;
+    return { first, found };
   });
 
-  const fits = (app: Application): boolean => wanted.every((found) => found.some((row) => grantsFrom(app, appOf(row))));
+  const fits = (app: Application): boolean => wanted.every(({ found }) => found.some((row) => grantsFrom(app, appOf(row))));
   const named = scope.applicationId
     ? (apps.find((app) => String(app.id) === scope.applicationId) ?? {
         id: scope.applicationId,
@@ -327,7 +328,7 @@ async function productEntitlements(
   const product = named ?? nativeApps.find(fits);
 
   if (!product) {
-    const spread = wanted.map((found) => found.map(describe).join(", ")).join("; ");
+    const spread = wanted.map(({ found }) => found.map(describe).join(", ")).join("; ");
     throw new Error(
       `No app of ${projectLabel} can grant all of these entitlements: ${spread}. ` +
         "An iOS or Android product grants only its own app's entitlements - pass --app <id>, " +
@@ -335,11 +336,10 @@ async function productEntitlements(
     );
   }
 
-  const ids = wanted.map((found) => {
+  const ids = wanted.map(({ first, found }) => {
     const granted = found.filter((candidate) => grantsFrom(product, appOf(candidate)));
     const row = granted.find((candidate) => String(appOf(candidate)?.id) === String(product.id)) ?? granted[0];
     if (row) return String(row.id);
-    const [first] = found as [Row];
     const owner = appOf(first);
     const identifier = String(first.identifier ?? "<identifier>");
     if (ANY_NATIVE_PLATFORMS.has((product.platform ?? "").toLowerCase())) {
