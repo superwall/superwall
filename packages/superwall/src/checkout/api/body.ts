@@ -7,6 +7,7 @@ import {
 } from "@superwall/runtime";
 import { presentingPlacement } from "../host/init";
 import { asNumber, asString } from "./decode";
+import { uuid } from "../uuid";
 import type { CheckoutMode } from "../types";
 
 export const allowedDirectivesFor = (mode: CheckoutMode): readonly string[] => {
@@ -38,7 +39,7 @@ export const identityOf = (snapshot: SuperwallRuntimeSnapshot): SessionIdentity 
     asString(params.uid) ||
     asString(device.appUserId) ||
     aliasId ||
-    `$SuperwallAlias:${crypto.randomUUID()}`;
+    `$SuperwallAlias:${uuid()}`;
 
   const platform = asString(device.platform).toLowerCase();
   const providedDeviceId = asString(device.deviceId);
@@ -46,7 +47,7 @@ export const identityOf = (snapshot: SuperwallRuntimeSnapshot): SessionIdentity 
 
   // Android reports a non-UUID vendorId, so its deviceId is the stable one.
   const rawDeviceId = platform === "android" ? providedDeviceId || vendorId : vendorId;
-  const deviceIdValue = rawDeviceId || crypto.randomUUID();
+  const deviceIdValue = rawDeviceId || uuid();
   const deviceId = deviceIdValue.startsWith("$SuperwallDevice:")
     ? deviceIdValue
     : `$SuperwallDevice:${deviceIdValue}`;
