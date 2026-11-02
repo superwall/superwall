@@ -46,7 +46,7 @@ test("off the next channel the public skills come from the repo's main branch", 
     const main = bundledSkills()
       .filter((skill) => skill.channel === "latest")
       .map((skill) => skill.name);
-    assert.ok(main.includes("superwall") && !main.includes("superwall-framework"));
+    assert.ok(main.includes("superwall") && main.includes("superwall-framework"));
     assert.ok((commands[0] ?? "").endsWith(`--skill ${main.join(" ")} --copy`));
     assert.match(commands[1] ?? "", /^npx -y skills@latest add superwall\/skills --global --yes/);
   } finally {
