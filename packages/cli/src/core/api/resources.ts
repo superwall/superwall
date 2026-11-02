@@ -96,9 +96,11 @@ export function createEntitlement(
   api: SuperwallApi,
   scope: Scope,
   identifier: string,
+  applicationId?: string,
 ): Promise<Row> {
   return api.post<Row>("/v2/entitlements", {
     project_id: scope.projectId,
+    ...(applicationId ? { application_id: applicationId } : {}),
     identifier,
   });
 }

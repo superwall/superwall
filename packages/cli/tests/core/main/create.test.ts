@@ -76,6 +76,27 @@ test("an entitlement is created in the project and named with its id", async () 
   assert.deepEqual(said(calls, "success"), ["Created entitlement `pro` e1"]);
 });
 
+test("an entitlement is created on the app --app names, even when another app comes first", async () => {
+  const lab = {
+    ...PROJECT,
+    applications: [
+      { id: "20", name: "Lab Android", platform: "android" },
+      { id: "10", name: "Lab iOS", platform: "ios" },
+    ],
+  };
+  const { writes } = await create(entitlements, { identifier: "pro", app: "20" }, {
+    "GET /v2/projects": [lab],
+    "POST /v2/entitlements": { id: "5", identifier: "pro" },
+  });
+  assert.deepEqual(writes, [
+    { method: "POST", path: "/v2/entitlements", body: { project_id: "1", application_id: "20", identifier: "pro" } },
+  ]);
+
+  const plan = await create(entitlements, { identifier: "pro", app: "20", dryRun: true }, { "GET /v2/projects": [lab] });
+  assert.deepEqual(said(plan.calls, "info"), ['[dry-run] would create entitlement "pro" in Lab, app 20']);
+  assert.deepEqual(plan.writes, []);
+});
+
 test("a product carries its price in minor units, its period and the entitlements it grants", async () => {
   const { result, writes } = await create(
     products,

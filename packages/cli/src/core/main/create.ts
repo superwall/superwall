@@ -1,7 +1,7 @@
 import type { CommandContext } from "@/program/command";
 import { platformForIntegration } from "@/core/account/bind";
 import { orgForNewProject } from "@/core/account/org";
-import { boundOrganization, pickScope } from "@/core/account/scope";
+import { boundOrganization, pickScope, type PickedScope } from "@/core/account/scope";
 import { ApiError, type SuperwallApi } from "@/core/api/client";
 import {
   createApplication,
@@ -15,7 +15,6 @@ import {
   type ProductCreateOpts,
   type ResourceName,
   type Row,
-  type Scope,
   type SubscriptionPeriod,
 } from "@/core/api/resources";
 import { apiCall } from "@/ui/spinner";
@@ -57,7 +56,9 @@ export async function create(
     if (json) return context.output.data(plan);
     const target = scope.applicationId
       ? `${scope.appName ?? scope.applicationId} (${platformLabel(scope.appPlatform)})`
-      : (scope.projectName ?? scope.projectId);
+      : resource === "entitlements" && scope.boundApplicationId
+        ? `${scope.projectName ?? scope.projectId}, app ${scope.boundApplicationId}`
+        : (scope.projectName ?? scope.projectId);
     ui.info(`[dry-run] would create ${resource.replace(/s$/, "")} "${value}" in ${target}`);
     return;
   }
@@ -194,14 +195,14 @@ async function createApp(
 function createOne(
   api: SuperwallApi,
   resource: ResourceName,
-  scope: Scope,
+  scope: PickedScope,
   value: string,
   value2: unknown,
   fields: Record<string, unknown>,
 ): Promise<Row> {
   switch (resource) {
     case "entitlements":
-      return createEntitlement(api, scope, value);
+      return createEntitlement(api, scope, value, scope.boundApplicationId);
     case "products":
       return createProduct(api, scope, value, {
         ...productOptions(fields),

@@ -51,6 +51,7 @@ function matchApp(apps: Application[], local: LocalApp): Application | undefined
 
 export interface PickedScope extends Scope {
   appPlatform?: string;
+  boundApplicationId?: string;
   projectCount: number;
   appCount: number;
 }
@@ -94,6 +95,7 @@ export async function pickScope(
       projectName: bound.project.name,
       appName: appScoped ? bound.app.name : undefined,
       appPlatform: appScoped ? bound.app.platform : undefined,
+      boundApplicationId: String(bound.app.id),
       projectCount: projects.length,
       appCount: bound.project.applications?.length ?? 0,
     };
