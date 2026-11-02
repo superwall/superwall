@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   backgroundOf,
+  billingPlanFor,
   checkoutManagedPaymentsOf,
   checkoutModeOf,
   checkoutPrefetchOf,
@@ -8,6 +9,7 @@ import {
   isPlatformProductIds,
   normalizePlatform,
   productIdFor,
+  productIdsOf,
 } from "../../src/config";
 
 describe("productIdFor", () => {
@@ -28,10 +30,61 @@ describe("productIdFor", () => {
     expect(productIdFor({})).toBeUndefined();
   });
 
+  it("falls back in the order the slot lists its platforms", () => {
+    expect(productIdFor({ web: "live:price_web", ios: "pro_ios" })).toBe("live:price_web");
+    expect(productIdFor({ billingPlan: "upFront", android: "play", ios: "pro_ios" })).toBe("play");
+    expect(productIdsOf({ web: "w", ios: "i" })).toEqual(["w", "i"]);
+  });
+
   it("tells per-platform slots apart from slot objects", () => {
     expect(isPlatformProductIds(slot)).toBe(true);
     expect(isPlatformProductIds({ productId: "x" })).toBe(false);
     expect(isPlatformProductIds("x")).toBe(false);
+  });
+
+  it("never takes a per-platform slot's billing plan for a product id", () => {
+    const planned = { billingPlan: "upFront", ios: "pro_year", android: "pro_year_play" } as const;
+    expect(isPlatformProductIds(planned)).toBe(true);
+    expect(productIdFor(planned)).toBe("pro_year");
+    expect(productIdFor(planned, "ios")).toBe("pro_year");
+    expect(productIdFor(planned, "android")).toBe("pro_year_play");
+    expect(productIdFor(planned, "web")).toBeUndefined();
+    expect(productIdFor({ billingPlan: "monthly" })).toBeUndefined();
+  });
+});
+
+describe("productIdsOf", () => {
+  it("lists every distinct id a slot names, and never its billing plan", () => {
+    expect(productIdsOf("pro")).toEqual(["pro"]);
+    expect(productIdsOf({ productId: "pro", billingPlan: "upFront" })).toEqual(["pro"]);
+    expect(productIdsOf({})).toEqual([]);
+    expect(productIdsOf({ billingPlan: "upFront", ios: "a", android: "b", web: "a" })).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+});
+
+describe("billingPlanFor", () => {
+  it("is the plan a slot object or per-platform slot declares", () => {
+    expect(billingPlanFor({ productId: "pro", billingPlan: "upFront" })).toBe("upFront");
+    expect(billingPlanFor({ ios: "pro", billingPlan: "monthly" })).toBe("monthly");
+  });
+
+  it("is nothing when the slot declares none", () => {
+    expect(billingPlanFor("pro")).toBeUndefined();
+    expect(billingPlanFor({ productId: "pro" })).toBeUndefined();
+    expect(billingPlanFor({ ios: "pro" })).toBeUndefined();
+  });
+
+  it("rejects a plan it does not know instead of dropping it", () => {
+    const slot = JSON.parse('{"productId":"pro","billingPlan":"yearly"}');
+    expect(() => billingPlanFor(slot)).toThrow(
+      'billingPlan must be one of "monthly", "upFront", got "yearly".',
+    );
+    expect(() => billingPlanFor(slot, "`annual` billingPlan")).toThrow(
+      '`annual` billingPlan must be one of "monthly", "upFront", got "yearly".',
+    );
   });
 });
 

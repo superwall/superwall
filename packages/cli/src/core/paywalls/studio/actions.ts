@@ -241,7 +241,12 @@ export function createStudioActions(
               html: built.html,
               surface: surface.id,
               assets: synced.assets,
-              products: versionProducts(built.products, target.platform, catalogue.stores),
+              products: versionProducts(
+                built.products,
+                target.platform,
+                catalogue.stores,
+                built.billingPlans,
+              ),
               settings: built.settings,
             }),
           );
