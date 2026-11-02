@@ -51,10 +51,14 @@ export const isPlatformProductIds = (
 ): input is SuperwallPlatformProductIds =>
   typeof input === "object" && input !== null && !("productId" in input);
 
+const isPlatformKey = (key: string): key is SuperwallPlatform =>
+  SUPERWALL_PLATFORMS.some((platform) => platform === key);
+
 const platformIdsOf = (input: SuperwallPlatformProductIds): string[] =>
-  SUPERWALL_PLATFORMS.map((platform) => input[platform]).filter(
-    (id): id is string => typeof id === "string",
-  );
+  Object.keys(input)
+    .filter(isPlatformKey)
+    .map((platform) => input[platform])
+    .filter((id): id is string => typeof id === "string");
 
 export const productIdFor = (
   input: SuperwallProductSlotInput,

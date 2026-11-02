@@ -30,6 +30,12 @@ describe("productIdFor", () => {
     expect(productIdFor({})).toBeUndefined();
   });
 
+  it("falls back in the order the slot lists its platforms", () => {
+    expect(productIdFor({ web: "live:price_web", ios: "pro_ios" })).toBe("live:price_web");
+    expect(productIdFor({ billingPlan: "upFront", android: "play", ios: "pro_ios" })).toBe("play");
+    expect(productIdsOf({ web: "w", ios: "i" })).toEqual(["w", "i"]);
+  });
+
   it("tells per-platform slots apart from slot objects", () => {
     expect(isPlatformProductIds(slot)).toBe(true);
     expect(isPlatformProductIds({ productId: "x" })).toBe(false);
