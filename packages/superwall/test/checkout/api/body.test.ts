@@ -62,6 +62,18 @@ describe("identityOf", () => {
     expect(identity.email).toBeNull();
   });
 
+  it("invents UUID-shaped ids outside a secure context, where crypto.randomUUID is missing", () => {
+    vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    try {
+      const identity = identityOf(snapshotOf());
+      const v4 = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+      expect(identity.appUserId).toMatch(new RegExp(`^\\$SuperwallAlias:${v4}$`));
+      expect(identity.deviceId).toMatch(new RegExp(`^\\$SuperwallDevice:${v4}$`));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("prefers the vendor id everywhere but Android, which reports a non-UUID one", () => {
     expect(
       identityOf(snapshotOf({ device: { platform: "iOS", vendorId: "v1", deviceId: "d1" } }))

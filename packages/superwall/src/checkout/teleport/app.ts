@@ -13,6 +13,7 @@ import { asString } from "../api/decode";
 import { hostOf } from "../../host";
 import { startLoading, stopLoading } from "../loading";
 import { isStripeProductIdentifier } from "../products";
+import { uuid } from "../uuid";
 import {
   createTeleport,
   moveTeleportIntroductoryOffer,
@@ -170,7 +171,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
   let prepared: Prepared | undefined;
   let starting: Promise<TeleportOutcome> | undefined;
   let route: string | undefined;
-  let presentationId: string = crypto.randomUUID();
+  let presentationId: string | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let polling: OpenTeleport | undefined;
   let parkedCheck: { record: ParkedTeleport; promise: Promise<ParkedState> } | undefined;
@@ -535,6 +536,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
   ): Promise<Created> => {
     const snapshot = paywall.getSnapshot();
     const freeTrial = freeTrialFor(resolved, snapshot);
+    presentationId ??= uuid();
     const created = await createTeleport(publicApiKey(), {
       route: target,
       ...(productReference === undefined ? {} : { productReference }),
@@ -742,6 +744,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     const snapshot = paywall.getSnapshot();
     return (
       settings() !== undefined &&
+      globalThis.isSecureContext !== false &&
       hostOf() !== "web-sdk" &&
       platformOf(snapshot.device) === "ios" &&
       publicApiKey() !== "" &&
@@ -816,7 +819,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     },
     prefetch: prepare,
     beginPresentation: (id) => {
-      presentationId = id ?? crypto.randomUUID();
+      presentationId = id;
       prepared = undefined;
     },
     endPresentation: () => {
