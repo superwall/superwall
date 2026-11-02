@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseAst } from "vite";
 import {
   inlineProductsOf,
+  resolveBillingPlans,
   resolveProductIds,
   rewriteConfigProducts,
 } from "../../src/build/products";
@@ -53,6 +54,53 @@ describe("resolveProductIds", () => {
         "android",
       ),
     ).toThrow("`annual`, `weekly` have no product id for android");
+  });
+});
+
+describe("resolveBillingPlans", () => {
+  const config = {
+    products: {
+      annual: { productId: "pro_annual", billingPlan: "upFront" },
+      annualMonthly: { productId: "pro_annual", billingPlan: "monthly" },
+      perPlatform: { ios: "a_ios", android: "a_play", billingPlan: "upFront" },
+      plain: "m",
+      noPlan: { productId: "w" },
+    },
+  } as const;
+
+  it("maps each slot that declares a plan, side by side on one product", () => {
+    expect(resolveBillingPlans(config, surface, "ios")).toEqual({
+      annual: "upFront",
+      annualMonthly: "monthly",
+      perPlatform: "upFront",
+    });
+    expect(resolveBillingPlans(config, surface, undefined)).toEqual({
+      annual: "upFront",
+      annualMonthly: "monthly",
+      perPlatform: "upFront",
+    });
+    expect(resolveBillingPlans(config, surface, "web")).toEqual({
+      annual: "upFront",
+      annualMonthly: "monthly",
+      perPlatform: "upFront",
+    });
+    expect(resolveBillingPlans({}, surface, "ios")).toEqual({});
+  });
+
+  it("carries no plan on an Android build, where the App Store plan does not exist", () => {
+    expect(resolveBillingPlans(config, surface, "android")).toEqual({});
+  });
+
+  it("refuses an unknown plan with the slot that declares it, on every platform", () => {
+    const typo = { products: { annual: { productId: "a", billingPlan: "upfront" } } };
+    for (const platform of ["ios", "android", undefined] as const) {
+      expect(() =>
+        // @ts-expect-error a typo the type rejects; config.ts can still be loose JS
+        resolveBillingPlans(typo, surface, platform),
+      ).toThrow(
+        'paywalls/pro: `annual` billingPlan must be one of "monthly", "upFront", got "upfront".',
+      );
+    }
   });
 });
 

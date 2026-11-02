@@ -1,6 +1,8 @@
 import {
+  billingPlanFor,
   isPlatformProductIds,
   productIdFor,
+  type SuperwallBillingPlan,
   type SuperwallConfig,
   type SuperwallPlatform,
 } from "@superwall/runtime";
@@ -45,6 +47,27 @@ export const resolveProductIds = (
     );
   }
   return Object.fromEntries(resolved);
+};
+
+export const resolveBillingPlans = (
+  config: SuperwallConfig,
+  surface: DiscoveredSurface,
+  platform: SuperwallPlatform | undefined,
+): Record<string, SuperwallBillingPlan> => {
+  const plans: Record<string, SuperwallBillingPlan> = {};
+  for (const [reference, input] of Object.entries(config.products ?? {})) {
+    let plan: SuperwallBillingPlan | undefined;
+    try {
+      plan = billingPlanFor(input);
+    } catch (error) {
+      throw new Error(
+        `${surface.kind}s/${surface.id}: \`${reference}\` ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
+    if (plan !== undefined && platform !== "android") plans[reference] = plan;
+  }
+  return plans;
 };
 
 const hasRange = (node: object): node is { start: number; end: number } =>
