@@ -197,6 +197,36 @@ describe("sessionBody", () => {
     expect(bodyOf().context).not.toHaveProperty("paywallManagedPaymentsOverride");
   });
 
+  it("blocks prepaid cards only when the config or the purchase asks to", () => {
+    const blocking = { config: { checkout: { mode: "sheet", prepaidCards: "block" } } } as const;
+    expect(bodyOf(blocking).context).toMatchObject({ blockPrepaidCards: true });
+    expect(
+      bodyOf({ config: { checkout: { mode: "sheet", prepaidCards: "allow" } } }).context,
+    ).not.toHaveProperty("blockPrepaidCards");
+    expect(bodyOf({ config: { checkout: "sheet" } }).context).not.toHaveProperty(
+      "blockPrepaidCards",
+    );
+    expect(bodyOf().context).not.toHaveProperty("blockPrepaidCards");
+  });
+
+  it("lets the purchase's prepaidCards override the config either way", () => {
+    const withOverride = (config: Record<string, unknown>, prepaidCards: "allow" | "block") =>
+      sessionBody({
+        snapshot: snapshotOf({ config }),
+        product,
+        productIdentifier: "test:price_1:no-trial",
+        mode: "sheet",
+        silent: false,
+        prepaidCards,
+      }).context;
+    expect(withOverride({ checkout: "sheet" }, "block")).toMatchObject({
+      blockPrepaidCards: true,
+    });
+    expect(
+      withOverride({ checkout: { mode: "sheet", prepaidCards: "block" } }, "allow"),
+    ).not.toHaveProperty("blockPrepaidCards");
+  });
+
   it("defaults product variables the store did not price", () => {
     const body = sessionBody({
       snapshot: snapshotOf(),

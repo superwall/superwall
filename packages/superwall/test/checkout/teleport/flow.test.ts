@@ -328,6 +328,15 @@ describe("a teleport from the app", () => {
     await expect(teleporter.showWaitingScreen()).resolves.toBe(false);
   });
 
+  it("opens the link with the prepaid-card rule the tap asked for", async () => {
+    api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
+    const { session, posted } = fakeSession();
+    void appTeleport(session).begin({ productReference: "card", query: {}, prepaidCards: "block" });
+    await settle();
+    const opened = posted.find((message) => message.event_name === "open_url_external");
+    expect(new URLSearchParams(new URL(String(opened?.url)).hash.slice(1)).get("p")).toBe("block");
+  });
+
   it("starts waiting on its own after a moment, or at once when the SDK asks", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
     const first = fakeSession();
@@ -1344,6 +1353,14 @@ describe("the link and the flow state", () => {
         "ref",
       ),
     ).toBe(false);
+  });
+
+  it("carries the tap's prepaid-card rule in the fragment, and none when the tap set none", () => {
+    const hash = (url: string) => new URLSearchParams(new URL(url).hash.slice(1));
+    expect(
+      hash(checkoutUrlFor("https://a.app/x", "card", undefined, undefined, "block")).get("p"),
+    ).toBe("block");
+    expect(hash(checkoutUrlFor("https://a.app/x", "card")).has("p")).toBe(false);
   });
 
   it("carries every query value but the stack", () => {

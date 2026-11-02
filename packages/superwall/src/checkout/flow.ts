@@ -1,4 +1,8 @@
-import type { SuperwallPostPurchase, SuperwallSession } from "@superwall/runtime";
+import type {
+  SuperwallPostPurchase,
+  SuperwallPrepaidCards,
+  SuperwallSession,
+} from "@superwall/runtime";
 import { checkoutPrefetchOf, detectSuperwallHost } from "@superwall/runtime";
 import { createApplePay, type ApplePay, type ApplePayOutcome } from "./applePay";
 import { asString, field } from "./api/decode";
@@ -212,6 +216,7 @@ export const prefetchSession = async (
   paywall: PaywallSession,
   referenceName: string,
   mode: CheckoutMode,
+  prepaidCards?: SuperwallPrepaidCards,
 ): Promise<void> => {
   const sessions = sessionsFor(paywall);
   const result = await sessions.prefetch({
@@ -219,6 +224,7 @@ export const prefetchSession = async (
     mode,
     scope: scopeFor(mode),
     silent: true,
+    ...(prepaidCards === undefined ? {} : { prepaidCards }),
   });
   if (!result) return;
 
@@ -359,7 +365,7 @@ export const purchaseWithApplePay = (
   paywall: PaywallSession,
   referenceName: string,
 ): Promise<ApplePayOutcome> => {
-  const warmed = sessionsFor(paywall).cache.get(referenceName, "apple-pay");
+  const warmed = sessionsFor(paywall).warmed(referenceName, "apple-pay");
   return applePayFor(paywall).purchase(
     referenceName,
     contextFor(paywall, referenceName, warmed?.checkoutContextId ?? ""),
@@ -439,7 +445,10 @@ export const purchaseOnWeb = async (
       if (outcome.status !== "unavailable") return outcome.status;
     }
 
-    const warmed = mode === "applePay" ? sessions.cache.get(referenceName, "apple-pay") : null;
+    const warmed =
+      mode === "applePay"
+        ? sessions.warmed(referenceName, "apple-pay", options.prepaidCards)
+        : null;
     const result =
       warmed?.directive === "embedded"
         ? warmed
@@ -447,6 +456,7 @@ export const purchaseOnWeb = async (
             referenceName,
             mode: mode === "external" ? "external" : "sheet",
             scope: mode === "external" ? "external" : "default",
+            ...(options.prepaidCards === undefined ? {} : { prepaidCards: options.prepaidCards }),
           });
 
     if (result.directive === "embedded") {

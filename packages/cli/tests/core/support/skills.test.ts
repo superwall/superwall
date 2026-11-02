@@ -74,10 +74,7 @@ test("the skills source follows the channel", () => {
     delete process.env.SUPERWALL_CHANNEL;
     assert.equal(SKILLS_REF(), "main");
     assert.equal(SKILLS_INSTALL_SOURCE(), "superwall/skills");
-    assert.deepEqual(
-      knownSkills().map((s) => s.name).filter((n) => /framework|paywall-migrate|screen-migrate/.test(n)),
-      [],
-    );
+    assert.ok(knownSkills().some((s) => s.name === "superwall-framework"));
     process.env.SUPERWALL_CHANNEL = "nightly";
     assert.equal(SKILLS_REF(), "main");
     process.env.SUPERWALL_CHANNEL = "next";
@@ -180,7 +177,7 @@ test("every skill of the repo is bundled, with its channel, and nothing else", (
   const index = bundledSkills();
   assert.deepEqual(index.map((skill) => skill.name).sort(), dirs);
   assert.equal(index.find((skill) => skill.name === "superwall")?.channel, "latest");
-  assert.equal(index.find((skill) => skill.name === "superwall-framework")?.channel, "next");
+  assert.equal(index.find((skill) => skill.name === "superwall-framework")?.channel, "latest");
   for (const { name, summary } of index) {
     assert.match(readFileSync(`dist/skills/${name}/SKILL.md`, "utf8"), new RegExp(`^name: ${name}$`, "m"));
     assert.ok(summary.length > 0 && summary.length <= 64, `${name}: summary`);

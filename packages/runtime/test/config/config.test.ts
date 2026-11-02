@@ -4,6 +4,7 @@ import {
   checkoutManagedPaymentsOf,
   checkoutModeOf,
   checkoutPrefetchOf,
+  checkoutPrepaidCardsOf,
   isPlatformProductIds,
   normalizePlatform,
   productIdFor,
@@ -68,6 +69,14 @@ describe("checkout", () => {
     expect(checkoutManagedPaymentsOf({ mode: "sheet" })).toBeUndefined();
     expect(checkoutManagedPaymentsOf("sheet")).toBeUndefined();
     expect(checkoutManagedPaymentsOf(undefined)).toBeUndefined();
+  });
+
+  it("allows prepaid cards unless the object form blocks them", () => {
+    expect(checkoutPrepaidCardsOf({ mode: "sheet", prepaidCards: "block" })).toBe("block");
+    expect(checkoutPrepaidCardsOf({ mode: "sheet", prepaidCards: "allow" })).toBe("allow");
+    expect(checkoutPrepaidCardsOf({ mode: "sheet" })).toBe("allow");
+    expect(checkoutPrepaidCardsOf("sheet")).toBe("allow");
+    expect(checkoutPrepaidCardsOf(undefined)).toBe("allow");
   });
 });
 

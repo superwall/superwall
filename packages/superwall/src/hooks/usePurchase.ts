@@ -14,6 +14,7 @@ import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
 import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
 import { useIdentityRefresh } from "../checkout/hooks/useIdentityRefresh";
 import { checkoutModeFor } from "../checkout/host/sdk";
+import { prepaidCardsFromFragment } from "../checkout/teleport/boot";
 import { teleportFor } from "../checkout/teleport/flow";
 import { flowQuery } from "../checkout/teleport/teleporter";
 import { QueryStoreContext } from "../navigation/query";
@@ -39,7 +40,7 @@ export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
   failure?: SuperwallPurchaseFailure<SuperwallProduct<TVariables>>;
   prefetch: (
     input?: ProductReference | SuperwallProduct<TVariables>,
-    options?: Pick<SuperwallPurchaseOptions, "checkout">,
+    options?: Pick<SuperwallPurchaseOptions, "checkout" | "prepaidCards">,
   ) => void;
 };
 
@@ -53,7 +54,8 @@ const referenceOf = (input: string | { reference: string }): string =>
  * offers it and falls back to the sheet; otherwise, and always inside an iOS
  * app, it opens Superwall's hosted checkout in the browser. A `purchase()` or
  * `prefetch()` call can pass its own `checkout` mode, under the same iOS
- * rule. Web checkout only runs when a host supplied a public API key.
+ * rule, and its own `prepaidCards`. Web checkout only runs when a host
+ * supplied a public API key.
  */
 export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
@@ -78,7 +80,7 @@ export const usePurchase = <
       const reference = referenceOf(input);
       const product = session.getSnapshot().productsByReference[reference];
       const teleporter = teleportFor(session);
-      const { postPurchase, stripeMetadata } = options ?? {};
+      const { postPurchase, stripeMetadata, prepaidCards } = options ?? {};
       if (
         product &&
         sessionsFor(session).isStripeProduct(reference) &&
@@ -90,6 +92,7 @@ export const usePurchase = <
           query: flowQuery(queryStore),
           postPurchase,
           stripeMetadata,
+          prepaidCards,
         });
         if (typeof outcome === "string") return { status: outcome, product };
         const settled = await outcome.result;
@@ -100,9 +103,12 @@ export const usePurchase = <
         if (teleporter.kind === "page" && !(await teleporter.whenUnsettled())) {
           return { status: "abandoned", product };
         }
+        const rule =
+          prepaidCards ?? (teleporter.kind === "page" ? prepaidCardsFromFragment() : undefined);
         const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
           postPurchase,
           stripeMetadata,
+          ...(rule === undefined ? {} : { prepaidCards: rule }),
         });
         return { status, product };
       }
@@ -124,7 +130,7 @@ export const usePurchase = <
   const prefetch = React.useCallback(
     (
       input?: ProductReference | SuperwallProduct<TVariables>,
-      options?: Pick<SuperwallPurchaseOptions, "checkout">,
+      options?: Pick<SuperwallPurchaseOptions, "checkout" | "prepaidCards">,
     ) => {
       const reference = input === undefined ? first : referenceOf(input);
       if (!webMode || reference === undefined) return;
@@ -134,6 +140,7 @@ export const usePurchase = <
         session,
         reference,
         checkoutModeFor(snapshot, options?.checkout ?? webMode),
+        options?.prepaidCards,
       );
     },
     [session, webMode, first],

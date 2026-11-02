@@ -1,5 +1,9 @@
-import type { SuperwallRuntimeSnapshot } from "@superwall/runtime";
-import { createSessionCache, type SessionCache } from "./cache";
+import {
+  checkoutPrepaidCardsOf,
+  type SuperwallPrepaidCards,
+  type SuperwallRuntimeSnapshot,
+} from "@superwall/runtime";
+import { createSessionCache, sessionKeyFor, type SessionCache } from "./cache";
 import { sessionBody } from "../api/body";
 import {
   asString,
@@ -31,6 +35,7 @@ export type SessionRequest = {
   mode: CheckoutMode;
   scope?: SessionScope;
   silent?: boolean;
+  prepaidCards?: SuperwallPrepaidCards;
 };
 
 export type CheckoutSessions = {
@@ -38,6 +43,11 @@ export type CheckoutSessions = {
   readonly cache: SessionCache;
   isStripeProduct(referenceName: string): boolean;
   identity(): CustomerIdentity;
+  warmed(
+    referenceName: string,
+    scope: SessionScope,
+    prepaidCards?: SuperwallPrepaidCards,
+  ): CheckoutSessionResult | null;
   begin(request: SessionRequest): Promise<CheckoutSessionResult>;
   prefetch(request: SessionRequest): Promise<CheckoutSessionResult | null>;
   status(checkoutContextId: string): Promise<CheckoutStatus>;
@@ -70,6 +80,9 @@ export const createCheckoutSessions = (
     inFlight.clear();
   };
 
+  const prepaidCardsFor = (override?: SuperwallPrepaidCards): SuperwallPrepaidCards =>
+    override ?? checkoutPrepaidCardsOf(getSnapshot().config?.checkout);
+
   const isStripeProduct = (referenceName: string) =>
     isStripeProductIdentifier(getSnapshot().productsByReference[referenceName]?.productId);
 
@@ -90,10 +103,11 @@ export const createCheckoutSessions = (
     mode,
     scope = "default",
     silent = false,
+    prepaidCards = prepaidCardsFor(),
   }: SessionRequest): Promise<CheckoutSessionResult> => {
     const asked = generation;
 
-    const cached = cache.get(referenceName, scope);
+    const cached = cache.get(referenceName, scope, prepaidCards);
     if (cached) return cached;
     cache.cleanupExpired();
 
@@ -111,6 +125,7 @@ export const createCheckoutSessions = (
       mode,
       silent,
       teleportId: readTeleportBoot()?.id,
+      prepaidCards,
     });
 
     const request = (promotionCode: string | null) =>
@@ -137,18 +152,19 @@ export const createCheckoutSessions = (
     }
 
     const result = readCheckoutSession(await response.json(), referenceName, silent);
-    if (asked === generation) cache.set(referenceName, result, scope);
+    if (asked === generation) cache.set(referenceName, result, scope, prepaidCards);
     return result;
   };
 
   const begin = (request: SessionRequest): Promise<CheckoutSessionResult> => {
     const scope = request.scope ?? "default";
-    const key = `${scope}:${request.referenceName}`;
+    const prepaidCards = prepaidCardsFor(request.prepaidCards);
+    const key = sessionKeyFor(request.referenceName, scope, prepaidCards);
 
     const existing = inFlight.get(key);
     if (existing) return existing;
 
-    const pending = create({ ...request, scope });
+    const pending = create({ ...request, scope, prepaidCards });
     inFlight.set(key, pending);
     const release = () => inFlight.delete(key);
     void pending.then(release, release);
@@ -160,6 +176,8 @@ export const createCheckoutSessions = (
     discounts,
     cache,
     isStripeProduct,
+    warmed: (referenceName, scope, prepaidCards) =>
+      cache.get(referenceName, scope, prepaidCardsFor(prepaidCards)),
     identity: () => {
       const { user } = getSnapshot();
       return {

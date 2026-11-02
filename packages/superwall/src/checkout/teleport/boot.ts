@@ -1,3 +1,4 @@
+import type { SuperwallPrepaidCards } from "@superwall/runtime";
 import { field } from "../api/decode";
 
 export type TeleportBoot = {
@@ -19,6 +20,7 @@ export const TAPPED_PRODUCT_FRAGMENT_KEY = "ref";
 export const TAPPED_PRODUCT_QUERY_KEY = "sw_ref";
 export const QUERY_FRAGMENT_KEY = "s";
 export const INTRODUCTORY_OFFER_FRAGMENT_KEY = "t";
+export const PREPAID_CARDS_FRAGMENT_KEY = "p";
 const REFERENCE_NAME = /^[\w.-]{1,191}$/;
 
 const textOf = (value: unknown): string | undefined =>
@@ -64,6 +66,11 @@ export const introductoryOfferFromFragment = (): boolean | undefined => {
   if (value === "1") return true;
   if (value === "0") return false;
   return undefined;
+};
+
+export const prepaidCardsFromFragment = (): SuperwallPrepaidCards | undefined => {
+  const value = fragment().get(PREPAID_CARDS_FRAGMENT_KEY);
+  return value === "block" || value === "allow" ? value : undefined;
 };
 
 const fragmentQuery = (): Record<string, string> => {

@@ -1,4 +1,4 @@
-import type { SuperwallPostPurchase } from "@superwall/runtime";
+import type { SuperwallPostPurchase, SuperwallPrepaidCards } from "@superwall/runtime";
 
 export type CheckoutMode = "sheet" | "external" | "applePay";
 
@@ -21,6 +21,7 @@ export type PostCheckoutResolution =
 export type WebPurchaseOptions = {
   postPurchase?: SuperwallPostPurchase;
   stripeMetadata?: Readonly<Record<string, string>>;
+  prepaidCards?: SuperwallPrepaidCards;
 };
 
 export type SessionScope = "default" | "apple-pay" | "external";
