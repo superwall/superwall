@@ -129,13 +129,14 @@ test("--app names an app by id and remembers it as the project's default", async
     projectName: "Monoroll",
     appName: "Monoroll Android",
     appPlatform: "android",
+    boundApplicationId: "12",
     projectCount: 2,
     appCount: 2,
   });
   assert.equal(readDefaultApp("1"), "12");
 });
 
-test("a project-scoped command keeps only the project of the named app", async () => {
+test("a project-scoped command keeps the project of the named app and the app only as bound", async () => {
   const { ctx } = contextFor({ app: "Solo" });
   const { api } = fakeApi([monoroll, solo]);
 
@@ -145,6 +146,7 @@ test("a project-scoped command keeps only the project of the named app", async (
     projectName: "Solo",
     appName: undefined,
     appPlatform: undefined,
+    boundApplicationId: "21",
     projectCount: 2,
     appCount: 1,
   });
@@ -199,7 +201,12 @@ test("an app bound in superwall.lock is used without asking", async () => {
   const scope = await pickScope(ctx, fakeApi([solo, monoroll]).api, true);
 
   assert.equal(scope.applicationId, "11");
+  assert.equal(scope.boundApplicationId, "11");
   assert.deepEqual(said(calls, "info"), ["Using `Monoroll iOS` - bound in superwall.lock."]);
+
+  const projectScoped = await pickScope(contextFor({ installDir: workspace.dir }).ctx, fakeApi([solo, monoroll]).api, false);
+  assert.equal(projectScoped.applicationId, undefined);
+  assert.equal(projectScoped.boundApplicationId, "11");
 });
 
 test("a lock that only names a paywall finds its app through the paywall", async () => {

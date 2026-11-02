@@ -1,8 +1,9 @@
 import type { CommandContext } from "@/program/command";
 import { platformForIntegration } from "@/core/account/bind";
 import { orgForNewProject } from "@/core/account/org";
-import { boundOrganization, pickScope } from "@/core/account/scope";
+import { boundOrganization, pickScope, type PickedScope } from "@/core/account/scope";
 import { ApiError, type SuperwallApi } from "@/core/api/client";
+import { findProject } from "@/core/api/lookup";
 import {
   createApplication,
   createCampaign,
@@ -10,12 +11,13 @@ import {
   createProduct,
   createProject,
   isAppScoped,
+  listResource,
   platformLabel,
   rowName,
+  type Application,
   type ProductCreateOpts,
   type ResourceName,
   type Row,
-  type Scope,
   type SubscriptionPeriod,
 } from "@/core/api/resources";
 import { apiCall } from "@/ui/spinner";
@@ -51,19 +53,33 @@ export async function create(
     api,
     isAppScoped(resource) || (resource === "products" && context.target.app !== undefined),
   );
+  const grants =
+    resource === "products" ? await resolveProductEntitlements(context, api, scope, entitlementValues(flags.fields)) : undefined;
   if (dryRun) {
     const { projectCount: _projects, appCount: _apps, ...where } = scope;
-    const plan = { dryRun: true, action: "create", resource, value, scope: where };
+    const plan = {
+      dryRun: true,
+      action: "create",
+      resource,
+      value,
+      scope: grants?.app ? { ...where, applicationId: String(grants.app.id) } : where,
+      ...(grants?.ids.length ? { entitlements: grants.ids } : {}),
+    };
     if (json) return context.output.data(plan);
-    const target = scope.applicationId
-      ? `${scope.appName ?? scope.applicationId} (${platformLabel(scope.appPlatform)})`
-      : (scope.projectName ?? scope.projectId);
-    ui.info(`[dry-run] would create ${resource.replace(/s$/, "")} "${value}" in ${target}`);
+    const target = grants?.app
+      ? appLabel(grants.app)
+      : scope.applicationId
+        ? `${scope.appName ?? scope.applicationId} (${platformLabel(scope.appPlatform)})`
+        : resource === "entitlements" && scope.boundApplicationId
+          ? `${scope.projectName ?? scope.projectId}, app ${scope.boundApplicationId}`
+          : (scope.projectName ?? scope.projectId);
+    const granting = grants?.ids.length ? ` granting entitlement ${grants.ids.join(", ")}` : "";
+    ui.info(`[dry-run] would create ${resource.replace(/s$/, "")} "${value}" in ${target}${granting}`);
     return;
   }
 
   const created = await apiCall(context, `Creating ${resource.replace(/s$/, "")}`, () => {
-    return createOne(api, resource, scope, value, value2, flags.fields);
+    return createOne(api, resource, scope, value, value2, flags.fields, grants);
   });
   if (json) return context.output.data(created);
   ui.success(`Created ${resource.replace(/s$/, "")} \`${rowName(created)}\` ${created.id ?? ""}`);
@@ -194,19 +210,23 @@ async function createApp(
 function createOne(
   api: SuperwallApi,
   resource: ResourceName,
-  scope: Scope,
+  scope: PickedScope,
   value: string,
   value2: unknown,
   fields: Record<string, unknown>,
+  grants: ProductEntitlements | undefined,
 ): Promise<Row> {
   switch (resource) {
     case "entitlements":
-      return createEntitlement(api, scope, value);
-    case "products":
+      return createEntitlement(api, scope, value, scope.boundApplicationId);
+    case "products": {
+      const applicationId = grants?.app ? String(grants.app.id) : scope.applicationId;
       return createProduct(api, scope, value, {
         ...productOptions(fields),
-        ...(scope.applicationId ? { applicationId: scope.applicationId } : {}),
+        ...(applicationId ? { applicationId } : {}),
+        ...(grants?.ids.length ? { entitlements: grants.ids } : {}),
       });
+    }
     case "campaigns": {
       return createCampaign(api, scope, value, String(value2));
     }
@@ -231,8 +251,111 @@ function productOptions(fields: Record<string, unknown>): ProductCreateOpts {
       ...(fields.trialDays !== undefined ? { trial_period_days: Number(fields.trialDays) } : {}),
     };
   }
-  const entitlement = fields.entitlement;
-  const entitlements = Array.isArray(entitlement) ? entitlement.map(String) : [];
-  if (entitlements.length) options.entitlements = entitlements;
   return options;
+}
+
+interface ProductEntitlements {
+  app?: Application;
+  ids: string[];
+}
+
+const NATIVE_PLATFORMS = new Set(["ios", "android"]);
+const ANY_NATIVE_PLATFORMS = new Set(["stripe", "web", "webapp", "custom"]);
+
+function entitlementValues(fields: Record<string, unknown>): string[] {
+  const raw = fields.entitlement;
+  const values = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
+  return values.map((value) => String(value).trim()).filter(Boolean);
+}
+
+function appLabel(app: Application): string {
+  return `${app.name ?? app.id} (${platformLabel(app.platform)})`;
+}
+
+function grantsFrom(product: Application, entitlementApp: Application | undefined): boolean {
+  if (ANY_NATIVE_PLATFORMS.has((product.platform ?? "").toLowerCase())) {
+    return NATIVE_PLATFORMS.has((entitlementApp?.platform ?? "").toLowerCase());
+  }
+  return entitlementApp !== undefined && String(entitlementApp.id) === String(product.id);
+}
+
+async function resolveProductEntitlements(
+  context: CommandContext,
+  api: SuperwallApi,
+  scope: PickedScope,
+  values: string[],
+): Promise<ProductEntitlements> {
+  if (values.length === 0) return { ids: [] };
+  const project = await findProject(api, scope.projectId);
+  const apps = project?.applications ?? [];
+  const rows = await apiCall(context, "Loading entitlements", () => listResource(api, "entitlements", scope));
+  const projectLabel = scope.projectName ?? `Project ${scope.projectId}`;
+  const appOf = (row: Row): Application | undefined => {
+    const id = row.application_id;
+    if (id === undefined || id === null) return undefined;
+    return apps.find((app) => String(app.id) === String(id)) ?? { id: String(id) };
+  };
+  const describe = (row: Row): string => {
+    const app = appOf(row);
+    const name = row.identifier ? ` (${String(row.identifier)})` : "";
+    return `${String(row.id)}${name} is on ${app ? appLabel(app) : "no app"}`;
+  };
+
+  const wanted = values.map((value) => {
+    const byId = rows.filter((row) => String(row.id) === value);
+    const found = byId.length > 0 ? byId : rows.filter((row) => row.identifier === value);
+    const [first] = found;
+    if (!first) {
+      throw new Error(
+        `${projectLabel} has no entitlement "${value}" - create it first: superwall entitlements create --identifier ${value} --app <app>`,
+      );
+    }
+    return { first, found };
+  });
+
+  const fits = (app: Application): boolean => wanted.every(({ found }) => found.some((row) => grantsFrom(app, appOf(row))));
+  const named = scope.applicationId
+    ? (apps.find((app) => String(app.id) === scope.applicationId) ?? {
+        id: scope.applicationId,
+        name: scope.appName,
+        platform: scope.appPlatform,
+      })
+    : undefined;
+  const nativeApps = [
+    ...apps.filter((app) => (app.platform ?? "").toLowerCase() === "ios"),
+    ...apps.filter((app) => (app.platform ?? "").toLowerCase() === "android"),
+  ];
+  const product = named ?? nativeApps.find(fits);
+
+  if (!product) {
+    const spread = wanted.map(({ found }) => found.map(describe).join(", ")).join("; ");
+    throw new Error(
+      `No app of ${projectLabel} can grant all of these entitlements: ${spread}. ` +
+        "An iOS or Android product grants only its own app's entitlements - pass --app <id>, " +
+        "or create the missing ones there: superwall entitlements create --identifier <identifier> --app <id>",
+    );
+  }
+
+  const ids = wanted.map(({ first, found }) => {
+    const granted = found.filter((candidate) => grantsFrom(product, appOf(candidate)));
+    const row = granted.find((candidate) => String(appOf(candidate)?.id) === String(product.id)) ?? granted[0];
+    if (row) return String(row.id);
+    const owner = appOf(first);
+    const identifier = String(first.identifier ?? "<identifier>");
+    if (ANY_NATIVE_PLATFORMS.has((product.platform ?? "").toLowerCase())) {
+      throw new Error(
+        `Entitlement ${describe(first)} - ${appLabel(product)} products grant only iOS or Android entitlements: ` +
+          `superwall entitlements create --identifier ${identifier} --app <ios or android app>`,
+      );
+    }
+    const move =
+      owner && NATIVE_PLATFORMS.has((owner.platform ?? "").toLowerCase())
+        ? `pass --app ${String(owner.id)} to create the product there, or `
+        : "";
+    throw new Error(
+      `Entitlement ${describe(first)}, not ${appLabel(product)} - ${move}create it on ${product.name ?? product.id}: ` +
+        `superwall entitlements create --identifier ${identifier} --app ${String(product.id)}`,
+    );
+  });
+  return { app: product, ids: [...new Set(ids)] };
 }

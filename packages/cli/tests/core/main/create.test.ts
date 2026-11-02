@@ -10,6 +10,7 @@ import { command as campaigns } from "@/commands/main/campaigns";
 import { command as entitlements } from "@/commands/main/entitlements";
 import { command as products } from "@/commands/main/products";
 import { defineResource } from "@/core/main/define";
+import type { Row } from "@/core/api/resources";
 import { answeringRenderer, prompted, said, type Answers } from "../../helpers/answers";
 import { runCommand } from "../../helpers/command";
 import type { RendererCall } from "../../helpers/renderer";
@@ -25,6 +26,32 @@ const PROJECT = {
   organization_id: 9,
   applications: [{ id: "10", name: "Lab", platform: "ios" }],
 };
+
+const ENTITLEMENTS: Record<string, Reply> = {
+  "GET /v2/projects/1": PROJECT,
+  "GET /v2/entitlements?project_id=1": [
+    { id: 5, identifier: "pro", application_id: 10 },
+    { id: 6, identifier: "plus", application_id: 10 },
+  ],
+};
+
+const SPLIT = {
+  ...PROJECT,
+  applications: [
+    { id: "20", name: "Lab Android", platform: "android" },
+    { id: "10", name: "Lab iOS", platform: "ios" },
+    { id: "30", name: "Lab Web", platform: "stripe" },
+  ],
+};
+
+function splitRoutes(entitlements: Row[]): Record<string, Reply> {
+  return {
+    "GET /v2/projects": [SPLIT],
+    "GET /v2/projects/1": SPLIT,
+    "GET /v2/entitlements?project_id=1": entitlements,
+    "POST /v2/products": { id: "p9", identifier: "pro_monthly" },
+  };
+}
 
 async function create(
   catalog: Catalog,
@@ -76,6 +103,27 @@ test("an entitlement is created in the project and named with its id", async () 
   assert.deepEqual(said(calls, "success"), ["Created entitlement `pro` e1"]);
 });
 
+test("an entitlement is created on the app --app names, even when another app comes first", async () => {
+  const lab = {
+    ...PROJECT,
+    applications: [
+      { id: "20", name: "Lab Android", platform: "android" },
+      { id: "10", name: "Lab iOS", platform: "ios" },
+    ],
+  };
+  const { writes } = await create(entitlements, { identifier: "pro", app: "20" }, {
+    "GET /v2/projects": [lab],
+    "POST /v2/entitlements": { id: "5", identifier: "pro" },
+  });
+  assert.deepEqual(writes, [
+    { method: "POST", path: "/v2/entitlements", body: { project_id: "1", application_id: "20", identifier: "pro" } },
+  ]);
+
+  const plan = await create(entitlements, { identifier: "pro", app: "20", dryRun: true }, { "GET /v2/projects": [lab] });
+  assert.deepEqual(said(plan.calls, "info"), ['[dry-run] would create entitlement "pro" in Lab, app 20']);
+  assert.deepEqual(plan.writes, []);
+});
+
 test("a product carries its price in minor units, its period and the entitlements it grants", async () => {
   const { result, writes } = await create(
     products,
@@ -90,7 +138,7 @@ test("a product carries its price in minor units, its period and the entitlement
       trialDays: "7",
       entitlement: ["pro", "plus"],
     },
-    { "POST /v2/products": { id: "p1", identifier: "pro_monthly" } },
+    { ...ENTITLEMENTS, "POST /v2/products": { id: "p1", identifier: "pro_monthly" } },
     { json: true },
   );
   assert.deepEqual(writes[0]?.body, {
@@ -99,7 +147,8 @@ test("a product carries its price in minor units, its period and the entitlement
     name: "Pro",
     price: { amount: 999, currency: "EUR" },
     subscription: { period: "month", period_count: 3, trial_period_days: 7 },
-    entitlements: ["pro", "plus"],
+    application_id: "10",
+    entitlements: ["5", "6"],
   });
   assert.deepEqual(result.json, { id: "p1", identifier: "pro_monthly" });
 });
@@ -108,7 +157,7 @@ test("a product's currency defaults to USD, its period count to one, and one ent
   const { writes } = await create(
     products,
     { identifier: "pro_weekly", project: "1", price: 2, period: "week", entitlement: "pro" },
-    { "POST /v2/products": { id: "p2" } },
+    { ...ENTITLEMENTS, "POST /v2/products": { id: "p2" } },
     { json: true },
   );
   assert.deepEqual(writes[0]?.body, {
@@ -116,7 +165,129 @@ test("a product's currency defaults to USD, its period count to one, and one ent
     identifier: "pro_weekly",
     price: { amount: 200, currency: "USD" },
     subscription: { period: "week", period_count: 1 },
-    entitlements: ["pro"],
+    application_id: "10",
+    entitlements: ["5"],
+  });
+});
+
+test("an entitlement on an app listed after another is granted, and the product goes to that app", async () => {
+  const { writes, error } = await create(products, { identifier: "pro_monthly", project: "1", entitlement: ["5"] }, splitRoutes([
+    { id: 5, identifier: "pro", application_id: 20 },
+  ]));
+  assert.equal(error, "");
+  assert.deepEqual(writes, [
+    {
+      method: "POST",
+      path: "/v2/products",
+      body: { project_id: "1", application_id: "20", identifier: "pro_monthly", entitlements: ["5"] },
+    },
+  ]);
+});
+
+test("an entitlement identifier resolves to its id, preferring the product's own app", async () => {
+  const routes = splitRoutes([
+    { id: 5, identifier: "pro", application_id: 20 },
+    { id: 7, identifier: "pro", application_id: 10 },
+    { id: 8, identifier: "plus", application_id: 20 },
+  ]);
+  const ios = await create(products, { identifier: "pro_monthly", app: "10", entitlement: ["pro", "7"] }, routes);
+  assert.deepEqual(ios.writes[0]?.body, {
+    project_id: "1",
+    application_id: "10",
+    identifier: "pro_monthly",
+    entitlements: ["7"],
+  });
+
+  const inferred = await create(products, { identifier: "pro_monthly", project: "1", entitlement: ["pro", "plus"] }, routes);
+  assert.deepEqual(inferred.writes[0]?.body, {
+    project_id: "1",
+    application_id: "20",
+    identifier: "pro_monthly",
+    entitlements: ["5", "8"],
+  });
+});
+
+test("a web product grants entitlements of any iOS or Android app, but not of a web app", async () => {
+  const routes = splitRoutes([
+    { id: 5, identifier: "pro", application_id: 20 },
+    { id: 7, identifier: "plus", application_id: 10 },
+    { id: 9, identifier: "web_only", application_id: 30 },
+  ]);
+  const granted = await create(products, { identifier: "pro_web", app: "30", entitlement: ["pro", "plus"] }, routes);
+  assert.deepEqual(granted.writes[0]?.body, {
+    project_id: "1",
+    application_id: "30",
+    identifier: "pro_web",
+    entitlements: ["5", "7"],
+  });
+
+  const refused = await create(products, { identifier: "pro_web", app: "30", entitlement: ["web_only"] }, routes);
+  assert.equal(
+    refused.error,
+    "Entitlement 9 (web_only) is on Lab Web (Stripe) - Lab Web (Stripe) products grant only iOS or Android entitlements: superwall entitlements create --identifier web_only --app <ios or android app>",
+  );
+  assert.deepEqual(refused.writes, []);
+});
+
+test("an entitlement on another app than the product's is refused before anything is sent", async () => {
+  const { writes, error } = await create(products, { identifier: "pro_monthly", app: "10", entitlement: ["5"] }, splitRoutes([
+    { id: 5, identifier: "pro", application_id: 20 },
+  ]));
+  assert.equal(
+    error,
+    "Entitlement 5 (pro) is on Lab Android (Android), not Lab iOS (iOS) - pass --app 20 to create the product there, or create it on Lab iOS: superwall entitlements create --identifier pro --app 10",
+  );
+  assert.deepEqual(writes, []);
+});
+
+test("entitlements no single app can grant are refused, naming where each one is", async () => {
+  const { writes, error } = await create(products, { identifier: "pro_monthly", project: "1", entitlement: ["5", "7"] }, splitRoutes([
+    { id: 5, identifier: "pro", application_id: 20 },
+    { id: 7, identifier: "plus", application_id: 10 },
+  ]));
+  assert.match(error, /^No app of Lab can grant all of these entitlements: 5 \(pro\) is on Lab Android \(Android\); 7 \(plus\) is on Lab iOS \(iOS\)\. /);
+  assert.match(error, /pass --app <id>/);
+  assert.deepEqual(writes, []);
+});
+
+test("an entitlement the project doesn't have is refused with the command that creates it", async () => {
+  const { writes, error } = await create(products, { identifier: "pro_monthly", project: "1", entitlement: ["gold"] }, ENTITLEMENTS);
+  assert.equal(
+    error,
+    'Lab has no entitlement "gold" - create it first: superwall entitlements create --identifier gold --app <app>',
+  );
+  assert.deepEqual(writes, []);
+});
+
+test("entitlements that can't be listed fail the create instead of reading as none", async () => {
+  const { writes, error } = await create(products, { identifier: "pro_monthly", project: "1", entitlement: ["5"] }, {
+    "GET /v2/projects/1": PROJECT,
+    "GET /v2/entitlements?project_id=1": new ApiError("GET /v2/entitlements", 500, "boom"),
+  });
+  assert.notEqual(error, "");
+  assert.doesNotMatch(error, /has no entitlement/);
+  assert.deepEqual(writes, []);
+});
+
+test("the same entitlement named twice is sent once", async () => {
+  const { writes } = await create(products, { identifier: "pro_monthly", project: "1", entitlement: ["5", "pro"] }, ENTITLEMENTS);
+  assert.deepEqual((writes[0]?.body as { entitlements?: string[] }).entitlements, ["5"]);
+});
+
+test("a product dry run shows the app and the entitlement ids it would send", async () => {
+  const routes = splitRoutes([{ id: 5, identifier: "pro", application_id: 20 }]);
+  const text = await create(products, { identifier: "pro_monthly", project: "1", entitlement: ["pro"], dryRun: true }, routes);
+  assert.deepEqual(said(text.calls, "info"), ['[dry-run] would create product "pro_monthly" in Lab Android (Android) granting entitlement 5']);
+  assert.deepEqual(text.writes, []);
+
+  const plan = await create(products, { identifier: "pro_monthly", project: "1", entitlement: ["pro"], dryRun: true }, routes, { json: true });
+  assert.deepEqual(plan.result.json, {
+    dryRun: true,
+    action: "create",
+    resource: "products",
+    value: "pro_monthly",
+    scope: { projectId: "1", projectName: "Lab", applicationId: "20" },
+    entitlements: ["5"],
   });
 });
 
