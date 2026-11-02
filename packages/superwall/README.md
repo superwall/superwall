@@ -170,7 +170,12 @@ and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedempt
 browser — `{ available }` from the browser's own Apple Pay
 check, to show an Apple Pay button only where the wallet opens; with a product
 also its wallet `status`, `preparing`, `ready` or `unavailable`; `undefined`
-inside the iOS and Android SDKs and in Studio).
+inside the iOS and Android SDKs and in Studio). The wallet opens only for a
+product prepared before the tap: a config `checkout: "applePay"` prepares it on
+its own, and on a `checkout: "sheet"` paywall
+`prefetch(reference, { checkout: "applePay" })` does; a `purchase(reference,
+{ checkout: "applePay" })` of anything else opens the sheet, with `status`
+`unavailable` and `reason` `not_prepared`.
 
 `useUserAttribute(key, parser)` is one user attribute as typed state —
 `useQueryState`'s API with the same parsers, kept by the host SDK across

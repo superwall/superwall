@@ -24,8 +24,17 @@ export default {
   },
   purchase: {
     continue: "Weiter",
+    applePay: "Mit Apple Pay bezahlen",
     restore: "Käufe wiederherstellen",
     failed: "Das hat nicht geklappt. Bitte erneut versuchen.",
+  },
+  wallet: {
+    native: "Apple Pay: in dieser App nicht angeboten (undefined).",
+    none: "Apple Pay: in diesem Browser nicht verfügbar (false).",
+    preparing: "Apple Pay: verfügbar (true), Wallet wird vorbereitet…",
+    ready: "Apple Pay: verfügbar (true), die Wallet öffnet sich beim Tippen.",
+    unavailable:
+      "Apple Pay: verfügbar (true), aber die Wallet ist nicht bereit ({reason}), daher öffnet sich das Kartenformular.",
   },
   restore: {
     restored: "Käufe wiederhergestellt.",

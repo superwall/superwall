@@ -19,6 +19,7 @@ const stripe = vi.hoisted(() => {
         release = resolve;
       });
     },
+    paymentRequest,
     release: () => release?.(),
     loadStripe: vi.fn(async () => {
       await gate;
@@ -32,9 +33,9 @@ const host = vi.hoisted(() => ({ current: "web-paywall" as SuperwallHost }));
 vi.mock("@stripe/stripe-js", () => ({ loadStripe: stripe.loadStripe }));
 vi.mock("../../src/host", () => ({ hostOf: () => host.current }));
 
-const { useApplePay, useSuperwallSession } = await import("../../src/hooks");
-const { applePayFor } = await import("../../src/checkout/flow");
-const { flush, renderWithProvider } = await import("../helpers");
+const { useApplePay, usePurchase, useSuperwallSession } = await import("../../src/hooks");
+const { applePayFor, sessionsFor } = await import("../../src/checkout/flow");
+const { flush, renderWithProvider, testConfig } = await import("../helpers");
 
 const products = [{ reference: "primary", productId: "test:price_1:no-trial" }];
 
@@ -50,8 +51,9 @@ const quote: ElementsCheckoutSession = {
 const withApplePaySession = (canMakePayments: () => unknown) =>
   vi.stubGlobal("ApplePaySession", { canMakePayments });
 
-const render = async <T,>(hook: () => T) => {
+const render = async <T,>(hook: () => T, checkout?: "sheet" | "applePay") => {
   const rendered = renderWithProvider(() => ({ session: useSuperwallSession(), value: hook() }), {
+    ...(checkout === undefined ? {} : { config: { ...testConfig, checkout } }),
     host: { products, device: { platform: "web", publicApiKey: "pk_test" } },
   });
   await flush();
@@ -64,6 +66,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  stripe.paymentRequest.show.mockClear();
 });
 
 describe("useApplePay on each host", () => {
@@ -183,5 +187,50 @@ describe("useApplePay for a product", () => {
     rerender();
     expect(result.current.value).toBe(first);
     expect(first).toEqual({ available: false, status: "unavailable", reason: "prepare_failed" });
+  });
+});
+
+describe("useApplePay with a per-call Apple Pay purchase", () => {
+  it("is not prepared on a sheet paywall, so the purchase falls back to the sheet", async () => {
+    withApplePaySession(() => true);
+    const { result } = await render(
+      () => ({ applePay: useApplePay("primary"), purchase: usePurchase() }),
+      "sheet",
+    );
+    const sessions = sessionsFor(result.current.session);
+    const begin = vi.spyOn(sessions, "begin").mockRejectedValue(new Error("no backend"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(result.current.value.applePay).toMatchObject({
+      status: "unavailable",
+      reason: "not_prepared",
+    });
+    await act(() => result.current.value.purchase.purchase("primary", { checkout: "applePay" }));
+    expect(begin).toHaveBeenCalledWith(expect.objectContaining({ mode: "sheet" }));
+    expect(stripe.paymentRequest.show).not.toHaveBeenCalled();
+  });
+
+  it("is ready once prefetch asks for Apple Pay, and the purchase opens the wallet", async () => {
+    withApplePaySession(() => true);
+    stripe.answer.value = { applePay: true };
+    const { result } = await render(
+      () => ({ applePay: useApplePay("primary"), purchase: usePurchase() }),
+      "sheet",
+    );
+    const sessions = sessionsFor(result.current.session);
+    const prefetch = vi.spyOn(sessions, "prefetch").mockResolvedValue(quote);
+
+    await act(async () => {
+      result.current.value.purchase.prefetch("primary", { checkout: "applePay" });
+      await flush();
+    });
+    expect(prefetch).toHaveBeenCalledWith(expect.objectContaining({ mode: "applePay" }));
+    expect(result.current.value.applePay).toEqual({ available: true, status: "ready" });
+
+    act(() => {
+      void result.current.value.purchase.purchase("primary", { checkout: "applePay" });
+    });
+    await flush();
+    expect(stripe.paymentRequest.show).toHaveBeenCalledOnce();
   });
 });

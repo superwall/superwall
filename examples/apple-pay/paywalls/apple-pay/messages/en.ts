@@ -24,8 +24,17 @@ export default {
   },
   purchase: {
     continue: "Continue",
+    applePay: "Pay with Apple Pay",
     restore: "Restore purchases",
     failed: "That didn't go through. Try again.",
+  },
+  wallet: {
+    native: "Apple Pay: not offered in this app (undefined).",
+    none: "Apple Pay: not available in this browser (false).",
+    preparing: "Apple Pay: available (true), getting the wallet ready…",
+    ready: "Apple Pay: available (true), the wallet opens on tap.",
+    unavailable:
+      "Apple Pay: available (true), but the wallet isn't ready ({reason}), so the card sheet opens.",
   },
   restore: {
     restored: "Purchases restored.",

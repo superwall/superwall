@@ -31,6 +31,12 @@ Apple Pay sheet opens; everywhere else Stripe's in-page sheet does. `prefetch`
 warms the session before the tap, so the wallet opens with nothing to wait
 for. `purchase(selected)` is the same call a native paywall makes.
 
+**The button says whether Apple Pay opens.** `useApplePay(selected)` is
+`{ available }` from the browser's own Apple Pay check on a web host, and
+`undefined` in the iOS and Android SDKs and in Studio. With a product it also
+says whether the wallet is ready for it, so the line under the button reads
+"opens on tap" once the prefetch has prepared it.
+
 **Trials are quoted to Apple.** A free trial or a paid intro offer is sent as a
 recurring payment with a trial line, so the sheet reads "3-Day Free Trial" and
 names the price that follows it.

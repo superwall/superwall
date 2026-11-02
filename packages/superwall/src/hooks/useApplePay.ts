@@ -24,8 +24,12 @@ export type UseApplePayResult = {
 };
 
 /**
- * Whether the wallet is ready to open for one product. The paywall prepares
- * the wallet for a product only when its checkout mode is `"applePay"`.
+ * Whether the wallet is ready to open for one product. The wallet opens only
+ * for a product prepared before the tap: the paywall prepares it on its own
+ * when the config's `checkout` is `"applePay"`, and
+ * `prefetch(product, { checkout: "applePay" })` prepares it when the config's
+ * `checkout` is `"sheet"`. A `purchase()` with `checkout: "applePay"` of a
+ * product nothing prepared opens the sheet instead.
  */
 export type ApplePayProductStatus =
   | {
@@ -40,9 +44,9 @@ export type ApplePayProductStatus =
       /** A `purchase()` of the product with `checkout: "applePay"` falls back to the sheet. */
       status: "unavailable";
       /**
-       * Why. `"not_prepared"` means nothing was prepared for the product, as in
-       * any checkout mode other than `"applePay"`, not that the device cannot
-       * pay. `"apple_pay_not_available"` means Stripe found no Apple Pay on the
+       * Why. `"not_prepared"` means nothing prepared the wallet for the
+       * product yet, not that the device cannot pay: neither the config's
+       * `checkout: "applePay"` nor a `prefetch(product, { checkout: "applePay" })`. `"apple_pay_not_available"` means Stripe found no Apple Pay on the
        * device. Other values name the step that failed.
        */
       reason: string;
@@ -92,8 +96,17 @@ const productStatusReader = (applePay: ApplePay | undefined, reference: string |
  * wallet is ready for that product, and re-renders as the checkout prepares
  * it. `undefined` inside the iOS and Android SDKs and in Studio.
  *
+ * On a paywall whose config `checkout` is `"sheet"`, prefetch the product for
+ * Apple Pay before the tap; with `checkout: "applePay"` the paywall does it on
+ * its own. With any other config `checkout` a Stripe purchase opens the hosted
+ * checkout whatever the call asks for.
+ *
  * ```tsx
- * const applePay = useApplePay();
+ * const { purchase, prefetch } = usePurchase();
+ * const applePay = useApplePay(reference);
+ * useEffect(() => {
+ *   if (applePay?.available) prefetch(reference, { checkout: "applePay" });
+ * }, [applePay?.available, reference]);
  * return applePay?.available ? (
  *   <button onClick={() => purchase(reference, { checkout: "applePay" })}>Apple Pay</button>
  * ) : (
