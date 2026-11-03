@@ -276,10 +276,10 @@ test("a fresh checkout reads the base from the committed lock, so a teammate's p
   await pushSource(input(fake, { superwallDir: alice, files: [shared] }));
   fs.copyFileSync(path.join(alice, "superwall.lock"), path.join(ci, "superwall.lock"));
   await pushSource(
-    input(fake, { superwallDir: alice, files: [shared, file("paywalls/a/app/index.tsx", "a\n")] }),
+    input(fake, { superwallDir: alice, surface: "a", files: [shared, file("paywalls/a/app/index.tsx", "a\n")] }),
   );
   await pushSource(
-    input(fake, { superwallDir: ci, files: [shared, file("paywalls/b/app/index.tsx", "b\n")] }),
+    input(fake, { superwallDir: ci, surface: "b", files: [shared, file("paywalls/b/app/index.tsx", "b\n")] }),
   );
 
   assert.deepEqual(tracked(fake.bare), ["config.ts", "paywalls/a/app/index.tsx", "paywalls/b/app/index.tsx"]);
@@ -363,11 +363,12 @@ test("two projects publishing different paywalls both survive", async () => {
   await pushSource(
     input(fake, {
       superwallDir: alice,
+      surface: "a",
       files: [shared, file("paywalls/a/app/index.tsx", "alice\n")],
     }),
   );
   await pushSource(
-    input(fake, { superwallDir: bob, files: [shared, file("paywalls/b/app/index.tsx", "bob\n")] }),
+    input(fake, { superwallDir: bob, surface: "b", files: [shared, file("paywalls/b/app/index.tsx", "bob\n")] }),
   );
 
   assert.deepEqual(tracked(fake.bare), [
@@ -386,12 +387,12 @@ test("pushing again after being rebased over a teammate keeps the teammate's pay
 
   await pushSource(input(fake, { superwallDir: alice, files: [shared] }));
   await pushSource(input(fake, { superwallDir: bob, files: [shared] }));
-  await pushSource(input(fake, { superwallDir: bob, files: [shared, bobs] }));
+  await pushSource(input(fake, { superwallDir: bob, surface: "b", files: [shared, bobs] }));
   await pushSource(
-    input(fake, { superwallDir: alice, files: [shared, file("paywalls/a/app/index.tsx", "a1\n")] }),
+    input(fake, { superwallDir: alice, surface: "a", files: [shared, file("paywalls/a/app/index.tsx", "a1\n")] }),
   );
   await pushSource(
-    input(fake, { superwallDir: alice, files: [shared, file("paywalls/a/app/index.tsx", "a2\n")] }),
+    input(fake, { superwallDir: alice, surface: "a", files: [shared, file("paywalls/a/app/index.tsx", "a2\n")] }),
   );
 
   assert.deepEqual(tracked(fake.bare), [
@@ -402,24 +403,26 @@ test("pushing again after being rebased over a teammate keeps the teammate's pay
   assert.equal(blob(fake.bare, "paywalls/a/app/index.tsx"), "a2\n");
 });
 
-test("a deletion only removes what this project deleted, not what it never saw", async () => {
+test("a deletion removes the shared files this project deleted, never another paywall's source", async () => {
   const fake = await fakeApi();
   const alice = temp("superwall-alice-");
   const bob = temp("superwall-bob-");
   const shared = file("config.ts", "export default {};\n");
+  const helper = file("components/helper.tsx", "helper\n");
   const old = file("paywalls/old/app/index.tsx", "old\n");
 
-  await pushSource(input(fake, { superwallDir: alice, files: [shared, old] }));
-  await pushSource(input(fake, { superwallDir: bob, files: [shared, old] }));
+  await pushSource(input(fake, { superwallDir: alice, surface: "old", files: [shared, helper, old] }));
+  await pushSource(input(fake, { superwallDir: bob, surface: "old", files: [shared, helper, old] }));
   await pushSource(
     input(fake, {
       superwallDir: alice,
-      files: [shared, old, file("paywalls/new/app/index.tsx", "new\n")],
+      surface: "new",
+      files: [shared, helper, old, file("paywalls/new/app/index.tsx", "new\n")],
     }),
   );
   await pushSource(input(fake, { superwallDir: bob, files: [shared] }));
 
-  assert.deepEqual(tracked(fake.bare), ["config.ts", "paywalls/new/app/index.tsx"]);
+  assert.deepEqual(tracked(fake.bare), ["config.ts", "paywalls/new/app/index.tsx", "paywalls/old/app/index.tsx"]);
 });
 
 test("the same file changed two ways is refused, naming it, and nothing lands", async () => {
@@ -449,12 +452,13 @@ test("a 409 retry lands on top of the other publish instead of reverting it", as
   await pushSource(
     input(fake, {
       superwallDir: alice,
+      surface: "a",
       files: [shared, file("paywalls/a/app/index.tsx", "alice\n")],
     }),
   );
   fake.conflicts = 1;
   await pushSource(
-    input(fake, { superwallDir: bob, files: [shared, file("paywalls/b/app/index.tsx", "bob\n")] }),
+    input(fake, { superwallDir: bob, surface: "b", files: [shared, file("paywalls/b/app/index.tsx", "bob\n")] }),
   );
 
   assert.deepEqual(tracked(fake.bare), [

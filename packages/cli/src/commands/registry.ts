@@ -50,6 +50,7 @@ import { command as create } from "./paywalls/create";
 import { command as dev } from "./paywalls/dev";
 import { command as promote } from "./paywalls/promote";
 import { command as publish } from "./paywalls/publish";
+import { command as pull } from "./paywalls/pull";
 import { command as push } from "./paywalls/push";
 import { command as annotations } from "./main/annotations";
 import { command as apps } from "./main/apps";
@@ -104,9 +105,9 @@ export const GROUPS: readonly Group[] = [
     title: "Paywalls & funnels",
     notes: [
       "push and publish take -m <note> to record why, in the source commit.",
-      "All four take --platform <p> when a project pushes to several platforms.",
+      "build, push, promote, publish and pull take --platform <p> when a project pushes to several platforms.",
     ],
-    commands: [create, dev, build, push, promote, publish],
+    commands: [create, dev, build, push, promote, publish, pull],
   },
   {
     id: "main",

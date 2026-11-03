@@ -14,6 +14,8 @@ import type {
   FrameworkSurface,
 } from "@/core/paywalls/project/framework";
 import { readLock, writeApp, writeBinding } from "@/core/paywalls/project/lock";
+import { runPull } from "@/core/paywalls/pull";
+import { writeFakeFrameworkProject } from "../../../helpers/framework";
 import { ui, useRenderer } from "@/ui";
 import { selectRenderer } from "@/ui/select";
 import { recordingRenderer, type RendererCall } from "../../../helpers/renderer";
@@ -1577,13 +1579,16 @@ test("a source tree over the size limit fails before any version exists", async 
   assert.ok(!fake.calls.includes("versions"));
 });
 
-test("--overwrite-source replaces a remote source this project never synced with", async () => {
+test("--overwrite-source replaces this paywall's source in a repo this project never synced with, keeping shared files it lacks", async () => {
   const project = scaffold();
   const fake = await fakeApi();
   const other = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pipeline-other-"));
   dirs.push(other);
   execFileSync("git", ["clone", "--quiet", fake.bare, other]);
-  fs.writeFileSync(path.join(other, "theirs.ts"), "theirs\n");
+  fs.mkdirSync(path.join(other, "paywalls/plus-upgrade"), { recursive: true });
+  fs.writeFileSync(path.join(other, "paywalls/plus-upgrade/old.ts"), "theirs\n");
+  fs.mkdirSync(path.join(other, "components"), { recursive: true });
+  fs.writeFileSync(path.join(other, "components/theirs.tsx"), "theirs\n");
   execFileSync("git", ["-C", other, "add", "-A"]);
   execFileSync("git", ["-C", other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "-m", "theirs"]);
   execFileSync("git", ["-C", other, "push", "--quiet", "origin", "HEAD:main"]);
@@ -1591,13 +1596,125 @@ test("--overwrite-source replaces a remote source this project never synced with
 
   await assert.rejects(
     runPushPipeline(contextFor(fake.api), { promote: false, load }),
-    /theirs\.ts[\s\S]*--overwrite-source/,
+    /paywalls\/plus-upgrade\/old\.ts[\s\S]*--overwrite-source/,
   );
 
   await runPushPipeline(contextFor(fake.api), { promote: false, overwriteSource: true, load });
   const tracked = execFileSync("git", ["--git-dir", fake.bare, "ls-tree", "-r", "--name-only", "main"], {
     encoding: "utf8",
   });
-  assert.ok(!tracked.includes("theirs.ts"));
+  assert.ok(!tracked.includes("paywalls/plus-upgrade/old.ts"));
+  assert.match(tracked, /components\/theirs\.tsx/);
   assert.match(tracked, /superwall\.lock/);
+});
+
+const shownAt = (bare: string, relative: string): string =>
+  execFileSync("git", ["--git-dir", bare, "show", `main:${relative}`], { encoding: "utf8" });
+
+function teammateCommit(bare: string, files: Record<string, string>): void {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pipeline-teammate-"));
+  dirs.push(work);
+  execFileSync("git", ["clone", "--quiet", bare, work], { stdio: "ignore" });
+  for (const [relative, content] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(work, relative)), { recursive: true });
+    fs.writeFileSync(path.join(work, relative), content);
+  }
+  execFileSync("git", ["-C", work, "add", "-A"]);
+  execFileSync("git", ["-C", work, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "-m", "teammate"]);
+  execFileSync("git", ["-C", work, "push", "--quiet", "origin", "HEAD:main"]);
+}
+
+test("--overwrite-source replaces only the pushed paywall: a teammate's other paywall stays", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+  teammateCommit(fake.bare, {
+    "paywalls/plus-upgrade/config.ts": "theirs\n",
+    "paywalls/b/config.ts": "b\n",
+  });
+  fs.mkdirSync(path.join(project.superwallDir, "paywalls/plus-upgrade"), { recursive: true });
+  fs.writeFileSync(path.join(project.superwallDir, "paywalls/plus-upgrade/config.ts"), "mine\n");
+  const load = async () => frameworkFor(project);
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: false, load }),
+    /paywalls\/plus-upgrade\/config\.ts[\s\S]*superwall pull[\s\S]*--overwrite-source/,
+  );
+  await runPushPipeline(contextFor(fake.api), { promote: false, overwriteSource: true, load });
+
+  assert.equal(shownAt(fake.bare, "paywalls/plus-upgrade/config.ts"), "mine\n");
+  assert.equal(shownAt(fake.bare, "paywalls/b/config.ts"), "b\n");
+});
+
+test("with no sync point, publishing one paywall keeps a teammate's other paywall and promotes", async () => {
+  const project = scaffold(["a"]);
+  const fake = await fakeApi();
+  teammateCommit(fake.bare, { "paywalls/b/config.ts": "b\n" });
+  fs.mkdirSync(path.join(project.superwallDir, "paywalls/a"), { recursive: true });
+  fs.writeFileSync(path.join(project.superwallDir, "paywalls/a/config.ts"), "a\n");
+
+  await runPushPipeline(contextFor(fake.api), { promote: true, load: async () => frameworkFor(project) });
+
+  assert.ok(fake.calls.includes("promote"));
+  assert.equal(shownAt(fake.bare, "paywalls/b/config.ts"), "b\n");
+  assert.equal(shownAt(fake.bare, "paywalls/a/config.ts"), "a\n");
+  assert.equal(readLock(project.superwallDir).paywalls.a?.ios?.sourcePending, undefined);
+});
+
+test("Nick's case: a teammate's newer version blocks publish until `superwall pull`, then publish and promote land", async () => {
+  const fake = await fakeApi();
+  const root = writeFakeFrameworkProject();
+  dirs.push(root);
+  const jom = scaffold(["pro", "b"]);
+  fs.copyFileSync(path.join(root, "package.json"), path.join(jom.superwallDir, "package.json"));
+  for (const id of ["pro", "b"]) {
+    fs.mkdirSync(path.join(jom.superwallDir, "paywalls", id), { recursive: true });
+    fs.writeFileSync(path.join(jom.superwallDir, "paywalls", id, "config.ts"), `jom ${id} v3\n`);
+  }
+  await runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(jom) });
+
+  writeApp(root, "ios", "42");
+  writeBinding(root, "paywall", "pro", "ios", { paywallId: "2080", snapshot: "nick-v2" });
+  fs.mkdirSync(path.join(root, "paywalls/pro"), { recursive: true });
+  fs.writeFileSync(path.join(root, "paywalls/pro/config.ts"), "nick pro v2\n");
+  const nick: FrameworkProject = {
+    root,
+    superwallDir: root,
+    marker: "package.json",
+    packageName: "acme-paywalls",
+    surfaces: [surfaceOf("pro")],
+    diagnostics: [],
+  };
+  const load = async () => frameworkFor(nick);
+  const ctx = { interactive: false } as Parameters<typeof runPull>[0];
+
+  fake.calls.length = 0;
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: true, load }),
+    /paywalls\/pro\/config\.ts[\s\S]*Run `superwall pull`/,
+  );
+  assert.ok(!fake.calls.includes("promote"), "a version with no source never goes live");
+  assert.equal(readLock(root).paywalls.pro?.ios?.sourcePending, 7);
+
+  await assert.rejects(
+    runPull(ctx, { args: { dir: root }, flags: { platform: [], theirs: false } }),
+    /both changed paywalls\/pro\/config\.ts, so nothing was pulled/,
+  );
+  assert.equal(fs.readFileSync(path.join(root, "paywalls/pro/config.ts"), "utf8"), "nick pro v2\n");
+
+  await runPull(ctx, { args: { dir: root }, flags: { platform: [], theirs: true } });
+  assert.equal(fs.readFileSync(path.join(root, "paywalls/pro/config.ts"), "utf8"), "jom pro v3\n");
+  assert.equal(fs.readFileSync(path.join(root, "paywalls/b/config.ts"), "utf8"), "jom b v3\n");
+  const pulled = readLock(root);
+  assert.equal(pulled.paywalls.b?.ios?.paywallId, "2081");
+  assert.equal(pulled.paywalls.pro?.ios?.sourcePending, 7, "the unfinished version stays pending");
+  assert.ok(pulled.sources?.["org1-app42"]);
+
+  fs.writeFileSync(path.join(root, "paywalls/pro/config.ts"), "nick pro v4 on jom v3\n");
+  fake.calls.length = 0;
+  await runPushPipeline(contextFor(fake.api), { promote: true, load });
+
+  assert.ok(fake.calls.includes("promote"));
+  assert.equal(shownAt(fake.bare, "paywalls/pro/config.ts"), "nick pro v4 on jom v3\n");
+  assert.equal(shownAt(fake.bare, "paywalls/b/config.ts"), "jom b v3\n");
+  assert.equal(readLock(root).paywalls.pro?.ios?.sourcePending, undefined);
 });
