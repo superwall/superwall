@@ -35,27 +35,51 @@ export function classifyPath(relative: string, scope: SourceScope): PathClass {
   return surface.kind === scope.kind && surface.id === scope.id ? "own" : "other";
 }
 
+export const isSurfaceRoot = (top: string): boolean => SURFACE_DIRS[top] !== undefined;
+
 export const isOtherSurfaceDir = (top: string, child: string, scope: SourceScope): boolean => {
   const kind = SURFACE_DIRS[top];
   return kind !== undefined && !(kind === scope.kind && child === scope.id);
 };
 
-const readable = (text: string | undefined): LockFile | undefined => {
-  if (text === undefined) return undefined;
+export class SourceLockUnreadableError extends Error {
+  constructor(reason: string) {
+    super(
+      `The source repo's superwall.lock can't be read (${reason}), so its bindings for other paywalls can't be kept. ` +
+        "Rerun with --overwrite-source to replace it with yours.",
+    );
+  }
+}
+
+type Readable = { lock: LockFile } | { reason: string };
+
+const readable = (text: string): Readable => {
   try {
-    return parseLock(text, LOCK_FILE);
+    return { lock: parseLock(text, LOCK_FILE) };
   } catch (error) {
     if (error instanceof NewerLockError) throw error;
-    return undefined;
+    return { reason: error instanceof Error ? error.message : String(error) };
   }
 };
 
-export function mergeLockText(theirs: string | undefined, mine: string, scope: SourceScope): string {
+export function mergeLockText(
+  theirs: string | undefined,
+  mine: string,
+  scope: SourceScope,
+  options: { replaceUnreadable?: boolean } = {},
+): string {
   const own = readable(mine);
-  const other = readable(theirs);
-  if (!own) return mine;
-  if (!other) return formatLock(withoutSources(own));
+  if (!("lock" in own)) return mine;
+  if (theirs === undefined) return formatLock(withoutSources(own.lock));
+  const read = readable(theirs);
+  if (!("lock" in read)) {
+    if (!options.replaceUnreadable) throw new SourceLockUnreadableError(read.reason);
+    return formatLock(withoutSources(own.lock));
+  }
+  return mergeLocks(read.lock, own.lock, scope);
+}
 
+function mergeLocks(other: LockFile, own: LockFile, scope: SourceScope): string {
   const section = (lock: LockFile) => (scope.kind === "paywall" ? lock.paywalls : lock.funnels);
   const merged: LockFile = {
     version: 1,

@@ -14,6 +14,7 @@ import {
   SourceDivergedError,
 } from "@/core/paywalls/source/git";
 import type { SourceFile } from "@/core/paywalls/source/source";
+import { SourceLockUnreadableError } from "@/core/paywalls/source/scope";
 import { formatLock, type SurfaceBindings } from "@/core/paywalls/project/lock";
 
 const dirs: string[] = [];
@@ -303,7 +304,7 @@ test("with no sync point, a remote that already differs is refused, naming the f
 
   const error = await pushSourceTree({
     access: access(repo.remote),
-    files: [file("config.ts", "mine\n")],
+    files: [file("config.ts", "mine\n"), ...Array.from({ length: 6 }, (_, i) => file(`f${i}.ts`, "y\n"))],
     message: { ...message, version: 8 },
   }).then(
     () => undefined,
@@ -343,9 +344,13 @@ test("a sync point the remote never had is no sync point at all", async () => {
   );
 });
 
-test("overwrite replaces the remote tree on top of its history, ignoring the sync point", async () => {
+test("overwrite replaces the pushed paywall on top of the remote's history, ignoring the sync point", async () => {
   const repo = bareRepo();
-  const theirs = await pushSourceTree({ access: access(repo.remote), files: [file("theirs.ts", "t\n")], message });
+  const theirs = await pushSourceTree({
+    access: access(repo.remote),
+    files: [file("paywalls/plus-upgrade/old.ts", "t\n"), file("theirs.ts", "t\n")],
+    message,
+  });
 
   const result = await pushSourceTree({
     access: access(repo.remote),
@@ -357,7 +362,7 @@ test("overwrite replaces the remote tree on top of its history, ignoring the syn
 
   assert.equal(result.status, "committed");
   assert.equal(result.syncedTo, result.commitSha);
-  assert.deepEqual(treeFiles(repo.dir), ["mine.ts"]);
+  assert.deepEqual(treeFiles(repo.dir), ["mine.ts", "theirs.ts"]);
   const parent = execFileSync("git", ["--git-dir", repo.dir, "rev-parse", "main^"], { encoding: "utf8" }).trim();
   assert.equal(parent, theirs.commitSha, "history is kept, never force-pushed away");
 });
@@ -559,6 +564,8 @@ test("overwrite replaces only the pushed paywall and the shared files, keeping e
     lockWith({ a: bound("1"), b: bound("2") }),
   ]);
 
+  seed(repo, [file("components/teammate.tsx", "theirs\n")]);
+
   const result = await pushSourceTree({
     access: access(repo.remote),
     overwrite: true,
@@ -568,6 +575,7 @@ test("overwrite replaces only the pushed paywall and the shared files, keeping e
 
   assert.equal(result.status, "committed");
   assert.deepEqual(treeFiles(repo.dir), [
+    "components/teammate.tsx",
     "funnels/f/config.ts",
     "package.json",
     "paywalls/a/app/index.tsx",
@@ -684,4 +692,65 @@ test("a push without a lock or types file of its own keeps the ones the repo alr
 
   assert.equal(fs.readFileSync(path.join(dir, "superwall.lock"), "utf8"), "theirs\n");
   assert.equal(fs.readFileSync(path.join(dir, "superwall.d.ts"), "utf8"), "theirs types\n");
+});
+
+test("with no sync point, a shared file this checkout lacks stays in the repo and never refuses", async () => {
+  const repo = bareRepo();
+  seed(repo, [file("components/teammate.tsx", "theirs\n"), file("paywalls/b/app/index.tsx", "b\n")]);
+
+  const result = await pushSourceTree({
+    access: access(repo.remote),
+    files: [file("paywalls/a/app/index.tsx", "a\n")],
+    message: messageFor("a", 8),
+  });
+
+  assert.equal(result.status, "committed");
+  assert.deepEqual(treeFiles(repo.dir), ["components/teammate.tsx", "paywalls/a/app/index.tsx", "paywalls/b/app/index.tsx"]);
+});
+
+test("materializing on the remote keeps shared files and clears a path whose type changed", () => {
+  const dir = temp("superwall-tree-");
+  fs.mkdirSync(path.join(dir, ".git"));
+  for (const [relative, content] of [
+    ["components/teammate.tsx", "theirs"],
+    ["paywalls/readme.md", "readme"],
+    ["paywalls/a/gone.ts", "gone"],
+    ["theme", "a file"],
+    ["config", "a file"],
+  ] as const) {
+    fs.mkdirSync(path.dirname(path.join(dir, relative)), { recursive: true });
+    fs.writeFileSync(path.join(dir, relative), content);
+  }
+  fs.mkdirSync(path.join(dir, "assets/logo.png"), { recursive: true });
+
+  materializeSourceTree(
+    dir,
+    [file("paywalls/a/app/index.tsx", "a"), file("theme/colors.ts", "c"), file("assets/logo.png", "png")],
+    scopeA,
+    { onRemote: true },
+  );
+
+  const read = (relative: string) => fs.readFileSync(path.join(dir, relative), "utf8");
+  assert.equal(read("components/teammate.tsx"), "theirs");
+  assert.equal(read("paywalls/readme.md"), "readme");
+  assert.equal(read("config"), "a file");
+  assert.equal(fs.existsSync(path.join(dir, "paywalls/a/gone.ts")), false);
+  assert.equal(read("theme/colors.ts"), "c");
+  assert.equal(read("assets/logo.png"), "png");
+});
+
+test("an unreadable lock in the repo refuses the push, and overwrite replaces it with mine", async () => {
+  const repo = bareRepo();
+  seed(repo, [file("superwall.lock", "{ truncated"), file("paywalls/b/app/index.tsx", "b\n")]);
+  const files = [file("paywalls/a/app/index.tsx", "a\n"), lockWith({ a: bound("9") })];
+
+  await assert.rejects(
+    pushSourceTree({ access: access(repo.remote), files, message: messageFor("a", 8) }),
+    (error: unknown) => error instanceof SourceLockUnreadableError && /--overwrite-source/.test(error.message),
+  );
+  assert.equal(blob(repo.dir, "superwall.lock"), "{ truncated");
+
+  await pushSourceTree({ access: access(repo.remote), overwrite: true, files, message: messageFor("a", 8) });
+  assert.equal(JSON.parse(blob(repo.dir, "superwall.lock")).paywalls.a.ios.paywallId, "9");
+  assert.equal(blob(repo.dir, "paywalls/b/app/index.tsx"), "b\n");
 });

@@ -1579,13 +1579,16 @@ test("a source tree over the size limit fails before any version exists", async 
   assert.ok(!fake.calls.includes("versions"));
 });
 
-test("--overwrite-source replaces a remote source this project never synced with", async () => {
+test("--overwrite-source replaces this paywall's source in a repo this project never synced with, keeping shared files it lacks", async () => {
   const project = scaffold();
   const fake = await fakeApi();
   const other = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pipeline-other-"));
   dirs.push(other);
   execFileSync("git", ["clone", "--quiet", fake.bare, other]);
-  fs.writeFileSync(path.join(other, "theirs.ts"), "theirs\n");
+  fs.mkdirSync(path.join(other, "paywalls/plus-upgrade"), { recursive: true });
+  fs.writeFileSync(path.join(other, "paywalls/plus-upgrade/old.ts"), "theirs\n");
+  fs.mkdirSync(path.join(other, "components"), { recursive: true });
+  fs.writeFileSync(path.join(other, "components/theirs.tsx"), "theirs\n");
   execFileSync("git", ["-C", other, "add", "-A"]);
   execFileSync("git", ["-C", other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "-m", "theirs"]);
   execFileSync("git", ["-C", other, "push", "--quiet", "origin", "HEAD:main"]);
@@ -1593,14 +1596,15 @@ test("--overwrite-source replaces a remote source this project never synced with
 
   await assert.rejects(
     runPushPipeline(contextFor(fake.api), { promote: false, load }),
-    /theirs\.ts[\s\S]*--overwrite-source/,
+    /paywalls\/plus-upgrade\/old\.ts[\s\S]*--overwrite-source/,
   );
 
   await runPushPipeline(contextFor(fake.api), { promote: false, overwriteSource: true, load });
   const tracked = execFileSync("git", ["--git-dir", fake.bare, "ls-tree", "-r", "--name-only", "main"], {
     encoding: "utf8",
   });
-  assert.ok(!tracked.includes("theirs.ts"));
+  assert.ok(!tracked.includes("paywalls/plus-upgrade/old.ts"));
+  assert.match(tracked, /components\/theirs\.tsx/);
   assert.match(tracked, /superwall\.lock/);
 });
 

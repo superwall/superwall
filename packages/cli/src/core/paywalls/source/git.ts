@@ -10,6 +10,7 @@ import {
   classifyPath,
   DERIVED_FILES,
   isOtherSurfaceDir,
+  isSurfaceRoot,
   LOCK_FILE,
   mergeLockText,
   type SourceScope,
@@ -112,6 +113,7 @@ export function materializeSourceTree(
   dir: string,
   files: readonly SourceFile[],
   scope: SourceScope,
+  options: { onRemote?: boolean; overwrite?: boolean } = {},
 ): void {
   const theirs = new Map<string, Buffer>();
   for (const derived of DERIVED_FILES) {
@@ -119,23 +121,34 @@ export function materializeSourceTree(
     if (fs.existsSync(existing)) theirs.set(derived, fs.readFileSync(existing));
   }
   const remove = (target: string) => fs.rmSync(target, { recursive: true, force: true });
+  const keepShared = options.onRemote === true;
 
   for (const entry of fs.readdirSync(dir)) {
     if (entry === ".git") continue;
     const top = path.join(dir, entry);
-    if (!fs.lstatSync(top).isDirectory()) {
+    const isDir = fs.lstatSync(top).isDirectory();
+    if (keepShared && !(isDir && isSurfaceRoot(entry))) continue;
+    if (!isDir) {
       remove(top);
       continue;
     }
     for (const child of fs.readdirSync(top)) {
       const inner = path.join(top, child);
-      if (isOtherSurfaceDir(entry, child, scope) && fs.lstatSync(inner).isDirectory()) continue;
+      const childIsDir = fs.lstatSync(inner).isDirectory();
+      if (isOtherSurfaceDir(entry, child, scope) && childIsDir) continue;
+      if (keepShared && !childIsDir) continue;
       remove(inner);
     }
   }
 
   const write = (relative: string, data: Buffer | string) => {
     const file = path.join(dir, relative);
+    const parts = relative.split("/");
+    for (let depth = 1; depth < parts.length; depth++) {
+      const ancestor = path.join(dir, ...parts.slice(0, depth));
+      if (fs.existsSync(ancestor) && !fs.lstatSync(ancestor).isDirectory()) remove(ancestor);
+    }
+    if (fs.existsSync(file) && fs.lstatSync(file).isDirectory()) remove(file);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, data);
   };
@@ -151,6 +164,7 @@ export function materializeSourceTree(
           theirs.get(LOCK_FILE)?.toString("utf8"),
           file.content.toString("utf8"),
           scope,
+          { replaceUnreadable: options.overwrite },
         ),
       );
     } else {
@@ -237,7 +251,10 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     const base = input.base && head && !input.overwrite ? await revParse(input.base) : undefined;
     if (base && base !== head) await run(["checkout", "--quiet", "--detach", base]);
 
-    materializeSourceTree(dir, input.files, scope);
+    materializeSourceTree(dir, input.files, scope, {
+      onRemote: head !== undefined && !base,
+      overwrite: input.overwrite,
+    });
 
     await run(["add", "-A"]);
     const dirty = (await run(["status", "--porcelain"])).trim();
@@ -395,8 +412,7 @@ export class PullConflictError extends Error {
   constructor(readonly files: readonly string[]) {
     super(
       `Your project and the source repo both changed ${listFiles(files)}, so nothing was pulled. ` +
-        "Rerun with --theirs to take the source repo's version of them (your edits to them are lost), " +
-        "or back up your copies and rerun with --theirs.",
+        "To keep your edits, copy those files somewhere first; then rerun with --theirs to take the source repo's version of them.",
     );
   }
 }

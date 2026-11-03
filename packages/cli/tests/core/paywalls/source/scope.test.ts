@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { formatLock, NewerLockError, type LockFile } from "@/core/paywalls/project/lock";
-import { classifyPath, isOtherSurfaceDir, mergeLockText, surfaceOf } from "@/core/paywalls/source/scope";
+import {
+  classifyPath,
+  isOtherSurfaceDir,
+  isSurfaceRoot,
+  mergeLockText,
+  SourceLockUnreadableError,
+  surfaceOf,
+} from "@/core/paywalls/source/scope";
 
 const scope = { kind: "paywall" as const, id: "a" };
 
@@ -95,13 +102,21 @@ test("a pushed surface the pusher has no entry or origin for is dropped from the
   assert.equal(result.origins, undefined);
 });
 
-test("with no lock in the repo, or an unreadable one, the merged lock is mine", () => {
+test("with no lock in the repo the merged lock is mine", () => {
   const mine = lock({ paywalls: { a: { ios: { paywallId: "1" } } }, sources: { repo: "a".repeat(40) } });
   const expected = formatLock({ version: 1, apps: mine.apps, paywalls: mine.paywalls, funnels: {} });
 
   assert.equal(mergeLockText(undefined, formatLock(mine), scope), expected);
-  assert.equal(mergeLockText("not json", formatLock(mine), scope), expected);
-  assert.equal(mergeLockText("<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> x\n", formatLock(mine), scope), expected);
+});
+
+test("an unreadable lock in the repo is refused, never read as having no bindings", () => {
+  const mine = lock({ paywalls: { a: { ios: { paywallId: "1" } } }, sources: { repo: "a".repeat(40) } });
+  const expected = formatLock({ version: 1, apps: mine.apps, paywalls: mine.paywalls, funnels: {} });
+
+  for (const theirs of ['{"version":1,"apps":{"ios":"42"},"paywalls":{"b"', "<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> x\n"]) {
+    assert.throws(() => mergeLockText(theirs, formatLock(mine), scope), SourceLockUnreadableError);
+    assert.equal(mergeLockText(theirs, formatLock(mine), scope, { replaceUnreadable: true }), expected);
+  }
 });
 
 test("a lock from a newer CLI in the repo stops the merge rather than being downgraded", () => {
@@ -112,4 +127,10 @@ test("a lock from a newer CLI in the repo stops the merge rather than being down
 
 test("a lock of mine that can't be read is passed through untouched", () => {
   assert.equal(mergeLockText(formatLock(lock()), "broken", scope), "broken");
+});
+
+test("only paywalls and funnels are surface roots", () => {
+  assert.equal(isSurfaceRoot("paywalls"), true);
+  assert.equal(isSurfaceRoot("funnels"), true);
+  assert.equal(isSurfaceRoot("components"), false);
 });

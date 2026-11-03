@@ -12,6 +12,7 @@ import { writeFakeFrameworkProject } from "../../helpers/framework";
 
 const apiKey = process.env.SUPERWALL_API_KEY;
 const dirs: string[] = [];
+const headless = { headless: "true" };
 
 afterEach(() => {
   restoreFetch();
@@ -172,7 +173,7 @@ test("an app with no local binding is pulled through its first paywall on Superw
   const { remote } = remoteWith({ "paywalls/b/config.ts": "b\n" });
   const root = project({ version: 1, apps: { ios: "42" }, paywalls: {}, funnels: {} });
   const log = useFetch([
-    { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 777 }] } },
+    { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 777, metadata: headless }] } },
     sourceAccess(remote),
   ]);
 
@@ -198,7 +199,7 @@ test("an app with no paywall yet, or an empty source repo, has nothing to pull",
   assert.deepEqual(result.said("error"), []);
   const steps = result.said("step").join("\n");
   assert.match(steps, /ios app 42: its source repo is empty/);
-  assert.match(steps, /android app 7: no paywall on Superwall yet/);
+  assert.match(steps, /android app 7: no code paywall on Superwall yet/);
   assert.equal(readLock(root).sources, undefined);
 });
 
@@ -239,7 +240,7 @@ test("pull --app sets up superwall/ from the app's source, with its bindings and
   const root = temp("superwall-pull-clone-");
   const log = useFetch([
     projects(),
-    { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 208540 }] } },
+    { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 208540, metadata: headless }] } },
     sourceAccess(remote),
   ]);
 
@@ -269,7 +270,7 @@ test("pull --app binds the app even when its source repo has no superwall.lock",
   fs.mkdirSync(path.join(root, "superwall"));
   useFetch([
     projects("android"),
-    { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 5 }] } },
+    { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 5, metadata: headless }] } },
     sourceAccess(remote),
   ]);
 
@@ -309,6 +310,33 @@ test("pull --app refuses a folder that already has a project or files, and touch
   assert.deepEqual(log, []);
 });
 
+test("an editor paywall listed first is skipped: only a code paywall has a source repo", async () => {
+  process.env.SUPERWALL_API_KEY = "sk_live_x";
+  const { remote } = remoteWith({ "paywalls/b/config.ts": "b\n" });
+  const root = project({ version: 1, apps: { ios: "42" }, paywalls: {}, funnels: {} });
+  const log = useFetch([
+    {
+      match: "/v2/paywalls?application_id=42",
+      body: { data: [{ id: 900 }, { id: 901, metadata: headless }] },
+    },
+    sourceAccess(remote),
+  ]);
+
+  const result = await runLine(`pull ${root}`);
+
+  assert.deepEqual(result.said("error"), []);
+  assert.ok(log.some((entry) => entry.url.includes("/v2/paywalls/901/source-access")));
+  assert.ok(!log.some((entry) => entry.url.includes("/v2/paywalls/900/source-access")));
+
+  const fresh = temp("superwall-pull-editor-");
+  useFetch([projects(), { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 900 }] } }]);
+  assert.match(
+    (await runLine(`pull ${fresh} --app 42`)).said("error").join(),
+    /no code paywall on Superwall yet/,
+  );
+  assert.equal(fs.existsSync(path.join(fresh, "superwall")), false);
+});
+
 test("pull --app with an unknown app, no paywall or an empty source repo stops without creating superwall/", async () => {
   process.env.SUPERWALL_API_KEY = "sk_live_x";
   const bare = temp("superwall-pull-empty-");
@@ -323,14 +351,14 @@ test("pull --app with an unknown app, no paywall or an empty source repo stops w
   useFetch([projects(), { match: "/v2/paywalls?application_id=42", body: { data: [] } }]);
   assert.match(
     (await runLine(`pull ${none} --app 42`)).said("error").join(),
-    /no paywall on Superwall yet[\s\S]*superwall create --app 42/,
+    /no code paywall on Superwall yet[\s\S]*superwall create --app 42/,
   );
   assert.equal(fs.existsSync(path.join(none, "superwall")), false);
 
   const empty = temp("superwall-pull-emptyrepo-");
   useFetch([
     projects(),
-    { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 5 }] } },
+    { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 5, metadata: headless }] } },
     sourceAccess(`file://${bare}`),
   ]);
   assert.match(

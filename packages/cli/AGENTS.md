@@ -147,8 +147,11 @@ skill.
   being pushed (`source/scope.ts`): it starts from the sync point, or the
   remote `HEAD` without one, and only `<kind>s/<id>/` and the shared files
   outside every surface dir come from the pusher; other surfaces stay as the
-  repo has them. `superwall.lock` merges per entry and `superwall.d.ts` takes
-  the pusher's, so a conflict in only those two resolves itself. Only the
+  repo has them, and without a sync point (or with `--overwrite-source`) so
+  does a shared file the pusher lacks. `superwall.lock` merges per entry (an
+  unreadable one in the repo refuses, unless `--overwrite-source`) and
+  `superwall.d.ts` takes the pusher's, so a conflict in only those two
+  resolves itself. Only the
   pusher's own paths can refuse, naming those files and pointing at
   `superwall pull`; `--overwrite-source` replaces only them. `superwall pull`
   merges the source repo into the project (files, bindings, sync point),

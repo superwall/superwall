@@ -4,7 +4,7 @@ import pc from "picocolors";
 import type { CommandContext } from "@/program/command";
 import type { SuperwallApi } from "@/core/api/client";
 import { appNotFound, findApplication } from "@/core/api/lookup";
-import { listAppPaywalls, mintSourceAccess } from "@/core/api/resources";
+import { listAppPaywalls, mintSourceAccess, type HeadlessPaywallRef } from "@/core/api/resources";
 import { PLATFORMS, requirePlatform } from "@/core/paywalls/binding/apps";
 import { parsePlatformFlags } from "@/core/paywalls/binding/targets";
 import { requireProject, resolveProjectDir } from "@/core/paywalls/pipeline/selection";
@@ -143,8 +143,15 @@ async function paywallFor(
 ): Promise<string | undefined> {
   const bound = boundPaywall(lock, app.platforms);
   if (bound) return bound;
-  const [first] = await listAppPaywalls(api, app.applicationId);
-  return first?.id;
+  return (await firstHeadlessPaywall(api, app.applicationId))?.id;
+}
+
+async function firstHeadlessPaywall(
+  api: SuperwallApi,
+  applicationId: string,
+): Promise<HeadlessPaywallRef | undefined> {
+  const paywalls = await listAppPaywalls(api, applicationId);
+  return paywalls.find((paywall) => paywall.metadata.headless === "true");
 }
 
 const SHOWN = 8;
@@ -190,10 +197,10 @@ async function runClone(
   if (!found) throw appNotFound(appRef);
   const applicationId = String(found.app.id);
   const platform = requirePlatform(found.app);
-  const [paywall] = await listAppPaywalls(api, applicationId);
+  const paywall = await firstHeadlessPaywall(api, applicationId);
   if (!paywall) {
     throw new Error(
-      `App ${applicationId} has no paywall on Superwall yet, so it has no source to pull — ` +
+      `App ${applicationId} has no code paywall on Superwall yet, so it has no source to pull — ` +
         `start one with \`superwall create --app ${applicationId}\`.`,
     );
   }
@@ -258,7 +265,7 @@ export async function runPull(
     const label = `${app.platforms.join(", ")} app ${app.applicationId}`;
     const paywallId = await paywallFor(api, readLock(superwallDir), app);
     if (!paywallId) {
-      ui.step(`${label}: no paywall on Superwall yet — nothing to pull`);
+      ui.step(`${label}: no code paywall on Superwall yet — nothing to pull`);
       continue;
     }
     const access = await mintSourceAccess(api, paywallId);
