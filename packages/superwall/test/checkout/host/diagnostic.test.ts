@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hostEvents } from "../../../src/checkout/host";
-import { inAppBrowser, inAppBrowserOf } from "../../../src/checkout/host/browser";
+import { inAppBrowser, inAppBrowserOf } from "../../../src/browser";
 
 const IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_7_1 like Mac OS X) AppleWebKit/605.1.15";
 
@@ -8,6 +8,7 @@ const context = { checkoutContextId: "ctx_1", productIdentifier: "live:price_1:i
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("inAppBrowserOf", () => {
@@ -27,23 +28,24 @@ describe("inAppBrowserOf", () => {
     expect(inAppBrowserOf(`${IOS} Mobile/15E148 Safari Line/14.10.0`)).toBe("line");
   });
 
-  it("is none in a plain browser", () => {
+  it("names nothing in a plain browser", () => {
     expect(
       inAppBrowserOf(`${IOS} (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1`),
-    ).toBe("none");
-    expect(inAppBrowserOf("")).toBe("none");
+    ).toBeUndefined();
+    expect(inAppBrowserOf("")).toBeUndefined();
   });
 
-  it("reads the page's own user agent, and answers none without a navigator", () => {
+  it("reads the page's own user agent, and names nothing without a navigator", () => {
     vi.stubGlobal("navigator", { userAgent: `${IOS} Instagram 450.0.0` });
     expect(inAppBrowser()).toBe("instagram");
     vi.stubGlobal("navigator", undefined);
-    expect(inAppBrowser()).toBe("none");
+    expect(inAppBrowser()).toBeUndefined();
   });
 });
 
 describe("the Stripe checkout diagnostic", () => {
   it("goes to a web host, with the context, rounded ms and the in-app browser", () => {
+    vi.spyOn(console, "info").mockImplementation(() => {});
     vi.stubGlobal("navigator", { userAgent: `${IOS} Instagram 450.0.0` });
     const post = vi.fn();
     const events = hostEvents(post);
@@ -72,10 +74,36 @@ describe("the Stripe checkout diagnostic", () => {
     ]);
   });
 
-  it("stays off the native SDKs, which cannot decode it", () => {
-    vi.stubGlobal("webkit", { messageHandlers: { paywallMessageHandler: {} } });
+  it("says none for the in-app browser on the wire when the page is in a plain browser", () => {
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.stubGlobal("navigator", { userAgent: `${IOS} Version/26.0 Mobile/15E148 Safari/604.1` });
     const post = vi.fn();
     hostEvents(post).diagnostic(context, "tap", 0);
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ in_app_browser: "none" }));
+  });
+
+  it("stays off the native SDKs, which cannot decode it, but still logs it in the page", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.stubGlobal("webkit", { messageHandlers: { paywallMessageHandler: {} } });
+    const post = vi.fn();
+    hostEvents(post).diagnostic(context, "ready_timeout", 10_000.4);
     expect(post).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith(
+      "[superwall] checkout ready_timeout +10000ms",
+      expect.objectContaining({
+        stage: "ready_timeout",
+        checkout_context_id: "ctx_1",
+        host: "ios-sdk",
+      }),
+    );
+  });
+
+  it("logs every stage in the page on a web host too", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    hostEvents(vi.fn()).diagnostic(context, "stripe_error", 812, "IntegrationError: nope");
+    expect(info).toHaveBeenCalledWith(
+      "[superwall] checkout stripe_error +812ms",
+      expect.objectContaining({ error: "IntegrationError: nope", host: "browser" }),
+    );
   });
 });

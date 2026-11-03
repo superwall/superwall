@@ -1,6 +1,6 @@
 import type { SuperwallSession } from "@superwall/runtime";
 import { hostOf, WEB_HOSTS } from "../../host";
-import { inAppBrowser } from "./browser";
+import { inAppBrowser } from "../../browser";
 import type {
   DiscountValidationResult,
   PostCheckoutResolution,
@@ -89,16 +89,21 @@ export const hostEvents = (post: (message: HostMessage) => void) => ({
         : {}),
     }),
   diagnostic: (ctx: HostContext, stage: DiagnosticStage, ms: number, error?: string) => {
-    if (!WEB_HOSTS.has(hostOf())) return;
-    post({
+    const diagnostic = {
       event_name: "stripe_checkout_diagnostic",
       checkout_context_id: ctx.checkoutContextId,
       product_identifier: ctx.productIdentifier,
       stage,
       ms: Math.round(ms),
-      in_app_browser: inAppBrowser(),
+      in_app_browser: inAppBrowser() ?? "none",
       ...(error === undefined ? {} : { error }),
+    } as const;
+    console.info(`[superwall] checkout ${stage} +${diagnostic.ms}ms`, {
+      ...diagnostic,
+      host: hostOf(),
     });
+    if (!WEB_HOSTS.has(hostOf())) return;
+    post(diagnostic);
   },
   openHostedPage: (url: string) => post({ event_name: "open_url_external", url }),
   redeem: (link: string) => post({ event_name: "open_deep_link", link }),
