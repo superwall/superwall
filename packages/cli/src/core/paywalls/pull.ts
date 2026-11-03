@@ -25,7 +25,7 @@ import {
   writeProjectTypes,
 } from "@/core/paywalls/project/types";
 import { readSourceBase, writeSourceBase } from "@/core/paywalls/source/base";
-import { pullSourceTree, type PulledChange } from "@/core/paywalls/source/git";
+import { pullSourceTree, type PulledChange, type SourceAccess } from "@/core/paywalls/source/git";
 import { collectSourceFiles } from "@/core/paywalls/source/source";
 import { VERSION } from "@/environment";
 import { ui } from "@/ui";
@@ -180,6 +180,47 @@ export function cloneTarget(root: string): string {
   return superwallDir;
 }
 
+export async function pullInto(
+  superwallDir: string,
+  access: SourceAccess,
+  theirs: boolean,
+): Promise<{ written: string[]; skipped: string[] } | undefined> {
+  const collected = await collectSourceFiles(superwallDir);
+  if (!collected.ok) throw new Error(collected.reason);
+  const { files } = collected;
+  const pulled = await pullSourceTree({
+    access,
+    files,
+    base: readSourceBase(superwallDir, access.repo),
+    theirs,
+  });
+  if (pulled.status === "empty") return undefined;
+  const lock = mergePulledLock(readLock(superwallDir), pulled.lock);
+  const applied = applyPulledChanges(
+    superwallDir,
+    pulled.changes,
+    new Set(files.map((file) => file.path)),
+  );
+  writeLock(superwallDir, lock);
+  writeSourceBase(superwallDir, access.repo, pulled.head);
+  return applied;
+}
+
+export async function cloneInto(
+  superwallDir: string,
+  access: SourceAccess,
+  apps: Record<string, string>,
+): Promise<string[] | undefined> {
+  const pulled = await pullSourceTree({ access, files: [] });
+  if (pulled.status === "empty") return undefined;
+  fs.mkdirSync(superwallDir, { recursive: true });
+  const { written } = applyPulledChanges(superwallDir, pulled.changes, new Set());
+  if (pulled.types !== undefined) fs.writeFileSync(path.join(superwallDir, TYPES_FILE), pulled.types);
+  writeLock(superwallDir, mergePulledLock({ version: 1, apps, paywalls: {}, funnels: {} }, pulled.lock));
+  writeSourceBase(superwallDir, access.repo, pulled.head);
+  return written;
+}
+
 async function runClone(
   appRef: string,
   root: string,
@@ -207,26 +248,13 @@ async function runClone(
 
   ui.intro(`Superwall ${pc.dim(`v${VERSION}`)}`);
   const access = await mintSourceAccess(api, paywall.id);
-  const pulled = await pullSourceTree({ access, files: [] });
-  if (pulled.status === "empty") {
+  const written = await cloneInto(superwallDir, access, { [platform]: applicationId });
+  if (written === undefined) {
     throw new Error(
       `App ${applicationId}'s source repo is empty — nobody has pushed from code yet. ` +
         `Start a project with \`superwall create --app ${applicationId}\`.`,
     );
   }
-
-  fs.mkdirSync(superwallDir, { recursive: true });
-  const { written } = applyPulledChanges(superwallDir, pulled.changes, new Set());
-  if (pulled.types !== undefined)
-    fs.writeFileSync(path.join(superwallDir, TYPES_FILE), pulled.types);
-  const bound: LockFile = {
-    version: 1,
-    apps: { [platform]: applicationId },
-    paywalls: {},
-    funnels: {},
-  };
-  writeLock(superwallDir, mergePulledLock(bound, pulled.lock));
-  writeSourceBase(superwallDir, access.repo, pulled.head);
 
   const manager = await detectPackageManager(superwallDir);
   const where = path.relative(process.cwd(), superwallDir) || ".";
@@ -269,28 +297,12 @@ export async function runPull(
       continue;
     }
     const access = await mintSourceAccess(api, paywallId);
-    const collected = await collectSourceFiles(superwallDir);
-    if (!collected.ok) throw new Error(collected.reason);
-    const { files } = collected;
-    const pulled = await pullSourceTree({
-      access,
-      files,
-      base: readSourceBase(superwallDir, access.repo),
-      theirs: flags.theirs,
-    });
-    if (pulled.status === "empty") {
+    const pulled = await pullInto(superwallDir, access, flags.theirs);
+    if (pulled === undefined) {
       ui.step(`${label}: its source repo is empty — nothing to pull yet`);
       continue;
     }
-
-    const lock = mergePulledLock(readLock(superwallDir), pulled.lock);
-    const { written, skipped } = applyPulledChanges(
-      superwallDir,
-      pulled.changes,
-      new Set(files.map((file) => file.path)),
-    );
-    writeLock(superwallDir, lock);
-    writeSourceBase(superwallDir, access.repo, pulled.head);
+    const { written, skipped } = pulled;
     if (written.length > 0) changed = true;
 
     if (skipped.length > 0) {

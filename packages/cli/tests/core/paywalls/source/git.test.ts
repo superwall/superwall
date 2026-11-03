@@ -361,10 +361,11 @@ test("overwrite replaces the pushed paywall on top of the remote's history, igno
   });
 
   assert.equal(result.status, "committed");
-  assert.equal(result.syncedTo, result.commitSha);
   assert.deepEqual(treeFiles(repo.dir), ["mine.ts", "theirs.ts"]);
-  const parent = execFileSync("git", ["--git-dir", repo.dir, "rev-parse", "main^"], { encoding: "utf8" }).trim();
+  const parent = execFileSync("git", ["--git-dir", repo.dir, "rev-parse", "main^1"], { encoding: "utf8" }).trim();
   assert.equal(parent, theirs.commitSha, "history is kept, never force-pushed away");
+  assert.equal(result.syncedTo, headOf(repo.dir, "main^2"), "the sync point is this project's own tree");
+  assert.deepEqual(treeFiles(repo.dir, result.syncedTo ?? ""), ["mine.ts"]);
 });
 
 test("a conflict names what to do with the commands that exist", () => {
@@ -459,7 +460,8 @@ test("with no sync point, publishing one paywall onto a repo holding a teammate'
   });
 
   assert.equal(result.status, "committed");
-  assert.equal(result.syncedTo, result.commitSha);
+  assert.equal(result.syncedTo, headOf(repo.dir, "main^2"), "the sync point is this project's own tree");
+  assert.deepEqual(treeFiles(repo.dir, result.syncedTo ?? ""), ["package.json", "paywalls/a/app/index.tsx", "superwall.lock"]);
   assert.deepEqual(treeFiles(repo.dir), ["package.json", "paywalls/a/app/index.tsx", "paywalls/b/app/index.tsx", "superwall.lock"]);
   assert.equal(blob(repo.dir, "paywalls/b/app/index.tsx"), "b by a teammate\n");
   const lock = JSON.parse(blob(repo.dir, "superwall.lock"));
@@ -753,4 +755,34 @@ test("an unreadable lock in the repo refuses the push, and overwrite replaces it
   await pushSourceTree({ access: access(repo.remote), overwrite: true, files, message: messageFor("a", 8) });
   assert.equal(JSON.parse(blob(repo.dir, "superwall.lock")).paywalls.a.ios.paywallId, "9");
   assert.equal(blob(repo.dir, "paywalls/b/app/index.tsx"), "b\n");
+});
+
+test("with no sync point, a push that changes nothing still records this project's tree, so the next edit merges", async () => {
+  const repo = bareRepo();
+  const mine = file("paywalls/a/app/index.tsx", "a\n");
+  const remoteHead = seed(repo, [mine, file("paywalls/b/app/index.tsx", "b\n")]);
+
+  const first = await pushSourceTree({ access: access(repo.remote), files: [mine], message: messageFor("a", 8) });
+  assert.equal(first.status, "unchanged");
+  assert.deepEqual(treeFiles(repo.dir), ["paywalls/a/app/index.tsx", "paywalls/b/app/index.tsx"]);
+  assert.equal(headOf(repo.dir, "main^1"), remoteHead);
+  assert.equal(first.syncedTo, headOf(repo.dir, "main^2"));
+
+  const second = await pushSourceTree({
+    access: access(repo.remote),
+    base: first.syncedTo,
+    files: [file("paywalls/a/app/index.tsx", "a2\n")],
+    message: messageFor("a", 9),
+  });
+  assert.equal(second.status, "committed");
+  assert.equal(blob(repo.dir, "paywalls/a/app/index.tsx"), "a2\n");
+  assert.equal(blob(repo.dir, "paywalls/b/app/index.tsx"), "b\n");
+});
+
+test("with no sync point, a remote whose whole tree matches this project is adopted as is", async () => {
+  const repo = bareRepo();
+  const files = [file("paywalls/a/app/index.tsx", "a\n")];
+  const remoteHead = seed(repo, files);
+  const result = await pushSourceTree({ access: access(repo.remote), files, message: messageFor("a", 8) });
+  assert.deepEqual(result, { commitSha: remoteHead, status: "unchanged", syncedTo: remoteHead });
 });

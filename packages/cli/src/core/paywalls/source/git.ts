@@ -250,27 +250,39 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     const head = await revParse("HEAD");
     const base = input.base && head && !input.overwrite ? await revParse(input.base) : undefined;
     if (base && base !== head) await run(["checkout", "--quiet", "--detach", base]);
+    const messageFile = path.join(dir, ".git", "SUPERWALL_COMMITMSG");
+    fs.writeFileSync(messageFile, buildCommitMessage(input.message));
 
-    materializeSourceTree(dir, input.files, scope, {
-      onRemote: head !== undefined && !base,
-      overwrite: input.overwrite,
-    });
+    const onRemote = head !== undefined && !base;
+    const local = onRemote ? await snapshotLocal(run, dir, input.files, head, committing) : undefined;
+
+    materializeSourceTree(dir, input.files, scope, { onRemote, overwrite: input.overwrite });
 
     await run(["add", "-A"]);
     const dirty = (await run(["status", "--porcelain"])).trim();
-    if (dirty === "") return { commitSha: head ?? "", status: "unchanged", syncedTo: base ?? head };
-    if (head && !base && !input.overwrite) {
+    if (dirty === "" && local === undefined) {
+      return { commitSha: head ?? "", status: "unchanged", syncedTo: base ?? head };
+    }
+    if (onRemote && !input.overwrite) {
       const refused = overwrittenPaths(
         await run(["diff", "--cached", "--name-status", "--no-renames", "-z", "HEAD"]),
       );
       if (refused.length > 0) throw new SourceDivergedError(refused);
     }
 
-    const messageFile = path.join(dir, ".git", "SUPERWALL_COMMITMSG");
-    fs.writeFileSync(messageFile, buildCommitMessage(input.message));
-    await run(["commit", "--quiet", "--no-verify", "-F", messageFile], { env: committing });
+    if (local !== undefined && head !== undefined) {
+      const tree = (await run(["write-tree"])).trim();
+      const merged = (
+        await run(["commit-tree", tree, "-p", head, "-p", local, "-F", messageFile], { env: committing })
+      ).trim();
+      await run(["reset", "--quiet", "--hard", merged]);
+    } else {
+      await run(["commit", "--quiet", "--no-verify", "-F", messageFile], { env: committing });
+    }
     const own = await revParse("HEAD");
     if (!own) throw new Error("The source commit was not created.");
+    const syncedTo = local ?? own;
+    const status = dirty === "" ? "unchanged" : "committed";
     const isAncestor = (ancestor: string, of: string) =>
       run(["merge-base", "--is-ancestor", ancestor, of]).then(
         () => true,
@@ -282,7 +294,7 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
       const upstream = parent ? await revParse(`origin/${access.branch}`) : undefined;
       if (upstream && upstream !== parent) {
         if (await isAncestor(own, upstream))
-          return { commitSha: upstream, status: "unchanged", syncedTo: own };
+          return { commitSha: upstream, status: "unchanged", syncedTo };
         await run(["reset", "--quiet", "--hard", own]);
         await mergeUpstream(`origin/${access.branch}`, messageFile, {
           run,
@@ -294,7 +306,7 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
       }
       try {
         await run(["push", "origin", `HEAD:${access.branch}`]);
-        return { commitSha: (await revParse("HEAD")) ?? own, status: "committed", syncedTo: own };
+        return { commitSha: (await revParse("HEAD")) ?? own, status, syncedTo };
       } catch (error) {
         if (!parent || attempt >= PUSH_ATTEMPTS || !isRejected(error)) throw error;
         await run(["fetch", "--quiet", "origin", access.branch]);
@@ -303,6 +315,27 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+async function snapshotLocal(
+  run: Run,
+  dir: string,
+  files: readonly SourceFile[],
+  head: string,
+  committing: NodeJS.ProcessEnv,
+): Promise<string | undefined> {
+  replaceTree(dir, files);
+  await run(["add", "-A"]);
+  const tree = (await run(["write-tree"])).trim();
+  const remote = (await run(["rev-parse", `${head}^{tree}`])).trim();
+  await run(["reset", "--quiet", "--hard", head]);
+  await run(["clean", "--quiet", "-d", "-x", "--force"]);
+  if (tree === remote) return undefined;
+  const snapshot = await run(
+    ["commit-tree", tree, "-m", "superwall: the project this push was made from"],
+    { env: committing },
+  );
+  return snapshot.trim();
 }
 
 function overwrittenPaths(nameStatus: string): string[] {
