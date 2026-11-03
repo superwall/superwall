@@ -28,7 +28,7 @@ export const command = defineCommand({
     },
     overwriteSource: {
       type: "boolean",
-      describe: "Replace the remote source with yours even though it can't be merged",
+      describe: "Replace the pushed paywalls' source in the app's repo with yours even though it can't be merged - other paywalls and funnels stay",
     },
   },
   examples: [

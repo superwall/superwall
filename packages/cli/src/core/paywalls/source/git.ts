@@ -180,7 +180,7 @@ export class SourceConflictError extends Error {
   constructor(readonly files: readonly string[]) {
     super(
       `Someone else published changes to ${listFiles(files)} since this project last synced. ` +
-        "Pull their commits into this project, then publish again — or rerun with --overwrite-source to replace their version with yours.",
+        "Run `superwall pull` to bring their changes into this project, then publish again — or rerun with --overwrite-source to replace this paywall's source with yours.",
     );
   }
 }
@@ -189,7 +189,7 @@ export class SourceDivergedError extends Error {
   constructor(readonly files: readonly string[]) {
     super(
       `The source repo differs from this project in ${listFiles(files)}, and superwall.lock records no sync point to merge from. ` +
-        "Pull the latest superwall.lock, or rerun with --overwrite-source to replace the remote source with yours.",
+        "Run `superwall pull` to merge the source repo into this project, then publish again — or rerun with --overwrite-source to replace this paywall's source with yours.",
     );
   }
 }

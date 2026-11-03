@@ -4,7 +4,7 @@
 > bin: the framework
 > package (`packages/superwall`) declares the `superwall`/`sw` binaries, and
 > its `bin/superwall.js` calls `main()` from this package's `src/entry.ts`.
-> The paywall commands (`create`/`dev`/`push`/`promote`/`publish`) are
+> The paywall commands (`create`/`dev`/`push`/`promote`/`publish`/`pull`) are
 > registered in `src/commands/registry.ts` like every other command. Never import
 > `superwall` (the framework) from this package — the dependency direction
 > is framework → cli only (paywall commands load the framework dynamically
@@ -55,7 +55,7 @@ skills branch it reads). Skills declare the channel they ship on; commands,
 flags and examples that exist only on a channel carry `channel: "next"` where
 they register (`visible()`, `onChannel()`, `summaryOn`), and off it they do not
 exist: unknown command, not hidden. The framework commands
-(`create`/`dev`/`build`/`push`/`promote`/`publish`, `migrate <paywall-id>`,
+(`create`/`dev`/`build`/`push`/`promote`/`publish`/`pull`, `migrate <paywall-id>`,
 `migrate --screen`) are public beta and carry no channel; `next` is for future
 betas. On `next` every skills source (`npx skills add`, the picker listing, the
 staleness SHA) points at the skills repo's `next` branch instead of `main`, and
@@ -143,8 +143,17 @@ skill.
   the old `.superwall/source.json` is still read and moved there) and
   advances as soon as the git push lands, before the link call, which alone
   is retried on 5xx. A 409 means another publish landed first, so the whole
-  push reruns on top of it. With no sync point, a remote whose tree differs
-  is refused, naming the files, unless `--overwrite-source`. Git runs with
+  push reruns on top of it. Each source commit is scoped to the surface
+  being pushed (`source/scope.ts`): it starts from the sync point, or the
+  remote `HEAD` without one, and only `<kind>s/<id>/` and the shared files
+  outside every surface dir come from the pusher; other surfaces stay as the
+  repo has them. `superwall.lock` merges per entry and `superwall.d.ts` takes
+  the pusher's, so a conflict in only those two resolves itself. Only the
+  pusher's own paths can refuse, naming those files and pointing at
+  `superwall pull`; `--overwrite-source` replaces only them. `superwall pull`
+  merges the source repo into the project (files, bindings, sync point),
+  changes nothing on a conflict unless `--theirs`, and keeps a local
+  `sourcePending`; `pull --app` clones it into an empty folder. Git runs with
   hooks, signing and autocrlf off and the caller's `GIT_DIR`-style variables
   dropped, so the user's setup never changes what is committed.
 - **Help is one renderer** (`src/program/help.ts`): the root page, topic pages
@@ -162,7 +171,7 @@ skill.
   `content/docs/agents/cli.mdx` › Upgrading from 1.x), and the `superwall`
   skill changes in the same release (it checks `superwall --version`).
 - **Kill commands that don't earn their place.** A command that duplicates
-  another's output (scan vs doctor) or has no user (pull/plan) gets deleted,
+  another's output (scan vs doctor) or has no user (plan) gets deleted,
   not deprecated.
 - **Errors are short.** An unknown command, flag or argument, or a bad value,
   is refused by the parser before anything runs: `✗ message` + "Run superwall

@@ -74,6 +74,7 @@ superwall dev         # open the studio and preview everything live
 superwall push        # build and push immutable versions (production untouched)
 superwall promote     # point production at a pushed version
 superwall publish     # push and promote in one step
+superwall pull        # bring teammates' paywalls from the app's source repo into this project
 ```
 
 Every paywall and web funnel is a mini React app: file-based routes, your
@@ -218,13 +219,25 @@ records a note in the source commit that rides along with every version, and
 Renames are resolved, never guessed — interactively, or with
 `push --rename old=new` in CI.
 
-A push also saves the project's source to the app's repo. It applies your
-changes on top of whatever teammates have published since your last push
-(the commit it last synced to is in `superwall.lock`, so commit it), so two
-people working on different paywalls never undo each other. If you both
-changed the same file, or the repo has changes this project never synced
-with, the push stops and names the files rather than overwriting their work;
-`--overwrite-source` replaces the remote source with yours when you mean to.
+A push also saves the source of each paywall it pushes to the app's repo.
+Only that paywall's directory and the files outside every paywall and funnel
+(your `package.json`, shared components) come from you; every other paywall
+and funnel stays as the repo has it, and `superwall.lock` keeps their entries.
+Your changes land on top of whatever teammates have published since your last
+push (the commit it last synced to is in `superwall.lock`), so two people
+working on different paywalls never undo each other, even from a checkout
+that never synced. If a teammate changed a file you are pushing, the push
+stops and names only those files: run `superwall pull` and publish again, or
+`--overwrite-source` to replace that paywall's source with yours. The
+overwrite never touches other paywalls.
+
+`superwall pull` merges the app's source repo into your project: teammates'
+paywalls, their `superwall.lock` bindings and the sync point. Your own edits
+stay. If you both changed a file it names the files and changes nothing;
+`pull --theirs` takes the repo's copy of them. A version whose source never
+landed stays pending, so `promote` still won't ship it. With no project,
+`superwall pull --app <id> [dir]` creates `superwall/` from the app's source,
+so you can work on an app's paywalls without its codebase or GitHub.
 
 The full reference — assets, localization, trials, transitions, web
 checkout, troubleshooting — lives at
@@ -609,7 +622,7 @@ commands that are not in the stable set yet, and the matching agent skills
 from the `next` branch of the skills repo. Everything else is unchanged.
 Export it in your shell rc so every terminal and agent sees it. Unset it to
 go back to the stable set. The framework (`create`, `dev`, `build`, `push`,
-`promote`, `publish`, `migrate <paywall-id>`, `migrate --screen`) is in public
+`promote`, `publish`, `pull`, `migrate <paywall-id>`, `migrate --screen`) is in public
 beta on the stable set and needs no channel.
 
 ## Telemetry
@@ -631,7 +644,7 @@ packages/cli/
 │   ├── program/          the command system: defineCommand, parser, help, lifecycle
 │   ├── commands/         registry.ts + one directory per section of `superwall --help`
 │   │   ├── workflows/          integrate, review, migrate
-│   │   ├── paywalls/           create, dev, build, push, promote, publish
+│   │   ├── paywalls/           create, dev, build, push, promote, publish, pull
 │   │   ├── main/               bootstrap, apps, products, entitlements, campaigns, paywalls, users, webhooks, events, annotations
 │   │   ├── analytics/          query
 │   │   ├── api/                docs, get, post, patch, delete

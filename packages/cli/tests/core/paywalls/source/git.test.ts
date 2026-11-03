@@ -366,8 +366,15 @@ test("a conflict names what to do with the commands that exist", () => {
   const error = new SourceConflictError(["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "f.ts"]);
 
   assert.match(error.message, /a\.ts, b\.ts, c\.ts, d\.ts, e\.ts and 1 more/);
-  assert.match(error.message, /Pull their commits into this project/);
+  assert.match(error.message, /superwall pull/);
   assert.match(error.message, /--overwrite-source/);
+});
+
+test("a diverged source points at superwall pull before the overwrite", () => {
+  const error = new SourceDivergedError(["paywalls/a/index.tsx"]);
+
+  assert.match(error.message, /paywalls\/a\/index\.tsx/);
+  assert.match(error.message, /Run `superwall pull`.*--overwrite-source/);
 });
 
 test("the user's git hooks, signing and line-ending settings never touch the source push", async () => {

@@ -306,6 +306,29 @@ test("the source push commits the tree with the platform's message", async () =>
   assert.doesNotMatch(tracked, /\.superwall-manifest\.json/);
 });
 
+test("publishing from the studio onto a source repo holding a teammate's paywall lands and keeps theirs", async () => {
+  const api = await startApi();
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-studio-teammate-"));
+  dirs.push(work);
+  execFileSync("git", ["clone", "--quiet", api.bare, work], { stdio: "ignore" });
+  fs.mkdirSync(path.join(work, "paywalls/b"), { recursive: true });
+  fs.writeFileSync(path.join(work, "paywalls/b/config.ts"), "b\n");
+  execFileSync("git", ["-C", work, "add", "-A"]);
+  execFileSync("git", ["-C", work, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "-m", "teammate"]);
+  execFileSync("git", ["-C", work, "push", "--quiet", "origin", "HEAD:main"]);
+  const project = boundProject();
+  fs.mkdirSync(path.join(project.superwallDir, "paywalls/plus-upgrade"), { recursive: true });
+  fs.writeFileSync(path.join(project.superwallDir, "paywalls/plus-upgrade/config.ts"), "mine\n");
+
+  const result = await createStudioActions(framework, project).run("publish", surface);
+
+  assert.deepEqual(result, { ok: true, version: 7, live: true });
+  const show = (relative: string) =>
+    execFileSync("git", ["--git-dir", api.bare, "show", `main:${relative}`], { encoding: "utf8" });
+  assert.equal(show("paywalls/b/config.ts"), "b\n");
+  assert.equal(show("paywalls/plus-upgrade/config.ts"), "mine\n");
+});
+
 test("a rejected source push fails the action and production is never repointed", async () => {
   const api = await startApi({ rejectSource: true });
   const project = boundProject();
