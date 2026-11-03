@@ -5,7 +5,13 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import { cloneInto, pullInto } from "@/core/paywalls/pull";
-import { readLock, writeBinding, writeLock, type SurfaceKind } from "@/core/paywalls/project/lock";
+import {
+  NewerLockError,
+  readLock,
+  writeBinding,
+  writeLock,
+  type SurfaceKind,
+} from "@/core/paywalls/project/lock";
 import { readSourceBase, writeSourceBase } from "@/core/paywalls/source/base";
 import {
   PullConflictError,
@@ -41,7 +47,13 @@ function sourceRepo(): Remote {
   execFileSync("git", ["init", "--quiet", "--bare", "--initial-branch", "main", dir]);
   return {
     dir,
-    access: { repo: REPO, remote: `file://${dir}`, branch: "main", token: "art_v1_collab?expires=1790000000", tokenId: "tok_1" },
+    access: {
+      repo: REPO,
+      remote: `file://${dir}`,
+      branch: "main",
+      token: "art_v1_collab?expires=1790000000",
+      tokenId: "tok_1",
+    },
   };
 }
 
@@ -59,7 +71,9 @@ const headOf = (remote: Remote): string | undefined => {
 function repoTree(remote: Remote): Map<string, string> {
   const tree = new Map<string, string>();
   if (headOf(remote) === undefined) return tree;
-  for (const file of gitDir(remote, "ls-tree", "-r", "--name-only", "-z", "main").split("\0").filter(Boolean)) {
+  for (const file of gitDir(remote, "ls-tree", "-r", "--name-only", "-z", "main")
+    .split("\0")
+    .filter(Boolean)) {
     tree.set(file, gitDir(remote, "show", `main:${file}`));
   }
   return tree;
@@ -146,7 +160,14 @@ class Teammate {
       base: this.base(),
       overwrite: options.overwrite,
       files: collected.files,
-      message: { kind, surface: id, version: pushes, paywallId: "1", applicationId: "42", framework: "0.4.2" },
+      message: {
+        kind,
+        surface: id,
+        version: pushes,
+        paywallId: "1",
+        applicationId: "42",
+        framework: "0.4.2",
+      },
     });
     if (pushed.syncedTo) writeSourceBase(this.dir, REPO, pushed.syncedTo);
     return pushed;
@@ -203,7 +224,8 @@ test("Nick's case: Jom's v3 refuses Nick's publish, pull --theirs brings it in, 
   await refusedWithoutChange(
     nick,
     () => nick.push("a"),
-    (error) => error instanceof SourceConflictError && error.files.join() === "paywalls/a/index.tsx",
+    (error) =>
+      error instanceof SourceConflictError && error.files.join() === "paywalls/a/index.tsx",
   );
   await refusedWithoutChange(
     nick,
@@ -243,14 +265,19 @@ test("teammates on different paywalls push in any order without pulling, and nob
   const tree = repoTree(remote);
   for (const id of ["a", "b", "c"]) {
     assert.equal(tree.get(`paywalls/${id}/index.tsx`), paywall(`${id} round 4`));
-    for (let round = 1; round <= 4; round++) assert.ok(tree.has(`paywalls/${id}/app/step-${round}.tsx`));
+    for (let round = 1; round <= 4; round++)
+      assert.ok(tree.has(`paywalls/${id}/app/step-${round}.tsx`));
   }
   const lock = JSON.parse(tree.get("superwall.lock") ?? "{}");
   assert.deepEqual(Object.keys(lock.paywalls).sort(), ["a", "b", "c"]);
 
   for (const who of people) await who.pull();
   for (const who of people) {
-    assert.deepEqual(sourceFiles(snapshot(who.dir)), sourceFiles(tree), `${who.name} converged on the repo`);
+    assert.deepEqual(
+      sourceFiles(snapshot(who.dir)),
+      sourceFiles(tree),
+      `${who.name} converged on the repo`,
+    );
     assert.deepEqual(Object.keys(readLock(who.dir).paywalls).sort(), ["a", "b", "c"]);
   }
   assertNoConflictMarkers("repo", tree);
@@ -266,7 +293,9 @@ test("two edits to different lines of one shared file merge on push and on pull"
   await jom.pull();
   assert.equal(jom.read("components/theme.ts"), lines(20));
 
-  jom.write("components/theme.ts", lines(20, { 15: "jom's line" })).write("paywalls/b/index.tsx", paywall("b"));
+  jom
+    .write("components/theme.ts", lines(20, { 15: "jom's line" }))
+    .write("paywalls/b/index.tsx", paywall("b"));
   await jom.push("b");
   nick.write("components/theme.ts", lines(20, { 2: "nick's line" }));
   await nick.push("a");
@@ -276,7 +305,10 @@ test("two edits to different lines of one shared file merge on push and on pull"
 
   nick.write("components/theme.ts", lines(20, { 2: "nick's line", 5: "nick again" }));
   await nick.pull();
-  assert.equal(nick.read("components/theme.ts"), lines(20, { 2: "nick's line", 5: "nick again", 15: "jom's line" }));
+  assert.equal(
+    nick.read("components/theme.ts"),
+    lines(20, { 2: "nick's line", 5: "nick again", 15: "jom's line" }),
+  );
   assert.equal(nick.read("paywalls/b/index.tsx"), paywall("b"));
 });
 
@@ -316,11 +348,14 @@ test("a teammate's deletion against your edit, and two different new files at on
   jom.remove("paywalls/a/extra.ts").write("paywalls/a/new.ts", "jom's new\n");
   await jom.push("a");
 
-  nick.write("paywalls/a/extra.ts", "nick edited extra\n").write("paywalls/a/new.ts", "nick's new\n");
+  nick
+    .write("paywalls/a/extra.ts", "nick edited extra\n")
+    .write("paywalls/a/new.ts", "nick's new\n");
   await assert.rejects(
     nick.pull(),
     (error: unknown) =>
-      error instanceof PullConflictError && error.files.join() === "paywalls/a/extra.ts,paywalls/a/new.ts",
+      error instanceof PullConflictError &&
+      error.files.join() === "paywalls/a/extra.ts,paywalls/a/new.ts",
   );
   await assert.rejects(nick.push("a"), SourceConflictError);
 
@@ -387,7 +422,11 @@ test("pushes racing each other both land, each merged on top of the other", asyn
   nick.write("paywalls/a/index.tsx", paywall("a1"));
   jom.write("paywalls/b/index.tsx", paywall("b1"));
   ana.write("funnels/c/index.tsx", paywall("c1"));
-  const results = await Promise.all([nick.push("a"), jom.push("b"), ana.push("c", { kind: "funnel" })]);
+  const results = await Promise.all([
+    nick.push("a"),
+    jom.push("b"),
+    ana.push("c", { kind: "funnel" }),
+  ]);
   assert.ok(results.every((result) => result.status === "committed"));
 
   const tree = repoTree(remote);
@@ -404,7 +443,9 @@ test("--overwrite-source on a diverged paywall replaces only that paywall, and t
   const [nick, jom] = people;
   assert.ok(nick && jom);
 
-  jom.write("paywalls/a/index.tsx", paywall("jom a")).write("paywalls/b/index.tsx", paywall("jom b"));
+  jom
+    .write("paywalls/a/index.tsx", paywall("jom a"))
+    .write("paywalls/b/index.tsx", paywall("jom b"));
   jom.write("components/button.tsx", "jom button\n");
   await jom.push("a");
   await jom.push("b");
@@ -413,7 +454,8 @@ test("--overwrite-source on a diverged paywall replaces only that paywall, and t
   await refusedWithoutChange(
     nick,
     () => nick.push("a"),
-    (error) => error instanceof SourceDivergedError && error.files.join() === "paywalls/a/index.tsx",
+    (error) =>
+      error instanceof SourceDivergedError && error.files.join() === "paywalls/a/index.tsx",
   );
   await nick.push("a", { overwrite: true });
 
@@ -452,16 +494,25 @@ test("a binary both sides changed is a conflict, never a corrupted merge", async
   const [nick, jom] = people;
   assert.ok(nick && jom);
 
-  nick.write("paywalls/a/index.tsx", paywall("a")).write("paywalls/a/hero.png", Buffer.from([0, 1, 2, 3, 0, 255]));
+  nick
+    .write("paywalls/a/index.tsx", paywall("a"))
+    .write("paywalls/a/hero.png", Buffer.from([0, 1, 2, 3, 0, 255]));
   await nick.push("a");
   await jom.pull();
   jom.write("paywalls/a/hero.png", Buffer.from([0, 9, 9, 9, 0, 255]));
   await jom.push("a");
 
   nick.write("paywalls/a/hero.png", Buffer.from([0, 7, 7, 7, 0, 255]));
-  await assert.rejects(nick.pull(), (error: unknown) => error instanceof PullConflictError && error.files.join() === "paywalls/a/hero.png");
+  await assert.rejects(
+    nick.pull(),
+    (error: unknown) =>
+      error instanceof PullConflictError && error.files.join() === "paywalls/a/hero.png",
+  );
   await nick.pull({ theirs: true });
-  assert.deepEqual(fs.readFileSync(path.join(nick.dir, "paywalls/a/hero.png")), Buffer.from([0, 9, 9, 9, 0, 255]));
+  assert.deepEqual(
+    fs.readFileSync(path.join(nick.dir, "paywalls/a/hero.png")),
+    Buffer.from([0, 9, 9, 9, 0, 255]),
+  );
 });
 
 test("a paywall and a funnel with the same id are separate surfaces", async () => {
@@ -520,68 +571,167 @@ test("pulling twice is a no-op the second time, and pushing straight after a pul
   assert.equal(base, headOf(remote));
 });
 
+test("publishing one paywall with no sync point keeps your unpublished edits to a teammate's paywall through the next pull", async () => {
+  const { remote, people } = team("jom", "nick");
+  const [jom, nick] = people;
+  assert.ok(jom && nick);
+
+  jom.write("paywalls/b/index.tsx", paywall("b by jom"));
+  await jom.push("b");
+
+  nick.write("paywalls/a/index.tsx", paywall("a by nick"));
+  nick.write("paywalls/b/index.tsx", paywall("b, nick's unpublished draft"));
+  assert.equal((await nick.push("a")).status, "committed");
+  assert.equal(repoTree(remote).get("paywalls/b/index.tsx"), paywall("b by jom"));
+
+  await nick.pull();
+  assert.equal(nick.read("paywalls/b/index.tsx"), paywall("b, nick's unpublished draft"));
+
+  jom.write("paywalls/b/index.tsx", paywall("b v2 by jom"));
+  await jom.push("b");
+  await refusedWithoutChange(
+    nick,
+    () => nick.pull(),
+    (error) => error instanceof PullConflictError && error.files.join() === "paywalls/b/index.tsx",
+  );
+});
+
+test("a shared file that a teammate turns into a folder, and back, pulls cleanly", async () => {
+  const { people } = team("jom", "nick");
+  const [jom, nick] = people;
+  assert.ok(jom && nick);
+
+  jom.write("paywalls/a/index.tsx", paywall("a"));
+  jom.write("theme", "plain file\n");
+  await jom.push("a");
+  await nick.pull();
+  assert.equal(nick.read("theme"), "plain file\n");
+
+  jom.remove("theme").write("theme/colors.ts", "export const red = 1;\n");
+  await jom.push("a");
+  await nick.pull();
+  assert.equal(nick.read("theme/colors.ts"), "export const red = 1;\n");
+
+  jom.remove("theme").write("theme", "a file again\n");
+  await jom.push("a");
+  await nick.pull();
+  assert.equal(nick.read("theme"), "a file again\n");
+});
+
+test("pull --app into a folder stops before writing anything when the source repo's lock is from a newer CLI", async () => {
+  const { remote, people } = team("jom");
+  const [jom] = people;
+  assert.ok(jom);
+  jom.write("paywalls/a/index.tsx", paywall("a"));
+  await jom.push("a");
+  const work = temp("superwall-collab-newer-");
+  execFileSync("git", ["clone", "--quiet", remote.access.remote, work], { stdio: "ignore" });
+  fs.writeFileSync(path.join(work, "superwall.lock"), JSON.stringify({ version: 2 }) + "\n");
+  for (const args of [
+    ["add", "-A"],
+    ["commit", "--quiet", "-m", "newer"],
+    ["push", "--quiet", "origin", "HEAD"],
+  ]) {
+    execFileSync(
+      "git",
+      [
+        "-C",
+        work,
+        "-c",
+        "user.name=Jom",
+        "-c",
+        "user.email=j@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
+      { stdio: "ignore" },
+    );
+  }
+
+  const fresh = new Teammate("fresh", remote, { empty: true });
+  const target = path.join(fresh.dir, "superwall");
+  await assert.rejects(cloneInto(target, remote.access, { ios: "42" }), NewerLockError);
+  assert.equal(fs.existsSync(target), false);
+});
+
 const SEEDS = (process.env.SUPERWALL_COLLAB_SEEDS ?? "7,1234,90210").split(",").map(Number);
 
-for (const start of SEEDS) test(`a long random session of three teammates (seed ${start}) never loses a push, never writes a marker, and converges`, async () => {
-  const { remote, people } = team("nick", "jom", "ana");
-  let seed = start;
-  const random = (below: number) => {
-    seed = (seed * 1103515245 + 12345) % 2 ** 31;
-    return seed % below;
-  };
-  const owned = new Map(people.map((who, index) => [who, ["a", "b", "c"][index] ?? "x"]));
-  const lastPushed = new Map<string, string>();
-  const steps: string[] = [];
+for (const start of SEEDS)
+  test(`a long random session of three teammates (seed ${start}) never loses a push, never writes a marker, and converges`, async () => {
+    const { remote, people } = team("nick", "jom", "ana");
+    let seed = start;
+    const random = (below: number) => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31;
+      return seed % below;
+    };
+    const owned = new Map(people.map((who, index) => [who, ["a", "b", "c"][index] ?? "x"]));
+    const lastPushed = new Map<string, string>();
+    const steps: string[] = [];
 
-  for (let step = 0; step < 60; step++) {
-    const who = people[random(people.length)];
-    assert.ok(who);
-    const id = owned.get(who) ?? "x";
-    const action = random(5);
-    steps.push(`${who.name}:${action}`);
-    if (action <= 1) {
-      who.write(`paywalls/${id}/index.tsx`, paywall(`${id} step ${step}`));
-      who.write(`components/${who.name}.ts`, `export const by = "${who.name} ${step}";\n`);
-      if (random(3) === 0) who.write(`paywalls/${id}/app/s${step}.tsx`, paywall(`extra ${step}`));
-    } else if (action <= 3) {
-      try {
-        const pushed = await who.push(id);
-        if (pushed.status === "committed") lastPushed.set(id, who.read(`paywalls/${id}/index.tsx`) ?? "");
-      } catch (error) {
-        assert.ok(error instanceof SourceConflictError || error instanceof SourceDivergedError, `${steps.join(" ")}: ${String(error)}`);
-        await who.pull({ theirs: true });
+    for (let step = 0; step < 60; step++) {
+      const who = people[random(people.length)];
+      assert.ok(who);
+      const id = owned.get(who) ?? "x";
+      const action = random(5);
+      steps.push(`${who.name}:${action}`);
+      if (action <= 1) {
+        who.write(`paywalls/${id}/index.tsx`, paywall(`${id} step ${step}`));
+        who.write(`components/${who.name}.ts`, `export const by = "${who.name} ${step}";\n`);
+        if (random(3) === 0) who.write(`paywalls/${id}/app/s${step}.tsx`, paywall(`extra ${step}`));
+      } else if (action <= 3) {
+        try {
+          const pushed = await who.push(id);
+          if (pushed.status === "committed")
+            lastPushed.set(id, who.read(`paywalls/${id}/index.tsx`) ?? "");
+        } catch (error) {
+          assert.ok(
+            error instanceof SourceConflictError || error instanceof SourceDivergedError,
+            `${steps.join(" ")}: ${String(error)}`,
+          );
+          await who.pull({ theirs: true });
+        }
+      } else {
+        try {
+          await who.pull();
+        } catch (error) {
+          assert.ok(error instanceof PullConflictError, `${steps.join(" ")}: ${String(error)}`);
+          await who.pull({ theirs: true });
+        }
       }
-    } else {
-      try {
-        await who.pull();
-      } catch (error) {
-        assert.ok(error instanceof PullConflictError, `${steps.join(" ")}: ${String(error)}`);
-        await who.pull({ theirs: true });
-      }
+      assertNoConflictMarkers(`repo after ${steps.join(" ")}`, repoTree(remote));
+      for (const person of people)
+        assertNoConflictMarkers(`${person.name} after ${steps.join(" ")}`, snapshot(person.dir));
     }
-    assertNoConflictMarkers(`repo after ${steps.join(" ")}`, repoTree(remote));
-    for (const person of people) assertNoConflictMarkers(`${person.name} after ${steps.join(" ")}`, snapshot(person.dir));
-  }
 
-  const tree = repoTree(remote);
-  for (const [id, content] of lastPushed) {
-    assert.equal(tree.get(`paywalls/${id}/index.tsx`), content, `${id}'s last push survived: ${steps.join(" ")}`);
-  }
-  for (const who of people) {
-    const id = owned.get(who) ?? "x";
-    await who.push(id).catch(async (error: unknown) => {
-      assert.ok(error instanceof SourceConflictError || error instanceof SourceDivergedError);
-      await who.pull({ theirs: true });
-      await who.push(id);
-    });
-  }
-  for (const who of people) {
-    await who.pull();
-    assert.deepEqual((await who.pull())?.written, [], `${who.name}'s second pull changes nothing`);
-  }
-  const final = sourceFiles(repoTree(remote));
-  for (const who of people) {
-    const mine = sourceFiles(snapshot(who.dir));
-    for (const [file, content] of final) assert.equal(mine.get(file), content, `${who.name} has ${file}`);
-  }
-});
+    const tree = repoTree(remote);
+    for (const [id, content] of lastPushed) {
+      assert.equal(
+        tree.get(`paywalls/${id}/index.tsx`),
+        content,
+        `${id}'s last push survived: ${steps.join(" ")}`,
+      );
+    }
+    for (const who of people) {
+      const id = owned.get(who) ?? "x";
+      await who.push(id).catch(async (error: unknown) => {
+        assert.ok(error instanceof SourceConflictError || error instanceof SourceDivergedError);
+        await who.pull({ theirs: true });
+        await who.push(id);
+      });
+    }
+    for (const who of people) {
+      await who.pull();
+      assert.deepEqual(
+        (await who.pull())?.written,
+        [],
+        `${who.name}'s second pull changes nothing`,
+      );
+    }
+    const final = sourceFiles(repoTree(remote));
+    for (const who of people) {
+      const mine = sourceFiles(snapshot(who.dir));
+      for (const [file, content] of final)
+        assert.equal(mine.get(file), content, `${who.name} has ${file}`);
+    }
+  });

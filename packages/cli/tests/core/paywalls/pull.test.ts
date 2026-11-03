@@ -4,7 +4,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
-import { applyPulledChanges, appsToPull, boundPaywall, mergePulledLock } from "@/core/paywalls/pull";
+import {
+  applyPulledChanges,
+  appsToPull,
+  boundPaywall,
+  mergePulledLock,
+  PullPathError,
+} from "@/core/paywalls/pull";
 import { formatLock, NewerLockError, type LockFile } from "@/core/paywalls/project/lock";
 import { PullConflictError, pullSourceTree } from "@/core/paywalls/source/git";
 import type { SourceFile } from "@/core/paywalls/source/source";
@@ -37,7 +43,10 @@ const access = (remote: string) => ({
   tokenId: "tok_1",
 });
 
-const file = (relative: string, content: string): SourceFile => ({ path: relative, content: Buffer.from(content) });
+const file = (relative: string, content: string): SourceFile => ({
+  path: relative,
+  content: Buffer.from(content),
+});
 
 function commit(repo: { remote: string }, files: Record<string, string | null>): string {
   const work = temp("superwall-pull-seed-");
@@ -53,7 +62,17 @@ function commit(repo: { remote: string }, files: Record<string, string | null>):
   const git = (...args: string[]) =>
     execFileSync(
       "git",
-      ["-C", work, "-c", "user.name=Jom", "-c", "user.email=j@example.com", "-c", "commit.gpgsign=false", ...args],
+      [
+        "-C",
+        work,
+        "-c",
+        "user.name=Jom",
+        "-c",
+        "user.email=j@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
       { encoding: "utf8" },
     );
   git("add", "-A");
@@ -78,7 +97,10 @@ const lock = (over: Partial<LockFile> = {}): LockFile => ({
 
 test("an empty source repo has nothing to pull", async () => {
   const repo = bareRepo();
-  const pulled = await pullSourceTree({ access: access(repo.remote), files: [file("config.ts", "x\n")] });
+  const pulled = await pullSourceTree({
+    access: access(repo.remote),
+    files: [file("config.ts", "x\n")],
+  });
   assert.deepEqual(pulled, { status: "empty" });
 });
 
@@ -159,7 +181,10 @@ test("--theirs takes a teammate's deletion over your edit of the same file", asy
   commit(repo, { "paywalls/b/gone.ts": null });
   const files = [file("paywalls/b/index.tsx", "b1\n"), file("paywalls/b/gone.ts", "mine\n")];
 
-  await assert.rejects(pullSourceTree({ access: access(repo.remote), base, files }), PullConflictError);
+  await assert.rejects(
+    pullSourceTree({ access: access(repo.remote), base, files }),
+    PullConflictError,
+  );
   const pulled = await pullSourceTree({ access: access(repo.remote), base, files, theirs: true });
   assert.ok(pulled.status === "pulled");
   assert.deepEqual(pulled.changes, [{ path: "paywalls/b/gone.ts", content: undefined }]);
@@ -167,8 +192,14 @@ test("--theirs takes a teammate's deletion over your edit of the same file", asy
 
 test("the lock and the types never conflict: they come back separately, never as file changes", async () => {
   const repo = bareRepo();
-  const remoteLock = formatLock(lock({ paywalls: { b: { ios: { paywallId: "2", snapshot: "s" } } } }));
-  commit(repo, { "superwall.lock": remoteLock, "superwall.d.ts": "theirs\n", "paywalls/b/index.tsx": "b\n" });
+  const remoteLock = formatLock(
+    lock({ paywalls: { b: { ios: { paywallId: "2", snapshot: "s" } } } }),
+  );
+  commit(repo, {
+    "superwall.lock": remoteLock,
+    "superwall.d.ts": "theirs\n",
+    "paywalls/b/index.tsx": "b\n",
+  });
 
   const pulled = await pullSourceTree({
     access: access(repo.remote),
@@ -205,7 +236,10 @@ test("a sync point the remote never had falls back to an unrelated merge", async
 
 test("a git failure that isn't a conflict surfaces instead of reading as up to date", async () => {
   await assert.rejects(
-    pullSourceTree({ access: access(`file://${temp("superwall-not-a-repo-")}/missing`), files: [] }),
+    pullSourceTree({
+      access: access(`file://${temp("superwall-not-a-repo-")}/missing`),
+      files: [],
+    }),
     /git clone failed/,
   );
 });
@@ -243,9 +277,12 @@ test("the pulled lock takes the teammate's bindings, keeps yours where they diff
     sources: { "org1-app42": "a".repeat(40) },
   });
   const remote = lock({
-    apps: { ios: "99", android: "7" },
+    apps: { ios: "42", android: "7" },
     paywalls: {
-      shared: { ios: { paywallId: "2", snapshot: "new" }, android: { paywallId: "5", snapshot: "s5" } },
+      shared: {
+        ios: { paywallId: "2", snapshot: "new" },
+        android: { paywallId: "5", snapshot: "s5" },
+      },
       pending: { ios: { paywallId: "3", snapshot: "p-remote" } },
       rebound: { ios: { paywallId: "40", snapshot: "r-remote" } },
       theirs: { ios: { paywallId: "6", snapshot: "t" } },
@@ -258,7 +295,10 @@ test("the pulled lock takes the teammate's bindings, keeps yours where they diff
 
   assert.deepEqual(merged.apps, { ios: "42", android: "7" });
   assert.deepEqual(merged.paywalls, {
-    shared: { ios: { paywallId: "2", snapshot: "new" }, android: { paywallId: "5", snapshot: "s5" } },
+    shared: {
+      ios: { paywallId: "2", snapshot: "new" },
+      android: { paywallId: "5", snapshot: "s5" },
+    },
     pending: { ios: { paywallId: "3", snapshot: "p-local", sourcePending: 4 } },
     rebound: { ios: { paywallId: "4", snapshot: "r-local" } },
     theirs: { ios: { paywallId: "6", snapshot: "t" } },
@@ -270,6 +310,86 @@ test("the pulled lock takes the teammate's bindings, keeps yours where they diff
     "paywall/mine": { paywallId: "1", url: "u1" },
   });
   assert.deepEqual(merged.sources, { "org1-app42": "a".repeat(40) });
+});
+
+test("the pulled lock never takes bindings of a different app on a platform, nor of platforms the pull left out", () => {
+  const local = lock({
+    apps: { ios: "42" },
+    paywalls: { mine: { ios: { paywallId: "1" } } },
+  });
+  const remote = formatLock(
+    lock({
+      apps: { ios: "99", android: "7", web: "8" },
+      paywalls: {
+        theirs: { ios: { paywallId: "6" }, android: { paywallId: "5" }, web: { paywallId: "9" } },
+        mine: { ios: { paywallId: "60" } },
+      },
+      funnels: { flow: { ios: { paywallId: "61" } } },
+    }),
+  );
+
+  const merged = mergePulledLock(local, remote);
+  assert.deepEqual(merged.apps, { ios: "42", android: "7", web: "8" });
+  assert.deepEqual(merged.paywalls, {
+    mine: { ios: { paywallId: "1" } },
+    theirs: { android: { paywallId: "5" }, web: { paywallId: "9" } },
+  });
+  assert.deepEqual(merged.funnels, {});
+
+  const scoped = mergePulledLock(local, remote, ["ios", "web"]);
+  assert.deepEqual(scoped.apps, { ios: "42", web: "8" });
+  assert.deepEqual(scoped.paywalls, {
+    mine: { ios: { paywallId: "1" } },
+    theirs: { web: { paywallId: "9" } },
+  });
+});
+
+test("a pulled path through a symlinked folder, or one that climbs out, is refused before anything is written", () => {
+  const dir = temp("superwall-pull-link-dir-");
+  const outside = temp("superwall-pull-outside-");
+  fs.symlinkSync(outside, path.join(dir, "assets"));
+  fs.symlinkSync(path.join(outside, "dangling"), path.join(dir, "link.ts"));
+
+  for (const change of [
+    { path: "assets/new.txt", content: Buffer.from("x\n") },
+    { path: "link.ts", content: Buffer.from("x\n") },
+    { path: "../escape.txt", content: Buffer.from("x\n") },
+  ]) {
+    assert.throws(
+      () =>
+        applyPulledChanges(
+          dir,
+          [{ path: "first.ts", content: Buffer.from("1\n") }, change],
+          new Set(),
+        ),
+      PullPathError,
+    );
+  }
+  assert.deepEqual(fs.readdirSync(outside), []);
+  assert.equal(fs.existsSync(path.join(dir, "first.ts")), false);
+  assert.equal(fs.existsSync(path.join(path.dirname(dir), "escape.txt")), false);
+});
+
+test("a pulled file that became a folder, or a folder that became a file, is applied in order", () => {
+  const dir = temp("superwall-pull-shape-");
+  fs.writeFileSync(path.join(dir, "theme"), "file\n");
+  fs.mkdirSync(path.join(dir, "icons"));
+  fs.writeFileSync(path.join(dir, "icons", "a.svg"), "<svg/>\n");
+
+  const result = applyPulledChanges(
+    dir,
+    [
+      { path: "icons", content: Buffer.from("now a file\n") },
+      { path: "theme/colors.ts", content: Buffer.from("colors\n") },
+      { path: "icons/a.svg", content: undefined },
+      { path: "theme", content: undefined },
+    ],
+    new Set(["theme", "icons/a.svg"]),
+  );
+
+  assert.deepEqual(result.written, ["icons", "icons/a.svg", "theme", "theme/colors.ts"]);
+  assert.equal(fs.readFileSync(path.join(dir, "icons"), "utf8"), "now a file\n");
+  assert.equal(fs.readFileSync(path.join(dir, "theme", "colors.ts"), "utf8"), "colors\n");
 });
 
 test("a missing remote lock keeps yours; an unreadable one keeps yours and says so; a newer one stops", () => {
@@ -284,7 +404,10 @@ test("a missing remote lock keeps yours; an unreadable one keeps yours and says 
     useRenderer(silentRenderer);
   }
   assert.match(
-    calls.filter((call) => call.method === "warn").map((call) => String(call.value)).join(),
+    calls
+      .filter((call) => call.method === "warn")
+      .map((call) => String(call.value))
+      .join(),
     /can't be read .* kept your bindings/,
   );
 
@@ -307,7 +430,10 @@ test("pulled changes are written and deleted, but never over a local file the pr
     new Set(["paywalls/b/old.ts"]),
   );
 
-  assert.deepEqual(result, { written: ["paywalls/b/index.tsx", "paywalls/b/old.ts"], skipped: ["secret.local"] });
+  assert.deepEqual(result, {
+    written: ["paywalls/b/index.tsx", "paywalls/b/old.ts"],
+    skipped: ["secret.local"],
+  });
   assert.equal(fs.readFileSync(path.join(dir, "paywalls", "b", "index.tsx"), "utf8"), "b\n");
   assert.equal(fs.existsSync(path.join(dir, "paywalls", "b", "old.ts")), false);
   assert.equal(fs.readFileSync(path.join(dir, "secret.local"), "utf8"), "keep\n");
@@ -319,10 +445,23 @@ test("a symlink in the source repo is refused rather than followed", async () =>
   execFileSync("git", ["clone", "--quiet", repo.remote, work], { stdio: "ignore" });
   fs.symlinkSync("/etc/hosts", path.join(work, "hosts"));
   const git = (...args: string[]) =>
-    execFileSync("git", ["-C", work, "-c", "user.name=J", "-c", "user.email=j@e.com", "-c", "commit.gpgsign=false", ...args]);
+    execFileSync("git", [
+      "-C",
+      work,
+      "-c",
+      "user.name=J",
+      "-c",
+      "user.email=j@e.com",
+      "-c",
+      "commit.gpgsign=false",
+      ...args,
+    ]);
   git("add", "-A");
   git("commit", "--quiet", "-m", "link");
   git("push", "--quiet", "origin", "HEAD:main");
 
-  await assert.rejects(pullSourceTree({ access: access(repo.remote), files: [] }), /hosts as a symlink/);
+  await assert.rejects(
+    pullSourceTree({ access: access(repo.remote), files: [] }),
+    /hosts as a symlink/,
+  );
 });

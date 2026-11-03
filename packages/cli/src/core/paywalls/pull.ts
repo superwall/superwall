@@ -88,7 +88,38 @@ const mergeSection = (
   return merged;
 };
 
-export function mergePulledLock(local: LockFile, remoteText: string | undefined): LockFile {
+function sharedPlatforms(
+  local: LockFile,
+  remote: LockFile,
+  platforms: readonly string[] | undefined,
+): Set<string> {
+  const shared = new Set<string>();
+  for (const [platform, applicationId] of Object.entries(remote.apps)) {
+    if (platforms !== undefined && !platforms.includes(platform)) continue;
+    const mine = local.apps[platform];
+    if (mine !== undefined && mine !== applicationId) continue;
+    shared.add(platform);
+  }
+  return shared;
+}
+
+const onlyPlatforms = (
+  section: Record<string, SurfaceBindings>,
+  allowed: ReadonlySet<string>,
+): Record<string, SurfaceBindings> => {
+  const kept: Record<string, SurfaceBindings> = {};
+  for (const [id, bindings] of Object.entries(section)) {
+    const entries = Object.entries(bindings).filter(([platform]) => allowed.has(platform));
+    if (entries.length > 0) kept[id] = Object.fromEntries(entries);
+  }
+  return kept;
+};
+
+export function mergePulledLock(
+  local: LockFile,
+  remoteText: string | undefined,
+  platforms?: readonly string[],
+): LockFile {
   if (remoteText === undefined) return local;
   let remote: LockFile;
   try {
@@ -100,11 +131,15 @@ export function mergePulledLock(local: LockFile, remoteText: string | undefined)
     );
     return local;
   }
+  const allowed = sharedPlatforms(local, remote, platforms);
+  const apps = Object.fromEntries(
+    Object.entries(remote.apps).filter(([platform]) => allowed.has(platform)),
+  );
   const merged: LockFile = {
     version: 1,
-    apps: { ...remote.apps, ...local.apps },
-    paywalls: mergeSection(local.paywalls, remote.paywalls),
-    funnels: mergeSection(local.funnels, remote.funnels),
+    apps: { ...apps, ...local.apps },
+    paywalls: mergeSection(local.paywalls, onlyPlatforms(remote.paywalls, allowed)),
+    funnels: mergeSection(local.funnels, onlyPlatforms(remote.funnels, allowed)),
   };
   const origins = { ...remote.origins, ...local.origins };
   if (Object.keys(origins).length > 0) merged.origins = origins;
@@ -112,28 +147,78 @@ export function mergePulledLock(local: LockFile, remoteText: string | undefined)
   return merged;
 }
 
+export class PullPathError extends Error {}
+
+function assertInside(superwallDir: string, relative: string): void {
+  const parts = relative.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    throw new PullPathError(
+      `The source repo has an unsafe path, ${relative} — nothing was pulled.`,
+    );
+  }
+  for (let depth = 1; depth <= parts.length; depth++) {
+    const at = path.join(superwallDir, ...parts.slice(0, depth));
+    const stat = fs.lstatSync(at, { throwIfNoEntry: false });
+    if (stat === undefined) return;
+    if (!stat.isSymbolicLink() && !stat.isDirectory()) return;
+    if (stat.isSymbolicLink()) {
+      throw new PullPathError(
+        `${parts.slice(0, depth).join("/")} is a symlink in this project, so the CLI won't write ${relative} through it — nothing was pulled. Replace the symlink with a folder, then pull again.`,
+      );
+    }
+  }
+}
+
+function pruneEmpty(superwallDir: string, from: string): void {
+  let dir = path.dirname(from);
+  while (
+    dir.startsWith(superwallDir + path.sep) &&
+    fs.existsSync(dir) &&
+    fs.readdirSync(dir).length === 0
+  ) {
+    fs.rmdirSync(dir);
+    dir = path.dirname(dir);
+  }
+}
+
 export function applyPulledChanges(
   superwallDir: string,
   changes: readonly PulledChange[],
   tracked: ReadonlySet<string>,
 ): { written: string[]; skipped: string[] } {
+  for (const change of changes) assertInside(superwallDir, change.path);
   const written: string[] = [];
   const skipped: string[] = [];
-  for (const change of changes) {
+  const ordered = [
+    ...changes.filter((change) => change.content === undefined),
+    ...changes.filter((change) => change.content !== undefined),
+  ];
+  for (const change of ordered) {
     const target = path.join(superwallDir, change.path);
-    if (!tracked.has(change.path) && fs.existsSync(target)) {
+    const existing = fs.lstatSync(target, { throwIfNoEntry: false });
+    if (
+      !tracked.has(change.path) &&
+      existing &&
+      !(
+        existing.isDirectory() &&
+        change.content !== undefined &&
+        fs.readdirSync(target).length === 0
+      )
+    ) {
       skipped.push(change.path);
       continue;
     }
     if (change.content === undefined) {
       fs.rmSync(target, { force: true });
+      pruneEmpty(superwallDir, target);
     } else {
+      if (existing?.isDirectory()) fs.rmdirSync(target);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, change.content);
     }
     written.push(change.path);
   }
-  return { written, skipped };
+  return { written: written.sort(), skipped };
 }
 
 async function paywallFor(
@@ -184,6 +269,7 @@ export async function pullInto(
   superwallDir: string,
   access: SourceAccess,
   theirs: boolean,
+  platforms?: readonly string[],
 ): Promise<{ written: string[]; skipped: string[] } | undefined> {
   const collected = await collectSourceFiles(superwallDir);
   if (!collected.ok) throw new Error(collected.reason);
@@ -195,7 +281,7 @@ export async function pullInto(
     theirs,
   });
   if (pulled.status === "empty") return undefined;
-  const lock = mergePulledLock(readLock(superwallDir), pulled.lock);
+  const lock = mergePulledLock(readLock(superwallDir), pulled.lock, platforms);
   const applied = applyPulledChanges(
     superwallDir,
     pulled.changes,
@@ -213,10 +299,22 @@ export async function cloneInto(
 ): Promise<string[] | undefined> {
   const pulled = await pullSourceTree({ access, files: [] });
   if (pulled.status === "empty") return undefined;
+  const lock = mergePulledLock({ version: 1, apps, paywalls: {}, funnels: {} }, pulled.lock);
+  const created = !fs.existsSync(superwallDir);
   fs.mkdirSync(superwallDir, { recursive: true });
-  const { written } = applyPulledChanges(superwallDir, pulled.changes, new Set());
-  if (pulled.types !== undefined) fs.writeFileSync(path.join(superwallDir, TYPES_FILE), pulled.types);
-  writeLock(superwallDir, mergePulledLock({ version: 1, apps, paywalls: {}, funnels: {} }, pulled.lock));
+  let written: string[];
+  try {
+    ({ written } = applyPulledChanges(superwallDir, pulled.changes, new Set()));
+  } catch (error) {
+    if (created) fs.rmSync(superwallDir, { recursive: true, force: true });
+    else
+      for (const entry of fs.readdirSync(superwallDir))
+        fs.rmSync(path.join(superwallDir, entry), { recursive: true, force: true });
+    throw error;
+  }
+  if (pulled.types !== undefined)
+    fs.writeFileSync(path.join(superwallDir, TYPES_FILE), pulled.types);
+  writeLock(superwallDir, lock);
   writeSourceBase(superwallDir, access.repo, pulled.head);
   return written;
 }
@@ -297,7 +395,12 @@ export async function runPull(
       continue;
     }
     const access = await mintSourceAccess(api, paywallId);
-    const pulled = await pullInto(superwallDir, access, flags.theirs);
+    const pulled = await pullInto(
+      superwallDir,
+      access,
+      flags.theirs,
+      flags.platform.length > 0 ? app.platforms : undefined,
+    );
     if (pulled === undefined) {
       ui.step(`${label}: its source repo is empty — nothing to pull yet`);
       continue;

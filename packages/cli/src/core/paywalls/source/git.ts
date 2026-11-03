@@ -254,7 +254,9 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     fs.writeFileSync(messageFile, buildCommitMessage(input.message));
 
     const onRemote = head !== undefined && !base;
-    const local = onRemote ? await snapshotLocal(run, dir, input.files, head, committing) : undefined;
+    const local = onRemote
+      ? await snapshotLocal(run, dir, input.files, scope, head, committing)
+      : undefined;
 
     materializeSourceTree(dir, input.files, scope, { onRemote, overwrite: input.overwrite });
 
@@ -273,7 +275,9 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     if (local !== undefined && head !== undefined) {
       const tree = (await run(["write-tree"])).trim();
       const merged = (
-        await run(["commit-tree", tree, "-p", head, "-p", local, "-F", messageFile], { env: committing })
+        await run(["commit-tree", tree, "-p", head, "-p", local, "-F", messageFile], {
+          env: committing,
+        })
       ).trim();
       await run(["reset", "--quiet", "--hard", merged]);
     } else {
@@ -321,10 +325,22 @@ async function snapshotLocal(
   run: Run,
   dir: string,
   files: readonly SourceFile[],
+  scope: SourceScope,
   head: string,
   committing: NodeJS.ProcessEnv,
 ): Promise<string | undefined> {
-  replaceTree(dir, files);
+  const kept: SourceFile[] = [];
+  for (const file of files) {
+    if (classifyPath(file.path, scope) !== "other") {
+      kept.push(file);
+      continue;
+    }
+    const remote = path.join(dir, file.path);
+    if (fs.lstatSync(remote, { throwIfNoEntry: false })?.isFile()) {
+      kept.push({ ...file, content: fs.readFileSync(remote) });
+    }
+  }
+  replaceTree(dir, kept);
   await run(["add", "-A"]);
   const tree = (await run(["write-tree"])).trim();
   const remote = (await run(["rev-parse", `${head}^{tree}`])).trim();
@@ -530,10 +546,18 @@ export async function pullSourceTree(input: PullInput): Promise<PullResult> {
     }
 
     const changes: PulledChange[] = [];
-    for (const file of changedPaths(
-      await run(["diff", "--cached", "--name-only", "--no-renames", "-z", own]),
-    )) {
-      if (DERIVED_FILES.has(file)) continue;
+    const staged = (await run(["diff", "--cached", "--name-status", "--no-renames", "-z", own]))
+      .split("\0")
+      .filter(Boolean);
+    const removed: PulledChange[] = [];
+    for (let index = 0; index + 1 < staged.length; index += 2) {
+      const status = staged[index];
+      const file = staged[index + 1];
+      if (file === undefined || DERIVED_FILES.has(file)) continue;
+      if (status === "D") {
+        removed.push({ path: file, content: undefined });
+        continue;
+      }
       const stat = fs.lstatSync(path.join(dir, file), { throwIfNoEntry: false });
       if (stat?.isSymbolicLink()) {
         throw new Error(
@@ -545,6 +569,8 @@ export async function pullSourceTree(input: PullInput): Promise<PullResult> {
         content: stat ? fs.readFileSync(path.join(dir, file)) : undefined,
       });
     }
+    changes.sort((a, b) => a.path.localeCompare(b.path));
+    changes.unshift(...removed.sort((a, b) => a.path.localeCompare(b.path)));
     const shown = (name: string) =>
       present.has(name) ? run(["show", `${head}:${name}`]) : undefined;
     return {
