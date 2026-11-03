@@ -5,6 +5,14 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 import { ui } from "@/ui";
 import { buildCommitMessage, redact, tokenSecret, type CommitMessageInput } from "./commit";
+import {
+  classifyPath,
+  DERIVED_FILES,
+  isOtherSurfaceDir,
+  LOCK_FILE,
+  mergeLockText,
+  type SourceScope,
+} from "./scope";
 import type { SourceFile } from "./source";
 
 const run = promisify(execFile);
@@ -99,10 +107,26 @@ export async function gitAvailable(): Promise<boolean> {
 
 const LARGE_FILE_BYTES = 50 * 1024 * 1024;
 
-export function materializeSourceTree(dir: string, files: readonly SourceFile[]): void {
+export function materializeSourceTree(dir: string, files: readonly SourceFile[], scope: SourceScope): void {
+  const theirs = new Map<string, Buffer>();
+  for (const derived of DERIVED_FILES) {
+    const existing = path.join(dir, derived);
+    if (fs.existsSync(existing)) theirs.set(derived, fs.readFileSync(existing));
+  }
+  const remove = (target: string) => fs.rmSync(target, { recursive: true, force: true });
+
   for (const entry of fs.readdirSync(dir)) {
     if (entry === ".git") continue;
-    fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
+    const top = path.join(dir, entry);
+    if (!fs.lstatSync(top).isDirectory()) {
+      remove(top);
+      continue;
+    }
+    for (const child of fs.readdirSync(top)) {
+      const inner = path.join(top, child);
+      if (isOtherSurfaceDir(entry, child, scope) && fs.lstatSync(inner).isDirectory()) continue;
+      remove(inner);
+    }
   }
 
   const write = (relative: string, data: Buffer | string) => {
@@ -113,9 +137,16 @@ export function materializeSourceTree(dir: string, files: readonly SourceFile[])
 
   const large: string[] = [];
   for (const file of files) {
+    if (classifyPath(file.path, scope) === "other") continue;
     if (file.content.byteLength > LARGE_FILE_BYTES) large.push(file.path);
-    write(file.path, file.content);
+    if (file.path === LOCK_FILE) {
+      write(file.path, mergeLockText(theirs.get(LOCK_FILE)?.toString("utf8"), file.content.toString("utf8"), scope));
+    } else {
+      write(file.path, file.content);
+    }
+    theirs.delete(file.path);
   }
+  for (const [derived, content] of theirs) write(derived, content);
 
   if (large.length > 0) {
     ui.warn(
@@ -189,20 +220,21 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
   try {
     await cloneSource(access, dir, { env, secrets });
 
+    const scope: SourceScope = { kind: input.message.kind, id: input.message.surface };
     const head = await revParse("HEAD");
     const base = input.base && head && !input.overwrite ? await revParse(input.base) : undefined;
     if (base && base !== head) await run(["checkout", "--quiet", "--detach", base]);
 
-    materializeSourceTree(dir, input.files);
+    materializeSourceTree(dir, input.files, scope);
 
     await run(["add", "-A"]);
     const dirty = (await run(["status", "--porcelain"])).trim();
     if (dirty === "") return { commitSha: head ?? "", status: "unchanged", syncedTo: base ?? head };
     if (head && !base && !input.overwrite) {
-      const differing = (await run(["diff", "--cached", "--name-only", "-z", "HEAD"]))
-        .split("\0")
-        .filter(Boolean);
-      throw new SourceDivergedError(differing);
+      const refused = overwrittenPaths(
+        await run(["diff", "--cached", "--name-status", "--no-renames", "-z", "HEAD"]),
+      );
+      if (refused.length > 0) throw new SourceDivergedError(refused);
     }
 
     const messageFile = path.join(dir, ".git", "SUPERWALL_COMMITMSG");
@@ -215,26 +247,39 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
         () => true,
         () => false,
       );
+    const parent = base ?? head;
 
     for (let attempt = 1; ; attempt++) {
-      const upstream = base ? await revParse(`origin/${access.branch}`) : undefined;
-      if (upstream && upstream !== base) {
+      const upstream = parent ? await revParse(`origin/${access.branch}`) : undefined;
+      if (upstream && upstream !== parent) {
         if (await isAncestor(own, upstream))
           return { commitSha: upstream, status: "unchanged", syncedTo: own };
         await run(["reset", "--quiet", "--hard", own]);
-        await mergeUpstream(`origin/${access.branch}`, messageFile, { run, committing });
+        await mergeUpstream(`origin/${access.branch}`, messageFile, { run, committing, dir, own, scope });
       }
       try {
         await run(["push", "origin", `HEAD:${access.branch}`]);
         return { commitSha: (await revParse("HEAD")) ?? own, status: "committed", syncedTo: own };
       } catch (error) {
-        if (!base || attempt >= PUSH_ATTEMPTS || !isRejected(error)) throw error;
+        if (!parent || attempt >= PUSH_ATTEMPTS || !isRejected(error)) throw error;
         await run(["fetch", "--quiet", "origin", access.branch]);
       }
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+function overwrittenPaths(nameStatus: string): string[] {
+  const fields = nameStatus.split("\0").filter(Boolean);
+  const paths: string[] = [];
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    const status = fields[index];
+    const file = fields[index + 1];
+    if (file === undefined || status === "A" || DERIVED_FILES.has(file)) continue;
+    paths.push(file);
+  }
+  return paths;
 }
 
 const CLONE_ATTEMPTS = [
@@ -267,32 +312,60 @@ async function cloneSource(
   throw first;
 }
 
+type Run = (args: string[], options?: { env?: NodeJS.ProcessEnv }) => Promise<string>;
+
 async function mergeUpstream(
   upstream: string,
   messageFile: string,
   {
     run,
     committing,
-  }: {
-    run: (args: string[], options?: { env?: NodeJS.ProcessEnv }) => Promise<string>;
-    committing: NodeJS.ProcessEnv;
-  },
+    dir,
+    own,
+    scope,
+  }: { run: Run; committing: NodeJS.ProcessEnv; dir: string; own: string; scope: SourceScope },
 ): Promise<void> {
-  try {
-    await run(["merge", "--quiet", "--no-ff", "-F", messageFile, upstream], { env: committing });
-  } catch (error) {
-    const conflicted = await run(["diff", "--name-only", "--diff-filter=U"]).then(
-      (out) =>
-        out
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean),
-      () => [],
-    );
+  let failure: unknown;
+  await run(["merge", "--quiet", "--no-ff", "--no-commit", upstream], { env: committing }).catch(
+    (error: unknown) => {
+      failure = error;
+    },
+  );
+  const conflicted = (await run(["diff", "--name-only", "--diff-filter=U", "-z"]).catch(() => ""))
+    .split("\0")
+    .filter(Boolean);
+  const blocking = conflicted.filter((file) => !DERIVED_FILES.has(file));
+  const merging = await run(["rev-parse", "--verify", "--quiet", "MERGE_HEAD"]).then(
+    () => true,
+    () => false,
+  );
+  if (blocking.length > 0 || (failure !== undefined && conflicted.length === 0)) {
     await run(["merge", "--abort"]).catch(() => undefined);
-    if (conflicted.length > 0) throw new SourceConflictError(conflicted);
-    throw error;
+    if (blocking.length > 0) throw new SourceConflictError(blocking);
+    throw failure;
   }
+  if (!merging) return;
+
+  const show = (ref: string, file: string) =>
+    run(["show", `${ref}:${file}`]).then(
+      (text) => text,
+      () => undefined,
+    );
+  const theirsLock = await show(upstream, LOCK_FILE);
+  const mineLock = await show(own, LOCK_FILE);
+  const lock = mineLock === undefined ? theirsLock : mergeLockText(theirsLock, mineLock, scope);
+  await settle(run, dir, LOCK_FILE, lock);
+  for (const file of DERIVED_FILES) {
+    if (file !== LOCK_FILE) await settle(run, dir, file, await show(own, file));
+  }
+
+  await run(["commit", "--quiet", "--no-verify", "-F", messageFile], { env: committing });
+}
+
+async function settle(run: Run, dir: string, file: string, content: string | undefined): Promise<void> {
+  if (content === undefined) return;
+  fs.writeFileSync(path.join(dir, file), content);
+  await run(["add", "--", file]);
 }
 
 const isRejected = (error: unknown): boolean =>

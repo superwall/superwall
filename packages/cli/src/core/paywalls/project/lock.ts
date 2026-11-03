@@ -119,8 +119,9 @@ const readSection = (value: unknown): Record<string, SurfaceBindings> => {
 
 const CONFLICT_MARKER = /^(<{7}|={7}|>{7})( |$)/m;
 
-function parseLockFile(file: string): Record<string, unknown> {
-  const text = fs.readFileSync(file, "utf8");
+export class NewerLockError extends Error {}
+
+function parseLockText(text: string, file: string): Record<string, unknown> {
   if (CONFLICT_MARKER.test(text)) {
     throw new Error(`${file} has unresolved merge conflicts — resolve them, then run again.`);
   }
@@ -135,7 +136,7 @@ function parseLockFile(file: string): Record<string, unknown> {
     throw new Error(`${file} isn't a Superwall lock file — fix it or restore it from git.`);
   }
   if (parsed.version > 1) {
-    throw new Error(
+    throw new NewerLockError(
       `${file} was written by a newer Superwall CLI (lock version ${parsed.version}) — run \`superwall upgrade\`.`,
     );
   }
@@ -145,10 +146,8 @@ function parseLockFile(file: string): Record<string, unknown> {
   return parsed;
 }
 
-export function readLock(superwallDir: string): LockFile {
-  const file = lockPath(superwallDir);
-  if (!fs.existsSync(file)) return emptyLock();
-  const parsed = parseLockFile(file);
+export function parseLock(text: string, file: string): LockFile {
+  const parsed = parseLockText(text, file);
   const lock = emptyLock();
   if (isRecord(parsed.apps)) {
     for (const [platform, id] of Object.entries(parsed.apps)) {
@@ -162,6 +161,12 @@ export function readLock(superwallDir: string): LockFile {
   const sources = parseSources(parsed.sources);
   if (Object.keys(sources).length > 0) lock.sources = sources;
   return lock;
+}
+
+export function readLock(superwallDir: string): LockFile {
+  const file = lockPath(superwallDir);
+  if (!fs.existsSync(file)) return emptyLock();
+  return parseLock(fs.readFileSync(file, "utf8"), file);
 }
 
 export function formatLock(lock: LockFile): string {
