@@ -321,6 +321,15 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
   }
 }
 
+export function statIfPresent(file: string): fs.Stats | undefined {
+  try {
+    return fs.lstatSync(file, { throwIfNoEntry: false });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOTDIR") return undefined;
+    throw error;
+  }
+}
+
 async function snapshotLocal(
   run: Run,
   dir: string,
@@ -336,7 +345,7 @@ async function snapshotLocal(
       continue;
     }
     const remote = path.join(dir, file.path);
-    if (fs.lstatSync(remote, { throwIfNoEntry: false })?.isFile()) {
+    if (statIfPresent(remote)?.isFile()) {
       kept.push({ ...file, content: fs.readFileSync(remote) });
     }
   }
@@ -541,9 +550,11 @@ export async function pullSourceTree(input: PullInput): Promise<PullResult> {
       (await run(["ls-tree", "-r", "--name-only", "-z", head])).split("\0").filter(Boolean),
     );
     for (const file of conflicted) {
-      if (present.has(file)) await run(["checkout", head, "--", file]);
-      else await run(["rm", "--quiet", "--force", "--", file]);
+      if (present.has(file)) await run(["--literal-pathspecs", "checkout", head, "--", file]);
+      else await run(["--literal-pathspecs", "rm", "--quiet", "--force", "--", file]);
     }
+    const unresolved = changedPaths(await run(["diff", "--name-only", "--diff-filter=U", "-z"]));
+    if (unresolved.length > 0) throw new PullConflictError(unresolved);
 
     const changes: PulledChange[] = [];
     const staged = (await run(["diff", "--cached", "--name-status", "--no-renames", "-z", own]))

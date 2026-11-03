@@ -25,7 +25,12 @@ import {
   writeProjectTypes,
 } from "@/core/paywalls/project/types";
 import { readSourceBase, writeSourceBase } from "@/core/paywalls/source/base";
-import { pullSourceTree, type PulledChange, type SourceAccess } from "@/core/paywalls/source/git";
+import {
+  pullSourceTree,
+  statIfPresent,
+  type PulledChange,
+  type SourceAccess,
+} from "@/core/paywalls/source/git";
 import { collectSourceFiles } from "@/core/paywalls/source/source";
 import { VERSION } from "@/environment";
 import { ui } from "@/ui";
@@ -181,44 +186,82 @@ function pruneEmpty(superwallDir: string, from: string): void {
   }
 }
 
+function blockedByFile(
+  superwallDir: string,
+  relative: string,
+  deleting: ReadonlySet<string>,
+): boolean {
+  const parts = relative.split("/");
+  for (let depth = 1; depth < parts.length; depth++) {
+    const prefix = parts.slice(0, depth).join("/");
+    const stat = statIfPresent(path.join(superwallDir, prefix));
+    if (stat === undefined) return false;
+    if (stat.isDirectory()) continue;
+    return !deleting.has(prefix);
+  }
+  return false;
+}
+
 export function applyPulledChanges(
   superwallDir: string,
   changes: readonly PulledChange[],
   tracked: ReadonlySet<string>,
 ): { written: string[]; skipped: string[] } {
   for (const change of changes) assertInside(superwallDir, change.path);
-  const written: string[] = [];
   const skipped: string[] = [];
+  const planned: PulledChange[] = [];
+  const removing = new Set(
+    changes
+      .filter((change) => change.content === undefined && tracked.has(change.path))
+      .map((change) => change.path),
+  );
+  const cleared = (relative: string): boolean =>
+    fs
+      .readdirSync(path.join(superwallDir, relative), { recursive: true, withFileTypes: true })
+      .filter((entry) => !entry.isDirectory())
+      .every((entry) =>
+        removing.has(
+          path
+            .relative(superwallDir, path.join(entry.parentPath, entry.name))
+            .split(path.sep)
+            .join("/"),
+        ),
+      );
+  for (const change of changes) {
+    const existing = statIfPresent(path.join(superwallDir, change.path));
+    const untrackedInTheWay =
+      !tracked.has(change.path) &&
+      existing !== undefined &&
+      !(existing.isDirectory() && change.content !== undefined && cleared(change.path));
+    if (untrackedInTheWay) skipped.push(change.path);
+    else planned.push(change);
+  }
+  const deleting = new Set(
+    planned.filter((change) => change.content === undefined).map((change) => change.path),
+  );
+  const applied = planned.filter((change) => {
+    if (!blockedByFile(superwallDir, change.path, deleting)) return true;
+    skipped.push(change.path);
+    return false;
+  });
   const ordered = [
-    ...changes.filter((change) => change.content === undefined),
-    ...changes.filter((change) => change.content !== undefined),
+    ...applied.filter((change) => change.content === undefined),
+    ...applied.filter((change) => change.content !== undefined),
   ];
+  const written: string[] = [];
   for (const change of ordered) {
     const target = path.join(superwallDir, change.path);
-    const existing = fs.lstatSync(target, { throwIfNoEntry: false });
-    if (
-      !tracked.has(change.path) &&
-      existing &&
-      !(
-        existing.isDirectory() &&
-        change.content !== undefined &&
-        fs.readdirSync(target).length === 0
-      )
-    ) {
-      skipped.push(change.path);
-      continue;
-    }
     if (change.content === undefined) {
       fs.rmSync(target, { force: true });
       pruneEmpty(superwallDir, target);
     } else {
-      if (existing?.isDirectory()) fs.rmdirSync(target);
+      if (statIfPresent(target)?.isDirectory()) fs.rmSync(target, { recursive: true });
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, change.content);
     }
     written.push(change.path);
   }
-  return { written: written.sort(), skipped };
+  return { written: written.sort(), skipped: skipped.sort() };
 }
 
 async function paywallFor(

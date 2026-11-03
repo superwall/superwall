@@ -19,7 +19,10 @@ export const LOCK_FILE = "superwall.lock";
 
 export const DERIVED_FILES: ReadonlySet<string> = new Set([LOCK_FILE, TYPES_FILE]);
 
-const SURFACE_DIRS: Readonly<Record<string, SurfaceKind>> = { paywalls: "paywall", funnels: "funnel" };
+const SURFACE_DIRS: Readonly<Record<string, SurfaceKind>> = {
+  paywalls: "paywall",
+  funnels: "funnel",
+};
 
 export function surfaceOf(relative: string): SourceScope | undefined {
   const [top, id, ...rest] = relative.split("/");
@@ -81,15 +84,30 @@ export function mergeLockText(
 
 function mergeLocks(other: LockFile, own: LockFile, scope: SourceScope): string {
   const section = (lock: LockFile) => (scope.kind === "paywall" ? lock.paywalls : lock.funnels);
+  const conflicting = new Set(
+    Object.entries(own.apps)
+      .filter(
+        ([platform, app]) => other.apps[platform] !== undefined && other.apps[platform] !== app,
+      )
+      .map(([platform]) => platform),
+  );
+  const ownApps = Object.fromEntries(
+    Object.entries(own.apps).filter(([platform]) => !conflicting.has(platform)),
+  );
   const merged: LockFile = {
     version: 1,
-    apps: { ...other.apps, ...own.apps },
+    apps: { ...other.apps, ...ownApps },
     paywalls: { ...other.paywalls },
     funnels: { ...other.funnels },
   };
   const target = section(merged);
-  const mineEntry = section(own)[scope.id];
-  if (mineEntry) target[scope.id] = mineEntry;
+  const theirEntry = section(other)[scope.id] ?? {};
+  const mineEntry = section(own)[scope.id] ?? {};
+  const entry = Object.fromEntries([
+    ...Object.entries(theirEntry).filter(([platform]) => conflicting.has(platform)),
+    ...Object.entries(mineEntry).filter(([platform]) => !conflicting.has(platform)),
+  ]);
+  if (Object.keys(entry).length > 0) target[scope.id] = entry;
   else delete target[scope.id];
 
   const key = originKey(scope.kind, scope.id);

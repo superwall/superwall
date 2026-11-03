@@ -20,7 +20,8 @@ const lock = (over: Partial<LockFile> = {}): LockFile => ({
   ...over,
 });
 
-const merged = (theirs: string | undefined, mine: LockFile) => JSON.parse(mergeLockText(theirs, formatLock(mine), scope));
+const merged = (theirs: string | undefined, mine: LockFile) =>
+  JSON.parse(mergeLockText(theirs, formatLock(mine), scope));
 
 test("paths split into the pushed surface, other surfaces, shared files and derived files", () => {
   assert.equal(classifyPath("paywalls/a/app/index.tsx", scope), "own");
@@ -36,7 +37,10 @@ test("paths split into the pushed surface, other surfaces, shared files and deri
 });
 
 test("a surface is named only by a file inside its directory", () => {
-  assert.deepEqual(surfaceOf("funnels/onboarding/app/index.tsx"), { kind: "funnel", id: "onboarding" });
+  assert.deepEqual(surfaceOf("funnels/onboarding/app/index.tsx"), {
+    kind: "funnel",
+    id: "onboarding",
+  });
   assert.equal(surfaceOf("paywalls/a"), undefined);
   assert.equal(surfaceOf("assets/paywalls/a/x.png"), undefined);
 });
@@ -67,7 +71,7 @@ test("the merged lock keeps other surfaces from theirs and takes the pushed one 
   const result = merged(
     theirs,
     lock({
-      apps: { ios: "99" },
+      apps: { ios: "42" },
       paywalls: {
         a: { ios: { paywallId: "1", snapshot: "mine", sourcePending: 4 } },
         b: { ios: { paywallId: "2", snapshot: "stale-b" } },
@@ -77,8 +81,10 @@ test("the merged lock keeps other surfaces from theirs and takes the pushed one 
     }),
   );
 
-  assert.deepEqual(result.apps, { ios: "99", android: "43" });
-  assert.deepEqual(result.paywalls.a, { ios: { paywallId: "1", snapshot: "mine", sourcePending: 4 } });
+  assert.deepEqual(result.apps, { ios: "42", android: "43" });
+  assert.deepEqual(result.paywalls.a, {
+    ios: { paywallId: "1", snapshot: "mine", sourcePending: 4 },
+  });
   assert.deepEqual(result.paywalls.b, { ios: { paywallId: "2", snapshot: "theirs-b" } });
   assert.deepEqual(result.funnels, { f: { web: { paywallId: "3" } } });
   assert.deepEqual(result.origins, {
@@ -86,6 +92,38 @@ test("the merged lock keeps other surfaces from theirs and takes the pushed one 
     "paywall/b": { paywallId: "2", url: "b" },
   });
   assert.equal(result.sources, undefined);
+});
+
+test("a platform bound to a different app in the repo keeps the repo's app and bindings for it", () => {
+  const theirs = formatLock(
+    lock({
+      apps: { ios: "42", android: "43" },
+      paywalls: {
+        a: { android: { paywallId: "7", snapshot: "theirs-a" } },
+        b: { android: { paywallId: "8", snapshot: "theirs-b" } },
+      },
+    }),
+  );
+
+  const result = merged(
+    theirs,
+    lock({
+      apps: { ios: "42", android: "77" },
+      paywalls: {
+        a: {
+          ios: { paywallId: "1", snapshot: "mine" },
+          android: { paywallId: "70", snapshot: "mine-a" },
+        },
+      },
+    }),
+  );
+
+  assert.deepEqual(result.apps, { ios: "42", android: "43" });
+  assert.deepEqual(result.paywalls.a, {
+    android: { paywallId: "7", snapshot: "theirs-a" },
+    ios: { paywallId: "1", snapshot: "mine" },
+  });
+  assert.deepEqual(result.paywalls.b, { android: { paywallId: "8", snapshot: "theirs-b" } });
 });
 
 test("a pushed surface the pusher has no entry or origin for is dropped from the merged lock", () => {
@@ -103,19 +141,41 @@ test("a pushed surface the pusher has no entry or origin for is dropped from the
 });
 
 test("with no lock in the repo the merged lock is mine", () => {
-  const mine = lock({ paywalls: { a: { ios: { paywallId: "1" } } }, sources: { repo: "a".repeat(40) } });
-  const expected = formatLock({ version: 1, apps: mine.apps, paywalls: mine.paywalls, funnels: {} });
+  const mine = lock({
+    paywalls: { a: { ios: { paywallId: "1" } } },
+    sources: { repo: "a".repeat(40) },
+  });
+  const expected = formatLock({
+    version: 1,
+    apps: mine.apps,
+    paywalls: mine.paywalls,
+    funnels: {},
+  });
 
   assert.equal(mergeLockText(undefined, formatLock(mine), scope), expected);
 });
 
 test("an unreadable lock in the repo is refused, never read as having no bindings", () => {
-  const mine = lock({ paywalls: { a: { ios: { paywallId: "1" } } }, sources: { repo: "a".repeat(40) } });
-  const expected = formatLock({ version: 1, apps: mine.apps, paywalls: mine.paywalls, funnels: {} });
+  const mine = lock({
+    paywalls: { a: { ios: { paywallId: "1" } } },
+    sources: { repo: "a".repeat(40) },
+  });
+  const expected = formatLock({
+    version: 1,
+    apps: mine.apps,
+    paywalls: mine.paywalls,
+    funnels: {},
+  });
 
-  for (const theirs of ['{"version":1,"apps":{"ios":"42"},"paywalls":{"b"', "<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> x\n"]) {
+  for (const theirs of [
+    '{"version":1,"apps":{"ios":"42"},"paywalls":{"b"',
+    "<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> x\n",
+  ]) {
     assert.throws(() => mergeLockText(theirs, formatLock(mine), scope), SourceLockUnreadableError);
-    assert.equal(mergeLockText(theirs, formatLock(mine), scope, { replaceUnreadable: true }), expected);
+    assert.equal(
+      mergeLockText(theirs, formatLock(mine), scope, { replaceUnreadable: true }),
+      expected,
+    );
   }
 });
 

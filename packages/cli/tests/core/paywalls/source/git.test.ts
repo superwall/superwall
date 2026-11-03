@@ -469,6 +469,27 @@ test("with no sync point, publishing one paywall onto a repo holding a teammate'
   assert.equal(lock.paywalls.b.ios.paywallId, "2");
 });
 
+test("with no sync point, another paywall's file turned folder locally never blocks the push", async () => {
+  const repo = bareRepo();
+  const shared = file("package.json", "{}\n");
+  seed(repo, [shared, file("paywalls/b/theme", "file in the repo\n"), lockWith({ b: bound("2") })]);
+
+  const result = await pushSourceTree({
+    access: access(repo.remote),
+    files: [
+      shared,
+      file("paywalls/a/app/index.tsx", "a\n"),
+      file("paywalls/b/theme/colors.ts", "folder locally\n"),
+      lockWith({ a: bound("1"), b: bound("2") }),
+    ],
+    message: messageFor("a", 8),
+  });
+
+  assert.equal(result.status, "committed");
+  assert.equal(blob(repo.dir, "paywalls/b/theme"), "file in the repo\n");
+  assert.equal(blob(repo.dir, "paywalls/a/app/index.tsx"), "a\n");
+});
+
 test("with no sync point, a different copy of the pushed paywall is refused, naming only its files", async () => {
   const repo = bareRepo();
   const theirs = seed(repo, [

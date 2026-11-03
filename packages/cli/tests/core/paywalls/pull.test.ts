@@ -439,6 +439,47 @@ test("pulled changes are written and deleted, but never over a local file the pr
   assert.equal(fs.readFileSync(path.join(dir, "secret.local"), "utf8"), "keep\n");
 });
 
+test("a pulled file under a folder an ignored local file blocks is skipped, and nothing else is lost", () => {
+  const dir = temp("superwall-pull-apply-");
+  fs.writeFileSync(path.join(dir, "assets"), "ignored local file\n");
+  fs.writeFileSync(path.join(dir, "old.ts"), "old\n");
+  fs.writeFileSync(path.join(dir, "theme"), "tracked file\n");
+
+  const result = applyPulledChanges(
+    dir,
+    [
+      { path: "old.ts", content: undefined },
+      { path: "theme", content: undefined },
+      { path: "assets/new.svg", content: Buffer.from("<svg/>") },
+      { path: "theme/colors.ts", content: Buffer.from("colors\n") },
+    ],
+    new Set(["old.ts", "theme"]),
+  );
+
+  assert.deepEqual(result, {
+    written: ["old.ts", "theme", "theme/colors.ts"],
+    skipped: ["assets/new.svg"],
+  });
+  assert.equal(fs.readFileSync(path.join(dir, "assets"), "utf8"), "ignored local file\n");
+  assert.equal(fs.existsSync(path.join(dir, "old.ts")), false);
+  assert.equal(fs.readFileSync(path.join(dir, "theme", "colors.ts"), "utf8"), "colors\n");
+});
+
+test("--theirs resolves a conflicting file named like a git pathspec without touching other files", async () => {
+  const repo = bareRepo();
+  const tricky = ":(glob)shared/*.txt";
+  commit(repo, { [tricky]: "theirs\n", "shared/other.txt": "remote other\n" });
+  const files = [file(tricky, "mine\n"), file("shared/other.txt", "remote other\n")];
+
+  const pulled = await pullSourceTree({ access: access(repo.remote), files, theirs: true });
+  assert.ok(pulled.status === "pulled");
+  assert.equal(contentOf(pulled.changes, tricky), "theirs\n");
+  assert.equal(
+    pulled.changes.some((change) => change.path === "shared/other.txt"),
+    false,
+  );
+});
+
 test("a symlink in the source repo is refused rather than followed", async () => {
   const repo = bareRepo();
   const work = temp("superwall-pull-link-");
