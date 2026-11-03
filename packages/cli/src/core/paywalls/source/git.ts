@@ -368,6 +368,118 @@ async function settle(run: Run, dir: string, file: string, content: string | und
   await run(["add", "--", file]);
 }
 
+export class PullConflictError extends Error {
+  constructor(readonly files: readonly string[]) {
+    super(
+      `Your project and the source repo both changed ${listFiles(files)}, so nothing was pulled. ` +
+        "Rerun with --theirs to take the source repo's version of them (your edits to them are lost), " +
+        "or back up your copies and rerun with --theirs.",
+    );
+  }
+}
+
+export interface PulledChange {
+  path: string;
+  content: Buffer | undefined;
+}
+
+export type PullResult =
+  | { status: "empty" }
+  | { status: "pulled"; head: string; changes: PulledChange[]; lock: string | undefined };
+
+export interface PullInput {
+  access: SourceAccess;
+  files: readonly SourceFile[];
+  base?: string;
+  theirs?: boolean;
+}
+
+export async function pullSourceTree(input: PullInput): Promise<PullResult> {
+  const { access } = input;
+  const secrets = [access.token, tokenSecret(access.token)];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pull-"));
+  const env = gitEnv(access.token, {
+    GIT_AUTHOR_NAME: AUTHOR.name,
+    GIT_AUTHOR_EMAIL: AUTHOR.email,
+    GIT_COMMITTER_NAME: AUTHOR.name,
+    GIT_COMMITTER_EMAIL: AUTHOR.email,
+  });
+  const run = (args: string[]) => git(args, { cwd: dir, env, secrets });
+  const revParse = (ref: string) =>
+    run(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).then(
+      (out) => out.trim(),
+      () => undefined,
+    );
+
+  try {
+    await cloneSource(access, dir, { env, secrets });
+    const head = await revParse("HEAD");
+    if (!head) return { status: "empty" };
+
+    const base = input.base ? await revParse(input.base) : undefined;
+    if (base) {
+      await run(["checkout", "--quiet", "--detach", base]);
+    } else {
+      await run(["checkout", "--quiet", "--orphan", "superwall-local"]);
+    }
+    replaceTree(dir, input.files);
+    await run(["add", "-A"]);
+    await run(["commit", "--quiet", "--no-verify", "--allow-empty", "-m", "Local project"]);
+    const own = await revParse("HEAD");
+    if (!own) throw new Error("The local snapshot commit was not created.");
+
+    let failure: unknown;
+    await run([
+      "merge",
+      "--quiet",
+      "--no-ff",
+      "--no-commit",
+      ...(base ? [] : ["--allow-unrelated-histories"]),
+      head,
+    ]).catch((error: unknown) => {
+      failure = error;
+    });
+    const conflicted = changedPaths(await run(["diff", "--name-only", "--diff-filter=U", "-z"]));
+    if (failure !== undefined && conflicted.length === 0) throw failure;
+    const blocking = conflicted.filter((file) => !DERIVED_FILES.has(file));
+    if (blocking.length > 0 && !input.theirs) throw new PullConflictError(blocking);
+    const present = new Set(
+      (await run(["ls-tree", "-r", "--name-only", "-z", head])).split("\0").filter(Boolean),
+    );
+    for (const file of conflicted) {
+      if (present.has(file)) await run(["checkout", head, "--", file]);
+      else await run(["rm", "--quiet", "--force", "--", file]);
+    }
+
+    const changes: PulledChange[] = [];
+    for (const file of changedPaths(await run(["diff", "--cached", "--name-only", "--no-renames", "-z", own]))) {
+      if (DERIVED_FILES.has(file)) continue;
+      const stat = fs.lstatSync(path.join(dir, file), { throwIfNoEntry: false });
+      if (stat?.isSymbolicLink()) {
+        throw new Error(`The source repo has ${file} as a symlink — the CLI only pulls regular files.`);
+      }
+      changes.push({ path: file, content: stat ? fs.readFileSync(path.join(dir, file)) : undefined });
+    }
+    const lock = present.has(LOCK_FILE) ? await run(["show", `${head}:${LOCK_FILE}`]) : undefined;
+    return { status: "pulled", head, changes, lock };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const changedPaths = (output: string): string[] => output.split("\0").filter(Boolean).sort();
+
+function replaceTree(dir: string, files: readonly SourceFile[]): void {
+  for (const entry of fs.readdirSync(dir)) {
+    if (entry !== ".git") fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
+  }
+  for (const file of files) {
+    const target = path.join(dir, file.path);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, file.content);
+  }
+}
+
 const isRejected = (error: unknown): boolean =>
   error instanceof GitError &&
   /rejected|non-fast-forward|fetch first|stale info|failed to push some refs/i.test(error.message);

@@ -187,7 +187,7 @@ export function formatSharedLock(superwallDir: string): string {
   return formatLock(lock);
 }
 
-function writeLock(superwallDir: string, lock: LockFile): void {
+export function writeLock(superwallDir: string, lock: LockFile): void {
   const file = lockPath(superwallDir);
   const temporary = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, formatLock(lock));

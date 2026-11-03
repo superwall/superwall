@@ -21,7 +21,7 @@ function command(name: string): Command {
 
 const rootHelp = () => stripVTControlCharacters(renderRoot(listGroups(), ""));
 
-const FRAMEWORK = ["create", "dev", "build", "push", "promote", "publish"];
+const FRAMEWORK = ["create", "dev", "build", "push", "promote", "publish", "pull"];
 
 for (const channel of ["latest", "next"] as const) {
   test(`on the ${channel} channel, help lists the framework commands`, () => {
