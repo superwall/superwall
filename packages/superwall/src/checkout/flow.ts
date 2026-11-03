@@ -71,7 +71,7 @@ export const resolutionOf = (
 };
 
 const APPLE_PAY_PREFETCH_LIMIT = 10;
-const SHEET_READY_TIMEOUT = 20_000;
+const SHEET_READY_TIMEOUT = 10_000;
 const STATUS_POLL_INTERVAL = 2_000;
 const STATUS_POLL_LIMIT = 60;
 
@@ -252,7 +252,7 @@ export const prefetchSession = async (
     if (mode === "applePay") {
       applePayFor(paywall).markUnavailable(referenceName, "session_unsupported");
     }
-    checkoutEvents.dispatch("SESSION_CREATED", result);
+    checkoutEvents.dispatch("SESSION_PREFETCHED", result);
   }
 };
 

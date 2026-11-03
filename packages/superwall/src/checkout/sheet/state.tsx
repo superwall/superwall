@@ -32,6 +32,9 @@ export const SheetProvider = ({ children }: React.PropsWithChildren) => {
           checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: session.clientSecret });
         }
       }),
+      checkoutEvents.subscribe("SESSION_PREFETCHED", (session) =>
+        dispatch({ type: "PREFETCH_SESSION", payload: session }),
+      ),
       checkoutEvents.subscribe("SHEET_OPEN", ({ session }) => {
         actions.addOrUpdateSession(session);
         actions.openSheet(session);

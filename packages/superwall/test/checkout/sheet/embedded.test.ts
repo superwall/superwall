@@ -6,7 +6,11 @@ import {
   type EmbeddedRequest,
 } from "../../../src/checkout/sheet/embedded";
 
-type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void; reject: (e: unknown) => void };
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (e: unknown) => void;
+};
 
 const deferred = <T>(): Deferred<T> => {
   let resolve!: (value: T) => void;
@@ -116,7 +120,9 @@ describe("one Stripe embedded checkout per page", () => {
   it("waits for a starting checkout before starting the next, never holding two", async () => {
     const gate = deferred<void>();
     let delays = 0;
-    const fake = fakeStripe({ initDelay: () => (delays++ === 0 ? gate.promise : Promise.resolve()) });
+    const fake = fakeStripe({
+      initDelay: () => (delays++ === 0 ? gate.promise : Promise.resolve()),
+    });
     const checkouts = createEmbeddedCheckouts(() => Promise.resolve(fake.stripe));
     const first = request("cs_first");
     const second = request("cs_second");
@@ -130,7 +136,12 @@ describe("one Stripe embedded checkout per page", () => {
     gate.resolve();
     await flush();
 
-    expect(fake.log).toEqual(["init cs_first", "destroy cs_first", "init cs_second", "mount cs_second"]);
+    expect(fake.log).toEqual([
+      "init cs_first",
+      "destroy cs_first",
+      "init cs_second",
+      "mount cs_second",
+    ]);
     expect(second.handlers.current.onError).not.toHaveBeenCalled();
     expect(fake.alive()).toBe(1);
   });
@@ -167,7 +178,10 @@ describe("one Stripe embedded checkout per page", () => {
   });
 
   it("forwards Stripe's callbacks to the latest handlers", async () => {
-    let options: { onComplete?: () => void; onAnalyticsEvent?: (e: { eventType: string }) => void } = {};
+    let options: {
+      onComplete?: () => void;
+      onAnalyticsEvent?: (e: { eventType: string }) => void;
+    } = {};
     const stripe = {
       initEmbeddedCheckout: (given: typeof options) => {
         options = given;
@@ -195,7 +209,8 @@ describe("when Stripe fails", () => {
     const stripe = {
       initEmbeddedCheckout: () => {
         calls++;
-        if (calls === 1) return Promise.reject(new Error("You cannot have multiple Embedded Checkout objects."));
+        if (calls === 1)
+          return Promise.reject(new Error("You cannot have multiple Embedded Checkout objects."));
         return Promise.resolve({ mount: () => {}, unmount: () => {}, destroy: () => {} });
       },
     } as unknown as Stripe;
@@ -225,7 +240,9 @@ describe("when Stripe fails", () => {
     checkouts.show(shown);
     await flush();
 
-    expect(shown.handlers.current.onError).toHaveBeenCalledWith(new Error("Stripe.js did not load"));
+    expect(shown.handlers.current.onError).toHaveBeenCalledWith(
+      new Error("Stripe.js did not load"),
+    );
   });
 
   it("loads stripe.js again after it failed to load", async () => {

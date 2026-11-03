@@ -3,6 +3,7 @@ import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SheetProvider, useSheetActions, useSheetState } from "../../../src/checkout/sheet/state";
 import { checkoutEvents } from "../../../src/checkout/events";
+import { openEmbeddedSheet } from "../../../src/checkout/flow";
 import type { EmbeddedCheckoutSession } from "../../../src/checkout/types";
 
 const sessionFor = (clientSecret: string): EmbeddedCheckoutSession => ({
@@ -60,6 +61,51 @@ describe("SheetProvider", () => {
     stop();
 
     expect(ready).toHaveBeenCalledWith({ clientSecret: "a" });
+  });
+
+  it("keeps the warm session when another plan is prepared, and swaps on a tap", () => {
+    const { result } = mount();
+
+    act(() => {
+      checkoutEvents.dispatch("SESSION_PREFETCHED", sessionFor("a"));
+      checkoutEvents.dispatch("SESSION_PREFETCHED", {
+        ...sessionFor("b"),
+        referenceName: "weekly",
+      });
+    });
+    expect([...result.current.state.pooledSessions.keys()]).toEqual(["a"]);
+
+    act(() =>
+      checkoutEvents.dispatch("SESSION_CREATED", { ...sessionFor("b"), referenceName: "weekly" }),
+    );
+    expect([...result.current.state.pooledSessions.keys()]).toEqual(["b"]);
+  });
+
+  it("opens at once on the tap after a timeout, once Stripe finished in the background", async () => {
+    vi.useFakeTimers();
+    const opened = vi.fn();
+    const stop = checkoutEvents.subscribe("SHEET_OPEN", opened);
+    const { result } = mount();
+
+    let first: ReturnType<typeof openEmbeddedSheet> | undefined;
+    act(() => {
+      first = openEmbeddedSheet(sessionFor("a"));
+    });
+    act(() => vi.advanceTimersByTime(10_000));
+    await expect(first).resolves.toEqual({ status: "failed" });
+    expect(opened).not.toHaveBeenCalled();
+    expect([...result.current.state.pooledSessions.keys()]).toEqual(["a"]);
+
+    act(() => checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: "a" }));
+    act(() => {
+      void openEmbeddedSheet(sessionFor("a"));
+    });
+
+    expect(opened).toHaveBeenCalledOnce();
+    expect(result.current.state.isOpen).toBe(true);
+    stop();
+    act(() => checkoutEvents.dispatch("SHEET_CLOSE", undefined));
+    vi.useRealTimers();
   });
 
   it("records a payment error and forgets the pool when sessions are invalidated", () => {

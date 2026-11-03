@@ -255,7 +255,7 @@ describe("prefetchSession", () => {
     const { session, postMessage } = fakeSession();
     vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(embedded);
     const pooled = vi.fn();
-    const stop = checkoutEvents.subscribe("SESSION_CREATED", pooled);
+    const stop = checkoutEvents.subscribe("SESSION_PREFETCHED", pooled);
 
     await prefetchSession(session, "primary", "sheet");
     stop();
@@ -271,7 +271,7 @@ describe("prefetchSession", () => {
     const { session } = fakeSession();
     vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(quote);
     const pooled = vi.fn();
-    const stop = checkoutEvents.subscribe("SESSION_CREATED", pooled);
+    const stop = checkoutEvents.subscribe("SESSION_PREFETCHED", pooled);
 
     await prefetchSession(session, "primary", "sheet");
     stop();
@@ -374,11 +374,23 @@ describe("openEmbeddedSheet", () => {
     expect(postMessage.mock.calls.at(-1)?.[0].event_name).toBe("stripe_checkout_fail");
   });
 
+  it("gives up waiting for Stripe after 10 seconds, not before", async () => {
+    vi.useFakeTimers();
+    const settled = vi.fn();
+    void openEmbeddedSheet(embedded).then(settled);
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(settled).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toHaveBeenCalledWith({ status: "failed" });
+    vi.useRealTimers();
+  });
+
   it("ignores a close that arrives before the sheet ever opened", async () => {
     vi.useFakeTimers();
     const outcome = openEmbeddedSheet(embedded);
     checkoutEvents.dispatch("SHEET_CLOSE", undefined);
-    vi.advanceTimersByTime(20_000);
+    vi.advanceTimersByTime(10_000);
     await expect(outcome).resolves.toEqual({ status: "failed" });
     vi.useRealTimers();
   });

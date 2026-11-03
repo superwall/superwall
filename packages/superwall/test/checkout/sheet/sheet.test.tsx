@@ -8,13 +8,14 @@ type StripeOptions = {
   onComplete: () => void;
   onAnalyticsEvent: (e: { eventType: string }) => void;
 };
-const stripe: { options?: StripeOptions } = {};
+const stripe: { options?: StripeOptions; started: string[] } = { started: [] };
 
 vi.mock("@stripe/stripe-js", () => ({
   loadStripe: () =>
     Promise.resolve({
-      initEmbeddedCheckout: (options: StripeOptions) => {
+      initEmbeddedCheckout: (options: StripeOptions & { clientSecret: string }) => {
         stripe.options = options;
+        stripe.started.push(options.clientSecret);
         const frame = document.createElement("div");
         frame.dataset.testid = "stripe-checkout";
         return Promise.resolve({
@@ -283,6 +284,44 @@ describe("a sheet that is pooled but not open", () => {
 
     expect(document.querySelector('[data-state="closed"]')).not.toBeNull();
     expect(document.querySelector('[data-state="open"]')).toBeNull();
+  });
+});
+
+describe("a warm checkout while the shopper picks plans", () => {
+  const plan = (clientSecret: string, referenceName: string) => ({
+    ...session,
+    clientSecret,
+    referenceName,
+  });
+
+  it("keeps the first prepared checkout when another plan is prepared", async () => {
+    stripe.started = [];
+    mount();
+    await act(async () => {
+      checkoutEvents.dispatch("SESSION_PREFETCHED", plan("cs_likely", "annual"));
+      await settle();
+    });
+    await act(async () => {
+      checkoutEvents.dispatch("SESSION_PREFETCHED", plan("cs_other", "weekly"));
+      await settle();
+    });
+
+    expect(stripe.started).toEqual(["cs_likely"]);
+  });
+
+  it("swaps to the plan the shopper tapped", async () => {
+    stripe.started = [];
+    mount();
+    await act(async () => {
+      checkoutEvents.dispatch("SESSION_PREFETCHED", plan("cs_likely", "annual"));
+      await settle();
+    });
+    await act(async () => {
+      checkoutEvents.dispatch("SESSION_CREATED", plan("cs_tapped", "weekly"));
+      await settle();
+    });
+
+    expect(stripe.started).toEqual(["cs_likely", "cs_tapped"]);
   });
 });
 

@@ -2,6 +2,7 @@ import type { EmbeddedCheckoutSession, PaymentSession } from "./types";
 
 export type CheckoutEventType =
   | "SESSION_CREATED"
+  | "SESSION_PREFETCHED"
   | "SHEET_OPEN"
   | "SHEET_CLOSE"
   | "EMBEDDED_READY"
@@ -13,6 +14,7 @@ export type CheckoutEventType =
 
 export type CheckoutEventPayload = {
   SESSION_CREATED: EmbeddedCheckoutSession;
+  SESSION_PREFETCHED: EmbeddedCheckoutSession;
   SHEET_OPEN: { session: EmbeddedCheckoutSession };
   SHEET_CLOSE: undefined;
   EMBEDDED_READY: { clientSecret: string };
