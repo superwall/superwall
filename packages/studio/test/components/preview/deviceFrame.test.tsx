@@ -341,9 +341,15 @@ describe("DeviceFrame in a browser", () => {
 
   it("draws the tablet bar under the status bar, and the desktop bar with traffic lights", () => {
     const view = render(
-      <DeviceFrame {...props} browser={{ kind: "tablet", top: 90, bottom: 0 }} theme="dark" />,
+      <DeviceFrame
+        {...props}
+        chrome={device.chrome && { ...device.chrome, statusBarHeight: 24 }}
+        browser={{ kind: "tablet", top: 90, bottom: 0 }}
+        theme="dark"
+      />,
     );
-    expect(screen.getByTestId("browser-top-bar").style.height).toBe("90px");
+    expect(screen.getByTestId("browser-top-bar").style.top).toBe("24px");
+    expect(screen.getByTestId("browser-top-bar").style.height).toBe("66px");
     expect(screen.getByText("superwall.com")).toBeDefined();
     view.unmount();
 

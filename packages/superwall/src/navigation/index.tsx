@@ -10,7 +10,7 @@ import {
 import { readTeleportBoot, seedTeleportUrl } from "../checkout/teleport/boot";
 import { teleportFor } from "../checkout/teleport/flow";
 import { restoreTeleportQuery } from "../checkout/teleport/page";
-import { provideInlinePush } from "../checkout/teleport/studio";
+import { provideInlineRouter } from "../checkout/teleport/studio";
 import { flowQuery } from "../checkout/teleport/teleporter";
 import { useHostStateArrived, useSuperwallSession } from "../provider/context";
 import {
@@ -412,12 +412,15 @@ const Router = ({
 
   React.useEffect(
     () =>
-      provideInlinePush(session, (route) => {
-        if (!isRoute(known.current, route))
-          throw new Error(
-            `Unknown route "${route}". Available routes: ${Object.keys(known.current).join(", ")}`,
-          );
-        current.current.push(route);
+      provideInlineRouter(session, {
+        push: (route) => {
+          if (!isRoute(known.current, route))
+            throw new Error(
+              `Unknown route "${route}". Available routes: ${Object.keys(known.current).join(", ")}`,
+            );
+          current.current.push(route);
+        },
+        back: (count) => current.current.dismiss(count),
       }),
     [session],
   );

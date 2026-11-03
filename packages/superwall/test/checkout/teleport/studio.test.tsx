@@ -2,8 +2,8 @@ import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallConfig, TOutgoingMessage } from "@superwall/runtime";
 import { teleportFor } from "../../../src/checkout/teleport/flow";
-import { createStudioTeleporter, provideInlinePush } from "../../../src/checkout/teleport/studio";
-import { usePurchase, useSuperwallSession } from "../../../src/hooks";
+import { createStudioTeleporter, provideInlineRouter } from "../../../src/checkout/teleport/studio";
+import { usePurchase, useSuperwallSession, useTeleport } from "../../../src/hooks";
 import { PaywallRouter, useRouter, type RouteMap } from "../../../src/navigation/index";
 import { createWrapper, flush } from "../../helpers";
 
@@ -23,6 +23,7 @@ type Captured = {
   router?: ReturnType<typeof useRouter>;
   purchase?: ReturnType<typeof usePurchase>["purchase"];
   session?: ReturnType<typeof useSuperwallSession>;
+  teleport?: ReturnType<typeof useTeleport>;
 };
 
 const captured: Captured = {};
@@ -31,6 +32,7 @@ const Page = ({ name }: { name: string }) => {
   captured.router = useRouter();
   captured.purchase = usePurchase().purchase;
   captured.session = useSuperwallSession();
+  captured.teleport = useTeleport();
   return <p>{name}</p>;
 };
 
@@ -206,6 +208,36 @@ describe("teleporting in the studio", () => {
     });
   });
 
+  it("shows the purchase as completed on the web half once it is bought there", async () => {
+    await mount();
+    await act(async () => {
+      void captured.purchase?.("card");
+      await settle();
+    });
+    await act(async () => {
+      await captured.purchase?.("card");
+      await flush();
+    });
+
+    expect(captured.teleport).toMatchObject({
+      status: "completed",
+      paidElsewhere: false,
+      productReference: "card",
+    });
+  });
+
+  it("returns to the app from useTeleport().returnToApp() on the web half", async () => {
+    const outgoing = await mount();
+    await act(async () => captured.router?.push("checkout"));
+    await act(async () => captured.router?.push("plans"));
+    await act(async () => captured.teleport?.returnToApp());
+    await flush();
+
+    expect(teleports(outgoing)).toHaveLength(1);
+    expect(captured.router?.name).toBe("index");
+    expect(statusNow()).toEqual({ status: "idle" });
+  });
+
   it("buys store products in the app without teleporting", async () => {
     const outgoing = await mount();
     await act(async () => {
@@ -235,6 +267,8 @@ describe("teleporting in the studio", () => {
   });
 });
 
+const router = () => ({ push: () => {}, back: () => {} });
+
 const session = (posted: unknown[] = []) => ({
   getSnapshot: () =>
     ({
@@ -258,8 +292,8 @@ describe("the studio teleporter", () => {
   it("forgets a router once it unmounts, but not a newer one", () => {
     const paywall = session();
     const teleporter = createStudioTeleporter(paywall);
-    const stale = provideInlinePush(paywall, () => {});
-    const remove = provideInlinePush(paywall, () => {});
+    const stale = provideInlineRouter(paywall, router());
+    const remove = provideInlineRouter(paywall, router());
     stale();
     expect(teleporter.available()).toBe(true);
     remove();
@@ -269,7 +303,7 @@ describe("the studio teleporter", () => {
   it("returns to the app when the paywall closes on the web half", async () => {
     const paywall = session();
     const teleporter = createStudioTeleporter(paywall);
-    provideInlinePush(paywall, () => {});
+    provideInlineRouter(paywall, router());
     const returned = vi.fn();
     teleporter.on("return", returned);
 
@@ -288,6 +322,7 @@ describe("the studio teleporter", () => {
     teleporter.refreshIntroductoryOffer();
     teleporter.open();
     teleporter.cancel();
+    teleporter.returnToApp();
     teleporter.attach({} as never)();
 
     expect(teleporter.fallback()).toBeUndefined();

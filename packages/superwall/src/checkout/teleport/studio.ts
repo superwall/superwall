@@ -9,19 +9,23 @@ import {
   type TeleportSession,
 } from "./teleporter";
 
-type InlinePush = (route: string) => void;
+export type InlineRouter = {
+  push: (route: string) => void;
+  back: (count: number) => void;
+};
 
-const inlinePushes = new WeakMap<object, InlinePush>();
+const inlineRouters = new WeakMap<object, InlineRouter>();
 
-export const provideInlinePush = (paywall: object, push: InlinePush): (() => void) => {
-  inlinePushes.set(paywall, push);
+export const provideInlineRouter = (paywall: object, router: InlineRouter): (() => void) => {
+  inlineRouters.set(paywall, router);
   return () => {
-    if (inlinePushes.get(paywall) === push) inlinePushes.delete(paywall);
+    if (inlineRouters.get(paywall) === router) inlineRouters.delete(paywall);
   };
 };
 
 type WebHalf = {
   depth: number;
+  productReference?: string;
   settle: (outcome: TeleportOutcome) => void;
 };
 
@@ -53,7 +57,7 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
     web === undefined &&
     settings() !== undefined &&
     platformOf(paywall.getSnapshot().device) === "ios" &&
-    inlinePushes.has(paywall);
+    inlineRouters.has(paywall);
 
   return {
     kind: "app",
@@ -67,16 +71,22 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
       if (web !== undefined && at < web.depth) backInApp();
     },
     begin: (request) => {
-      const push = inlinePushes.get(paywall);
+      const router = inlineRouters.get(paywall);
       const target = request.route ?? settings()?.route ?? route;
-      if (!available() || push === undefined || target === undefined) {
+      if (!available() || router === undefined || target === undefined) {
         return Promise.resolve("failed");
       }
       const outcome = new Promise<TeleportOutcome>((resolve) => {
-        web = { depth: depth + 1, settle: resolve };
+        web = {
+          depth: depth + 1,
+          settle: resolve,
+          ...(request.productReference === undefined
+            ? {}
+            : { productReference: request.productReference }),
+        };
       });
       try {
-        push(target);
+        router.push(target);
       } catch (error) {
         web = undefined;
         throw error;
@@ -103,9 +113,30 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
       reference: string,
       purchase: () => Promise<T>,
     ): Promise<T> => {
+      const half = web;
       const result = purchase();
-      web?.settle({ reference, result });
+      half?.settle({ reference, result });
+      void result.then(
+        (bought) => {
+          if (bought.status !== "completed" || web !== half || half === undefined) return;
+          store.setStatus({
+            status: "completed",
+            paidElsewhere: false,
+            ...(half.productReference === undefined
+              ? {}
+              : { productReference: half.productReference }),
+          });
+          store.emit("complete");
+        },
+        () => {},
+      );
       return result;
+    },
+    returnToApp: () => {
+      const half = web;
+      const router = inlineRouters.get(paywall);
+      if (half === undefined || router === undefined) return;
+      router.back(depth - half.depth + 1);
     },
     open: () => {},
     cancel: () => {},

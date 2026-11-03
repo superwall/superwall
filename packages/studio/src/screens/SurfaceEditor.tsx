@@ -376,11 +376,13 @@ export const SurfaceEditor = ({
   const previewSrc = source.previewUrl(surface);
   const local = usePreviewPlace(`${previewSrc}#${reloadKey}`);
   const delegate = useStudioDelegate(reminder, local.tracker);
-  const comparing = usePreviewPlace(`${compareKeyOf(compareWith)}#${reloadKey}`);
+  const comparing = usePreviewPlace(`${previewSrc}|${compareKeyOf(compareWith)}#${reloadKey}`);
   const compareDelegate = useStudioDelegate(reminder, comparing.tracker);
-  const browserFor = (place: PreviewPlace): BrowserLayout | undefined => {
+  const compareWeb =
+    compareWith?.type === "surface" ? isWebOnly(compareWith.surface.platforms) : web;
+  const browserFor = (place: PreviewPlace, paneWeb: boolean): BrowserLayout | undefined => {
     if (responsive) return undefined;
-    if (web) return webBrowser;
+    if (paneWeb) return browserLayoutFor(device, { teleported: false, landscape });
     return place.where === "browser"
       ? browserLayoutFor(device, { teleported: true, landscape })
       : undefined;
@@ -652,7 +654,7 @@ export const SurfaceEditor = ({
                   chrome={chrome}
                   landscape={landscape}
                   theme={theme}
-                  browser={browserFor(comparing.place)}
+                  browser={browserFor(comparing.place, compareWeb)}
                   place={comparing.place}
                 />
               )}
@@ -669,7 +671,7 @@ export const SurfaceEditor = ({
                 chrome={chrome}
                 landscape={landscape}
                 theme={theme}
-                browser={browserFor(local.place)}
+                browser={browserFor(local.place, web)}
                 place={local.place}
                 onResize={
                   responsive

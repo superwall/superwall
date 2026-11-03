@@ -756,6 +756,66 @@ describe("SurfaceEditor's smaller states", () => {
     expect(screen.getByTestId("presentation-page").style.top).toBe("90px");
   });
 
+  it("keeps a native comparison in the app beside a web-only paywall", async () => {
+    const web: StudioSurface = { ...live, platforms: ["web"] };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [pushed, web], previewUrl: () => "/preview" }}
+        surface={web}
+        samples={{}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /compare/i }));
+    fireEvent.click(screen.getByText("v13"));
+    await act(async () => {});
+
+    const [compared, primary] = screen.getAllByTestId("device-frame");
+    expect(compared?.getAttribute("data-browser")).toBeNull();
+    expect(primary?.getAttribute("data-browser")).toBe("phone");
+  });
+
+  it("forgets the comparison's teleport when the paywall it compares changes", async () => {
+    const first: StudioSurface = {
+      ...live,
+      origin: { paywallId: "65920", url: "https://runtime.example/doc/abc" },
+    };
+    const second: StudioSurface = { ...first, id: "other", label: "Other" };
+    window.history.replaceState({}, "", `/paywall/${first.id}?compare=origin`);
+    const editor = (surface: StudioSurface) => (
+      <StudioHostProvider mode="local" home={{ href: "/", navigate: () => {} }}>
+        <SurfaceEditor
+          source={{ ...source, surfaces: [first, second], previewUrl: (s) => `/preview/${s.id}` }}
+          surface={surface}
+          samples={{}}
+        />
+      </StudioHostProvider>
+    );
+    const view = render(editor(first));
+    await act(async () => {});
+    const original = screen.getByTitle(`${first.id} original`);
+    if (!(original instanceof HTMLIFrameElement)) throw new Error("no original frame");
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            version: 1,
+            direction: "from_paywall",
+            payload: {
+              events: [{ event_name: "open_url_external", url: "http://x/", teleport: true }],
+            },
+          }),
+          source: original.contentWindow,
+        }),
+      );
+    });
+    expect(screen.getByRole("status", { name: "In browser" })).toBeDefined();
+
+    view.rerender(editor(second));
+    await act(async () => {});
+    expect(screen.queryByRole("status", { name: "In browser" })).toBeNull();
+    expect(screen.queryByRole("status", { name: "In app" })).toBeNull();
+  });
+
   it("puts zoom in the toolbar: step buttons, and the percentage fits", async () => {
     renderEditor(
       <SurfaceEditor

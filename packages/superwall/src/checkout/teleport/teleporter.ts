@@ -55,6 +55,7 @@ export type AppTeleport = TeleportBase & {
   fallback(): string | undefined;
   showWaitingScreen(): Promise<boolean>;
   handleReturn(reason?: string): Promise<boolean>;
+  returnToApp(): void;
 };
 
 export type TeleportPage = TeleportBase & {

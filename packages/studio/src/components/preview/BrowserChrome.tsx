@@ -200,9 +200,9 @@ const DesktopTopBar = () => (
 
 const TabletTopBar = ({ height, statusBar }: { height: number; statusBar: number }) => (
   <div
-    className="absolute inset-x-0 top-0 flex flex-col text-white"
+    className="absolute inset-x-0 flex flex-col text-white"
     data-testid="browser-top-bar"
-    style={{ height, background: BAR_BACKGROUND, paddingTop: statusBar }}
+    style={{ top: statusBar, height: height - statusBar, background: BAR_BACKGROUND }}
   >
     <div className="flex flex-1 items-center gap-2 px-3">
       <Pill glass={DARK_GLASS} height={40} padding={0}>
