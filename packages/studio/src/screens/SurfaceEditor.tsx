@@ -386,6 +386,11 @@ export const SurfaceEditor = ({
       : undefined;
   };
   const frame = landscape ? { width: upright.height, height: upright.width } : upright;
+  const chooseDevice = (id: string) => {
+    setDeviceId(id);
+    if (local.place.where === "browser" || comparing.place.where === "browser")
+      setReloadKey((key) => key + 1);
+  };
 
   const openPreview = () => {
     const standalone = source.standaloneUrl?.(surface);
@@ -738,7 +743,7 @@ export const SurfaceEditor = ({
               ...STUDIO_DEVICES.map((entry) => ({ value: entry.id, label: entry.name })),
               { value: RESPONSIVE_ID, label: "Responsive" },
             ]}
-            onChange={setDeviceId}
+            onChange={chooseDevice}
           />
           <Tooltip
             side="top"

@@ -411,7 +411,14 @@ const Router = ({
   current.current = router;
 
   React.useEffect(
-    () => provideInlinePush(session, (route) => current.current.push(route)),
+    () =>
+      provideInlinePush(session, (route) => {
+        if (!isRoute(known.current, route))
+          throw new Error(
+            `Unknown route "${route}". Available routes: ${Object.keys(known.current).join(", ")}`,
+          );
+        current.current.push(route);
+      }),
     [session],
   );
 

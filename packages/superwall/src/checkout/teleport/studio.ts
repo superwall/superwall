@@ -75,6 +75,12 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
       const outcome = new Promise<TeleportOutcome>((resolve) => {
         web = { depth: depth + 1, settle: resolve };
       });
+      try {
+        push(target);
+      } catch (error) {
+        web = undefined;
+        throw error;
+      }
       paywall.postMessage({
         event_name: "open_url_external",
         url: studioTeleportUrl(target, request.productReference),
@@ -86,7 +92,6 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
           : { status: "arrived", productReference: request.productReference },
       );
       store.emit("open");
-      push(target);
       return outcome;
     },
     prefetch: () => {},

@@ -3,6 +3,9 @@ import { definePaywall } from "superwall/config";
 export default definePaywall({
   name: "Web Funnel",
 
+  /** Sold only on the web: the studio previews it in Safari, and push binds it to the web app alone. */
+  platforms: ["web"],
+
   /** The page background per scheme — what <html> shows when a scroll bounces past the content. Matches `--bg` in theme.css. */
   background: { light: "#fdfef6", dark: "#0c0d0f" },
 

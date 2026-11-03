@@ -670,6 +670,58 @@ describe("SurfaceEditor's smaller states", () => {
     expect(screen.queryByRole("status", { name: "In app" })).toBeNull();
   });
 
+  it("reloads a teleported preview in the app when the device changes", async () => {
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [live], previewUrl: () => "/preview" }}
+        surface={live}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    const teleported = preview();
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            version: 1,
+            direction: "from_paywall",
+            payload: {
+              events: [{ event_name: "open_url_external", url: "http://x/", teleport: true }],
+            },
+          }),
+          source: teleported.contentWindow,
+        }),
+      );
+    });
+    expect(screen.getByRole("status", { name: "In browser" })).toBeDefined();
+
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "pixel-10" } });
+    await act(async () => {});
+    expect(screen.queryByRole("status", { name: "In browser" })).toBeNull();
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
+    expect(screen.getAllByTitle("plus-upgrade preview").length).toBe(2);
+
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "desktop" } });
+    await act(async () => {});
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
+  });
+
+  it("keeps the preview running when the device changes in the app", async () => {
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [live], previewUrl: () => "/preview" }}
+        surface={live}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    const frame = preview();
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "pixel-10" } });
+    await act(async () => {});
+    expect(screen.getAllByTitle("plus-upgrade preview")).toEqual([frame]);
+  });
+
   it("opens an iPad teleport under the Safari top bar, dropping the sheet", async () => {
     const sheet: StudioSurface = {
       ...live,

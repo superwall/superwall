@@ -157,6 +157,23 @@ describe("teleporting in the studio", () => {
     });
   });
 
+  it("refuses a teleport route the paywall does not have, without telling the host", async () => {
+    const outgoing = await mount({ surfaceConfig: { ...config, teleport: { route: "missing" } } });
+    let failure: unknown;
+    await act(async () => {
+      try {
+        await captured.purchase?.("card");
+      } catch (error) {
+        failure = error;
+      }
+    });
+
+    expect(String(failure)).toContain('Unknown route "missing"');
+    expect(teleports(outgoing)).toHaveLength(0);
+    expect(statusNow()).toEqual({ status: "idle" });
+    expect(screen.getByText("index")).toBeTruthy();
+  });
+
   it("teleports a purchase to the current route when the paywall names none", async () => {
     const outgoing = await mount({ surfaceConfig: { ...config, teleport: true } });
     await act(async () => captured.router?.push("plans"));
