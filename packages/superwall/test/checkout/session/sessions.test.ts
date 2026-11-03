@@ -591,13 +591,15 @@ describe("host lifecycle for the embedded sheet", () => {
     checkoutEvents.dispatch("PAYMENT_SUCCESS", { session });
     await expect(outcome).resolves.toEqual({ status: "completed" });
 
-    const names = postMessage.mock.calls.map(([message]) => message.event_name);
-    expect(names).toEqual([
+    const lifecycle = postMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.event_name !== "stripe_checkout_diagnostic");
+    expect(lifecycle.map((message) => message.event_name)).toEqual([
       "initiate_web_checkout",
       "stripe_checkout_start",
       "stripe_checkout_submit",
     ]);
-    expect(postMessage.mock.calls[0]![0]).toMatchObject({
+    expect(lifecycle[0]).toMatchObject({
       checkout_context_id: "ctx_1",
       product_identifier: "test:price_1:no-trial",
       paywall_identifier: "pw_1",

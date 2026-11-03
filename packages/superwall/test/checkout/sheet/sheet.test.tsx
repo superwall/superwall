@@ -1,28 +1,31 @@
 import { act, render, screen } from "@testing-library/react";
-import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 
 // Stripe's own bundle fetches js.stripe.com and mounts a cross-origin iframe,
 // neither of which exists in jsdom. Standing in for it keeps these tests about
 // our sheet — when it opens, when it refuses to close — rather than Stripe's.
-vi.mock("@stripe/stripe-js", () => ({
-  loadStripe: () => Promise.resolve({}),
-}));
 type StripeOptions = {
   onComplete: () => void;
   onAnalyticsEvent: (e: { eventType: string }) => void;
 };
-const stripe: { options?: StripeOptions } = {};
+const stripe: { options?: StripeOptions; started: string[]; refuse?: Error } = { started: [] };
 
-vi.mock("@stripe/react-stripe-js", () => ({
-  EmbeddedCheckoutProvider: ({
-    children,
-    options,
-  }: React.PropsWithChildren<{ options: StripeOptions }>) => {
-    stripe.options = options;
-    return <>{children}</>;
-  },
-  EmbeddedCheckout: () => <div data-testid="stripe-checkout" />,
+vi.mock("@stripe/stripe-js", () => ({
+  loadStripe: () =>
+    Promise.resolve({
+      initEmbeddedCheckout: (options: StripeOptions & { clientSecret: string }) => {
+        if (stripe.refuse) return Promise.reject(stripe.refuse);
+        stripe.options = options;
+        stripe.started.push(options.clientSecret);
+        const frame = document.createElement("div");
+        frame.dataset.testid = "stripe-checkout";
+        return Promise.resolve({
+          mount: (element: HTMLElement) => element.append(frame),
+          unmount: () => frame.remove(),
+          destroy: () => frame.remove(),
+        });
+      },
+    }),
 }));
 
 // jsdom ships no matchMedia; the sheet asks it whether to lay out as a phone
@@ -66,10 +69,12 @@ const mount = () =>
     </SuperwallProvider>,
   );
 
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const open = async () => {
   await act(async () => {
     checkoutEvents.dispatch("SHEET_OPEN", { session });
-    await Promise.resolve();
+    await settle();
   });
 };
 
@@ -270,6 +275,53 @@ describe("the sheet's chrome", () => {
   });
 });
 
+describe("the stages the sheet records for diagnostics", () => {
+  it("records stripe.js, the mount and Stripe's rendered event against the session", async () => {
+    const { checkoutDiagnostics } = await import("../../../src/checkout/diagnostics");
+    const record = vi.spyOn(checkoutDiagnostics, "record");
+    const staged = { ...session, clientSecret: "cs_staged" };
+    mount();
+    await act(async () => {
+      checkoutEvents.dispatch("SHEET_OPEN", { session: staged });
+      await settle();
+    });
+    await act(async () => {
+      stripe.options?.onAnalyticsEvent({ eventType: "checkoutRendered" });
+      await Promise.resolve();
+    });
+    const calls = [...record.mock.calls];
+    record.mockRestore();
+
+    expect(calls).toEqual([
+      ["cs_staged", "stripe_js_loaded"],
+      ["cs_staged", "embedded_mounted"],
+      ["cs_staged", "checkout_rendered"],
+    ]);
+  });
+
+  it("records Stripe's error when it refuses to start the checkout", async () => {
+    const { checkoutDiagnostics } = await import("../../../src/checkout/diagnostics");
+    const record = vi.spyOn(checkoutDiagnostics, "record");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const refused = new Error("You cannot have multiple Embedded Checkout objects.");
+    stripe.refuse = refused;
+    const refusedSession = { ...session, clientSecret: "cs_refused" };
+    mount();
+    await act(async () => {
+      checkoutEvents.dispatch("SHEET_OPEN", { session: refusedSession });
+      await settle();
+    });
+    stripe.refuse = undefined;
+    const calls = [...record.mock.calls];
+    const logs = logged.mock.calls.length;
+    record.mockRestore();
+    logged.mockRestore();
+
+    expect(calls).toContainEqual(["cs_refused", "stripe_error", refused]);
+    expect(logs).toBeGreaterThan(0);
+  });
+});
+
 describe("a sheet that is pooled but not open", () => {
   it("renders closed, so Stripe can warm up behind the paywall", async () => {
     mount();
@@ -280,6 +332,44 @@ describe("a sheet that is pooled but not open", () => {
 
     expect(document.querySelector('[data-state="closed"]')).not.toBeNull();
     expect(document.querySelector('[data-state="open"]')).toBeNull();
+  });
+});
+
+describe("a warm checkout while the shopper picks plans", () => {
+  const plan = (clientSecret: string, referenceName: string) => ({
+    ...session,
+    clientSecret,
+    referenceName,
+  });
+
+  it("keeps the first prepared checkout when another plan is prepared", async () => {
+    stripe.started = [];
+    mount();
+    await act(async () => {
+      checkoutEvents.dispatch("SESSION_PREFETCHED", plan("cs_likely", "annual"));
+      await settle();
+    });
+    await act(async () => {
+      checkoutEvents.dispatch("SESSION_PREFETCHED", plan("cs_other", "weekly"));
+      await settle();
+    });
+
+    expect(stripe.started).toEqual(["cs_likely"]);
+  });
+
+  it("swaps to the plan the shopper tapped", async () => {
+    stripe.started = [];
+    mount();
+    await act(async () => {
+      checkoutEvents.dispatch("SESSION_PREFETCHED", plan("cs_likely", "annual"));
+      await settle();
+    });
+    await act(async () => {
+      checkoutEvents.dispatch("SESSION_CREATED", plan("cs_tapped", "weekly"));
+      await settle();
+    });
+
+    expect(stripe.started).toEqual(["cs_likely", "cs_tapped"]);
   });
 });
 

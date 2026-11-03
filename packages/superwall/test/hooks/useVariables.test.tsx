@@ -34,6 +34,25 @@ describe("useDevice", () => {
       window.history.replaceState(null, "", "/");
     }
   });
+
+  it("names the browser showing the page, such as Instagram's in-app browser", async () => {
+    const userAgent = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 26_7_1 like Mac OS X) Instagram 450.0.0",
+    });
+    try {
+      const { result } = renderWithProvider(() => useDevice());
+      await flush();
+      expect(result.current.browser).toBe("instagram");
+    } finally {
+      if (userAgent) Object.defineProperty(window.navigator, "userAgent", userAgent);
+      else delete (window.navigator as { userAgent?: string }).userAgent;
+    }
+    const { result } = renderWithProvider(() => useDevice());
+    await flush();
+    expect(result.current.browser).not.toBe("instagram");
+  });
 });
 
 describe("useUser", () => {

@@ -10,6 +10,13 @@ export type SuperwallHost =
   | "studio"
   | "browser";
 
+export const WEB_HOSTS: ReadonlySet<SuperwallHost> = new Set([
+  "web-sdk",
+  "web-paywall",
+  "web-teleport",
+  "browser",
+]);
+
 type WebPaywallController = { props?: { clientSurface?: unknown } };
 
 const webController = (): WebPaywallController | undefined =>

@@ -475,7 +475,7 @@ describe("usePurchase prefetch", () => {
     const { result, sessions, product } = await renderCheckout("applePay");
     const warm = vi.spyOn(sessions, "prefetch").mockResolvedValue(embedded);
     const pooled: string[] = [];
-    const unsubscribe = checkoutEvents.subscribe("SESSION_CREATED", (session) => {
+    const unsubscribe = checkoutEvents.subscribe("SESSION_PREFETCHED", (session) => {
       pooled.push(session.clientSecret);
     });
 

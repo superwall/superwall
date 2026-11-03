@@ -141,3 +141,47 @@ describe("invalidating sessions", () => {
     expect(state.readyState.has("a")).toBe(true);
   });
 });
+
+describe("a prepared session", () => {
+  const plan = (clientSecret: string, referenceName: string): EmbeddedCheckoutSession => ({
+    ...sessionFor(clientSecret),
+    referenceName,
+  });
+
+  it("fills an empty pool", () => {
+    const state = reduce(initialSheetState, {
+      type: "PREFETCH_SESSION",
+      payload: plan("a", "annual"),
+    });
+    expect([...state.pooledSessions.keys()]).toEqual(["a"]);
+  });
+
+  it("leaves the warm session of another plan in place, readiness and all", () => {
+    const state = reduce(
+      initialSheetState,
+      { type: "PREFETCH_SESSION", payload: plan("a", "annual") },
+      { type: "MARK_READY", payload: "a" },
+      { type: "PREFETCH_SESSION", payload: plan("b", "weekly") },
+    );
+    expect([...state.pooledSessions.keys()]).toEqual(["a"]);
+    expect(state.readyState.has("a")).toBe(true);
+  });
+
+  it("replaces a session of the same plan, so a refreshed one is not dropped", () => {
+    const state = reduce(
+      initialSheetState,
+      { type: "PREFETCH_SESSION", payload: plan("a", "annual") },
+      { type: "PREFETCH_SESSION", payload: plan("a2", "annual") },
+    );
+    expect([...state.pooledSessions.keys()]).toEqual(["a2"]);
+  });
+
+  it("gives way to a tapped session of another plan", () => {
+    const state = reduce(
+      initialSheetState,
+      { type: "PREFETCH_SESSION", payload: plan("a", "annual") },
+      { type: "ADD_SESSION", payload: plan("b", "weekly") },
+    );
+    expect([...state.pooledSessions.keys()]).toEqual(["b"]);
+  });
+});

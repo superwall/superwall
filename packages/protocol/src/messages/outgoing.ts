@@ -134,6 +134,29 @@ const stripeCheckoutAbandon = stripeCheckout("stripe_checkout_abandon");
 const stripeCheckoutFail = stripeCheckout("stripe_checkout_fail");
 const stripeCheckoutSubmit = stripeCheckout("stripe_checkout_submit");
 
+export const StripeCheckoutDiagnosticStageSchema = z.enum([
+  "tap",
+  "session_ready",
+  "stripe_js_loaded",
+  "embedded_mounted",
+  "checkout_rendered",
+  "ready_timeout",
+  "stripe_error",
+]);
+
+export type TStripeCheckoutDiagnosticStage = z.infer<typeof StripeCheckoutDiagnosticStageSchema>;
+
+const stripeCheckoutDiagnostic = z.object({
+  event_name: z.literal("stripe_checkout_diagnostic"),
+  checkout_context_id: z.string(),
+  product_identifier: z.string(),
+  stage: StripeCheckoutDiagnosticStageSchema,
+  ms: z.number(),
+  browser: z.string(),
+  in_app_browser: z.boolean(),
+  error: z.string().optional(),
+});
+
 const postPurchaseBehavior = z.enum(["GRANT_ACCESS", "REDIRECT", "REDEEM", "CUSTOM"]);
 
 const postCheckoutResolution = z.union([
@@ -233,6 +256,7 @@ export const OutgoingMessageSchema = z.union([
   stripeCheckoutFail,
   stripeCheckoutComplete,
   stripeCheckoutSubmit,
+  stripeCheckoutDiagnostic,
   postCheckoutComplete,
   discountRedemptionResult,
   pageView,

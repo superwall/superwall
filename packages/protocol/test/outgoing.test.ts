@@ -226,6 +226,40 @@ describe("OutgoingMessageSchema", () => {
     rejects({ event_name: "discount_redemption_result", code: "SPRING20" });
   });
 
+  it("parses a Stripe checkout diagnostic at every stage", () => {
+    const base = {
+      event_name: "stripe_checkout_diagnostic",
+      checkout_context_id: "ctx",
+      product_identifier: "p",
+      ms: 0,
+      browser: "safari",
+      in_app_browser: false,
+    };
+    for (const stage of [
+      "tap",
+      "session_ready",
+      "stripe_js_loaded",
+      "embedded_mounted",
+      "checkout_rendered",
+      "ready_timeout",
+    ]) {
+      accepts({ ...base, stage });
+    }
+    accepts({
+      ...base,
+      stage: "stripe_error",
+      ms: -1200,
+      browser: "instagram",
+      in_app_browser: true,
+      error: "IntegrationError: You cannot have multiple Embedded Checkout objects.",
+    });
+    rejects({ ...base, stage: "loaded" });
+    rejects({ ...base, stage: "tap", ms: "0" });
+    rejects({ ...base, stage: "tap", in_app_browser: "instagram" });
+    const { browser: _, ...withoutBrowser } = base;
+    rejects({ ...withoutBrowser, stage: "tap" });
+  });
+
   it("rejects unknown event names", () => {
     rejects({ event_name: "nope" });
   });

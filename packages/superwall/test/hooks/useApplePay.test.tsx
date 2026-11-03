@@ -32,7 +32,10 @@ const stripe = vi.hoisted(() => {
 const host = vi.hoisted(() => ({ current: "web-paywall" as SuperwallHost }));
 
 vi.mock("@stripe/stripe-js", () => ({ loadStripe: stripe.loadStripe }));
-vi.mock("../../src/host", () => ({ hostOf: () => host.current }));
+vi.mock("../../src/host", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/host")>()),
+  hostOf: () => host.current,
+}));
 
 const { useApplePay, usePurchase, useSuperwallSession } = await import("../../src/hooks");
 const { applePayFor, sessionsFor } = await import("../../src/checkout/flow");

@@ -14,6 +14,7 @@ export type SheetAction =
   | { type: "CLOSE_SHEET" }
   | { type: "MARK_READY"; payload: string }
   | { type: "ADD_SESSION"; payload: EmbeddedCheckoutSession }
+  | { type: "PREFETCH_SESSION"; payload: EmbeddedCheckoutSession }
   | { type: "REMOVE_SESSION"; payload: string }
   | { type: "CLEAR_ALL_SESSIONS" }
   | { type: "SET_PROCESSING"; payload: boolean }
@@ -60,6 +61,15 @@ export const sheetReducer = (state: SheetState, action: SheetAction): SheetState
         ...keepOnly(state, action.payload.clientSecret),
         pooledSessions: new Map([[action.payload.clientSecret, action.payload]]),
       };
+    case "PREFETCH_SESSION": {
+      const [pooled] = state.pooledSessions.values();
+      const warm =
+        pooled !== undefined &&
+        pooled.clientSecret !== action.payload.clientSecret &&
+        pooled.referenceName !== action.payload.referenceName;
+      if (warm) return state;
+      return sheetReducer(state, { type: "ADD_SESSION", payload: action.payload });
+    }
     case "CLEAR_ALL_SESSIONS":
       return keepOnly(state, state.activeSession?.clientSecret);
     case "REMOVE_SESSION": {
