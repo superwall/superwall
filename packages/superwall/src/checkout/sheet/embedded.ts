@@ -92,6 +92,12 @@ export const createEmbeddedCheckouts = (load: LoadStripe) => {
   };
 
   return {
+    retry: (clientSecret: string) => {
+      if (running || !desired || live || attempted !== desired) return;
+      if (desired.session.clientSecret !== clientSecret) return;
+      attempted = null;
+      void settle();
+    },
     show: (request: EmbeddedRequest): (() => void) => {
       desired = request;
       void settle();

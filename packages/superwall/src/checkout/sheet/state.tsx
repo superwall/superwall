@@ -1,6 +1,7 @@
 import * as React from "react";
 import { initialSheetState, sheetReducer, type SheetActions, type SheetState } from "./reducer";
 import { checkoutEvents } from "../events";
+import { embeddedCheckouts } from "./embedded";
 
 const StateContext = React.createContext<SheetState | null>(null);
 const ActionsContext = React.createContext<SheetActions | null>(null);
@@ -30,6 +31,8 @@ export const SheetProvider = ({ children }: React.PropsWithChildren) => {
         actions.addOrUpdateSession(session);
         if (ready.current.has(session.clientSecret)) {
           checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: session.clientSecret });
+        } else {
+          embeddedCheckouts.retry(session.clientSecret);
         }
       }),
       checkoutEvents.subscribe("SESSION_PREFETCHED", (session) =>

@@ -263,6 +263,49 @@ describe("when Stripe fails", () => {
     expect(retried.handlers.current.onError).not.toHaveBeenCalled();
   });
 
+  it("starts a failed checkout again on retry, with the same mounted request", async () => {
+    let calls = 0;
+    const stripe = {
+      initEmbeddedCheckout: () => {
+        calls++;
+        if (calls === 1) return Promise.reject(new Error("init failed"));
+        return Promise.resolve({ mount: () => {}, unmount: () => {}, destroy: () => {} });
+      },
+    } as unknown as Stripe;
+    const checkouts = createEmbeddedCheckouts(() => Promise.resolve(stripe));
+    const shown = request("cs_a");
+
+    checkouts.show(shown);
+    await flush();
+    expect(calls).toBe(1);
+
+    checkouts.retry("cs_other");
+    await flush();
+    expect(calls).toBe(1);
+
+    checkouts.retry("cs_a");
+    await flush();
+    expect(calls).toBe(2);
+    expect(shown.handlers.current.onStage).toHaveBeenCalledWith("embedded_mounted");
+
+    checkouts.retry("cs_a");
+    await flush();
+    expect(calls).toBe(2);
+  });
+
+  it("does nothing on retry while the checkout is still starting", async () => {
+    const script = deferred<Stripe | null>();
+    const fake = fakeStripe();
+    const checkouts = createEmbeddedCheckouts(() => script.promise);
+
+    checkouts.show(request("cs_a"));
+    checkouts.retry("cs_a");
+    script.resolve(fake.stripe);
+    await flush();
+
+    expect(fake.log).toEqual(["init cs_a", "mount cs_a"]);
+  });
+
   it("reports a stripe.js that resolves to nothing", async () => {
     const checkouts = createEmbeddedCheckouts(() => Promise.resolve(null));
     const shown = request("cs_a");

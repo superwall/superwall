@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SheetProvider, useSheetActions, useSheetState } from "../../../src/checkout/sheet/state";
 import { checkoutEvents } from "../../../src/checkout/events";
 import { openEmbeddedSheet } from "../../../src/checkout/flow";
+import { embeddedCheckouts } from "../../../src/checkout/sheet/embedded";
 import type { EmbeddedCheckoutSession } from "../../../src/checkout/types";
 
 const sessionFor = (clientSecret: string): EmbeddedCheckoutSession => ({
@@ -106,6 +107,20 @@ describe("SheetProvider", () => {
     stop();
     act(() => checkoutEvents.dispatch("SHEET_CLOSE", undefined));
     vi.useRealTimers();
+  });
+
+  it("asks Stripe to start again on a tap whose session is not ready, and not once it is", () => {
+    const retry = vi.spyOn(embeddedCheckouts, "retry").mockImplementation(() => {});
+    mount();
+
+    act(() => checkoutEvents.dispatch("SESSION_CREATED", sessionFor("a")));
+    expect(retry).toHaveBeenCalledWith("a");
+
+    act(() => checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: "a" }));
+    retry.mockClear();
+    act(() => checkoutEvents.dispatch("SESSION_CREATED", sessionFor("a")));
+    expect(retry).not.toHaveBeenCalled();
+    retry.mockRestore();
   });
 
   it("records a payment error and forgets the pool when sessions are invalidated", () => {
