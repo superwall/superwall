@@ -10,6 +10,7 @@ import {
 import { readTeleportBoot, seedTeleportUrl } from "../checkout/teleport/boot";
 import { teleportFor } from "../checkout/teleport/flow";
 import { restoreTeleportQuery } from "../checkout/teleport/page";
+import { provideInlinePush } from "../checkout/teleport/studio";
 import { flowQuery } from "../checkout/teleport/teleporter";
 import { useHostStateArrived, useSuperwallSession } from "../provider/context";
 import {
@@ -406,10 +407,18 @@ const Router = ({
     };
   }, [entries, top, session, store]);
 
+  const current = React.useRef(router);
+  current.current = router;
+
+  React.useEffect(
+    () => provideInlinePush(session, (route) => current.current.push(route)),
+    [session],
+  );
+
   React.useEffect(() => {
     const teleporter = teleportFor(session);
-    if (teleporter.kind === "app") teleporter.landed(top.name);
-  }, [session, top.name]);
+    if (teleporter.kind === "app") teleporter.landed(top.name, entries.length - 1);
+  }, [session, top.name, entries.length]);
 
   React.useEffect(() => {
     if (readTeleportBoot() === undefined) return;

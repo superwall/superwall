@@ -39,7 +39,7 @@ type TeleportBase = {
 export type AppTeleport = TeleportBase & {
   kind: "app";
   available(): boolean;
-  landed(route: string): void;
+  landed(route: string, depth?: number): void;
   begin(request: TeleportRequest): Promise<TeleportOutcome>;
   prefetch(route?: string, query?: Record<string, string>): void;
   beginPresentation(presentationId?: string): void;
