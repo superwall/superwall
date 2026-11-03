@@ -19,6 +19,14 @@ type LoadStripe = (publishableKey: string) => Promise<Stripe | null>;
 const errorOf = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
+const notify = (run: () => void) => {
+  try {
+    run();
+  } catch (error) {
+    console.error("[checkout] a checkout handler failed:", error);
+  }
+};
+
 const destroy = (checkout: StripeEmbeddedCheckout) => {
   try {
     checkout.destroy();
@@ -39,7 +47,12 @@ export const createEmbeddedCheckouts = (load: LoadStripe) => {
     if (cached) return cached;
     const loaded = load(publishableKey);
     stripeByKey.set(publishableKey, loaded);
-    loaded.catch(() => stripeByKey.delete(publishableKey));
+    const forget = () => {
+      if (stripeByKey.get(publishableKey) === loaded) stripeByKey.delete(publishableKey);
+    };
+    loaded.then((stripe) => {
+      if (!stripe) forget();
+    }, forget);
     return loaded;
   };
 
@@ -47,7 +60,7 @@ export const createEmbeddedCheckouts = (load: LoadStripe) => {
     try {
       const stripe = await stripeFor(request.session.publishableKey);
       if (!stripe) throw new Error("Stripe.js did not load");
-      request.handlers.current.onStage("stripe_js_loaded");
+      notify(() => request.handlers.current.onStage("stripe_js_loaded"));
       if (desired !== request) return null;
       const checkout = await stripe.initEmbeddedCheckout({
         clientSecret: request.session.clientSecret,
@@ -61,10 +74,10 @@ export const createEmbeddedCheckouts = (load: LoadStripe) => {
         destroy(checkout);
         throw error;
       }
-      request.handlers.current.onStage("embedded_mounted");
+      notify(() => request.handlers.current.onStage("embedded_mounted"));
       return checkout;
     } catch (error) {
-      request.handlers.current.onError(errorOf(error));
+      notify(() => request.handlers.current.onError(errorOf(error)));
       return null;
     }
   };

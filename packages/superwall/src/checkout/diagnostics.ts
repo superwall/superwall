@@ -14,14 +14,23 @@ const RECORDS_PER_SESSION = 20;
 const ERROR_LENGTH = 500;
 export const DIAGNOSTIC_WINDOW = 60_000;
 
-const messageOf = (error: unknown): string => {
-  const text =
-    error instanceof Error
-      ? `${error.name}: ${error.message}`
-      : typeof error === "string"
-        ? error
-        : String(error);
-  return text.slice(0, ERROR_LENGTH);
+const textOf = (error: unknown): string => {
+  try {
+    if (error instanceof Error) return `${error.name}: ${error.message}`;
+    return typeof error === "string" ? error : String(error);
+  } catch {
+    return "Unreadable error";
+  }
+};
+
+const messageOf = (error: unknown): string => textOf(error).slice(0, ERROR_LENGTH);
+
+const safely = (run: () => void) => {
+  try {
+    run();
+  } catch (error) {
+    console.error("[checkout] reporting a checkout diagnostic failed:", error);
+  }
 };
 
 export type DiagnosticTracker = { timedOut: () => void; stop: () => void };
@@ -44,7 +53,7 @@ export const createCheckoutDiagnostics = (now: () => number = () => Date.now()) 
       if (records.size <= SESSIONS_KEPT) break;
       records.delete(oldest);
     }
-    listeners.forEach((listener) => listener(clientSecret, entry));
+    for (const listener of listeners) safely(() => listener(clientSecret, entry));
   };
 
   const track = (
@@ -67,7 +76,7 @@ export const createCheckoutDiagnostics = (now: () => number = () => Date.now()) 
     const post = (entry: StageRecord) => {
       if (!active || posted.has(entry)) return;
       posted.add(entry);
-      report(entry.stage, entry.at - tappedAt, entry.error);
+      safely(() => report(entry.stage, entry.at - tappedAt, entry.error));
       if (entry.stage === "checkout_rendered") stop();
     };
 
@@ -78,13 +87,13 @@ export const createCheckoutDiagnostics = (now: () => number = () => Date.now()) 
     const deadline = setTimeout(stop, DIAGNOSTIC_WINDOW);
     trackers.set(clientSecret, stop);
     listeners.add(listener);
-    report("tap", 0);
-    report("session_ready", now() - tappedAt);
+    safely(() => report("tap", 0));
+    safely(() => report("session_ready", now() - tappedAt));
     for (const entry of records.get(clientSecret) ?? []) post(entry);
 
     return {
       timedOut: () => {
-        if (active) report("ready_timeout", now() - tappedAt);
+        if (active) safely(() => report("ready_timeout", now() - tappedAt));
       },
       stop,
     };

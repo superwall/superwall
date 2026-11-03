@@ -186,4 +186,60 @@ describe("checkout diagnostics after a tap", () => {
     diagnostics.track("cs_a", 48_000, report);
     expect(stages()[1]).toEqual({ stage: "session_ready", ms: 2_000, error: undefined });
   });
+
+  it("never lets a failing report reach the checkout", () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const diagnostics = createCheckoutDiagnostics(now);
+    const report = vi.fn<DiagnosticReport>(() => {
+      throw new Error("host gone");
+    });
+    const tracker = diagnostics.track("cs_a", clock, report);
+
+    expect(() => diagnostics.record("cs_a", "stripe_js_loaded")).not.toThrow();
+    expect(() => tracker.timedOut()).not.toThrow();
+    expect(() => diagnostics.record("cs_a", "checkout_rendered")).not.toThrow();
+    expect(report.mock.calls.map(([stage]) => stage)).toEqual([
+      "tap",
+      "session_ready",
+      "stripe_js_loaded",
+      "ready_timeout",
+      "checkout_rendered",
+    ]);
+    errors.mockRestore();
+  });
+
+  it("reports to every tap even when one of them throws", () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const diagnostics = createCheckoutDiagnostics(now);
+    diagnostics.track("cs_a", clock, () => {
+      throw new Error("host gone");
+    });
+    const { report, stages } = reporter();
+    diagnostics.track("cs_b", clock, report);
+
+    diagnostics.record("cs_a", "stripe_js_loaded");
+    diagnostics.record("cs_b", "stripe_js_loaded");
+
+    expect(stages().map(({ stage }) => stage)).toEqual([
+      "tap",
+      "session_ready",
+      "stripe_js_loaded",
+    ]);
+    errors.mockRestore();
+  });
+
+  it("names an error it cannot turn into text", () => {
+    const diagnostics = createCheckoutDiagnostics(now);
+    const { report, stages } = reporter();
+    diagnostics.track("cs_a", clock, report);
+    const unreadable = {
+      toString: () => {
+        throw new Error("no");
+      },
+    };
+
+    diagnostics.record("cs_a", "stripe_error", unreadable);
+
+    expect(stages()[2]).toEqual({ stage: "stripe_error", ms: 0, error: "Unreadable error" });
+  });
 });

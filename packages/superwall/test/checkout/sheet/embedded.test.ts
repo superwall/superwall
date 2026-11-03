@@ -387,4 +387,96 @@ describe("when Stripe fails", () => {
     expect(second.handlers.current.onError).not.toHaveBeenCalled();
     errors.mockRestore();
   });
+
+  it("loads stripe.js again after it resolved to nothing", async () => {
+    const fake = fakeStripe();
+    const load = vi
+      .fn<() => Promise<Stripe | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(fake.stripe);
+    const checkouts = createEmbeddedCheckouts(load);
+
+    const release = checkouts.show(request("cs_a"));
+    await flush();
+    release();
+    checkouts.show(request("cs_a"));
+    await flush();
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(fake.log).toEqual(["init cs_a", "mount cs_a"]);
+  });
+
+  it("keeps a reload in place when an older failed load settles late", async () => {
+    const fake = fakeStripe();
+    const first = deferred<Stripe | null>();
+    const load = vi
+      .fn<() => Promise<Stripe | null>>()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValue(fake.stripe);
+    const checkouts = createEmbeddedCheckouts(load);
+
+    const release = checkouts.show(request("cs_a"));
+    first.reject(new Error("network"));
+    await flush();
+    release();
+    checkouts.show(request("cs_b"));
+    await flush();
+    const later = request("cs_c");
+    checkouts.show(later);
+    await flush();
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(later.handlers.current.onError).not.toHaveBeenCalled();
+  });
+});
+
+describe("when a handler throws", () => {
+  it("still mounts the checkout when reporting a stage throws", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fake = fakeStripe();
+    const checkouts = createEmbeddedCheckouts(() => Promise.resolve(fake.stripe));
+    const shown = request(
+      "cs_a",
+      handlersOf({
+        onStage: () => {
+          throw new Error("reporting broke");
+        },
+      }),
+    );
+
+    checkouts.show(shown);
+    await flush();
+
+    expect(fake.log).toEqual(["init cs_a", "mount cs_a"]);
+    expect(shown.handlers.current.onError).not.toHaveBeenCalled();
+    expect(errors).toHaveBeenCalledWith("[checkout] a checkout handler failed:", expect.any(Error));
+    errors.mockRestore();
+  });
+
+  it("keeps serving later sessions when the error handler throws", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fake = fakeStripe();
+    const load = vi
+      .fn<() => Promise<Stripe | null>>()
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValue(fake.stripe);
+    const checkouts = createEmbeddedCheckouts(load);
+    const failing = request(
+      "cs_a",
+      handlersOf({
+        onError: () => {
+          throw new Error("handler broke");
+        },
+      }),
+    );
+
+    const release = checkouts.show(failing);
+    await flush();
+    release();
+    checkouts.show(request("cs_b"));
+    await flush();
+
+    expect(fake.log).toEqual(["init cs_b", "mount cs_b"]);
+    errors.mockRestore();
+  });
 });
