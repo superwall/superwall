@@ -781,6 +781,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
 
   const teleporter: AppTeleport = {
     kind: "app",
+    returnToApp: () => {},
     getStatus: store.getStatus,
     subscribe: store.subscribe,
     on: store.on,

@@ -211,3 +211,17 @@ export const AppWindowIcon = (props: IconProps) => (
     <path d="M10 4v4M2 8h20M6 4v4" />
   </Icon>
 );
+
+export const CompassIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36z" />
+  </Icon>
+);
+
+export const SmartphoneIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="5" y="2" width="14" height="20" rx="2" />
+    <path d="M12 18h.01" />
+  </Icon>
+);

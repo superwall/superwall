@@ -158,17 +158,62 @@ export const isWebOnly = (platforms: readonly string[] | undefined): boolean =>
 export const chromeFor = (device: StudioDevice, web: boolean): DeviceChromeSpec | undefined =>
   web ? undefined : device.chrome;
 
-const BROWSER_CHROME = { iOS: 84, Android: 104, tablet: 66, desktop: 52 };
+export type BrowserKind = "phone" | "tablet" | "desktop";
+
+export type BrowserLayout = {
+  kind: BrowserKind;
+  top: number;
+  bottom: number;
+  statusBar: number;
+  right: number;
+};
+
+export const BROWSER_BAR = { phone: 84, tablet: 66, desktop: 52 } as const;
+
+const ANDROID_BROWSER_BARS = { phone: 104, tablet: 66 } as const;
+
+const isTablet = (device: StudioDevice) => device.width >= 600;
+
+const browserKindOf = (device: StudioDevice): BrowserKind | undefined => {
+  if (device.device === undefined) return "desktop";
+  if (device.device.platform !== "iOS") return undefined;
+  return isTablet(device) ? "tablet" : "phone";
+};
+
+export const browserLayoutFor = (
+  device: StudioDevice,
+  { teleported, landscape = false }: { teleported: boolean; landscape?: boolean },
+): BrowserLayout | undefined => {
+  const kind = browserKindOf(device);
+  if (kind === undefined) return undefined;
+  const statusBar = device.chrome?.statusBarHeight ?? 0;
+  if (kind === "tablet") {
+    const safeArea = safeAreaFor(device, landscape);
+    const top = Math.max(statusBar, safeArea?.top ?? 0);
+    return {
+      kind,
+      top: top + BROWSER_BAR.tablet,
+      bottom: 0,
+      statusBar: top,
+      right: safeArea?.right ?? 0,
+    };
+  }
+  if (kind === "desktop")
+    return { kind, top: BROWSER_BAR.desktop, bottom: 0, statusBar: 0, right: 0 };
+  if (teleported) return { kind, top: 0, bottom: 0, statusBar, right: 0 };
+  return landscape
+    ? undefined
+    : { kind, top: statusBar, bottom: BROWSER_BAR.phone, statusBar, right: 0 };
+};
 
 export const webViewportFor = (device: StudioDevice): { width: number; height: number } => {
-  const statusBar = device.chrome?.statusBarHeight ?? 0;
+  const layout = browserLayoutFor(device, { teleported: false });
   const bars =
-    device.device === undefined
-      ? BROWSER_CHROME.desktop
-      : device.width >= 600
-        ? BROWSER_CHROME.tablet
-        : BROWSER_CHROME[device.device.platform];
-  return { width: device.width, height: device.height - statusBar - bars };
+    layout === undefined
+      ? (device.chrome?.statusBarHeight ?? 0) +
+        ANDROID_BROWSER_BARS[isTablet(device) ? "tablet" : "phone"]
+      : layout.top + layout.bottom;
+  return { width: device.width, height: device.height - bars };
 };
 
 const DESKTOP_HOST = {

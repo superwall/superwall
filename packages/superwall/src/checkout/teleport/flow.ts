@@ -1,6 +1,8 @@
+import { hostOf } from "../../host";
 import { createAppTeleporter } from "./app";
 import { readTeleportBoot } from "./boot";
 import { createTeleportPage } from "./page";
+import { createStudioTeleporter } from "./studio";
 import type { Teleporter, TeleportSession } from "./teleporter";
 
 const teleporters = new WeakMap<object, Teleporter>();
@@ -10,7 +12,11 @@ export const teleportFor = (paywall: TeleportSession): Teleporter => {
   if (existing) return existing;
   const boot = readTeleportBoot();
   const created =
-    boot === undefined ? createAppTeleporter(paywall) : createTeleportPage(paywall, boot);
+    boot !== undefined
+      ? createTeleportPage(paywall, boot)
+      : hostOf() === "studio"
+        ? createStudioTeleporter(paywall)
+        : createAppTeleporter(paywall);
   teleporters.set(paywall, created);
   return created;
 };

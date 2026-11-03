@@ -172,6 +172,7 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
       },
       returnToApp: () => {
         if (teleporter.kind === "page") teleporter.returnToApp("closed");
+        else teleporter.returnToApp();
       },
     }),
     [status, fallbackReference, productsByReference, teleporter, store],

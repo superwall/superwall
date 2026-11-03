@@ -1,8 +1,9 @@
 import * as React from "react";
 import type { HostDelegate, HostState } from "@superwall/host";
+import { BrowserChrome } from "./BrowserChrome";
 import { DeviceChrome, duoLayout } from "./DeviceChrome";
 import { HostedIframe } from "./HostedIframe";
-import type { DeviceChromeSpec } from "../../lib/devices";
+import type { BrowserLayout, DeviceChromeSpec } from "../../lib/devices";
 import { presentationRect, type StudioPresentation } from "../../lib/presentation";
 
 const SWAP_DELAY_MS = 250;
@@ -42,6 +43,7 @@ export const DeviceFrame = ({
   presentation,
   landscape = false,
   theme = "light",
+  browser,
 }: {
   width: number;
   height: number;
@@ -54,6 +56,7 @@ export const DeviceFrame = ({
   presentation?: StudioPresentation;
   landscape?: boolean;
   theme?: "light" | "dark";
+  browser?: BrowserLayout;
 }) => {
   const generation = React.useRef(0);
   const [frames, setFrames] = React.useState<Frame[]>([{ src, generation: 0, ready: true }]);
@@ -82,13 +85,13 @@ export const DeviceFrame = ({
 
   const visible = frames.findLast((frame) => frame.ready);
 
-  const sheet = presentationRect(presentation, { width, height });
-  const navigationBar = landscape ? 0 : (chrome?.navigationBarHeight ?? 0);
+  const sheet = browser ? undefined : presentationRect(presentation, { width, height });
+  const navigationBar = landscape || browser ? 0 : (chrome?.navigationBarHeight ?? 0);
   const page = sheet ?? {
     x: 0,
-    y: 0,
+    y: browser?.top ?? 0,
     width,
-    height: height - navigationBar,
+    height: height - navigationBar - (browser ? browser.top + browser.bottom : 0),
     radius: { top: 0, bottom: 0 },
   };
   const dark = theme === "dark";
@@ -102,7 +105,13 @@ export const DeviceFrame = ({
     <div
       className="relative flex-none overflow-hidden bg-background outline outline-foreground/20"
       data-testid="device-frame"
-      style={{ width, height, borderRadius: radius }}
+      data-browser={browser ? browser.kind : undefined}
+      style={{
+        width,
+        height,
+        borderRadius: radius,
+        background: browser ? (dark ? "#000000" : "#ffffff") : undefined,
+      }}
     >
       {sheet && (
         <div
@@ -175,6 +184,15 @@ export const DeviceFrame = ({
             theme={theme}
           />
         </div>
+      )}
+      {browser && (
+        <BrowserChrome
+          kind={browser.kind}
+          top={browser.top}
+          statusBar={browser.statusBar}
+          right={browser.right}
+          theme={theme}
+        />
       )}
     </div>
   );
