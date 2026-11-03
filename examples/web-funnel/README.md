@@ -70,7 +70,7 @@ them, nothing to re-fetch, and the whole flow ships as a single snapshot.
 
 **It is sold on the web only.** `platforms: ["web"]` binds it to your web
 app alone, and the studio previews it inside Safari. To run the same source
-natively, add `"iOS"` to `platforms`, drop `checkout` and give it App Store
+natively, add `"ios"` to `platforms`, drop `checkout` and give it App Store
 products: it then buys through the App Store, and `purchase()` does not
 change.
 
