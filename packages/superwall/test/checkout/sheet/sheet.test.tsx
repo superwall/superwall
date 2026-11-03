@@ -1,28 +1,29 @@
 import { act, render, screen } from "@testing-library/react";
-import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 
 // Stripe's own bundle fetches js.stripe.com and mounts a cross-origin iframe,
 // neither of which exists in jsdom. Standing in for it keeps these tests about
 // our sheet — when it opens, when it refuses to close — rather than Stripe's.
-vi.mock("@stripe/stripe-js", () => ({
-  loadStripe: () => Promise.resolve({}),
-}));
 type StripeOptions = {
   onComplete: () => void;
   onAnalyticsEvent: (e: { eventType: string }) => void;
 };
 const stripe: { options?: StripeOptions } = {};
 
-vi.mock("@stripe/react-stripe-js", () => ({
-  EmbeddedCheckoutProvider: ({
-    children,
-    options,
-  }: React.PropsWithChildren<{ options: StripeOptions }>) => {
-    stripe.options = options;
-    return <>{children}</>;
-  },
-  EmbeddedCheckout: () => <div data-testid="stripe-checkout" />,
+vi.mock("@stripe/stripe-js", () => ({
+  loadStripe: () =>
+    Promise.resolve({
+      initEmbeddedCheckout: (options: StripeOptions) => {
+        stripe.options = options;
+        const frame = document.createElement("div");
+        frame.dataset.testid = "stripe-checkout";
+        return Promise.resolve({
+          mount: (element: HTMLElement) => element.append(frame),
+          unmount: () => frame.remove(),
+          destroy: () => frame.remove(),
+        });
+      },
+    }),
 }));
 
 // jsdom ships no matchMedia; the sheet asks it whether to lay out as a phone
@@ -66,10 +67,12 @@ const mount = () =>
     </SuperwallProvider>,
   );
 
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const open = async () => {
   await act(async () => {
     checkoutEvents.dispatch("SHEET_OPEN", { session });
-    await Promise.resolve();
+    await settle();
   });
 };
 

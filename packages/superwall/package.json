@@ -64,7 +64,6 @@
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
-    "@stripe/react-stripe-js": "^5.4.0",
     "@stripe/stripe-js": "^8.5.2",
     "@superwall/cli": "workspace:*",
     "@superwall/host": "workspace:*",

@@ -5,6 +5,7 @@ export type CheckoutEventType =
   | "SHEET_OPEN"
   | "SHEET_CLOSE"
   | "EMBEDDED_READY"
+  | "EMBEDDED_ERROR"
   | "CHECKOUT_SUBMITTED"
   | "PAYMENT_SUCCESS"
   | "PAYMENT_ERROR"
@@ -15,6 +16,7 @@ export type CheckoutEventPayload = {
   SHEET_OPEN: { session: EmbeddedCheckoutSession };
   SHEET_CLOSE: undefined;
   EMBEDDED_READY: { clientSecret: string };
+  EMBEDDED_ERROR: { clientSecret: string; error: Error };
   CHECKOUT_SUBMITTED: { session: PaymentSession };
   PAYMENT_SUCCESS: { session: PaymentSession };
   PAYMENT_ERROR: { error: Error; session: PaymentSession };
