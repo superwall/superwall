@@ -35,7 +35,7 @@ describe("useDevice", () => {
     }
   });
 
-  it("names the browser in hostDetails, and whether it is an app's in-app browser", async () => {
+  it("names the browser showing the page, such as Instagram's in-app browser", async () => {
     const userAgent = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
     Object.defineProperty(window.navigator, "userAgent", {
       configurable: true,
@@ -44,14 +44,14 @@ describe("useDevice", () => {
     try {
       const { result } = renderWithProvider(() => useDevice());
       await flush();
-      expect(result.current.hostDetails).toEqual({ browser: "instagram", inAppBrowser: true });
+      expect(result.current.browser).toBe("instagram");
     } finally {
       if (userAgent) Object.defineProperty(window.navigator, "userAgent", userAgent);
       else delete (window.navigator as { userAgent?: string }).userAgent;
     }
     const { result } = renderWithProvider(() => useDevice());
     await flush();
-    expect(result.current.hostDetails.inAppBrowser).toBe(false);
+    expect(result.current.browser).not.toBe("instagram");
   });
 });
 

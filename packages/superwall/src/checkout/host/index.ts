@@ -1,6 +1,6 @@
 import type { SuperwallSession } from "@superwall/runtime";
 import { hostOf, WEB_HOSTS } from "../../host";
-import { hostDetails } from "../../browser";
+import { currentBrowser, isInAppBrowser } from "../../browser";
 import type {
   DiscountValidationResult,
   PostCheckoutResolution,
@@ -89,15 +89,15 @@ export const hostEvents = (post: (message: HostMessage) => void) => ({
         : {}),
     }),
   diagnostic: (ctx: HostContext, stage: DiagnosticStage, ms: number, error?: string) => {
-    const details = hostDetails();
+    const browser = currentBrowser();
     const diagnostic = {
       event_name: "stripe_checkout_diagnostic",
       checkout_context_id: ctx.checkoutContextId,
       product_identifier: ctx.productIdentifier,
       stage,
       ms: Math.round(ms),
-      browser: details.browser ?? "unknown",
-      in_app_browser: details.inAppBrowser,
+      browser: browser ?? "unknown",
+      in_app_browser: isInAppBrowser(browser),
       ...(error === undefined ? {} : { error }),
     } as const;
     console.info(`[superwall] checkout ${stage} +${diagnostic.ms}ms`, {
