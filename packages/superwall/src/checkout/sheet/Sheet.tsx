@@ -24,13 +24,7 @@ const StripeSheet = ({ session, isOpen, onClose, onSuccess, onError }: StripeShe
 
   React.useEffect(() => () => setProcessing(false), [session.clientSecret, setProcessing]);
 
-  const handlers = React.useRef<EmbeddedHandlers>({
-    onComplete: () => {},
-    onAnalyticsEvent: () => {},
-    onError: () => {},
-    onStage: () => {},
-  });
-  handlers.current = {
+  const current: EmbeddedHandlers = {
     onComplete: () => {
       setProcessing(false);
       onSuccess(session);
@@ -53,6 +47,8 @@ const StripeSheet = ({ session, isOpen, onClose, onSuccess, onError }: StripeShe
     },
     onStage: (stage) => checkoutDiagnostics.record(session.clientSecret, stage),
   };
+  const handlers = React.useRef(current);
+  handlers.current = current;
 
   const { clientSecret, publishableKey } = session;
   React.useEffect(() => {

@@ -339,6 +339,20 @@ describe("when Stripe fails", () => {
     expect(fake.log).toEqual(["init cs_a", "mount cs_a"]);
   });
 
+  it("reports a failure that is not an Error as one", async () => {
+    const checkouts = createEmbeddedCheckouts(() =>
+      Promise.reject("blocked by the in-app browser"),
+    );
+    const failed = request("cs_a");
+
+    checkouts.show(failed);
+    await flush();
+
+    expect(failed.handlers.current.onError).toHaveBeenCalledWith(
+      new Error("blocked by the in-app browser"),
+    );
+  });
+
   it("destroys and reports a checkout that cannot mount", async () => {
     const destroy = vi.fn();
     const stripe = {

@@ -401,7 +401,6 @@ export const openEmbeddedSheet = (
         : null;
 
     const readyTimeout = setTimeout(() => {
-      if (opened) return;
       diagnostics?.timedOut();
       finish("failed");
     }, SHEET_READY_TIMEOUT);

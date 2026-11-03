@@ -62,7 +62,6 @@ export const createCheckoutDiagnostics = (now: () => number = () => Date.now()) 
     report: DiagnosticReport,
   ): DiagnosticTracker => {
     trackers.get(clientSecret)?.();
-    const posted = new Set<StageRecord>();
     let active = true;
 
     const stop = () => {
@@ -74,8 +73,7 @@ export const createCheckoutDiagnostics = (now: () => number = () => Date.now()) 
     };
 
     const post = (entry: StageRecord) => {
-      if (!active || posted.has(entry)) return;
-      posted.add(entry);
+      if (!active) return;
       safely(() => report(entry.stage, entry.at - tappedAt, entry.error));
       if (entry.stage === "checkout_rendered") stop();
     };

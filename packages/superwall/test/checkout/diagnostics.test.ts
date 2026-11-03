@@ -69,6 +69,21 @@ describe("checkout diagnostics after a tap", () => {
     ]);
   });
 
+  it("replays nothing past a checkout that already rendered", () => {
+    const diagnostics = createCheckoutDiagnostics(now);
+    diagnostics.record("cs_a", "checkout_rendered");
+    diagnostics.record("cs_a", "stripe_error", new Error("late"));
+
+    const { report, stages } = reporter();
+    diagnostics.track("cs_a", clock, report);
+
+    expect(stages().map(({ stage }) => stage)).toEqual([
+      "tap",
+      "session_ready",
+      "checkout_rendered",
+    ]);
+  });
+
   it("keeps reporting past the ready timeout, so a late Stripe still shows up", () => {
     const diagnostics = createCheckoutDiagnostics(now);
     const { report, stages } = reporter();

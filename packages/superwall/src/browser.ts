@@ -56,4 +56,4 @@ export const browserOf = (userAgent: string): SuperwallBrowser | undefined =>
   (ANDROID_WEBVIEW.test(userAgent) ? undefined : match(BROWSERS, userAgent));
 
 export const currentBrowser = (): SuperwallBrowser | undefined =>
-  browserOf(typeof navigator === "undefined" ? "" : (navigator.userAgent ?? ""));
+  browserOf(globalThis.navigator?.userAgent ?? "");
