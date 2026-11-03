@@ -3,11 +3,13 @@ import * as path from "node:path";
 import pc from "picocolors";
 import type { CommandContext } from "@/program/command";
 import type { SuperwallApi } from "@/core/api/client";
+import { appNotFound, findApplication } from "@/core/api/lookup";
 import { listAppPaywalls, mintSourceAccess } from "@/core/api/resources";
-import { PLATFORMS } from "@/core/paywalls/binding/apps";
+import { PLATFORMS, requirePlatform } from "@/core/paywalls/binding/apps";
 import { parsePlatformFlags } from "@/core/paywalls/binding/targets";
 import { requireProject, resolveProjectDir } from "@/core/paywalls/pipeline/selection";
 import { resolveFramework } from "@/core/paywalls/project/framework";
+import { detectPackageManager, devCommand } from "@/core/paywalls/project/setup";
 import {
   NewerLockError,
   parseLock,
@@ -17,7 +19,11 @@ import {
   type SurfaceBindings,
 } from "@/core/paywalls/project/lock";
 import { requireApi } from "@/core/paywalls/project/session";
-import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
+import {
+  collectProjectDeclarations,
+  TYPES_FILE,
+  writeProjectTypes,
+} from "@/core/paywalls/project/types";
 import { readSourceBase, writeSourceBase } from "@/core/paywalls/source/base";
 import { pullSourceTree, type PulledChange } from "@/core/paywalls/source/git";
 import { collectSourceFiles } from "@/core/paywalls/source/source";
@@ -26,7 +32,7 @@ import { ui } from "@/ui";
 
 interface PullInput {
   args: { dir: string | undefined };
-  flags: { platform: string[]; theirs: boolean };
+  flags: { app?: string; platform: string[]; theirs: boolean };
 }
 
 export interface PulledApp {
@@ -130,7 +136,11 @@ export function applyPulledChanges(
   return { written, skipped };
 }
 
-async function paywallFor(api: SuperwallApi, lock: LockFile, app: PulledApp): Promise<string | undefined> {
+async function paywallFor(
+  api: SuperwallApi,
+  lock: LockFile,
+  app: PulledApp,
+): Promise<string | undefined> {
   const bound = boundPaywall(lock, app.platforms);
   if (bound) return bound;
   const [first] = await listAppPaywalls(api, app.applicationId);
@@ -144,9 +154,91 @@ const describeChanges = (files: readonly string[]): string[] => [
   ...(files.length > SHOWN ? [`  ${pc.dim(`and ${files.length - SHOWN} more`)}`] : []),
 ];
 
-export async function runPull(ctx: CommandContext<"none">, { args, flags }: PullInput): Promise<void> {
+const LOCK_FILE = "superwall.lock";
+
+export function cloneTarget(root: string): string {
+  if (fs.existsSync(path.join(root, LOCK_FILE))) {
+    throw new Error(
+      `\`${root}\` is already a superwall project — run \`superwall pull\` there without --app.`,
+    );
+  }
+  const superwallDir = path.join(root, "superwall");
+  if (fs.existsSync(superwallDir) && fs.readdirSync(superwallDir).length > 0) {
+    throw new Error(
+      fs.existsSync(path.join(superwallDir, LOCK_FILE))
+        ? `\`${superwallDir}\` is already a superwall project — run \`superwall pull\` there without --app.`
+        : `\`${superwallDir}\` already has files — pull --app only fills an empty folder; pick another directory.`,
+    );
+  }
+  return superwallDir;
+}
+
+async function runClone(
+  appRef: string,
+  root: string,
+  flags: PullInput["flags"],
+  api: SuperwallApi,
+): Promise<void> {
+  if (flags.theirs || flags.platform.length > 0) {
+    throw new Error(
+      "--app sets up a new folder from the app's source — drop --theirs and --platform.",
+    );
+  }
+  const superwallDir = cloneTarget(root);
+
+  const found = await findApplication(api, appRef);
+  if (!found) throw appNotFound(appRef);
+  const applicationId = String(found.app.id);
+  const platform = requirePlatform(found.app);
+  const [paywall] = await listAppPaywalls(api, applicationId);
+  if (!paywall) {
+    throw new Error(
+      `App ${applicationId} has no paywall on Superwall yet, so it has no source to pull — ` +
+        `start one with \`superwall create --app ${applicationId}\`.`,
+    );
+  }
+
+  ui.intro(`Superwall ${pc.dim(`v${VERSION}`)}`);
+  const access = await mintSourceAccess(api, paywall.id);
+  const pulled = await pullSourceTree({ access, files: [] });
+  if (pulled.status === "empty") {
+    throw new Error(
+      `App ${applicationId}'s source repo is empty — nobody has pushed from code yet. ` +
+        `Start a project with \`superwall create --app ${applicationId}\`.`,
+    );
+  }
+
+  fs.mkdirSync(superwallDir, { recursive: true });
+  const { written } = applyPulledChanges(superwallDir, pulled.changes, new Set());
+  if (pulled.types !== undefined)
+    fs.writeFileSync(path.join(superwallDir, TYPES_FILE), pulled.types);
+  const bound: LockFile = {
+    version: 1,
+    apps: { [platform]: applicationId },
+    paywalls: {},
+    funnels: {},
+  };
+  writeLock(superwallDir, mergePulledLock(bound, pulled.lock));
+  writeSourceBase(superwallDir, access.repo, pulled.head);
+
+  const manager = await detectPackageManager(superwallDir);
+  const where = path.relative(process.cwd(), superwallDir) || ".";
+  ui.info(
+    [
+      `${pc.bold(`${platform} app ${applicationId}`)} pulled ${written.length} ${written.length === 1 ? "file" : "files"} into ${where}`,
+      ...describeChanges(written),
+    ].join("\n"),
+  );
+  ui.outro(`Next: cd ${where} && ${manager} install && ${devCommand(manager)}`);
+}
+
+export async function runPull(
+  ctx: CommandContext<"none">,
+  { args, flags }: PullInput,
+): Promise<void> {
   const api = await requireApi(ctx.interactive);
   const dir = resolveProjectDir(args.dir);
+  if (flags.app !== undefined) return runClone(flags.app, dir, flags, api);
   const framework = await resolveFramework(dir);
   const project = requireProject(framework.discoverProject(dir), dir);
   const { superwallDir } = project;
@@ -202,15 +294,19 @@ export async function runPull(ctx: CommandContext<"none">, { args, flags }: Pull
     if (written.length === 0) ui.step(`${label}: already up to date`);
     else
       ui.info(
-        [`${pc.bold(label)} pulled ${written.length} ${written.length === 1 ? "file" : "files"}`, ...describeChanges(written)].join(
-          "\n",
-        ),
+        [
+          `${pc.bold(label)} pulled ${written.length} ${written.length === 1 ? "file" : "files"}`,
+          ...describeChanges(written),
+        ].join("\n"),
       );
   }
 
   if (changed) {
     const refreshed = framework.discoverProject(dir);
-    writeProjectTypes(refreshed, (await collectProjectDeclarations(framework, refreshed.root)).products);
+    writeProjectTypes(
+      refreshed,
+      (await collectProjectDeclarations(framework, refreshed.root)).products,
+    );
   }
   ui.outro("Pulled. Publish from here: your next push merges on top of what you pulled.");
 }

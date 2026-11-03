@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
+import { TYPES_FILE } from "@/core/paywalls/project/types";
 import { ui } from "@/ui";
 import { buildCommitMessage, redact, tokenSecret, type CommitMessageInput } from "./commit";
 import {
@@ -107,7 +108,11 @@ export async function gitAvailable(): Promise<boolean> {
 
 const LARGE_FILE_BYTES = 50 * 1024 * 1024;
 
-export function materializeSourceTree(dir: string, files: readonly SourceFile[], scope: SourceScope): void {
+export function materializeSourceTree(
+  dir: string,
+  files: readonly SourceFile[],
+  scope: SourceScope,
+): void {
   const theirs = new Map<string, Buffer>();
   for (const derived of DERIVED_FILES) {
     const existing = path.join(dir, derived);
@@ -140,7 +145,14 @@ export function materializeSourceTree(dir: string, files: readonly SourceFile[],
     if (classifyPath(file.path, scope) === "other") continue;
     if (file.content.byteLength > LARGE_FILE_BYTES) large.push(file.path);
     if (file.path === LOCK_FILE) {
-      write(file.path, mergeLockText(theirs.get(LOCK_FILE)?.toString("utf8"), file.content.toString("utf8"), scope));
+      write(
+        file.path,
+        mergeLockText(
+          theirs.get(LOCK_FILE)?.toString("utf8"),
+          file.content.toString("utf8"),
+          scope,
+        ),
+      );
     } else {
       write(file.path, file.content);
     }
@@ -255,7 +267,13 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
         if (await isAncestor(own, upstream))
           return { commitSha: upstream, status: "unchanged", syncedTo: own };
         await run(["reset", "--quiet", "--hard", own]);
-        await mergeUpstream(`origin/${access.branch}`, messageFile, { run, committing, dir, own, scope });
+        await mergeUpstream(`origin/${access.branch}`, messageFile, {
+          run,
+          committing,
+          dir,
+          own,
+          scope,
+        });
       }
       try {
         await run(["push", "origin", `HEAD:${access.branch}`]);
@@ -362,7 +380,12 @@ async function mergeUpstream(
   await run(["commit", "--quiet", "--no-verify", "-F", messageFile], { env: committing });
 }
 
-async function settle(run: Run, dir: string, file: string, content: string | undefined): Promise<void> {
+async function settle(
+  run: Run,
+  dir: string,
+  file: string,
+  content: string | undefined,
+): Promise<void> {
   if (content === undefined) return;
   fs.writeFileSync(path.join(dir, file), content);
   await run(["add", "--", file]);
@@ -385,7 +408,13 @@ export interface PulledChange {
 
 export type PullResult =
   | { status: "empty" }
-  | { status: "pulled"; head: string; changes: PulledChange[]; lock: string | undefined };
+  | {
+      status: "pulled";
+      head: string;
+      changes: PulledChange[];
+      lock: string | undefined;
+      types: string | undefined;
+    };
 
 export interface PullInput {
   access: SourceAccess;
@@ -452,16 +481,30 @@ export async function pullSourceTree(input: PullInput): Promise<PullResult> {
     }
 
     const changes: PulledChange[] = [];
-    for (const file of changedPaths(await run(["diff", "--cached", "--name-only", "--no-renames", "-z", own]))) {
+    for (const file of changedPaths(
+      await run(["diff", "--cached", "--name-only", "--no-renames", "-z", own]),
+    )) {
       if (DERIVED_FILES.has(file)) continue;
       const stat = fs.lstatSync(path.join(dir, file), { throwIfNoEntry: false });
       if (stat?.isSymbolicLink()) {
-        throw new Error(`The source repo has ${file} as a symlink — the CLI only pulls regular files.`);
+        throw new Error(
+          `The source repo has ${file} as a symlink — the CLI only pulls regular files.`,
+        );
       }
-      changes.push({ path: file, content: stat ? fs.readFileSync(path.join(dir, file)) : undefined });
+      changes.push({
+        path: file,
+        content: stat ? fs.readFileSync(path.join(dir, file)) : undefined,
+      });
     }
-    const lock = present.has(LOCK_FILE) ? await run(["show", `${head}:${LOCK_FILE}`]) : undefined;
-    return { status: "pulled", head, changes, lock };
+    const shown = (name: string) =>
+      present.has(name) ? run(["show", `${head}:${name}`]) : undefined;
+    return {
+      status: "pulled",
+      head,
+      changes,
+      lock: await shown(LOCK_FILE),
+      types: await shown(TYPES_FILE),
+    };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
