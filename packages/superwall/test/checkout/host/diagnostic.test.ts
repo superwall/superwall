@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hostEvents } from "../../../src/checkout/host";
-import { inAppBrowser, inAppBrowserOf } from "../../../src/browser";
+import { hostDetails, hostDetailsOf } from "../../../src/browser";
 
 const IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_7_1 like Mac OS X) AppleWebKit/605.1.15";
 
@@ -11,35 +11,70 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("inAppBrowserOf", () => {
+const ANDROID = "Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko)";
+
+describe("hostDetailsOf", () => {
   it("names the app whose in-app browser opened the page", () => {
-    expect(
-      inAppBrowserOf(`${IOS} (KHTML, like Gecko) Mobile/15E148 Instagram 450.0.0.25.110`),
-    ).toBe("instagram");
-    expect(inAppBrowserOf(`${IOS} Mobile/15E148 [FBAN/FBIOS;FBAV/530.0.0.41.104;]`)).toBe(
+    const inApp = (userAgent: string) => hostDetailsOf(userAgent);
+    expect(inApp(`${IOS} (KHTML, like Gecko) Mobile/15E148 Instagram 450.0.0.25.110`)).toEqual({
+      browser: "instagram",
+      inAppBrowser: true,
+    });
+    expect(inApp(`${IOS} Mobile/15E148 [FBAN/FBIOS;FBAV/530.0.0.41.104;]`).browser).toBe(
       "facebook",
     );
-    expect(inAppBrowserOf(`${IOS} Mobile/15E148 musical_ly_43.5.0 JsSdk/2.0`)).toBe("tiktok");
-    expect(inAppBrowserOf(`${IOS} Mobile/15E148 Snapchat/13.60.0.48`)).toBe("snapchat");
-    expect(inAppBrowserOf(`${IOS} Mobile/15E148 [Pinterest/iOS]`)).toBe("pinterest");
-    expect(inAppBrowserOf(`${IOS} Mobile/15E148 [LinkedInApp]/9.31.6`)).toBe("linkedin");
-    expect(inAppBrowserOf(`${IOS} Mobile/15E148 Twitter for iPhone/10.70`)).toBe("twitter");
-    expect(inAppBrowserOf(`${IOS} Mobile/15E148 MicroMessenger/8.0.50`)).toBe("wechat");
-    expect(inAppBrowserOf(`${IOS} Mobile/15E148 Safari Line/14.10.0`)).toBe("line");
+    expect(inApp(`${IOS} Mobile/15E148 musical_ly_43.5.0 JsSdk/2.0`).browser).toBe("tiktok");
+    expect(inApp(`${IOS} Mobile/15E148 Snapchat/13.60.0.48`).browser).toBe("snapchat");
+    expect(inApp(`${IOS} Mobile/15E148 [Pinterest/iOS]`).browser).toBe("pinterest");
+    expect(inApp(`${IOS} Mobile/15E148 [LinkedInApp]/9.31.6`).browser).toBe("linkedin");
+    expect(inApp(`${IOS} Mobile/15E148 Twitter for iPhone/10.70`).browser).toBe("twitter");
+    expect(inApp(`${IOS} Mobile/15E148 MicroMessenger/8.0.50`).browser).toBe("wechat");
+    expect(inApp(`${IOS} Mobile/15E148 Safari Line/14.10.0`).browser).toBe("line");
+    expect(inApp(`${ANDROID} Chrome/131.0 Mobile Safari/537.36 Instagram 450.0`).browser).toBe(
+      "instagram",
+    );
   });
 
-  it("names nothing in a plain browser", () => {
+  it("names a regular browser, and says it is not in an app", () => {
+    const browser = (userAgent: string) => hostDetailsOf(userAgent);
+    expect(browser(`${IOS} (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1`)).toEqual({
+      browser: "safari",
+      inAppBrowser: false,
+    });
     expect(
-      inAppBrowserOf(`${IOS} (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1`),
-    ).toBeUndefined();
-    expect(inAppBrowserOf("")).toBeUndefined();
+      browser(`${IOS} (KHTML, like Gecko) CriOS/131.0 Mobile/15E148 Safari/604.1`).browser,
+    ).toBe("chrome");
+    expect(
+      browser(`${IOS} (KHTML, like Gecko) FxiOS/133.0 Mobile/15E148 Safari/605.1.15`).browser,
+    ).toBe("firefox");
+    expect(
+      browser(`${IOS} (KHTML, like Gecko) EdgiOS/131.0 Mobile/15E148 Safari/605.1.15`).browser,
+    ).toBe("edge");
+    expect(browser(`${ANDROID} Chrome/131.0.0.0 Mobile Safari/537.36`).browser).toBe("chrome");
+    expect(
+      browser(`${ANDROID} SamsungBrowser/27.0 Chrome/125.0 Mobile Safari/537.36`).browser,
+    ).toBe("samsung");
+    expect(browser(`${ANDROID} Chrome/131.0 Mobile Safari/537.36 OPR/86.0`).browser).toBe("opera");
+    expect(browser(`${ANDROID} Chrome/131.0 Mobile Safari/537.36 EdgA/131.0`).browser).toBe("edge");
+    expect(
+      browser("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
+        .browser,
+    ).toBe("firefox");
+  });
+
+  it("names nothing inside an app's own web view or for an unknown agent", () => {
+    expect(hostDetailsOf(`${IOS} (KHTML, like Gecko) Mobile/15E148`)).toEqual({
+      browser: undefined,
+      inAppBrowser: false,
+    });
+    expect(hostDetailsOf("")).toEqual({ browser: undefined, inAppBrowser: false });
   });
 
   it("reads the page's own user agent, and names nothing without a navigator", () => {
     vi.stubGlobal("navigator", { userAgent: `${IOS} Instagram 450.0.0` });
-    expect(inAppBrowser()).toBe("instagram");
+    expect(hostDetails()).toEqual({ browser: "instagram", inAppBrowser: true });
     vi.stubGlobal("navigator", undefined);
-    expect(inAppBrowser()).toBeUndefined();
+    expect(hostDetails()).toEqual({ browser: undefined, inAppBrowser: false });
   });
 });
 
@@ -60,7 +95,8 @@ describe("the Stripe checkout diagnostic", () => {
         product_identifier: "live:price_1:intro",
         stage: "session_ready",
         ms: 1_235,
-        in_app_browser: "instagram",
+        browser: "instagram",
+        in_app_browser: true,
       },
       {
         event_name: "stripe_checkout_diagnostic",
@@ -68,18 +104,26 @@ describe("the Stripe checkout diagnostic", () => {
         product_identifier: "live:price_1:intro",
         stage: "stripe_error",
         ms: -20,
-        in_app_browser: "instagram",
+        browser: "instagram",
+        in_app_browser: true,
         error: "IntegrationError: nope",
       },
     ]);
   });
 
-  it("says none for the in-app browser on the wire when the page is in a plain browser", () => {
+  it("names the regular browser on the wire, and unknown when it cannot tell", () => {
     vi.spyOn(console, "info").mockImplementation(() => {});
     vi.stubGlobal("navigator", { userAgent: `${IOS} Version/26.0 Mobile/15E148 Safari/604.1` });
     const post = vi.fn();
     hostEvents(post).diagnostic(context, "tap", 0);
-    expect(post).toHaveBeenCalledWith(expect.objectContaining({ in_app_browser: "none" }));
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ browser: "safari", in_app_browser: false }),
+    );
+    vi.stubGlobal("navigator", { userAgent: `${IOS} Mobile/15E148` });
+    hostEvents(post).diagnostic(context, "tap", 0);
+    expect(post).toHaveBeenLastCalledWith(
+      expect.objectContaining({ browser: "unknown", in_app_browser: false }),
+    );
   });
 
   it("stays off the native SDKs, which cannot decode it, but still logs it in the page", () => {

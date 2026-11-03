@@ -152,7 +152,8 @@ const stripeCheckoutDiagnostic = z.object({
   product_identifier: z.string(),
   stage: StripeCheckoutDiagnosticStageSchema,
   ms: z.number(),
-  in_app_browser: z.string(),
+  browser: z.string(),
+  in_app_browser: z.boolean(),
   error: z.string().optional(),
 });
 

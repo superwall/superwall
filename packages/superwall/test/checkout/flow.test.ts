@@ -448,7 +448,8 @@ describe("Stripe checkout diagnostics for a tap", () => {
     expect(diagnosticsOf(postMessage)[0]).toMatchObject({
       checkout_context_id: "ctx_late",
       product_identifier: "test:price_1:no-trial",
-      in_app_browser: "none",
+      browser: expect.any(String),
+      in_app_browser: false,
     });
   });
 

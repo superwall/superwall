@@ -232,7 +232,8 @@ describe("OutgoingMessageSchema", () => {
       checkout_context_id: "ctx",
       product_identifier: "p",
       ms: 0,
-      in_app_browser: "none",
+      browser: "safari",
+      in_app_browser: false,
     };
     for (const stage of [
       "tap",
@@ -248,12 +249,14 @@ describe("OutgoingMessageSchema", () => {
       ...base,
       stage: "stripe_error",
       ms: -1200,
-      in_app_browser: "instagram",
+      browser: "instagram",
+      in_app_browser: true,
       error: "IntegrationError: You cannot have multiple Embedded Checkout objects.",
     });
     rejects({ ...base, stage: "loaded" });
     rejects({ ...base, stage: "tap", ms: "0" });
-    const { in_app_browser: _, ...withoutBrowser } = base;
+    rejects({ ...base, stage: "tap", in_app_browser: "instagram" });
+    const { browser: _, ...withoutBrowser } = base;
     rejects({ ...withoutBrowser, stage: "tap" });
   });
 

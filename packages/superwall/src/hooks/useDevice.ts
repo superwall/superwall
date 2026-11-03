@@ -1,7 +1,7 @@
 import * as React from "react";
 import type { SuperwallDeviceVariables } from "@superwall/runtime";
 import { cutoutOf, modelOf, platformOf, type DeviceCutout, type DevicePlatform } from "../device";
-import { inAppBrowser, type SuperwallInAppBrowser } from "../browser";
+import { hostDetails, type SuperwallHostDetails } from "../browser";
 import { hostOf, type SuperwallHost } from "../host";
 import { useMediaQuery } from "./useMediaQuery";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
@@ -28,13 +28,12 @@ export type UseDeviceResult = SuperwallDeviceVariables & {
    */
   host: SuperwallHost;
   /**
-   * The app whose in-app browser shows this page, read from the user agent:
-   * `"instagram"`, `"facebook"`, `"tiktok"`, `"snapchat"`, `"pinterest"`,
-   * `"linkedin"`, `"twitter"`, `"wechat"` or `"line"`. `undefined` in a
-   * regular browser, inside an app's own paywall (the native SDKs), or for an
-   * app it does not recognize. Known from the first render.
+   * The browser showing the page next to `host`: `browser` names it
+   * (`"instagram"`, `"safari"`, `"chrome"`, …) and `inAppBrowser` says whether
+   * it is an app's in-app browser, such as a link opened from an Instagram ad.
+   * Read from the user agent, so known from the first render.
    */
-  inAppBrowser: SuperwallInAppBrowser | undefined;
+  hostDetails: SuperwallHostDetails;
   /**
    * What the screen's top edge holds on an iPhone: `"island"`, `"notch"`,
    * `"none"`, or `"strip"` for iPhone Duo, whose camera strip sits on the right
@@ -45,7 +44,7 @@ export type UseDeviceResult = SuperwallDeviceVariables & {
   cutout: DeviceCutout | undefined;
 };
 
-/** The host's device variables (platform, locale, osVersion, …) plus live `orientation`, `hostPlatform`, `host` and `inAppBrowser`. */
+/** The host's device variables (platform, locale, osVersion, …) plus live `orientation`, `hostPlatform`, `host` and `hostDetails`. */
 export const useDevice = (): UseDeviceResult => {
   const { device } = useSuperwallSnapshot();
   const landscape = useMediaQuery("(orientation: landscape)");
@@ -56,7 +55,7 @@ export const useDevice = (): UseDeviceResult => {
       orientation: landscape ? "landscape" : "portrait",
       hostPlatform: platformOf(device),
       host: hostOf(),
-      inAppBrowser: inAppBrowser(),
+      hostDetails: hostDetails(),
       cutout: cutoutOf(modelOf(device)),
     }),
     [device, landscape],
@@ -64,4 +63,4 @@ export const useDevice = (): UseDeviceResult => {
 };
 export type { DeviceCutout, DevicePlatform } from "../device";
 export type { SuperwallHost } from "../host";
-export type { SuperwallInAppBrowser } from "../browser";
+export type { SuperwallBrowser, SuperwallHostDetails, SuperwallInAppBrowser } from "../browser";
