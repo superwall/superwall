@@ -15,49 +15,59 @@ const ANDROID = "Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (K
 
 describe("browserOf", () => {
   it("names the app whose in-app browser opened the page", () => {
-    const inApp = (userAgent: string) => browserOf(userAgent);
-    expect(inApp(`${IOS} (KHTML, like Gecko) Mobile/15E148 Instagram 450.0.0.25.110`)).toBe(
+    expect(browserOf(`${IOS} (KHTML, like Gecko) Mobile/15E148 Instagram 450.0.0.25.110`)).toBe(
       "instagram",
     );
-    expect(inApp(`${IOS} Mobile/15E148 [FBAN/FBIOS;FBAV/530.0.0.41.104;]`)).toBe("facebook");
-    expect(inApp(`${IOS} Mobile/15E148 musical_ly_43.5.0 JsSdk/2.0`)).toBe("tiktok");
-    expect(inApp(`${IOS} Mobile/15E148 Snapchat/13.60.0.48`)).toBe("snapchat");
-    expect(inApp(`${IOS} Mobile/15E148 [Pinterest/iOS]`)).toBe("pinterest");
-    expect(inApp(`${IOS} Mobile/15E148 [LinkedInApp]/9.31.6`)).toBe("linkedin");
-    expect(inApp(`${IOS} Mobile/15E148 Twitter for iPhone/10.70`)).toBe("twitter");
-    expect(inApp(`${IOS} Mobile/15E148 MicroMessenger/8.0.50`)).toBe("wechat");
-    expect(inApp(`${IOS} Mobile/15E148 Safari Line/14.10.0`)).toBe("line");
-    expect(inApp(`${ANDROID} Chrome/131.0 Mobile Safari/537.36 Instagram 450.0`)).toBe("instagram");
+    expect(browserOf(`${IOS} Mobile/15E148 [FBAN/FBIOS;FBAV/530.0.0.41.104;]`)).toBe("facebook");
+    expect(browserOf(`${IOS} Mobile/15E148 musical_ly_43.5.0 JsSdk/2.0`)).toBe("tiktok");
+    expect(browserOf(`${IOS} Mobile/15E148 Snapchat/13.60.0.48`)).toBe("snapchat");
+    expect(browserOf(`${IOS} Mobile/15E148 [Pinterest/iOS]`)).toBe("pinterest");
+    expect(browserOf(`${IOS} Mobile/15E148 [LinkedInApp]/9.31.6`)).toBe("linkedin");
+    expect(browserOf(`${IOS} Mobile/15E148 Twitter for iPhone/10.70`)).toBe("twitter");
+    expect(browserOf(`${IOS} Mobile/15E148 MicroMessenger/8.0.50`)).toBe("wechat");
+    expect(browserOf(`${IOS} Mobile/15E148 Safari Line/14.10.0`)).toBe("line");
+    expect(browserOf(`${ANDROID} Chrome/131.0 Mobile Safari/537.36 Instagram 450.0`)).toBe(
+      "instagram",
+    );
   });
 
   it("names a regular browser, and says it is not in an app", () => {
-    const browser = (userAgent: string) => browserOf(userAgent);
-    expect(browser(`${IOS} (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1`)).toBe(
+    expect(browserOf(`${IOS} (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1`)).toBe(
       "safari",
     );
-    expect(browser(`${IOS} (KHTML, like Gecko) CriOS/131.0 Mobile/15E148 Safari/604.1`)).toBe(
+    expect(browserOf(`${IOS} (KHTML, like Gecko) CriOS/131.0 Mobile/15E148 Safari/604.1`)).toBe(
       "chrome",
     );
-    expect(browser(`${IOS} (KHTML, like Gecko) FxiOS/133.0 Mobile/15E148 Safari/605.1.15`)).toBe(
+    expect(browserOf(`${IOS} (KHTML, like Gecko) FxiOS/133.0 Mobile/15E148 Safari/605.1.15`)).toBe(
       "firefox",
     );
-    expect(browser(`${IOS} (KHTML, like Gecko) EdgiOS/131.0 Mobile/15E148 Safari/605.1.15`)).toBe(
+    expect(browserOf(`${IOS} (KHTML, like Gecko) EdgiOS/131.0 Mobile/15E148 Safari/605.1.15`)).toBe(
       "edge",
     );
-    expect(browser(`${ANDROID} Chrome/131.0.0.0 Mobile Safari/537.36`)).toBe("chrome");
-    expect(browser(`${ANDROID} SamsungBrowser/27.0 Chrome/125.0 Mobile Safari/537.36`)).toBe(
+    expect(browserOf(`${ANDROID} Chrome/131.0.0.0 Mobile Safari/537.36`)).toBe("chrome");
+    expect(browserOf(`${ANDROID} SamsungBrowser/27.0 Chrome/125.0 Mobile Safari/537.36`)).toBe(
       "samsung",
     );
-    expect(browser(`${ANDROID} Chrome/131.0 Mobile Safari/537.36 OPR/86.0`)).toBe("opera");
-    expect(browser(`${ANDROID} Chrome/131.0 Mobile Safari/537.36 EdgA/131.0`)).toBe("edge");
+    expect(browserOf(`${ANDROID} Chrome/131.0 Mobile Safari/537.36 OPR/86.0`)).toBe("opera");
+    expect(browserOf(`${ANDROID} Chrome/131.0 Mobile Safari/537.36 EdgA/131.0`)).toBe("edge");
     expect(
-      browser("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"),
+      browserOf("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"),
     ).toBe("firefox");
   });
 
   it("names nothing inside an app's own web view or for an unknown agent", () => {
     expect(browserOf(`${IOS} (KHTML, like Gecko) Mobile/15E148`)).toBeUndefined();
     expect(browserOf("")).toBeUndefined();
+    expect(
+      browserOf(
+        "Mozilla/5.0 (Linux; Android 15; SM-S928B; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36",
+      ),
+    ).toBeUndefined();
+    expect(
+      browserOf(
+        "Mozilla/5.0 (Linux; Android 15; SM-S928B; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 Instagram 450.0",
+      ),
+    ).toBe("instagram");
   });
 
   it("reads the page's own user agent, and names nothing without a navigator", () => {

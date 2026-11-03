@@ -49,8 +49,11 @@ const IN_APP: ReadonlySet<SuperwallBrowser> = new Set(IN_APP_BROWSERS.map(([name
 export const isInAppBrowser = (browser: SuperwallBrowser | undefined): boolean =>
   browser !== undefined && IN_APP.has(browser);
 
+const ANDROID_WEBVIEW = /; wv\)/;
+
 export const browserOf = (userAgent: string): SuperwallBrowser | undefined =>
-  match(IN_APP_BROWSERS, userAgent) ?? match(BROWSERS, userAgent);
+  match(IN_APP_BROWSERS, userAgent) ??
+  (ANDROID_WEBVIEW.test(userAgent) ? undefined : match(BROWSERS, userAgent));
 
 export const currentBrowser = (): SuperwallBrowser | undefined =>
   browserOf(typeof navigator === "undefined" ? "" : (navigator.userAgent ?? ""));
