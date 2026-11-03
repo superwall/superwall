@@ -5,6 +5,7 @@ export type EmbeddedHandlers = {
   onComplete: () => void;
   onAnalyticsEvent: (event: { eventType: string }) => void;
   onError: (error: Error) => void;
+  onStage: (stage: "stripe_js_loaded" | "embedded_mounted") => void;
 };
 
 export type EmbeddedRequest = {
@@ -46,6 +47,7 @@ export const createEmbeddedCheckouts = (load: LoadStripe) => {
     try {
       const stripe = await stripeFor(request.session.publishableKey);
       if (!stripe) throw new Error("Stripe.js did not load");
+      request.handlers.current.onStage("stripe_js_loaded");
       if (desired !== request) return null;
       const checkout = await stripe.initEmbeddedCheckout({
         clientSecret: request.session.clientSecret,
@@ -59,6 +61,7 @@ export const createEmbeddedCheckouts = (load: LoadStripe) => {
         destroy(checkout);
         throw error;
       }
+      request.handlers.current.onStage("embedded_mounted");
       return checkout;
     } catch (error) {
       request.handlers.current.onError(errorOf(error));

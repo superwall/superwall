@@ -57,6 +57,7 @@ const handlersOf = (overrides: Partial<EmbeddedHandlers> = {}) => ({
     onComplete: vi.fn(),
     onAnalyticsEvent: vi.fn(),
     onError: vi.fn(),
+    onStage: vi.fn(),
     ...overrides,
   },
 });
@@ -200,6 +201,35 @@ describe("one Stripe embedded checkout per page", () => {
 
     expect(later.current.onComplete).toHaveBeenCalled();
     expect(later.current.onAnalyticsEvent).toHaveBeenCalledWith({ eventType: "checkoutRendered" });
+  });
+});
+
+describe("the stages it reports", () => {
+  it("reports stripe.js loaded, then the checkout mounted", async () => {
+    const fake = fakeStripe();
+    const checkouts = createEmbeddedCheckouts(() => Promise.resolve(fake.stripe));
+    const shown = request("cs_a");
+
+    checkouts.show(shown);
+    await flush();
+
+    expect(vi.mocked(shown.handlers.current.onStage).mock.calls).toEqual([
+      ["stripe_js_loaded"],
+      ["embedded_mounted"],
+    ]);
+  });
+
+  it("reports no mount when Stripe refused to start the checkout", async () => {
+    const stripe = {
+      initEmbeddedCheckout: () => Promise.reject(new Error("refused")),
+    } as unknown as Stripe;
+    const checkouts = createEmbeddedCheckouts(() => Promise.resolve(stripe));
+    const shown = request("cs_a");
+
+    checkouts.show(shown);
+    await flush();
+
+    expect(vi.mocked(shown.handlers.current.onStage).mock.calls).toEqual([["stripe_js_loaded"]]);
   });
 });
 

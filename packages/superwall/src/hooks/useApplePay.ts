@@ -8,7 +8,7 @@ import {
   type ApplePayWalletReason,
 } from "../checkout/applePay";
 import { applePayFor } from "../checkout/flow";
-import { hostOf, type SuperwallHost } from "../host";
+import { hostOf, WEB_HOSTS } from "../host";
 import { useSuperwallSession } from "../provider/context";
 import type { ProductReference } from "./index";
 
@@ -122,13 +122,6 @@ const MESSAGES: Record<ApplePayProductReason, string> = {
   session_unsupported: "The product's checkout session cannot be paid with Apple Pay.",
   show_failed: "The wallet failed to open on the last tap.",
 };
-
-const WEB_HOSTS: ReadonlySet<SuperwallHost> = new Set([
-  "web-sdk",
-  "web-paywall",
-  "web-teleport",
-  "browser",
-]);
 
 type ApplePaySessionGlobal = { canMakePayments?: () => unknown };
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallCheckoutConfig } from "@superwall/runtime";
+import { checkoutDiagnostics } from "../../src/checkout/diagnostics";
 import { checkoutEvents } from "../../src/checkout/events";
 import {
   applePayFor,
@@ -357,10 +358,11 @@ describe("openEmbeddedSheet", () => {
     checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
 
     await expect(outcome).resolves.toEqual({ status: "completed" });
-    expect(postMessage.mock.calls.map(([message]) => message.event_name)).toEqual([
-      "initiate_web_checkout",
-      "stripe_checkout_start",
-    ]);
+    expect(
+      postMessage.mock.calls
+        .map(([message]) => message.event_name)
+        .filter((name) => name !== "stripe_checkout_diagnostic"),
+    ).toEqual(["initiate_web_checkout", "stripe_checkout_start"]);
   });
 
   it("reports a failed payment to the host", async () => {
@@ -407,6 +409,74 @@ describe("openEmbeddedSheet", () => {
 
     await expect(outcome).resolves.toEqual({ status: "completed" });
     expect(opened).toHaveBeenCalledOnce();
+  });
+});
+
+const diagnosticsOf = (postMessage: ReturnType<typeof vi.fn>) =>
+  postMessage.mock.calls
+    .map(([message]) => message)
+    .filter((message) => message.event_name === "stripe_checkout_diagnostic");
+
+describe("Stripe checkout diagnostics for a tap", () => {
+  it("times each stage from the tap, and keeps reporting a Stripe that arrives after the timeout", async () => {
+    vi.useFakeTimers();
+    const { session, postMessage } = fakeSession({ checkout: "sheet" });
+    const late = { ...embedded, clientSecret: "cs_diagnostic_late", checkoutContextId: "ctx_late" };
+    vi.spyOn(sessionsFor(session), "begin").mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(late), 1_300)),
+    );
+
+    const outcome = purchaseOnWeb(session, "primary", "sheet");
+    await vi.advanceTimersByTimeAsync(1_300);
+    await vi.advanceTimersByTimeAsync(2_000);
+    checkoutDiagnostics.record(late.clientSecret, "stripe_js_loaded");
+    await vi.advanceTimersByTimeAsync(8_000);
+    await expect(outcome).resolves.toBe("failed");
+    await vi.advanceTimersByTimeAsync(1_500);
+    checkoutDiagnostics.record(late.clientSecret, "embedded_mounted");
+    checkoutDiagnostics.record(late.clientSecret, "checkout_rendered");
+    vi.useRealTimers();
+
+    expect(diagnosticsOf(postMessage).map(({ stage, ms }) => [stage, ms])).toEqual([
+      ["tap", 0],
+      ["session_ready", 1_300],
+      ["stripe_js_loaded", 3_300],
+      ["ready_timeout", 11_300],
+      ["embedded_mounted", 12_800],
+      ["checkout_rendered", 12_800],
+    ]);
+    expect(diagnosticsOf(postMessage)[0]).toMatchObject({
+      checkout_context_id: "ctx_late",
+      product_identifier: "test:price_1:no-trial",
+      in_app_browser: "none",
+    });
+  });
+
+  it("reports Stripe's error against the tapped checkout", async () => {
+    const { session, postMessage } = fakeSession();
+    const failing = { ...embedded, clientSecret: "cs_diagnostic_error" };
+    const outcome = openEmbeddedSheet(failing, { paywall: session, referenceName: "primary" });
+
+    const error = new Error("You cannot have multiple Embedded Checkout objects.");
+    error.name = "IntegrationError";
+    checkoutDiagnostics.record(failing.clientSecret, "stripe_error", error);
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: failing.clientSecret });
+    checkoutEvents.dispatch("SHEET_CLOSE", undefined);
+
+    await expect(outcome).resolves.toEqual({ status: "abandoned" });
+    expect(diagnosticsOf(postMessage).at(-1)).toMatchObject({
+      stage: "stripe_error",
+      error: "IntegrationError: You cannot have multiple Embedded Checkout objects.",
+    });
+  });
+
+  it("sends nothing for a sheet opened without a paywall to report to", async () => {
+    const track = vi.spyOn(checkoutDiagnostics, "track");
+    const outcome = openEmbeddedSheet({ ...embedded, clientSecret: "cs_diagnostic_none" });
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: "cs_diagnostic_none" });
+    checkoutEvents.dispatch("SHEET_CLOSE", undefined);
+    await expect(outcome).resolves.toEqual({ status: "abandoned" });
+    expect(track).not.toHaveBeenCalled();
   });
 });
 
@@ -933,9 +1003,10 @@ describe("a hosted checkout the shopper leaves the paywall for", () => {
     const { session, postMessage } = fakeSession();
     await expect(openHostedCheckout(session, redirect)).resolves.toBe("abandoned");
     expect(window.location.hash).toBe("#hosted");
-    expect(postMessage.mock.calls.map(([message]) => message.event_name)).toEqual([
-      "initiate_web_checkout",
-      "stripe_checkout_start",
-    ]);
+    expect(
+      postMessage.mock.calls
+        .map(([message]) => message.event_name)
+        .filter((name) => name !== "stripe_checkout_diagnostic"),
+    ).toEqual(["initiate_web_checkout", "stripe_checkout_start"]);
   });
 });

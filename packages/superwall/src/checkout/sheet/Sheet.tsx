@@ -4,6 +4,7 @@ import { SheetCard } from "./SheetCard";
 import { embeddedCheckouts, type EmbeddedHandlers } from "./embedded";
 import { useSheetActions, useSheetState } from "./state";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { checkoutDiagnostics } from "../diagnostics";
 import { checkoutEvents } from "../events";
 import type { EmbeddedCheckoutSession } from "../types";
 import "./checkout.css";
@@ -27,6 +28,7 @@ const StripeSheet = ({ session, isOpen, onClose, onSuccess, onError }: StripeShe
     onComplete: () => {},
     onAnalyticsEvent: () => {},
     onError: () => {},
+    onStage: () => {},
   });
   handlers.current = {
     onComplete: () => {
@@ -35,6 +37,7 @@ const StripeSheet = ({ session, isOpen, onClose, onSuccess, onError }: StripeShe
     },
     onAnalyticsEvent: (event) => {
       if (event.eventType === "checkoutRendered") {
+        checkoutDiagnostics.record(session.clientSecret, "checkout_rendered");
         checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: session.clientSecret });
       } else if (event.eventType === "checkoutSubmitted") {
         checkoutEvents.dispatch("CHECKOUT_SUBMITTED", { session });
@@ -46,8 +49,9 @@ const StripeSheet = ({ session, isOpen, onClose, onSuccess, onError }: StripeShe
     },
     onError: (error) => {
       console.error("[checkout] Stripe's embedded checkout failed:", error);
-      checkoutEvents.dispatch("EMBEDDED_ERROR", { clientSecret: session.clientSecret, error });
+      checkoutDiagnostics.record(session.clientSecret, "stripe_error", error);
     },
+    onStage: (stage) => checkoutDiagnostics.record(session.clientSecret, stage),
   };
 
   const { clientSecret, publishableKey } = session;

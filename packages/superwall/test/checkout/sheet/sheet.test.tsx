@@ -8,12 +8,13 @@ type StripeOptions = {
   onComplete: () => void;
   onAnalyticsEvent: (e: { eventType: string }) => void;
 };
-const stripe: { options?: StripeOptions; started: string[] } = { started: [] };
+const stripe: { options?: StripeOptions; started: string[]; refuse?: Error } = { started: [] };
 
 vi.mock("@stripe/stripe-js", () => ({
   loadStripe: () =>
     Promise.resolve({
       initEmbeddedCheckout: (options: StripeOptions & { clientSecret: string }) => {
+        if (stripe.refuse) return Promise.reject(stripe.refuse);
         stripe.options = options;
         stripe.started.push(options.clientSecret);
         const frame = document.createElement("div");
@@ -271,6 +272,53 @@ describe("the sheet's chrome", () => {
     });
     expect(overlay?.getAttribute("data-state")).toBe("inactive");
     expect(overlay?.getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
+describe("the stages the sheet records for diagnostics", () => {
+  it("records stripe.js, the mount and Stripe's rendered event against the session", async () => {
+    const { checkoutDiagnostics } = await import("../../../src/checkout/diagnostics");
+    const record = vi.spyOn(checkoutDiagnostics, "record");
+    const staged = { ...session, clientSecret: "cs_staged" };
+    mount();
+    await act(async () => {
+      checkoutEvents.dispatch("SHEET_OPEN", { session: staged });
+      await settle();
+    });
+    await act(async () => {
+      stripe.options?.onAnalyticsEvent({ eventType: "checkoutRendered" });
+      await Promise.resolve();
+    });
+    const calls = [...record.mock.calls];
+    record.mockRestore();
+
+    expect(calls).toEqual([
+      ["cs_staged", "stripe_js_loaded"],
+      ["cs_staged", "embedded_mounted"],
+      ["cs_staged", "checkout_rendered"],
+    ]);
+  });
+
+  it("records Stripe's error when it refuses to start the checkout", async () => {
+    const { checkoutDiagnostics } = await import("../../../src/checkout/diagnostics");
+    const record = vi.spyOn(checkoutDiagnostics, "record");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const refused = new Error("You cannot have multiple Embedded Checkout objects.");
+    stripe.refuse = refused;
+    const refusedSession = { ...session, clientSecret: "cs_refused" };
+    mount();
+    await act(async () => {
+      checkoutEvents.dispatch("SHEET_OPEN", { session: refusedSession });
+      await settle();
+    });
+    stripe.refuse = undefined;
+    const calls = [...record.mock.calls];
+    const logs = logged.mock.calls.length;
+    record.mockRestore();
+    logged.mockRestore();
+
+    expect(calls).toContainEqual(["cs_refused", "stripe_error", refused]);
+    expect(logs).toBeGreaterThan(0);
   });
 });
 

@@ -6,6 +6,7 @@ import type {
 import { checkoutPrefetchOf, detectSuperwallHost } from "@superwall/runtime";
 import { createApplePay, type ApplePay, type ApplePayOutcome } from "./applePay";
 import { asString, field } from "./api/decode";
+import { checkoutDiagnostics } from "./diagnostics";
 import { fetchWithRetry } from "./api/fetch";
 import { subscriptionsApiUrl } from "./api/url";
 import { checkoutEvents } from "./events";
@@ -382,7 +383,7 @@ export const purchaseWithApplePay = (
 
 export const openEmbeddedSheet = (
   embedded: EmbeddedCheckoutSession,
-  host?: { paywall: PaywallSession; referenceName: string },
+  host?: { paywall: PaywallSession; referenceName: string; tappedAt?: number },
 ): Promise<{ status: PurchaseOutcome }> =>
   new Promise((resolve) => {
     const events = host ? hostFor(host.paywall) : null;
@@ -390,9 +391,19 @@ export const openEmbeddedSheet = (
       ? contextFor(host.paywall, host.referenceName, embedded.checkoutContextId)
       : null;
     let opened = false;
+    const diagnostics =
+      context && events
+        ? checkoutDiagnostics.track(
+            embedded.clientSecret,
+            host?.tappedAt ?? Date.now(),
+            (stage, ms, error) => events.diagnostic(context, stage, ms, error),
+          )
+        : null;
 
     const readyTimeout = setTimeout(() => {
-      if (!opened) finish("failed");
+      if (opened) return;
+      diagnostics?.timedOut();
+      finish("failed");
     }, SHEET_READY_TIMEOUT);
 
     const isOurs = (candidate: { directive: string; clientSecret?: string }) =>
@@ -444,6 +455,7 @@ export const purchaseOnWeb = async (
   requested: CheckoutMode,
   options: WebPurchaseOptions = {},
 ): Promise<PurchaseOutcome> => {
+  const tappedAt = Date.now();
   const sessions = sessionsFor(paywall);
   const mode = checkoutModeFor(paywall.getSnapshot(), requested);
   rememberPurchaseOptions(paywall, referenceName, options);
@@ -468,7 +480,7 @@ export const purchaseOnWeb = async (
           });
 
     if (result.directive === "embedded") {
-      return (await openEmbeddedSheet(result, { paywall, referenceName })).status;
+      return (await openEmbeddedSheet(result, { paywall, referenceName, tappedAt })).status;
     }
     if (result.directive === "redirect") return openHostedCheckout(paywall, result);
     return "failed";
