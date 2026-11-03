@@ -22,6 +22,7 @@ no separate mapping to maintain.
 
 ```ts
 export default definePaywall({
+  platforms: ["web"],
   checkout: { mode: "sheet", prefetch: "monthly" },
   products: {
     monthly: "test:price_YOUR_MONTHLY_PRICE:no-trial",
@@ -67,8 +68,11 @@ asks. `queryState: false` in `config.ts` turns it off.
 same document — `router.push("goal")` — so there is no page load between
 them, nothing to re-fetch, and the whole flow ships as a single snapshot.
 
-**The same source runs natively.** Drop `checkout` and this paywall buys
-through the App Store instead; `purchase()` does not change.
+**It is sold on the web only.** `platforms: ["web"]` binds it to your web
+app alone, and the studio previews it inside Safari. To run the same source
+natively, add `"iOS"` to `platforms`, drop `checkout` and give it App Store
+products: it then buys through the App Store, and `purchase()` does not
+change.
 
 ## Next
 
