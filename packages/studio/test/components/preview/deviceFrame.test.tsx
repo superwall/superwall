@@ -299,3 +299,62 @@ describe("DevicePlaceholder beside a DeviceFrame", () => {
     }
   });
 });
+
+describe("DeviceFrame in a browser", () => {
+  const props = {
+    title: "preview",
+    src: "/preview/paywall/a",
+    hostState: initialState,
+    delegate: recordingDelegate(),
+    width: device.width,
+    height: device.height,
+  };
+
+  it("keeps the same iframe when it moves into Safari, dropping the sheet and the navigation bar", () => {
+    const pixel = deviceById("pixel-10");
+    const drawer = { style: "drawer", height: 50, cornerRadius: 24 } as const;
+    const view = render(<DeviceFrame {...props} chrome={pixel.chrome} presentation={drawer} />);
+    const before = frames()[0];
+    expect(screen.getByTestId("presentation-backdrop")).toBeDefined();
+
+    view.rerender(
+      <DeviceFrame
+        {...props}
+        chrome={pixel.chrome}
+        presentation={drawer}
+        browser={{ kind: "phone", top: 0, bottom: 0 }}
+      />,
+    );
+    expect(frames()).toEqual([before]);
+    expect(screen.queryByTestId("presentation-backdrop")).toBeNull();
+    expect(screen.queryByTestId("navigation-bar")).toBeNull();
+    expect(before.getAttribute("height")).toBe(String(device.height));
+    expect(screen.getByTestId("browser-bottom-bar")).toBeDefined();
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBe("phone");
+  });
+
+  it("fits the page between the bars the browser reserves", () => {
+    render(<DeviceFrame {...props} browser={{ kind: "phone", top: 64, bottom: 84 }} />);
+    expect(screen.getByTestId("presentation-page").style.top).toBe("64px");
+    expect(frames()[0].getAttribute("height")).toBe(String(device.height - 64 - 84));
+  });
+
+  it("draws the tablet bar under the status bar, and the desktop bar with traffic lights", () => {
+    const view = render(
+      <DeviceFrame {...props} browser={{ kind: "tablet", top: 90, bottom: 0 }} theme="dark" />,
+    );
+    expect(screen.getByTestId("browser-top-bar").style.height).toBe("90px");
+    expect(screen.getByText("superwall.com")).toBeDefined();
+    view.unmount();
+
+    render(<DeviceFrame {...props} browser={{ kind: "desktop", top: 52, bottom: 0 }} />);
+    expect(screen.getByTestId("browser-chrome-desktop")).toBeDefined();
+    expect(screen.getByTestId("browser-top-bar").style.height).toBe("52px");
+  });
+
+  it("shades the phone bar for a dark preview", () => {
+    render(<DeviceFrame {...props} browser={{ kind: "phone", top: 0, bottom: 0 }} theme="dark" />);
+    expect(screen.getByTestId("browser-bottom-bar").className).toContain("text-white");
+    expect(screen.getByTestId("device-frame").style.background).toBe("rgb(0, 0, 0)");
+  });
+});

@@ -24,7 +24,9 @@ import {
   RotateDeviceIcon,
   RotateIcon,
   SlidersIcon,
+  SmartphoneIcon,
   SunIcon,
+  CompassIcon,
 } from "../components/icons";
 import { Tooltip } from "../components/Tooltip";
 import { SidePanel } from "../components/panels/SidePanel";
@@ -36,6 +38,7 @@ import {
   type VariableRow,
 } from "../components/panels/VariablesPanel";
 import {
+  browserLayoutFor,
   chromeFor,
   DEFAULT_DEVICE_ID,
   deviceById,
@@ -46,6 +49,7 @@ import {
   RESPONSIVE_DEFAULT,
   RESPONSIVE_ID,
   STUDIO_DEVICES,
+  type BrowserLayout,
   type DeviceChromeSpec,
 } from "../lib/devices";
 import { hostStateFor, previewDevice, studioDefaults } from "../lib/host";
@@ -66,6 +70,7 @@ import {
   type StudioSurface,
   type StudioVersion,
 } from "../lib/surfaces";
+import { usePreviewPlace, type PreviewPlace } from "../lib/teleport";
 import { timeAgo } from "../lib/time";
 import { type VariableOverrides } from "../lib/variables";
 
@@ -127,6 +132,8 @@ const StagePane = ({
   theme,
   onResize,
   canvas,
+  browser,
+  place,
 }: {
   label?: string;
   width: number;
@@ -144,6 +151,8 @@ const StagePane = ({
   theme?: "light" | "dark";
   onResize?: (next: FrameSize) => void;
   canvas?: React.RefObject<CanvasHandle | null>;
+  browser?: BrowserLayout;
+  place?: PreviewPlace;
 }) => {
   const scale = useCanvasScale();
   const [broken, setBroken] = React.useState(false);
@@ -159,6 +168,14 @@ const StagePane = ({
         </span>
       )}
       <div className="relative">
+        {place?.teleported && (
+          <div
+            className="absolute right-0 bottom-full mb-2 origin-bottom-right"
+            style={{ transform: `scale(${1 / scale})` }}
+          >
+            <PlaceBadge place={place} />
+          </div>
+        )}
         {image && !broken ? (
           <div
             className="flex flex-none items-center justify-center overflow-hidden bg-black"
@@ -186,6 +203,7 @@ const StagePane = ({
             presentation={presentation}
             landscape={landscape}
             theme={theme}
+            browser={browser}
           />
         ) : (
           <DevicePlaceholder width={width} height={height}>
@@ -207,6 +225,25 @@ const StagePane = ({
   );
 };
 
+const PlaceBadge = ({ place }: { place: PreviewPlace }) => {
+  const browser = place.where === "browser";
+  const label = browser ? "In browser" : "In app";
+  return (
+    <span
+      role="status"
+      aria-label={label}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors duration-hover ${
+        browser
+          ? "border-primary/30 bg-primary/10 text-primary"
+          : "border-border bg-background text-fg-secondary"
+      }`}
+    >
+      {browser ? <CompassIcon /> : <SmartphoneIcon />}
+      {label}
+    </span>
+  );
+};
+
 const CanvasFooter = ({ children }: React.PropsWithChildren) => {
   const scale = useCanvasScale();
   return (
@@ -218,6 +255,13 @@ const CanvasFooter = ({ children }: React.PropsWithChildren) => {
       {children}
     </div>
   );
+};
+
+const compareKeyOf = (target: CompareTarget | undefined): string => {
+  if (target === undefined) return "";
+  if (target.type === "version") return `version:${target.version}`;
+  if (target.type === "origin") return "origin";
+  return `surface:${target.surface.kind}/${target.surface.id}`;
 };
 
 const nameOf = (surface: StudioSurface): string => surface.label ?? `${surface.kind}/${surface.id}`;
@@ -315,18 +359,32 @@ export const SurfaceEditor = ({
     () => deviceVariablesFor(device, web, landscape),
     [device, web, landscape],
   );
+  const webBrowser =
+    web && !responsive ? browserLayoutFor(device, { teleported: false, landscape }) : undefined;
   const upright = responsive
     ? size
-    : web
+    : web && webBrowser === undefined
       ? webViewportFor(device)
       : { width: device.width, height: device.height };
   const presentation = web ? undefined : surface.presentation;
   const reminderScreen = notificationScreenFor(device, web || responsive);
-  const delegate = useStudioDelegate({
+  const reminder = {
     platform: reminderScreen.platform,
     screenWidth: reminderScreen.width,
     app: source.app ?? { name: surface.project ?? source.title },
-  });
+  };
+  const previewSrc = source.previewUrl(surface);
+  const local = usePreviewPlace(`${previewSrc}#${reloadKey}`);
+  const delegate = useStudioDelegate(reminder, local.tracker);
+  const comparing = usePreviewPlace(`${compareKeyOf(compareWith)}#${reloadKey}`);
+  const compareDelegate = useStudioDelegate(reminder, comparing.tracker);
+  const browserFor = (place: PreviewPlace): BrowserLayout | undefined => {
+    if (responsive) return undefined;
+    if (web) return webBrowser;
+    return place.where === "browser"
+      ? browserLayoutFor(device, { teleported: true, landscape })
+      : undefined;
+  };
   const frame = landscape ? { width: upright.height, height: upright.width } : upright;
 
   const openPreview = () => {
@@ -360,8 +418,7 @@ export const SurfaceEditor = ({
       }),
     [surface, defaults, source.samples, samples, responsive, frameDevice, theme, locale, edited],
   );
-  const chrome = responsive ? undefined : chromeFor(device, web);
-  const previewSrc = source.previewUrl(surface);
+  const chrome = responsive ? undefined : chromeFor(device, web && webBrowser === undefined);
   const versions = status.versions ?? [];
   const promotion = {
     target: surface.version ?? picked ?? latestVersion(versions),
@@ -584,12 +641,14 @@ export const SurfaceEditor = ({
                       : presentation
                   }
                   hostState={hostState}
-                  delegate={delegate}
+                  delegate={compareDelegate}
                   reloadKey={reloadKey}
                   empty={"empty" in comparePane ? comparePane.empty : undefined}
                   chrome={chrome}
                   landscape={landscape}
                   theme={theme}
+                  browser={browserFor(comparing.place)}
+                  place={comparing.place}
                 />
               )}
               <StagePane
@@ -605,6 +664,8 @@ export const SurfaceEditor = ({
                 chrome={chrome}
                 landscape={landscape}
                 theme={theme}
+                browser={browserFor(local.place)}
+                place={local.place}
                 onResize={
                   responsive
                     ? (next) =>

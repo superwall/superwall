@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  browserLayoutFor,
   chromeFor,
   DEFAULT_DEVICE_ID,
   deviceById,
@@ -140,5 +141,43 @@ describe("where a notification preview is drawn", () => {
     const fallback = { platform: "iOS", width: deviceById(DEFAULT_DEVICE_ID).width };
     expect(notificationScreenFor(deviceById("pixel-10"), true)).toEqual(fallback);
     expect(notificationScreenFor(deviceById("desktop"), false)).toEqual(fallback);
+  });
+});
+
+describe("browserLayoutFor", () => {
+  it("reserves Safari's bars on an iPhone, iPad and desktop, and nothing on Android", () => {
+    expect(browserLayoutFor(deviceById("iphone-17"), { teleported: false })).toEqual({
+      kind: "phone",
+      top: 64,
+      bottom: 84,
+    });
+    expect(browserLayoutFor(deviceById("ipad-pro-11"), { teleported: false })).toEqual({
+      kind: "tablet",
+      top: 24 + 66,
+      bottom: 0,
+    });
+    expect(browserLayoutFor(deviceById("desktop"), { teleported: false })).toEqual({
+      kind: "desktop",
+      top: 52,
+      bottom: 0,
+    });
+    expect(browserLayoutFor(deviceById("pixel-10"), { teleported: false })).toBeUndefined();
+  });
+
+  it("floats the iPhone bar over a teleported paywall, which keeps the app's safe areas", () => {
+    expect(browserLayoutFor(deviceById("iphone-17"), { teleported: true })).toEqual({
+      kind: "phone",
+      top: 0,
+      bottom: 0,
+    });
+    expect(
+      browserLayoutFor(deviceById("iphone-17"), { teleported: true, landscape: true }),
+    ).toEqual({ kind: "phone", top: 0, bottom: 0 });
+  });
+
+  it("leaves a landscape web-only iPhone a bare viewport", () => {
+    expect(
+      browserLayoutFor(deviceById("iphone-17"), { teleported: false, landscape: true }),
+    ).toBeUndefined();
   });
 });

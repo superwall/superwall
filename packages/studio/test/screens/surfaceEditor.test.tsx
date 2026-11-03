@@ -549,7 +549,7 @@ describe("SurfaceEditor's smaller states", () => {
     expect((screen.getByLabelText("Preview height") as HTMLInputElement).value).toBe("800");
   });
 
-  it("shows a web-only paywall as a bare viewport on the picked device, reporting web", async () => {
+  it("shows a web-only paywall in Safari on the picked iPhone, reporting web", async () => {
     const web: StudioSurface = { ...live, platforms: ["web"] };
     renderEditor(
       <SurfaceEditor
@@ -561,15 +561,147 @@ describe("SurfaceEditor's smaller states", () => {
     await act(async () => {});
 
     expect((screen.getByLabelText("Device") as HTMLSelectElement).value).toBe("iphone-17");
-    expect(screen.queryByTestId("device-chrome")).toBeNull();
-    expect(parseFloat(screen.getByTestId("device-frame").style.borderRadius)).toBe(3);
+    const frame = screen.getByTestId("device-frame");
+    expect(frame.style.width).toBe("402px");
+    expect(frame.style.height).toBe("874px");
+    expect(frame.getAttribute("data-browser")).toBe("phone");
+    expect(screen.getByTestId("device-chrome")).toBeDefined();
+    expect(screen.getByTestId("browser-bottom-bar")).toBeDefined();
     expect(preview().getAttribute("width")).toBe("402");
     expect(preview().getAttribute("height")).toBe(String(874 - 64 - 84));
+    expect(screen.getByTestId("presentation-page").style.top).toBe("64px");
+    expect(screen.queryByRole("status", { name: /In (app|browser)/ })).toBeNull();
     const host = hostOf(preview());
     host.ping();
     expect(host.sent()[0]?.[0]).toMatchObject({
       variables: { device: { platform: "web", deviceModel: "iPhone18,3" } },
     });
+  });
+
+  it("keeps a web-only paywall a bare viewport on Android, which has no Safari", async () => {
+    const web: StudioSurface = { ...live, platforms: ["web"] };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [web], previewUrl: () => "/preview" }}
+        surface={web}
+        samples={{}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "pixel-10" } });
+    await act(async () => {});
+
+    expect(screen.queryByTestId("device-chrome")).toBeNull();
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
+    expect(preview().getAttribute("height")).toBe(String(915 - 24 - 104));
+  });
+
+  it("shows a web-only paywall under the Safari top bar on an iPad and a desktop", async () => {
+    const web: StudioSurface = { ...live, platforms: ["web"] };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [web], previewUrl: () => "/preview" }}
+        surface={web}
+        samples={{}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "ipad-pro-11" } });
+    await act(async () => {});
+    expect(screen.getByTestId("browser-chrome-tablet")).toBeDefined();
+    expect(screen.getByTestId("presentation-page").style.top).toBe("90px");
+    expect(preview().getAttribute("height")).toBe(String(1194 - 24 - 66));
+
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "desktop" } });
+    await act(async () => {});
+    expect(screen.getByTestId("browser-chrome-desktop")).toBeDefined();
+    expect(screen.getByTestId("presentation-page").style.top).toBe("52px");
+    expect(preview().getAttribute("height")).toBe(String(900 - 52));
+  });
+
+  it("moves the preview into Safari when the paywall teleports, and back when it returns", async () => {
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [live], previewUrl: () => "/preview" }}
+        surface={live}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    const frame = preview();
+    const send = (events: Record<string, unknown>[]) =>
+      act(async () => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify({ version: 1, direction: "from_paywall", payload: { events } }),
+            source: frame.contentWindow,
+          }),
+        );
+      });
+    const view = (page_name: string, flow_position: number, type = "forward") => ({
+      event_name: "page_view",
+      type,
+      page_name,
+      page_node_id: page_name,
+      navigation_node_id: "nav",
+      flow_position,
+    });
+
+    expect(screen.queryByText("In app")).toBeNull();
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
+
+    await send([
+      view("index", 0, "entry"),
+      { event_name: "open_url_external", url: "http://localhost/?sw_nav=plan", teleport: true },
+      view("plan", 1),
+    ]);
+    expect(await screen.findByText("Teleported to the browser")).toBeDefined();
+    expect(screen.getByRole("status", { name: "In browser" })).toBeDefined();
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBe("phone");
+    expect(screen.getByTestId("browser-bottom-bar")).toBeDefined();
+    expect(screen.getAllByTitle("plus-upgrade preview")).toEqual([frame]);
+    expect(frame.getAttribute("height")).toBe("874");
+
+    await send([view("index", 0, "back")]);
+    expect(await screen.findByText("Back in the app")).toBeDefined();
+    expect(screen.getByRole("status", { name: "In app" })).toBeDefined();
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reload preview" }));
+    await act(async () => {});
+    expect(screen.queryByRole("status", { name: "In app" })).toBeNull();
+  });
+
+  it("opens an iPad teleport under the Safari top bar, dropping the sheet", async () => {
+    const sheet: StudioSurface = {
+      ...live,
+      presentation: { style: "drawer", height: 50, cornerRadius: 24 },
+    };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [sheet], previewUrl: () => "/preview" }}
+        surface={sheet}
+        samples={{}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "ipad-pro-11" } });
+    await act(async () => {});
+    expect(screen.getByTestId("presentation-backdrop")).toBeDefined();
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            version: 1,
+            direction: "from_paywall",
+            payload: {
+              events: [{ event_name: "open_url_external", url: "http://x/", teleport: true }],
+            },
+          }),
+          source: preview().contentWindow,
+        }),
+      );
+    });
+    expect(screen.queryByTestId("presentation-backdrop")).toBeNull();
+    expect(screen.getByTestId("browser-chrome-tablet")).toBeDefined();
+    expect(screen.getByTestId("presentation-page").style.top).toBe("90px");
   });
 
   it("puts zoom in the toolbar: step buttons, and the percentage fits", async () => {

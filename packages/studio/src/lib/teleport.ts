@@ -1,3 +1,4 @@
+import * as React from "react";
 import type { TOutgoingMessage } from "@superwall/host";
 
 const ROUTE_QUERY_KEY = "sw_nav";
@@ -72,4 +73,13 @@ export const createTeleportTracker = (): TeleportTracker => {
     },
     reset: () => set(IN_APP),
   };
+};
+
+export const usePreviewPlace = (
+  resetKey: string,
+): { tracker: TeleportTracker; place: PreviewPlace } => {
+  const tracker = React.useMemo(createTeleportTracker, []);
+  React.useEffect(() => tracker.reset(), [tracker, resetKey]);
+  const place = React.useSyncExternalStore(tracker.subscribe, tracker.getSnapshot);
+  return { tracker, place };
 };
