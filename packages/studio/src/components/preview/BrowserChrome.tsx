@@ -198,11 +198,19 @@ const DesktopTopBar = () => (
   </div>
 );
 
-const TabletTopBar = ({ height, statusBar }: { height: number; statusBar: number }) => (
+const TabletTopBar = ({
+  height,
+  statusBar,
+  right,
+}: {
+  height: number;
+  statusBar: number;
+  right: number;
+}) => (
   <div
-    className="absolute inset-x-0 flex flex-col text-white"
+    className="absolute left-0 flex flex-col text-white"
     data-testid="browser-top-bar"
-    style={{ top: statusBar, height: height - statusBar, background: BAR_BACKGROUND }}
+    style={{ top: statusBar, right, height: height - statusBar, background: BAR_BACKGROUND }}
   >
     <div className="flex flex-1 items-center gap-2 px-3">
       <Pill glass={DARK_GLASS} height={40} padding={0}>
@@ -250,16 +258,18 @@ export const BrowserChrome = ({
   kind,
   top,
   statusBar,
+  right = 0,
   theme = "light",
 }: {
   kind: BrowserKind;
   top: number;
   statusBar: number;
+  right?: number;
   theme?: "light" | "dark";
 }) => (
   <div className="pointer-events-none absolute inset-0" data-testid={`browser-chrome-${kind}`}>
     {kind === "desktop" && <DesktopTopBar />}
-    {kind === "tablet" && <TabletTopBar height={top} statusBar={statusBar} />}
+    {kind === "tablet" && <TabletTopBar height={top} statusBar={statusBar} right={right} />}
     {kind === "phone" && <PhoneBottomBar dark={theme === "dark"} />}
   </div>
 );

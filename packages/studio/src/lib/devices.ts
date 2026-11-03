@@ -160,7 +160,13 @@ export const chromeFor = (device: StudioDevice, web: boolean): DeviceChromeSpec 
 
 export type BrowserKind = "phone" | "tablet" | "desktop";
 
-export type BrowserLayout = { kind: BrowserKind; top: number; bottom: number };
+export type BrowserLayout = {
+  kind: BrowserKind;
+  top: number;
+  bottom: number;
+  statusBar: number;
+  right: number;
+};
 
 export const BROWSER_BAR = { phone: 84, tablet: 66, desktop: 52 } as const;
 
@@ -181,9 +187,23 @@ export const browserLayoutFor = (
   const kind = browserKindOf(device);
   if (kind === undefined) return undefined;
   const statusBar = device.chrome?.statusBarHeight ?? 0;
-  if (kind !== "phone") return { kind, top: statusBar + BROWSER_BAR[kind], bottom: 0 };
-  if (teleported) return { kind, top: 0, bottom: 0 };
-  return landscape ? undefined : { kind, top: statusBar, bottom: BROWSER_BAR.phone };
+  if (kind === "tablet") {
+    const safeArea = safeAreaFor(device, landscape);
+    const top = Math.max(statusBar, safeArea?.top ?? 0);
+    return {
+      kind,
+      top: top + BROWSER_BAR.tablet,
+      bottom: 0,
+      statusBar: top,
+      right: safeArea?.right ?? 0,
+    };
+  }
+  if (kind === "desktop")
+    return { kind, top: BROWSER_BAR.desktop, bottom: 0, statusBar: 0, right: 0 };
+  if (teleported) return { kind, top: 0, bottom: 0, statusBar, right: 0 };
+  return landscape
+    ? undefined
+    : { kind, top: statusBar, bottom: BROWSER_BAR.phone, statusBar, right: 0 };
 };
 
 export const webViewportFor = (device: StudioDevice): { width: number; height: number } => {

@@ -643,9 +643,11 @@ export const SurfaceEditor = ({
                   src={"src" in comparePane ? comparePane.src : undefined}
                   image={"image" in comparePane ? comparePane.image : undefined}
                   presentation={
-                    compareWith?.type === "surface" && !web
-                      ? compareWith.surface.presentation
-                      : presentation
+                    comparing.place.where === "browser"
+                      ? undefined
+                      : compareWith?.type === "surface" && !web
+                        ? compareWith.surface.presentation
+                        : presentation
                   }
                   hostState={hostState}
                   delegate={compareDelegate}
@@ -664,7 +666,7 @@ export const SurfaceEditor = ({
                 height={frame.height}
                 title={`${surface.id} preview`}
                 src={previewSrc}
-                presentation={presentation}
+                presentation={local.place.where === "browser" ? undefined : presentation}
                 hostState={hostState}
                 delegate={delegate}
                 reloadKey={reloadKey}

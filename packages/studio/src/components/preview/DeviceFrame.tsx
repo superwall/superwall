@@ -189,7 +189,8 @@ export const DeviceFrame = ({
         <BrowserChrome
           kind={browser.kind}
           top={browser.top}
-          statusBar={chrome?.statusBarHeight ?? 0}
+          statusBar={browser.statusBar}
+          right={browser.right}
           theme={theme}
         />
       )}

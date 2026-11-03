@@ -315,6 +315,87 @@ describe("the studio teleporter", () => {
     expect(teleporter.getStatus()).toEqual({ status: "idle" });
   });
 
+  it("returns to the app when the session reports the paywall closed", async () => {
+    const paywall = session();
+    const teleporter = createStudioTeleporter(paywall);
+    provideInlineRouter(paywall, router());
+    const listeners = new Map<string, () => void>();
+    const off = vi.fn();
+    const detach = teleporter.attach({
+      ...paywall,
+      purchase: vi.fn(),
+      on: (name: string, handler: () => void) => {
+        listeners.set(name, handler);
+        return off;
+      },
+    } as never);
+
+    const outcome = teleporter.begin({ query: {} });
+    listeners.get("paywall_close")?.();
+
+    await expect(outcome).resolves.toBe("abandoned");
+    expect(teleporter.getStatus()).toEqual({ status: "idle" });
+    detach();
+    expect(off).toHaveBeenCalledOnce();
+  });
+
+  it("hands a purchase made in the app straight through", async () => {
+    const teleporter = createStudioTeleporter(session());
+    const bought = { status: "completed" as const };
+
+    await expect(teleporter.handOff("card", () => Promise.resolve(bought))).resolves.toBe(bought);
+    expect(teleporter.getStatus()).toEqual({ status: "idle" });
+  });
+
+  it("leaves the web half as it was when its purchase throws", async () => {
+    const paywall = session();
+    const teleporter = createStudioTeleporter(paywall);
+    provideInlineRouter(paywall, router());
+    const outcome = teleporter.begin({ query: {}, productReference: "card" });
+    const failure = new Error("declined");
+
+    const result = teleporter.handOff("card", () => Promise.reject(failure));
+
+    await expect(result).rejects.toBe(failure);
+    await expect(outcome).resolves.toMatchObject({ reference: "card" });
+    expect(teleporter.getStatus()).toEqual({ status: "arrived", productReference: "card" });
+  });
+
+  it("stays in the app when a purchase completes after the shopper went back", async () => {
+    const paywall = session();
+    const teleporter = createStudioTeleporter(paywall);
+    provideInlineRouter(paywall, router());
+    void teleporter.begin({ query: {} });
+    let finish: (value: { status: "completed" }) => void = () => {};
+    const result = teleporter.handOff(
+      "card",
+      () => new Promise<{ status: "completed" }>((resolve) => (finish = resolve)),
+    );
+
+    teleporter.endPresentation();
+    finish({ status: "completed" });
+    await result;
+    await Promise.resolve();
+
+    expect(teleporter.getStatus()).toEqual({ status: "idle" });
+  });
+
+  it("completes a route teleport without a tapped product once it is bought there", async () => {
+    const paywall = session();
+    const teleporter = createStudioTeleporter(paywall);
+    provideInlineRouter(paywall, router());
+    const returned = vi.fn();
+    teleporter.on("return", returned);
+    teleporter.endPresentation();
+    void teleporter.begin({ query: {} });
+
+    await teleporter.handOff("card", () => Promise.resolve({ status: "completed" as const }));
+    await Promise.resolve();
+
+    expect(returned).not.toHaveBeenCalled();
+    expect(teleporter.getStatus()).toEqual({ status: "completed", paidElsewhere: false });
+  });
+
   it("does nothing for the app-only actions", async () => {
     const teleporter = createStudioTeleporter(session());
     teleporter.prefetch();
@@ -323,7 +404,6 @@ describe("the studio teleporter", () => {
     teleporter.open();
     teleporter.cancel();
     teleporter.returnToApp();
-    teleporter.attach({} as never)();
 
     expect(teleporter.fallback()).toBeUndefined();
     expect(teleporter.inFlight()).toBe(false);

@@ -53,6 +53,15 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
     left.settle("abandoned");
   };
 
+  const completed = (half: WebHalf) => {
+    store.setStatus({
+      status: "completed",
+      paidElsewhere: false,
+      ...(half.productReference === undefined ? {} : { productReference: half.productReference }),
+    });
+    store.emit("complete");
+  };
+
   const available = () =>
     web === undefined &&
     settings() !== undefined &&
@@ -115,18 +124,11 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
     ): Promise<T> => {
       const half = web;
       const result = purchase();
-      half?.settle({ reference, result });
-      void result.then(
+      if (half === undefined) return result;
+      half.settle({ reference, result });
+      result.then(
         (bought) => {
-          if (bought.status !== "completed" || web !== half || half === undefined) return;
-          store.setStatus({
-            status: "completed",
-            paidElsewhere: false,
-            ...(half.productReference === undefined
-              ? {}
-              : { productReference: half.productReference }),
-          });
-          store.emit("complete");
+          if (bought.status === "completed" && web === half) completed(half);
         },
         () => {},
       );
@@ -143,6 +145,6 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
     fallback: () => undefined,
     showWaitingScreen: async () => false,
     handleReturn: async () => false,
-    attach: () => () => {},
+    attach: (session) => session.on("paywall_close", backInApp),
   };
 };

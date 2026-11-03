@@ -322,7 +322,7 @@ describe("DeviceFrame in a browser", () => {
         {...props}
         chrome={pixel.chrome}
         presentation={drawer}
-        browser={{ kind: "phone", top: 0, bottom: 0 }}
+        browser={{ kind: "phone", top: 0, bottom: 0, statusBar: 64, right: 0 }}
       />,
     );
     expect(frames()).toEqual([before]);
@@ -334,7 +334,12 @@ describe("DeviceFrame in a browser", () => {
   });
 
   it("fits the page between the bars the browser reserves", () => {
-    render(<DeviceFrame {...props} browser={{ kind: "phone", top: 64, bottom: 84 }} />);
+    render(
+      <DeviceFrame
+        {...props}
+        browser={{ kind: "phone", top: 64, bottom: 84, statusBar: 64, right: 0 }}
+      />,
+    );
     expect(screen.getByTestId("presentation-page").style.top).toBe("64px");
     expect(frames()[0].getAttribute("height")).toBe(String(device.height - 64 - 84));
   });
@@ -343,23 +348,34 @@ describe("DeviceFrame in a browser", () => {
     const view = render(
       <DeviceFrame
         {...props}
-        chrome={device.chrome && { ...device.chrome, statusBarHeight: 24 }}
-        browser={{ kind: "tablet", top: 90, bottom: 0 }}
+        browser={{ kind: "tablet", top: 90, bottom: 0, statusBar: 24, right: 12 }}
         theme="dark"
       />,
     );
     expect(screen.getByTestId("browser-top-bar").style.top).toBe("24px");
     expect(screen.getByTestId("browser-top-bar").style.height).toBe("66px");
+    expect(screen.getByTestId("browser-top-bar").style.right).toBe("12px");
     expect(screen.getByText("superwall.com")).toBeDefined();
     view.unmount();
 
-    render(<DeviceFrame {...props} browser={{ kind: "desktop", top: 52, bottom: 0 }} />);
+    render(
+      <DeviceFrame
+        {...props}
+        browser={{ kind: "desktop", top: 52, bottom: 0, statusBar: 0, right: 0 }}
+      />,
+    );
     expect(screen.getByTestId("browser-chrome-desktop")).toBeDefined();
     expect(screen.getByTestId("browser-top-bar").style.height).toBe("52px");
   });
 
   it("shades the phone bar for a dark preview", () => {
-    render(<DeviceFrame {...props} browser={{ kind: "phone", top: 0, bottom: 0 }} theme="dark" />);
+    render(
+      <DeviceFrame
+        {...props}
+        browser={{ kind: "phone", top: 0, bottom: 0, statusBar: 64, right: 0 }}
+        theme="dark"
+      />,
+    );
     expect(screen.getByTestId("browser-bottom-bar").className).toContain("text-white");
     expect(screen.getByTestId("device-frame").style.background).toBe("rgb(0, 0, 0)");
   });

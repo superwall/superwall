@@ -756,6 +756,53 @@ describe("SurfaceEditor's smaller states", () => {
     expect(screen.getByTestId("presentation-page").style.top).toBe("90px");
   });
 
+  it("opens a Responsive teleport full screen, and the sheet again on the way back", async () => {
+    const sheet: StudioSurface = {
+      ...live,
+      presentation: { style: "drawer", height: 50, cornerRadius: 24 },
+    };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [sheet], previewUrl: () => "/preview" }}
+        surface={sheet}
+        samples={{}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "responsive" } });
+    await act(async () => {});
+    const send = (events: unknown[]) =>
+      act(async () => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify({ version: 1, direction: "from_paywall", payload: { events } }),
+            source: preview().contentWindow,
+          }),
+        );
+      });
+    expect(screen.getByTestId("presentation-backdrop")).toBeDefined();
+    const view = (page_name: string, flow_position: number, type: string) => ({
+      event_name: "page_view",
+      type,
+      page_name,
+      page_node_id: page_name,
+      navigation_node_id: "nav",
+      flow_position,
+    });
+
+    await send([
+      view("index", 0, "entry"),
+      { event_name: "open_url_external", url: "http://x/", teleport: true },
+      view("plan", 1, "forward"),
+    ]);
+    expect(screen.getByRole("status", { name: "In browser" })).toBeDefined();
+    expect(screen.queryByTestId("presentation-backdrop")).toBeNull();
+    expect(screen.getByTestId("presentation-page").style.top).toBe("0px");
+
+    await send([view("index", 0, "back")]);
+    expect(screen.getByRole("status", { name: "In app" })).toBeDefined();
+    expect(screen.getByTestId("presentation-backdrop")).toBeDefined();
+  });
+
   it("keeps a native comparison in the app beside a web-only paywall", async () => {
     const web: StudioSurface = { ...live, platforms: ["web"] };
     renderEditor(
