@@ -7,9 +7,11 @@ import {
   BoltIcon,
   CartIcon,
   CheckCircleIcon,
+  CompassIcon,
   ExternalIcon,
   InfoCircleIcon,
   RotateIcon,
+  SmartphoneIcon,
   StarIcon,
   UserIcon,
   XIcon,
@@ -23,6 +25,7 @@ import {
 } from "./NotificationPreview";
 import { DEFAULT_DEVICE_ID, deviceById, notificationScreenFor } from "../lib/devices";
 import { noticeFor, type EventNotice, type PaywallMessageName } from "../lib/notices";
+import { createTeleportTracker, type TeleportTracker } from "../lib/teleport";
 import { timeUntil } from "../lib/time";
 
 const TINT: Record<EventNotice["tone"], string> = {
@@ -300,6 +303,36 @@ const showReminder = (message: ScheduledNotification, target: ReminderTarget) =>
   );
 };
 
+const showTeleported = (route: string | undefined) =>
+  toast.custom(() => (
+    <ToastCard
+      icon={CompassIcon}
+      tone="info"
+      description={
+        route === undefined ? (
+          "The preview shows the paywall in Safari, as the shopper sees it."
+        ) : (
+          <>
+            The preview shows <InlineCode>{route}</InlineCode> in Safari, as the shopper sees it.
+          </>
+        )
+      }
+    >
+      Teleported to the browser
+    </ToastCard>
+  ));
+
+const showReturned = () =>
+  toast.custom(() => (
+    <ToastCard
+      icon={SmartphoneIcon}
+      tone="success"
+      description="The shopper went back from the first web route."
+    >
+      Back in the app
+    </ToastCard>
+  ));
+
 let asked = 0;
 
 const ask = <T,>(
@@ -330,8 +363,16 @@ const ask = <T,>(
 
 export const createStudioDelegate = (
   reminderTarget: () => ReminderTarget = () => DEFAULT_TARGET,
+  tracker: TeleportTracker = createTeleportTracker(),
 ): HostDelegate => ({
   event: (message) => {
+    const change = tracker.feed(message);
+    if (change === "teleported") {
+      const place = tracker.getSnapshot();
+      showTeleported(place.where === "browser" ? place.route : undefined);
+      return;
+    }
+    if (change === "returned") showReturned();
     if (message.event_name === "schedule_notification") {
       showReminder(message, reminderTarget());
       return;
@@ -350,10 +391,16 @@ export const createStudioDelegate = (
     ask("request_callback", "callback", name, CALLBACK).then((status) => ({ status })),
 });
 
-export const useStudioDelegate = (reminderTarget?: ReminderTarget): HostDelegate => {
+export const useStudioDelegate = (
+  reminderTarget?: ReminderTarget,
+  tracker?: TeleportTracker,
+): HostDelegate => {
   const latest = React.useRef(reminderTarget);
   latest.current = reminderTarget;
-  return React.useMemo(() => createStudioDelegate(() => latest.current ?? DEFAULT_TARGET), []);
+  return React.useMemo(
+    () => createStudioDelegate(() => latest.current ?? DEFAULT_TARGET, tracker),
+    [tracker],
+  );
 };
 
 export const PaywallToasts = ({

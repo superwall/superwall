@@ -8,6 +8,7 @@ import {
   useStudioDelegate,
   type ReminderTarget,
 } from "../../src/components/PaywallToasts";
+import { createTeleportTracker } from "../../src/lib/teleport";
 
 const product = { reference: "annual", productId: "pro_5999_year", variables: {} };
 
@@ -306,5 +307,87 @@ describe("the events that get their own icon", () => {
     });
 
     expect(await screen.findByText("post_checkout_complete")).toBeDefined();
+  });
+});
+
+const view = (page_name: string, flow_position: number) =>
+  ({
+    event_name: "page_view",
+    type: "forward",
+    page_name,
+    page_node_id: page_name,
+    navigation_node_id: "nav",
+    flow_position,
+  }) as const;
+
+describe("PaywallToasts teleports", () => {
+  const teleport = {
+    event_name: "open_url_external",
+    url: "http://localhost:5173/?sw_nav=plan",
+    teleport: true,
+  } as const;
+
+  it("says the paywall teleported, naming the route, instead of the bare link", async () => {
+    const delegate = mount();
+    await act(async () => {
+      delegate.event(teleport);
+    });
+
+    expect(await screen.findByText("Teleported to the browser")).toBeDefined();
+    expect(screen.getByText("plan")).toBeDefined();
+    expect(screen.queryByText("open_url_external")).toBeNull();
+  });
+
+  it("says nothing of the route when the teleport URL names none", async () => {
+    const delegate = mount();
+    await act(async () => {
+      delegate.event({ ...teleport, url: "http://localhost:5173/" });
+    });
+
+    expect(await screen.findByText(/shows the paywall in Safari/)).toBeDefined();
+  });
+
+  it("says the shopper is back in the app once they go back from the first web route", async () => {
+    const tracker = createTeleportTracker();
+    const delegate = createStudioDelegate(undefined, tracker);
+    render(<PaywallToasts surfaceKey="a/pro" />);
+    await act(async () => {
+      delegate.event(teleport);
+      delegate.event(view("plan", 1));
+    });
+    expect(tracker.getSnapshot().where).toBe("browser");
+    expect(screen.queryByText("Back in the app")).toBeNull();
+
+    await act(async () => {
+      delegate.event({ ...view("index", 0), type: "back" });
+    });
+
+    expect(await screen.findByText("Back in the app")).toBeDefined();
+    expect(tracker.getSnapshot()).toEqual({ where: "app", teleported: true });
+  });
+
+  it("keeps showing the link for an external URL that is not a teleport", async () => {
+    const delegate = mount();
+    await act(async () => {
+      delegate.event({ event_name: "open_url_external", url: "https://superwall.com" });
+    });
+
+    expect(await screen.findByText("https://superwall.com")).toBeDefined();
+    expect(screen.queryByText("Teleported to the browser")).toBeNull();
+  });
+
+  it("feeds the tracker it is given from the hook", async () => {
+    const tracker = createTeleportTracker();
+    let delegate: HostDelegate | undefined;
+    const Probe = () => {
+      delegate = useStudioDelegate(undefined, tracker);
+      return null;
+    };
+    render(<Probe />);
+    await act(async () => {
+      delegate?.event(teleport);
+    });
+
+    expect(tracker.getSnapshot().where).toBe("browser");
   });
 });
