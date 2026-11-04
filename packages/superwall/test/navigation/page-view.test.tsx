@@ -399,7 +399,6 @@ describe("a reset", () => {
   });
 });
 
-/** Mounts inside an SDK host that loads the page before presenting it, as a preloaded web view does. */
 const mountInHost = async (entry?: () => readonly string[]) => {
   sent = [];
   const { transport: inner, host } = createHost({
