@@ -505,6 +505,16 @@ describe("inside an SDK host, page_view follows the presentation", () => {
     expect(trail()).toEqual([["entry", "index", 0]]);
   });
 
+  it("stays quiet on a close that arrives before any open, and still sends one entry view on open", async () => {
+    const paywall = await mountInHost();
+    paywall.close();
+    paywall.close();
+    expect(trail()).toEqual([]);
+
+    paywall.open();
+    expect(trail()).toEqual([["entry", "index", 0]]);
+  });
+
   it("chooses the entry stack again on close", async () => {
     let stack: readonly string[] = ["index"];
     const paywall = await mountInHost(() => stack);
