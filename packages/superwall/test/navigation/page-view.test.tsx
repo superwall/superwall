@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TOutgoingMessage } from "@superwall/runtime";
+import { paywallClose, paywallOpen } from "@superwall/host";
+import type { ITransport, TOutgoingMessage } from "@superwall/runtime";
+import { SuperwallProvider } from "../../src";
 import { PaywallRouter, TRANSITION_MS, useRouter, type RouteMap } from "../../src/navigation/index";
-import { createWrapper } from "../helpers";
+import { createHost, createWrapper, flush, testConfig } from "../helpers";
 
 type PageView = Extract<TOutgoingMessage, { event_name: "page_view" }>;
 
@@ -393,6 +395,128 @@ describe("a reset", () => {
     expect(trail()).toEqual([
       ["entry", "index", 0],
       ["back", "plans", 1],
+    ]);
+  });
+});
+
+/** Mounts inside an SDK host that loads the page before presenting it, as a preloaded web view does. */
+const mountInHost = async (entry?: () => readonly string[]) => {
+  sent = [];
+  const { transport: inner, host } = createHost({
+    onOutgoing: (message) => {
+      if (message.event_name === "page_view") sent.push(message as PageView);
+    },
+  });
+  const transport: ITransport = {
+    ...inner,
+    addListener: (handler) =>
+      inner.addListener((message) => {
+        if (message.event_name !== "paywall_open" || presented) handler(message);
+      }),
+  };
+  let presented = false;
+  render(
+    <SuperwallProvider config={testConfig} transport={transport}>
+      <PaywallRouter routes={routes} navigationId="get-started" entry={entry} />
+    </SuperwallProvider>,
+  );
+  await flush();
+  return {
+    open: () => {
+      presented = true;
+      act(() => inner.accept(paywallOpen(host.state)));
+    },
+    close: () => {
+      act(() => inner.accept(paywallClose(host.state)));
+      act(() => vi.advanceTimersByTime(TRANSITION_MS));
+    },
+  };
+};
+
+describe("inside an SDK host, page_view follows the presentation", () => {
+  beforeEach(() => window.history.replaceState(null, "", "/?transport=editor"));
+  afterEach(() => window.history.replaceState(null, "", "/"));
+
+  it("sends nothing while the page is loaded but not presented", async () => {
+    await mountInHost();
+
+    expect(screen.getByText("index")).toBeTruthy();
+    expect(trail()).toEqual([]);
+  });
+
+  it("sends the entry view when the paywall opens, with no previous page", async () => {
+    const paywall = await mountInHost();
+    paywall.open();
+
+    expect(trail()).toEqual([["entry", "index", 0]]);
+    expect(sent[0].previous_page_node_id).toBeUndefined();
+    expect(sent[0].time_on_previous_page_ms).toBeUndefined();
+  });
+
+  it("reports navigation after the open as before", async () => {
+    const paywall = await mountInHost();
+    paywall.open();
+    tap("push plans");
+    tap("back");
+
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["forward", "plans", 1],
+      ["back", "index", 0],
+    ]);
+  });
+
+  it("goes quiet on close and returns to the entry page", async () => {
+    const paywall = await mountInHost();
+    paywall.open();
+    tap("push plans");
+    paywall.close();
+
+    expect(screen.getAllByText("index").length).toBeGreaterThan(0);
+    expect(screen.queryByText("plans")).toBeNull();
+    tap("push terms");
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["forward", "plans", 1],
+    ]);
+  });
+
+  it("sends a fresh entry view each time a cached paywall is shown again", async () => {
+    const paywall = await mountInHost();
+    paywall.open();
+    tap("push plans");
+    paywall.close();
+    paywall.open();
+    tap("push terms");
+
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["forward", "plans", 1],
+      ["entry", "index", 0],
+      ["forward", "terms", 1],
+    ]);
+    expect(sent[2].previous_page_node_id).toBeUndefined();
+  });
+
+  it("sends no second entry view for a repeated open while already open", async () => {
+    const paywall = await mountInHost();
+    paywall.open();
+    paywall.open();
+
+    expect(trail()).toEqual([["entry", "index", 0]]);
+  });
+
+  it("chooses the entry stack again on close", async () => {
+    let stack: readonly string[] = ["index"];
+    const paywall = await mountInHost(() => stack);
+    paywall.open();
+    stack = ["index", "plans"];
+    paywall.close();
+    paywall.open();
+
+    expect(trail()).toEqual([
+      ["entry", "index", 0],
+      ["entry", "plans", 1],
     ]);
   });
 });

@@ -301,6 +301,12 @@ const Router = ({
 
   const known = React.useRef(routes);
   known.current = routes;
+  const choose = React.useRef(chooseStack);
+  choose.current = chooseStack;
+  const [presentation, setPresentation] = React.useState(() => ({
+    open: !detectSuperwallHost() || session.getSnapshot().paywall !== undefined,
+    opens: 0,
+  }));
   const notify = React.useRef(onNavigate);
   notify.current = onNavigate;
   const nextKey = React.useRef(entries.length);
@@ -425,6 +431,24 @@ const Router = ({
     [session],
   );
 
+  React.useLayoutEffect(() => {
+    if (!detectSuperwallHost()) return;
+    const offOpen = session.on("paywall_open", () =>
+      setPresentation((was) => (was.open ? was : { open: true, opens: was.opens + 1 })),
+    );
+    const offClose = session.on("paywall_close", () => {
+      setPresentation((was) => (was.open ? { ...was, open: false } : was));
+      current.current.reset(
+        askedStack(known.current) ??
+          enteredStack(choose.current, known.current, variablesOf(session)),
+      );
+    });
+    return () => {
+      offOpen();
+      offClose();
+    };
+  }, [session]);
+
   React.useEffect(() => {
     const teleporter = teleportFor(session);
     if (teleporter.kind === "app") teleporter.landed(top.name, entries.length - 1);
@@ -490,15 +514,19 @@ const Router = ({
   const previous = React.useRef<{ name: string; depth: number; at: number } | undefined>(undefined);
 
   const reported = React.useRef<number | undefined>(undefined);
+  const announced = React.useRef<number | undefined>(undefined);
 
   React.useEffect(() => {
+    if (!presentation.open) return;
     if (landing.current !== undefined && landing.current !== nav.reset) return;
     landing.current = undefined;
-    if (reported.current === top.key) return;
+    const fresh = announced.current !== presentation.opens;
+    if (!fresh && reported.current === top.key) return;
+    announced.current = presentation.opens;
     reported.current = top.key;
     notify.current?.(name);
 
-    const before = previous.current;
+    const before = fresh ? undefined : previous.current;
     const now = Date.now();
     session.pageView({
       type: before ? direction : "entry",
@@ -510,7 +538,7 @@ const Router = ({
       timeOnPreviousMs: before ? now - before.at : undefined,
     });
     previous.current = { name, depth, at: now };
-  }, [top.key, nav.reset, name, depth, direction, navigationId, session]);
+  }, [top.key, nav.reset, name, depth, direction, navigationId, session, presentation]);
 
   const warmed = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
