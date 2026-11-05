@@ -356,6 +356,14 @@ as the viewer. The platform itself lives in a private repo.
   Its `synced_commit` is the merge base and stays out of the source repo, or every push would
   change it. A `--overwrite-source` here replaces the whole repo. A 409 from `builds` means the
   head moved, so `push` mints again and pushes on top, up to three times.
+- **`push` asks before it runs someone else's commits as you.** A build runs with the reads of
+  whoever minted its token, so merging a teammate's commits puts them in the pusher's own copy. Any
+  commit this project hasn't seen counts, whatever name it carries, because a commit's author is
+  whatever its pusher set. That includes a push with no changes of its own, whose build is their
+  commit. Commits it asked about are recorded as `reviewed_commit` in the binding (out of the source
+  repo, with `synced_commit`), so it doesn't ask twice. It asks at a terminal, and without one stops
+  unless `--accept-merged-commits` is passed. Workspace commits are authored by the signed-in person,
+  or the names would all read "Superwall".
 - **Reading a build settles it,** so `push` polls until it finishes (20 minutes, riding out a
   few 5xx), and `status` reads an unfinished latest version. A build that fails or outlasts the
   wait fails the command. `--json` carries the outcome either way.

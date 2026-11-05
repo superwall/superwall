@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { ApiError, ApiUnreachableError } from "@/core/api/client";
 import { readBinding } from "@/core/workspaces/binding";
 import { runWorkspacePull } from "@/core/workspaces/pull";
-import { runWorkspacePush, slugOfName, waitForBuild, type PushInput } from "@/core/workspaces/push";
+import { namesOf, runWorkspacePush, slugOfName, waitForBuild, type PushInput } from "@/core/workspaces/push";
 import { hasGitHttpBackend, startLocalGitRemote, type LocalGitRemote } from "../../helpers/git-remote";
 import { fakeContext, fakeWorkspaceApi } from "./fake-api";
 import { MANIFEST, scratch, workspaceProject, writeVendoredSdk } from "./fixture";
@@ -154,7 +154,7 @@ test("a 409 from the build re-mints and pushes again on top of a teammate", { sk
   });
   second.workspaces.push({ id: Number(binding.workspaceId), organization_id: 7, slug: binding.slug, name: "x", state: "no_version", active_version_id: null });
   fs.writeFileSync(path.join(root, "src/mine.ts"), "mine");
-  await runWorkspacePush(second.ctx, input(root), noWait);
+  await runWorkspacePush(second.ctx, input(root, { acceptMergedCommits: true }), noWait);
 
   assert.ok(raced);
   const files = remote.filesOf(repo);
@@ -163,6 +163,206 @@ test("a 409 from the build re-mints and pushes again on top of a teammate", { sk
   assert.deepEqual(second.revoked, ["tok_2"]);
   assert.match(second.said("info").join(), /Someone pushed at the same moment/);
   assert.equal(second.apiCalls.filter((call) => call.endsWith("/source-access")).length, 2);
+});
+
+const linkedSetup = (root: string, options: Parameters<typeof setup>[0] = {}, context: Parameters<typeof fakeContext>[1] = {}) => {
+  const binding = readBinding(root)!;
+  const fake = fakeWorkspaceApi({ remote, manifest: MANIFEST as never, ...options });
+  fake.workspaces.push({ id: Number(binding.workspaceId), organization_id: 7, slug: binding.slug, name: "x", state: "no_version", active_version_id: null });
+  return { ...fake, ...fakeContext(fake.api, context), repo: `ws-${binding.workspaceId}` };
+};
+
+async function teammateCommit(root: string, file: string, identity = "Alex Teammate", message = `Add ${file}`) {
+  const repo = `ws-${readBinding(root)!.workspaceId}`;
+  const dir = scratch("teammate");
+  const git = teammateGit(dir, "art_v1_merged");
+  await git("clone", "--quiet", remote.remoteOf(repo), ".");
+  fs.writeFileSync(path.join(dir, file), "theirs");
+  await git("add", "-A");
+  await git("-c", `user.name=${identity}`, "-c", `user.email=${identity.toLowerCase().replace(/\s+/g, ".")}@example.com`, "commit", "--quiet", "-m", message);
+  await git("push", "--quiet", "origin", "HEAD:main");
+  return (await git("rev-parse", "HEAD")).stdout.trim();
+}
+
+async function pushedOnce(extra: Record<string, string> = {}): Promise<string> {
+  const root = project(extra);
+  await runWorkspacePush(setup().ctx, input(root), noWait);
+  return root;
+}
+
+test("a workspace commit is authored by the person signed in, whatever git's environment says", { skip }, async () => {
+  const root = project();
+  const previous = { name: process.env.GIT_AUTHOR_NAME, email: process.env.GIT_AUTHOR_EMAIL };
+  process.env.GIT_AUTHOR_NAME = "Somebody Else";
+  process.env.GIT_AUTHOR_EMAIL = "else@example.com";
+  try {
+    await runWorkspacePush(setup({ me: { name: "Pat Pusher", email: "pat@example.com" } }).ctx, input(root), noWait);
+  } finally {
+    if (previous.name === undefined) delete process.env.GIT_AUTHOR_NAME;
+    else process.env.GIT_AUTHOR_NAME = previous.name;
+    if (previous.email === undefined) delete process.env.GIT_AUTHOR_EMAIL;
+    else process.env.GIT_AUTHOR_EMAIL = previous.email;
+  }
+  const repo = `ws-${readBinding(root)!.workspaceId}`;
+  assert.equal(remote.authorOf(repo), "Pat Pusher <pat@example.com>");
+});
+
+test("with no name it signs commits with the email, and with no email it falls back to git's own", { skip }, async () => {
+  const named = project();
+  await runWorkspacePush(setup({ me: { name: null, email: "pat@example.com" } }).ctx, input(named), noWait);
+  assert.equal(remote.authorOf(`ws-${readBinding(named)!.workspaceId}`), "pat@example.com <pat@example.com>");
+  const unnamed = project();
+  await runWorkspacePush(setup({ me: { name: "Pat", email: null } }).ctx, input(unnamed), noWait);
+  assert.equal(remote.authorOf(`ws-${readBinding(unnamed)!.workspaceId}`), "Superwall <publish@superwall.com>");
+});
+
+test("without a terminal, merging a teammate's commit stops, pushes nothing and changes nothing", { skip }, async () => {
+  const root = await pushedOnce();
+  const sha = await teammateCommit(root, "theirs.txt");
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine");
+  const before = fs.readFileSync(path.join(root, "superwall.workspace.json"), "utf8");
+  const run = linkedSetup(root);
+  await runWorkspacePush(run.ctx, input(root), noWait);
+
+  assert.equal(remote.headOf(run.repo), sha, "the source repo didn't move");
+  assert.equal(fs.readFileSync(path.join(root, "superwall.workspace.json"), "utf8"), before);
+  assert.equal(run.failed(), 1);
+  assert.equal(run.apiCalls.filter((call) => call.endsWith("/builds")).length, 0, "no build started");
+  assert.match(run.said("error").join(), /Your copy would run commits from Alex Teammate with your reads/);
+  assert.match(run.said("error").join(), /--accept-merged-commits/);
+  assert.match(run.said("report").join(), new RegExp(`${sha.slice(0, 12)} Alex Teammate: Add theirs\\.txt`));
+});
+
+test("--json refuses the same way, and carries the commits", { skip }, async () => {
+  const root = await pushedOnce();
+  const sha = await teammateCommit(root, "theirs.txt");
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine");
+  const run = linkedSetup(root, {}, { json: true });
+  await runWorkspacePush(run.ctx, input(root), noWait);
+  assert.equal(run.failed(), 1);
+  assert.equal(remote.headOf(run.repo), sha);
+  const [answer] = run.data as [{ pushed: boolean; reason: string; merged_commits: { sha: string; author: string; email: string }[] }];
+  assert.equal(answer.pushed, false);
+  assert.equal(answer.reason, "needs_accept_merged_commits");
+  assert.deepEqual(answer.merged_commits.map((commit) => [commit.sha, commit.author, commit.email]), [[sha, "Alex Teammate", "alex.teammate@example.com"]]);
+});
+
+test("at a terminal it asks and says why, and No leaves everything alone", { skip }, async () => {
+  const root = await pushedOnce();
+  const sha = await teammateCommit(root, "theirs.txt");
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine");
+  const declined = linkedSetup(root, {}, { interactive: true, confirm: false });
+  await runWorkspacePush(declined.ctx, input(root), noWait);
+  assert.match(JSON.stringify(declined.calls.filter((call) => call.method === "confirm")), /Your copy will run commits from Alex Teammate with your reads\./);
+  assert.equal(remote.headOf(declined.repo), sha);
+  assert.equal(declined.failed(), 0);
+  assert.match(declined.said("outro").join(), /Nothing was pushed/);
+
+  const cancelled = linkedSetup(root, {}, { interactive: true, confirm: null });
+  await runWorkspacePush(cancelled.ctx, input(root), noWait);
+  assert.equal(remote.headOf(cancelled.repo), sha);
+
+  const accepted = linkedSetup(root, {}, { interactive: true, confirm: true });
+  await runWorkspacePush(accepted.ctx, input(root), noWait);
+  assert.notEqual(remote.headOf(accepted.repo), sha);
+  assert.ok(remote.filesOf(accepted.repo).includes("theirs.txt"));
+  assert.ok(remote.filesOf(accepted.repo).includes("src/mine.ts"));
+  assert.match(accepted.said("warn").join(), /runs commits from Alex Teammate with your reads, and they aren't in this project yet/);
+});
+
+test("pushing with no changes of your own still asks: the build would be their commit, as you", { skip }, async () => {
+  const root = await pushedOnce();
+  const sha = await teammateCommit(root, "theirs.txt");
+  const refused = linkedSetup(root);
+  await runWorkspacePush(refused.ctx, input(root), noWait);
+  assert.equal(refused.failed(), 1);
+  assert.equal(refused.apiCalls.filter((call) => call.endsWith("/builds")).length, 0);
+
+  const accepted = linkedSetup(root);
+  await runWorkspacePush(accepted.ctx, input(root, { acceptMergedCommits: true }), noWait);
+  assert.equal(accepted.versions[0]?.commit_sha, sha);
+  assert.equal(accepted.failed(), 0);
+});
+
+test("a commit under your own name still asks, because anyone can set a commit's name", { skip }, async () => {
+  const root = await pushedOnce();
+  await teammateCommit(root, "theirs.txt", "Pat Pusher");
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine");
+  const run = linkedSetup(root);
+  await runWorkspacePush(run.ctx, input(root), noWait);
+  assert.equal(run.failed(), 1);
+  assert.match(run.said("report").join(), /Their names come from the commits/);
+});
+
+test("it asks once per commit: the next push only asks about newer ones, and a pull settles them", { skip }, async () => {
+  const root = await pushedOnce();
+  await teammateCommit(root, "first.txt", "Alex Teammate");
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine");
+  await runWorkspacePush(linkedSetup(root).ctx, input(root, { acceptMergedCommits: true }), noWait);
+
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine again");
+  const quiet = linkedSetup(root);
+  await runWorkspacePush(quiet.ctx, input(root), noWait);
+  assert.equal(quiet.failed(), 0, "the same commits don't ask twice");
+
+  await teammateCommit(root, "second.txt", "Sam Other");
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine a third time");
+  const asked = linkedSetup(root);
+  await runWorkspacePush(asked.ctx, input(root), noWait);
+  assert.equal(asked.failed(), 1);
+  assert.match(asked.said("error").join(), /commits from Sam Other with/);
+  assert.doesNotMatch(asked.said("error").join(), /Alex/);
+
+  const pulling = linkedSetup(root);
+  await runWorkspacePull(pulling.ctx, { dir: root, theirs: false });
+  assert.match(pulling.said("info").join(), /your own copy runs all of it with your reads/);
+  assert.equal(fs.readFileSync(path.join(root, "second.txt"), "utf8"), "theirs");
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine, after reading");
+  const afterPull = linkedSetup(root);
+  await runWorkspacePush(afterPull.ctx, input(root), noWait);
+  assert.equal(afterPull.failed(), 0);
+  assert.doesNotMatch(afterPull.said("warn").join(), /runs commits from/);
+});
+
+test("--overwrite-source replaces a teammate's work knowingly, with nothing to confirm", { skip }, async () => {
+  const root = await pushedOnce();
+  await teammateCommit(root, "theirs.txt");
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine");
+  const run = linkedSetup(root);
+  await runWorkspacePush(run.ctx, input(root, { overwriteSource: true }), noWait);
+  assert.equal(run.failed(), 0);
+  assert.ok(!remote.filesOf(run.repo).includes("theirs.txt"));
+  assert.ok(remote.filesOf(run.repo).includes("src/mine.ts"));
+});
+
+test("a name can't drive the terminal, and only ten commits are listed", { skip }, async () => {
+  const root = await pushedOnce();
+  const repo = `ws-${readBinding(root)!.workspaceId}`;
+  const dir = scratch("teammate");
+  const git = teammateGit(dir, "art_v1_merged");
+  await git("clone", "--quiet", remote.remoteOf(repo), ".");
+  for (let index = 0; index < 12; index++) {
+    fs.writeFileSync(path.join(dir, `file-${index}.txt`), "theirs");
+    await git("add", "-A");
+    await git("-c", "user.name=Alex\u001b[2JTeammate", "-c", "user.email=alex@example.com", "commit", "--quiet", "-m", `Change\u001b[2J ${index}`);
+  }
+  await git("push", "--quiet", "origin", "HEAD:main");
+  fs.writeFileSync(path.join(root, "src/mine.ts"), "mine");
+  const run = linkedSetup(root);
+  await runWorkspacePush(run.ctx, input(root), noWait);
+  const shown = run.said("report").join() + run.said("error").join();
+  assert.doesNotMatch(shown, /\u001b/);
+  assert.match(shown, /Alex\[2JTeammate/);
+  assert.match(shown, /and 2 more/);
+  assert.equal(shown.match(/commits from Alex\[2JTeammate with/g)?.length, 1, "one person, however many commits");
+});
+
+test("names read as a list", () => {
+  const commit = (author: string, email: string) => ({ sha: "a", author, email, subject: "s" });
+  assert.equal(namesOf([commit("A", "a@x"), commit("A", "a@x")]), "A");
+  assert.equal(namesOf([commit("A", "a@x"), commit("B", "b@x"), commit("C", "c@x")]), "A, B and C");
+  assert.equal(namesOf([commit("", "a@x")]), "a@x");
+  assert.equal(namesOf([]), "someone");
 });
 
 test("a conflict with a teammate tells you to pull, in workspace words", { skip }, async () => {
@@ -231,7 +431,7 @@ test("--json carries the outcome either way", { skip }, async () => {
   await runWorkspacePush(good.ctx, input(root), noWait);
   assert.deepEqual(
     Object.keys(good.data[0] as object),
-    ["workspace_id", "slug", "version_id", "commit_sha", "source", "status", "step", "failure", "steps", "url"],
+    ["workspace_id", "slug", "version_id", "commit_sha", "source", "status", "step", "failure", "steps", "merged_commits", "url"],
   );
   assert.equal((good.data[0] as { status: string }).status, "succeeded");
 

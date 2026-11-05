@@ -22,6 +22,7 @@ export interface LocalGitRemote {
   filesOf(name: string, branch?: string): string[];
   show(name: string, file: string, branch?: string): string;
   log(name: string, branch?: string): string;
+  authorOf(name: string, branch?: string): string;
   tokens: Set<string>;
   requests: { path: string; authorized: boolean }[];
   close(): Promise<void>;
@@ -99,6 +100,7 @@ export const startLocalGitRemote = async (): Promise<LocalGitRemote> => {
     filesOf: (name, branch = "main") => git(name, "ls-tree", "-r", "--name-only", branch).split("\n").filter(Boolean),
     show: (name, file, branch = "main") => git(name, "show", `${branch}:${file}`),
     log: (name, branch = "main") => git(name, "log", "-1", "--format=%B", branch),
+    authorOf: (name, branch = "main") => git(name, "log", "-1", "--format=%an <%ae>", branch).trim(),
     tokens,
     requests,
     close: async () => {

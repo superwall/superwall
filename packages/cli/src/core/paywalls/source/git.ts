@@ -221,18 +221,45 @@ export class SourceDivergedError extends Error {
   }
 }
 
+export interface SourceCommit {
+  sha: string;
+  author: string;
+  email: string;
+  subject: string;
+}
+
 export interface DirectPushInput {
   access: SourceAccess;
   files: readonly SourceFile[];
   message: CommitMessageInput;
   base?: string;
   overwrite?: boolean;
+  author?: { name: string; email: string };
+  reviewed?: string;
+  confirmIncoming?: (commits: readonly SourceCommit[]) => Promise<void>;
 }
 
 export interface DirectPushResult {
   commitSha: string;
   status: "committed" | "unchanged";
   syncedTo: string | undefined;
+  incoming?: readonly SourceCommit[];
+}
+
+const printable = (text: string): string => text.replace(/[\p{Cc}\p{Cf}]/gu, "");
+
+function parseCommits(output: string): SourceCommit[] {
+  const fields = output.split("\0");
+  const commits: SourceCommit[] = [];
+  for (let index = 0; index + 3 < fields.length; index += 4) {
+    commits.push({
+      sha: (fields[index] ?? "").trim(),
+      author: printable(fields[index + 1] ?? ""),
+      email: printable(fields[index + 2] ?? ""),
+      subject: printable(fields[index + 3] ?? ""),
+    });
+  }
+  return commits;
 }
 
 const PUSH_ATTEMPTS = 3;
@@ -243,8 +270,8 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-source-"));
   const env = gitEnv(access.token);
   const committing = gitEnv(access.token, {
-    GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME || AUTHOR.name,
-    GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL || AUTHOR.email,
+    GIT_AUTHOR_NAME: input.author?.name ?? (process.env.GIT_AUTHOR_NAME || AUTHOR.name),
+    GIT_AUTHOR_EMAIL: input.author?.email ?? (process.env.GIT_AUTHOR_EMAIL || AUTHOR.email),
     GIT_COMMITTER_NAME: AUTHOR.name,
     GIT_COMMITTER_EMAIL: AUTHOR.email,
   });
@@ -255,6 +282,23 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
       (out) => out.trim(),
       () => undefined,
     );
+
+  const incoming: SourceCommit[] = [];
+  const finished = (result: DirectPushResult): DirectPushResult =>
+    incoming.length > 0 ? { ...result, incoming } : result;
+  const known = new Set<string>();
+  const confirmIncoming = async (from: string, to: string) => {
+    if (!input.confirmIncoming) return;
+    known.add(from);
+    const reviewed = input.reviewed ? await revParse(input.reviewed) : undefined;
+    if (reviewed) known.add(reviewed);
+    const log = await run(["log", "-z", "--format=%H%x00%an%x00%ae%x00%s", to, ...[...known].map((ref) => `^${ref}`)]);
+    const commits = parseCommits(log);
+    known.add(to);
+    if (commits.length === 0) return;
+    await input.confirmIncoming(commits);
+    incoming.push(...commits);
+  };
 
   try {
     await cloneSource(access, dir, { env, secrets });
@@ -280,7 +324,8 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     await run(["add", "-A"]);
     const dirty = (await run(["status", "--porcelain"])).trim();
     if (dirty === "" && local === undefined) {
-      return { commitSha: head ?? "", status: "unchanged", syncedTo: base ?? head };
+      if (base && head && base !== head) await confirmIncoming(base, head);
+      return finished({ commitSha: head ?? "", status: "unchanged", syncedTo: base ?? head });
     }
     if (onRemote && !input.overwrite) {
       const refused = overwrittenPaths(
@@ -315,8 +360,10 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     for (let attempt = 1; ; attempt++) {
       const upstream = parent ? await revParse(`origin/${access.branch}`) : undefined;
       if (upstream && upstream !== parent) {
-        if (await isAncestor(own, upstream))
-          return { commitSha: upstream, status: "unchanged", syncedTo };
+        if (await isAncestor(own, upstream)) {
+          await confirmIncoming(own, upstream);
+          return finished({ commitSha: upstream, status: "unchanged", syncedTo });
+        }
         await run(["reset", "--quiet", "--hard", own]);
         await mergeUpstream(`origin/${access.branch}`, messageFile, {
           run,
@@ -325,10 +372,11 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
           own,
           scope,
         });
+        await confirmIncoming(parent ?? own, upstream);
       }
       try {
         await run(["push", "origin", `HEAD:${access.branch}`]);
-        return { commitSha: (await revParse("HEAD")) ?? own, status, syncedTo };
+        return finished({ commitSha: (await revParse("HEAD")) ?? own, status, syncedTo });
       } catch (error) {
         if (!parent || attempt >= PUSH_ATTEMPTS || !isRejected(error)) throw error;
         await run(["fetch", "--quiet", "origin", access.branch]);

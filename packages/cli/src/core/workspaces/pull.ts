@@ -73,9 +73,13 @@ export async function runWorkspacePull(ctx: CommandContext<"required">, input: W
     organizationId: String(workspace.organization_id),
     slug: workspace.slug,
     syncedCommit: pulled.head,
+    reviewedCommit: pulled.head,
   };
   writeBinding(root, binding);
   report(ctx, workspace.slug, pulled.head, written, skipped);
+  if (linked && written.length > 0 && !ctx.json) {
+    ctx.ui.info("Read what came in before you push: your own copy runs all of it with your reads.");
+  }
   if (!linked && !ctx.json) {
     const where = path.relative(process.cwd(), root) || ".";
     ctx.ui.info(`Next: cd ${where} && npm install && superwall workspaces dev`);

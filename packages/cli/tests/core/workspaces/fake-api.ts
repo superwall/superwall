@@ -14,9 +14,10 @@ export interface FakeApiOptions {
   manifest?: Manifest;
   buildSequence?: readonly Partial<WorkspaceBuild>[];
   onBuilds?: (commit: string) => void | Promise<void>;
+  me?: { name?: string | null; email?: string | null };
 }
 
-export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds }: FakeApiOptions) {
+export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me = { name: "Pat Pusher", email: "pat@example.com" } }: FakeApiOptions) {
   const workspaces: Workspace[] = [];
   const versions: WorkspaceVersion[] = [];
   const calls: string[] = [];
@@ -45,6 +46,7 @@ export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds }: 
     async get(path: string) {
       calls.push(`GET ${path}`);
       const url = new URL(path, "http://x");
+      if (url.pathname === "/v2/me") return me;
       if (url.pathname === "/v2/workspaces") {
         const slug = url.searchParams.get("slug");
         return { data: workspaces.filter((workspace) => !slug || workspace.slug === slug) };

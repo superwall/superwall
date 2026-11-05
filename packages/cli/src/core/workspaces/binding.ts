@@ -8,6 +8,7 @@ export interface WorkspaceBinding {
   organizationId: string;
   slug: string;
   syncedCommit?: string;
+  reviewedCommit?: string;
 }
 
 export function readBinding(root: string): WorkspaceBinding | undefined {
@@ -24,7 +25,13 @@ export function readBinding(root: string): WorkspaceBinding | undefined {
   } catch (error) {
     throw new WorkspaceError(`${WORKSPACE_FILE} is not valid JSON: ${(error as Error).message}`);
   }
-  const { workspace_id: workspaceId, organization_id: organizationId, slug, synced_commit: syncedCommit } = parsed;
+  const {
+    workspace_id: workspaceId,
+    organization_id: organizationId,
+    slug,
+    synced_commit: syncedCommit,
+    reviewed_commit: reviewedCommit,
+  } = parsed;
   if (typeof workspaceId !== "number" || typeof organizationId !== "number" || typeof slug !== "string") {
     throw new WorkspaceError(`${WORKSPACE_FILE} needs workspace_id, organization_id and slug.`);
   }
@@ -33,6 +40,7 @@ export function readBinding(root: string): WorkspaceBinding | undefined {
     organizationId: String(organizationId),
     slug,
     ...(typeof syncedCommit === "string" ? { syncedCommit } : {}),
+    ...(typeof reviewedCommit === "string" ? { reviewedCommit } : {}),
   };
 }
 
@@ -43,6 +51,7 @@ const formatBinding = (binding: WorkspaceBinding, includeSync: boolean): string 
       organization_id: Number(binding.organizationId),
       slug: binding.slug,
       ...(includeSync && binding.syncedCommit ? { synced_commit: binding.syncedCommit } : {}),
+      ...(includeSync && binding.reviewedCommit ? { reviewed_commit: binding.reviewedCommit } : {}),
     },
     null,
     2,
