@@ -2,8 +2,8 @@ import { defineCommand } from "@/program/command";
 
 export const command = defineCommand({
   name: "upgrade",
-  summary: "Update the CLI to the latest version",
-  examples: [["upgrade", "Install the latest version globally with npm"]],
+  summary: "Update the CLI and its agent skills to the latest version",
+  examples: [["upgrade", "Install the latest version globally with npm, then its skills"]],
   auth: "none",
   json: true,
   prompts: true,
