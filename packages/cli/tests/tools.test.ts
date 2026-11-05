@@ -85,6 +85,34 @@ test("apiFor sends the caller's token to the host it names", async () => {
   assert.deepEqual(seen, [{ url: "https://api.example.com/v2/projects/1", auth: "Bearer tok_123" }]);
 });
 
+test("commands run where there is no process, as in a browser or a Worker", async () => {
+  const sent: string[] = [];
+  const originalFetch = globalThis.fetch;
+  const originalProcess = globalThis.process;
+  globalThis.fetch = (async (url: string, init: RequestInit) => {
+    sent.push(`${init.method ?? "GET"} ${String(url)}`);
+    return new Response(JSON.stringify({ id: "1" }), { headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  const api = apiFor({ token: "tok_123", host: "https://api.example.com" });
+  let post: unknown;
+  let feedback: unknown;
+  Reflect.deleteProperty(globalThis, "process");
+  try {
+    post = await tool("post").run({ path: "/v2/projects", body: { name: "Pro" } }, api);
+    feedback = await tool("feedback").run({ message: "push fails on a 2MB asset", kind: "bug" }, api);
+  } finally {
+    globalThis.process = originalProcess;
+    globalThis.fetch = originalFetch;
+  }
+  assert.deepEqual(post, { ok: true, data: { id: "1" } });
+  assert.equal((feedback as { ok: boolean }).ok, true);
+  assert.deepEqual(sent, [
+    "POST https://api.example.com/v2/projects",
+    "POST https://api.example.com/v2/feedback",
+    "POST https://us.i.posthog.com/capture/",
+  ]);
+});
+
 test("tools that reach Apple or a customer's endpoint say so", () => {
   assert.equal(tool("asc_keys_list").annotations.openWorldHint, true);
   assert.equal(tool("asa_campaigns_list").annotations.openWorldHint, true);
