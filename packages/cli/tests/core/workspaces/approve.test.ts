@@ -146,6 +146,10 @@ test("the report shows the push's note, not the generic subject", async () => {
   const first = setup([noted, live], {}, 1);
   await runWorkspaceApprove(first.ctx, input());
   assert.match(first.said("report").join(), /\nAdd the cohort page\n/);
+  const colon = version(2, { commit_message: "push workspace/churn\n\nFix: correct cohort counts\n\nSuperwall-Workspace: 42\n" });
+  const fourth = setup([colon, live], {}, 1);
+  await runWorkspaceApprove(fourth.ctx, input());
+  assert.match(fourth.said("report").join(), /\nFix: correct cohort counts\n/);
   const bare = version(2, { commit_message: "push workspace/churn\n\nSuperwall-Workspace: 42\n" });
   const second = setup([bare, live], {}, 1);
   await runWorkspaceApprove(second.ctx, input());

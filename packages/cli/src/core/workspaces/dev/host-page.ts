@@ -189,7 +189,7 @@ const showFrame = async (entrypoint, generation) => {
       frame.contentWindow.postMessage(hostMessage({ _tag: "connect", theme: theme(), context: session.context }), mount.origin);
       mount.stopWatching?.();
       const watched = mount;
-      mount.stopWatching = watchLoad(document, LOAD_TIMEOUT_MS, () => watched.ready, () => {
+      mount.stopWatching = watchLoad(document, LOAD_TIMEOUT_MS, () => watched.ready || mount !== watched, () => {
         log("It didn't send ready within " + LOAD_TIMEOUT_MS / 1000 + " seconds. In the dashboard this shows as: This app couldn't load. Try again.");
       });
     },

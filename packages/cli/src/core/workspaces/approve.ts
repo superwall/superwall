@@ -138,11 +138,9 @@ const diffLines = (diff: readonly SectionDiff[]): string[] =>
     ...removed.map((item) => `  - ${item}`),
   ]);
 
-const TRAILER = /^[A-Za-z][A-Za-z-]*: /;
-
 function commitLine(message: string): string {
   const [subject = "", note] = message.split(/\n\n+/);
-  return subject.startsWith("push workspace/") && note && !TRAILER.test(note) ? note : subject;
+  return subject.startsWith("push workspace/") && note && !note.startsWith("Superwall-") ? note : subject;
 }
 
 const ONLY_ADMINS =

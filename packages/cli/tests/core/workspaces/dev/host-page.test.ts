@@ -68,3 +68,7 @@ test("a page that answered isn't late, and stopping ends the watch", async () =>
   await pause(70);
   assert.equal(stopped.late(), 0);
 });
+
+test("a frame that's been replaced or removed isn't reported as late", () => {
+  assert.ok(renderHostPage().includes("watched.ready || mount !== watched"));
+});
