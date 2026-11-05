@@ -1,8 +1,12 @@
+import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import pc from "picocolors";
 import type { CommandContext } from "@/program/command";
 import { spawnStream } from "@/core/workflows/agent/drivers/spawn";
-import { writeUpdateCheck, readUpdateCheck } from "@/core/state/config";
-import { RUNNING_VIA_NPX, VERSION } from "@/environment";
+import { readAutoUpdate, readUpdateCheck, writeAutoUpdate, writeUpdateCheck } from "@/core/state/config";
+import { AUTO_UPDATE, RUNNING_VIA_NPX, VERSION } from "@/environment";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const REGISTRY_URL = "https://registry.npmjs.org/superwall/latest";
@@ -33,6 +37,10 @@ async function selectLatestVersion(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+function majorOf(version: string): number {
+  return parseInt(version.split(".")[0] ?? "", 10);
 }
 
 function selectAvailableUpdate(): string | null {
@@ -67,7 +75,37 @@ export function maybeNotifyUpdate(stream: Pick<NodeJS.WriteStream, "write">): vo
   stream.write(`${pc.dim(`Update available ${VERSION} → ${latest} · run \`superwall upgrade\``)}\n`);
 }
 
-export async function runUpgrade(ctx: CommandContext<"none">): Promise<void> {
+export function selectAutoUpdate(): string | null {
+  if (process.env.NODE_TEST_CONTEXT || !AUTO_UPDATE()) return null;
+  const latest = selectAvailableUpdate();
+  if (!latest || majorOf(latest) !== majorOf(VERSION)) return null;
+  const last = readAutoUpdate();
+  if (last?.version === latest && Date.now() - Date.parse(last.startedAt) < CHECK_INTERVAL_MS) return null;
+  return latest;
+}
+
+export function recordAutoUpdate(version: string): void {
+  writeAutoUpdate({ version, startedAt: new Date().toISOString() });
+}
+
+export function printAutoUpdate(stream: Pick<NodeJS.WriteStream, "write">, version: string): void {
+  stream.write(`${pc.dim(`Updating ${VERSION} → ${version} in the background`)}\n`);
+}
+
+export function isGlobalInstall(file: string = fileURLToPath(import.meta.url)): boolean {
+  try {
+    const root = execFileSync("npm", ["root", "--global"], {
+      encoding: "utf8",
+      timeout: 3000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return root !== "" && realpathSync(file).startsWith(`${realpathSync(root)}${sep}`);
+  } catch {
+    return false;
+  }
+}
+
+export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): Promise<void> {
   const { ui } = ctx;
 
   if (RUNNING_VIA_NPX()) {
@@ -81,7 +119,7 @@ export async function runUpgrade(ctx: CommandContext<"none">): Promise<void> {
   ui.intro("Superwall upgrade");
   const spin = ui.spinner();
   spin.start("Checking the latest version");
-  const latest = await selectLatestVersion();
+  const latest = pinned ?? (await selectLatestVersion());
   if (!latest) {
     spin.stop("Check failed");
     throw new Error("Couldn't reach the npm registry - try again.");

@@ -90,3 +90,12 @@ export function isNonInteractive(): boolean {
 }
 
 export const RUNNING_VIA_NPX = (): boolean => process.argv[1]?.includes("_npx") ?? false;
+
+const isOn = (name: string): boolean => {
+  const value = resolveEnv(name)?.toLowerCase();
+  return value !== undefined && value !== "0" && value !== "false";
+};
+
+export const AUTO_UPDATE = (): boolean => !isOn("SUPERWALL_NO_UPDATE") && !isOn("CI") && !RUNNING_VIA_NPX();
+
+export const AUTO_UPDATE_TARGET = (): string | undefined => resolveEnv("SW_AUTO_UPDATE");
