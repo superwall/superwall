@@ -208,3 +208,81 @@ test("non-API errors render their own message with no aside", () => {
   assert.equal(normalizeError(new NotLoggedInError()).code, "not_logged_in");
   assert.match(normalizeError(new NotLoggedInError()).message, /superwall login/);
 });
+
+test("an interrupt waits for a command's cleanup before it exits, through the real listener", async (t) => {
+  const order: string[] = [];
+  const listeners: Array<() => void> = [];
+  const renderer = { ...recordingRenderer(), onInterrupt: (listener: () => void) => (listeners.push(listener), () => {}) };
+  const exited = new Promise<number>((resolve) => {
+    t.mock.method(process, "exit", (code: number) => {
+      order.push(`exit ${code}`);
+      resolve(code);
+      return undefined as never;
+    });
+  });
+  t.mock.method(process.stderr, "write", () => true);
+  let finish!: () => void;
+  const running = new Promise<void>((resolve) => (finish = resolve));
+  const command = defineCommand({
+    name: "cancellable",
+    summary: "Waits",
+    examples: [],
+    auth: "none",
+    json: false,
+    prompts: false,
+    mcp: false,
+    async run(ctx) {
+      ctx.onCancel?.(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        order.push("cleaned up");
+      });
+      const off = ctx.onCancel?.(async () => {
+        order.push("removed cleanup ran");
+      });
+      off?.();
+      listeners[0]!();
+      await running;
+    },
+  });
+  const execution = command.execute({}, { renderer: () => renderer, waitForPaint: false });
+  assert.equal(await exited, 130);
+  assert.deepEqual(order, ["cleaned up", "exit 130"]);
+  finish();
+  await execution;
+});
+
+test("a cleanup that hangs can't hold the exit forever", async (t) => {
+  const timers = t.mock.timers;
+  timers.enable({ apis: ["setTimeout"] });
+  const listeners: Array<() => void> = [];
+  const renderer = { ...recordingRenderer(), onInterrupt: (listener: () => void) => (listeners.push(listener), () => {}) };
+  const exited = new Promise<number>((resolve) => {
+    t.mock.method(process, "exit", (code: number) => {
+      resolve(code);
+      return undefined as never;
+    });
+  });
+  t.mock.method(process.stderr, "write", () => true);
+  let finish!: () => void;
+  const running = new Promise<void>((resolve) => (finish = resolve));
+  const command = defineCommand({
+    name: "hanging",
+    summary: "Waits",
+    examples: [],
+    auth: "none",
+    json: false,
+    prompts: false,
+    mcp: false,
+    async run(ctx) {
+      ctx.onCancel?.(() => new Promise(() => {}));
+      listeners[0]!();
+      timers.tick(3_000);
+      await running;
+    },
+  });
+  const execution = command.execute({}, { renderer: () => renderer, waitForPaint: false });
+  assert.equal(await exited, 130);
+  finish();
+  timers.reset();
+  await execution;
+});

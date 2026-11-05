@@ -24,9 +24,7 @@ import {
   RotateDeviceIcon,
   RotateIcon,
   SlidersIcon,
-  SmartphoneIcon,
   SunIcon,
-  CompassIcon,
 } from "../components/icons";
 import { Tooltip } from "../components/Tooltip";
 import { SidePanel } from "../components/panels/SidePanel";
@@ -133,7 +131,6 @@ const StagePane = ({
   onResize,
   canvas,
   browser,
-  place,
 }: {
   label?: string;
   width: number;
@@ -152,7 +149,6 @@ const StagePane = ({
   onResize?: (next: FrameSize) => void;
   canvas?: React.RefObject<CanvasHandle | null>;
   browser?: BrowserLayout;
-  place?: PreviewPlace;
 }) => {
   const scale = useCanvasScale();
   const [broken, setBroken] = React.useState(false);
@@ -168,14 +164,6 @@ const StagePane = ({
         </span>
       )}
       <div className="relative">
-        {place?.teleported && (
-          <div
-            className="absolute right-0 bottom-full mb-2 origin-bottom-right"
-            style={{ transform: `scale(${1 / scale})` }}
-          >
-            <PlaceBadge place={place} />
-          </div>
-        )}
         {image && !broken ? (
           <div
             className="flex flex-none items-center justify-center overflow-hidden bg-black"
@@ -222,25 +210,6 @@ const StagePane = ({
         )}
       </div>
     </div>
-  );
-};
-
-const PlaceBadge = ({ place }: { place: PreviewPlace }) => {
-  const browser = place.where === "browser";
-  const label = browser ? "In browser" : "In app";
-  return (
-    <span
-      role="status"
-      aria-label={label}
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors duration-hover ${
-        browser
-          ? "border-primary/30 bg-primary/10 text-primary"
-          : "border-border bg-background text-fg-secondary"
-      }`}
-    >
-      {browser ? <CompassIcon /> : <SmartphoneIcon />}
-      {label}
-    </span>
   );
 };
 
@@ -657,7 +626,6 @@ export const SurfaceEditor = ({
                   landscape={landscape}
                   theme={theme}
                   browser={browserFor(comparing.place, compareWeb)}
-                  place={comparing.place}
                 />
               )}
               <StagePane
@@ -674,7 +642,6 @@ export const SurfaceEditor = ({
                 landscape={landscape}
                 theme={theme}
                 browser={browserFor(local.place, web)}
-                place={local.place}
                 onResize={
                   responsive
                     ? (next) =>

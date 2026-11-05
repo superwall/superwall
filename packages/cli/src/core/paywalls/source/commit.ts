@@ -1,4 +1,4 @@
-export interface CommitMessageInput {
+export interface SurfaceCommitInput {
   kind: "paywall" | "funnel";
   surface: string;
   version: number;
@@ -11,7 +11,28 @@ export interface CommitMessageInput {
   external?: readonly string[];
 }
 
+export interface WorkspaceCommitInput {
+  kind: "workspace";
+  surface: string;
+  workspaceId: string;
+  sdk?: string;
+  cli?: string;
+  note?: string;
+}
+
+export type CommitMessageInput = SurfaceCommitInput | WorkspaceCommitInput;
+
+const workspaceCommitMessage = (input: WorkspaceCommitInput): string => {
+  const surface = `workspace/${input.surface}`;
+  const trailers = [`Superwall-Workspace: ${input.workspaceId}`, `Superwall-Surface: ${surface}`];
+  if (input.sdk) trailers.push(`Superwall-Workspace-Sdk: ${input.sdk}`);
+  if (input.cli) trailers.push(`Superwall-Cli: ${input.cli}`);
+  const note = input.note?.replace(/\r\n?/g, "\n").trim();
+  return `push ${surface}\n${note ? `\n${note}\n` : ""}\n${trailers.join("\n")}\n`;
+};
+
 export const buildCommitMessage = (input: CommitMessageInput): string => {
+  if (input.kind === "workspace") return workspaceCommitMessage(input);
   const surface = `${input.kind}/${input.surface}`;
   const subject = `publish ${surface} v${input.version}`;
 

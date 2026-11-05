@@ -8,23 +8,37 @@ import {
   type SurfaceKind,
 } from "@/core/paywalls/project/lock";
 
-export interface SourceScope {
+export interface SurfaceScope {
   kind: SurfaceKind;
   id: string;
 }
+
+export interface WorkspaceScope {
+  kind: "workspace";
+  id: string;
+}
+
+export type SourceScope = SurfaceScope | WorkspaceScope;
 
 export type PathClass = "own" | "other" | "shared" | "derived";
 
 export const LOCK_FILE = "superwall.lock";
 
+export const WORKSPACE_FILE = "superwall.workspace.json";
+
 export const DERIVED_FILES: ReadonlySet<string> = new Set([LOCK_FILE, TYPES_FILE]);
+
+export const WORKSPACE_DERIVED_FILES: ReadonlySet<string> = new Set([WORKSPACE_FILE]);
+
+export const derivedFilesOf = (scope: SourceScope): ReadonlySet<string> =>
+  scope.kind === "workspace" ? WORKSPACE_DERIVED_FILES : DERIVED_FILES;
 
 const SURFACE_DIRS: Readonly<Record<string, SurfaceKind>> = {
   paywalls: "paywall",
   funnels: "funnel",
 };
 
-export function surfaceOf(relative: string): SourceScope | undefined {
+export function surfaceOf(relative: string): SurfaceScope | undefined {
   const [top, id, ...rest] = relative.split("/");
   const kind = top === undefined ? undefined : SURFACE_DIRS[top];
   if (!kind || !id || rest.length === 0) return undefined;
@@ -32,15 +46,18 @@ export function surfaceOf(relative: string): SourceScope | undefined {
 }
 
 export function classifyPath(relative: string, scope: SourceScope): PathClass {
-  if (DERIVED_FILES.has(relative)) return "derived";
+  if (derivedFilesOf(scope).has(relative)) return "derived";
+  if (scope.kind === "workspace") return "own";
   const surface = surfaceOf(relative);
   if (!surface) return "shared";
   return surface.kind === scope.kind && surface.id === scope.id ? "own" : "other";
 }
 
-export const isSurfaceRoot = (top: string): boolean => SURFACE_DIRS[top] !== undefined;
+export const isSurfaceRoot = (top: string, scope?: SourceScope): boolean =>
+  scope?.kind !== "workspace" && SURFACE_DIRS[top] !== undefined;
 
 export const isOtherSurfaceDir = (top: string, child: string, scope: SourceScope): boolean => {
+  if (scope.kind === "workspace") return false;
   const kind = SURFACE_DIRS[top];
   return kind !== undefined && !(kind === scope.kind && child === scope.id);
 };
@@ -68,7 +85,7 @@ const readable = (text: string): Readable => {
 export function mergeLockText(
   theirs: string | undefined,
   mine: string,
-  scope: SourceScope,
+  scope: SurfaceScope,
   options: { replaceUnreadable?: boolean } = {},
 ): string {
   const own = readable(mine);
@@ -82,7 +99,7 @@ export function mergeLockText(
   return mergeLocks(read.lock, own.lock, scope);
 }
 
-function mergeLocks(other: LockFile, own: LockFile, scope: SourceScope): string {
+function mergeLocks(other: LockFile, own: LockFile, scope: SurfaceScope): string {
   const section = (lock: LockFile) => (scope.kind === "paywall" ? lock.paywalls : lock.funnels);
   const conflicting = new Set(
     Object.entries(own.apps)

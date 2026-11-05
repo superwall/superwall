@@ -153,3 +153,15 @@ test("redact removes every form of the token from text a user could see", () => 
 test("redact leaves short strings alone rather than blanking the message", () => {
   assert.equal(redact("nothing to hide", "abc"), "nothing to hide");
 });
+
+test("a workspace commit names the workspace and its SDK", () => {
+  const message = buildCommitMessage({ kind: "workspace", surface: "churn", workspaceId: "42", sdk: "0.1.0", cli: "2.3.1", note: " Why\r\nand how " });
+  assert.equal(
+    message,
+    "push workspace/churn\n\nWhy\nand how\n\nSuperwall-Workspace: 42\nSuperwall-Surface: workspace/churn\nSuperwall-Workspace-Sdk: 0.1.0\nSuperwall-Cli: 2.3.1\n",
+  );
+  assert.equal(
+    buildCommitMessage({ kind: "workspace", surface: "churn", workspaceId: "42" }),
+    "push workspace/churn\n\nSuperwall-Workspace: 42\nSuperwall-Surface: workspace/churn\n",
+  );
+});

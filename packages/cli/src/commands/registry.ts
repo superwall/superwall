@@ -66,6 +66,19 @@ import { command as doctor } from "./support/doctor";
 import { command as feedback } from "./support/feedback";
 import { command as skills } from "./support/skills";
 import { command as upgrade } from "./support/upgrade";
+import { command as workspacesApprove } from "./workspaces/approve";
+import { command as workspacesCreate } from "./workspaces/create";
+import { command as workspacesDev } from "./workspaces/dev";
+import { command as workspacesInstall } from "./workspaces/install";
+import { command as workspacesList } from "./workspaces/list";
+import { command as workspacesLogs } from "./workspaces/logs";
+import { command as workspacesOpen } from "./workspaces/open";
+import { command as workspacesPull } from "./workspaces/pull";
+import { command as workspacesPush } from "./workspaces/push";
+import { command as workspacesShare } from "./workspaces/share";
+import { command as workspacesStatus } from "./workspaces/status";
+import { command as workspacesTry } from "./workspaces/try";
+import { command as workspacesUpdate } from "./workspaces/update";
 import { command as integrate } from "./workflows/integrate";
 import { command as migrate } from "./workflows/migrate";
 import { command as review } from "./workflows/review";
@@ -108,6 +121,35 @@ export const GROUPS: readonly Group[] = [
       "build, push, promote, publish and pull take --platform <p> when a project pushes to several platforms.",
     ],
     commands: [create, dev, build, push, promote, publish, pull],
+  },
+  {
+    id: "workspaces",
+    title: "Workspaces",
+    prefix: "workspaces",
+    channel: "next",
+    topics: [
+      {
+        name: "workspaces",
+        summary: "Mini-apps that add pages, panels and metrics to the Superwall dashboard",
+        details:
+          "A workspace is a Worker with a superwall.json manifest. It holds no credential: it calls Superwall as whoever is viewing it.",
+      },
+    ],
+    commands: [
+      workspacesCreate,
+      workspacesDev,
+      workspacesTry,
+      workspacesUpdate,
+      workspacesPush,
+      workspacesPull,
+      workspacesStatus,
+      workspacesLogs,
+      workspacesShare,
+      workspacesApprove,
+      workspacesInstall,
+      workspacesList,
+      workspacesOpen,
+    ],
   },
   {
     id: "main",
