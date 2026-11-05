@@ -15,9 +15,10 @@ export interface FakeApiOptions {
   buildSequence?: readonly Partial<WorkspaceBuild>[];
   onBuilds?: (commit: string) => void | Promise<void>;
   me?: { name?: string | null; email?: string | null };
+  tokenIdOf?: (mint: number) => string;
 }
 
-export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me = { name: "Pat Pusher", email: "pat@example.com" } }: FakeApiOptions) {
+export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me = { name: "Pat Pusher", email: "pat@example.com" }, tokenIdOf = (mint) => `tok_${mint}` }: FakeApiOptions) {
   const workspaces: Workspace[] = [];
   const versions: WorkspaceVersion[] = [];
   const calls: string[] = [];
@@ -47,6 +48,7 @@ export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me
       calls.push(`GET ${path}`);
       const url = new URL(path, "http://x");
       if (url.pathname === "/v2/me") return me;
+      if (url.pathname === "/v2/me/organizations") return { data: [] };
       if (url.pathname === "/v2/workspaces") {
         const slug = url.searchParams.get("slug");
         return { data: workspaces.filter((workspace) => !slug || workspace.slug === slug) };
@@ -109,7 +111,7 @@ export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me
           remote: remote.remoteOf(repo),
           branch: "main",
           token: `${secret}?expires=1790000000`,
-          token_id: `tok_${mint}`,
+          token_id: tokenIdOf(mint),
           expires_at: "2026-11-05T00:10:00Z",
         };
       }
@@ -129,6 +131,8 @@ export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me
           build_status: "PENDING",
           build_error: null,
           manifest: null,
+          compatibility_date: null,
+          compatibility_flags: [],
           deploy_requested_at: null,
           created_at: "2026-11-05T00:00:00Z",
           grant: null,

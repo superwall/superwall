@@ -4,7 +4,7 @@ import { defineCommand } from "@/program/command";
 export const command = defineCommand({
   name: "workspaces share",
   summary: "Ask an admin to review a version",
-  details: "The latest built version by default. Until an admin approves it, only its author can see it.",
+  details: "The latest built version by default. Until an organization owner or admin approves it, only its author can see it. Nobody is told automatically, so it says who to ask.",
   args: {
     version: { describe: "The version id (default: the latest built)" },
   },

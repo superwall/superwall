@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import type { CommandContext } from "@/program/command";
 import { DASHBOARD_ORIGIN_OVERRIDE } from "@/environment";
+import { listOrganizations } from "@/core/api/orgs";
 import { getWorkspace, listVersions, listWorkspaces, type Workspace, type WorkspaceVersion } from "./api";
 import { readBinding } from "./binding";
 import { WorkspaceError } from "./project";
@@ -41,6 +42,12 @@ export function dashboardOrigin(apiHost: string): string {
 
 export const workspaceUrl = (apiHost: string, workspace: Pick<Workspace, "organization_id" | "slug">): string =>
   `${dashboardOrigin(apiHost)}/${workspace.organization_id}/workspaces/${encodeURIComponent(workspace.slug)}`;
+
+export async function canApprove(ctx: CommandContext<"required">, workspace: Pick<Workspace, "organization_id">): Promise<boolean> {
+  const organizations = await listOrganizations(ctx.api).catch(() => []);
+  const role = organizations.find((organization) => String(organization.id) === String(workspace.organization_id))?.role;
+  return typeof role !== "string" || role === "OWNER" || role === "ADMIN";
+}
 
 export const newestFirst = (versions: readonly WorkspaceVersion[]): WorkspaceVersion[] =>
   [...versions].sort((a, b) => b.id - a.id);
