@@ -82,7 +82,7 @@ export interface OrganizationMember {
 }
 
 export const listMembers = async (api: SuperwallApi, organizationId: string | number) =>
-  (await api.get<{ data: OrganizationMember[] }>(`/v2/organizations/${encodeURIComponent(String(organizationId))}/access/members`)).data;
+  (await api.get<{ data?: OrganizationMember[] }>(`/v2/organizations/${encodeURIComponent(String(organizationId))}/access/members`)).data ?? [];
 
 export const getWorkspace = (api: SuperwallApi, id: string | number) => api.get<Workspace>(workspacePath(id));
 

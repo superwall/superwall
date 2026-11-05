@@ -177,6 +177,7 @@ test("share tells a member who can't approve who to ask, when that's knowable", 
     const { get } = (context.ctx as unknown as { api: { get: (path: string) => Promise<unknown> } }).api;
     (context.ctx as unknown as { api: { get: unknown } }).api.get = async (path: string) => {
       if (path === "/v2/me/organizations") return { data: [{ id: 7, role }] };
+      if (path === "/v2/me") return { email: "me@example.com" };
       if (path === "/v2/organizations/7/access/members") {
         if (members instanceof Error) throw members;
         return { data: members };
@@ -205,6 +206,18 @@ test("share tells a member who can't approve who to ask, when that's knowable", 
 
   const admin = await run("OWNER", [member("Alex Owner", null, "OWNER")]);
   assert.doesNotMatch(admin.said("info").join(), /Nobody is told/);
+
+  const restricted = await run("ADMIN", [
+    member("Me", "me@example.com", "ADMIN", { project_access_mode: "RESTRICTED" }),
+    member("Alex Owner", "alex@example.com", "OWNER"),
+  ]);
+  assert.match(restricted.said("info").join(), /Nobody is told automatically\. Ask one of the people who can approve it: Alex Owner\./, "a restricted admin can't approve");
+
+  const allProjects = await run("ADMIN", [member("Me", "me@example.com", "ADMIN")]);
+  assert.doesNotMatch(allProjects.said("info").join(), /Nobody is told/);
+
+  const noList = await run("ADMIN", new ApiError("GET members", 403, "{}"));
+  assert.doesNotMatch(noList.said("info").join(), /Nobody is told/, "with no list, the role is all there is to go on");
 
   const json = await run("USER", [member("Alex Owner", null, "OWNER")], { json: true });
   assert.deepEqual((json.data[0] as { approvers: string[]; can_approve: boolean }).approvers, ["Alex Owner"]);
