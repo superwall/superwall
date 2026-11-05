@@ -8,6 +8,11 @@ export interface SkillsSync {
   ref?: string;
 }
 
+export interface AutoUpdate {
+  version: string;
+  startedAt: string;
+}
+
 interface OnboardedApp {
   publicApiKey: string;
   projectId?: string;
@@ -25,6 +30,7 @@ interface Config {
     apps?: Record<string, OnboardedApp>;
   };
   updateCheck?: { latest?: string; checkedAt?: string };
+  autoUpdate?: AutoUpdate;
 }
 
 const FILE = "config.json";
@@ -111,6 +117,16 @@ export function readUpdateCheck(): { latest?: string; checkedAt?: string } | und
 export function writeUpdateCheck(check: { latest: string; checkedAt: string }): void {
   const config = read();
   config.updateCheck = check;
+  write(config);
+}
+
+export function readAutoUpdate(): AutoUpdate | undefined {
+  return read().autoUpdate;
+}
+
+export function writeAutoUpdate(update: AutoUpdate): void {
+  const config = read();
+  config.autoUpdate = update;
   write(config);
 }
 

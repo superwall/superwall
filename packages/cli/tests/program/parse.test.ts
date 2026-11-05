@@ -85,6 +85,14 @@ test("the longest matching command wins, and its arguments and flags are typed b
   assert.equal(resolution.input.json, true);
 });
 
+test("--no-update is a global that turns off the automatic update for the run", () => {
+  const plain = resolveLine(["asc", "keys", "create", "api_key"], groups);
+  const opted = resolveLine(["asc", "keys", "create", "--no-update", "api_key"], groups);
+  assert.equal(plain.kind === "run" && plain.input.update, true);
+  assert.equal(opted.kind === "run" && opted.input.update, false);
+  assert.deepEqual(opted.kind === "run" && opted.input.args, { kind: "api_key" });
+});
+
 test("a variadic argument takes the rest of the words", () => {
   const resolution = resolveLine(["asc", "docs", "introductory", "offer"], groups);
   assert.equal(resolution.kind === "run" && resolution.input.args?.query instanceof Array, true);

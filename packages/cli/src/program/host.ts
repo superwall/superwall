@@ -25,7 +25,7 @@ export interface Host {
   readLockRef: (installDir: string) => LockRef | undefined;
   track: (event: string, props: Record<string, unknown>) => void;
   starting: (ui: Renderer, mode: OutputMode) => void;
-  finishing: (stdout: Writable, mode: OutputMode, command: string) => void;
+  finishing: (stdout: Writable, mode: OutputMode, command: string, update: boolean) => void;
   fail: () => void;
   waitForPaint: boolean;
 }

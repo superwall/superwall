@@ -130,6 +130,7 @@ export interface RawInput {
   flags?: Record<string, unknown>;
   json?: boolean;
   interactive?: boolean;
+  update?: boolean;
 }
 
 export type CommandRuntime = Partial<Host>;

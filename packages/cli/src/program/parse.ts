@@ -11,16 +11,18 @@ export type Resolution =
 interface Globals {
   json: boolean;
   interactive: boolean;
+  update: boolean;
   help: boolean;
   rest: string[];
 }
 
 function takeGlobals(tokens: readonly string[]): Globals {
-  const globals: Globals = { json: false, interactive: true, help: false, rest: [] };
+  const globals: Globals = { json: false, interactive: true, update: true, help: false, rest: [] };
   for (const token of tokens) {
     if (token === "--json") globals.json = true;
     else if (token === "--no-interactive") globals.interactive = false;
     else if (token === "--interactive") globals.interactive = true;
+    else if (token === "--no-update") globals.update = false;
     else if (token === "--help" || token === "-h") globals.help = true;
     else globals.rest.push(token);
   }
@@ -147,6 +149,7 @@ function resolveCommand(command: AnyCommand, rest: string[], globals: Globals): 
     flags: parsed.values,
     json: globals.json,
     interactive: globals.interactive,
+    update: globals.update,
   };
   if (command.kind === "command") command.validate(input);
   return { kind: "run", command, input };

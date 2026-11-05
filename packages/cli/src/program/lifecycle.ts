@@ -88,7 +88,7 @@ export async function runLifecycle<Auth extends AuthPolicy>(
       await new Promise((done) => setTimeout(done, 50));
     }
     ui.stop();
-    host.finishing(stdout, outputMode, description.name);
+    host.finishing(stdout, outputMode, description.name, input.update !== false);
   }
 }
 

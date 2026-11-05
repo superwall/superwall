@@ -1,3 +1,4 @@
+import { AUTO_UPDATE_TARGET } from "@/environment";
 import { defineCommand } from "@/program/command";
 
 export const command = defineCommand({
@@ -10,6 +11,6 @@ export const command = defineCommand({
   mcp: false,
   async run(ctx) {
     const { runUpgrade } = await import("@/core/support/upgrade");
-    return runUpgrade(ctx);
+    return runUpgrade(ctx, AUTO_UPDATE_TARGET());
   },
 });
