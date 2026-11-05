@@ -45,7 +45,11 @@ function categoryOf(property: string): Category | null {
 }
 
 function normalizeColor(literal: string): string {
-  const value = literal.toLowerCase().replace(/\s+/g, "");
+  const value = literal
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\s*([(),/])\s*/g, "$1");
   if (!value.startsWith("#")) return value;
   const hex = value.slice(1);
   const long = hex.length <= 4 ? [...hex].map((digit) => digit + digit).join("") : hex;

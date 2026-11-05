@@ -709,6 +709,19 @@ describe("Canvas inset and zoom handle", () => {
       y: 48 + (704 - 4000) / 2,
     });
   });
+
+  it("pans from a zoom set in the same event, not from the last render", () => {
+    const { layer, api } = mount();
+    act(() => {
+      api().zoomTo(1);
+      api().pan(10, 0);
+    });
+    expect(transformOf(layer)).toEqual({
+      scale: 1,
+      x: 48 + (904 - 2000) / 2 + 10,
+      y: 48 + (704 - 1000) / 2,
+    });
+  });
 });
 
 describe("Canvas resize", () => {

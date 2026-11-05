@@ -148,6 +148,12 @@ test("a length in a property no token family covers, or a zero, is left alone", 
   assert.deepEqual(lintSource(index, ".a { color: #46d7d4ff }").map((finding) => finding.tokens), [["--color-accent"]]);
 });
 
+test("a space-separated colour only matches a token with the same channels", () => {
+  const index = readTokens(":root { --color-a: rgb(1 23 4); }");
+  assert.deepEqual(lintSource(index, ".a { color: rgb(12 3 4) }"), []);
+  assert.deepEqual(lintSource(index, ".a { color: rgb( 1  23 4 ) }").map((finding) => finding.tokens), [["--color-a"]]);
+});
+
 test("the starter design system the CLI writes passes its own check", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-lint-starter-"));
   dirs.push(root);

@@ -262,7 +262,6 @@ export const Canvas = ({
 
   const transform =
     mode.kind === "fit" ? fitTransform(contentSize, viewportSize, room) : mode.transform;
-  const latest = useLatest(transform);
   const pointers = React.useRef(new Map<number, Point>());
   const pinch = React.useRef<Pinch | null>(null);
   const lastFitKey = React.useRef(fitKey);
@@ -319,9 +318,9 @@ export const Canvas = ({
   const zoomWheel = React.useCallback(
     (event: WheelEvent, at: Point) => {
       event.preventDefault();
-      apply(zoomAt(latest.current, wheelZoomFactor(event.deltaY), at));
+      apply(zoomAt(current(), wheelZoomFactor(event.deltaY), at));
     },
-    [apply, latest],
+    [apply, current],
   );
 
   const zoomStep = React.useCallback(
@@ -350,11 +349,11 @@ export const Canvas = ({
     apply(centered(1, contentSize, viewportSize, room));
   }, [apply, contentSize, viewportSize, room]);
 
-  const hold = React.useCallback(() => move(latest.current), [move, latest]);
+  const hold = React.useCallback(() => move(current()), [move, current]);
 
   const pan = React.useCallback(
-    (dx: number, dy: number) => move(panBy(latest.current, dx, dy)),
-    [move, latest],
+    (dx: number, dy: number) => move(panBy(current(), dx, dy)),
+    [move, current],
   );
 
   React.useImperativeHandle(ref, () => ({ zoomStep, zoomTo, zoom, actualSize, fit, hold, pan }), [
@@ -403,11 +402,11 @@ export const Canvas = ({
       if (!ongoing.pans.x && !ongoing.pans.y) return;
       event.preventDefault();
       const delta = panDelta(event, ongoing.pans);
-      move(panBy(latest.current, delta.x, delta.y));
+      move(panBy(current(), delta.x, delta.y));
     };
     viewport.addEventListener("wheel", onWheel, { passive: false });
     return () => viewport.removeEventListener("wheel", onWheel);
-  }, [viewport, contained, move, latest, toViewport, zoomWheel, wheelGesture]);
+  }, [viewport, contained, move, current, toViewport, zoomWheel, wheelGesture]);
 
   React.useEffect(() => {
     if (!content) return undefined;
@@ -423,7 +422,7 @@ export const Canvas = ({
         if (isZoomGesture(event)) {
           gesture.current = null;
           const rect = frame.getBoundingClientRect();
-          const scale = latest.current.scale;
+          const scale = current().scale;
           zoomWheel(
             event,
             toViewport(rect.left + event.clientX * scale, rect.top + event.clientY * scale),
@@ -442,7 +441,7 @@ export const Canvas = ({
         if (!ongoing.pans.x && !ongoing.pans.y) return;
         event.preventDefault();
         const delta = panDelta(event, ongoing.pans);
-        move(panBy(latest.current, delta.x, delta.y));
+        move(panBy(current(), delta.x, delta.y));
       };
       let press: { at: Point; panning: boolean } | null = null;
       let grabStyle: HTMLStyleElement | null = null;
@@ -472,7 +471,7 @@ export const Canvas = ({
           grab(true);
         }
         event.preventDefault();
-        move(panBy(latest.current, point.x - press.at.x, point.y - press.at.y));
+        move(panBy(current(), point.x - press.at.x, point.y - press.at.y));
         press.at = point;
       };
       const onPointerUp = () => {
@@ -499,7 +498,7 @@ export const Canvas = ({
       content.removeEventListener("load", onLoad, true);
       attached.forEach((detach) => detach());
     };
-  }, [content, contained, move, latest, toViewport, zoomWheel, wheelGesture]);
+  }, [content, contained, move, current, toViewport, zoomWheel, wheelGesture]);
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -541,7 +540,7 @@ export const Canvas = ({
       const [a, b] = [...pointers.current.values()];
       const next: Pinch = { span: distance(a, b), midpoint: midpointOf(a, b) };
       const zoomed = zoomAt(
-        latest.current,
+        current(),
         next.span / pinch.current.span,
         toViewport(pinch.current.midpoint.x, pinch.current.midpoint.y),
       );
@@ -559,7 +558,7 @@ export const Canvas = ({
     const asked = requested.current;
     const fitted = asked.kind === "fit" || asked.followsFit;
     if (contained && event.pointerType !== "mouse" && fitted) return;
-    move(panBy(latest.current, point.x - previous.x, point.y - previous.y));
+    move(panBy(current(), point.x - previous.x, point.y - previous.y));
   };
 
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
