@@ -37,7 +37,7 @@ export const entrySource = ({
     ...(checkout
       ? [
           teleport
-            ? `import { SuperwallCheckout, TeleportScreen } from "superwall/checkout";`
+            ? `import { SuperwallCheckout, TeleportScreen, markTeleportScriptStart } from "superwall/checkout";`
             : `import { SuperwallCheckout } from "superwall/checkout";`,
         ]
       : []),
@@ -86,6 +86,7 @@ export const entrySource = ({
       .map((route, index) => `${JSON.stringify(route.name)}: Route${index}`)
       .join(", ")}};`,
     ``,
+    ...(teleport ? [`markTeleportScriptStart();`] : []),
     `createRoot(document.getElementById("root")).render(`,
     `  <React.StrictMode>`,
     inlineProducts === undefined || Object.keys(inlineProducts).length === 0

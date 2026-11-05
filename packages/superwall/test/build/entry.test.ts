@@ -88,10 +88,14 @@ describe("entrySource", () => {
       config: { teleport: { route: "checkout" } },
     });
     expect(source).toContain(
-      'import { SuperwallCheckout, TeleportScreen } from "superwall/checkout";',
+      'import { SuperwallCheckout, TeleportScreen, markTeleportScriptStart } from "superwall/checkout";',
     );
     expect(source).toContain("<SuperwallCheckout />");
     expect(source).toContain("<TeleportScreen />");
+    expect(source).toContain("markTeleportScriptStart();");
+    expect(source.indexOf("markTeleportScriptStart();")).toBeLessThan(
+      source.indexOf("createRoot("),
+    );
   });
 
   it("prefixes ./ for a file that sits beside the entry", () => {
