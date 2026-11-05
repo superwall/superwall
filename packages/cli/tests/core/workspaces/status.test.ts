@@ -104,6 +104,34 @@ test("status survives a build it can't read, and passes on other errors", async 
   await assert.rejects(runWorkspaceStatus(loud.ctx, { workspace: "42" }), /boom/);
 });
 
+test("status shows the latest few and the live one, and --all shows the rest", async () => {
+  const many = [1, 2, 3, 4, 5, 6, 7].map((id) => version(id));
+  const labels = (calls: { method: string; value?: unknown }[]) =>
+    (calls.find((call) => call.method === "list")?.value as { items: { label: string; meta: string }[] }).items.map((item) => item.label);
+  const quiet = setup(many, { workspace: workspace({ active_version_id: 2, author_version_id: null }) });
+  await runWorkspaceStatus(quiet.ctx, { workspace: "42" });
+  assert.deepEqual(labels(quiet.calls), ["Version 7", "Version 6", "Version 5", "Version 2"]);
+  assert.match(JSON.stringify(quiet.calls), /"label":"Version 2","meta":"[^"]*active/);
+  assert.match(quiet.said("info").join(), /And 3 older versions\. See them all with --all\./);
+
+  const all = setup(many, { workspace: workspace({ active_version_id: 2, author_version_id: null }) });
+  await runWorkspaceStatus(all.ctx, { workspace: "42", all: true });
+  assert.equal(labels(all.calls).length, 7);
+  assert.doesNotMatch(all.said("info").join(), /older/);
+
+  const one = setup([1, 2, 3, 4].map((id) => version(id)), { workspace: workspace({ active_version_id: 4, author_version_id: null }) });
+  await runWorkspaceStatus(one.ctx, { workspace: "42" });
+  assert.match(one.said("info").join(), /And 1 older version\./);
+});
+
+test("an app-only workspace's status links to the app route", async () => {
+  const manifest = { name: "x", scopes: [], entrypoints: [{ id: "cohorts", slot: "app.page@1", title: "C", path: "/" }] };
+  const context = setup([version(1, { manifest: manifest as never })]);
+  (context.ctx as unknown as { api: { list: unknown } }).api.list = async () => [{ id: 1, applications: [{ id: 9, name: "Pets" }] }];
+  await runWorkspaceStatus(context.ctx, { workspace: "42" });
+  assert.match(context.said("info").join(), /\/7\/9\/apps\/42\/cohorts/);
+});
+
 test("status says why the latest build failed, and --json gives it all", async () => {
   const { ctx, said } = setup([version(2, { build_status: "FAILED", build_error: "no lockfile" })]);
   await runWorkspaceStatus(ctx, { workspace: "42" });
@@ -163,7 +191,7 @@ test("share asks for review of the latest built version, and says who sees it", 
   const { ctx, posts, said } = setup([version(1), version(2), version(3, { build_status: "FAILED" })]);
   await runWorkspaceShare(ctx, { workspace: "42" });
   assert.deepEqual(posts, ["/v2/workspaces/42/versions/2/request-deploy"]);
-  assert.match(said("success").join(), /marked for review\. Only you can see it until an admin approves it/);
+  assert.match(said("success").join(), /marked for review\. Only you can see version 2 until an admin approves it/);
   assert.match(said("info").join(), /workspaces approve 2 --workspace 42/);
   const json = setup([version(2)], { json: true });
   await runWorkspaceShare(json.ctx, { workspace: "42" });
@@ -222,6 +250,16 @@ test("share tells a member who can't approve who to ask, when that's knowable", 
   const json = await run("USER", [member("Alex Owner", null, "OWNER")], { json: true });
   assert.deepEqual((json.data[0] as { approvers: string[]; can_approve: boolean }).approvers, ["Alex Owner"]);
   assert.equal((json.data[0] as { can_approve: boolean }).can_approve, false);
+});
+
+test("share tells a staff account nobody can see it", async () => {
+  const context = setup([version(2)], { workspace: workspace({ author_version_id: null }) });
+  const { get } = (context.ctx as unknown as { api: { get: (path: string) => Promise<unknown> } }).api;
+  (context.ctx as unknown as { api: { get: unknown } }).api.get = async (path: string) =>
+    path === "/v2/me" ? { role: "SUPERADMIN", email: "staff@example.com" } : get(path);
+  await runWorkspaceShare(context.ctx, { workspace: "42" });
+  assert.match(context.said("success").join(), /marked for review\. Nobody can see version 2 until an admin approves it/);
+  assert.doesNotMatch(context.said("success").join(), /Only you/);
 });
 
 test("share won't ask about what's live, or when nothing's built", async () => {

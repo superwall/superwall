@@ -182,6 +182,85 @@ test("a token that ran out or was used is minted again, and says so", { skip }, 
   assert.equal(run.versions.length, 1);
 });
 
+test("a staff account is told nobody can see the version, because it gets no copy", { skip }, async () => {
+  const run = setup({ staff: true });
+  await runWorkspacePush(run.ctx, input(project()), noWait);
+  const said = run.said("success").join();
+  assert.match(said, /Nobody can see version 101 until an admin approves it, because a staff account doesn't get a copy of its own/);
+  assert.doesNotMatch(said, /Only you/);
+
+  const json = setup({ staff: true });
+  const quiet = fakeContext(json.api, { json: true });
+  await runWorkspacePush(quiet.ctx, input(project()), noWait);
+  assert.equal((quiet.data[0] as { visible_to: string }).visible_to, "nobody");
+});
+
+test("--json says who can see it, and someone else's version is only its author's", { skip }, async () => {
+  const mine = fakeWorkspaceApi({ remote, manifest: MANIFEST as never });
+  const context = fakeContext(mine.api, { json: true });
+  await runWorkspacePush(context.ctx, input(project()), noWait);
+  assert.equal((context.data[0] as { visible_to: string }).visible_to, "you");
+
+  const root = project();
+  const first = setup();
+  await runWorkspacePush(first.ctx, input(root), noWait);
+  const [workspace] = first.workspaces;
+  workspace!.author_version_id = null;
+  const again = linkedSetup(root);
+  again.workspaces[0] = workspace!;
+  again.versions.push(...first.versions);
+  const get = again.api.get.bind(again.api);
+  again.api.get = (async (route: string) => {
+    if (route === `/v2/workspaces/${workspace!.id}`) return { ...workspace, author_version_id: null };
+    return get(route);
+  }) as never;
+  await runWorkspacePush(again.ctx, input(root), noWait);
+  assert.match(again.said("success").join(), /Only its author can see version/);
+
+  const off = linkedSetup(root);
+  off.workspaces[0]!.state = "turned_off";
+  off.versions.push(...first.versions);
+  await runWorkspacePush(off.ctx, input(root), noWait);
+  assert.match(off.said("success").join(), /turned off, so nobody can see version/);
+
+  const live = linkedSetup(root);
+  live.versions.push(...first.versions);
+  live.workspaces[0]!.active_version_id = first.versions[0]!.id;
+  await runWorkspacePush(live.ctx, input(root), noWait);
+  assert.match(live.said("success").join(), /Version \d+ is live\./);
+});
+
+const APP_ONLY = {
+  name: "App page",
+  scopes: ["users:read"],
+  entrypoints: [{ id: "cohorts", slot: "app.page@1", title: "Cohorts", path: "/" }],
+};
+
+function appOnlyProject(): string {
+  const root = project();
+  fs.writeFileSync(path.join(root, "superwall.json"), JSON.stringify(APP_ONLY));
+  return root;
+}
+
+test("an app-only workspace prints the app route, which opens something", { skip }, async () => {
+  const projects = [{ id: 1, applications: [{ id: 42, name: "Pets" }, { id: 43, name: "Cats" }] }];
+  const run = setup({ projects, manifest: APP_ONLY as never });
+  await runWorkspacePush(run.ctx, input(appOnlyProject()), noWait);
+  const id = run.workspaces[0]!.id;
+  const info = run.said("info").join("\n");
+  assert.ok(info.includes(`Open https://app.superwall.dev/7/42/apps/${id}/cohorts (in Pets)`));
+  assert.match(info, /For another app, run `superwall workspaces open cohorts --app <id>`/);
+
+  const oneApp = setup({ projects: [{ id: 1, applications: [{ id: 42 }] }], manifest: APP_ONLY as never });
+  await runWorkspacePush(oneApp.ctx, input(appOnlyProject()), noWait);
+  assert.doesNotMatch(oneApp.said("info").join(), /For another app/);
+  assert.match(oneApp.said("info").join(), /\(in 42\)/);
+
+  const noApps = setup({ manifest: APP_ONLY as never });
+  await runWorkspacePush(noApps.ctx, input(appOnlyProject()), noWait);
+  assert.match(noApps.said("info").join(), /Open https:\/\/app\.superwall\.dev\/7\/workspaces\/app-page/);
+});
+
 test("token_id goes back exactly as it came, however long and odd", { skip }, async () => {
   const opaque = `v1.${"aZ09+/=_-".repeat(56)}`.slice(0, 512);
   const root = project();
@@ -625,7 +704,7 @@ test("--json carries the outcome either way", { skip }, async () => {
   await runWorkspacePush(good.ctx, input(root), noWait);
   assert.deepEqual(
     Object.keys(good.data[0] as object),
-    ["workspace_id", "slug", "version_id", "commit_sha", "source", "status", "step", "failure", "steps", "merged_commits", "url"],
+    ["workspace_id", "slug", "version_id", "commit_sha", "source", "status", "step", "failure", "steps", "merged_commits", "url", "visible_to"],
   );
   assert.equal((good.data[0] as { status: string }).status, "succeeded");
 

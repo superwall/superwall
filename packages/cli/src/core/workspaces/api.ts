@@ -71,7 +71,7 @@ const workspacePath = (id: string | number) => `/v2/workspaces/${encodeURICompon
 const versionPath = (id: string | number, version: string | number) =>
   `${workspacePath(id)}/versions/${encodeURIComponent(String(version))}`;
 
-export const getMe = (api: SuperwallApi) => api.get<{ name?: string | null; email?: string | null }>("/v2/me");
+export const getMe = (api: SuperwallApi) => api.get<{ name?: string | null; email?: string | null; role?: string }>("/v2/me");
 
 export interface OrganizationMember {
   status: string;

@@ -2,9 +2,9 @@ import type { CommandContext } from "@/program/command";
 import { ApiError } from "@/core/api/client";
 import { getBuild, getMe, listMembers, listVersions, requestDeploy, type OrganizationMember, type Workspace, type WorkspaceBuild, type WorkspaceVersion } from "./api";
 import { WorkspaceError } from "./project";
-import { newestFirst, pickVersion, roleCanApprove, resolveWorkspace, workspaceUrl, type WorkspaceRef } from "./resolve";
+import { latestManifest, newestFirst, openLink, pickVersion, roleCanApprove, resolveWorkspace, visibilityOf, type WorkspaceRef } from "./resolve";
 
-const SHOWN_VERSIONS = 5;
+const SHOWN_VERSIONS = 3;
 
 const STATE_LABEL = {
   active: "Live",
@@ -35,27 +35,36 @@ async function settle(ctx: CommandContext<"required">, version: WorkspaceVersion
   }
 }
 
-export async function runWorkspaceStatus(ctx: CommandContext<"required">, input: WorkspaceRef): Promise<void> {
+export interface StatusInput extends WorkspaceRef {
+  all?: boolean;
+}
+
+export async function runWorkspaceStatus(ctx: CommandContext<"required">, input: StatusInput): Promise<void> {
   const workspace = await resolveWorkspace(ctx, input);
   let versions = newestFirst(await listVersions(ctx.api, workspace.id));
   const [latest] = versions;
   const build = latest && isUnfinished(latest) ? await settle(ctx, latest) : undefined;
   if (build) versions = versions.map((version) => (version.id === build.version.id ? build.version : version));
 
-  const url = workspaceUrl(ctx.api.host, workspace);
+  const { url } = await openLink(ctx, workspace, latestManifest(versions));
   if (ctx.json) {
     ctx.output.data({ workspace, url, versions, build: build ?? null });
     return;
   }
   ctx.ui.success(`${workspace.name} (\`${workspace.slug}\`, id ${workspace.id}): ${STATE_LABEL[workspace.state]}`);
   ctx.ui.info(`Open ${url}`);
+  const newest = input.all ? versions : versions.slice(0, SHOWN_VERSIONS);
+  const active = versions.find((version) => version.id === workspace.active_version_id);
+  const shown = active && !newest.includes(active) ? [...newest, active] : newest;
   ctx.ui.list({
     empty: "No versions yet. Run `superwall workspaces push`.",
-    items: versions.slice(0, SHOWN_VERSIONS).map((version) => ({
+    items: shown.map((version) => ({
       label: `Version ${version.id}`,
       meta: versionMeta(version, workspace.active_version_id, workspace.author_version_id),
     })),
   });
+  const hidden = versions.length - shown.length;
+  if (hidden > 0) ctx.ui.info(`And ${hidden} older ${hidden === 1 ? "version" : "versions"}. See them all with --all.`);
   if (build?.step) ctx.ui.info(`Version ${build.version_id} is at ${build.step}.`);
   const failed = versions.find((version) => version.build_status === "FAILED" && version.id === latest?.id);
   if (failed) ctx.ui.warn(`Version ${failed.id} didn't build: ${failed.build_error ?? "see `superwall workspaces logs`."}`);
@@ -130,11 +139,12 @@ export async function runWorkspaceShare(ctx: CommandContext<"required">, input: 
   }
   const requested = await requestDeploy(ctx.api, workspace.id, version.id);
   const { admin, names } = await approvers(ctx, workspace);
+  const { visibleTo, sentence } = await visibilityOf(ctx, workspace.id, version.id);
   if (ctx.json) {
-    ctx.output.data({ ...requested, can_approve: admin, approvers: names });
+    ctx.output.data({ ...requested, can_approve: admin, approvers: names, visible_to: visibleTo });
     return;
   }
-  ctx.ui.success(`Version ${version.id} is marked for review. Only you can see it until an admin approves it.`);
+  ctx.ui.success(`Version ${version.id} is marked for review. ${sentence}`);
   if (!admin) ctx.ui.info(`Nobody is told automatically. ${askLine(names)}`);
   ctx.ui.info(`An admin approves it with \`superwall workspaces approve ${version.id} --workspace ${workspace.id}\`.`);
 }
