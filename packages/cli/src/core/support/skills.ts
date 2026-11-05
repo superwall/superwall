@@ -321,11 +321,11 @@ async function selectSourceSha(): Promise<string | null> {
   }
 }
 
-async function skillsOutOfDate(): Promise<boolean> {
+async function skillsOutOfDate(verify = false): Promise<boolean> {
   const sync = readSkillsSync();
   const check = checkSkillsSync(sync, VERSION, SKILLS_REF(), Date.now());
   if (!sync || check === "stale") return true;
-  if (check === "fresh") return false;
+  if (check === "fresh" && !verify) return false;
   const head = await selectSourceSha();
   if (!head) return false;
   if (head !== sync.sourceSha) return true;
@@ -338,7 +338,7 @@ interface SyncSkillsResult {
   commands: string[];
 }
 
-type SkillsSyncTrigger = "login" | "workflow" | "manual";
+type SkillsSyncTrigger = "login" | "workflow" | "manual" | "upgrade";
 
 async function syncSkills(
   opts: InstallSkillsOptions & { trigger?: SkillsSyncTrigger } = {},
@@ -379,6 +379,14 @@ export async function ensureSkillsCurrent(
   if (required && !ok) {
     throw new Error("The integration completed, but the Superwall skills could not be installed.");
   }
+}
+
+export type SkillsUpdate = "current" | "updated" | "failed";
+
+export async function updateSkills(): Promise<SkillsUpdate> {
+  if (!(await skillsOutOfDate(true))) return "current";
+  const { ok } = await syncSkills({ trigger: "upgrade" });
+  return ok ? "updated" : "failed";
 }
 
 interface SkillsInput {

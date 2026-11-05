@@ -2,7 +2,7 @@ import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { FRAMEWORK_REF } from "@/core/workflows/agent/actions";
 import { Integration, VERSION } from "@/environment";
-import { SKILLS_INSTALL_SOURCE, SKILLS_REF, checkSkillsSync, ensureSkillsCurrent, knownSkills, readBundledSkill, normalizeSkillFrontmatter, normalizeSkillsDir, PLAYBOOKS, bundledSkills } from "@/core/support/skills";
+import { SKILLS_INSTALL_SOURCE, SKILLS_REF, checkSkillsSync, ensureSkillsCurrent, updateSkills, knownSkills, readBundledSkill, normalizeSkillFrontmatter, normalizeSkillsDir, PLAYBOOKS, bundledSkills } from "@/core/support/skills";
 import { command as skillsCommand } from "@/commands/support/skills";
 import { readSkillsSync, writeSkillsSync } from "@/core/state/config";
 import { useRenderer } from "@/ui";
@@ -381,6 +381,37 @@ test("day-old skills are checked against the repo head, and refreshed only when 
   await ensureSkillsCurrent();
   assert.equal(tools.npxCalls().length, 2);
   assert.equal(readSkillsSync()?.sourceSha, "moved");
+});
+
+test("an update checks the repo head at once, even when the skills synced minutes ago", async () => {
+  const recent = { cliVersion: VERSION, syncedAt: new Date().toISOString(), ref: "next", sourceSha: "abc" };
+  useHome();
+  const tools = fakeTools({ git: false });
+
+  writeSkillsSync(recent);
+  const log = useFetch([{ match: GITHUB_HEAD, body: { sha: "abc" } }]);
+  assert.equal(await updateSkills(), "current");
+  assert.deepEqual(tools.npxCalls(), []);
+  assert.ok(log.some((entry) => entry.url.includes(GITHUB_HEAD)));
+
+  useFetch([{ match: GITHUB_HEAD, body: { sha: "moved" } }]);
+  assert.equal(await updateSkills(), "updated");
+  assert.equal(tools.npxCalls().length, 2);
+  assert.equal(readSkillsSync()?.sourceSha, "moved");
+});
+
+test("an update installs skills that were never synced, and says when the install failed", async () => {
+  useHome();
+  useFetch([{ match: GITHUB_HEAD, body: { sha: "head-sha" } }]);
+  const installed = fakeTools({ git: false });
+
+  assert.equal(await updateSkills(), "updated");
+  assert.equal(installed.npxCalls().length, 2);
+
+  useHome();
+  fakeTools({ npxCode: 1, git: false });
+  assert.equal(await updateSkills(), "failed");
+  assert.equal(readSkillsSync(), undefined);
 });
 
 function pickingRenderer(calls: RendererCall[], pick: (values: string[]) => string[] | null) {

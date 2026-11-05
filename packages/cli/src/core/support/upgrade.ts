@@ -1,5 +1,9 @@
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import pc from "picocolors";
 import type { CommandContext } from "@/program/command";
+import type { SkillsUpdate } from "@/core/support/skills";
 import { spawnStream } from "@/core/workflows/agent/drivers/spawn";
 import { writeUpdateCheck, readUpdateCheck } from "@/core/state/config";
 import { RUNNING_VIA_NPX, VERSION } from "@/environment";
@@ -67,14 +71,60 @@ export function maybeNotifyUpdate(stream: Pick<NodeJS.WriteStream, "write">): vo
   stream.write(`${pc.dim(`Update available ${VERSION} → ${latest} · run \`superwall upgrade\``)}\n`);
 }
 
+const SKILLS_OUTCOME: Record<SkillsUpdate, string> = {
+  current: "Superwall skills are up to date",
+  updated: "Superwall skills updated",
+  failed: "Superwall skills not updated",
+};
+
+async function updateAgentSkills(
+  ctx: CommandContext<"none">,
+  work: () => Promise<SkillsUpdate>,
+): Promise<SkillsUpdate> {
+  const spin = ctx.ui.spinner();
+  spin.start("Checking Superwall skills");
+  const skills = await work().catch((): SkillsUpdate => "failed");
+  spin.stop(SKILLS_OUTCOME[skills]);
+  if (skills === "failed") {
+    ctx.ui.warn("Couldn't update the Superwall skills. Run `superwall skills --force` to retry.");
+  }
+  return skills;
+}
+
+async function updateSkillsInProcess(): Promise<SkillsUpdate> {
+  const { updateSkills } = await import("@/core/support/skills");
+  return updateSkills();
+}
+
+async function updateSkillsWithInstalledCli(): Promise<SkillsUpdate> {
+  const prefix: string[] = [];
+  const { code } = await spawnStream({
+    bin: "npm",
+    args: ["prefix", "--global"],
+    cwd: process.cwd(),
+    onStdoutLine: (line) => prefix.push(line.trim()),
+  });
+  const bin = prefix[0] ? join(prefix[0], "bin", "superwall") : undefined;
+  if (code !== 0 || !bin || !existsSync(bin)) return "failed";
+  const result = await spawnStream({
+    bin,
+    args: ["skills", "--force", "--yes"],
+    cwd: tmpdir(),
+    onStdoutLine: () => {},
+    onStderrLine: () => {},
+  });
+  return result.code === 0 ? "updated" : "failed";
+}
+
 export async function runUpgrade(ctx: CommandContext<"none">): Promise<void> {
   const { ui } = ctx;
 
   if (RUNNING_VIA_NPX()) {
-    if (ctx.json) return ctx.output.data({ upgraded: false, via: "npx" });
     ui.info(
       "You're running via npx, which always fetches the latest published version - nothing to upgrade.",
     );
+    const skills = await updateAgentSkills(ctx, updateSkillsInProcess);
+    if (ctx.json) return ctx.output.data({ upgraded: false, via: "npx", skills });
     return;
   }
 
@@ -88,7 +138,8 @@ export async function runUpgrade(ctx: CommandContext<"none">): Promise<void> {
   }
   if (!isNewerVersion(latest, VERSION)) {
     spin.stop(`You're on the latest version (\`${VERSION}\`)`);
-    if (ctx.json) return ctx.output.data({ upgraded: false, version: VERSION });
+    const skills = await updateAgentSkills(ctx, updateSkillsInProcess);
+    if (ctx.json) return ctx.output.data({ upgraded: false, version: VERSION, skills });
     return;
   }
 
@@ -110,6 +161,7 @@ export async function runUpgrade(ctx: CommandContext<"none">): Promise<void> {
   }
   writeUpdateCheck({ latest, checkedAt: new Date().toISOString() });
   spin.stop(`Upgraded \`${VERSION}\` → \`${latest}\``);
-  if (ctx.json) return ctx.output.data({ upgraded: true, from: VERSION, to: latest });
+  const skills = await updateAgentSkills(ctx, updateSkillsWithInstalledCli);
+  if (ctx.json) return ctx.output.data({ upgraded: true, from: VERSION, to: latest, skills });
   ui.outro("You're on the latest version.");
 }
