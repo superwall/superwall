@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 import { downloadRepoDir, RepoDownloadError } from "@/core/repo/download";
-import { repoTarball, respondWith, scratch } from "../workspaces/fixture";
+import { repoTarball, respondWith, scratch } from "../artifacts/fixture";
 
 const tempTars = () => fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith("superwall-example-") || name.startsWith("superwall-download-"));
 

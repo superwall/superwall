@@ -5,7 +5,7 @@
     "coverage",
     "packages/cli",
     "**/superwall.d.ts",
-    "workspaces/starter/vendor",
-    "workspaces/starter/package-lock.json"
+    "artifacts/starter/vendor",
+    "artifacts/starter/package-lock.json"
   ]
 }

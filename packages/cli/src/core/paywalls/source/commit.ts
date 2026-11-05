@@ -11,10 +11,10 @@ export interface SurfaceCommitInput {
   external?: readonly string[];
 }
 
-export interface WorkspaceCommitInput {
-  kind: "workspace";
+export interface ArtifactCommitInput {
+  kind: "artifact";
   surface: string;
-  workspaceId: string;
+  artifactId: string;
   sdk?: string;
   cli?: string;
   note?: string;
@@ -28,23 +28,23 @@ interface ProjectCommitInput {
   note?: string;
 }
 
-export type CommitMessageInput = SurfaceCommitInput | WorkspaceCommitInput | ProjectCommitInput;
+export type CommitMessageInput = SurfaceCommitInput | ArtifactCommitInput | ProjectCommitInput;
 
 const noteBody = (note: string | undefined): string => {
   const text = note?.replace(/\r\n?/g, "\n").trim();
   return text ? `\n${text}\n` : "";
 };
 
-const workspaceCommitMessage = (input: WorkspaceCommitInput): string => {
-  const surface = `workspace/${input.surface}`;
-  const trailers = [`Superwall-Workspace: ${input.workspaceId}`, `Superwall-Surface: ${surface}`];
-  if (input.sdk) trailers.push(`Superwall-Workspace-Sdk: ${input.sdk}`);
+const artifactCommitMessage = (input: ArtifactCommitInput): string => {
+  const surface = `artifact/${input.surface}`;
+  const trailers = [`Superwall-Artifact: ${input.artifactId}`, `Superwall-Surface: ${surface}`];
+  if (input.sdk) trailers.push(`Superwall-Artifact-Sdk: ${input.sdk}`);
   if (input.cli) trailers.push(`Superwall-Cli: ${input.cli}`);
   return `push ${surface}\n${noteBody(input.note)}\n${trailers.join("\n")}\n`;
 };
 
 export const buildCommitMessage = (input: CommitMessageInput): string => {
-  if (input.kind === "workspace") return workspaceCommitMessage(input);
+  if (input.kind === "artifact") return artifactCommitMessage(input);
   if (input.kind === "project") {
     const trailers = [`Superwall-Application: ${input.applicationId}`, `Superwall-Framework: ${input.framework}`];
     if (input.cli) trailers.push(`Superwall-Cli: ${input.cli}`);
