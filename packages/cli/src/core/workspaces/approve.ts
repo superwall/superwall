@@ -2,7 +2,7 @@ import { ApiError } from "@/core/api/client";
 import type { CommandContext } from "@/program/command";
 import { approveVersion, type WorkspaceVersion } from "./api";
 import { WorkspaceError, type Manifest } from "./project";
-import { canApprove, pickVersion, resolveWorkspace, type WorkspaceRef } from "./resolve";
+import { roleCanApprove, pickVersion, resolveWorkspace, type WorkspaceRef } from "./resolve";
 
 export interface ApproveInput extends WorkspaceRef {
   version?: string;
@@ -192,7 +192,7 @@ export async function runWorkspaceApprove(ctx: CommandContext<"required">, input
     else ctx.ui.error(message);
     ctx.fail();
   };
-  if (!(await canApprove(ctx, workspace))) {
+  if (!(await roleCanApprove(ctx, workspace))) {
     refuse("needs_admin", ONLY_ADMINS);
     if (!ctx.json) ctx.ui.info("To ask for review, run `superwall workspaces share`.");
     return;

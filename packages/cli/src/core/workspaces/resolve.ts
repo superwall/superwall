@@ -43,7 +43,7 @@ export function dashboardOrigin(apiHost: string): string {
 export const workspaceUrl = (apiHost: string, workspace: Pick<Workspace, "organization_id" | "slug">): string =>
   `${dashboardOrigin(apiHost)}/${workspace.organization_id}/workspaces/${encodeURIComponent(workspace.slug)}`;
 
-export async function canApprove(ctx: CommandContext<"required">, workspace: Pick<Workspace, "organization_id">): Promise<boolean> {
+export async function roleCanApprove(ctx: CommandContext<"required">, workspace: Pick<Workspace, "organization_id">): Promise<boolean> {
   const organizations = await listOrganizations(ctx.api).catch(() => []);
   const role = organizations.find((organization) => String(organization.id) === String(workspace.organization_id))?.role;
   return typeof role !== "string" || role === "OWNER" || role === "ADMIN";
