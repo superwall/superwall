@@ -36,6 +36,8 @@ export type ClientBuildResult = {
     readonly styleBytes: number;
     /** What's in the bundle, largest first, for a developer whose bundle is too big. */
     readonly inputs: ReadonlyArray<ClientBuildInput>;
+    /** Every file esbuild read. Refuse the bundle if `outsideRepoInputs` finds any. */
+    readonly inputPaths: ReadonlyArray<string>;
 } | {
     readonly ok: false;
     /** Readable on one line per error, each with its file and line. */
@@ -95,6 +97,16 @@ export declare const clientBuildOptions: (root: string, entry: string) => {
     metafile: boolean;
     logLevel: string;
 };
+/** How much of one error a message keeps. esbuild quotes the source, which can be any size. */
+export declare const CLIENT_ERROR_MAX_CHARS = 2048;
+/**
+ * A path esbuild reports, relative to the repo, that a bundle has no business
+ * reading: out of the checkout (`../../etc/passwd`, `/proc/self/environ`) or the
+ * checkout's own git metadata. esbuild follows symlinks, so a link can't hide one.
+ */
+export declare const isOutsideRepo: (path: string) => boolean;
+export declare const outsideRepoInputs: (paths: ReadonlyArray<string>) => ReadonlyArray<string>;
+export declare const OUTSIDE_REPO_MESSAGE = "A file outside the repo can't be bundled.";
 /** `src/client.tsx:3:14: Expected ">"`, per error. */
 export declare const formatClientErrors: (errors: ReadonlyArray<ClientBuildError>) => string;
 /** Bundles `entry` and writes the module. A problem in the source is a result, not a throw. */

@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach } from "node:test";
-import type { RunWrangler } from "@/core/workspaces/bundle";
+import type { ReadConfig, RunWrangler } from "@/core/workspaces/bundle";
 
 const dirs: string[] = [];
 
@@ -58,11 +58,17 @@ function flag(args: readonly string[], name: string): string {
   return value;
 }
 
+export const ACCEPTED_CONFIG: ReadConfig = async (root) => ({
+  config: { configPath: path.join(root, "superwall.json"), main: "src/worker.ts", compatibility_date: "2026-09-01" },
+});
+
+export const withAcceptedConfig = (wrangler: RunWrangler): RunWrangler => Object.assign(wrangler, { readConfig: ACCEPTED_CONFIG });
+
 export function fakeWrangler(
   module: string | (() => string) = "export default {}\n",
   options: { exports?: string[]; extra?: string; entry?: boolean } = {},
 ): RunWrangler {
-  return async (root, args) => {
+  return withAcceptedConfig(async (root, args) => {
     const out = flag(args, "--outdir");
     const output = path.join(out, "worker.js");
     fs.writeFileSync(output, typeof module === "string" ? module : module());
@@ -74,7 +80,7 @@ export function fakeWrangler(
       flag(args, "--metafile"),
       JSON.stringify({ outputs: { [path.relative(root, output)]: info } }),
     );
-  };
+  });
 }
 
 export function repoTarball(files: Record<string, string>): Buffer {

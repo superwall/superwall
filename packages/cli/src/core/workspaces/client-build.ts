@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { bundleDir, MANIFEST_FILE, WorkspaceError } from "./project";
 import { CLIENT_BUNDLE_MODULE } from "./wire";
+import { outsideRepoProblem } from "./wrangler-config";
 
 interface ClientBuildInput {
   path: string;
@@ -11,11 +12,19 @@ interface ClientBuildInput {
 }
 
 type ClientBuildResult =
-  | { ok: true; module: string; scriptBytes: number; styleBytes: number; inputs: readonly ClientBuildInput[] }
+  | {
+      ok: true;
+      module: string;
+      scriptBytes: number;
+      styleBytes: number;
+      inputs: readonly ClientBuildInput[];
+      inputPaths: readonly string[];
+    }
   | { ok: false; message: string };
 
 interface ClientBuildModule {
   buildClient(esbuild: unknown, input: { root: string; entry: string }): Promise<ClientBuildResult>;
+  outsideRepoInputs(paths: readonly string[]): readonly string[];
 }
 
 interface ConstantsModule {
@@ -59,10 +68,11 @@ async function loadSdk(root: string): Promise<ClientBuildModule & ConstantsModul
       import(pathToFileURL(project.resolve("@superwall/workspace-sdk/client-build")).href) as Promise<ClientBuildModule>,
       import(pathToFileURL(project.resolve("@superwall/workspace-sdk/constants")).href) as Promise<ConstantsModule>,
     ]);
+    if (typeof build.outsideRepoInputs !== "function") throw new Error("An early 0.2.0");
     return { ...build, ...constants };
   } catch {
     throw new WorkspaceError(
-      "A workspace with client.entry needs workspace SDK 0.2.0 or newer. Run `superwall workspaces update`, then `npm install`.",
+      "This project's workspace SDK is too old for client.entry. Run `superwall workspaces update`, then `npm install`.",
     );
   }
 }
@@ -103,6 +113,8 @@ export async function buildClientAlias(projectRoot: string, entry: unknown, wran
     );
   }
   if (!result.ok) throw new WorkspaceError(result.message);
+  const outside = outsideRepoProblem(sdk.outsideRepoInputs(result.inputPaths));
+  if (outside !== undefined) throw new WorkspaceError(outside);
 
   const total = result.scriptBytes + result.styleBytes;
   if (total > sdk.CLIENT_BUNDLE_MAX_BYTES) {

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { bundleWorkspace, resolveWranglerPackage } from "@/core/workspaces/bundle";
 import { WorkspaceError } from "@/core/workspaces/project";
 import { BUNDLE_MAX_BYTES } from "@/core/workspaces/wire";
-import { fakeWrangler, workspaceProject } from "./fixture";
+import { fakeWrangler, workspaceProject, withAcceptedConfig } from "./fixture";
 
 test("a bundle is one module with only a default export", async () => {
   const root = workspaceProject();
@@ -26,9 +26,9 @@ test("the builder's bundle rules apply locally", async () => {
 test("an empty output says it made nothing", async () => {
   const root = workspaceProject();
   await assert.rejects(
-    bundleWorkspace(root, async (_root, args) => {
+    bundleWorkspace(root, withAcceptedConfig(async (_root, args) => {
       fs.writeFileSync(args[args.indexOf("--metafile") + 1]!, "{}");
-    }),
+    })),
     /made nothing/,
   );
 });
@@ -36,8 +36,12 @@ test("an empty output says it made nothing", async () => {
 function installFakeWrangler(root: string, script: string): void {
   const dir = path.join(root, "node_modules", "wrangler");
   fs.mkdirSync(path.join(dir, "bin"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "wrangler", version: "1.0.0" }));
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "wrangler", version: "1.0.0", main: "index.mjs" }));
   fs.writeFileSync(path.join(dir, "bin", "wrangler.js"), script);
+  fs.writeFileSync(
+    path.join(dir, "index.mjs"),
+    `export const unstable_readConfig = () => ({ configPath: "superwall.json", main: "src/worker.ts", compatibility_date: "2026-09-01" });`,
+  );
 }
 
 test("without an installed wrangler, it says to install", () => {
@@ -56,12 +60,20 @@ test("it runs the project's own wrangler the way the builder does", async () => 
      const args = process.argv.slice(2);
      if (args[0] !== "deploy" || args[1] !== "--dry-run") process.exit(9);
      if (process.env.WRANGLER_SEND_METRICS !== "false") process.exit(8);
+     if (args[args.indexOf("--config") + 1] !== "superwall.json") process.exit(7);
+     if (args[args.indexOf("--env-file") + 1] !== require("node:os").devNull) process.exit(6);
+     if (process.env.CLOUDFLARE_ENV !== undefined) process.exit(5);
      const out = args[args.indexOf("--outdir") + 1];
      fs.writeFileSync(path.join(out, "worker.js"), "real");
      fs.writeFileSync(args[args.indexOf("--metafile") + 1], JSON.stringify({ outputs: { [path.relative(process.cwd(), path.join(out, "worker.js"))]: { entryPoint: "src/worker.ts", exports: ["default"] } } }));`,
   );
-  const bundle = await bundleWorkspace(root);
-  assert.equal(bundle.module, "real");
+  process.env.CLOUDFLARE_ENV = "from-my-shell";
+  try {
+    const bundle = await bundleWorkspace(root);
+    assert.equal(bundle.module, "real");
+  } finally {
+    delete process.env.CLOUDFLARE_ENV;
+  }
 });
 
 test("a failed bundle shows wrangler's own words, its error last", async () => {

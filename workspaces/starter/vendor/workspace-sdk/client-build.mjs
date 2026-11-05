@@ -44,6 +44,11 @@ var clientBuildOptions = (root, entry) => ({
   metafile: true,
   logLevel: "silent"
 });
+var CLIENT_ERROR_MAX_CHARS = 2048;
+var clip = (text, max = CLIENT_ERROR_MAX_CHARS) => text.length <= max ? text : `${text.slice(0, max)}\u2026 (${text.length - max} more characters)`;
+var isOutsideRepo = (path) => path === ".." || path.startsWith("../") || path.startsWith("/") || path === ".git" || path.startsWith(".git/");
+var outsideRepoInputs = (paths) => paths.filter(isOutsideRepo);
+var OUTSIDE_REPO_MESSAGE = "A file outside the repo can't be bundled.";
 var hashOf = async (text) => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(
@@ -52,20 +57,25 @@ var hashOf = async (text) => {
   ).join("");
 };
 var utf8Bytes = (text) => new TextEncoder().encode(text).byteLength;
-var readError = (message) => ({
-  file: message.location?.file ?? null,
-  line: message.location?.line ?? null,
-  column: message.location?.column ?? null,
-  text: message.text,
-  lineText: message.location?.lineText ?? null
-});
+var readError = (message) => {
+  const file = message.location?.file ?? null;
+  const hidden = file !== null && isOutsideRepo(file);
+  const lineText = message.location?.lineText ?? null;
+  return {
+    file: file === null ? null : clip(file),
+    line: message.location?.line ?? null,
+    column: message.location?.column ?? null,
+    text: hidden ? OUTSIDE_REPO_MESSAGE : clip(message.text),
+    lineText: hidden || lineText === null ? null : clip(lineText)
+  };
+};
 var isBuildFailure = (error) => typeof error === "object" && error !== null && Array.isArray(error.errors);
 var UNRESOLVED = /^Could not resolve "(?!\.)/;
 var formatClientErrors = (errors) => {
   const shown = errors.slice(0, 5).map((error) => {
     const where = error.file === null ? "" : `${error.file}:${error.line ?? 0}:${error.column ?? 0}: `;
     const hint = UNRESOLVED.test(error.text) ? " (is it in package.json and package-lock.json?)" : "";
-    return `${where}${error.text}${hint}`;
+    return clip(`${where}${error.text}${hint}`);
   });
   const more = errors.length > shown.length ? `
 \u2026and ${errors.length - shown.length} more` : "";
@@ -117,11 +127,16 @@ var buildClient = async (esbuild, { root, entry }) => {
 `,
     scriptBytes: utf8Bytes(script.text),
     styleBytes: style === null ? 0 : utf8Bytes(style),
-    inputs: Array.from(inputs, ([path, bytes]) => ({ path, bytes })).sort((a, b) => b.bytes - a.bytes).slice(0, 10)
+    inputs: Array.from(inputs, ([path, bytes]) => ({ path, bytes })).sort((a, b) => b.bytes - a.bytes).slice(0, 10),
+    inputPaths: Array.from(inputs.keys())
   };
 };
 export {
+  CLIENT_ERROR_MAX_CHARS,
+  OUTSIDE_REPO_MESSAGE,
   buildClient,
   clientBuildOptions,
-  formatClientErrors
+  formatClientErrors,
+  isOutsideRepo,
+  outsideRepoInputs
 };

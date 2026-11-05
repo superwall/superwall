@@ -18,9 +18,17 @@ const packageDir = (name: string) => path.dirname(cliRequire.resolve(`${name}/pa
 
 function linkDependencies(root: string): void {
   fs.mkdirSync(path.join(root, "node_modules/@superwall"), { recursive: true });
-  fs.symlinkSync(path.join(STARTER, "vendor/workspace-sdk"), path.join(root, "node_modules/@superwall/workspace-sdk"));
-  for (const name of ["wrangler", "react", "react-dom"]) {
-    fs.symlinkSync(packageDir(name), path.join(root, "node_modules", name));
+  fs.cpSync(path.join(STARTER, "vendor/workspace-sdk"), path.join(root, "node_modules/@superwall/workspace-sdk"), { recursive: true });
+  fs.symlinkSync(packageDir("wrangler"), path.join(root, "node_modules/wrangler"));
+  const reactDom = packageDir("react-dom");
+  const reactDomRequire = createRequire(path.join(reactDom, "package.json"));
+  for (const [name, dir] of [
+    ["react", packageDir("react")],
+    ["react-dom", reactDom],
+    ["scheduler", path.dirname(reactDomRequire.resolve("scheduler/package.json"))],
+    ["loose-envify", path.dirname(reactDomRequire.resolve("loose-envify/package.json"))],
+  ] as const) {
+    fs.cpSync(dir, path.join(root, "node_modules", name), { recursive: true, dereference: true });
   }
 }
 
@@ -160,6 +168,90 @@ async function devOn(root: string, drive: (mounted: Mounted) => Promise<void>): 
     },
   );
 }
+
+const page = (config: string, files: Record<string, string> = {}): string => {
+  const root = reactPage();
+  fs.writeFileSync(path.join(root, "wrangler.jsonc"), config);
+  for (const [file, content] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    fs.writeFileSync(path.join(root, file), content);
+  }
+  return root;
+};
+const BASE_CONFIG = '"name": "x", "main": "src/worker.ts", "compatibility_date": "2026-09-01"';
+
+describe("the wrangler config on real wrangler, as the builder reads it", () => {
+  test("anything the builder refuses stops here too, in its words", { timeout: 120_000 }, async () => {
+    const refused: readonly (readonly [string, RegExp])[] = [
+      ['"vars": { "A": "b" }', /Environment variables and secrets are not supported.*found: vars/],
+      ['"site": { "bucket": "./public" }', /The platform serves a workspace.*found: site/],
+      ['"analytics_engine_datasets": [{ "binding": "A" }]', /Bindings are not supported.*found: analytics_engine_datasets/],
+      ['"env": { "staging": {} }', /Wrangler environments are not supported.*found: definedEnvironments/],
+      ['"build": { "command": "make" }', /Custom build commands are not supported/],
+      ['"triggers": { "crons": ["0 9 * * *"] }', /Cron triggers belong in superwall\.json/],
+    ];
+    await Promise.all(
+      refused.map(async ([setting, message]) => {
+        await assert.rejects(bundleWorkspace(page(`{ ${BASE_CONFIG}, ${setting} }`)), (error: Error) => {
+          assert.match(error.message, /^This would fail on the builder\. /);
+          assert.match(error.message, message);
+          return true;
+        });
+      }),
+    );
+  });
+
+  test("no config, an unreadable one, and one with no compatibility date are all refused", { timeout: 120_000 }, async () => {
+    const none = reactPage();
+    fs.rmSync(path.join(none, "wrangler.jsonc"));
+    await assert.rejects(bundleWorkspace(none), /No wrangler config \(wrangler\.jsonc, wrangler\.json or wrangler\.toml\) was found/);
+    await assert.rejects(bundleWorkspace(page("{ nope")), /The wrangler config could not be read/);
+    await assert.rejects(bundleWorkspace(page('{ "name": "x", "main": "src/worker.ts" }')), /needs a compatibility_date/);
+  });
+
+  test("a committed .env has no effect, and neither does one in your shell", { timeout: 120_000 }, async () => {
+    const dotenv = "CLOUDFLARE_ENV=staging\nWRANGLER_BUILD_CONDITIONS=nope\n";
+    const config = `{ ${BASE_CONFIG} }`;
+    const committed = await bundleWorkspace(page(config, { ".env": dotenv, ".env.local": dotenv }));
+    assert.ok(committed.bytes > 0);
+    process.env.CLOUDFLARE_ENV = "staging";
+    try {
+      assert.ok((await bundleWorkspace(page(config))).bytes > 0);
+    } finally {
+      delete process.env.CLOUDFLARE_ENV;
+    }
+  });
+
+  test("a redirect in .wrangler/deploy/config.json has no effect", { timeout: 120_000 }, async () => {
+    const root = page(`{ ${BASE_CONFIG} }`, {
+      "other/worker.ts": 'export default { fetch: () => new Response("REDIRECTED") };',
+      "other/wrangler.json": JSON.stringify({ name: "other", main: "./worker.ts", compatibility_date: "2026-09-01" }),
+      ".wrangler/deploy/config.json": JSON.stringify({ configPath: "../../other/wrangler.json" }),
+    });
+    const { module } = await bundleWorkspace(root);
+    assert.ok(!module.includes("REDIRECTED"));
+    assert.match(module, /_client/);
+  });
+
+  test("a Worker can't read a file outside the repo either", { timeout: 120_000 }, async () => {
+    const root = page(`{ ${BASE_CONFIG} }`);
+    const beside = `${root}-beside.js`;
+    fs.writeFileSync(beside, 'export const beside = "from outside";');
+    fs.writeFileSync(
+      path.join(root, "src/worker.ts"),
+      `import client from "@superwall/workspace-sdk/client-bundle";
+import { clientPage, defineWorkspace } from "@superwall/workspace-sdk/server";
+import { beside } from "../../${path.basename(beside)}";
+export default defineWorkspace({ client, fetch: () => clientPage(client, { title: beside }) });
+`,
+    );
+    try {
+      await assert.rejects(bundleWorkspace(root), /The bundle reads files outside the repo, which isn't allowed: \.\.\/.*beside\.js\./);
+    } finally {
+      fs.rmSync(beside);
+    }
+  });
+});
 
 describe("client.entry on real wrangler, esbuild and workerd", () => {
   test("a React page renders through dev's frame, under the runtime's CSP, and a change anywhere rebuilds it", { timeout: 120_000 }, async () => {

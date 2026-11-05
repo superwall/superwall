@@ -8,7 +8,7 @@ import { ApiError } from "@/core/api/client";
 import { runWorkspaceDev, type DevInput, type DevRuntimeSeams } from "@/core/workspaces/dev/run";
 import type { RuntimeOptions } from "@/core/workspaces/dev/runtime";
 import { recordingRenderer, type RendererCall } from "../../../helpers/renderer";
-import { fakeWrangler, MANIFEST, workspaceProject, writeVendoredSdk } from "../fixture";
+import { fakeWrangler, MANIFEST, withAcceptedConfig, workspaceProject, writeVendoredSdk } from "../fixture";
 
 function setup(api: Record<string, unknown> = {}) {
   const calls: RendererCall[] = [];
@@ -254,10 +254,10 @@ test("a change rebuilds and reloads; a broken one is reported and the last good 
   let rebuild!: () => Promise<void>;
   let host = "";
   const seams = harness({
-    wrangler: async (workspace, args) => {
+    wrangler: withAcceptedConfig(async (workspace, args) => {
       if (code === "BROKEN") throw new Error("Expected ; but found x");
       await fakeWrangler(code)(workspace, args);
-    },
+    }),
     onReady: (urls, trigger) => {
       host = urls.host;
       rebuild = trigger;
@@ -382,10 +382,10 @@ test("a failed rebuild keeps the manifest that matches the running code", async 
   let rebuild!: () => Promise<void>;
   let failing = false;
   const seams = harness({
-    wrangler: async (workspace, args) => {
+    wrangler: withAcceptedConfig(async (workspace, args) => {
       if (failing) throw new Error("Expected ; but found x");
       await fakeWrangler("CODE")(workspace, args);
-    },
+    }),
     onReady: (urls, trigger) => {
       host = urls.host;
       rebuild = trigger;

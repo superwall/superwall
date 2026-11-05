@@ -363,6 +363,13 @@ as the viewer. The platform itself lives in a private repo.
   version. The output reaches wrangler as `--alias @superwall/workspace-sdk/client-bundle:<absolute path>`.
   `result.inputs` lists only the largest files, so `dev` watches the whole project except dot folders,
   `node_modules` and `dist`. Keep the entry rules and messages in `client-build.ts` matching the builder's.
+- **`bundleWorkspace` refuses what the builder refuses,** so a workspace can't pass locally and fail on
+  push. It reads the config with the project's `unstable_readConfig`, like the builder's `read-config`,
+  then applies `wrangler-config.ts`, a copy of the builder's `checkConfig` with its keys and messages.
+  Update that copy when the builder's list changes. It passes `--config` and `--env-file <devnull>`,
+  and runs wrangler with the builder's small environment, so a committed `.env`, a shell's
+  `CLOUDFLARE_ENV` or `.wrangler/deploy/config.json` have no effect. A bundle reading a file outside
+  the repo is refused, for browser code and for the Worker, where only wrangler's own folder is allowed.
 - **Push and pull reuse the framework's git code.** `core/paywalls/source` is shared: a
   `SourceScope` of kind `workspace` owns its whole repo, so a directory named `paywalls/` means
   nothing there, and its one derived file is `superwall.workspace.json`, which records the
