@@ -48,26 +48,41 @@ export function seriesProblem(value: unknown): string | undefined {
   return undefined;
 }
 
+const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+function variantProblem(variant: unknown, seen: Set<number>, variantIds: readonly number[]): string | undefined {
+  const { variantId, value, interval } = (variant ?? {}) as Record<string, unknown>;
+  if (typeof variantId !== "number" || !Number.isSafeInteger(variantId) || variantId <= 0) {
+    return `A variant has a variantId that isn't a positive whole number: ${JSON.stringify(variantId)}.`;
+  }
+  if (seen.has(variantId)) return `Variant ${variantId} appears twice.`;
+  seen.add(variantId);
+  if (variantIds.length > 0 && !variantIds.includes(variantId)) {
+    return `Variant ${variantId} isn't one of this audience's variants.`;
+  }
+  if (value !== null && !isFiniteNumber(value)) {
+    return `Variant ${variantId} has a value that isn't a finite number or null.`;
+  }
+  if (interval === undefined) return undefined;
+  if (!Array.isArray(interval) || interval.length !== 2 || !interval.every(isFiniteNumber)) {
+    return `Variant ${variantId} has an interval that isn't two finite numbers.`;
+  }
+  const [lower, upper] = interval as [number, number];
+  if (value === null || lower > value || value > upper) {
+    return `Variant ${variantId} has an interval that doesn't hold its value.`;
+  }
+  return undefined;
+}
+
 export function readoutProblem(value: unknown, variantIds: readonly number[]): string | undefined {
   const variants = (value as ReadoutResult | null | undefined)?.variants;
   if (!Array.isArray(variants)) return "It must return { variants: [...] }.";
   const bytes = Buffer.byteLength(JSON.stringify(value));
   if (bytes > READOUT_LIMITS.maxBytes) return `It returned ${bytes} bytes; the limit is ${READOUT_LIMITS.maxBytes}.`;
   const seen = new Set<number>();
-  for (const variant of variants as ReadoutResult["variants"]) {
-    if (seen.has(variant?.variantId)) return `Variant ${variant.variantId} appears twice.`;
-    seen.add(variant?.variantId);
-    if (variantIds.length > 0 && !variantIds.includes(variant?.variantId)) {
-      return `Variant ${variant?.variantId} isn't one of this audience's variants.`;
-    }
-    if (variant.value !== null && (typeof variant.value !== "number" || !Number.isFinite(variant.value))) {
-      return `Variant ${variant.variantId} has a value that isn't a finite number or null.`;
-    }
-    const interval = variant.interval;
-    if (interval !== undefined) {
-      const inside = variant.value !== null && interval[0] <= variant.value && variant.value <= interval[1];
-      if (!inside) return `Variant ${variant.variantId} has an interval that doesn't hold its value.`;
-    }
+  for (const variant of variants as readonly unknown[]) {
+    const problem = variantProblem(variant, seen, variantIds);
+    if (problem) return problem;
   }
   return undefined;
 }
@@ -91,7 +106,7 @@ export function checkMetricQuery(metric: MetricDefinition | undefined, query: Me
 }
 
 export function parseFilters(pairs: readonly string[]): Record<string, string[]> {
-  const filters: Record<string, string[]> = {};
+  const filters = Object.create(null) as Record<string, string[]>;
   for (const pair of pairs) {
     const separator = pair.indexOf("=");
     if (separator <= 0 || separator === pair.length - 1) {
@@ -105,6 +120,7 @@ export function parseFilters(pairs: readonly string[]): Record<string, string[]>
 
 export interface SeriesSummary {
   name: string;
+  breakdown: string | null;
   points: number;
   sum: number;
   lastAt: string;
@@ -112,15 +128,16 @@ export interface SeriesSummary {
 }
 
 export function summarizeSeries(series: MetricSeries): SeriesSummary[] {
-  const groups = new Map<string, MetricPoint[]>();
+  const groups = new Map<string | null, MetricPoint[]>();
   for (const point of series.points) {
-    const name = point.breakdown ?? "All";
-    groups.set(name, [...(groups.get(name) ?? []), point]);
+    const breakdown = point.breakdown ?? null;
+    groups.set(breakdown, [...(groups.get(breakdown) ?? []), point]);
   }
-  return [...groups.entries()].map(([name, points]) => {
-    const latest = points.reduce((best, point) => (point.t > best.t ? point : best));
+  return [...groups.entries()].map(([breakdown, points]) => {
+    const latest = points.reduce((best, point) => (Date.parse(point.t) > Date.parse(best.t) ? point : best));
     return {
-      name,
+      name: breakdown ?? "All",
+      breakdown,
       points: points.length,
       sum: points.reduce((total, point) => total + point.value, 0),
       lastAt: latest.t,

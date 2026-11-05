@@ -10,7 +10,7 @@ function setup(answers: Response[] = [new Response("{}", { status: 200 })], decl
   let renewed = 0;
   const outbound = createOutbound({
     apiOrigin: "https://api.test",
-    credential: { current: async () => "token-1", renew: async () => (renewed += 1, "token-2") },
+    credential: { current: async () => "token-1", renew: async (rejected) => (assert.equal(rejected, "token-1"), renewed += 1, "token-2") },
     log: { info: (text) => logged.push(`info ${text}`), warn: (text) => logged.push(`warn ${text}`) },
     declaredScopes: () => declared,
     fetchImpl: (async (url: string, init: RequestInit) => {
@@ -48,14 +48,60 @@ test("API calls go to the session's host with the agent token, and only the allo
   assert.match(logged[0]!, /^info POST \/v2\/organizations\/1\/query 200 \d+ms$/);
 });
 
-test("the token never reaches the log or the answer", async () => {
-  const { outbound, logged } = setup([new Response("nope", { status: 403, headers: { "set-cookie": "a=b", "content-encoding": "gzip" } })]);
+test("the token never reaches the log or the answer's headers or body", async () => {
+  const { outbound, logged, sent } = setup([
+    new Response("nope", { status: 403, headers: { "set-cookie": "a=b", "content-encoding": "gzip", "x-from-api": "kept" } }),
+  ]);
   const answer = await outbound(new Request("https://api.workspace.internal/v2/products", { method: "POST", body: "{}" }), org);
+  assert.equal((sent[0]!.init.headers as Headers).get("authorization"), "Bearer token-1");
   assert.equal(answer.status, 403);
   assert.equal(answer.headers.get("set-cookie"), null);
   assert.equal(answer.headers.get("content-encoding"), null);
+  assert.equal(answer.headers.get("x-from-api"), "kept");
+  const everything = `${[...answer.headers.entries()].join()} ${await answer.text()} ${logged.join()}`;
   assert.match(logged[0]!, /^warn POST \/v2\/products 403 \d+ms\. Dev is read-only\. nope$/);
-  assert.doesNotMatch(logged.join(), /token-1/);
+  assert.doesNotMatch(everything, /token-1/);
+});
+
+for (const status of [204, 205, 304]) {
+  test(`a ${status} from the API reaches the Worker with no body`, async () => {
+    const { outbound } = setup([new Response(null, { status })]);
+    const answer = await outbound(new Request("https://api.workspace.internal/v2/projects", { headers: { "if-none-match": "x" } }), org);
+    assert.equal(answer.status, status);
+    assert.equal(answer.body, null);
+  });
+}
+
+test("an API's stream isn't held back", async () => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const stream = new ReadableStream({
+    async start(controller) {
+      controller.enqueue(new TextEncoder().encode("first"));
+      await held;
+      controller.close();
+    },
+  });
+  const { outbound } = setup([new Response(stream)]);
+  const answer = await outbound(new Request("https://api.workspace.internal/v2/projects"), org);
+  const reader = answer.body!.getReader();
+  assert.equal(Buffer.from((await reader.read()).value!).toString(), "first");
+  release();
+  assert.equal((await reader.read()).done, true);
+});
+
+test("when a new token can't be had, the Worker gets the 401 and the terminal gets why", async () => {
+  const logged: string[] = [];
+  const outbound = createOutbound({
+    apiOrigin: "https://api.test",
+    credential: { current: async () => "t", renew: async () => { throw new Error("no more tokens"); } },
+    log: { info: (text) => logged.push(text), warn: (text) => logged.push(text) },
+    declaredScopes: () => ["projects:read"],
+    fetchImpl: (async () => new Response("expired", { status: 401 })) as never,
+  });
+  const answer = await outbound(new Request("https://api.workspace.internal/v2/projects"), org);
+  assert.equal(answer.status, 401);
+  assert.ok(logged.includes("no more tokens"));
 });
 
 test("a GET has no body, and a 401 renews the token once", async () => {

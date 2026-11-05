@@ -7,6 +7,8 @@ import type { Renderer } from "@/ui/types";
 import { UsageError, type AuthPolicy, type CommandContext, type CommandRuntime, type RawInput } from "./command";
 import { currentHost, type Writable } from "./host";
 
+const CANCEL_CLEANUP_MS = 3_000;
+
 function textOf(value: unknown): string | undefined {
   if (typeof value === "number") return String(value);
   return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
@@ -47,10 +49,17 @@ export async function runLifecycle<Auth extends AuthPolicy>(
   };
 
   ui.start();
+  const cancelCleanups = new Set<() => Promise<void>>();
   const offInterrupt = ui.onInterrupt?.(() => {
     ui.stop();
     process.stderr.write("\n✗ Cancelled.\n");
-    process.exit(130);
+    if (cancelCleanups.size === 0) {
+      process.exit(130);
+      return;
+    }
+    const cleaning = Promise.allSettled([...cancelCleanups].map((cleanup) => cleanup()));
+    const deadline = new Promise((resolve) => setTimeout(resolve, CANCEL_CLEANUP_MS));
+    void Promise.race([cleaning, deadline]).then(() => process.exit(130));
   });
   host.starting(ui, outputMode);
   host.track("command started", base);
@@ -67,6 +76,10 @@ export async function runLifecycle<Auth extends AuthPolicy>(
       dryRun: flags.dryRun === true,
       target: { app: textOf(flags.app), project: textOf(flags.project) },
       fail: host.fail,
+      onCancel: (cleanup) => {
+        cancelCleanups.add(cleanup);
+        return () => cancelCleanups.delete(cleanup);
+      },
       ...(api ? { api } : {}),
     };
     await work(context as CommandContext<Auth>);

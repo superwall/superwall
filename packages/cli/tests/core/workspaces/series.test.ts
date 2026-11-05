@@ -34,6 +34,12 @@ test("readouts: each variant once, in the audience, with an interval that holds 
   assert.equal(readoutProblem({ variants: [{ variantId: 1, value: 2, interval: [1, 3] }, { variantId: 2, value: null }] }, [1, 2]), undefined);
   assert.equal(readoutProblem({ variants: [{ variantId: 9, value: 1 }] }, []), undefined);
   assert.match(readoutProblem({}, [])!, /must return/);
+  assert.match(readoutProblem({ variants: [{ value: 2 }] }, [])!, /variantId/);
+  assert.match(readoutProblem({ variants: [{ variantId: 1.5, value: 2 }] }, [])!, /variantId/);
+  assert.match(readoutProblem({ variants: [null] }, [])!, /variantId/);
+  for (const interval of ["13", ["1", "3"], null, [1], [1, 2, 3], [Number.NaN, 3]]) {
+    assert.match(readoutProblem({ variants: [{ variantId: 1, value: 2, interval }] }, [])!, /isn't two finite numbers/, String(interval));
+  }
   assert.match(readoutProblem({ variants: [{ variantId: 1, value: 1 }, { variantId: 1, value: 2 }] }, [1])!, /appears twice/);
   assert.match(readoutProblem({ variants: [{ variantId: 3, value: 1 }] }, [1])!, /isn't one of/);
   assert.match(readoutProblem({ variants: [{ variantId: 1, value: "1" }] }, [1])!, /finite/);
@@ -58,22 +64,32 @@ test("only what the metric declares can be asked for", () => {
 });
 
 test("--filter gathers repeated keys and refuses anything else", () => {
-  assert.deepEqual(parseFilters(["a=1", "a=2", "b=x=y"]), { a: ["1", "2"], b: ["x=y"] });
+  assert.deepEqual({ ...parseFilters(["a=1", "a=2", "b=x=y"]) }, { a: ["1", "2"], b: ["x=y"] });
+  for (const key of ["constructor", "toString", "__proto__"]) {
+    const filters = parseFilters([`${key}=A`, `${key}=B`]);
+    assert.deepEqual(filters[key], ["A", "B"], key);
+    assert.deepEqual(JSON.parse(JSON.stringify(filters))[key], ["A", "B"], key);
+  }
   for (const bad of ["a", "=1", "a="]) assert.throws(() => parseFilters([bad]), /takes key=value/);
 });
 
-test("a summary has one row per series, with its latest point", () => {
+test("a summary has one row per series, with its latest point by time", () => {
   assert.deepEqual(
     summarizeSeries({
       points: [
-        { t: "2026-10-02T00:00:00Z", value: 2, breakdown: "a" },
-        { t: "2026-10-01T00:00:00Z", value: 1, breakdown: "a" },
+        { t: "2026-10-02T01:00:00+02:00", value: 2, breakdown: "a" },
+        { t: "2026-10-02T00:00:00Z", value: 1, breakdown: "a" },
         { t, value: 5 },
       ],
     }),
     [
-      { name: "a", points: 2, sum: 3, lastAt: "2026-10-02T00:00:00Z", last: 2 },
-      { name: "All", points: 1, sum: 5, lastAt: t, last: 5 },
+      { name: "a", breakdown: "a", points: 2, sum: 3, lastAt: "2026-10-02T00:00:00Z", last: 1 },
+      { name: "All", breakdown: null, points: 1, sum: 5, lastAt: t, last: 5 },
     ],
   );
+});
+
+test("a breakdown named All stays apart from the series with none", () => {
+  const rows = summarizeSeries({ points: [{ t, value: 1 }, { t, value: 2, breakdown: "All" }, { t, value: 3, breakdown: null }] });
+  assert.deepEqual(rows.map((row) => [row.breakdown, row.sum]), [[null, 4], ["All", 2]]);
 });

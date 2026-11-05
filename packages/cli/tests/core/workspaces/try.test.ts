@@ -55,7 +55,7 @@ test("uploads the bundle and manifest as a draft, then runs the metric on it", a
     path: "/v2/workspaces/drafts",
     body: { organization_id: 3, manifest: MANIFEST, module: "MODULE" },
   });
-  assert.deepEqual(posts[1], {
+  assert.deepEqual(JSON.parse(JSON.stringify(posts[1])), {
     path: `/v2/workspaces/drafts/${DRAFT.id}/metric`,
     body: {
       organization_id: 3,
@@ -95,8 +95,8 @@ test("--json prints the draft, a summary and the series", async () => {
     requested_scopes: DRAFT.requested_scopes,
     entrypoint_id: "count",
     summary: [
-      { name: "A", points: 1, sum: 2.5, lastAt: "2026-10-01T00:00:00Z", last: 2.5 },
-      { name: "All", points: 1, sum: 3, lastAt: "2026-10-02T00:00:00Z", last: 3 },
+      { name: "A", breakdown: "A", points: 1, sum: 2.5, lastAt: "2026-10-01T00:00:00Z", last: 2.5 },
+      { name: "All", breakdown: null, points: 1, sum: 3, lastAt: "2026-10-02T00:00:00Z", last: 3 },
     ],
     series: SERIES,
   });

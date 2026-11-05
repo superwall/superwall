@@ -7,9 +7,10 @@ import { resolveAppScope, resolveOrganization } from "@/core/workspaces/organiza
 import { MANIFEST_FILE, readManifest, readProject, WorkspaceError } from "@/core/workspaces/project";
 import { warnIfSdkBehind } from "@/core/workspaces/sdk";
 import type { ContextInput } from "@/core/workspaces/slots";
-import { createOutbound, type AgentCredential } from "./outbound";
+import { createAgentCredential } from "./credential";
+import { createOutbound } from "./outbound";
 import { startMiniflare, type StartRuntime } from "./runtime";
-import { startDevServer } from "./server";
+import { startDevServer, type DevServer } from "./server";
 
 export interface DevInput {
   dir?: string;
@@ -35,7 +36,8 @@ export interface DevRuntimeSeams {
   onReady?: (urls: { host: string; frame: string }, rebuild: () => Promise<void>) => void;
 }
 
-const WATCHED = ["src", "vendor", MANIFEST_FILE, "wrangler.jsonc", "wrangler.json", "wrangler.toml"];
+const WATCHED_DIRS = ["src", "vendor"];
+const WATCHED_FILES = new Set([MANIFEST_FILE, "wrangler.jsonc", "wrangler.json", "wrangler.toml"]);
 const DEBOUNCE_MS = 150;
 
 function watchProject(root: string, onChange: () => void): () => void {
@@ -44,17 +46,32 @@ function watchProject(root: string, onChange: () => void): () => void {
     clearTimeout(timer);
     timer = setTimeout(onChange, DEBOUNCE_MS);
   };
-  const watchers = WATCHED.map((name) => path.join(root, name))
-    .filter((file) => fs.existsSync(file))
-    .map((file) => fs.watch(file, { recursive: fs.statSync(file).isDirectory() }, changed));
+  const nested = new Map<string, fs.FSWatcher>();
+  const attach = (name: string) => {
+    nested.get(name)?.close();
+    nested.delete(name);
+    const dir = path.join(root, name);
+    if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+      nested.set(name, fs.watch(dir, { recursive: true }, changed));
+    }
+  };
+  for (const name of WATCHED_DIRS) attach(name);
+  const top = fs.watch(root, (_event, file) => {
+    if (file === null || WATCHED_FILES.has(file)) changed();
+    if (file !== null && WATCHED_DIRS.includes(file)) {
+      attach(file);
+      changed();
+    }
+  });
   return () => {
     clearTimeout(timer);
-    for (const watcher of watchers) watcher.close();
+    top.close();
+    for (const watcher of nested.values()) watcher.close();
   };
 }
 
-function agentCredential(ctx: CommandContext<"required">): AgentCredential {
-  const mint = async () => {
+function agentCredential(ctx: CommandContext<"required">) {
+  return createAgentCredential(async () => {
     try {
       const { token } = await ctx.api.post<{ token: string }>("/v2/me/agent-token", {});
       return token;
@@ -66,12 +83,7 @@ function agentCredential(ctx: CommandContext<"required">): AgentCredential {
       }
       throw error;
     }
-  };
-  let token: Promise<string> | undefined;
-  return {
-    current: () => (token ??= mint()),
-    renew: () => (token = mint()),
-  };
+  });
 }
 
 const waitForSignal = (stop: () => Promise<void>): Promise<void> =>
@@ -97,7 +109,7 @@ async function resolveDefaults(ctx: CommandContext<"required">, input: DevInput)
     to: input.to,
     context: input.context,
   };
-  if (input.context !== undefined) return context;
+  if (input.context !== undefined && input.app === undefined && input.org === undefined) return context;
   const scope =
     input.app === undefined
       ? { organizationId: await resolveOrganization(ctx, input.org) }
@@ -132,45 +144,47 @@ export async function runWorkspaceDev(
     }),
   });
 
-  const server = await startDevServer({ getManifest: () => manifest, runtime, port: input.port, defaults });
-
+  let server: DevServer | undefined;
+  let unwatch: (() => void) | undefined;
   let rebuilding: Promise<void> = Promise.resolve();
-  const rebuild = (): Promise<void> => {
-    rebuilding = rebuilding.then(async () => {
-      try {
-        manifest = readManifest(root);
-        const next = await bundleWorkspace(root, seams.wrangler);
-        await runtime.update(next.module);
-        ctx.ui.step(`Rebuilt, ${next.bytes} bytes`);
-        server.publish({ type: "reload" });
-      } catch (error) {
-        ctx.ui.error((error as Error).message);
-        server.publish({ type: "error", message: (error as Error).message });
-      }
-    });
-    return rebuilding;
-  };
-  const unwatch = watchProject(root, () => void rebuild());
-
-  ctx.ui.success(`Open ${server.hostOrigin}`);
-  ctx.ui.info("API calls use a read-only token as you. Writes and outside hosts are refused.");
-  seams.onReady?.({ host: server.hostOrigin, frame: server.frameOrigin }, rebuild);
-
   let stopping: Promise<void> | undefined;
   const stop = () => {
     stopping ??= (async () => {
-      unwatch();
+      unwatch?.();
       await rebuilding;
-      await server.close();
+      await server?.close();
       await runtime.dispose();
     })();
     return stopping;
   };
-  const offInterrupt = ctx.ui.onInterrupt?.(() => void stop());
+  const offCancel = ctx.onCancel?.(stop);
   try {
+    const started = await startDevServer({ getManifest: () => manifest, runtime, port: input.port, defaults });
+    server = started;
+    const rebuild = (): Promise<void> => {
+      rebuilding = rebuilding.then(async () => {
+        try {
+          const nextManifest = readManifest(root);
+          const next = await bundleWorkspace(root, seams.wrangler);
+          await runtime.update(next.module);
+          manifest = nextManifest;
+          ctx.ui.step(`Rebuilt, ${next.bytes} bytes`);
+          started.publish({ type: "reload" });
+        } catch (error) {
+          ctx.ui.error((error as Error).message);
+          started.publish({ type: "error", message: (error as Error).message });
+        }
+      });
+      return rebuilding;
+    };
+    unwatch = watchProject(root, () => void rebuild());
+
+    ctx.ui.success(`Open ${started.hostOrigin}`);
+    ctx.ui.info("API calls use a read-only token as you. Writes, outside hosts and raw sockets are refused.");
+    seams.onReady?.({ host: started.hostOrigin, frame: started.frameOrigin }, rebuild);
     await (seams.until ?? waitForSignal)(stop);
   } finally {
-    offInterrupt?.();
+    offCancel?.();
     await stop();
   }
 }

@@ -19,7 +19,9 @@ interface FetchResponse {
   json(): Promise<unknown>;
 }
 
-export type FetchLike = (url: string) => Promise<FetchResponse>;
+export type FetchLike = (url: string, init?: { signal: AbortSignal }) => Promise<FetchResponse>;
+
+const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 export async function downloadRepoDir(
   dir: string,
@@ -27,23 +29,34 @@ export async function downloadRepoDir(
   notFound: string,
   fetchImpl: FetchLike = fetch,
 ): Promise<void> {
-  const response = await fetchImpl(
-    `https://codeload.github.com/${PUBLIC_REPO}/tar.gz/refs/heads/${PUBLIC_REF}`,
-  );
-  if (!response.ok) {
-    throw new RepoDownloadError(
-      `Could not download github.com/${PUBLIC_REPO} (HTTP ${response.status}). ` +
-        "Check your network, then try again.",
+  const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
+  let response: FetchResponse;
+  let bytes: ArrayBuffer;
+  try {
+    response = await fetchImpl(
+      `https://codeload.github.com/${PUBLIC_REPO}/tar.gz/refs/heads/${PUBLIC_REF}`,
+      { signal },
     );
+    if (!response.ok) {
+      throw new RepoDownloadError(
+        `Could not download github.com/${PUBLIC_REPO} (HTTP ${response.status}). ` +
+          "Check your network, then try again.",
+      );
+    }
+    bytes = await response.arrayBuffer();
+  } catch (error) {
+    if (error instanceof RepoDownloadError) throw error;
+    throw new RepoDownloadError(`Could not reach github.com/${PUBLIC_REPO}. Check your network, then try again.`);
   }
 
   let archive: Buffer;
   try {
-    archive = gunzipSync(Buffer.from(await response.arrayBuffer()));
+    archive = gunzipSync(Buffer.from(bytes));
   } catch {
     throw new RepoDownloadError(`The download of github.com/${PUBLIC_REPO} was damaged. Try again.`);
   }
-  const tarball = path.join(os.tmpdir(), `superwall-example-${process.pid}.tar`);
+  const stage = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-download-"));
+  const tarball = path.join(stage, "repo.tar");
   fs.writeFileSync(tarball, archive);
   const prefix = `${PUBLIC_REPO.split("/")[1]}-${PUBLIC_REF.replace(/\//g, "-")}`;
   fs.mkdirSync(target, { recursive: true });
@@ -60,6 +73,6 @@ export async function downloadRepoDir(
   } catch {
     throw new RepoDownloadError(notFound);
   } finally {
-    fs.rmSync(tarball, { force: true });
+    fs.rmSync(stage, { recursive: true, force: true });
   }
 }

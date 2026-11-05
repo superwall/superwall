@@ -89,6 +89,32 @@ test("create refuses a directory with files in it", async () => {
   assert.ok(fs.existsSync(path.join(target, "keep")));
 });
 
+test("create on a file says so", async () => {
+  const target = path.join(scratch(), "file");
+  fs.writeFileSync(target, "x");
+  const { ctx } = context();
+  await assert.rejects(runWorkspaceCreate(ctx, { dir: target, install: false }, { fetch: download() }), /is a file/);
+  assert.equal(fs.readFileSync(target, "utf8"), "x");
+});
+
+test("a failed create . leaves the empty directory it was given", async () => {
+  const target = scratch();
+  const cwd = process.cwd();
+  process.chdir(target);
+  const { ctx } = context();
+  try {
+    await assert.rejects(runWorkspaceCreate(ctx, { dir: ".", install: false }, { fetch: respondWith(500, Buffer.from("")) as never }), /HTTP 500/);
+    assert.ok(fs.existsSync(target));
+    await assert.rejects(
+      runWorkspaceCreate(ctx, { dir: ".", install: false }, { fetch: respondWith(200, repoTarball({ "workspaces/starter/README.md": "no project" })) as never }),
+    );
+    assert.ok(fs.existsSync(target));
+    assert.deepEqual(fs.readdirSync(target), []);
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
 test("a failed download leaves nothing behind", async () => {
   const target = path.join(scratch(), "new");
   const { ctx } = context();
@@ -174,6 +200,69 @@ test("update keeps what's there when the download fails, and survives a failed i
     install: async () => { throw new Error("no npm"); },
   });
   assert.match(said("warn")[0]!, /npm install/);
+});
+
+test("update leaves package.json's formatting alone when it already points at the SDK", async () => {
+  const root = workspaceProject();
+  const text = '{"name":"x","dependencies":{"@superwall/workspace-sdk":"file:vendor/workspace-sdk"},\n\t"private":true}';
+  fs.writeFileSync(path.join(root, "package.json"), text);
+  const { ctx } = context();
+  await runWorkspaceUpdate(ctx, { dir: root, install: false }, { fetch: download() });
+  assert.equal(fs.readFileSync(path.join(root, "package.json"), "utf8"), text);
+});
+
+test("update keeps package.json's indent and final newline when it has to add the SDK", async () => {
+  const root = workspaceProject();
+  fs.writeFileSync(path.join(root, "package.json"), '{\n\t"name": "x"\n}\n');
+  const { ctx } = context();
+  await runWorkspaceUpdate(ctx, { dir: root, install: false }, { fetch: download() });
+  assert.equal(
+    fs.readFileSync(path.join(root, "package.json"), "utf8"),
+    '{\n\t"name": "x",\n\t"dependencies": {\n\t\t"@superwall/workspace-sdk": "file:vendor/workspace-sdk"\n\t}\n}\n',
+  );
+});
+
+test("update won't replace a newer SDK unless it's forced", async () => {
+  const root = workspaceProject();
+  writeVendoredSdk(root, "9.9.9");
+  const { ctx, said } = context();
+  await runWorkspaceUpdate(ctx, { dir: root, install: true }, { fetch: download(), install: async () => assert.fail("nothing changed") });
+  assert.equal(json(path.join(root, "vendor/workspace-sdk/package.json")).version, "9.9.9");
+  assert.match(said("warn")[0]!, /--force/);
+  await runWorkspaceUpdate(ctx, { dir: root, install: false, force: true }, { fetch: download() });
+  assert.equal(json(path.join(root, "vendor/workspace-sdk/package.json")).version, "0.2.0");
+});
+
+test("update changes nothing when package.json is missing", async () => {
+  const root = workspaceProject();
+  writeVendoredSdk(root, "0.1.0");
+  fs.rmSync(path.join(root, "package.json"));
+  const { ctx } = context();
+  await assert.rejects(runWorkspaceUpdate(ctx, { dir: root, install: false }, { fetch: async () => assert.fail("no download") }), /No package\.json/);
+  assert.equal(json(path.join(root, "vendor/workspace-sdk/package.json")).version, "0.1.0");
+});
+
+test("update moves the new SDK into place and leaves nothing beside it", async () => {
+  const root = workspaceProject();
+  writeVendoredSdk(root, "0.1.0");
+  const { ctx } = context();
+  await runWorkspaceUpdate(ctx, { dir: root, install: false }, { fetch: download() });
+  assert.deepEqual(fs.readdirSync(path.join(root, "vendor")), ["workspace-sdk"]);
+});
+
+test("update puts the old SDK back when the move fails", async () => {
+  const root = workspaceProject();
+  writeVendoredSdk(root, "0.1.0");
+  const { ctx } = context();
+  let calls = 0;
+  const rename: typeof fs.renameSync = (from, to) => {
+    calls += 1;
+    if (calls === 2) throw new Error("disk full");
+    fs.renameSync(from, to);
+  };
+  await assert.rejects(runWorkspaceUpdate(ctx, { dir: root, install: false }, { fetch: download(), rename }), /disk full/);
+  assert.equal(json(path.join(root, "vendor/workspace-sdk/package.json")).version, "0.1.0");
+  assert.deepEqual(fs.readdirSync(path.join(root, "vendor")), ["workspace-sdk"]);
 });
 
 test("update needs a workspace", async () => {

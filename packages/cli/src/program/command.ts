@@ -69,6 +69,7 @@ interface BaseContext {
   dryRun: boolean;
   target: Target;
   fail: () => void;
+  onCancel?: (cleanup: () => Promise<void>) => () => void;
 }
 
 export type CommandContext<Auth extends AuthPolicy = AuthPolicy> = BaseContext &

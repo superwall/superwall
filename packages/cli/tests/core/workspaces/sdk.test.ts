@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { latestVersion, vendoredVersion, warnIfSdkBehind } from "@/core/workspaces/sdk";
+import { compareVersions, latestVersion, vendoredVersion, warnIfSdkBehind } from "@/core/workspaces/sdk";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
 import { workspaceProject, writeVendoredSdk } from "./fixture";
 
@@ -19,6 +19,26 @@ test("behind: says so and names the command", async () => {
   assert.match(warning!, /0\.1\.0.*0\.2\.0.*superwall workspaces update/);
   assert.equal((await warnings(root, answering("1.0.0"))).length, 1);
   assert.equal((await warnings(root, answering("0.1.1-beta.1"))).length, 1);
+});
+
+test("versions compare by semver, prereleases included", () => {
+  const ascending = ["0.1.0", "0.2.0-alpha", "0.2.0-alpha.1", "0.2.0-beta.1", "0.2.0-beta.2", "0.2.0-beta.11", "0.2.0-rc", "0.2.0", "0.2.1", "1.0.0"];
+  for (let index = 0; index < ascending.length - 1; index += 1) {
+    const [lower, higher] = [ascending[index]!, ascending[index + 1]!];
+    assert.ok(compareVersions(lower, higher) < 0, `${lower} < ${higher}`);
+    assert.ok(compareVersions(higher, lower) > 0, `${higher} > ${lower}`);
+  }
+  assert.equal(compareVersions("1.0.0+build", "1.0.0"), 0);
+  assert.equal(compareVersions("1.0.0-1", "1.0.0-1"), 0);
+  assert.ok(compareVersions("1.0.0-1", "1.0.0-a") < 0);
+});
+
+test("a beta behind the next beta or its stable release says so", async () => {
+  const root = workspaceProject();
+  writeVendoredSdk(root, "0.2.0-beta.1");
+  assert.equal((await warnings(root, answering("0.2.0-beta.2"))).length, 1);
+  assert.equal((await warnings(root, answering("0.2.0"))).length, 1);
+  assert.equal((await warnings(root, answering("0.1.9"))).length, 0);
 });
 
 test("current or ahead: says nothing", async () => {

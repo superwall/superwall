@@ -20,7 +20,6 @@ import {
 import { renderHostPage } from "./host-page";
 import { INVOKE_PATH, type DevRuntime } from "./runtime";
 
-const SESSION_COOKIE = "sw_dev_session";
 
 interface Session {
   entrypointId: string;
@@ -58,7 +57,13 @@ const sendJson = (response: http.ServerResponse, status: number, body: unknown):
 
 const listen = (server: http.Server, port: number): Promise<number> =>
   new Promise((resolve, reject) => {
-    server.once("error", reject);
+    server.once("error", (error: NodeJS.ErrnoException) => {
+      reject(
+        error.code === "EADDRINUSE"
+          ? new WorkspaceError(`Port ${port} is already in use. Pick another with --port; dev also takes the one after it.`)
+          : error,
+      );
+    });
     server.listen(port, "127.0.0.1", () => {
       const address = server.address();
       resolve(typeof address === "object" && address !== null ? address.port : port);
@@ -103,12 +108,27 @@ export const withTimeout = async <T>(work: Promise<T>, ms: number, message: stri
   }
 };
 
-const sessionTokenOf = (cookie: string | undefined): string | undefined => {
+const sessionTokenOf = (cookie: string | undefined, cookieName: string): string | undefined => {
   for (const part of (cookie ?? "").split(";")) {
     const [name, value] = part.trim().split("=");
-    if (name === SESSION_COOKIE) return value;
+    if (name === cookieName) return value;
   }
   return undefined;
+};
+
+const writeBody = async (answer: Response, response: http.ServerResponse): Promise<void> => {
+  if (answer.body === null) {
+    response.end();
+    return;
+  }
+  const reader = answer.body.getReader();
+  response.once("close", () => void reader.cancel().catch(() => {}));
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    response.write(value);
+  }
+  response.end();
 };
 
 export interface MetricCall extends MetricQuery {
@@ -132,6 +152,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
   const subscribers = new Set<http.ServerResponse>();
   let hostOrigin = "";
   let frameOrigin = "";
+  let sessionCookie = "";
 
   const invoke = async (kind: string, payload: unknown, timeoutMs: number): Promise<unknown> => {
     const answer = await withTimeout(
@@ -163,7 +184,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       "metric",
       {
         metric: entrypoint.id,
-        context: buildContext(entrypoint.slot, { ...defaults, ...call.input, context: undefined }),
+        context: buildContext(entrypoint.slot, { ...defaults, ...call.input }),
         from: new Date(call.from ?? range.from).toISOString(),
         to: new Date(call.to ?? range.to).toISOString(),
         interval: call.interval ?? "day",
@@ -183,10 +204,10 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     if (entrypoint.slot !== "campaign.metric@1") {
       throw new WorkspaceError(`\`${entrypoint.id}\` (${entrypoint.slot}) isn't a readout.`);
     }
-    const context = buildContext(entrypoint.slot, { ...defaults, ...call.input, context: undefined });
+    const context = buildContext(entrypoint.slot, { ...defaults, ...call.input });
     const started = Date.now();
     const result = await invoke("readout", { metric: entrypoint.id, context }, READOUT_LIMITS.timeoutMs);
-    const problem = readoutProblem(result, context.variantIds as readonly number[]);
+    const problem = readoutProblem(result, (context.variantIds ?? []) as readonly number[]);
     if (problem) throw new WorkspaceError(problem);
     return { result, took_ms: Date.now() - started };
   };
@@ -241,10 +262,11 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       return;
     }
     if (request.method !== "POST") return sendJson(response, 404, { error: "Not found." });
-    const origin = request.headers.origin;
-    if (origin !== undefined && origin !== hostOrigin) return sendJson(response, 403, { error: "Wrong origin." });
-    const body = JSON.parse((await readBody(request)).toString("utf8") || "{}") as never;
+    if (request.headers.origin !== hostOrigin) {
+      return sendJson(response, 403, { error: `POSTs here need the header Origin: ${hostOrigin}.` });
+    }
     try {
+      const body = JSON.parse((await readBody(request)).toString("utf8") || "{}") as never;
       if (pathname === "/__dev/sessions") return sendJson(response, 200, createSession(body));
       if (pathname === "/__dev/metric") return sendJson(response, 200, await runMetric(body));
       if (pathname === "/__dev/readout") return sendJson(response, 200, await runReadout(body));
@@ -265,26 +287,31 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       if (session === undefined) return sendJson(response, 400, { error: "That link was already used." });
       response.writeHead(302, {
         location: session.path,
-        "set-cookie": `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax`,
+        "set-cookie": `${sessionCookie}=${token}; Path=/; HttpOnly; SameSite=Lax`,
       });
       response.end();
       return;
     }
     if (isInternalPath(url.pathname)) return sendJson(response, 404, { error: "Not found." });
-    const session = sessions.get(sessionTokenOf(request.headers.cookie) ?? "");
+    const hasBody = request.method !== "GET" && request.method !== "HEAD";
+    if (hasBody && request.headers.origin !== frameOrigin) {
+      return sendJson(response, 403, { error: "Only this frame's own page can send this." });
+    }
+    const session = sessions.get(sessionTokenOf(request.headers.cookie, sessionCookie) ?? "");
     if (session === undefined) {
       return sendJson(response, 401, { error: `This frame has no session. Open it from ${hostOrigin}.` });
     }
 
     const headers = new Headers();
     for (const [name, value] of Object.entries(request.headers)) {
-      if (name === "cookie" || name === "host" || name.startsWith(WORKSPACE_HEADER_PREFIX)) continue;
+      if (name === "cookie" || name === "host" || name.startsWith("mf-") || name.startsWith(WORKSPACE_HEADER_PREFIX)) {
+        continue;
+      }
       if (typeof value === "string") headers.set(name, value);
     }
     headers.set(CONTEXT_HEADER, headerJson(session.context));
     headers.set(ENTRYPOINT_HEADER, session.entrypointId);
     headers.set(TRIGGER_HEADER, "dev");
-    const hasBody = request.method !== "GET" && request.method !== "HEAD";
     const answer = await runtime.fetch(
       `${frameOrigin}${request.url}`,
       {
@@ -305,7 +332,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     out.set("x-content-type-options", "nosniff");
     out.set("referrer-policy", "same-origin");
     response.writeHead(answer.status, Object.fromEntries(out.entries()));
-    response.end(Buffer.from(await answer.arrayBuffer()));
+    await writeBody(answer, response);
   };
 
   const guarded =
@@ -323,9 +350,13 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
   const hostServer = http.createServer(guarded(answerHost));
   const frameServer = http.createServer(guarded(answerFrame));
   const hostPort = await listen(hostServer, options.port);
-  const framePort = await listen(frameServer, options.port === 0 ? 0 : options.port + 1);
+  const framePort = await listen(frameServer, options.port === 0 ? 0 : options.port + 1).catch(async (error: unknown) => {
+    await closeServer(hostServer);
+    throw error;
+  });
   hostOrigin = `http://localhost:${hostPort}`;
   frameOrigin = `http://localhost:${framePort}`;
+  sessionCookie = `sw_dev_session_${framePort}`;
 
   return {
     hostOrigin,

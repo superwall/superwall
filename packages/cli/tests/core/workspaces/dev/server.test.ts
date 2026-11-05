@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import * as http from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterEach, test } from "node:test";
 import type { CallerScope, DevRuntime } from "@/core/workspaces/dev/runtime";
 import { startDevServer, withTimeout, type DevServer } from "@/core/workspaces/dev/server";
@@ -36,7 +38,11 @@ async function start(handler: Handler = () => new Response("hello"), manifest: M
 }
 
 const post = (url: string, body: unknown, headers: Record<string, string> = {}) =>
-  fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+  fetch(url, {
+    method: "POST",
+    headers: { origin: new URL(url).origin, "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
 
 async function connect(server: DevServer, entrypoint = "home", input: unknown = {}) {
   const session = (await (await post(`${server.hostOrigin}/__dev/sessions`, { entrypoint, input })).json()) as {
@@ -66,7 +72,7 @@ test("a session binds its context; the link works once and lands on the entrypoi
   assert.equal(answer.status, 302);
   assert.equal(answer.headers.get("location"), "/home");
   assert.match(answer.headers.get("set-cookie")!, /HttpOnly/);
-  assert.ok(cookie.startsWith("sw_dev_session="));
+  assert.ok(cookie.startsWith(`sw_dev_session_${new URL(server.frameOrigin).port}=`));
   const again = await fetch(session.connect_url, { redirect: "manual" });
   assert.equal(again.status, 400);
 });
@@ -117,10 +123,10 @@ test("non-ASCII context survives the header", async () => {
   assert.match(header, /\\u00eb/);
 });
 
-test("a frame POST reaches the worker with its body", async () => {
+test("a frame POST from the frame reaches the worker with its body", async () => {
   const { server, seen } = await start();
   const { cookie } = await connect(server);
-  await fetch(`${server.frameOrigin}/save`, { method: "POST", headers: { cookie }, body: "payload" });
+  await fetch(`${server.frameOrigin}/save`, { method: "POST", headers: { cookie, origin: server.frameOrigin }, body: "payload" });
   assert.equal(seen[0]!.init.method, "POST");
   assert.equal(Buffer.from(seen[0]!.init.body as Buffer).toString(), "payload");
 });
@@ -136,23 +142,120 @@ test("the frame refuses a missing session, internal paths and other hosts", asyn
   assert.equal((await fetch(`${server.frameOrigin}/__connect`, { redirect: "manual" })).status, 400);
 });
 
-test("a rebinding attack is refused: other Host headers and cross-origin POSTs", async () => {
-  const { server } = await start();
-  const http = await import("node:http");
-  const status = (origin: string) =>
-    new Promise<number>((resolve) => {
-      http.get(origin, { headers: { host: "evil.example" } }, (response) => {
-        response.resume();
-        resolve(response.statusCode!);
-      });
+const statusWithHost = (origin: string, host: string, method = "GET") =>
+  new Promise<number>((resolve, reject) => {
+    const request = http.request(origin, { method, headers: { host } }, (response) => {
+      response.resume();
+      resolve(response.statusCode!);
     });
-  assert.equal(await status(server.hostOrigin), 403);
-  assert.equal(await status(server.frameOrigin), 403);
-  const cross = await post(`${server.hostOrigin}/__dev/metric`, { entrypoint: "count" }, { origin: "https://evil.example" });
-  assert.equal(cross.status, 403);
-  const same = await post(`${server.hostOrigin}/__dev/nothing`, {}, { origin: server.hostOrigin });
-  assert.equal(same.status, 404);
+    request.on("error", reject);
+    request.end();
+  });
+
+test("another Host header is refused on both servers, whatever the method", async () => {
+  const { server, seen } = await start();
+  for (const origin of [server.hostOrigin, server.frameOrigin]) {
+    for (const method of ["GET", "POST"]) {
+      assert.equal(await statusWithHost(origin, "evil.example", method), 403, `${method} ${origin}`);
+    }
+  }
+  assert.equal(seen.length, 0);
+});
+
+test("the host takes a POST only from its own origin: a missing Origin is refused too", async () => {
+  const { server, seen } = await start((url) => (url.pathname.startsWith("/__sw/") ? Response.json({ result: { points: [] } }) : new Response()));
+  const send = (route: string, headers: Record<string, string>) =>
+    fetch(`${server.hostOrigin}${route}`, { method: "POST", headers, body: JSON.stringify({ entrypoint: route.endsWith("metric") ? "count" : "home", input: {} }) });
+  for (const route of ["/__dev/sessions", "/__dev/metric", "/__dev/readout"]) {
+    assert.equal((await send(route, {})).status, 403, `${route} with no Origin`);
+    assert.equal((await send(route, { origin: "https://evil.example" })).status, 403, `${route} from elsewhere`);
+    assert.equal((await send(route, { origin: server.frameOrigin })).status, 403, `${route} from the frame`);
+  }
+  assert.equal(seen.length, 0);
+  assert.equal((await send("/__dev/metric", { origin: server.hostOrigin })).status, 200);
+  assert.equal((await post(`${server.hostOrigin}/__dev/nothing`, {})).status, 404);
   assert.equal((await fetch(`${server.hostOrigin}/nothing`)).status, 404);
+  const broken = await fetch(`${server.hostOrigin}/__dev/metric`, { method: "POST", headers: { origin: server.hostOrigin }, body: "{nope" });
+  assert.equal(broken.status, 400);
+});
+
+test("the frame takes anything but GET and HEAD only from its own origin", async () => {
+  const { server, seen } = await start();
+  const { cookie } = await connect(server);
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    const send = (headers: Record<string, string>) => fetch(`${server.frameOrigin}/save`, { method, headers: { cookie, ...headers }, body: "x" });
+    assert.equal((await send({})).status, 403, `${method} with no Origin`);
+    assert.equal((await send({ origin: "https://evil.example" })).status, 403, `${method} from elsewhere`);
+    assert.equal((await send({ origin: server.hostOrigin })).status, 403, `${method} from the dev page`);
+  }
+  assert.equal(seen.length, 0);
+  assert.equal((await fetch(`${server.frameOrigin}/save`, { method: "POST", headers: { cookie, origin: server.frameOrigin }, body: "x" })).status, 200);
+  assert.equal((await fetch(`${server.frameOrigin}/`, { headers: { cookie } })).status, 200);
+  assert.equal((await fetch(`${server.frameOrigin}/`, { method: "HEAD", headers: { cookie } })).status, 200);
+});
+
+test("two dev servers keep their sessions apart, though cookies ignore ports", async () => {
+  const first = await start();
+  const second = await start();
+  const a = await connect(first.server);
+  const b = await connect(second.server);
+  assert.notEqual(a.cookie.split("=")[0], b.cookie.split("=")[0]);
+  const both = `${a.cookie}; ${b.cookie}`;
+  assert.equal((await fetch(`${first.server.frameOrigin}/home`, { headers: { cookie: both } })).status, 200);
+  assert.equal((await fetch(`${second.server.frameOrigin}/home`, { headers: { cookie: both } })).status, 200);
+  assert.equal((await fetch(`${second.server.frameOrigin}/home`, { headers: { cookie: a.cookie } })).status, 401);
+});
+
+test("a busy port says so plainly, and a busy frame port leaves nothing listening", async () => {
+  const blocker = http.createServer();
+  await new Promise<void>((resolve) => blocker.listen(0, "127.0.0.1", resolve));
+  const busy = (blocker.address() as AddressInfo).port;
+  try {
+    const options = { getManifest: () => MANIFEST, runtime: {} as DevRuntime, defaults: {} };
+    await assert.rejects(startDevServer({ ...options, port: busy }), new RegExp(`Port ${busy} is already in use.*--port`));
+    await assert.rejects(startDevServer({ ...options, port: busy - 1 }), new RegExp(`Port ${busy} is already in use`));
+    const probe = http.createServer();
+    await new Promise<void>((resolve, reject) => {
+      probe.once("error", reject);
+      probe.listen(busy - 1, "127.0.0.1", resolve);
+    });
+    await new Promise((resolve) => probe.close(resolve));
+  } finally {
+    await new Promise((resolve) => blocker.close(resolve));
+  }
+});
+
+test("mf-* request headers never reach miniflare", async () => {
+  const { server, seen } = await start();
+  const { cookie } = await connect(server);
+  await fetch(`${server.frameOrigin}/home`, { headers: { cookie, "mf-original-url": "http://evil/", "mf-cf-blob": "{}", "x-kept": "1" } });
+  const headers = seen[0]!.init.headers as Headers;
+  assert.equal(headers.get("mf-original-url"), null);
+  assert.equal(headers.get("mf-cf-blob"), null);
+  assert.equal(headers.get("x-kept"), "1");
+});
+
+test("--context reaches metrics and readouts, on top of the organization and app", async () => {
+  let sent: any;
+  const runtime: DevRuntime = {
+    fetch: async (_url, init) => {
+      sent = JSON.parse(init.body as string);
+      return Response.json({ result: { points: [], variants: [] } });
+    },
+    update: async () => {},
+    dispose: async () => {},
+  };
+  const server = await startDevServer({
+    getManifest: () => MANIFEST,
+    runtime,
+    port: 0,
+    defaults: { organizationId: "1", applicationId: "2", context: '{"custom":true}' },
+  });
+  servers.push(server);
+  assert.equal((await post(`${server.hostOrigin}/__dev/metric`, { entrypoint: "count", input: {} })).status, 200);
+  assert.deepEqual(sent.context, { organizationId: 1, applicationId: 2, custom: true });
+  assert.equal((await post(`${server.hostOrigin}/__dev/readout`, { entrypoint: "lift", input: {} })).status, 200);
+  assert.deepEqual(sent.context, { organizationId: 1, applicationId: 2, custom: true });
 });
 
 test("sessions refuse headless entrypoints, unknown ones and missing context", async () => {
@@ -221,7 +324,7 @@ test("a metric defaults to 30 days by day, and its problems come back as errors"
   reply = { error: "This workspace has no metric handler." };
   assert.match(await message({ entrypoint: "count", input: {} }), /no metric handler/);
   assert.match(await message({ entrypoint: "home", input: {} }), /isn't a metric/);
-  assert.match(await message({ entrypoint: "count", input: {}, breakdown: "plan" }), /isn't|not a breakdown/);
+  assert.match(await message({ entrypoint: "count", input: {}, breakdown: "plan" }), /not a breakdown/);
   assert.match(await message({ entrypoint: "count", input: { applicationId: "x" } }), /positive number/);
 });
 

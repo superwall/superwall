@@ -3,7 +3,7 @@
 A workspace is a small Worker that adds to the Superwall dashboard: a page, a panel, or a metric in
 Charts. It holds no credential and calls Superwall as whoever is viewing it.
 
-    superwall workspaces dev                         # http://localhost:8787 against your real data, read-only
+    superwall workspaces dev                         # http://localhost:8790 against your real data, read-only
     superwall workspaces try transactions --app <id> # the metric on the real runtime
     superwall workspaces try home                    # the page in the dashboard
 

@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import type { CommandContext } from "@/program/command";
 import { downloadRepoDir, PUBLIC_REPO, RepoDownloadError, type FetchLike } from "@/core/repo/download";
 import { MANIFEST_FILE, readManifest, VENDORED_SDK, WorkspaceError } from "./project";
-import { STARTER_DIR, vendoredVersion } from "./sdk";
+import { compareVersions, STARTER_DIR, vendoredVersion } from "./sdk";
 
 const run = promisify(execFile);
 
@@ -23,6 +23,7 @@ const npmInstall: Install = async (root) => {
 export interface CreateRuntime {
   fetch?: FetchLike;
   install?: Install;
+  rename?: typeof fs.renameSync;
 }
 
 const packageNameOf = (dir: string): string =>
@@ -72,7 +73,11 @@ export async function runWorkspaceCreate(
   runtime: CreateRuntime = {},
 ): Promise<void> {
   const target = path.resolve(input.dir ?? "my-workspace");
-  if (fs.existsSync(target) && fs.readdirSync(target).length > 0) {
+  const existed = fs.existsSync(target);
+  if (existed && !fs.statSync(target).isDirectory()) {
+    throw new WorkspaceError(`${target} is a file. Pick an empty directory.`);
+  }
+  if (existed && fs.readdirSync(target).length > 0) {
     throw new WorkspaceError(`${target} already has files in it. Pick an empty directory.`);
   }
   ctx.ui.intro("New workspace");
@@ -88,7 +93,11 @@ export async function runWorkspaceCreate(
     adoptStarter(target, packageNameOf(target));
   } catch (error) {
     spin.stop("The starter didn't download");
-    fs.rmSync(target, { recursive: true, force: true });
+    if (existed) {
+      for (const entry of fs.readdirSync(target)) fs.rmSync(path.join(target, entry), { recursive: true, force: true });
+    } else {
+      fs.rmSync(target, { recursive: true, force: true });
+    }
     throw error;
   }
   spin.stop("Downloaded the starter");
@@ -111,7 +120,7 @@ export async function runWorkspaceCreate(
   ctx.ui.note(next.join("\n"), "Next");
 }
 
-async function downloadSdk(target: string, fetchImpl: FetchLike): Promise<string> {
+async function downloadSdk(fetchImpl: FetchLike): Promise<{ stage: string; version: string }> {
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-workspace-sdk-"));
   try {
     await downloadRepoDir(
@@ -120,14 +129,38 @@ async function downloadSdk(target: string, fetchImpl: FetchLike): Promise<string
       `No workspace SDK at ${STARTER_DIR} in github.com/${PUBLIC_REPO}. Update the CLI with \`superwall upgrade\`.`,
       fetchImpl,
     );
-    const version = readStageVersion(stage);
-    fs.rmSync(target, { recursive: true, force: true });
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.cpSync(stage, target, { recursive: true });
-    return version;
-  } finally {
+    return { stage, version: readStageVersion(stage) };
+  } catch (error) {
     fs.rmSync(stage, { recursive: true, force: true });
+    throw error;
   }
+}
+
+function replaceDirectory(stage: string, target: string, rename: typeof fs.renameSync = fs.renameSync): void {
+  const parent = path.dirname(target);
+  fs.mkdirSync(parent, { recursive: true });
+  const incoming = fs.mkdtempSync(path.join(parent, ".workspace-sdk-new-"));
+  const outgoing = `${incoming}-old`;
+  fs.cpSync(stage, incoming, { recursive: true });
+  const hadTarget = fs.existsSync(target);
+  try {
+    if (hadTarget) rename(target, outgoing);
+    rename(incoming, target);
+  } catch (error) {
+    if (hadTarget && !fs.existsSync(target) && fs.existsSync(outgoing)) rename(outgoing, target);
+    fs.rmSync(incoming, { recursive: true, force: true });
+    throw error;
+  }
+  fs.rmSync(outgoing, { recursive: true, force: true });
+}
+
+function pointPackageAtSdk(file: string): void {
+  const text = fs.readFileSync(file, "utf8");
+  const parsed = JSON.parse(text) as { dependencies?: Record<string, string> };
+  if (parsed.dependencies?.["@superwall/workspace-sdk"] === "file:vendor/workspace-sdk") return;
+  parsed.dependencies = { ...parsed.dependencies, "@superwall/workspace-sdk": "file:vendor/workspace-sdk" };
+  const indent = /^([ \t]+)"/m.exec(text)?.[1] ?? "  ";
+  fs.writeFileSync(file, `${JSON.stringify(parsed, null, indent)}${text.endsWith("\n") ? "\n" : ""}`);
 }
 
 function readStageVersion(stage: string): string {
@@ -139,6 +172,7 @@ function readStageVersion(stage: string): string {
 export interface UpdateInput {
   dir?: string;
   install: boolean;
+  force?: boolean;
 }
 
 export async function runWorkspaceUpdate(
@@ -148,21 +182,34 @@ export async function runWorkspaceUpdate(
 ): Promise<void> {
   const root = path.resolve(input.dir ?? process.cwd());
   readManifest(root);
+  const packageFile = path.join(root, "package.json");
+  if (!fs.existsSync(packageFile)) {
+    throw new WorkspaceError(`No package.json in ${root}, so nothing was changed. A workspace needs one to depend on the SDK.`);
+  }
   const before = vendoredVersion(root);
   const spin = ctx.ui.spinner();
   spin.start("Downloading the workspace SDK");
-  let version: string;
+  let downloaded: { stage: string; version: string };
   try {
-    version = await downloadSdk(path.join(root, VENDORED_SDK), runtime.fetch ?? fetch);
+    downloaded = await downloadSdk(runtime.fetch ?? fetch);
   } catch (error) {
     spin.stop("The workspace SDK didn't download");
     throw error;
   }
+  const { stage, version } = downloaded;
+  try {
+    if (before !== undefined && compareVersions(before, version) > 0 && !input.force) {
+      spin.stop(`Yours is newer than the latest published one, ${version}`);
+      ctx.ui.warn(`Left workspace SDK ${before} alone. Pass --force to replace it with ${version}.`);
+      return;
+    }
+    replaceDirectory(stage, path.join(root, VENDORED_SDK), runtime.rename);
+  } finally {
+    fs.rmSync(stage, { recursive: true, force: true });
+  }
   spin.stop(before === version ? `Already on the latest workspace SDK, ${version}` : `Workspace SDK ${version}`);
+  pointPackageAtSdk(packageFile);
 
-  editJson(path.join(root, "package.json"), (value) => {
-    value.dependencies = { ...value.dependencies, "@superwall/workspace-sdk": "file:vendor/workspace-sdk" };
-  });
   if (!input.install) {
     ctx.ui.info("Run `npm install` to update package-lock.json, then commit vendor/workspace-sdk and the lockfile.");
     return;

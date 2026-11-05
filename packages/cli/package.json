@@ -82,7 +82,8 @@
     "ink-testing-library": "^4.0.0",
     "tsdown": "^0.15.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "wrangler": "4.157.0"
   },
   "engines": {
     "node": ">=20.0.0"

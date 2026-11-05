@@ -15,7 +15,7 @@ const FORWARDED_HEADERS = [
 
 export interface AgentCredential {
   current(): Promise<string>;
-  renew(): Promise<string>;
+  renew(rejected: string): Promise<string>;
 }
 
 export interface OutboundLog {
@@ -39,6 +39,16 @@ const refuse = (status: number, message: string): Response =>
   new Response(JSON.stringify({ message }), { status, headers: { "content-type": "application/json" } });
 
 const STRIPPED_ANSWER_HEADERS = ["set-cookie", "content-encoding", "content-length", "transfer-encoding"];
+const BODYLESS_STATUSES = new Set([101, 204, 205, 304]);
+
+export function rebuildResponse(
+  answer: Response,
+  ResponseClass: typeof Response = Response,
+  headers: Headers = answer.headers,
+): Response {
+  const body = BODYLESS_STATUSES.has(answer.status) ? null : answer.body;
+  return new ResponseClass(body, { status: answer.status, headers });
+}
 
 export function createOutbound({ apiOrigin, credential, log, declaredScopes, fetchImpl = fetch }: OutboundOptions): Outbound {
   const warnedScopes = new Set<string>();
@@ -76,8 +86,15 @@ export function createOutbound({ apiOrigin, credential, log, declaredScopes, fet
     const target = `${apiOrigin}${url.pathname}${url.search}`;
     const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
     const started = Date.now();
-    let answer = await send(target, request, body, await credential.current());
-    if (answer.status === 401) answer = await send(target, request, body, await credential.renew());
+    const token = await credential.current();
+    let answer = await send(target, request, body, token);
+    if (answer.status === 401) {
+      const renewed = await credential.renew(token).catch((error: Error) => {
+        log.warn(error.message);
+        return undefined;
+      });
+      if (renewed !== undefined) answer = await send(target, request, body, renewed);
+    }
     const took = Date.now() - started;
     if (answer.status === 403) {
       const text = await answer.clone().text();
@@ -87,6 +104,6 @@ export function createOutbound({ apiOrigin, credential, log, declaredScopes, fet
     }
     const headers = new Headers(answer.headers);
     for (const name of STRIPPED_ANSWER_HEADERS) headers.delete(name);
-    return new Response(await answer.arrayBuffer(), { status: answer.status, headers });
+    return rebuildResponse(answer, Response, headers);
   };
 }

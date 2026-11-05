@@ -110,6 +110,7 @@ let mode = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
 let values = {};
 let frame = null;
 let mount = null;
+let selection = 0;
 
 const theme = () => ({ mode, tokens: TOKENS[mode] });
 const applyTheme = () => {
@@ -148,8 +149,9 @@ const fail = (message) => {
   $("stage").replaceChildren(el("div", { class: "problem" }, message));
 };
 
-const showFrame = async (entrypoint) => {
+const showFrame = async (entrypoint, generation) => {
   const session = await post("/__dev/sessions", { entrypoint: entrypoint.id, input: inputFromForm() });
+  if (generation !== selection) return;
   const slot = state.slots[session.slot];
   const fills = slot.shape === "page" || session.slot === "app.dashboard.widget@1";
   const nonce = crypto.randomUUID().replaceAll("-", "");
@@ -286,12 +288,14 @@ const showReadout = (entrypoint) => {
 const show = async () => {
   const entrypoint = state.manifest.entrypoints.find((candidate) => candidate.id === selected);
   if (!entrypoint) return;
+  selection += 1;
+  const generation = selection;
   try {
     if (entrypoint.slot === "chart.source@1") showMetric(entrypoint);
     else if (entrypoint.slot === "campaign.metric@1") showReadout(entrypoint);
-    else await showFrame(entrypoint);
+    else await showFrame(entrypoint, generation);
   } catch (error) {
-    fail(error.message);
+    if (generation === selection) fail(error.message);
   }
 };
 const select = (id) => {

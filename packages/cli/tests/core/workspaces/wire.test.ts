@@ -47,6 +47,11 @@ test("the starter satisfies the builder's rules", () => {
   assert.match(wrangler, /"main": "src\/worker.ts"/);
 });
 
+test("the starter pins the wrangler this repo's real-workerd test runs on", () => {
+  const cli = JSON.parse(fs.readFileSync(new URL("../../../package.json", import.meta.url), "utf8"));
+  assert.equal(readStarter("package.json").devDependencies.wrangler, cli.devDependencies.wrangler);
+});
+
 test("the starter's slots are ones the CLI knows", async () => {
   const { SLOTS } = await import("@/core/workspaces/slots");
   for (const entrypoint of readStarter("superwall.json").entrypoints) {

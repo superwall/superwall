@@ -11,12 +11,14 @@ const UNITS = { hour: "HOUR", day: "DAY", week: "WEEK", month: "MONTH" };
 const dateTime = (iso: string) => iso.slice(0, 19).replace("T", " ");
 
 // Charts calls this for the `transactions` entrypoint. Anything in manifest `filters` can reach SQL
-// only as a parameter, and a bucket with no point draws as a gap, so return 0 where zero is what you mean.
+// only as a parameter. Buckets follow the chart's timezone, and WITH FILL returns 0 for a bucket with no
+// transactions, because a bucket with no point draws as a gap. A window with none at all returns no points.
 const metric = async ({
   context,
   from,
   to,
   interval,
+  timezone,
   breakdown,
   filters,
 }: MetricRequest): Promise<MetricSeries> => {
@@ -25,21 +27,32 @@ const metric = async ({
     param_app: String(context.applicationId),
     param_from: dateTime(from),
     param_to: dateTime(to),
+    param_tz: timezone,
   });
   let storeFilter = "";
   if (filters.store) {
     storeFilter = "AND store IN {stores:Array(String)}";
     search.set("param_stores", `[${filters.store.map((store) => `'${store}'`).join(",")}]`);
   }
+  const unit = UNITS[interval];
+  const bucketOf = (time: string) =>
+    `toDateTime(toStartOfInterval(${time}, INTERVAL 1 ${unit}, {tz:String}), {tz:String})`;
   const sql = `
-    SELECT toDateTime(toStartOfInterval(ts, INTERVAL 1 ${UNITS[interval]})) AS t,
-           ${breakdown === "store" ? "store" : "NULL"} AS breakdown,
-           uniq(transactionId) AS value
-    FROM open_revenue.attributed_events_by_ts_rep
-    WHERE applicationId = {app:UInt64} AND ts >= {from:DateTime} AND ts < {to:DateTime} AND ts < now()
-      AND isSandbox = 0 ${storeFilter}
-    GROUP BY t, breakdown
-    ORDER BY t`;
+    SELECT toString(toTimeZone(bucket, 'UTC')) AS t, breakdown, value
+    FROM (
+      SELECT ${bucketOf("ts")} AS bucket,
+             ${breakdown === "store" ? "store" : "NULL"} AS breakdown,
+             uniq(transactionId) AS value
+      FROM open_revenue.attributed_events_by_ts_rep
+      WHERE applicationId = {app:UInt64} AND ts >= {from:DateTime} AND ts < {to:DateTime} AND ts < now()
+        AND isSandbox = 0 ${storeFilter}
+      GROUP BY bucket, breakdown
+      ORDER BY breakdown, bucket WITH FILL
+        FROM ${bucketOf("toDateTime({from:DateTime}, 'UTC')")}
+        TO least(toDateTime({to:DateTime}, 'UTC'), now())
+        STEP INTERVAL 1 ${unit}
+    )
+    ORDER BY breakdown, t`;
   const response = await superwallFetch(
     `/v2/organizations/${context.organizationId}/query?${search}`,
     {

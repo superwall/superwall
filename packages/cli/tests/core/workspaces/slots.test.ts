@@ -73,6 +73,10 @@ test("bad ids and dates are refused", () => {
 test("an unknown slot points at --context, which takes the whole context", () => {
   assert.throws(() => slotOf("paywall.panel@1"), /--context/);
   assert.deepEqual(buildContext("paywall.panel@1", { context: '{"paywallId":9}' }), { paywallId: 9 });
+  assert.deepEqual(buildContext("chart.source@1", { organizationId: "1", applicationId: "2", context: '{"applicationId":3}' }), {
+    organizationId: 1,
+    applicationId: 3,
+  });
   assert.throws(() => buildContext("org.page@1", { context: "{nope" }), /not valid JSON/);
   assert.throws(() => buildContext("org.page@1", { context: "[]" }), /must be a JSON object/);
 });

@@ -151,7 +151,13 @@ export function missingFields(slot: Slot, input: ContextInput): string[] {
 }
 
 export function buildContext(slotId: string, input: ContextInput): Record<string, unknown> {
-  if (input.context !== undefined) return parseContextJson(input.context);
+  if (input.context !== undefined) {
+    const known = {
+      ...(input.organizationId ? { organizationId: positive("The organization", input.organizationId) } : {}),
+      ...(input.applicationId ? { applicationId: positive("The app", input.applicationId) } : {}),
+    };
+    return { ...known, ...parseContextJson(input.context) };
+  }
   const slot = slotOf(slotId);
   const missing = missingFields(slot, input);
   if (missing.length > 0) {

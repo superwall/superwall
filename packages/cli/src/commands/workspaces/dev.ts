@@ -5,12 +5,12 @@ export const command = defineCommand({
   name: "workspaces dev",
   summary: "Run a workspace on localhost against your real data, read-only",
   details:
-    "Bundles the workspace the way the builder does and runs it in workerd. A local page plays the dashboard: it mounts pages and widgets, sends them context and theme over the bridge, and runs metrics and readouts. API calls go out with a read-only token as you; writes and outside hosts are refused. Every change rebuilds it.",
+    "Bundles the workspace the way the builder does and runs it in workerd. A local page plays the dashboard: it mounts pages and widgets, sends them context and theme over the bridge, and runs metrics and readouts. API calls go out with a read-only token as you, so it reads with everything you can read: only run code you trust. Writes, outside hosts and raw sockets are refused. Every change rebuilds it.",
   args: {
     dir: { describe: "The workspace (default: cwd)" },
   },
   flags: {
-    port: { type: "number", alias: "p", default: 8787, describe: "Port for the dev page; the frame takes the next one" },
+    port: { type: "number", alias: "p", default: 8790, describe: "Port for the dev page; the frame takes the next one" },
     org: { type: "string", value: "id", describe: "The organization in the context" },
     app: { ...app, describe: "The app in the context: an id, a name or a dashboard link" },
     campaign: { type: "string", value: "id", describe: "The campaign in the context" },
