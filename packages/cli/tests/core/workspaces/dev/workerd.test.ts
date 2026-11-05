@@ -67,7 +67,7 @@ export default {
         return new Response(answer.status + " " + (await answer.text()).slice(0, 80));
       }
       case "/not-modified":
-        return new Response(String((await fetch("https://api.workspace.internal/v2/not-modified")).status));
+        return new Response(String((await fetch("https://api.workspace.internal/v2/projects/not-modified")).status));
       case "/stream":
         return new Response(
           new ReadableStream({
@@ -224,9 +224,9 @@ describe("dev on real workerd", () => {
     assert.doesNotMatch(logged.join("\n"), new RegExp(TOKEN));
   });
 
-  test("a slot tied to one app is refused SQL, and an organization page isn't", async () => {
+  test("a slot tied to one app is refused what the runtime refuses it, and an organization page isn't", async () => {
     apiCalls.length = 0;
-    assert.match(await (await page("/sql", "app")).text(), /^403 .*can't run SQL/);
+    assert.match(await (await page("/sql", "app")).text(), /^403 .*insufficient_permissions/);
     assert.equal(apiCalls.length, 0);
     assert.match(await (await page("/sql", "home")).text(), /^200 /);
     assert.equal(apiCalls.length, 1);

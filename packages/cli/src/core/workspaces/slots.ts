@@ -112,6 +112,13 @@ const FIELD_LABELS: Readonly<Record<ContextField, string>> = {
   aliases: "aliases (--alias)",
 };
 
+const ENVIRONMENTS: readonly unknown[] = ["PRODUCTION", "SANDBOX"];
+
+function environmentOf(environment: unknown = "PRODUCTION"): unknown {
+  if (ENVIRONMENTS.includes(environment)) return environment;
+  throw new WorkspaceError(`The environment must be PRODUCTION or SANDBOX, in capitals. Got ${String(environment)}.`);
+}
+
 function fieldValue(field: ContextField, input: ContextInput): unknown {
   switch (field) {
     case "organizationId":
@@ -123,7 +130,7 @@ function fieldValue(field: ContextField, input: ContextInput): unknown {
     case "audienceId":
       return positive("The audience", input.audienceId);
     case "environment":
-      return input.environment ?? "PRODUCTION";
+      return environmentOf(input.environment);
     case "dateRange": {
       const fallback = defaultRange(30);
       const range = { from: input.from || fallback.from, to: input.to || fallback.to };
@@ -156,7 +163,9 @@ export function buildContext(slotId: string, input: ContextInput): Record<string
       ...(input.organizationId ? { organizationId: positive("The organization", input.organizationId) } : {}),
       ...(input.applicationId ? { applicationId: positive("The app", input.applicationId) } : {}),
     };
-    return { ...known, ...parseContextJson(input.context) };
+    const context = parseContextJson(input.context);
+    if ("environment" in context) environmentOf(context.environment);
+    return { ...known, ...context };
   }
   const slot = slotOf(slotId);
   const missing = missingFields(slot, input);

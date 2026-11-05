@@ -371,6 +371,10 @@ as the viewer. The platform itself lives in a private repo.
   `CLOUDFLARE_ENV` or `.wrangler/deploy/config.json` have no effect. A bundle reading a file outside
   the repo is refused, for browser code and for the Worker, where only wrangler's own folder is allowed.
   A bundle runs on its own `compatibility_date` and allow-listed flags, in `dev` as on the platform.
+- **`dev` refuses the routes the runtime refuses.** `routes.ts` is a copy of the platform's workspace route list,
+  held to the slot's narrowing: every slot but `org.page@1` is tied to one app, while metrics and readouts aren't.
+  It answers with the runtime's body and sentence. Update it when the platform's list changes. It doesn't narrow
+  data: on a route the slot can reach, `dev`'s token can still read another app in the organization.
 - **Push and pull reuse the framework's git code.** `core/paywalls/source` is shared: a
   `SourceScope` of kind `workspace` owns its whole repo, so a directory named `paywalls/` means
   nothing there, and its one derived file is `superwall.workspace.json`, which records the

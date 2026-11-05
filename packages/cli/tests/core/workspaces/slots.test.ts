@@ -87,3 +87,14 @@ test("every slot's bounds fit its shape", () => {
     if (slot.maxHeight !== null) assert.ok(slot.minHeight <= slot.maxHeight, id);
   }
 });
+
+test("the environment is PRODUCTION or SANDBOX, in capitals, however it arrives", () => {
+  const input = { organizationId: "1", applicationId: "2", appUserId: "alice" };
+  for (const environment of ["production", "sandbox", "Production", ""]) {
+    assert.throws(() => buildContext("user.panel@1", { ...input, environment }), /must be PRODUCTION or SANDBOX, in capitals/);
+  }
+  assert.throws(() => buildContext("user.panel@1", { context: '{"environment":"production"}' }), /in capitals\. Got production\./);
+  assert.equal(buildContext("user.panel@1", { context: '{"environment":"SANDBOX"}' }).environment, "SANDBOX");
+  assert.deepEqual(buildContext("org.page@1", { context: '{"organizationId":1}' }), { organizationId: 1 });
+  assert.equal(buildContext("user.panel@1", input).environment, "PRODUCTION");
+});

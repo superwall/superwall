@@ -125,20 +125,41 @@ test("outside hosts are refused, and the platform host isn't here yet", async ()
   assert.equal(logged.length, 2);
 });
 
-test("a slot tied to one app can't run SQL, as on the real runtime, and can use the rest", async () => {
+const runtimeRefusal = async (answer: Response) => {
+  assert.equal(answer.status, 403);
+  assert.deepEqual(await answer.json(), {
+    type: "permission_error",
+    code: "insufficient_permissions",
+    message: "Workspaces may not call this endpoint.",
+  });
+};
+
+test("a slot tied to one app gets the runtime's refusal on a route it can't reach, and reaches the rest", async () => {
   const { outbound, sent, logged } = setup();
-  const query = new Request("https://api.workspace.internal/v2/organizations/1/query", { method: "POST", body: "SELECT 1" });
-  const refused = await outbound(query, { narrowed: true });
-  assert.equal(refused.status, 403);
-  assert.match(((await refused.json()) as { message: string }).message, /org\.page@1 or a metric/);
+  await runtimeRefusal(await outbound(new Request("https://api.workspace.internal/v2/projects"), { narrowed: true }));
   assert.equal(sent.length, 0);
-  assert.match(logged[0]!, /^warn POST \/v2\/organizations\/1\/query refused/);
-  assert.equal((await outbound(new Request("https://api.workspace.internal/v2/projects"), { narrowed: true })).status, 200);
+  assert.match(logged[0]!, /^warn GET \/v2\/projects 403\. Workspaces may not call this endpoint\. This slot is tied to one app.*use an org\.page@1/);
+
+  const query = new Request("https://api.workspace.internal/v2/organizations/1/query", { method: "POST", body: "SELECT 1" });
+  await runtimeRefusal(await outbound(query, { narrowed: true }));
+  assert.match(logged[1]!, /^warn POST \/v2\/organizations\/1\/query 403\. Workspaces may not call this endpoint\. A slot tied to one app can't run SQL/);
+  assert.equal(sent.length, 0);
+
+  assert.equal((await outbound(new Request("https://api.workspace.internal/v2/users/abc"), { narrowed: true })).status, 200);
+  assert.equal(sent.length, 1);
+});
+
+test("no workspace reaches a route off the list, tied to an app or not", async () => {
+  const { outbound, sent, logged } = setup();
+  await runtimeRefusal(await outbound(new Request("https://api.workspace.internal/v2/me"), org));
+  await runtimeRefusal(await outbound(new Request("https://api.workspace.internal/V2//ME/"), org));
+  assert.equal(sent.length, 0);
+  assert.match(logged[0]!, /^warn GET \/v2\/me 403\. Workspaces may not call this endpoint\. It answers the same on the real runtime\./);
 });
 
 test("a read the manifest doesn't declare warns once per scope, and still runs", async () => {
   const { outbound, sent, logged } = setup([new Response("{}"), new Response("{}"), new Response("{}")], []);
-  for (const path of ["/v2/projects", "/v2/projects/7", "/v2/nothing-we-know"]) {
+  for (const path of ["/v2/projects", "/v2/projects/7", "/v2/grants/1"]) {
     await outbound(new Request(`https://api.workspace.internal${path}`), org);
   }
   assert.equal(sent.length, 3);
@@ -200,10 +221,10 @@ test("when access has ended, the re-mint's 403 is what you see", async () => {
 test("a route a limited token can't use reads plainly, and the Worker gets the 403", async () => {
   const message = "This Agent Token is limited to one organization and can't call this endpoint.";
   const { outbound, logged } = refused([Response.json({ message }, { status: 403 })], () => "7");
-  const answer = await outbound(new Request("https://api.workspace.internal/v2/me"), { narrowed: false });
+  const answer = await outbound(new Request("https://api.workspace.internal/v2/projects"), { narrowed: false });
   assert.equal(answer.status, 403);
   assert.equal(((await answer.json()) as { message: string }).message, message);
-  assert.match(logged[0]!, /^warn GET \/v2\/me 403 \d+ms\. Dev's token is read-only, limited to organization 7 and the routes a workspace can read\. This Agent Token/);
+  assert.match(logged[0]!, /^warn GET \/v2\/projects 403 \d+ms\. Dev's token is read-only, limited to organization 7 and the routes a workspace can read\. This Agent Token/);
 });
 
 test("against an API with no limited tokens, a 403 doesn't claim a limit", async () => {

@@ -129,15 +129,15 @@ type Mounted = {
   scriptOf: () => Promise<{ path: string; text: string; style: string | null }>;
 };
 
-async function devOn(root: string, drive: (mounted: Mounted) => Promise<void>): Promise<void> {
+async function devOn(root: string, drive: (mounted: Mounted) => Promise<void>, flags: { app?: string; fetchImpl?: unknown } = {}): Promise<void> {
   let host = "";
   let frame = "";
   const { ctx } = context();
   await runWorkspaceDev(
     ctx,
-    { dir: root, port: 0, org: "21450" },
+    { dir: root, port: 0, org: "21450", ...(flags.app ? { app: flags.app } : {}) },
     {
-      fetchImpl: JSON_API,
+      fetchImpl: (flags.fetchImpl ?? JSON_API) as never,
       onReady: (urls) => {
         host = urls.host;
         frame = urls.frame;
@@ -342,6 +342,35 @@ describe("client.entry on real wrangler, esbuild and workerd", () => {
     delete manifest.client;
     fs.writeFileSync(path.join(root, "superwall.json"), JSON.stringify(manifest));
     await assert.rejects(bundleWorkspace(root), /client-bundle[\s\S]*Declare the browser entry in superwall\.json/);
+  });
+
+  test("the starter moved to an app slot gets the runtime's refusal in dev, and shows the API's message", { timeout: 120_000 }, async () => {
+    const root = scratch("starter-app");
+    for (const file of ["superwall.json", "package.json", "wrangler.jsonc", "tsconfig.json"]) {
+      fs.copyFileSync(path.join(STARTER, file), path.join(root, file));
+    }
+    fs.cpSync(path.join(STARTER, "src"), path.join(root, "src"), { recursive: true });
+    linkDependencies(root);
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, "superwall.json"), "utf8")) as { entrypoints: { slot: string }[] };
+    manifest.entrypoints[0]!.slot = "app.page@1";
+    fs.writeFileSync(path.join(root, "superwall.json"), JSON.stringify(manifest));
+
+    let reachedApi = 0;
+    const counting = (async (url: string, init: RequestInit) => {
+      reachedApi += 1;
+      return (JSON_API as unknown as (url: string, init: RequestInit) => Promise<Response>)(url, init);
+    }) as never;
+    await devOn(
+      root,
+      async ({ page, scriptOf }) => {
+        const answer = await page("/api/projects");
+        assert.equal(answer.status, 403);
+        assert.equal(((await answer.json()) as { message: string }).message, "Workspaces may not call this endpoint.");
+        assert.equal(reachedApi, 0);
+        assert.match((await scriptOf()).text, /Your projects didn't load: /);
+      },
+      { app: "42", fetchImpl: counting },
+    );
   });
 
   test("the starter's page builds and serves as it ships", { timeout: 120_000 }, async () => {

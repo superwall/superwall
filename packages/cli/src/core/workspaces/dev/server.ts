@@ -235,7 +235,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       entrypointId: entrypoint.id,
       path: entrypoint.path,
       context,
-      narrowed: "applicationId" in context,
+      narrowed: entrypoint.slot !== "org.page@1",
     });
     codes.set(code, token);
     return {

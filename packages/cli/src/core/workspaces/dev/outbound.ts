@@ -1,3 +1,4 @@
+import { isWorkspaceRequestAllowed, WORKSPACE_ROUTE_REFUSAL } from "@/core/workspaces/routes";
 import { scopeForRoute } from "@/core/workspaces/scopes";
 import { API_HOST, PLATFORM_HOST } from "@/core/workspaces/wire";
 import type { Outbound } from "./runtime";
@@ -44,11 +45,23 @@ const refusalOf = async (answer: Response): Promise<{ reason?: unknown; message?
 };
 
 const ORGANIZATION_QUERY = /^\/v2\/organizations\/[^/]+\/query\/?$/i;
-const NARROWED_QUERY_MESSAGE =
-  "A slot tied to one app can't run SQL: the organization query endpoint needs org.page@1 or a metric. It answers 403 on the real runtime too.";
 
 const refuse = (status: number, message: string): Response =>
   new Response(JSON.stringify({ message }), { status, headers: { "content-type": "application/json" } });
+
+const refuseRoute = (): Response =>
+  new Response(JSON.stringify({ type: "permission_error", code: "insufficient_permissions", message: WORKSPACE_ROUTE_REFUSAL }), {
+    status: 403,
+    headers: { "content-type": "application/json" },
+  });
+
+const routeHint = (pathname: string, narrowed: boolean): string => {
+  if (!narrowed) return "It answers the same on the real runtime.";
+  if (ORGANIZATION_QUERY.test(pathname)) {
+    return "A slot tied to one app can't run SQL: the organization query endpoint needs org.page@1 or a metric. It answers the same on the real runtime.";
+  }
+  return "This slot is tied to one app, and only reaches that app's routes. It answers the same on the real runtime, so use an org.page@1 or another route.";
+};
 
 const STRIPPED_ANSWER_HEADERS = ["set-cookie", "content-encoding", "content-length", "transfer-encoding"];
 const BODYLESS_STATUSES = new Set([101, 204, 205, 304]);
@@ -86,9 +99,9 @@ export function createOutbound({ apiOrigin, credential, log, declaredScopes, lim
     }
 
     const label = `${request.method} ${url.pathname}`;
-    if (caller.narrowed && ORGANIZATION_QUERY.test(url.pathname)) {
-      log.warn(`${label} refused. ${NARROWED_QUERY_MESSAGE}`);
-      return refuse(403, NARROWED_QUERY_MESSAGE);
+    if (!isWorkspaceRequestAllowed(request.method, `${url.pathname}${url.search}`, caller.narrowed)) {
+      log.warn(`${label} 403. ${WORKSPACE_ROUTE_REFUSAL} ${routeHint(url.pathname, caller.narrowed)}`);
+      return refuseRoute();
     }
     const scope = scopeForRoute(request.method, url.pathname);
     if (scope !== undefined && !declaredScopes().includes(scope) && !warnedScopes.has(scope)) {

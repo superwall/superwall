@@ -11,10 +11,19 @@ const applyTheme = ({ tokens }: Theme) => {
   }
 };
 
-type Projects = ReadonlyArray<{ name: string }> | "loading" | "failed";
+type Projects = ReadonlyArray<{ name: string }>;
+
+// The API says why it refused, so show that. A 403 usually means a scope superwall.json doesn't declare,
+// or a route this slot can't reach.
+const readProjects = async (response: Response): Promise<Projects> => {
+  const body = (await response.json().catch(() => null)) as { data?: Projects; message?: string } | null;
+  if (response.ok && body?.data) return body.data;
+  throw new Error(body?.message ?? `The API answered ${response.status}.`);
+};
 
 const Home = () => {
-  const [projects, setProjects] = useState<Projects>("loading");
+  const [projects, setProjects] = useState<Projects | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
     void connect().then((bridge) => {
@@ -22,20 +31,17 @@ const Home = () => {
       bridge.onTheme(applyTheme);
     });
     void fetch("/api/projects")
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`The API answered ${response.status}.`);
-        return ((await response.json()) as { data: ReadonlyArray<{ name: string }> }).data;
-      })
-      .then(setProjects, () => setProjects("failed"));
+      .then(readProjects)
+      .then(setProjects, (error: Error) => setFailure(error.message));
   }, []);
 
   return (
     <main>
       <h1>My workspace</h1>
       <p>Edit src/client.tsx to change this page. Your projects:</p>
-      {projects === "loading" && <p>Loading…</p>}
-      {projects === "failed" && <p>Your projects didn't load.</p>}
-      {typeof projects === "object" && (
+      {failure !== null && <p role="alert">Your projects didn't load: {failure}</p>}
+      {failure === null && projects === null && <p>Loading…</p>}
+      {projects !== null && (
         <ul>
           {projects.length === 0 && <li>None you can see.</li>}
           {projects.map((project) => (
