@@ -3,6 +3,7 @@ import { openBrowser } from "@/core/account/browser";
 import {
   deleteInstallation,
   listInstallations,
+  listVersions,
   listWorkspaces,
   setInstallation,
   type WorkspaceInstallation,
@@ -10,7 +11,7 @@ import {
 import { readBinding } from "./binding";
 import { resolveAppScope, resolveOrganization } from "./organization";
 import { WorkspaceError } from "./project";
-import { dashboardOrigin, projectRoot, resolveWorkspace, workspaceUrl, type WorkspaceRef } from "./resolve";
+import { appEntrypointUrl, latestManifest, openLink, projectRoot, resolveWorkspace, type WorkspaceRef } from "./resolve";
 
 export interface InstallInput extends WorkspaceRef {
   entrypoint?: string;
@@ -128,10 +129,12 @@ export async function runWorkspaceOpen(
   if (input.entrypoint !== undefined && input.app === undefined) {
     throw new WorkspaceError("An entrypoint opens inside an app. Say which with --app <id>.");
   }
-  let url = workspaceUrl(ctx.api.host, workspace);
+  let url: string;
   if (input.entrypoint !== undefined && input.app !== undefined) {
     const { applicationId } = await resolveAppScope(ctx.api, input.app, String(workspace.organization_id));
-    url = `${dashboardOrigin(ctx.api.host)}/${workspace.organization_id}/${applicationId}/apps/${workspace.id}/${encodeURIComponent(input.entrypoint)}`;
+    url = appEntrypointUrl(ctx.api.host, workspace, String(applicationId), input.entrypoint);
+  } else {
+    url = (await openLink(ctx, workspace, latestManifest(await listVersions(ctx.api, workspace.id).catch(() => [])))).url;
   }
   if (ctx.json) {
     ctx.output.data({ url });

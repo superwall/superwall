@@ -16,9 +16,11 @@ export interface FakeApiOptions {
   onBuilds?: (commit: string) => void | Promise<void>;
   me?: { name?: string | null; email?: string | null };
   tokenIdOf?: (mint: number) => string;
+  staff?: boolean;
+  projects?: unknown[];
 }
 
-export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me = { name: "Pat Pusher", email: "pat@example.com" }, tokenIdOf = (mint) => `tok_${mint}` }: FakeApiOptions) {
+export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me = { name: "Pat Pusher", email: "pat@example.com" }, tokenIdOf = (mint) => `tok_${mint}`, staff = false, projects = [] }: FakeApiOptions) {
   const workspaces: Workspace[] = [];
   const versions: WorkspaceVersion[] = [];
   const calls: string[] = [];
@@ -44,10 +46,11 @@ export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me
 
   const api = {
     host: "https://api2.superwall.dev",
+    list: async () => projects,
     async get(path: string) {
       calls.push(`GET ${path}`);
       const url = new URL(path, "http://x");
-      if (url.pathname === "/v2/me") return me;
+      if (url.pathname === "/v2/me") return { ...me, role: staff ? "SUPERADMIN" : "CUSTOMER" };
       if (url.pathname === "/v2/me/organizations") return { data: [] };
       if (url.pathname === "/v2/workspaces") {
         const slug = url.searchParams.get("slug");
@@ -68,6 +71,8 @@ export function fakeWorkspaceApi({ remote, manifest, buildSequence, onBuilds, me
         if (step.status === "succeeded") {
           version.build_status = "SUCCEEDED";
           version.manifest = manifest ?? null;
+          const owner = workspaces.find((workspace) => workspace.id === version.workspace_id);
+          if (owner && !staff) owner.author_version_id = version.id;
         }
         if (step.status === "failed") {
           version.build_status = "FAILED";
