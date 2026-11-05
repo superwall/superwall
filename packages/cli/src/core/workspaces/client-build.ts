@@ -22,9 +22,18 @@ type ClientBuildResult =
     }
   | { ok: false; message: string };
 
+type ClientTsconfig = Record<string, unknown>;
+
 interface ClientBuildModule {
-  buildClient(esbuild: unknown, input: { root: string; entry: string }): Promise<ClientBuildResult>;
+  buildClient(
+    esbuild: unknown,
+    input: { root: string; entry: string; tsconfig: ClientTsconfig; configFiles: readonly string[] },
+  ): Promise<ClientBuildResult>;
   outsideRepoInputs(paths: readonly string[]): readonly string[];
+  readClientTsconfig(
+    text: string | null,
+    file: "tsconfig.json" | "jsconfig.json",
+  ): { ok: true; tsconfig: ClientTsconfig } | { ok: false; message: string };
 }
 
 interface ConstantsModule {
@@ -35,6 +44,9 @@ interface ConstantsModule {
 const ENTRY_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._\-/]*\.(?:tsx|ts|jsx|js|mts|mjs)$/;
 const ENTRY_MAX_LENGTH = 256;
 const LARGEST_SHOWN = 5;
+const CONFIG_NAMES = new Set(["tsconfig.json", "jsconfig.json"]);
+const CONFIG_FILES_MAX = 200;
+const SKIPPED_DIRS = new Set(["node_modules", ".git"]);
 
 const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 
@@ -68,11 +80,13 @@ async function loadSdk(root: string): Promise<ClientBuildModule & ConstantsModul
       import(pathToFileURL(project.resolve("@superwall/workspace-sdk/client-build")).href) as Promise<ClientBuildModule>,
       import(pathToFileURL(project.resolve("@superwall/workspace-sdk/constants")).href) as Promise<ConstantsModule>,
     ]);
-    if (typeof build.outsideRepoInputs !== "function") throw new Error("An early 0.2.0");
+    if (typeof build.outsideRepoInputs !== "function" || typeof build.readClientTsconfig !== "function") {
+      throw new Error("Older than the builder's browser build");
+    }
     return { ...build, ...constants };
   } catch {
     throw new WorkspaceError(
-      "This project's workspace SDK is too old for client.entry. Run `superwall workspaces update`, then `npm install`.",
+      "This project's workspace SDK is older than the builder's browser build, so client.entry would build differently here. Run `superwall workspaces update`, then `npm install`.",
     );
   }
 }
@@ -87,6 +101,42 @@ function loadEsbuild(wranglerPackage: string): unknown {
   }
 }
 
+export function findConfigFiles(root: string, dir = root, found: string[] = []): string[] {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (!SKIPPED_DIRS.has(entry.name)) findConfigFiles(root, path.join(dir, entry.name), found);
+    } else if (CONFIG_NAMES.has(entry.name)) {
+      found.push(path.relative(root, path.join(dir, entry.name)).split(path.sep).join("/"));
+      if (found.length > CONFIG_FILES_MAX) {
+        throw new WorkspaceError(`The repo has more than ${CONFIG_FILES_MAX} tsconfig.json and jsconfig.json files.`);
+      }
+    }
+  }
+  return found;
+}
+
+const readIfPresent = (file: string): string | null => {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+};
+
+function rootTsconfig(root: string, sdk: ClientBuildModule): ClientTsconfig {
+  const tsconfig = readIfPresent(path.join(root, "tsconfig.json"));
+  const jsconfig = readIfPresent(path.join(root, "jsconfig.json"));
+  const read =
+    tsconfig === null && jsconfig !== null
+      ? sdk.readClientTsconfig(jsconfig, "jsconfig.json")
+      : sdk.readClientTsconfig(tsconfig, "tsconfig.json");
+  if (!read.ok) throw new WorkspaceError(read.message);
+  return read.tsconfig;
+}
+
+export const WRANGLER_TSCONFIG_REFUSAL =
+  "This would fail on the builder. The wrangler config's `tsconfig` isn't supported in a workspace with browser code: the build reads tsconfig.json at the repo root for both.";
+
 export function explainBundleFailure(error: Error, hasClient: boolean): Error {
   if (hasClient || !error.message.includes(CLIENT_BUNDLE_MODULE)) return error;
   return new WorkspaceError(
@@ -94,7 +144,13 @@ export function explainBundleFailure(error: Error, hasClient: boolean): Error {
   );
 }
 
-export async function buildClientAlias(projectRoot: string, entry: unknown, wranglerPackage: string): Promise<readonly string[]> {
+export async function buildClientAlias(
+  projectRoot: string,
+  entry: unknown,
+  wranglerPackage: string,
+  wranglerTsconfig: boolean = false,
+): Promise<readonly string[]> {
+  if (wranglerTsconfig) throw new WorkspaceError(WRANGLER_TSCONFIG_REFUSAL);
   const problem = clientEntryProblem(entry);
   if (problem !== undefined) throw new WorkspaceError(problem);
   const root = fs.realpathSync(projectRoot);
@@ -103,10 +159,12 @@ export async function buildClientAlias(projectRoot: string, entry: unknown, wran
   if (missing !== undefined) throw new WorkspaceError(missing);
 
   const sdk = await loadSdk(root);
+  const tsconfig = rootTsconfig(root, sdk);
+  const configFiles = findConfigFiles(root);
   const esbuild = loadEsbuild(wranglerPackage);
   let result: ClientBuildResult;
   try {
-    result = await sdk.buildClient(esbuild, { root, entry: relative });
+    result = await sdk.buildClient(esbuild, { root, entry: relative, tsconfig, configFiles });
   } catch (error) {
     throw new WorkspaceError(
       `${(error as Error).message} It comes with this project's wrangler, so install the wrangler the starter pins.`,

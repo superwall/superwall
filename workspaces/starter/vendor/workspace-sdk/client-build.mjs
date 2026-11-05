@@ -20,7 +20,7 @@ var DATA_URLS = [
   ".ttf",
   ".otf"
 ];
-var clientBuildOptions = (root, entry) => ({
+var clientBuildOptions = (root, entry, tsconfig = {}) => ({
   absWorkingDir: root,
   entryPoints: [entry],
   outdir: "client",
@@ -40,7 +40,7 @@ var clientBuildOptions = (root, entry) => ({
   jsxDev: false,
   define: { "process.env.NODE_ENV": '"production"' },
   loader: Object.fromEntries(DATA_URLS.map((extension) => [extension, "dataurl"])),
-  tsconfigRaw: "{}",
+  tsconfigRaw: JSON.stringify({ compilerOptions: tsconfig }),
   metafile: true,
   logLevel: "silent"
 });
@@ -71,6 +71,143 @@ var readError = (message) => {
 };
 var isBuildFailure = (error) => typeof error === "object" && error !== null && Array.isArray(error.errors);
 var UNRESOLVED = /^Could not resolve "(?!\.)/;
+var TSCONFIG_FILES = ["tsconfig.json", "jsconfig.json"];
+var TSCONFIG_MAX_PATHS = 100;
+var TSCONFIG_MAX_TARGETS = 10;
+var TSCONFIG_MAX_CHARS = 256;
+var parseJsonc = (source) => {
+  const text = source.startsWith("\uFEFF") ? source.slice(1) : source;
+  let out = "";
+  let index = 0;
+  const lineEnd = (from) => {
+    const match = /[\r\n]/.exec(text.slice(from));
+    return match === null ? text.length : from + match.index;
+  };
+  const nextSignificant = (from) => {
+    let at = from;
+    while (at < text.length) {
+      if (/\s/.test(text[at])) at++;
+      else if (text.startsWith("//", at)) {
+        at = lineEnd(at);
+      } else if (text.startsWith("/*", at)) {
+        const end = text.indexOf("*/", at + 2);
+        if (end === -1) return void 0;
+        at = end + 2;
+      } else return text[at];
+    }
+    return void 0;
+  };
+  while (index < text.length) {
+    const char = text[index];
+    if (char === '"') {
+      const end = /^"(?:[^"\\]|\\.)*"/.exec(text.slice(index));
+      if (end === null) throw new Error("unterminated string");
+      out += end[0];
+      index += end[0].length;
+    } else if (text.startsWith("//", index)) {
+      index = lineEnd(index);
+    } else if (text.startsWith("/*", index)) {
+      const end = text.indexOf("*/", index + 2);
+      if (end === -1) throw new Error("unterminated comment");
+      index = end + 2;
+    } else {
+      const next = char === "," ? nextSignificant(index + 1) : void 0;
+      if (!(next === "}" || next === "]")) out += char;
+      index++;
+    }
+  }
+  return JSON.parse(out);
+};
+var isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var repoPathProblem = (path, what) => {
+  if (path.length === 0 || path.length > TSCONFIG_MAX_CHARS)
+    return `${what} must be 1 to ${TSCONFIG_MAX_CHARS} characters`;
+  if (path.startsWith("/") || /^[A-Za-z]:/.test(path) || path.includes("\\")) {
+    return `${what} ${JSON.stringify(path)} must be a path relative to the repo`;
+  }
+  const segments = path.split("/");
+  if (segments.includes("..")) return `${what} ${JSON.stringify(path)} points outside the repo`;
+  if (segments.includes(".git")) return `${what} ${JSON.stringify(path)} points into .git`;
+  return null;
+};
+var wildcards = (text) => text.split("*").length - 1;
+var checkClientTsconfig = (value) => {
+  const refuse = (message) => ({
+    ok: false,
+    message: `tsconfig: ${message}.`
+  });
+  if (!isObject(value)) return refuse("compilerOptions must be an object");
+  const tsconfig = {};
+  if (value.baseUrl !== void 0) {
+    if (typeof value.baseUrl !== "string") return refuse("baseUrl must be a string");
+    const problem = repoPathProblem(value.baseUrl, "baseUrl");
+    if (problem !== null) return refuse(problem);
+    tsconfig.baseUrl = value.baseUrl;
+  }
+  if (value.paths !== void 0) {
+    if (!isObject(value.paths)) return refuse("paths must be an object");
+    const entries = Object.entries(value.paths);
+    if (entries.length > TSCONFIG_MAX_PATHS)
+      return refuse(`paths can have at most ${TSCONFIG_MAX_PATHS} entries`);
+    const paths = /* @__PURE__ */ Object.create(null);
+    for (const [pattern, targets] of entries) {
+      if (pattern.length === 0 || pattern.length > TSCONFIG_MAX_CHARS || wildcards(pattern) > 1) {
+        return refuse(
+          `the paths pattern ${JSON.stringify(pattern.slice(0, 64))} must be 1 to ${TSCONFIG_MAX_CHARS} characters with at most one *`
+        );
+      }
+      if (!Array.isArray(targets) || targets.length === 0 || targets.length > TSCONFIG_MAX_TARGETS || !targets.every((target) => typeof target === "string")) {
+        return refuse(
+          `paths[${JSON.stringify(pattern)}] must be a list of 1 to ${TSCONFIG_MAX_TARGETS} paths`
+        );
+      }
+      for (const target of targets) {
+        if (wildcards(target) > 1)
+          return refuse(
+            `paths[${JSON.stringify(pattern)}] target ${JSON.stringify(target)} has more than one *`
+          );
+        const problem = repoPathProblem(target, `paths[${JSON.stringify(pattern)}] target`);
+        if (problem !== null) return refuse(problem);
+      }
+      paths[pattern] = [...targets];
+    }
+    tsconfig.paths = paths;
+  }
+  return { ok: true, tsconfig };
+};
+var readClientTsconfig = (text, file = "tsconfig.json") => {
+  if (text === null) return { ok: true, tsconfig: {} };
+  let parsed;
+  try {
+    parsed = parseJsonc(text);
+  } catch (error) {
+    return {
+      ok: false,
+      message: `${file} is not valid JSON: ${clip(error instanceof Error ? error.message : String(error))}.`
+    };
+  }
+  if (!isObject(parsed)) return { ok: false, message: `${file} must be a JSON object.` };
+  if (parsed.extends !== void 0) {
+    return {
+      ok: false,
+      message: `${file}: "extends" isn't supported in a workspace with browser code. Put baseUrl and paths in ${file} itself.`
+    };
+  }
+  if (parsed.compilerOptions === void 0) return { ok: true, tsconfig: {} };
+  const checked = checkClientTsconfig(parsed.compilerOptions);
+  return checked.ok ? checked : { ok: false, message: checked.message.replace(/^tsconfig:/, `${file}:`) };
+};
+var nestedTsconfigProblem = (inputPaths, configFiles) => {
+  const dirs = configFiles.filter((file) => file.includes("/")).map((file) => ({ file, dir: file.slice(0, file.lastIndexOf("/") + 1) }));
+  for (const input of inputPaths) {
+    if (input.startsWith("node_modules/") || input.includes("/node_modules/")) continue;
+    const covering = dirs.find(({ dir }) => input.startsWith(dir));
+    if (covering !== void 0) {
+      return `${covering.file} applies to ${input} in the Worker's build but not in browser code. Keep one tsconfig.json at the repo root for browser code.`;
+    }
+  }
+  return null;
+};
 var formatClientErrors = (errors) => {
   const shown = errors.slice(0, 5).map((error) => {
     const where = error.file === null ? "" : `${error.file}:${error.line ?? 0}:${error.column ?? 0}: `;
@@ -87,15 +224,17 @@ var failed = (errors) => ({
   errors
 });
 var failure = (text) => failed([{ file: null, line: null, column: null, text, lineText: null }]);
-var buildClient = async (esbuild, { root, entry }) => {
+var buildClient = async (esbuild, { root, entry, tsconfig = {}, configFiles = [] }) => {
   if (esbuild.version !== CLIENT_ESBUILD_VERSION) {
     throw new Error(
       `Workspace browser code is bundled with esbuild ${CLIENT_ESBUILD_VERSION}, not ${esbuild.version}.`
     );
   }
+  const checked = checkClientTsconfig(tsconfig);
+  if (!checked.ok) return failure(checked.message);
   let result;
   try {
-    result = await esbuild.build(clientBuildOptions(root, entry));
+    result = await esbuild.build(clientBuildOptions(root, entry, checked.tsconfig));
   } catch (error) {
     if (!isBuildFailure(error)) throw error;
     return failed(error.errors.map(readError));
@@ -121,6 +260,11 @@ var buildClient = async (esbuild, { root, entry }) => {
       inputs.set(path, (inputs.get(path) ?? 0) + input.bytesInOutput);
     }
   }
+  const inputPaths = Array.from(
+    /* @__PURE__ */ new Set([...Object.keys(result.metafile?.inputs ?? {}), ...inputs.keys()])
+  );
+  const nested = nestedTsconfigProblem(inputPaths, configFiles);
+  if (nested !== null) return failure(nested);
   return {
     ok: true,
     module: `export default ${JSON.stringify(bundle)}
@@ -128,15 +272,20 @@ var buildClient = async (esbuild, { root, entry }) => {
     scriptBytes: utf8Bytes(script.text),
     styleBytes: style === null ? 0 : utf8Bytes(style),
     inputs: Array.from(inputs, ([path, bytes]) => ({ path, bytes })).sort((a, b) => b.bytes - a.bytes).slice(0, 10),
-    inputPaths: Array.from(inputs.keys())
+    inputPaths
   };
 };
 export {
   CLIENT_ERROR_MAX_CHARS,
   OUTSIDE_REPO_MESSAGE,
+  TSCONFIG_FILES,
   buildClient,
+  checkClientTsconfig,
   clientBuildOptions,
   formatClientErrors,
   isOutsideRepo,
-  outsideRepoInputs
+  nestedTsconfigProblem,
+  outsideRepoInputs,
+  parseJsonc,
+  readClientTsconfig
 };

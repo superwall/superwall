@@ -390,6 +390,10 @@ as the viewer. The platform itself lives in a private repo.
   project's own `@superwall/workspace-sdk/client-build` and passes it the esbuild that the project's
   wrangler depends on, resolved from wrangler's folder, never the CLI's. `buildClient` refuses any other
   version. The output reaches wrangler as `--alias @superwall/workspace-sdk/client-bundle:<absolute path>`.
+  The root `tsconfig.json` (or `jsconfig.json`) goes through the SDK's `readClientTsconfig`, and every
+  `tsconfig.json`/`jsconfig.json` outside `node_modules` and `.git` is passed as `configFiles`, so `buildClient` refuses
+  a nested one as the builder does. A wrangler `tsconfig` key is refused with browser code. These rules come from the
+  project's SDK and aren't copied, so an SDK without `readClientTsconfig` is told to update.
   `result.inputs` lists only the largest files, so `dev` watches the whole project except dot folders,
   `node_modules` and `dist`. Keep the entry rules and messages in `client-build.ts` matching the builder's.
 - **`bundleWorkspace` refuses what the builder refuses,** so a workspace can't pass locally and fail on

@@ -12,9 +12,10 @@ Charts. It holds no credential and calls Superwall as whoever is viewing it.
 - `src/worker.ts` is the server code. `fetch` serves pages, `metric` answers `chart.source@1` entrypoints and
   `readout` answers `campaign.metric@1` ones.
 - `src/client.tsx` is the page's browser code. `client.entry` in `superwall.json` names it, and `dev`, `try` and the
-  builder bundle it the same way, with React's JSX, TypeScript, CSS imports, and images and fonts as data URLs. There
-  is no build script, so PostCSS and Tailwind need their CSS committed, and `paths` in `tsconfig.json` don't apply
-  in browser code.
+  builder bundle it the same way, with React's JSX, TypeScript, CSS imports, and images and fonts as data URLs. `baseUrl`
+  and `paths` in the root `tsconfig.json` apply to browser code and the Worker alike, so `@/` imports work in both. Keep
+  them in that one file: `extends` and a `tsconfig.json` in a subfolder are refused for a workspace with browser code.
+  There is no build script, so PostCSS and Tailwind need their CSS committed.
 - `superwall.workspace.json` appears on the first push and links this project to its workspace. Commit it.
 - `vendor/workspace-sdk` is generated. Refresh it with `superwall workspaces update`.
 

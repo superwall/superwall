@@ -24,6 +24,22 @@ export interface ClientBuildError {
     /** The source line it points at. */
     readonly lineText: string | null;
 }
+/**
+ * What browser code takes from the repo's tsconfig: `baseUrl` and `paths`, so
+ * `import { Button } from "@/components/button"` resolves as it does in the
+ * Worker. Nothing else is read, and esbuild never sees the file itself.
+ */
+export interface ClientTsconfig {
+    readonly baseUrl?: string;
+    readonly paths?: Readonly<Record<string, ReadonlyArray<string>>>;
+}
+export type ClientTsconfigResult = {
+    readonly ok: true;
+    readonly tsconfig: ClientTsconfig;
+} | {
+    readonly ok: false;
+    readonly message: string;
+};
 export interface ClientBuildInput {
     readonly path: string;
     readonly bytes: number;
@@ -61,15 +77,19 @@ interface EsbuildOutput {
 interface EsbuildResult {
     readonly outputFiles?: ReadonlyArray<EsbuildFile>;
     readonly metafile?: {
+        readonly inputs?: Record<string, unknown>;
         readonly outputs: Record<string, EsbuildOutput>;
     };
 }
 /**
  * Every option, for this repo and entry. `tsconfigRaw` keeps esbuild from reading
+ * any tsconfig on disk, the repo root's or a nested one: it gets only the checked
+ * `baseUrl` and `paths`, which it resolves from `absWorkingDir`, the repo root, as
+ * it would the root's own file.
  * the repo's `tsconfig.json`; `write: false`, no splitting and data URLs for
  * assets make the output one script and at most one stylesheet.
  */
-export declare const clientBuildOptions: (root: string, entry: string) => {
+export declare const clientBuildOptions: (root: string, entry: string, tsconfig?: ClientTsconfig) => {
     absWorkingDir: string;
     entryPoints: string[];
     outdir: string;
@@ -107,11 +127,42 @@ export declare const CLIENT_ERROR_MAX_CHARS = 2048;
 export declare const isOutsideRepo: (path: string) => boolean;
 export declare const outsideRepoInputs: (paths: ReadonlyArray<string>) => ReadonlyArray<string>;
 export declare const OUTSIDE_REPO_MESSAGE = "A file outside the repo can't be bundled.";
+/** The files esbuild reads a tsconfig from, by name, when nothing says otherwise. */
+export declare const TSCONFIG_FILES: readonly ["tsconfig.json", "jsconfig.json"];
+/**
+ * tsconfig is JSON with comments and trailing commas. Strings are skipped
+ * whole, so a `//` inside one (a URL) stays.
+ */
+export declare const parseJsonc: (source: string) => unknown;
+/**
+ * Checks the `baseUrl` and `paths` browser code will get. `buildClient` checks
+ * again, so what reaches esbuild passed here whoever called it.
+ */
+export declare const checkClientTsconfig: (value: unknown) => ClientTsconfigResult;
+/**
+ * The repo root's tsconfig (`tsconfig.json`, or `jsconfig.json` when there's
+ * none, as esbuild picks), reduced to what browser code may use. `extends` is
+ * refused: it would make the Worker's build read another file, which browser
+ * code wouldn't, so the two would resolve differently.
+ */
+export declare const readClientTsconfig: (text: string | null, file?: (typeof TSCONFIG_FILES)[number]) => ClientTsconfigResult;
+/**
+ * A tsconfig below the root applies to the files under it in the Worker's
+ * build, and never to browser code, so a file it covers would resolve
+ * differently in the two. `configFiles` are repo paths of every tsconfig.json
+ * and jsconfig.json, `node_modules` aside.
+ */
+export declare const nestedTsconfigProblem: (inputPaths: ReadonlyArray<string>, configFiles: ReadonlyArray<string>) => string | null;
 /** `src/client.tsx:3:14: Expected ">"`, per error. */
 export declare const formatClientErrors: (errors: ReadonlyArray<ClientBuildError>) => string;
 /** Bundles `entry` and writes the module. A problem in the source is a result, not a throw. */
-export declare const buildClient: (esbuild: Esbuild, { root, entry }: {
+export interface ClientBuildRequest {
     readonly root: string;
     readonly entry: string;
-}) => Promise<ClientBuildResult>;
+    /** From `readClientTsconfig`. Checked again here. */
+    readonly tsconfig?: ClientTsconfig;
+    /** Every tsconfig.json and jsconfig.json in the repo outside `node_modules`, as repo paths. */
+    readonly configFiles?: ReadonlyArray<string>;
+}
+export declare const buildClient: (esbuild: Esbuild, { root, entry, tsconfig, configFiles }: ClientBuildRequest) => Promise<ClientBuildResult>;
 export {};
