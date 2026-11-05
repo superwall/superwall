@@ -1,7 +1,8 @@
+import { ApiError } from "@/core/api/client";
 import type { CommandContext } from "@/program/command";
 import { approveVersion, type WorkspaceVersion } from "./api";
 import { WorkspaceError, type Manifest } from "./project";
-import { pickVersion, resolveWorkspace, type WorkspaceRef } from "./resolve";
+import { canApprove, pickVersion, resolveWorkspace, type WorkspaceRef } from "./resolve";
 
 export interface ApproveInput extends WorkspaceRef {
   version?: string;
@@ -18,6 +19,7 @@ export interface ManifestSide {
   crons: readonly string[];
   events: readonly string[];
   storage: readonly string[];
+  compatibility: readonly string[];
 }
 
 type Section = keyof ManifestSide;
@@ -31,6 +33,7 @@ const SECTIONS: readonly (readonly [Section, string])[] = [
   ["crons", "Crons"],
   ["events", "Events"],
   ["storage", "Storage"],
+  ["compatibility", "Compatibility"],
 ];
 
 export interface SectionDiff {
@@ -87,6 +90,7 @@ const emptySide: ManifestSide = {
   crons: [],
   events: [],
   storage: [],
+  compatibility: [],
 };
 
 export function sideOf(version: WorkspaceVersion | undefined, enforced: boolean): ManifestSide {
@@ -104,6 +108,10 @@ export function sideOf(version: WorkspaceVersion | undefined, enforced: boolean)
     crons: (manifest.crons ?? []).map((cron) => `${cron.name}: ${cron.schedule}`),
     events: manifest.events ?? [],
     storage: [storage.sql ? "sql" : undefined, storage.kv ? "kv" : undefined].filter((kind): kind is string => kind !== undefined),
+    compatibility: [
+      ...(version.compatibility_date ? [`date ${version.compatibility_date}`] : []),
+      ...(version.compatibility_flags ?? []).map((flag) => `flag ${flag}`),
+    ],
   };
 }
 
@@ -129,6 +137,9 @@ const diffLines = (diff: readonly SectionDiff[]): string[] =>
     ...added.map((item) => `  + ${item}`),
     ...removed.map((item) => `  - ${item}`),
   ]);
+
+const ONLY_ADMINS =
+  "Only organization owners and admins can approve workspace versions. Ask one of them to review this version.";
 
 export async function runWorkspaceApprove(ctx: CommandContext<"required">, input: ApproveInput): Promise<void> {
   const workspace = await resolveWorkspace(ctx, input);
@@ -156,6 +167,8 @@ export async function runWorkspaceApprove(ctx: CommandContext<"required">, input
     commit_sha: version.commit_sha,
     active_version_id: active?.id ?? null,
     manifest: version.manifest,
+    compatibility_date: version.compatibility_date ?? null,
+    compatibility_flags: version.compatibility_flags ?? [],
     diff,
   };
 
@@ -179,6 +192,11 @@ export async function runWorkspaceApprove(ctx: CommandContext<"required">, input
     else ctx.ui.error(message);
     ctx.fail();
   };
+  if (!(await canApprove(ctx, workspace))) {
+    refuse("needs_admin", ONLY_ADMINS);
+    if (!ctx.json) ctx.ui.info("To ask for review, run `superwall workspaces share`.");
+    return;
+  }
   const changes = diff.length > 0;
   const accepted = !changes || input.acceptChanges;
   if (ctx.interactive && !(input.yes && accepted)) {
@@ -209,7 +227,14 @@ export async function runWorkspaceApprove(ctx: CommandContext<"required">, input
     }
   }
 
-  const approved = await approveVersion(ctx.api, workspace.id, version.id);
+  let approved: WorkspaceVersion;
+  try {
+    approved = await approveVersion(ctx.api, workspace.id, version.id);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 403) throw error;
+    refuse("forbidden", error.message);
+    return;
+  }
   if (ctx.json) {
     ctx.output.data({ approved: true, ...details, version: approved });
     return;

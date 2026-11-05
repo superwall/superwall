@@ -372,13 +372,20 @@ as the viewer. The platform itself lives in a private repo.
   repo, with `synced_commit`), so it doesn't ask twice. It asks at a terminal, and without one stops
   unless `--accept-merged-commits` is passed. Workspace commits are authored by the signed-in person,
   or the names would all read "Superwall".
+- **`POST builds` answers.** `token_id` is opaque, up to 512 characters: send it back as it came, never
+  parse it. A 403 stops. A 409 mints and pushes again. A 429 with a short `retry_after` (the organization's
+  3 builds) waits and repeats the same call, with nothing to push: the version exists. A long `retry_after`
+  (100 versions a day) says trying soon won't help. A build failing with `busy` or `unavailable` isn't the
+  person's code, so it says to push again rather than read the log.
 - **Reading a build settles it,** so `push` polls until it finishes (20 minutes, riding out a
   few 5xx), and `status` reads an unfinished latest version. A build that fails or outlasts the
   wait fails the command. `--json` carries the outcome either way.
 - **`approve` must never pass a change silently.** It shows the manifest and the diff from what's
   granted, not what was once in a manifest, so a revoked grant makes every scope new again.
   Any change to scopes, hosts, secrets, entrypoints, crons, events or storage needs a person at a
-  terminal, or `--yes --accept-changes`; `--json` alone approves nothing and prints the diff. Keep
+  terminal, or `--yes --accept-changes`; `--json` alone approves nothing and prints the diff. A member
+  whose role can't approve sees the same report and the API's sentence, with no prompt to answer first.
+  The version's compatibility date and flags are a section of the diff, so changing them needs accepting too. Keep
   `sideOf` covering every field the manifest grants.
 - **What `dev` doesn't copy:** the workspace-token route list and scope enforcement
   (the Agent Token holds the user's read scopes on any route it allows, and a

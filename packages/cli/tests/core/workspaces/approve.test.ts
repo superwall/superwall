@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { ApiError } from "@/core/api/client";
 import { diffSides, runWorkspaceApprove, sideOf, type ApproveInput } from "@/core/workspaces/approve";
 import type { Workspace, WorkspaceVersion } from "@/core/workspaces/api";
 import { fakeContext } from "./fake-api";
@@ -20,6 +21,8 @@ const version = (id: number, overrides: Partial<WorkspaceVersion> = {}): Workspa
   build_status: "SUCCEEDED",
   build_error: null,
   manifest: manifest() as never,
+  compatibility_date: "2026-09-01",
+  compatibility_flags: [],
   deploy_requested_at: null,
   created_at: "2026-11-05T00:00:00Z",
   grant: null,
@@ -28,13 +31,22 @@ const version = (id: number, overrides: Partial<WorkspaceVersion> = {}): Workspa
 
 const grantOf = (scopes: string[], egress: string[] = []) => ({ scopes, background_scopes: [], egress, secret_bindings: [] });
 
-function setup(versions: WorkspaceVersion[], options: Parameters<typeof fakeContext>[1] = {}, active: number | null = null) {
+function setup(
+  versions: WorkspaceVersion[],
+  options: Parameters<typeof fakeContext>[1] = {},
+  active: number | null = null,
+  extra: { role?: string; onApprove?: () => never } = {},
+) {
   const posts: string[] = [];
   const workspace: Workspace = { id: 42, organization_id: 7, slug: "churn", name: "Churn", state: "not_approved", active_version_id: active };
   const api = {
-    get: async (path: string) => (path.endsWith("/versions") ? { data: versions } : workspace),
+    get: async (path: string) => {
+      if (path === "/v2/me/organizations") return { data: extra.role ? [{ id: 7, role: extra.role }] : [] };
+      return path.endsWith("/versions") ? { data: versions } : workspace;
+    },
     post: async (path: string) => {
       posts.push(path);
+      extra.onApprove?.();
       return { id: 1 };
     },
   } as never;
@@ -56,6 +68,76 @@ test("it shows the manifest and the diff before it asks, and a no asks nothing f
   assert.ok(order.indexOf("report") < order.indexOf("confirm"));
   assert.deepEqual(posts, []);
   assert.match(said("outro").join(), /Nothing was approved/);
+});
+
+test("a compatibility change is shown beside the manifest, and has to be accepted", async () => {
+  const newer = version(2, { compatibility_date: "2026-10-01", compatibility_flags: ["nodejs_compat"] });
+  const shown = setup([newer, live], {}, 1);
+  await runWorkspaceApprove(shown.ctx, input({ yes: true }));
+  const report = shown.said("report").join("\n");
+  assert.match(report, /What it can do:[\s\S]*Compatibility:\n  date 2026-10-01\n  flag nodejs_compat/);
+  assert.match(report, /Changes from the live version, 1:[\s\S]*Compatibility:\n  \+ date 2026-10-01\n  \+ flag nodejs_compat\n  - date 2026-09-01/);
+  assert.deepEqual(shown.posts, []);
+  assert.match(shown.said("error").join(), /--accept-changes/);
+
+  const json = setup([newer, live], { json: true }, 1);
+  await runWorkspaceApprove(json.ctx, input());
+  const [answer] = json.data as [{ compatibility_date: string; compatibility_flags: string[]; diff: { section: string }[] }];
+  assert.equal(answer.compatibility_date, "2026-10-01");
+  assert.deepEqual(answer.compatibility_flags, ["nodejs_compat"]);
+  assert.deepEqual(answer.diff.map((section) => section.section), ["compatibility"]);
+
+  const same = setup([version(2), live], {}, 1);
+  await runWorkspaceApprove(same.ctx, input({ yes: true }));
+  assert.deepEqual(same.posts, ["/v2/workspaces/42/versions/2/approve"], "the same date and flags are no change");
+
+  const bare = version(2, { compatibility_date: null, compatibility_flags: undefined as never });
+  assert.deepEqual(sideOf(bare, false).compatibility, []);
+});
+
+test("a member who can't approve reads it, gets the API's sentence with no prompt, and nothing is posted", async () => {
+  const sentence = "Only organization owners and admins can approve workspace versions. Ask one of them to review this version.";
+  for (const role of ["USER", "EDITOR"]) {
+    const { ctx, posts, said, calls, failed } = setup([wider, live], { interactive: true, mode: "rich", confirm: true }, 1, { role });
+    await runWorkspaceApprove(ctx, input());
+    assert.ok(said("report").join().includes("What it can do"));
+    assert.equal(calls.filter((call) => call.method === "confirm").length, 0);
+    assert.deepEqual(posts, []);
+    assert.equal(said("error").join(), sentence);
+    assert.match(said("info").join(), /workspaces share/);
+    assert.equal(failed(), 1);
+  }
+  const json = setup([wider, live], { json: true }, 1, { role: "USER" });
+  await runWorkspaceApprove(json.ctx, input({ yes: true, acceptChanges: true }));
+  assert.equal((json.data[0] as { reason: string }).reason, "needs_admin");
+  assert.equal(json.failed(), 1);
+});
+
+test("owners and admins are asked as before, and a 403 from the API shows its own words", async () => {
+  for (const role of ["OWNER", "ADMIN"]) {
+    const { ctx, posts } = setup([wider, live], { interactive: true, mode: "rich", confirm: true }, 1, { role });
+    await runWorkspaceApprove(ctx, input());
+    assert.equal(posts.length, 1);
+  }
+  const restricted = "Only owners and admins with access to all projects can approve workspace versions, because a workspace reaches every project. Ask an owner to change your project access.";
+  const refusing = (): never => {
+    throw new ApiError("POST approve", 403, JSON.stringify({ message: restricted }));
+  };
+  const { ctx, said, failed } = setup([wider, live], { interactive: true, mode: "rich", confirm: true }, 1, { role: "ADMIN", onApprove: refusing });
+  await runWorkspaceApprove(ctx, input());
+  assert.equal(said("error").join(), restricted);
+  assert.equal(failed(), 1);
+
+  const json = setup([wider, live], { json: true }, 1, { onApprove: refusing });
+  await runWorkspaceApprove(json.ctx, input({ yes: true, acceptChanges: true }));
+  assert.equal((json.data[0] as { reason: string }).reason, "forbidden");
+
+  const other = setup([wider, live], {}, 1, {
+    onApprove: () => {
+      throw new ApiError("POST approve", 503, JSON.stringify({ message: "Down" }));
+    },
+  });
+  await assert.rejects(runWorkspaceApprove(other.ctx, input({ yes: true, acceptChanges: true })), /Down/);
 });
 
 test("a yes in a terminal approves, and points at install", async () => {

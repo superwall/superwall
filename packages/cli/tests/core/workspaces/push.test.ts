@@ -182,6 +182,138 @@ test("a token that ran out or was used is minted again, and says so", { skip }, 
   assert.equal(run.versions.length, 1);
 });
 
+test("token_id goes back exactly as it came, however long and odd", { skip }, async () => {
+  const opaque = `v1.${"aZ09+/=_-".repeat(56)}`.slice(0, 512);
+  const root = project();
+  const run = setup({ tokenIdOf: () => opaque });
+  await runWorkspacePush(run.ctx, input(root), noWait);
+  assert.deepEqual(run.revoked, [opaque]);
+});
+
+test("a 403 from the build stops, with the API's words and no second try", { skip }, async () => {
+  const root = project();
+  const message = "This token_id wasn't issued to you for this workspace.";
+  const run = setup({
+    onBuilds: () => {
+      throw new ApiError("POST builds", 403, JSON.stringify({ message }));
+    },
+  });
+  await assert.rejects(runWorkspacePush(run.ctx, input(root), noWait), new RegExp(message));
+  assert.equal(run.apiCalls.filter((call) => call.endsWith("/source-access")).length, 1);
+});
+
+test("a member who can't build sees why, before anything is pushed", { skip }, async () => {
+  const root = project();
+  const message = "Building a workspace needs access to all projects, because a workspace reaches every project. Ask an owner or admin to change your project access.";
+  const fake = setup();
+  const { api } = fake;
+  const post = api.post.bind(api);
+  api.post = (async (route: string, body: never) => {
+    if (route.endsWith("/source-access")) throw new ApiError("POST source-access", 403, JSON.stringify({ message }));
+    return post(route, body);
+  }) as never;
+  await assert.rejects(runWorkspacePush(fake.ctx, input(root), noWait), new RegExp(message));
+  assert.equal(fake.apiCalls.filter((call) => call.endsWith("/builds")).length, 0);
+});
+
+test("a full organization waits and repeats the same call: no new push and no new token", { skip }, async () => {
+  const root = project();
+  const message = "This organization already has 3 builds running. Try again when one finishes.";
+  let refusals = 2;
+  const waits: number[] = [];
+  const run = setup({
+    tokenIdOf: (mint) => `opaque-${mint}`,
+    onBuilds: () => {
+      if (refusals <= 0) return;
+      refusals -= 1;
+      throw new ApiError("POST builds", 429, JSON.stringify({ message, retry_after: 60 }));
+    },
+  });
+  const repo = () => `ws-${readBinding(root)!.workspaceId}`;
+  await runWorkspacePush(run.ctx, input(root), {
+    ...noWait,
+    sleep: async (ms) => {
+      waits.push(ms);
+    },
+  });
+  assert.deepEqual(waits.slice(0, 2), [60_000, 60_000]);
+  assert.equal(run.apiCalls.filter((call) => call.endsWith("/builds")).length, 3);
+  assert.equal(run.apiCalls.filter((call) => call.endsWith("/source-access")).length, 1, "no re-push");
+  assert.deepEqual(run.revoked, ["opaque-1"]);
+  assert.ok(remote.headOf(repo()));
+  const told = run.said("info").filter((text) => text.includes(message));
+  assert.equal(told.length, 1, "told once, however long it waits");
+  assert.match(told[0]!, /keep trying on its own, with nothing to push again/);
+  assert.equal(run.failed(), 0);
+});
+
+test("a 429 with no usable retry_after still waits a minute", { skip }, async () => {
+  for (const body of [JSON.stringify({ message: "Busy" }), "not json"]) {
+    let refused = false;
+    const waits: number[] = [];
+    const run = setup({
+      onBuilds: () => {
+        if (refused) return;
+        refused = true;
+        throw new ApiError("POST builds", 429, body);
+      },
+    });
+    await runWorkspacePush(run.ctx, input(project()), { ...noWait, sleep: async (ms) => void waits.push(ms) });
+    assert.equal(waits[0], 60_000);
+  }
+});
+
+test("a full organization that stays full gives up after 20 minutes, and says the source is pushed", { skip }, async () => {
+  const root = project();
+  let clock = 0;
+  const run = setup({
+    onBuilds: () => {
+      throw new ApiError("POST builds", 429, JSON.stringify({ message: "This organization already has 3 builds running.", retry_after: 60 }));
+    },
+  });
+  await assert.rejects(
+    runWorkspacePush(run.ctx, input(root), {
+      ...noWait,
+      now: () => clock,
+      sleep: async (ms) => {
+        clock += ms;
+      },
+    }),
+    /3 builds running\. There's still no room after 20 minutes\. Your source is pushed/,
+  );
+  assert.equal(run.apiCalls.filter((call) => call.endsWith("/source-access")).length, 1);
+});
+
+test("the daily limit says trying soon won't help, and doesn't wait", { skip }, async () => {
+  const root = project();
+  const waits: number[] = [];
+  const run = setup({
+    onBuilds: () => {
+      throw new ApiError("POST builds", 429, JSON.stringify({ message: "This workspace has had 100 pushes in the last day, which is the limit. Try again later.", retry_after: 3600 }));
+    },
+  });
+  await assert.rejects(
+    runWorkspacePush(run.ctx, input(root), { ...noWait, sleep: async (ms) => void waits.push(ms) }),
+    /100 pushes in the last day.*Trying again soon won't help.*Your source is pushed/,
+  );
+  assert.deepEqual(waits, []);
+  assert.equal(run.apiCalls.filter((call) => call.endsWith("/builds")).length, 1);
+});
+
+test("a build with no machine says to push again, not to read a log", { skip }, async () => {
+  for (const failure of [
+    { code: "busy", message: "All the build machines are busy. Try again in a few minutes." },
+    { code: "unavailable", message: "The build container did not start. This is usually temporary, so try again in a few minutes." },
+  ]) {
+    const run = setup({ buildSequence: [{ status: "failed", step: "start", failure }] });
+    await runWorkspacePush(run.ctx, input(project()), noWait);
+    assert.equal(run.failed(), 1);
+    assert.ok(run.said("error").join().includes(failure.message));
+    assert.match(run.said("info").join(), /push` again in a few minutes, and it retries this version/);
+    assert.doesNotMatch(run.said("info").join(), /workspaces logs/);
+  }
+});
+
 const linkedSetup = (root: string, options: Parameters<typeof setup>[0] = {}, context: Parameters<typeof fakeContext>[1] = {}) => {
   const binding = readBinding(root)!;
   const fake = fakeWorkspaceApi({ remote, manifest: MANIFEST as never, ...options });
