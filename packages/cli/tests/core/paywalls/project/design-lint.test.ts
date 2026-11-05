@@ -119,6 +119,17 @@ test("components (the paywall's and the shared ones) are read too, style objects
   ].sort());
 });
 
+test("a surface's config file is not read: the host paints its colours, which can't name a token", () => {
+  const { project: p, surfaces } = project({
+    "design/tokens.css": TOKENS,
+    "paywalls/pro/config.ts": 'export default { background: { light: "#46d7d4" } };\n',
+    "paywalls/pro/app/theme.css": ".a { color: #46d7d4; }\n",
+  });
+
+  const findings = lintDesignTokens(p, surfaces).map((finding) => `${finding.file}:${finding.line} ${finding.literal}`);
+  assert.deepEqual(findings, [`${path.join("paywalls", "pro", "app", "theme.css")}:1 #46d7d4`]);
+});
+
 test("no tokens file, or tokens that are not single literals, finds nothing", () => {
   const none = project({ "paywalls/pro/app/theme.css": ".a { color: #46d7d4; }" });
   assert.deepEqual(lintDesignTokens(none.project, none.surfaces), []);

@@ -143,7 +143,8 @@ export function lintDesignTokens(project: FrameworkProject, surfaces: readonly F
   for (const dir of [...surfaces.map((surface) => surface.dir), path.join(project.superwallDir, "components")]) {
     if (fs.existsSync(dir)) walk(dir, files);
   }
-  return [...new Set(files)].flatMap((file) =>
+  const configFiles = new Set(surfaces.map((surface) => surface.configFile));
+  return [...new Set(files)].filter((file) => !configFiles.has(file)).flatMap((file) =>
     lintSource(index, fs.readFileSync(file, "utf8")).map((finding) => ({
       file: path.relative(project.superwallDir, file),
       ...finding,

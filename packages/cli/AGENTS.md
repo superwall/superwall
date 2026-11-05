@@ -178,7 +178,9 @@ skill.
   not resolve to `Object.prototype`.
 - **The design-token lint** (`project/design-lint.ts`) is a warning on `build`
   and `push`, never a stop, so a project from before the design system still
-  ships. It reads declarations line by line from CSS and style objects alike;
+  ships. A surface's `config.ts` is not read: the host paints its
+  `background`, which can't name a CSS token. It reads declarations line by
+  line from CSS and style objects alike;
   a comma ends a value only where another `property:` follows, because style
   objects separate properties with commas while CSS values (`box-shadow`,
   `rgb()`) contain them.
