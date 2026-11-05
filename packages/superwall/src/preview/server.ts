@@ -454,6 +454,7 @@ export const startPreviewServer = async (
     logLevel: "warn",
     ...(postcss === undefined ? {} : { css: { postcss } }),
     assetsInclude: EXTRA_ASSET_TYPES.map((extension) => `**/*.${extension}`),
+    esbuild: { jsx: "automatic", jsxImportSource: "react" },
     plugins: [
       react(),
       previewPlugin(
