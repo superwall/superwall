@@ -191,6 +191,9 @@ const listFiles = (files: readonly string[]): string => {
   return rest > 0 ? `${shown} and ${rest} more` : shown;
 };
 
+const replaced = (kind: SourceScope["kind"]): string =>
+  kind === "project" ? "the project's shared files" : "this paywall's source";
+
 export class SourceConflictError extends Error {
   constructor(
     readonly files: readonly string[],
@@ -201,7 +204,8 @@ export class SourceConflictError extends Error {
         ? `Someone else pushed changes to ${listFiles(files)} since this project last synced. ` +
             "Run `superwall workspaces pull` to bring their changes into this project, then push again, or rerun with --overwrite-source to replace this workspace's source with yours."
         : `Someone else published changes to ${listFiles(files)} since this project last synced. ` +
-            "Run `superwall pull` to bring their changes into this project, then publish again — or rerun with --overwrite-source to replace this paywall's source with yours.",
+            "Run `superwall pull` to bring their changes into this project, then publish again — or rerun with --overwrite-source to replace " +
+            `${replaced(kind)} with yours.`,
     );
   }
 }
@@ -216,7 +220,8 @@ export class SourceDivergedError extends Error {
         ? `The source repo differs from this project in ${listFiles(files)}, and this project records no sync point to merge from. ` +
             "Run `superwall workspaces pull` to merge the source repo into this project, then push again, or rerun with --overwrite-source to replace this workspace's source with yours."
         : `The source repo differs from this project in ${listFiles(files)}, and superwall.lock records no sync point to merge from. ` +
-            "Run `superwall pull` to merge the source repo into this project, then publish again — or rerun with --overwrite-source to replace this paywall's source with yours.",
+            "Run `superwall pull` to merge the source repo into this project, then publish again — or rerun with --overwrite-source to replace " +
+            `${replaced(kind)} with yours.`,
     );
   }
 }
@@ -303,7 +308,10 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
   try {
     await cloneSource(access, dir, { env, secrets });
 
-    const scope: SourceScope = { kind: input.message.kind, id: input.message.surface };
+    const scope: SourceScope =
+      input.message.kind === "project"
+        ? { kind: "project" }
+        : { kind: input.message.kind, id: input.message.surface };
     const head = await revParse("HEAD");
     const base = input.base && head && !input.overwrite ? await revParse(input.base) : undefined;
     if (base && base !== head) await run(["checkout", "--quiet", "--detach", base]);

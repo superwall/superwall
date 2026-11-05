@@ -807,3 +807,8 @@ test("with no sync point, a remote whose whole tree matches this project is adop
   const result = await pushSourceTree({ access: access(repo.remote), files, message: messageFor("a", 8) });
   assert.deepEqual(result, { commitSha: remoteHead, status: "unchanged", syncedTo: remoteHead });
 });
+
+test("a project push that can't land names the project's shared files, not a paywall", () => {
+  assert.match(new SourceConflictError(["design/tokens.css"], "project").message, /the project's shared files/);
+  assert.match(new SourceDivergedError(["design/tokens.css"], "project").message, /the project's shared files/);
+});

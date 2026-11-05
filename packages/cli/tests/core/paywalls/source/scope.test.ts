@@ -206,3 +206,25 @@ test("a workspace owns everything in its repo, whatever a directory is called", 
   assert.equal(isSurfaceRoot("paywalls"), true);
   assert.equal(isOtherSurfaceDir("paywalls", "x", scope), false);
 });
+
+test("a project source push owns only the shared files and keeps every surface as the repo has it", () => {
+  const project = { kind: "project" as const };
+  assert.equal(classifyPath("design/tokens.css", project), "shared");
+  assert.equal(classifyPath("paywalls/a/app/index.tsx", project), "other");
+  assert.equal(classifyPath("superwall.lock", project), "derived");
+  assert.equal(isOtherSurfaceDir("paywalls", "a", project), true);
+  assert.equal(isOtherSurfaceDir("design", "a", project), false);
+
+  const theirs = formatLock(
+    lock({
+      paywalls: { a: { ios: { paywallId: "1", snapshot: "theirs" } } },
+      origins: { "paywall/a": { paywallId: "1", url: "theirs" } },
+    }),
+  );
+  const mine = formatLock(lock({ apps: { ios: "42", android: "43" }, paywalls: { a: { ios: { paywallId: "1", snapshot: "mine" } } } }));
+  const merged = mergeLockText(theirs, mine, project);
+  assert.match(merged, /"snapshot": "theirs"/);
+  assert.match(merged, /"android": "43"/);
+  assert.match(merged, /"origins"/);
+  assert.doesNotMatch(mergeLockText(formatLock(lock()), mine, project), /"origins"/);
+});
