@@ -1,6 +1,6 @@
 {
   "name": "@superwall/artifact-sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Helpers for a Superwall artifact's Worker and pages. Generated; refresh it with `superwall artifacts update`.",
   "type": "module",
