@@ -13,5 +13,11 @@
     // fields use underscore naming as part of the host contract.
     "no-underscore-dangle": "off"
   },
-  "ignorePatterns": ["dist", "coverage", "node_modules", "packages/cli"]
+  "ignorePatterns": [
+    "dist",
+    "coverage",
+    "node_modules",
+    "packages/cli",
+    "workspaces/starter/vendor"
+  ]
 }

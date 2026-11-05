@@ -1,0 +1,16 @@
+{
+  "name": "superwall-workspace-starter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@superwall/workspace-sdk": "file:vendor/workspace-sdk"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "wrangler": "4.157.0"
+  }
+}

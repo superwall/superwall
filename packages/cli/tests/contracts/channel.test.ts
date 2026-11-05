@@ -46,3 +46,12 @@ for (const channel of ["latest", "next"] as const) {
     assert.match(help, /migrate 65920/);
   });
 }
+
+test("workspaces commands exist only on the next channel", () => {
+  process.env.SUPERWALL_CHANNEL = "latest";
+  assert.doesNotMatch(rootHelp(), /workspaces/i);
+  assert.equal(listGroups().flatMap((group) => group.commands).some((entry) => entry.name.startsWith("workspaces")), false);
+  process.env.SUPERWALL_CHANNEL = "next";
+  assert.match(rootHelp(), /^Workspaces$/m);
+  for (const name of ["create", "dev", "try", "update"]) command(`workspaces ${name}`);
+});

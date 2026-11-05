@@ -1,0 +1,28 @@
+{
+  "name": "My workspace",
+  "scopes": ["projects:read", "data:read"],
+  "entrypoints": [
+    { "id": "home", "slot": "org.page@1", "title": "My workspace", "path": "/" },
+    {
+      "id": "transactions",
+      "slot": "chart.source@1",
+      "title": "Transactions",
+      "metric": {
+        "description": "Transactions in each period, split or filtered by store.",
+        "value_type": "number",
+        "breakdowns": [{ "key": "store", "name": "Store" }],
+        "filters": [
+          {
+            "key": "store",
+            "name": "Store",
+            "values": [
+              { "value": "APP_STORE", "label": "App Store" },
+              { "value": "PLAY_STORE", "label": "Google Play" },
+              { "value": "STRIPE", "label": "Stripe" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

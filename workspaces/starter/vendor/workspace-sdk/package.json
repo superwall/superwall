@@ -1,0 +1,38 @@
+{
+  "name": "@superwall/workspace-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Helpers for a Superwall workspace's Worker and pages. Generated; refresh it with `superwall workspaces update`.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./server": {
+      "types": "./server.d.ts",
+      "default": "./server.mjs"
+    },
+    "./client": {
+      "types": "./client.d.ts",
+      "default": "./client.mjs"
+    },
+    "./constants": {
+      "types": "./constants.d.ts",
+      "default": "./constants.mjs"
+    },
+    "./client-script": {
+      "types": "./client-script.d.ts",
+      "default": "./client-script.mjs"
+    },
+    "./metrics": {
+      "types": "./metrics.d.ts"
+    },
+    "./slots": {
+      "types": "./slots.d.ts"
+    },
+    "./bridge": {
+      "types": "./bridge.d.ts"
+    },
+    "./platform": {
+      "types": "./platform.d.ts"
+    }
+  }
+}

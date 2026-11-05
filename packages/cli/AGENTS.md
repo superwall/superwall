@@ -188,9 +188,9 @@ fails the build when one isn't.
 
 - **A help section is a directory.** `src/commands/<group>/` is one section of
   `superwall --help`, in the order and with the title `src/commands/registry.ts`
-  gives it: `workflows`, `paywalls` (next channel), `main` (titled
-  Commands), `analytics`, `api`, `app-store-connect`, `apple-search-ads`,
-  `account`, `support`.
+  gives it: `workflows`, `paywalls` (next channel), `workspaces` (next
+  channel), `main` (titled Commands), `analytics`, `api`, `app-store-connect`,
+  `apple-search-ads`, `account`, `support`.
   `src/commands/` holds those directories and `registry.ts`, nothing else.
 - **A command is a file at the path you type.** Its words are its path, minus
   the group's `prefix` (`asc`, `asa`, `api`): `superwall asc keys create` is
@@ -300,6 +300,51 @@ src/
 - Inside a directory import with `./`; everything else with `@/`. No barrels.
 - Tests that span many modules (the command contract, the channel split, the
   bundle) live in `tests/contracts/`.
+
+## Workspaces (`src/core/workspaces/`, next channel)
+
+`workspaces create|dev|try|update` build a workspace, a customer mini-app (a
+Worker plus `superwall.json`) that renders in the dashboard and calls Superwall
+as the viewer. The platform is in the private `superwall/paywall-next` repo.
+
+- **Nothing is bundled.** `create` and `update` download `workspaces/starter` from
+  this repo's `main` (`core/repo/download.ts`, which `downloadExample` also uses);
+  `dev` and `try` compare the project's vendored SDK with that copy and warn when
+  it's behind. An unreachable check never blocks. `vendor/workspace-sdk` is
+  generated: never edit it here, run paywall-next's `packages/workspace-sdk` `vendor`
+  script, which also holds the version rule.
+- **`wire.ts` copies the SDK's constants** because this repo can't import a private
+  package. `tests/core/workspaces/wire.test.ts` fails when they drift from the vendored
+  `constants.mjs`. `slots.ts` is hand-written the same way, without that check, so a
+  new slot needs a row there; until then `--context` carries its context as JSON.
+- **`dev` runs the bundle in workerd,** through the miniflare of the project's own
+  wrangler, which it loads dynamically like the framework (`dev/runtime.ts`). It bundles
+  with `wrangler deploy --dry-run`, the builder's own step, and re-checks the builder's
+  bundle rules. It wraps the bundle in the platform's two modules and its compatibility
+  date; invocations go through a `/__sw/invoke/<kind>` route, not RPC. A loopback
+  server plays the dashboard on the port asked for and serves the frame on the next
+  one, so the bridge crosses a real origin boundary. It answers only to its own
+  `Host`, and POSTs only from its own origin, because it can run code as the user.
+- **Egress is `outboundService`,** the same place the platform's `globalOutbound` sits
+  (`dev/outbound.ts`): the API host gets an Agent Token, the platform host 501, and
+  everything else 403. Agent Tokens don't expire, so the token stays in memory: never
+  write it to disk or logs, and never hand it to the Worker or the page. Writes
+  are refused by the API, not here. An API-key login can't mint one.
+- **`try` is the real runtime.** A metric prints its series; a frame uploads and opens
+  `/<org>/workspace-drafts/<draft>` on the dashboard (`SUPERWALL_DASHBOARD_ORIGIN`
+  overrides the host, which otherwise follows the API's stage). Readouts aren't there
+  yet: `tryReadout` is the seam and says to use `dev`. A 400 is the author's own code
+  or manifest, so it's shown bare, with no API hint.
+- **Two workers, one bundle.** A frame with an app in its context dispatches to a second
+  worker whose outbound knows it's narrowed, because the outbound service can't see
+  which request made a `fetch`. That is what lets `dev` refuse such a frame SQL, as the
+  real runtime does. `scopes.ts` is a hand-written map of routes to read scopes; it only
+  warns, so a stale row can't block anyone.
+- **What `dev` doesn't copy:** the workspace-token route list and scope enforcement
+  (the Agent Token holds the user's read scopes on any route it allows), the rest of
+  app narrowing, the deployed frame's cookie and origin (one session cookie per dev
+  server, so two tabs share the last one), CPU and subrequest limits, and storage, cron,
+  events and secrets. Run `try` before believing a scope is enough.
 
 ## One registry, two hosts (CLI and MCP)
 
