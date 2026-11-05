@@ -812,3 +812,24 @@ test("a project push that can't land names the project's shared files, not a pay
   assert.match(new SourceConflictError(["design/tokens.css"], "project").message, /the project's shared files/);
   assert.match(new SourceDivergedError(["design/tokens.css"], "project").message, /the project's shared files/);
 });
+
+test("a project push with no sync point records none, so a stale paywall pushed after it is refused, not landed", async () => {
+  const repo = bareRepo();
+  seed(repo, [file("paywalls/b/app/index.tsx", "new\n"), file("design/tokens.css", "old\n")]);
+  const files = [file("paywalls/b/app/index.tsx", "stale\n"), file("design/tokens.css", "mine\n")];
+  const project = { kind: "project" as const, applicationId: "42", framework: "0.4.2" };
+
+  const shared = await pushSourceTree({ access: access(repo.remote), overwrite: true, files, message: project });
+  assert.equal(shared.syncedTo, undefined);
+  assert.equal(blob(repo.dir, "design/tokens.css"), "mine\n");
+  assert.equal(blob(repo.dir, "paywalls/b/app/index.tsx"), "new\n");
+
+  const again = await pushSourceTree({ access: access(repo.remote), files, message: project });
+  assert.deepEqual({ status: again.status, syncedTo: again.syncedTo }, { status: "unchanged", syncedTo: undefined });
+
+  await assert.rejects(
+    pushSourceTree({ access: access(repo.remote), base: shared.syncedTo, files, message: messageFor("b", 8) }),
+    SourceDivergedError,
+  );
+  assert.equal(blob(repo.dir, "paywalls/b/app/index.tsx"), "new\n");
+});

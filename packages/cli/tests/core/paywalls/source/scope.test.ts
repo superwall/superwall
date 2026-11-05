@@ -228,3 +228,26 @@ test("a project source push owns only the shared files and keeps every surface a
   assert.match(merged, /"origins"/);
   assert.doesNotMatch(mergeLockText(formatLock(lock()), mine, project), /"origins"/);
 });
+
+test("a project push into a repo with no lock, or over an unreadable one, binds no paywall, funnel or origin", () => {
+  const project = { kind: "project" as const };
+  const mine = formatLock(
+    lock({
+      apps: { ios: "42" },
+      paywalls: { a: { ios: { paywallId: "1", snapshot: "mine" } } },
+      funnels: { f: { web: { paywallId: "2", snapshot: "mine" } } },
+      origins: { "paywall/a": { paywallId: "1", url: "mine" } },
+    }),
+  );
+  for (const merged of [
+    mergeLockText(undefined, mine, project),
+    mergeLockText("{ truncated", mine, project, { replaceUnreadable: true }),
+  ]) {
+    const parsed = JSON.parse(merged) as LockFile;
+    assert.deepEqual(parsed.apps, { ios: "42" });
+    assert.deepEqual(parsed.paywalls, {});
+    assert.deepEqual(parsed.funnels, {});
+    assert.equal(parsed.origins, undefined);
+  }
+  assert.match(mergeLockText(undefined, mine, { kind: "paywall", id: "a" }), /"origins"/);
+});

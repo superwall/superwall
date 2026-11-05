@@ -1862,6 +1862,34 @@ test("--existing with nothing bound pushes nothing and binds no app", async () =
   assert.deepEqual(readLock(project.superwallDir).apps, { ios: "42" });
 });
 
+test("--existing --platform skips a requested platform the surface declares but superwall.lock does not bind", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+  const calls: RendererCall[] = [];
+  useRenderer(recordingRenderer(calls));
+
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      existing: true,
+      platforms: ["android"],
+      load: async () => declaring(project, { "plus-upgrade": ["ios", "android"] }),
+    });
+    writeApp(project.superwallDir, "android", "43");
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      existing: true,
+      platforms: ["android"],
+      load: async () => declaring(project, { "plus-upgrade": ["ios", "android"] }),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.deepEqual(fake.calls, []);
+  assert.ok(JSON.stringify(calls).includes("plus-upgrade skipped"));
+});
+
 const twoApps = (project: FrameworkProject) => {
   writeApp(project.superwallDir, "android", "43");
   writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "3080" });

@@ -18,6 +18,8 @@ const SKIPPED_DIRS = new Set(["node_modules", ".superwall", "dist", "public", "a
 const COLOR = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)/g;
 const LENGTH = /(?<![\w.#-])-?\d*\.?\d+(?:px|rem|em)\b/g;
 const NUMBER = /(?<![\w.#%-])\d*\.?\d+(?![\w.%(])/g;
+const PAINTS = /color|background|border|outline|fill|stroke|shadow|caret|accent|decoration|column-rule/;
+const URL_VALUE = /url\([^)]*\)/gi;
 const DECLARATION =
   /(?<![\w-])["']?([a-zA-Z][\w-]*)["']?\s*:\s*((?:[^;{},]|,(?!\s*["']?[a-zA-Z][\w-]*["']?\s*:))+)/g;
 
@@ -86,7 +88,8 @@ export function readTokens(css: string): TokenIndex {
 
 function lintValue(index: TokenIndex, property: string, value: string): Array<{ literal: string; tokens: string[] }> {
   const findings: Array<{ literal: string; tokens: string[] }> = [];
-  for (const [literal] of value.matchAll(COLOR)) {
+  const painted = PAINTS.test(property) ? value.replace(URL_VALUE, " ") : "";
+  for (const [literal] of painted.matchAll(COLOR)) {
     const tokens = index.colors.get(normalizeColor(literal));
     if (tokens) findings.push({ literal, tokens: [...tokens].sort() });
   }

@@ -323,6 +323,8 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
       ? await snapshotLocal(run, dir, input.files, scope, head, committing)
       : undefined;
 
+    const unsynced = onRemote && scope.kind === "project";
+
     materializeSourceTree(dir, input.files, scope, {
       onRemote: onRemote && scope.kind !== "workspace",
       overwrite: input.overwrite,
@@ -332,7 +334,11 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     const dirty = (await run(["status", "--porcelain"])).trim();
     if (dirty === "" && local === undefined) {
       if (base && head && base !== head) await confirmIncoming(base, head);
-      return finished({ commitSha: head ?? "", status: "unchanged", syncedTo: base ?? head });
+      return finished({
+        commitSha: head ?? "",
+        status: "unchanged",
+        syncedTo: unsynced ? undefined : (base ?? head),
+      });
     }
     if (onRemote && !input.overwrite) {
       const refused = overwrittenPaths(
@@ -355,7 +361,7 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     }
     const own = await revParse("HEAD");
     if (!own) throw new Error("The source commit was not created.");
-    const syncedTo = local ?? own;
+    const syncedTo = unsynced ? undefined : (local ?? own);
     const status = dirty === "" ? "unchanged" : "committed";
     const isAncestor = (ancestor: string, of: string) =>
       run(["merge-base", "--is-ancestor", ancestor, of]).then(

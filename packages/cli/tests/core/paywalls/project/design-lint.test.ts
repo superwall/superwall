@@ -179,3 +179,12 @@ test("each property of a style object is read on its own, and a CSS value keeps 
     "8px --space-2",
   ]);
 });
+
+test("a colour in copy, a non-style property or a url() is not a painted colour", () => {
+  const index = readTokens(TOKENS);
+  const found = (text: string) => lintSource(index, text).map((finding) => finding.literal);
+  assert.deepEqual(found('const messages = { title: "Use #46d7d4" };'), []);
+  assert.deepEqual(found('.a { background: url("icon.svg#46d7d4"); }'), []);
+  assert.deepEqual(found('.a { background: url("icon.svg#46d7d4") #46d7d4; }'), ["#46d7d4"]);
+  assert.deepEqual(found('const s = { borderColor: "#46d7d4", fill: "#fff" };'), ["#46d7d4", "#fff"]);
+});

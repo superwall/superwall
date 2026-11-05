@@ -734,6 +734,18 @@ describe("Canvas resize", () => {
     expect(transformOf(layer).scale).toBe(1);
   });
 
+  it("keeps a zoom chosen on purpose across a resize, even when it equals the fit", () => {
+    vi.stubGlobal("ResizeObserver", TestResizeObserver);
+    const { layer, api, zoom } = mount(undefined, { width: 400, height: 300 });
+    expect(api().zoom()).toEqual({ scale: 1, fitted: true });
+
+    act(() => api().zoomTo(1));
+    act(() => api().pan(10, 0));
+    resizeViewport({ width: 300, height: 300 });
+    expect(transformOf(layer).scale).toBe(1);
+    expect(zoom.current).toEqual({ scale: 1, fitted: false });
+  });
+
   it("leaves a fitted stage to refit by itself, and ignores the first measurement", () => {
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     sizes.canvas = { width: 0, height: 0 };
@@ -789,6 +801,30 @@ describe("Canvas contained", () => {
     act(() => api().zoomTo(1));
     expect(canvas.className).not.toContain("touch-pan-y");
     expect(canvas.className).toContain("touch-none pointer-coarse:[&_iframe]:pointer-events-none");
+  });
+
+  it("leaves a one-finger drag on a fitted stage to the page; a mouse drag, or a finger once zoomed, moves it", () => {
+    const { canvas, layer, api } = mount(undefined, undefined, { contained: true });
+    canvas.setPointerCapture = () => {};
+    const fitted = transformOf(layer);
+    const drag = (pointerType: string) => {
+      fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 400, clientY: 400, pointerType });
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 410, clientY: 430, pointerType });
+      fireEvent.pointerUp(canvas, { pointerId: 1, pointerType });
+    };
+
+    drag("touch");
+    expect(transformOf(layer)).toEqual(fitted);
+    expect(canvas.className).toContain("touch-pan-y");
+
+    drag("mouse");
+    expect(transformOf(layer).x).toBeCloseTo(fitted.x + 10);
+    expect(canvas.className).toContain("touch-pan-y");
+
+    act(() => api().zoomTo(1));
+    const zoomed = transformOf(layer);
+    drag("touch");
+    expect(transformOf(layer).y).toBeCloseTo(zoomed.y + 30);
   });
 
   it("answers the keyboard and Space only while hovered or focused", () => {

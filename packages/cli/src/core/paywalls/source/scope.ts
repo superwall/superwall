@@ -96,11 +96,11 @@ export function mergeLockText(
 ): string {
   const own = readable(mine);
   if (!("lock" in own)) return mine;
-  if (theirs === undefined) return formatLock(withoutSources(own.lock));
+  if (theirs === undefined) return formatLock(scoped(own.lock, scope));
   const read = readable(theirs);
   if (!("lock" in read)) {
     if (!options.replaceUnreadable) throw new SourceLockUnreadableError(read.reason);
-    return formatLock(withoutSources(own.lock));
+    return formatLock(scoped(own.lock, scope));
   }
   return mergeLocks(read.lock, own.lock, scope);
 }
@@ -148,3 +148,8 @@ function mergeLocks(other: LockFile, own: LockFile, scope: SurfaceScope | Projec
 }
 
 const withoutSources = ({ sources: _, ...lock }: LockFile): LockFile => lock;
+
+const scoped = (lock: LockFile, scope: SurfaceScope | ProjectScope): LockFile => {
+  const { origins: _, ...rest } = withoutSources(lock);
+  return scope.kind === "project" ? { ...rest, paywalls: {}, funnels: {} } : withoutSources(lock);
+};

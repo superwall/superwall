@@ -11,7 +11,7 @@ import {
   type ProductStores,
 } from "@/core/api/resources";
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
-import { resolveApps } from "@/core/paywalls/binding/apps";
+import { platformFor, resolveApps } from "@/core/paywalls/binding/apps";
 import { resolveBinding, type ResolvedBinding } from "@/core/paywalls/binding/binding";
 import { parseRenameFlags, resolveRenames } from "@/core/paywalls/binding/renames";
 import {
@@ -183,25 +183,34 @@ function boundScope(
   surfaces: readonly FrameworkSurface[],
   declared: DeclaredPlatforms,
   only: readonly string[],
-): { surfaces: FrameworkSurface[]; declared: DeclaredPlatforms; unbound: UnboundTarget[] } {
+): {
+  surfaces: FrameworkSurface[];
+  declared: DeclaredPlatforms;
+  apps: Record<string, string>;
+  unbound: UnboundTarget[];
+} {
+  const allowed = only.map((entry) => platformFor(lock.apps, entry) ?? entry);
+  const wanted = (platform: string) => only.length === 0 || allowed.includes(platform);
+  const apps = Object.fromEntries(Object.entries(lock.apps).filter(([platform]) => wanted(platform)));
   const scoped: FrameworkSurface[] = [];
   const narrowed: DeclaredPlatforms = { ...declared };
   const unbound: UnboundTarget[] = [];
   for (const surface of surfaces) {
     const platforms = declared[surfaceKey(surface)];
     if (platforms === undefined) {
-      scoped.push(surface);
+      if (Object.keys(apps).length > 0) scoped.push(surface);
       continue;
     }
-    const kept = platforms.filter((platform) => isBound(lock, { surface, platform }));
+    const kept: string[] = [];
     for (const platform of platforms) {
-      const wanted = only.length === 0 || only.includes(platform);
-      if (wanted && !kept.includes(platform)) unbound.push({ surface, platform });
+      if (!wanted(platform)) continue;
+      if (isBound(lock, { surface, platform })) kept.push(platform);
+      else unbound.push({ surface, platform });
     }
     narrowed[surfaceKey(surface)] = kept;
     if (kept.length > 0) scoped.push(surface);
   }
-  return { surfaces: scoped, declared: narrowed, unbound };
+  return { surfaces: scoped, declared: narrowed, apps, unbound };
 }
 
 async function prepare(
@@ -220,21 +229,26 @@ async function prepare(
   const lock = readLock(project.superwallDir);
   const scope = input.existing
     ? boundScope(lock, input.surfaces, input.declared, only)
-    : { surfaces: input.surfaces, declared: input.declared, unbound: [] };
+    : { surfaces: input.surfaces, declared: input.declared, apps: undefined, unbound: [] };
 
-  const apps = input.existing
-    ? lock.apps
-    : await resolveApps({
-        api: context.api,
-        superwallDir: project.superwallDir,
-        wanted: wantedPlatforms(scope.surfaces, scope.declared),
-        pickApplication: context.interactive ? pickApplicationOption : undefined,
-      });
-  const multi = Object.keys(apps).length > 1;
+  const apps =
+    scope.apps ??
+    (await resolveApps({
+      api: context.api,
+      superwallDir: project.superwallDir,
+      wanted: wantedPlatforms(scope.surfaces, scope.declared),
+      pickApplication: context.interactive ? pickApplicationOption : undefined,
+    }));
+  const multi = Object.keys(input.existing ? lock.apps : apps).length > 1;
   const planned =
     scope.surfaces.length === 0
       ? []
-      : planTargets({ surfaces: scope.surfaces, declared: scope.declared, apps, only });
+      : planTargets({
+          surfaces: scope.surfaces,
+          declared: scope.declared,
+          apps,
+          only: input.existing ? [] : only,
+        });
   const targets = input.existing ? planned.filter((target) => isBound(lock, target)) : planned;
   const unbound = [...scope.unbound, ...planned.filter((target) => !targets.includes(target))];
 
