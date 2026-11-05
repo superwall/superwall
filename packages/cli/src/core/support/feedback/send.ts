@@ -1,8 +1,9 @@
 import { FEEDBACK_KINDS, type FeedbackKind } from "./kinds";
 import type { CommandContext } from "@/program/command";
-import { ApiError, type SuperwallApi } from "@/core/api/client";
+import { ApiError, ApiUnreachableError, type SuperwallApi } from "@/core/api/client";
 import { appNotFound, findApplication, findProject, parseDashboardUrl } from "@/core/api/lookup";
 import { orgIdOf } from "@/core/api/orgs";
+import { NotLoggedInError } from "@/core/account/errors";
 import { readSession } from "@/core/account/storage";
 import { readAnonymousId, readOnboardedApp } from "@/core/state/config";
 import { plural } from "@/core/app-store-connect/resources/operation";
@@ -153,14 +154,18 @@ export function parseFeedbackReport(value: unknown): FeedbackReport | undefined 
   };
 }
 
-const rateLimited = (error: unknown): boolean => error instanceof ApiError && error.status === 429;
+const fallsBack = (error: unknown): boolean =>
+  (error instanceof ApiError && error.status !== 429) ||
+  error instanceof ApiUnreachableError ||
+  error instanceof NotLoggedInError ||
+  error instanceof SyntaxError;
 
 async function sendToApi(api: SuperwallApi, feedback: Feedback, via: FeedbackVia): Promise<FeedbackReport | undefined> {
   try {
     return parseFeedbackReport(await api.post<unknown>("/v2/feedback", buildFeedbackBody(feedback, via)));
   } catch (error) {
-    if (rateLimited(error)) throw error;
-    return undefined;
+    if (fallsBack(error)) return undefined;
+    throw error;
   }
 }
 

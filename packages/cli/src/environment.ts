@@ -54,7 +54,7 @@ export const ENV_APPLE_PASSWORD = "SUPERWALL_APPLE_PASSWORD";
 
 export function appleCredentialsFromEnv(): { appleId?: string; password?: string } {
   const appleId = resolveEnv(ENV_APPLE_ID);
-  const password = process.env[ENV_APPLE_PASSWORD];
+  const password = globalThis.process?.env[ENV_APPLE_PASSWORD];
   return {
     ...(appleId ? { appleId } : {}),
     ...(password ? { password } : {}),
@@ -82,7 +82,7 @@ export const USER_AGENT = (): string => {
 };
 
 export function resolveEnv(name: string): string | undefined {
-  const value = process.env[name]?.trim();
+  const value = globalThis.process?.env[name]?.trim();
   return value === "" ? undefined : value;
 }
 

@@ -14,7 +14,8 @@ import {
   resolveFeedbackTarget,
   runFeedback,
 } from "@/core/support/feedback/send";
-import { ApiError, type SuperwallApi } from "@/core/api/client";
+import { ApiError, ApiUnreachableError, type SuperwallApi } from "@/core/api/client";
+import { NotLoggedInError } from "@/core/account/errors";
 import { writeOnboardedApp } from "@/core/state/config";
 import { command as feedback } from "@/commands/support/feedback";
 import { defineCommand } from "@/program/command";
@@ -334,7 +335,7 @@ test("signed in, a report goes to the feedback endpoint and the team's feed, and
 });
 
 test("when the endpoint isn't there or fails, the report goes to the team the old way", async () => {
-  for (const failure of [new ApiError("POST /v2/feedback", 404, "{}"), new ApiError("POST /v2/feedback", 503), new Error("offline")]) {
+  for (const failure of [new ApiError("POST /v2/feedback", 404, "{}"), new ApiError("POST /v2/feedback", 503), new ApiUnreachableError("https://api.example.com", new Error("offline")), new NotLoggedInError(), new SyntaxError("Unexpected token < in JSON")]) {
     useHome();
     const log = useFetch([{ match: "/capture/", body: {} }]);
     const api = lookupApi({ post: async () => Promise.reject(failure) });
@@ -342,6 +343,16 @@ test("when the endpoint isn't there or fails, the report goes to the team the ol
     assert.deepEqual(result.json, { submitted: true, outcome: "queued" });
     assert.equal(sentProperties(log).use_case, "why");
   }
+});
+
+test("a host that stops the send ends the command, and nothing reaches the team's feed", async () => {
+  useHome();
+  const log = useFetch([{ match: "/capture/", body: {} }]);
+  class Stopped extends Error {}
+  const api = lookupApi({ post: async () => Promise.reject(new Stopped("ask the user first")) });
+  const result = await runCommand(feedback, { args: { message: "m" }, json: true, api });
+  assert.equal(log.length, 0);
+  assert.match(JSON.stringify(result.json), /ask the user first/);
 });
 
 test("an answer the CLI can't read also falls back, so nothing is lost", async () => {
