@@ -6,10 +6,12 @@ Charts. It holds no credential and calls Superwall as whoever is viewing it.
     superwall workspaces dev                         # http://localhost:8790 against your real data, read-only
     superwall workspaces try transactions --app <id> # the metric on the real runtime
     superwall workspaces try home                    # the page in the dashboard
+    superwall workspaces push                        # build it; only you see it until an admin approves it
 
 - `superwall.json` says what it does: its scopes and entrypoints.
 - `src/worker.ts` is the code. `fetch` serves pages, `metric` answers `chart.source@1` entrypoints and
   `readout` answers `campaign.metric@1` ones.
+- `superwall.workspace.json` appears on the first push and links this project to its workspace. Commit it.
 - `vendor/workspace-sdk` is generated. Refresh it with `superwall workspaces update`.
 
 Each API a workspace calls needs its read scope in `superwall.json`, or it answers 403 at run time:

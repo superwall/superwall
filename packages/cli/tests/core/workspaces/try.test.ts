@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ApiError } from "@/core/api/client";
-import { dashboardOrigin, runWorkspaceTry, type TryInput } from "@/core/workspaces/try";
+import { dashboardOrigin } from "@/core/workspaces/resolve";
+import { runWorkspaceTry, type TryInput } from "@/core/workspaces/try";
 import { DRAFT_MODULE_MAX_BYTES } from "@/core/workspaces/wire";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
 import { fakeWrangler, MANIFEST, workspaceProject, writeVendoredSdk } from "./fixture";

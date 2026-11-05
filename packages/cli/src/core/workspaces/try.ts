@@ -1,9 +1,9 @@
 import type { CommandContext } from "@/program/command";
 import { openBrowser } from "@/core/account/browser";
 import { ApiError } from "@/core/api/client";
-import { DASHBOARD_ORIGIN_OVERRIDE } from "@/environment";
 import { bundleWorkspace, type RunWrangler } from "./bundle";
 import { resolveAppScope, resolveOrganization } from "./organization";
+import { dashboardOrigin } from "./resolve";
 import { findEntrypoint, readProject, WorkspaceError, type Entrypoint, type WorkspaceProject } from "./project";
 import { warnIfSdkBehind } from "./sdk";
 import { parseFilters, summarizeSeries, type MetricSeries } from "./series";
@@ -128,10 +128,6 @@ async function tryMetric(
 }
 
 const round = (value: number): number => Math.round(value * 1000) / 1000;
-
-export function dashboardOrigin(apiHost: string): string {
-  return DASHBOARD_ORIGIN_OVERRIDE() ?? (new URL(apiHost).hostname.endsWith(".dev") ? "https://app.superwall.dev" : "https://app.superwall.com");
-}
 
 async function tryFrame(
   ctx: CommandContext<"required">,

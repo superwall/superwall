@@ -349,6 +349,21 @@ as the viewer. The platform itself lives in a private repo.
   loader id, whose `Egress` knows it's narrowed. That is what lets `dev` refuse such a
   frame SQL, as the real runtime does. `scopes.ts` is a hand-written map of routes to
   read scopes; it only warns, so a stale row can't block anyone.
+- **Push and pull reuse the framework's git code.** `core/paywalls/source` is shared: a
+  `SourceScope` of kind `workspace` owns its whole repo, so a directory named `paywalls/` means
+  nothing there, and its one derived file is `superwall.workspace.json`, which records the
+  workspace id and organization, and is committed so a teammate pushes to the same workspace.
+  Its `synced_commit` is the merge base and stays out of the source repo, or every push would
+  change it. A `--overwrite-source` here replaces the whole repo. A 409 from `builds` means the
+  head moved, so `push` mints again and pushes on top, up to three times.
+- **Reading a build settles it,** so `push` polls until it finishes (20 minutes, riding out a
+  few 5xx), and `status` reads an unfinished latest version. A build that fails or outlasts the
+  wait fails the command. `--json` carries the outcome either way.
+- **`approve` must never pass a change silently.** It shows the manifest and the diff from what's
+  granted, not what was once in a manifest, so a revoked grant makes every scope new again.
+  Any change to scopes, hosts, secrets, entrypoints, crons, events or storage needs a person at a
+  terminal, or `--yes --accept-changes`; `--json` alone approves nothing and prints the diff. Keep
+  `sideOf` covering every field the manifest grants.
 - **What `dev` doesn't copy:** the workspace-token route list and scope enforcement
   (the Agent Token holds the user's read scopes on any route it allows, and a
   superadmin's holds them on every organization, so only run code you trust), the rest

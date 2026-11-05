@@ -9,6 +9,7 @@ import { buildCommitMessage, redact, tokenSecret, type CommitMessageInput } from
 import {
   classifyPath,
   DERIVED_FILES,
+  derivedFilesOf,
   isOtherSurfaceDir,
   isSurfaceRoot,
   LOCK_FILE,
@@ -116,7 +117,7 @@ export function materializeSourceTree(
   options: { onRemote?: boolean; overwrite?: boolean } = {},
 ): void {
   const theirs = new Map<string, Buffer>();
-  for (const derived of DERIVED_FILES) {
+  for (const derived of derivedFilesOf(scope)) {
     const existing = path.join(dir, derived);
     if (fs.existsSync(existing)) theirs.set(derived, fs.readFileSync(existing));
   }
@@ -127,7 +128,7 @@ export function materializeSourceTree(
     if (entry === ".git") continue;
     const top = path.join(dir, entry);
     const isDir = fs.lstatSync(top).isDirectory();
-    if (keepShared && !(isDir && isSurfaceRoot(entry))) continue;
+    if (keepShared && !(isDir && isSurfaceRoot(entry, scope))) continue;
     if (!isDir) {
       remove(top);
       continue;
@@ -157,7 +158,7 @@ export function materializeSourceTree(
   for (const file of files) {
     if (classifyPath(file.path, scope) === "other") continue;
     if (file.content.byteLength > LARGE_FILE_BYTES) large.push(file.path);
-    if (file.path === LOCK_FILE) {
+    if (file.path === LOCK_FILE && scope.kind !== "workspace") {
       write(
         file.path,
         mergeLockText(
@@ -177,7 +178,7 @@ export function materializeSourceTree(
   if (large.length > 0) {
     ui.warn(
       `Committing ${large.length > 1 ? `${large.length} files` : large[0]} over 50 MB — ` +
-        "every future clone of this app's source repo pays for it.",
+        `every future clone of this ${scope.kind === "workspace" ? "workspace's" : "app's"} source repo pays for it.`,
     );
   }
 }
@@ -191,19 +192,31 @@ const listFiles = (files: readonly string[]): string => {
 };
 
 export class SourceConflictError extends Error {
-  constructor(readonly files: readonly string[]) {
+  constructor(
+    readonly files: readonly string[],
+    kind: SourceScope["kind"] = "paywall",
+  ) {
     super(
-      `Someone else published changes to ${listFiles(files)} since this project last synced. ` +
-        "Run `superwall pull` to bring their changes into this project, then publish again — or rerun with --overwrite-source to replace this paywall's source with yours.",
+      kind === "workspace"
+        ? `Someone else pushed changes to ${listFiles(files)} since this project last synced. ` +
+            "Run `superwall workspaces pull` to bring their changes into this project, then push again, or rerun with --overwrite-source to replace this workspace's source with yours."
+        : `Someone else published changes to ${listFiles(files)} since this project last synced. ` +
+            "Run `superwall pull` to bring their changes into this project, then publish again — or rerun with --overwrite-source to replace this paywall's source with yours.",
     );
   }
 }
 
 export class SourceDivergedError extends Error {
-  constructor(readonly files: readonly string[]) {
+  constructor(
+    readonly files: readonly string[],
+    kind: SourceScope["kind"] = "paywall",
+  ) {
     super(
-      `The source repo differs from this project in ${listFiles(files)}, and superwall.lock records no sync point to merge from. ` +
-        "Run `superwall pull` to merge the source repo into this project, then publish again — or rerun with --overwrite-source to replace this paywall's source with yours.",
+      kind === "workspace"
+        ? `The source repo differs from this project in ${listFiles(files)}, and this project records no sync point to merge from. ` +
+            "Run `superwall workspaces pull` to merge the source repo into this project, then push again, or rerun with --overwrite-source to replace this workspace's source with yours."
+        : `The source repo differs from this project in ${listFiles(files)}, and superwall.lock records no sync point to merge from. ` +
+            "Run `superwall pull` to merge the source repo into this project, then publish again — or rerun with --overwrite-source to replace this paywall's source with yours.",
     );
   }
 }
@@ -258,7 +271,11 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
       ? await snapshotLocal(run, dir, input.files, scope, head, committing)
       : undefined;
 
-    materializeSourceTree(dir, input.files, scope, { onRemote, overwrite: input.overwrite });
+    const replacesEverything = scope.kind === "workspace" && input.overwrite === true;
+    materializeSourceTree(dir, input.files, scope, {
+      onRemote: onRemote && !replacesEverything,
+      overwrite: input.overwrite,
+    });
 
     await run(["add", "-A"]);
     const dirty = (await run(["status", "--porcelain"])).trim();
@@ -268,8 +285,9 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     if (onRemote && !input.overwrite) {
       const refused = overwrittenPaths(
         await run(["diff", "--cached", "--name-status", "--no-renames", "-z", "HEAD"]),
+        derivedFilesOf(scope),
       );
-      if (refused.length > 0) throw new SourceDivergedError(refused);
+      if (refused.length > 0) throw new SourceDivergedError(refused, scope.kind);
     }
 
     if (local !== undefined && head !== undefined) {
@@ -363,13 +381,13 @@ async function snapshotLocal(
   return snapshot.trim();
 }
 
-function overwrittenPaths(nameStatus: string): string[] {
+function overwrittenPaths(nameStatus: string, derived: ReadonlySet<string>): string[] {
   const fields = nameStatus.split("\0").filter(Boolean);
   const paths: string[] = [];
   for (let index = 0; index + 1 < fields.length; index += 2) {
     const status = fields[index];
     const file = fields[index + 1];
-    if (file === undefined || status === "A" || DERIVED_FILES.has(file)) continue;
+    if (file === undefined || status === "A" || derived.has(file)) continue;
     paths.push(file);
   }
   return paths;
@@ -427,14 +445,15 @@ async function mergeUpstream(
   const conflicted = (await run(["diff", "--name-only", "--diff-filter=U", "-z"]).catch(() => ""))
     .split("\0")
     .filter(Boolean);
-  const blocking = conflicted.filter((file) => !DERIVED_FILES.has(file));
+  const derived = derivedFilesOf(scope);
+  const blocking = conflicted.filter((file) => !derived.has(file));
   const merging = await run(["rev-parse", "--verify", "--quiet", "MERGE_HEAD"]).then(
     () => true,
     () => false,
   );
   if (blocking.length > 0 || (failure !== undefined && conflicted.length === 0)) {
     await run(["merge", "--abort"]).catch(() => undefined);
-    if (blocking.length > 0) throw new SourceConflictError(blocking);
+    if (blocking.length > 0) throw new SourceConflictError(blocking, scope.kind);
     throw failure;
   }
   if (!merging) return;
@@ -444,11 +463,13 @@ async function mergeUpstream(
       (text) => text,
       () => undefined,
     );
-  const theirsLock = await show(upstream, LOCK_FILE);
-  const mineLock = await show(own, LOCK_FILE);
-  const lock = mineLock === undefined ? theirsLock : mergeLockText(theirsLock, mineLock, scope);
-  await settle(run, dir, LOCK_FILE, lock);
-  for (const file of DERIVED_FILES) {
+  if (scope.kind !== "workspace") {
+    const theirsLock = await show(upstream, LOCK_FILE);
+    const mineLock = await show(own, LOCK_FILE);
+    const lock = mineLock === undefined ? theirsLock : mergeLockText(theirsLock, mineLock, scope);
+    await settle(run, dir, LOCK_FILE, lock);
+  }
+  for (const file of derived) {
     if (file !== LOCK_FILE) await settle(run, dir, file, await show(own, file));
   }
 
@@ -495,10 +516,11 @@ export interface PullInput {
   files: readonly SourceFile[];
   base?: string;
   theirs?: boolean;
+  derived?: ReadonlySet<string>;
 }
 
 export async function pullSourceTree(input: PullInput): Promise<PullResult> {
-  const { access } = input;
+  const { access, derived = DERIVED_FILES } = input;
   const secrets = [access.token, tokenSecret(access.token)];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pull-"));
   const env = gitEnv(access.token, {
@@ -544,7 +566,7 @@ export async function pullSourceTree(input: PullInput): Promise<PullResult> {
     });
     const conflicted = changedPaths(await run(["diff", "--name-only", "--diff-filter=U", "-z"]));
     if (failure !== undefined && conflicted.length === 0) throw failure;
-    const blocking = conflicted.filter((file) => !DERIVED_FILES.has(file));
+    const blocking = conflicted.filter((file) => !derived.has(file));
     if (blocking.length > 0 && !input.theirs) throw new PullConflictError(blocking);
     const present = new Set(
       (await run(["ls-tree", "-r", "--name-only", "-z", head])).split("\0").filter(Boolean),
@@ -564,7 +586,7 @@ export async function pullSourceTree(input: PullInput): Promise<PullResult> {
     for (let index = 0; index + 1 < staged.length; index += 2) {
       const status = staged[index];
       const file = staged[index + 1];
-      if (file === undefined || DERIVED_FILES.has(file)) continue;
+      if (file === undefined || derived.has(file)) continue;
       if (status === "D") {
         removed.push({ path: file, content: undefined });
         continue;

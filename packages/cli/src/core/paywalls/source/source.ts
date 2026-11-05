@@ -57,7 +57,15 @@ function gitignoreExcludes(superwallDir: string): string[] {
   return excludes;
 }
 
-export async function collectSourceFiles(superwallDir: string): Promise<CollectedFiles> {
+const readFramework = (superwallDir: string, relative: string): Buffer =>
+  relative === LOCK_FILE
+    ? Buffer.from(formatSharedLock(superwallDir))
+    : fs.readFileSync(path.join(superwallDir, relative));
+
+export async function collectSourceFiles(
+  superwallDir: string,
+  read: (superwallDir: string, relative: string) => Buffer = readFramework,
+): Promise<CollectedFiles> {
   const entries = await fg("**/*", {
     cwd: superwallDir,
     dot: true,
@@ -93,10 +101,7 @@ export async function collectSourceFiles(superwallDir: string): Promise<Collecte
     ok: true,
     files: entries.sort().map((relative) => ({
       path: relative,
-      content:
-        relative === LOCK_FILE
-          ? Buffer.from(formatSharedLock(superwallDir))
-          : fs.readFileSync(path.join(superwallDir, relative)),
+      content: read(superwallDir, relative),
     })),
   };
 }

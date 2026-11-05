@@ -53,5 +53,7 @@ test("workspaces commands exist only on the next channel", () => {
   assert.equal(listGroups().flatMap((group) => group.commands).some((entry) => entry.name.startsWith("workspaces")), false);
   process.env.SUPERWALL_CHANNEL = "next";
   assert.match(rootHelp(), /^Workspaces$/m);
-  for (const name of ["create", "dev", "try", "update"]) command(`workspaces ${name}`);
+  for (const name of ["create", "dev", "try", "update", "push", "pull", "status", "logs", "share", "approve", "install", "list", "open"]) {
+    command(`workspaces ${name}`);
+  }
 });
