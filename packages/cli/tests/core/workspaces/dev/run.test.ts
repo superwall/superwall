@@ -13,20 +13,22 @@ import { fakeWrangler, MANIFEST, workspaceProject, writeVendoredSdk } from "../f
 function setup(api: Record<string, unknown> = {}) {
   const calls: RendererCall[] = [];
   const minted: string[] = [];
+  const mintBodies: unknown[] = [];
   const ctx = {
     ui: recordingRenderer(calls),
     interactive: false,
     outputMode: "text",
     api: {
       host: "https://api.test",
-      post: async (route: string) => {
+      post: async (route: string, body: { organization_id?: number }) => {
         minted.push(route);
-        return { token: `token-${minted.length}` };
+        mintBodies.push(body);
+        return { token: `token-${minted.length}`, organization_id: body.organization_id };
       },
       ...api,
     },
   } as never;
-  return { ctx, calls, minted, said: (method: string) => calls.filter((call) => call.method === method).map((call) => String(call.value)) };
+  return { ctx, calls, minted, mintBodies, said: (method: string) => calls.filter((call) => call.method === method).map((call) => String(call.value)) };
 }
 
 function project() {
@@ -85,10 +87,107 @@ test("the runtime's outbound uses the minted token against the session's host", 
 test("an API key can't make the token, and it says what to do", async () => {
   const { ctx } = setup({
     post: async () => {
-      throw new ApiError("POST /v2/me/agent-token", 403, '{"message":"not eligible"}');
+      throw new ApiError(
+        "POST /v2/me/agent-token",
+        403,
+        '{"message":"Agent Tokens can only be exchanged from a WorkOS access token. This credential is not eligible."}',
+      );
     },
   });
   await assert.rejects(runWorkspaceDev(ctx, input(project()), harness().runtime), /needs a browser login[\s\S]*superwall login/);
+});
+
+test("it asks for a short-lived token limited to the organization it runs against", async () => {
+  const { ctx, mintBodies, said } = setup();
+  await runWorkspaceDev(ctx, input(project(), { org: "7" }), harness().runtime);
+  assert.deepEqual(mintBodies, [{ ttl_seconds: 3600, organization_id: 7 }]);
+  assert.match(said("info")[0]!, /limited to organization 7/);
+  assert.deepEqual(said("warn").filter((text) => /can't limit/.test(text)), []);
+});
+
+test("not a member of the organization: the API's reason, not a login hint", async () => {
+  const { ctx } = setup({
+    post: async () => {
+      throw new ApiError("POST /v2/me/agent-token", 403, '{"message":"You can\'t mint an Agent Token for organization 7: you aren\'t a member of it."}');
+    },
+  });
+  await assert.rejects(runWorkspaceDev(ctx, input(project(), { org: "7" }), harness().runtime), /aren't a member of it/);
+});
+
+test("an API that hasn't deployed limited tokens still runs, and says once that the token isn't limited", async () => {
+  let mints = 0;
+  const { ctx, said } = setup({
+    post: async () => {
+      mints += 1;
+      return { token: `token-${mints}` };
+    },
+  });
+  const answers = [new Response("{}", { status: 401 }), new Response("{}", { status: 403 }), new Response("{}")];
+  const seen: (string | null)[] = [];
+  const seams = harness({
+    fetchImpl: (async (_url: string, init: RequestInit) => {
+      seen.push((init.headers as Headers).get("authorization"));
+      return answers.shift()!;
+    }) as never,
+  });
+  await runWorkspaceDev(ctx, input(project()), seams.runtime);
+  await seams.started[0]!.outbound(new Request("https://api.workspace.internal/v2/projects"), { narrowed: false });
+  assert.deepEqual(seen, ["Bearer token-1", "Bearer token-2"]);
+  assert.equal(said("warn").filter((text) => /can't limit dev's token/.test(text)).length, 1);
+  assert.doesNotMatch(said("info")[0]!, /limited to/);
+  assert.match(said("warn").at(-1)!, /Dev is read-only/);
+});
+
+test("dev outlives any number of expiries, and a token that keeps being refused stops", async () => {
+  const { ctx, minted } = setup();
+  let status = 401;
+  let body = JSON.stringify({ code: "invalid_session", reason: "agent_token_expired", message: "expired" });
+  const seams = harness({
+    fetchImpl: (async (_url: string, init: RequestInit) => {
+      const token = (init.headers as Headers).get("authorization");
+      return token === `Bearer token-${minted.length}` && status !== 401 ? new Response("ok") : new Response(body, { status: 401 });
+    }) as never,
+  });
+  await runWorkspaceDev(ctx, input(project()), seams.runtime);
+  const call = () => seams.started[0]!.outbound(new Request("https://api.workspace.internal/v2/projects"), { narrowed: false });
+  for (let index = 0; index < 6; index += 1) assert.equal((await call()).status, 401);
+  assert.equal(minted.length, 7, "each expiry got a new token");
+  body = JSON.stringify({ code: "invalid_session", message: "Invalid Agent Token" });
+  for (let index = 0; index < 5; index += 1) await call();
+  assert.equal(minted.length, 10, "a plain refusal stops after three");
+  status = 200;
+  assert.equal((await call()).status, 200);
+});
+
+test("dev's own calls stay on the session: the limited token only goes out through the Worker", async () => {
+  const gets: string[] = [];
+  const { ctx } = setup({
+    get: async (route: string) => {
+      gets.push(route);
+      return { data: [{ id: 7, name: "Only one" }] };
+    },
+  });
+  const seams = harness();
+  await runWorkspaceDev(ctx, input(project(), { org: undefined }), seams.runtime);
+  assert.deepEqual(gets, ["/v2/me/organizations"]);
+  assert.equal((ctx as { api: { token?: string } }).api.token, undefined);
+});
+
+test("the organization can come from --context, and it must be an id", async () => {
+  const { ctx, mintBodies } = setup();
+  await runWorkspaceDev(ctx, input(project(), { org: undefined, context: '{"organizationId":9}' }), harness().runtime);
+  assert.deepEqual(mintBodies, [{ ttl_seconds: 3600, organization_id: 9 }]);
+  await assert.rejects(runWorkspaceDev(setup().ctx, input(project(), { org: "acme" }), harness().runtime), /--org takes an organization's id/);
+  await assert.rejects(
+    runWorkspaceDev(setup({ get: async () => ({ data: [{ id: 1 }, { id: 2 }] }) }).ctx, input(project(), { org: undefined, context: '{"paywallId":1}' }), harness().runtime),
+    /--org <id>/,
+  );
+});
+
+test("an app with no organization to be found has to name one", async () => {
+  const projects = { data: [{ id: 3, name: "P", applications: [{ id: 42, name: "A" }] }] };
+  const { ctx } = setup({ get: async () => projects, list: async () => projects.data });
+  await assert.rejects(runWorkspaceDev(ctx, input(project(), { org: undefined, app: "42" }), harness().runtime), /Couldn't find the organization of app 42/);
 });
 
 test("other API failures pass through", async () => {
@@ -100,7 +199,7 @@ test("other API failures pass through", async () => {
   await assert.rejects(runWorkspaceDev(ctx, input(project()), harness().runtime), /down/);
 });
 
-test("the app and flags become the page's defaults, and --context skips the organization", async () => {
+test("the app and flags become the page's defaults, and --context still names an organization", async () => {
   const flags = {
     app: "42",
     campaign: "3",
@@ -139,8 +238,8 @@ test("the app and flags become the page's defaults, and --context skips the orga
     organizationId: "1",
     applicationId: "42",
   });
-  const custom = (await stateOf({ org: undefined, context: '{"paywallId":1}' })).defaults;
-  assert.deepEqual(custom, { context: '{"paywallId":1}' });
+  const custom = (await stateOf({ context: '{"paywallId":1}' })).defaults;
+  assert.deepEqual(custom, { context: '{"paywallId":1}', organizationId: "1" });
 });
 
 test("it needs an organization", async () => {
@@ -319,7 +418,7 @@ test("a signal stops it when there's no terminal listener", async () => {
   assert.equal(signalled.disposed(), 1);
 });
 
-test("--context with --org keeps the organization, and alone skips the lookup", async () => {
+test("--context with --org keeps the organization, and one naming its own skips the lookup", async () => {
   const stateOf = async (overrides: Partial<DevInput>) => {
     const { ctx } = setup();
     let host = "";
@@ -335,5 +434,5 @@ test("--context with --org keeps the organization, and alone skips the lookup", 
     return state.defaults;
   };
   assert.deepEqual(await stateOf({ context: '{"a":1}' }), { context: '{"a":1}', organizationId: "1" });
-  assert.deepEqual(await stateOf({ org: undefined, context: '{"a":1}' }), { context: '{"a":1}' });
+  assert.deepEqual(await stateOf({ org: undefined, context: '{"organizationId":1}' }), { context: '{"organizationId":1}', organizationId: "1" });
 });

@@ -23,17 +23,17 @@ export function createAgentCredential(mint: () => Promise<string>): AgentCredent
       });
       return first;
     },
-    renew(rejected) {
+    renew(rejected, { expired = false } = {}) {
       if (renewing) return renewing;
       if (latest !== undefined && latest !== rejected) return Promise.resolve(latest);
-      if (renewals >= MAX_TOKEN_RENEWALS) {
+      if (!expired && renewals >= MAX_TOKEN_RENEWALS) {
         return Promise.reject(
           new WorkspaceError(
             `The API kept refusing dev's token after ${MAX_TOKEN_RENEWALS} new ones, so it stopped making more. Check \`superwall whoami\`, then restart dev.`,
           ),
         );
       }
-      renewals += 1;
+      if (!expired) renewals += 1;
       renewing = start().finally(() => {
         renewing = undefined;
       });

@@ -169,6 +169,17 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     return body.result;
   };
 
+  const contextFor = (slot: string, input: ContextInput | undefined) => {
+    const context = buildContext(slot, { ...defaults, ...input });
+    const { organizationId } = context;
+    if (defaults.organizationId !== undefined && organizationId !== undefined && String(organizationId) !== defaults.organizationId) {
+      throw new WorkspaceError(
+        `This dev is running against organization ${defaults.organizationId}, and its token reaches only that one. Restart dev with --org ${String(organizationId)} to use ${String(organizationId)}.`,
+      );
+    }
+    return context;
+  };
+
   const runMetric = async (call: MetricCall) => {
     const entrypoint = findEntrypoint(getManifest(), call.entrypoint);
     if (entrypoint.slot !== "chart.source@1") {
@@ -184,7 +195,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
       "metric",
       {
         metric: entrypoint.id,
-        context: buildContext(entrypoint.slot, { ...defaults, ...call.input }),
+        context: contextFor(entrypoint.slot, call.input),
         from: new Date(call.from ?? range.from).toISOString(),
         to: new Date(call.to ?? range.to).toISOString(),
         interval: call.interval ?? "day",
@@ -204,7 +215,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     if (entrypoint.slot !== "campaign.metric@1") {
       throw new WorkspaceError(`\`${entrypoint.id}\` (${entrypoint.slot}) isn't a readout.`);
     }
-    const context = buildContext(entrypoint.slot, { ...defaults, ...call.input });
+    const context = contextFor(entrypoint.slot, call.input);
     const started = Date.now();
     const result = await invoke("readout", { metric: entrypoint.id, context }, READOUT_LIMITS.timeoutMs);
     const problem = readoutProblem(result, (context.variantIds ?? []) as readonly number[]);
@@ -217,7 +228,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
     if (entrypoint.path === undefined) {
       throw new WorkspaceError(`\`${entrypoint.id}\` (${entrypoint.slot}) has no path to open.`);
     }
-    const context = buildContext(entrypoint.slot, { ...defaults, ...call.input });
+    const context = contextFor(entrypoint.slot, call.input);
     const token = randomBytes(24).toString("hex");
     const code = randomBytes(24).toString("hex");
     sessions.set(token, {

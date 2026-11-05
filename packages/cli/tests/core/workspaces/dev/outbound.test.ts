@@ -146,3 +146,70 @@ test("a read the manifest doesn't declare warns once per scope, and still runs",
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!, /GET \/v2\/projects needs projects:read, which superwall\.json doesn't declare/);
 });
+
+const REQUEST = new Request("https://api.workspace.internal/v2/projects");
+
+function refused(answers: Response[], limitedTo?: () => string | undefined, renew?: (rejected: string, why?: { expired: boolean }) => Promise<string>) {
+  const logged: string[] = [];
+  const renewals: { expired: boolean | undefined }[] = [];
+  const outbound = createOutbound({
+    apiOrigin: "https://api.test",
+    credential: {
+      current: async () => "t1",
+      renew: renew ?? (async (_rejected, why) => (renewals.push({ expired: why?.expired }), "t2")),
+    },
+    log: { info: (text) => logged.push(`info ${text}`), warn: (text) => logged.push(`warn ${text}`) },
+    declaredScopes: () => ["projects:read"],
+    ...(limitedTo ? { limitedTo } : {}),
+    fetchImpl: (async () => answers.shift()!) as never,
+  });
+  return { outbound, logged, renewals };
+}
+
+test("a 401 with the expired reason renews as an expiry, and retries", async () => {
+  const { outbound, renewals } = refused([
+    Response.json({ code: "invalid_session", reason: "agent_token_expired", message: "expired" }, { status: 401 }),
+    new Response("ok"),
+  ]);
+  const answer = await outbound(REQUEST.clone(), { narrowed: false });
+  assert.equal(answer.status, 200);
+  assert.deepEqual(renewals, [{ expired: true }]);
+});
+
+test("a 401 with no reason renews as a refusal, so it counts", async () => {
+  for (const body of [JSON.stringify({ code: "invalid_session", message: "no" }), "not json", "[]"]) {
+    const { outbound, renewals } = refused([new Response(body, { status: 401 }), new Response("ok")]);
+    await outbound(REQUEST.clone(), { narrowed: false });
+    assert.deepEqual(renewals, [{ expired: false }]);
+  }
+});
+
+test("when access has ended, the re-mint's 403 is what you see", async () => {
+  const { outbound, logged } = refused(
+    [Response.json({ code: "invalid_session", message: "Invalid Agent Token" }, { status: 401 })],
+    () => "7",
+    async () => {
+      throw new Error("You can't mint an Agent Token for organization 7: you aren't a member of it.");
+    },
+  );
+  const answer = await outbound(REQUEST.clone(), { narrowed: false });
+  assert.equal(answer.status, 401);
+  assert.match(logged.join(), /warn You can't mint an Agent Token for organization 7/);
+});
+
+test("a route a limited token can't use reads plainly, and the Worker gets the 403", async () => {
+  const message = "This Agent Token is limited to one organization and can't call this endpoint.";
+  const { outbound, logged } = refused([Response.json({ message }, { status: 403 })], () => "7");
+  const answer = await outbound(new Request("https://api.workspace.internal/v2/me"), { narrowed: false });
+  assert.equal(answer.status, 403);
+  assert.equal(((await answer.json()) as { message: string }).message, message);
+  assert.match(logged[0]!, /^warn GET \/v2\/me 403 \d+ms\. Dev's token is read-only, limited to organization 7 and the routes a workspace can read\. This Agent Token/);
+});
+
+test("against an API with no limited tokens, a 403 doesn't claim a limit", async () => {
+  const { outbound, logged } = refused([Response.json({ message: "No." }, { status: 403 }), Response.json({}, { status: 403 })], () => undefined);
+  await outbound(REQUEST.clone(), { narrowed: false });
+  assert.match(logged[0]!, /Dev is read-only\. No\.$/);
+  await outbound(REQUEST.clone(), { narrowed: false });
+  assert.match(logged[1]!, /Dev is read-only\.$/);
+});

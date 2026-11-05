@@ -56,3 +56,20 @@ test("renewals stop at the limit, and say so", async () => {
   await assert.rejects(credential.renew(token), /stopped making more/);
   assert.equal(mints(), MAX_TOKEN_RENEWALS + 1);
 });
+
+test("an expired token doesn't use up a renewal, however long dev runs", async () => {
+  const { credential, mints } = counting();
+  let token = await credential.current();
+  for (let index = 0; index < MAX_TOKEN_RENEWALS * 4; index += 1) token = await credential.renew(token, { expired: true });
+  assert.equal(mints(), MAX_TOKEN_RENEWALS * 4 + 1);
+  for (let index = 0; index < MAX_TOKEN_RENEWALS; index += 1) token = await credential.renew(token, { expired: false });
+  await assert.rejects(credential.renew(token), /stopped making more/);
+});
+
+test("past the limit, an expiry still gets a new token", async () => {
+  const { credential } = counting();
+  let token = await credential.current();
+  for (let index = 0; index < MAX_TOKEN_RENEWALS; index += 1) token = await credential.renew(token);
+  await assert.rejects(credential.renew(token), /stopped making more/);
+  assert.equal(await credential.renew(token, { expired: true }), `t${MAX_TOKEN_RENEWALS + 2}`);
+});

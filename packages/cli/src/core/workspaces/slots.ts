@@ -87,7 +87,7 @@ function positive(name: string, value: string | undefined): number | undefined {
   return parsed;
 }
 
-function parseContextJson(text: string): Record<string, unknown> {
+export function parseContextJson(text: string): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

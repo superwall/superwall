@@ -15,7 +15,7 @@ const FORWARDED_HEADERS = [
 
 export interface AgentCredential {
   current(): Promise<string>;
-  renew(rejected: string): Promise<string>;
+  renew(rejected: string, why?: { expired?: boolean }): Promise<string>;
 }
 
 export interface OutboundLog {
@@ -28,8 +28,20 @@ export interface OutboundOptions {
   credential: AgentCredential;
   log: OutboundLog;
   declaredScopes: () => readonly string[];
+  limitedTo?: () => string | undefined;
   fetchImpl?: typeof fetch;
 }
+
+const EXPIRED_REASON = "agent_token_expired";
+
+const refusalOf = async (answer: Response): Promise<{ reason?: unknown; message?: unknown }> => {
+  const text = await answer.clone().text();
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed === "object" && parsed !== null) return parsed;
+  } catch {}
+  return { message: text };
+};
 
 const ORGANIZATION_QUERY = /^\/v2\/organizations\/[^/]+\/query\/?$/i;
 const NARROWED_QUERY_MESSAGE =
@@ -50,7 +62,7 @@ export function rebuildResponse(
   return new ResponseClass(body, { status: answer.status, headers });
 }
 
-export function createOutbound({ apiOrigin, credential, log, declaredScopes, fetchImpl = fetch }: OutboundOptions): Outbound {
+export function createOutbound({ apiOrigin, credential, log, declaredScopes, limitedTo, fetchImpl = fetch }: OutboundOptions): Outbound {
   const warnedScopes = new Set<string>();
   const send = async (url: string, request: Request, body: ArrayBuffer | undefined, token: string) => {
     const headers = new Headers();
@@ -89,7 +101,8 @@ export function createOutbound({ apiOrigin, credential, log, declaredScopes, fet
     const token = await credential.current();
     let answer = await send(target, request, body, token);
     if (answer.status === 401) {
-      const renewed = await credential.renew(token).catch((error: Error) => {
+      const expired = (await refusalOf(answer)).reason === EXPIRED_REASON;
+      const renewed = await credential.renew(token, { expired }).catch((error: Error) => {
         log.warn(error.message);
         return undefined;
       });
@@ -97,8 +110,10 @@ export function createOutbound({ apiOrigin, credential, log, declaredScopes, fet
     }
     const took = Date.now() - started;
     if (answer.status === 403) {
-      const text = await answer.clone().text();
-      log.warn(`${label} ${answer.status} ${took}ms. Dev is read-only. ${text.slice(0, 200)}`);
+      const { message } = await refusalOf(answer);
+      const organization = limitedTo?.();
+      const reach = organization === undefined ? "Dev is read-only." : `Dev's token is read-only, limited to organization ${organization} and the routes a workspace can read.`;
+      log.warn(`${label} ${answer.status} ${took}ms. ${reach} ${String(message ?? "").slice(0, 200)}`.trimEnd());
     } else {
       log.info(`${label} ${answer.status} ${took}ms`);
     }

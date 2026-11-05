@@ -6,7 +6,7 @@ import { bundleWorkspace, type RunWrangler } from "@/core/workspaces/bundle";
 import { resolveAppScope, resolveOrganization } from "@/core/workspaces/organization";
 import { MANIFEST_FILE, readManifest, readProject, WorkspaceError } from "@/core/workspaces/project";
 import { warnIfSdkBehind } from "@/core/workspaces/sdk";
-import type { ContextInput } from "@/core/workspaces/slots";
+import { parseContextJson, type ContextInput } from "@/core/workspaces/slots";
 import { createAgentCredential } from "./credential";
 import { createOutbound } from "./outbound";
 import { startMiniflare, type StartRuntime } from "./runtime";
@@ -39,6 +39,7 @@ export interface DevRuntimeSeams {
 const WATCHED_DIRS = ["src", "vendor"];
 const WATCHED_FILES = new Set([MANIFEST_FILE, "wrangler.jsonc", "wrangler.json", "wrangler.toml"]);
 const DEBOUNCE_MS = 150;
+const TOKEN_TTL_SECONDS = 60 * 60;
 
 function watchProject(root: string, onChange: () => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -70,20 +71,31 @@ function watchProject(root: string, onChange: () => void): () => void {
   };
 }
 
-function agentCredential(ctx: CommandContext<"required">) {
-  return createAgentCredential(async () => {
+function mintRefusal(error: ApiError): string {
+  return /WorkOS access token/i.test(error.message)
+    ? "`superwall workspaces dev` needs a browser login: it makes its read-only token from your session, and an API key can't. Run `superwall login`."
+    : error.message;
+}
+
+function agentCredential(ctx: CommandContext<"required">, organizationId: string) {
+  let limited = true;
+  const credential = createAgentCredential(async () => {
     try {
-      const { token } = await ctx.api.post<{ token: string }>("/v2/me/agent-token", {});
-      return token;
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        throw new WorkspaceError(
-          "`superwall workspaces dev` needs a browser login: it makes its read-only token from your session, and an API key can't. Run `superwall login`.",
-        );
+      const minted = await ctx.api.post<{ token: string; organization_id?: number }>("/v2/me/agent-token", {
+        ttl_seconds: TOKEN_TTL_SECONDS,
+        organization_id: Number(organizationId),
+      });
+      if (minted.organization_id === undefined && limited) {
+        limited = false;
+        ctx.ui.warn("This API can't limit dev's token to one organization yet, so it reaches everything you can read.");
       }
+      return minted.token;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) throw new WorkspaceError(mintRefusal(error));
       throw error;
     }
   });
+  return { credential, limitedTo: () => (limited ? organizationId : undefined) };
 }
 
 const waitForSignal = (stop: () => Promise<void>): Promise<void> =>
@@ -97,7 +109,10 @@ const waitForSignal = (stop: () => Promise<void>): Promise<void> =>
     process.once("SIGTERM", finish);
   });
 
-async function resolveDefaults(ctx: CommandContext<"required">, input: DevInput): Promise<ContextInput> {
+async function resolveDefaults(
+  ctx: CommandContext<"required">,
+  input: DevInput,
+): Promise<ContextInput & { organizationId: string }> {
   const context: ContextInput = {
     campaignId: input.campaign,
     audienceId: input.audience,
@@ -109,12 +124,19 @@ async function resolveDefaults(ctx: CommandContext<"required">, input: DevInput)
     to: input.to,
     context: input.context,
   };
-  if (input.context !== undefined && input.app === undefined && input.org === undefined) return context;
+  const named = input.context === undefined ? undefined : parseContextJson(input.context).organizationId;
   const scope =
     input.app === undefined
-      ? { organizationId: await resolveOrganization(ctx, input.org) }
+      ? { organizationId: input.org ?? (named === undefined ? await resolveOrganization(ctx, undefined) : String(named)) }
       : await resolveAppScope(ctx.api, input.app, input.org);
-  return { ...context, ...scope };
+  const { organizationId } = scope;
+  if (organizationId === undefined) {
+    throw new WorkspaceError(`Couldn't find the organization of app ${input.app}. Say which with --org <id>.`);
+  }
+  if (!/^[1-9]\d*$/.test(organizationId)) {
+    throw new WorkspaceError(`--org takes an organization's id, a number. Got ${organizationId}.`);
+  }
+  return { ...context, ...scope, organizationId };
 }
 
 export async function runWorkspaceDev(
@@ -126,7 +148,7 @@ export async function runWorkspaceDev(
   ctx.ui.intro("Workspace dev");
   void warnIfSdkBehind(ctx.ui, root);
   const defaults = await resolveDefaults(ctx, input);
-  const credential = agentCredential(ctx);
+  const { credential, limitedTo } = agentCredential(ctx, defaults.organizationId);
   await credential.current();
 
   const first = await bundleWorkspace(root, seams.wrangler);
@@ -140,6 +162,7 @@ export async function runWorkspaceDev(
       credential,
       log,
       declaredScopes: () => manifest.scopes,
+      limitedTo,
       ...(seams.fetchImpl ? { fetchImpl: seams.fetchImpl } : {}),
     }),
   });
@@ -180,7 +203,8 @@ export async function runWorkspaceDev(
     unwatch = watchProject(root, () => void rebuild());
 
     ctx.ui.success(`Open ${started.hostOrigin}`);
-    ctx.ui.info("API calls use a read-only token as you. Writes, outside hosts and raw sockets are refused.");
+    const reach = limitedTo() === undefined ? "" : `, limited to organization ${defaults.organizationId}`;
+    ctx.ui.info(`API calls use a read-only token as you${reach}. Writes, outside hosts and raw sockets are refused.`);
     seams.onReady?.({ host: started.hostOrigin, frame: started.frameOrigin }, rebuild);
     await (seams.until ?? waitForSignal)(stop);
   } finally {

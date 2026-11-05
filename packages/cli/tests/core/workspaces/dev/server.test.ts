@@ -375,3 +375,13 @@ test("a worker that throws answers 500, not a hang", async () => {
   assert.equal(answer.status, 500);
   assert.match(((await answer.json()) as { error: string }).error, /boom/);
 });
+
+test("the page can't point dev at an organization its token doesn't reach", async () => {
+  const { server, seen } = await start();
+  const answer = await post(`${server.hostOrigin}/__dev/sessions`, { entrypoint: "home", input: { organizationId: "2" } });
+  assert.equal(answer.status, 400);
+  assert.match(((await answer.json()) as { error: string }).error, /running against organization 1.*--org 2/);
+  const custom = await post(`${server.hostOrigin}/__dev/sessions`, { entrypoint: "home", input: { context: '{"organizationId":3}' } });
+  assert.match(((await custom.json()) as { error: string }).error, /--org 3/);
+  assert.equal(seen.length, 0);
+});

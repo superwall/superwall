@@ -349,6 +349,14 @@ as the viewer. The platform itself lives in a private repo.
   loader id, whose `Egress` knows it's narrowed. That is what lets `dev` refuse such a
   frame SQL, as the real runtime does. `scopes.ts` is a hand-written map of routes to
   read scopes; it only warns, so a stale row can't block anyone.
+- **`dev`'s token is limited to one organization and lasts an hour.** It mints with `ttl_seconds` and
+  `organization_id`, so it needs an organization even for `--context`, and the page can't switch to
+  another. It answers `agent_token_expired` by minting again, and that must not count toward
+  `MAX_TOKEN_RENEWALS`, or `dev` stops after three hours. A 401 with no reason counts: re-minting then
+  gets a 403 that says why, so show that. The token only goes out through the Worker's outbound:
+  a limited token can't call `/v2/me` or `/v2/workspaces`, so `whoami`, drafts and the CLI's own calls
+  stay on the session. An API with no `organization_id` in its answer hasn't deployed this, so warn and
+  carry on.
 - **Push and pull reuse the framework's git code.** `core/paywalls/source` is shared: a
   `SourceScope` of kind `workspace` owns its whole repo, so a directory named `paywalls/` means
   nothing there, and its one derived file is `superwall.workspace.json`, which records the
