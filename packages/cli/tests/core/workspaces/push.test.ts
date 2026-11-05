@@ -249,11 +249,11 @@ test("an app-only workspace prints the app route, which opens something", { skip
   const id = run.workspaces[0]!.id;
   const info = run.said("info").join("\n");
   assert.ok(info.includes(`Open https://app.superwall.dev/7/42/apps/${id}/cohorts (in Pets)`));
-  assert.match(info, /For another app, run `superwall workspaces open cohorts --app <id>`/);
+  assert.match(info, /Each of your other apps has the same page/);
 
   const oneApp = setup({ projects: [{ id: 1, applications: [{ id: 42 }] }], manifest: APP_ONLY as never });
   await runWorkspacePush(oneApp.ctx, input(appOnlyProject()), noWait);
-  assert.doesNotMatch(oneApp.said("info").join(), /For another app/);
+  assert.doesNotMatch(oneApp.said("info").join(), /other apps/);
   assert.match(oneApp.said("info").join(), /\(in 42\)/);
 
   const noApps = setup({ manifest: APP_ONLY as never });

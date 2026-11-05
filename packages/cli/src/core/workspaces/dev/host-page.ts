@@ -73,7 +73,29 @@ svg { display: block; width: 100%; height: 160px; margin-bottom: 12px; }
 .row h1 { flex: 1; }
 `;
 
+export const WATCH_LOAD = `
+const watchLoad = (doc, ms, isReady, onLate) => {
+  let timer = 0;
+  const stop = () => {
+    clearTimeout(timer);
+    doc.removeEventListener("visibilitychange", restart);
+  };
+  const restart = () => {
+    clearTimeout(timer);
+    if (doc.visibilityState !== "visible") return;
+    timer = setTimeout(() => {
+      stop();
+      if (!isReady()) onLate();
+    }, ms);
+  };
+  doc.addEventListener("visibilitychange", restart);
+  restart();
+  return stop;
+};
+`;
+
 const SCRIPT = `
+${WATCH_LOAD}
 const PROTOCOL = ${JSON.stringify(BRIDGE_PROTOCOL)};
 const LOAD_TIMEOUT_MS = ${MOUNT_LOAD_TIMEOUT_MS};
 const TOKENS = { light: ${JSON.stringify(LIGHT_TOKENS)}, dark: ${JSON.stringify(DARK_TOKENS)} };
@@ -155,7 +177,8 @@ const showFrame = async (entrypoint, generation) => {
   const slot = state.slots[session.slot];
   const fills = slot.shape === "page" || session.slot === "app.dashboard.widget@1";
   const nonce = crypto.randomUUID().replaceAll("-", "");
-  mount = { nonce, origin: session.origin, connected: false, slot, ready: false, timer: 0 };
+  mount?.stopWatching?.();
+  mount = { nonce, origin: session.origin, connected: false, slot, ready: false, stopWatching: null };
   frame = el("iframe", {
     class: fills ? "fills" : undefined,
     title: entrypoint.title,
@@ -164,10 +187,11 @@ const showFrame = async (entrypoint, generation) => {
     onload: () => {
       mount.connected = true;
       frame.contentWindow.postMessage(hostMessage({ _tag: "connect", theme: theme(), context: session.context }), mount.origin);
-      clearTimeout(mount.timer);
-      mount.timer = setTimeout(() => {
-        if (!mount.ready) log("It didn't send ready within " + LOAD_TIMEOUT_MS / 1000 + " seconds. In the dashboard this shows as: This app couldn't load. Try again.");
-      }, LOAD_TIMEOUT_MS);
+      mount.stopWatching?.();
+      const watched = mount;
+      mount.stopWatching = watchLoad(document, LOAD_TIMEOUT_MS, () => watched.ready, () => {
+        log("It didn't send ready within " + LOAD_TIMEOUT_MS / 1000 + " seconds. In the dashboard this shows as: This app couldn't load. Try again.");
+      });
     },
   });
   if (!fills && slot.minHeight) frame.style.height = slot.minHeight + "px";

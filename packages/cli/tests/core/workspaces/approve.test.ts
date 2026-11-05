@@ -42,6 +42,7 @@ function setup(
   const api = {
     get: async (path: string) => {
       if (path === "/v2/me/organizations") return { data: extra.role ? [{ id: 7, role: extra.role }] : [] };
+      if (path.endsWith("/installations")) return { data: [] };
       return path.endsWith("/versions") ? { data: versions } : workspace;
     },
     post: async (path: string) => {
@@ -138,6 +139,28 @@ test("owners and admins are asked as before, and a 403 from the API shows its ow
     },
   });
   await assert.rejects(runWorkspaceApprove(other.ctx, input({ yes: true, acceptChanges: true })), /Down/);
+});
+
+test("the report shows the push's note, not the generic subject", async () => {
+  const noted = version(2, { commit_message: "push workspace/churn\n\nAdd the cohort page\n\nSuperwall-Workspace: 42\nSuperwall-Cli: 2.5.0\n" });
+  const first = setup([noted, live], {}, 1);
+  await runWorkspaceApprove(first.ctx, input());
+  assert.match(first.said("report").join(), /\nAdd the cohort page\n/);
+  const bare = version(2, { commit_message: "push workspace/churn\n\nSuperwall-Workspace: 42\n" });
+  const second = setup([bare, live], {}, 1);
+  await runWorkspaceApprove(second.ctx, input());
+  assert.match(second.said("report").join(), /\npush workspace\/churn\n/);
+  const mine = version(2, { commit_message: "Fix the chart\n\nLonger body" });
+  const third = setup([mine, live], {}, 1);
+  await runWorkspaceApprove(third.ctx, input());
+  assert.match(third.said("report").join(), /\nFix the chart\n/);
+});
+
+test("approving something with nothing installed says only its author can see it", async () => {
+  const metricOnly = manifest({ entrypoints: [{ id: "count", slot: "chart.source@1", title: "C", metric: {} }] });
+  const { ctx, said } = setup([version(2, { manifest: metricOnly as never })], { interactive: true, mode: "rich", confirm: true }, null);
+  await runWorkspaceApprove(ctx, input());
+  assert.match(said("success").join(), /Nothing is installed yet, so only its author can see it until you choose where it shows/);
 });
 
 test("a yes in a terminal approves, and points at install", async () => {
