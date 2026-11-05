@@ -131,8 +131,11 @@ skill.
   a write that timed out may already have landed. The API reference is cached
   for a day and a stale copy still answers offline. A browser login reaches
   every organization and stores no organization name; an API key belongs to one
-  and stores its name. `feedback` looks the app's account up best-effort and
-  never waits or fails on it.
+  and stores its name. `feedback` posts to `/v2/feedback`, which merges a
+  report into an existing request or opens one; logged out, or when that call
+  fails for any reason but a 429, it sends the anonymous telemetry event
+  instead, so a report is never lost. It is an MCP `write`, not
+  `destructive`: agents send it without asking (Superwall's terms cover it).
 - **Source pushes never erase.** A version only counts as pushed once its
   source has landed and been linked: `superwall.lock` records the snapshot
   with `sourcePending: <version>` until then, so a rerun finishes that

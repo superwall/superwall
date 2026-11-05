@@ -1,11 +1,12 @@
-
 import { FEEDBACK_KINDS, type FeedbackKind } from "./kinds";
 import type { CommandContext } from "@/program/command";
-import type { SuperwallApi } from "@/core/api/client";
-import { findApplication } from "@/core/api/lookup";
+import { ApiError, type SuperwallApi } from "@/core/api/client";
+import { appNotFound, findApplication, findProject, parseDashboardUrl } from "@/core/api/lookup";
 import { orgIdOf } from "@/core/api/orgs";
 import { readSession } from "@/core/account/storage";
 import { readAnonymousId, readOnboardedApp } from "@/core/state/config";
+import { plural } from "@/core/app-store-connect/resources/operation";
+import { field, isRecord, textField } from "@/core/json";
 import { readInput } from "@/program/host";
 import { detectAgent, TELEMETRY_HOST, TELEMETRY_KEY, VERSION } from "@/environment";
 
@@ -23,18 +24,40 @@ interface FeedbackAttachment {
   truncated: boolean;
 }
 
-interface Feedback {
-  title?: string;
-  message: string;
-  kind: FeedbackKind;
-  command?: string;
-  agent?: string;
+interface FeedbackTarget {
   projectId?: string;
   applicationId?: string;
   organizationId?: string;
+}
+
+interface Feedback extends FeedbackTarget {
+  title?: string;
+  message: string;
+  kind: FeedbackKind;
+  useCase?: string;
+  command?: string;
+  agent?: string;
   context: Record<string, string>;
   attachments: FeedbackAttachment[];
 }
+
+export interface FeedbackRequest {
+  id: number;
+  title: string;
+  kind: string;
+  status: string;
+  report_count: number;
+  organization_count: number;
+}
+
+export interface FeedbackReport {
+  object: "feedback_report";
+  id: number;
+  outcome: "created" | "merged";
+  request: FeedbackRequest;
+}
+
+type FeedbackResult = FeedbackReport | { submitted: boolean; outcome?: "queued" };
 
 export function parseContext(pairs: string[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -44,14 +67,6 @@ export function parseContext(pairs: string[]): Record<string, string> {
     out[pair.slice(0, at).trim()] = pair.slice(at + 1).trim();
   }
   return out;
-}
-
-function linkedApp(cwd = proc?.cwd() ?? ""): {
-  projectId?: string;
-  applicationId?: string;
-} {
-  const app = readOnboardedApp(cwd);
-  return { projectId: app?.projectId, applicationId: app?.applicationId };
 }
 
 export function readAttachments(paths: string[]): FeedbackAttachment[] {
@@ -67,6 +82,86 @@ export function readAttachments(paths: string[]): FeedbackAttachment[] {
       truncated,
     };
   });
+}
+
+export async function resolveFeedbackTarget(
+  api: SuperwallApi | undefined,
+  { app, project }: { app?: string; project?: string },
+  cwd = proc?.cwd() ?? "",
+): Promise<FeedbackTarget> {
+  if (app) {
+    const dashboard = parseDashboardUrl(app);
+    if (dashboard) return { applicationId: dashboard.applicationId, organizationId: dashboard.orgId, projectId: project };
+    if (/^\d+$/.test(app) || !api) return { applicationId: app, projectId: project };
+    const found = await findApplication(api, app).catch(() => null);
+    if (found === null) return { applicationId: app, projectId: project };
+    if (!found) throw appNotFound(app);
+    return { applicationId: String(found.app.id), projectId: String(found.project.id), organizationId: orgIdOf(found.project) };
+  }
+  if (project) {
+    const found = api ? await findProject(api, project).catch(() => undefined) : undefined;
+    return { projectId: project, organizationId: found && orgIdOf(found) };
+  }
+  const linked = readOnboardedApp(cwd);
+  return { projectId: linked?.projectId, applicationId: linked?.applicationId };
+}
+
+const numericId = (id: string | undefined): number | undefined =>
+  id !== undefined && /^\d+$/.test(id) ? Number(id) : undefined;
+
+export function buildFeedbackBody(feedback: Feedback, via: FeedbackVia): Record<string, unknown> {
+  const applicationId = numericId(feedback.applicationId);
+  const context = feedback.projectId ? { project: feedback.projectId, ...feedback.context } : feedback.context;
+  return {
+    kind: feedback.kind,
+    message: feedback.message,
+    title: feedback.title,
+    use_case: feedback.useCase,
+    command: feedback.command,
+    application_id: applicationId,
+    organization_id: applicationId === undefined ? numericId(feedback.organizationId) : undefined,
+    context,
+    attachments: feedback.attachments,
+    agent: feedback.agent,
+    via,
+    cli_version: VERSION,
+  };
+}
+
+export function parseFeedbackReport(value: unknown): FeedbackReport | undefined {
+  const request = field(value, "request");
+  const outcome = field(value, "outcome");
+  const id = field(value, "id");
+  if (!isRecord(request) || typeof id !== "number" || (outcome !== "created" && outcome !== "merged")) return undefined;
+  const count = (key: string): number => {
+    const found = field(request, key);
+    return typeof found === "number" ? found : 0;
+  };
+  const requestId = field(request, "id");
+  return {
+    object: "feedback_report",
+    id,
+    outcome,
+    request: {
+      id: typeof requestId === "number" ? requestId : 0,
+      title: textField(request, "title") ?? "",
+      kind: textField(request, "kind") ?? "other",
+      status: textField(request, "status") ?? "open",
+      report_count: count("report_count"),
+      organization_count: count("organization_count"),
+    },
+  };
+}
+
+const rateLimited = (error: unknown): boolean => error instanceof ApiError && error.status === 429;
+
+async function sendToApi(api: SuperwallApi, feedback: Feedback, via: FeedbackVia): Promise<FeedbackReport | undefined> {
+  try {
+    return parseFeedbackReport(await api.post<unknown>("/v2/feedback", buildFeedbackBody(feedback, via)));
+  } catch (error) {
+    if (rateLimited(error)) throw error;
+    return undefined;
+  }
 }
 
 export function buildFeedbackEvent(
@@ -90,6 +185,7 @@ export function buildFeedbackEvent(
       title: feedback.title ?? null,
       message: feedback.message,
       kind: feedback.kind,
+      use_case: feedback.useCase ?? null,
       command: feedback.command ?? null,
       project_id: feedback.projectId ?? null,
       application_id: feedback.applicationId ?? null,
@@ -111,7 +207,7 @@ export function buildFeedbackEvent(
   };
 }
 
-async function submitFeedback(feedback: Feedback, via: FeedbackVia): Promise<boolean> {
+async function sendToTelemetry(feedback: Feedback, via: FeedbackVia): Promise<boolean> {
   const osRelease = proc ? await import("node:os").then((os) => os.release()).catch(() => undefined) : undefined;
   const payload = buildFeedbackEvent(feedback, via, readAnonymousId(), readSession(), osRelease);
   try {
@@ -127,26 +223,22 @@ async function submitFeedback(feedback: Feedback, via: FeedbackVia): Promise<boo
   }
 }
 
-const ORG_LOOKUP_MS = 3000;
+async function submitFeedback(api: SuperwallApi | undefined, feedback: Feedback, via: FeedbackVia): Promise<FeedbackResult> {
+  const report = api ? await sendToApi(api, feedback, via) : undefined;
+  if (report) return report;
+  const submitted = await sendToTelemetry(feedback, via);
+  return submitted ? { submitted, outcome: "queued" } : { submitted };
+}
 
-export async function organizationOfApp(
-  api: SuperwallApi | undefined,
-  applicationId: string | undefined,
-): Promise<string | undefined> {
-  if (!api || !applicationId) return undefined;
-  const lookup = findApplication(api, applicationId)
-    .then((found) => (found ? orgIdOf(found.project) : undefined))
-    .catch(() => undefined);
-  const timeout = new Promise<undefined>((resolve) => {
-    const timer: { unref?: () => void } = setTimeout(() => resolve(undefined), ORG_LOOKUP_MS);
-    timer.unref?.();
-  });
-  return Promise.race([lookup, timeout]);
+export function formatFeedbackReport(report: FeedbackReport): string {
+  const { title, report_count, organization_count } = report.request;
+  if (report.outcome === "created") return `Opened a new request: '${title}'`;
+  return `Merged into '${title}' (${plural(report_count, "report")} from ${plural(organization_count, "team")})`;
 }
 
 interface FeedbackInput {
   args: { message: string | undefined; };
-  flags: { title: string | undefined; kind: string; command: string | undefined; app: string | undefined; project: string | undefined; context: string[]; file: string[]; agent: string | undefined; };
+  flags: { title: string | undefined; kind: string; useCase: string | undefined; command: string | undefined; app: string | undefined; project: string | undefined; context: string[]; file: string[]; agent: string | undefined; };
 }
 
 export async function runFeedback(ctx: CommandContext<"optional">, { args, flags }: FeedbackInput): Promise<void> {
@@ -165,7 +257,7 @@ export async function runFeedback(ctx: CommandContext<"optional">, { args, flags
   }
   if (!message) {
     throw new Error(
-      'Usage: superwall feedback "<message>" [--title ...] [--kind bug] [--file log.txt]',
+      'Usage: superwall feedback "<message>" [--title ...] [--kind bug] [--use-case ...] [--file log.txt]',
     );
   }
 
@@ -173,35 +265,25 @@ export async function runFeedback(ctx: CommandContext<"optional">, { args, flags
   if (!kind) throw new Error(`--kind must be one of: ${FEEDBACK_KINDS.join(", ")}`);
   const agent = flags.agent ?? detectAgent();
   const attachments = readAttachments(flags.file.filter(Boolean));
-
   const context = parseContext(flags.context);
-  const linked = linkedApp();
-  const applicationId = flags.app ?? linked.applicationId;
+  const target = await resolveFeedbackTarget(ctx.api, { app: flags.app, project: flags.project });
 
   const via = agent || !interactive ? "agent" : "human";
   const spin = interactive ? ui.spinner() : null;
   spin?.start("Sending your feedback");
-  const ok = await submitFeedback(
-    {
-      title: flags.title,
-      message,
-      kind,
-      command: flags.command,
-      agent,
-      projectId: flags.project ?? linked.projectId,
-      applicationId,
-      organizationId: await organizationOfApp(ctx.api, applicationId),
-      context,
-      attachments,
-    },
+  const result = await submitFeedback(
+    ctx.api,
+    { title: flags.title, message, kind, useCase: flags.useCase, command: flags.command, agent, context, attachments, ...target },
     via,
   );
-  spin?.stop(ok ? "Sent" : "Failed to send");
+  const sent = "outcome" in result;
+  spin?.stop(sent ? "Sent" : "Failed to send");
 
-  if (json) return ctx.output.data({ submitted: ok });
-  if (!ok) {
+  if (json) return ctx.output.data(result);
+  if (!sent) {
     throw new Error("Couldn't send your feedback - check your connection and try again.");
   }
+  if ("request" in result) return void ui.success(formatFeedbackReport(result));
   ui.success(
     "Thank you! We've received your feedback and will read through it. Really appreciate you helping us make Superwall better.",
   );

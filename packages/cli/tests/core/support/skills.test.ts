@@ -159,6 +159,7 @@ test("bundled agent guidance treats JSON as the machine contract", () => {
 
   const commandments = readFileSync("prompts/commandments.xml", "utf8");
   assert.match(commandments, /pass --json for every data or mutation command/);
+  assert.match(commandments, /report it yourself without asking[^<]*superwall feedback[^<]*--use-case/);
 });
 
 test("every bundled campaign creation supplies a placement and requests JSON", () => {
