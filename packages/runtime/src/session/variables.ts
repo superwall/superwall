@@ -73,6 +73,12 @@ export type SuperwallDeviceVariables = {
   fontScale?: number;
   preferredContentSizeCategory?: string;
   isLowPowerModeEnabled?: boolean;
+  /**
+   * @deprecated The native SDK always reports `true`, so this says nothing
+   * about Apple Pay. On the web use `useApplePay()`; in `checkout: "applePay"`
+   * mode Stripe's `canMakePayment()` decides, reported by
+   * `useApplePay(product).product`.
+   */
   isApplePayAvailable?: boolean;
   isMac?: boolean;
   isSandbox?: string;
