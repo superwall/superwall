@@ -24,9 +24,7 @@ import {
   RotateDeviceIcon,
   RotateIcon,
   SlidersIcon,
-  SmartphoneIcon,
   SunIcon,
-  CompassIcon,
 } from "../components/icons";
 import { Tooltip } from "../components/Tooltip";
 import { SidePanel } from "../components/panels/SidePanel";
@@ -133,7 +131,6 @@ const StagePane = ({
   onResize,
   canvas,
   browser,
-  place,
 }: {
   label?: string;
   width: number;
@@ -152,7 +149,6 @@ const StagePane = ({
   onResize?: (next: FrameSize) => void;
   canvas?: React.RefObject<CanvasHandle | null>;
   browser?: BrowserLayout;
-  place?: PreviewPlace;
 }) => {
   const scale = useCanvasScale();
   const [broken, setBroken] = React.useState(false);
@@ -160,17 +156,12 @@ const StagePane = ({
   return (
     <div className="flex flex-none flex-col gap-2">
       {label && (
-        <div
-          className="relative w-fit origin-bottom-left"
+        <span
+          className="origin-bottom-left text-xs whitespace-nowrap text-fg-tertiary"
           style={{ transform: `scale(${1 / scale})` }}
         >
-          <span className="text-xs whitespace-nowrap text-fg-tertiary">{label}</span>
-          {place?.teleported && (
-            <div className="absolute top-1/2 left-full ml-2 -translate-y-1/2">
-              <PlaceBadge place={place} />
-            </div>
-          )}
-        </div>
+          {label}
+        </span>
       )}
       <div className="relative">
         {image && !broken ? (
@@ -222,30 +213,10 @@ const StagePane = ({
   );
 };
 
-const PlaceBadge = ({ place }: { place: PreviewPlace }) => {
-  const browser = place.where === "browser";
-  const label = browser ? "In browser" : "In app";
-  return (
-    <span
-      role="status"
-      aria-label={label}
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors duration-hover ${
-        browser
-          ? "border-primary/30 bg-primary/10 text-primary"
-          : "border-border bg-background text-fg-secondary"
-      }`}
-    >
-      {browser ? <CompassIcon /> : <SmartphoneIcon />}
-      {label}
-    </span>
-  );
-};
-
 const CanvasFooter = ({ children }: React.PropsWithChildren) => {
   const scale = useCanvasScale();
   return (
     <div
-      data-testid="canvas-footer"
       className="w-fit origin-top self-center"
       style={{ transform: `scale(${1 / scale})` }}
       onPointerDown={(event) => event.stopPropagation()}
@@ -655,7 +626,6 @@ export const SurfaceEditor = ({
                   landscape={landscape}
                   theme={theme}
                   browser={browserFor(comparing.place, compareWeb)}
-                  place={comparing.place}
                 />
               )}
               <StagePane
@@ -682,23 +652,16 @@ export const SurfaceEditor = ({
               />
             </div>
             <CanvasFooter>
-              <div className="relative">
-                {local.place.teleported && (
-                  <div className="absolute top-1/2 right-full mr-3 -translate-y-1/2">
-                    <PlaceBadge place={local.place} />
-                  </div>
-                )}
-                <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-fg-secondary select-none">
-                  <Switch
-                    label="Introductory offer"
-                    checked={hasIntroductoryOffer(hostState)}
-                    onChange={(checked) =>
-                      setEdited((current) => ({ ...current, introductoryOfferEligible: checked }))
-                    }
-                  />
-                  Introductory offer
-                </label>
-              </div>
+              <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-fg-secondary select-none">
+                <Switch
+                  label="Introductory offer"
+                  checked={hasIntroductoryOffer(hostState)}
+                  onChange={(checked) =>
+                    setEdited((current) => ({ ...current, introductoryOfferEligible: checked }))
+                  }
+                />
+                Introductory offer
+              </label>
             </CanvasFooter>
           </div>
         </Canvas>

@@ -645,7 +645,6 @@ describe("SurfaceEditor's smaller states", () => {
       flow_position,
     });
 
-    expect(screen.queryByText("In app")).toBeNull();
     expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
 
     await send([
@@ -654,10 +653,7 @@ describe("SurfaceEditor's smaller states", () => {
       view("plan", 1),
     ]);
     expect(await screen.findByText("Teleported to the browser")).toBeDefined();
-    const footer = within(screen.getByTestId("canvas-footer"));
-    expect(footer.getByRole("status", { name: "In browser" })).toBeDefined();
-    expect(footer.getByRole("switch", { name: "Introductory offer" })).toBeDefined();
-    expect(within(screen.getByTestId("device-frame")).queryByRole("status")).toBeNull();
+    expect(screen.queryByText("In browser")).toBeNull();
     expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBe("phone");
     expect(screen.getByTestId("browser-bottom-bar")).toBeDefined();
     expect(screen.getAllByTitle("plus-upgrade preview")).toEqual([frame]);
@@ -665,14 +661,9 @@ describe("SurfaceEditor's smaller states", () => {
 
     await send([view("index", 0, "back")]);
     expect(await screen.findByText("Back in the app")).toBeDefined();
-    expect(
-      within(screen.getByTestId("canvas-footer")).getByRole("status", { name: "In app" }),
-    ).toBeDefined();
+    expect(screen.queryByText("In app")).toBeNull();
     expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Reload preview" }));
-    await act(async () => {});
-    expect(screen.queryByRole("status", { name: "In app" })).toBeNull();
   });
 
   it("reloads a teleported preview in the app when the device changes", async () => {
@@ -699,11 +690,10 @@ describe("SurfaceEditor's smaller states", () => {
         }),
       );
     });
-    expect(screen.getByRole("status", { name: "In browser" })).toBeDefined();
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBe("phone");
 
     fireEvent.change(screen.getByLabelText("Device"), { target: { value: "pixel-10" } });
     await act(async () => {});
-    expect(screen.queryByRole("status", { name: "In browser" })).toBeNull();
     expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
     expect(screen.getAllByTitle("plus-upgrade preview").length).toBe(2);
 
@@ -799,12 +789,10 @@ describe("SurfaceEditor's smaller states", () => {
       { event_name: "open_url_external", url: "http://x/", teleport: true },
       view("plan", 1, "forward"),
     ]);
-    expect(screen.getByRole("status", { name: "In browser" })).toBeDefined();
     expect(screen.queryByTestId("presentation-backdrop")).toBeNull();
     expect(screen.getByTestId("presentation-page").style.top).toBe("0px");
 
     await send([view("index", 0, "back")]);
-    expect(screen.getByRole("status", { name: "In app" })).toBeDefined();
     expect(screen.getByTestId("presentation-backdrop")).toBeDefined();
   });
 
@@ -860,14 +848,12 @@ describe("SurfaceEditor's smaller states", () => {
         }),
       );
     });
-    const badge = screen.getByRole("status", { name: "In browser" });
-    expect(screen.getByText("Original").parentElement?.contains(badge)).toBe(true);
-    expect(within(screen.getByTestId("canvas-footer")).queryByRole("status")).toBeNull();
+    expect(screen.getAllByTestId("device-frame")[0]?.getAttribute("data-browser")).toBe("phone");
 
     view.rerender(editor(second));
     await act(async () => {});
-    expect(screen.queryByRole("status", { name: "In browser" })).toBeNull();
-    expect(screen.queryByRole("status", { name: "In app" })).toBeNull();
+    for (const frame of screen.getAllByTestId("device-frame"))
+      expect(frame.getAttribute("data-browser")).toBeNull();
   });
 
   it("puts zoom in the toolbar: step buttons, and the percentage fits", async () => {
