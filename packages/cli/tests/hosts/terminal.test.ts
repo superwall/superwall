@@ -106,6 +106,19 @@ test("startAutoUpdate starts nothing without an entry point and reports a spawn 
   assert.equal(startAutoUpdate(MINOR_BUMP, failing, () => true), false);
 });
 
+test("a child that fails after starting doesn't take the finished command down with it", () => {
+  useHome();
+  let child: EventEmitter | undefined;
+  const impl = (() => {
+    child = Object.assign(new EventEmitter(), { unref: () => {} });
+    return child;
+  }) as unknown as typeof spawn;
+
+  assert.equal(startAutoUpdate(MINOR_BUMP, impl, () => true), true);
+
+  assert.doesNotThrow(() => child?.emit("error", Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" })));
+});
+
 test("a CLI npm didn't install globally records the attempt and starts nothing", () => {
   const home = useHome();
   const calls: { cmd: string; args: readonly string[]; options: Record<string, unknown> }[] = [];

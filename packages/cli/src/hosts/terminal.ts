@@ -54,6 +54,7 @@ export function startAutoUpdate(
       stdio: "ignore",
       env: { ...process.env, SW_AUTO_UPDATE: version },
     });
+    child.on("error", () => {});
     child.unref();
     return true;
   } catch {
