@@ -159,6 +159,41 @@ test("dev outlives any number of expiries, and a token that keeps being refused 
   assert.equal((await call()).status, 200);
 });
 
+test("the runtime runs the bundle on the date and flags in its config, on every rebuild", async () => {
+  const { ctx } = setup();
+  let date = "2026-08-01";
+  const wrangler = Object.assign(fakeWrangler(), {
+    readConfig: async (root: string) => ({
+      config: { configPath: path.join(root, "superwall.json"), main: "src/worker.ts", compatibility_date: date, compatibility_flags: ["nodejs_compat"] },
+    }),
+  });
+  const seen: unknown[] = [];
+  let rebuild!: () => Promise<void>;
+  const seams = harness({
+    wrangler,
+    startRuntime: async (options) => {
+      seen.push(options.compatibility);
+      return {
+        fetch: async () => new Response(),
+        update: async (_code, compatibility) => void seen.push(compatibility),
+        dispose: async () => {},
+      };
+    },
+    onReady: (_urls, trigger) => {
+      rebuild = trigger;
+    },
+    until: async () => {
+      date = "2026-08-02";
+      await rebuild();
+    },
+  });
+  await runWorkspaceDev(ctx, input(project()), seams.runtime);
+  assert.deepEqual(seen, [
+    { date: "2026-08-01", flags: ["nodejs_compat"] },
+    { date: "2026-08-02", flags: ["nodejs_compat"] },
+  ]);
+});
+
 test("dev's own calls stay on the session: the limited token only goes out through the Worker", async () => {
   const gets: string[] = [];
   const { ctx } = setup({

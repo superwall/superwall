@@ -6,6 +6,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { bundleWorkspace } from "@/core/workspaces/bundle";
 import { runWorkspaceDev } from "@/core/workspaces/dev/run";
+import { startMiniflare } from "@/core/workspaces/dev/runtime";
 import { recordingRenderer, type RendererCall } from "../../../helpers/renderer";
 import { scratch } from "../fixture";
 
@@ -254,36 +255,25 @@ export default defineWorkspace({ client, fetch: () => clientPage(client, { title
 });
 
 describe("the date and flags a bundle runs on", () => {
-  test("it runs on its own, as on the platform, and a change takes effect on the next rebuild", { timeout: 120_000 }, async () => {
-    const worker = `export default { fetch: () => new Response(String(typeof globalThis.Buffer)) };`;
+  test("the loaded bundle gets them, as on the platform, and an update changes them", { timeout: 120_000 }, async () => {
     const root = reactPage();
-    fs.writeFileSync(path.join(root, "superwall.json"), JSON.stringify({ name: "Flags", scopes: [], entrypoints: [{ id: "home", slot: "org.page@1", title: "Home", path: "/" }] }));
-    fs.writeFileSync(path.join(root, "src/worker.ts"), worker);
-    fs.writeFileSync(path.join(root, "wrangler.jsonc"), `{ ${BASE_CONFIG} }`);
-    let origins = { host: "", frame: "" };
-    let rebuild!: () => Promise<void>;
-    const { ctx } = context();
-    await runWorkspaceDev(ctx, { dir: root, port: 0, org: "21450" }, {
-      fetchImpl: JSON_API,
-      onReady: (urls, trigger) => {
-        origins = urls;
-        rebuild = trigger;
-      },
-      until: async () => {
-        const body = async () => {
-          const { host, frame } = origins;
-          const created = await fetch(`${host}/__dev/sessions`, { method: "POST", headers: { origin: host }, body: JSON.stringify({ entrypoint: "home", input: {} }) });
-          const { connect_url } = (await created.json()) as { connect_url: string };
-          const connected = await fetch(connect_url, { redirect: "manual" });
-          const cookie = connected.headers.get("set-cookie")!.split(";")[0]!;
-          return (await fetch(`${frame}/`, { headers: { cookie } })).text();
-        };
-        assert.equal(await body(), "undefined", "no flag, no Buffer");
-        fs.writeFileSync(path.join(root, "wrangler.jsonc"), `{ ${BASE_CONFIG}, "compatibility_flags": ["nodejs_compat"] }`);
-        await rebuild();
-        assert.equal(await body(), "function", "nodejs_compat reached the loaded bundle");
-      },
+    const module = `export default { fetch: () => new Response(typeof globalThis.Buffer + " " + typeof globalThis.MessageChannel) };`;
+    const runtime = await startMiniflare({
+      root,
+      module,
+      compatibility: { date: "2024-09-23", flags: [] },
+      outbound: async () => new Response(),
     });
+    const body = async () => (await runtime.fetch("http://localhost/", {})).text();
+    try {
+      assert.equal(await body(), "undefined undefined", "an old date, with no flag");
+      await runtime.update(module, { date: "2024-09-23", flags: ["nodejs_compat"] });
+      assert.equal(await body(), "function undefined", "the flag reached the loaded bundle");
+      await runtime.update(module, { date: "2026-09-01", flags: [] });
+      assert.equal(await body(), "function function", "so did the date");
+    } finally {
+      await runtime.dispose();
+    }
   });
 });
 
