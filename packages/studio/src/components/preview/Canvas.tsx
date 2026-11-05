@@ -1,11 +1,14 @@
 import * as React from "react";
 import {
   centered,
+  clampScale,
+  FIT_INSET,
   fitTransform,
   panBy,
   stepScale,
   zoomAt,
   type CanvasTransform,
+  type Inset,
   type Size,
 } from "../../lib/canvas";
 
@@ -28,7 +31,7 @@ type WheelGesture = { at: number; sum: Point; pans: Axes | null };
 const PANS_NONE: Axes = { x: false, y: false };
 const PANS_BOTH: Axes = { x: true, y: true };
 
-type Mode = { kind: "fit" } | { kind: "manual"; transform: CanvasTransform };
+type Mode = { kind: "fit" } | { kind: "manual"; transform: CanvasTransform; followsFit: boolean };
 
 type Pinch = { span: number; midpoint: Point };
 
@@ -138,12 +141,13 @@ const useLatest = <T,>(value: T): React.RefObject<T> => {
   return ref;
 };
 
-const useSpaceHeld = (): boolean => {
+const useSpaceHeld = (engaged: React.RefObject<boolean>): boolean => {
   const [held, setHeld] = React.useState(false);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.code !== "Space" || event.repeat || isTyping(event.target)) return;
+      if (!engaged.current) return;
       event.preventDefault();
       setHeld(true);
     };
@@ -159,7 +163,7 @@ const useSpaceHeld = (): boolean => {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", release);
     };
-  }, []);
+  }, [engaged]);
 
   return held;
 };
@@ -168,21 +172,83 @@ export type CanvasZoom = { scale: number; fitted: boolean };
 
 export type CanvasHandle = {
   zoomStep: (direction: 1 | -1) => void;
+  zoomTo: (scale: number) => void;
+  zoom: () => CanvasZoom;
   actualSize: () => void;
   fit: () => void;
   hold: () => void;
   pan: (dx: number, dy: number) => void;
 };
 
+const insetOf = (inset: number | undefined): Inset =>
+  inset === undefined ? FIT_INSET : { top: inset, right: inset, bottom: inset, left: inset };
+
+const sameSize = (a: Size, b: Size): boolean => a.width === b.width && a.height === b.height;
+
+const useEngaged = (viewport: HTMLElement | null, contained: boolean): React.RefObject<boolean> => {
+  const engaged = React.useRef(!contained);
+
+  React.useEffect(() => {
+    engaged.current = !contained;
+    if (!contained || !viewport) return undefined;
+    let hovered = false;
+    let focused = false;
+    const update = () => {
+      engaged.current = hovered || focused;
+    };
+    const controller = new AbortController();
+    const { signal } = controller;
+    viewport.addEventListener(
+      "pointerenter",
+      () => {
+        hovered = true;
+        update();
+      },
+      { signal },
+    );
+    viewport.addEventListener(
+      "pointerleave",
+      () => {
+        hovered = false;
+        update();
+      },
+      { signal },
+    );
+    viewport.addEventListener(
+      "focusin",
+      () => {
+        focused = true;
+        update();
+      },
+      { signal },
+    );
+    viewport.addEventListener(
+      "focusout",
+      (event: FocusEvent) => {
+        focused = event.relatedTarget instanceof Node && viewport.contains(event.relatedTarget);
+        update();
+      },
+      { signal },
+    );
+    return () => controller.abort();
+  }, [contained, viewport]);
+
+  return engaged;
+};
+
 export const Canvas = ({
   fitKey,
   ref,
   onZoom,
+  inset,
+  contained = false,
   children,
 }: React.PropsWithChildren<{
   fitKey: string;
   ref?: React.Ref<CanvasHandle>;
   onZoom?: (zoom: CanvasZoom) => void;
+  inset?: number;
+  contained?: boolean;
 }>) => {
   const [viewport, setViewport] = React.useState<HTMLDivElement | null>(null);
   const [content, setContent] = React.useState<HTMLDivElement | null>(null);
@@ -190,14 +256,25 @@ export const Canvas = ({
   const [dragging, setDragging] = React.useState(false);
   const viewportSize = useSize(viewport);
   const contentSize = useSize(content);
-  const handTool = useSpaceHeld();
+  const engaged = useEngaged(viewport, contained);
+  const handTool = useSpaceHeld(engaged);
+  const room = React.useMemo(() => insetOf(inset), [inset]);
 
-  const transform = mode.kind === "fit" ? fitTransform(contentSize, viewportSize) : mode.transform;
-  const latest = useLatest(transform);
+  const transform =
+    mode.kind === "fit" ? fitTransform(contentSize, viewportSize, room) : mode.transform;
   const pointers = React.useRef(new Map<number, Point>());
   const pinch = React.useRef<Pinch | null>(null);
   const lastFitKey = React.useRef(fitKey);
   const gesture = React.useRef<WheelGesture | null>(null);
+  const requested = React.useRef<Mode>(mode);
+  const measured = useLatest({ contentSize, viewportSize, room });
+
+  const current = React.useCallback((): CanvasTransform => {
+    const asked = requested.current;
+    if (asked.kind === "manual") return asked.transform;
+    const sizes = measured.current;
+    return fitTransform(sizes.contentSize, sizes.viewportSize, sizes.room);
+  }, [measured]);
 
   const wheelGesture = React.useCallback((): WheelGesture => {
     const now = performance.now();
@@ -210,11 +287,25 @@ export const Canvas = ({
     return gesture.current;
   }, []);
 
-  const apply = React.useCallback((next: CanvasTransform) => {
-    setMode({ kind: "manual", transform: next });
+  const settle = React.useCallback((transform: CanvasTransform, followsFit: boolean) => {
+    requested.current = { kind: "manual", transform, followsFit };
+    setMode(requested.current);
   }, []);
 
-  const fit = React.useCallback(() => setMode({ kind: "fit" }), []);
+  const apply = React.useCallback((next: CanvasTransform) => settle(next, false), [settle]);
+
+  const move = React.useCallback(
+    (next: CanvasTransform) => {
+      const asked = requested.current;
+      settle(next, asked.kind === "fit" || asked.followsFit);
+    },
+    [settle],
+  );
+
+  const fit = React.useCallback(() => {
+    requested.current = { kind: "fit" };
+    setMode(requested.current);
+  }, []);
 
   const toViewport = React.useCallback(
     (clientX: number, clientY: number): Point => {
@@ -227,33 +318,48 @@ export const Canvas = ({
   const zoomWheel = React.useCallback(
     (event: WheelEvent, at: Point) => {
       event.preventDefault();
-      apply(zoomAt(latest.current, wheelZoomFactor(event.deltaY), at));
+      apply(zoomAt(current(), wheelZoomFactor(event.deltaY), at));
     },
-    [apply, latest],
+    [apply, current],
   );
 
   const zoomStep = React.useCallback(
     (direction: 1 | -1) => {
       const centre = { x: viewportSize.width / 2, y: viewportSize.height / 2 };
-      const next = stepScale(latest.current.scale, direction);
-      apply(zoomAt(latest.current, next / latest.current.scale, centre));
+      const from = current();
+      apply(zoomAt(from, stepScale(from.scale, direction) / from.scale, centre));
     },
-    [apply, latest, viewportSize],
+    [apply, current, viewportSize],
+  );
+
+  const zoomTo = React.useCallback(
+    (scale: number) => {
+      const sizes = measured.current;
+      apply(centered(clampScale(scale), sizes.contentSize, sizes.viewportSize, sizes.room));
+    },
+    [apply, measured],
+  );
+
+  const zoom = React.useCallback(
+    (): CanvasZoom => ({ scale: current().scale, fitted: requested.current.kind === "fit" }),
+    [current],
   );
 
   const actualSize = React.useCallback(() => {
-    apply(centered(1, contentSize, viewportSize));
-  }, [apply, contentSize, viewportSize]);
+    apply(centered(1, contentSize, viewportSize, room));
+  }, [apply, contentSize, viewportSize, room]);
 
-  const hold = React.useCallback(() => apply(latest.current), [apply, latest]);
+  const hold = React.useCallback(() => move(current()), [move, current]);
 
   const pan = React.useCallback(
-    (dx: number, dy: number) => apply(panBy(latest.current, dx, dy)),
-    [apply, latest],
+    (dx: number, dy: number) => move(panBy(current(), dx, dy)),
+    [move, current],
   );
 
-  React.useImperativeHandle(ref, () => ({ zoomStep, actualSize, fit, hold, pan }), [
+  React.useImperativeHandle(ref, () => ({ zoomStep, zoomTo, zoom, actualSize, fit, hold, pan }), [
     zoomStep,
+    zoomTo,
+    zoom,
     actualSize,
     fit,
     hold,
@@ -263,6 +369,18 @@ export const Canvas = ({
   React.useEffect(() => {
     onZoom?.({ scale: transform.scale, fitted: mode.kind === "fit" });
   }, [onZoom, transform.scale, mode.kind]);
+
+  const lastViewport = React.useRef(viewportSize);
+  React.useLayoutEffect(() => {
+    const before = lastViewport.current;
+    lastViewport.current = viewportSize;
+    if (sameSize(before, viewportSize)) return;
+    const asked = requested.current;
+    if (asked.kind !== "manual" || before.width <= 0 || before.height <= 0) return;
+    const { contentSize: size, room: margin } = measured.current;
+    if (asked.followsFit) fit();
+    else apply(centered(asked.transform.scale, size, viewportSize, margin));
+  }, [viewportSize, measured, fit, apply]);
 
   React.useEffect(() => {
     if (lastFitKey.current === fitKey) return;
@@ -278,16 +396,17 @@ export const Canvas = ({
         zoomWheel(event, toViewport(event.clientX, event.clientY));
         return;
       }
-      const current = wheelGesture();
-      current.pans ??= PANS_BOTH;
-      if (!current.pans.x && !current.pans.y) return;
+      if (contained) return;
+      const ongoing = wheelGesture();
+      ongoing.pans ??= PANS_BOTH;
+      if (!ongoing.pans.x && !ongoing.pans.y) return;
       event.preventDefault();
-      const delta = panDelta(event, current.pans);
-      apply(panBy(latest.current, delta.x, delta.y));
+      const delta = panDelta(event, ongoing.pans);
+      move(panBy(current(), delta.x, delta.y));
     };
     viewport.addEventListener("wheel", onWheel, { passive: false });
     return () => viewport.removeEventListener("wheel", onWheel);
-  }, [viewport, apply, latest, toViewport, zoomWheel, wheelGesture]);
+  }, [viewport, contained, move, current, toViewport, zoomWheel, wheelGesture]);
 
   React.useEffect(() => {
     if (!content) return undefined;
@@ -303,25 +422,26 @@ export const Canvas = ({
         if (isZoomGesture(event)) {
           gesture.current = null;
           const rect = frame.getBoundingClientRect();
-          const scale = latest.current.scale;
+          const scale = current().scale;
           zoomWheel(
             event,
             toViewport(rect.left + event.clientX * scale, rect.top + event.clientY * scale),
           );
           return;
         }
-        const current = wheelGesture();
+        if (contained) return;
+        const ongoing = wheelGesture();
         if (event.defaultPrevented) return;
-        if (!current.pans) {
+        if (!ongoing.pans) {
           const pixels = wheelPixels(event);
-          current.sum = { x: current.sum.x + pixels.x, y: current.sum.y + pixels.y };
-          if (Math.hypot(current.sum.x, current.sum.y) < WHEEL_GESTURE_DECIDE_PX) return;
-          current.pans = ownerOverPage(current.sum, pageClaimedAxes(event));
+          ongoing.sum = { x: ongoing.sum.x + pixels.x, y: ongoing.sum.y + pixels.y };
+          if (Math.hypot(ongoing.sum.x, ongoing.sum.y) < WHEEL_GESTURE_DECIDE_PX) return;
+          ongoing.pans = ownerOverPage(ongoing.sum, pageClaimedAxes(event));
         }
-        if (!current.pans.x && !current.pans.y) return;
+        if (!ongoing.pans.x && !ongoing.pans.y) return;
         event.preventDefault();
-        const delta = panDelta(event, current.pans);
-        apply(panBy(latest.current, delta.x, delta.y));
+        const delta = panDelta(event, ongoing.pans);
+        move(panBy(current(), delta.x, delta.y));
       };
       let press: { at: Point; panning: boolean } | null = null;
       let grabStyle: HTMLStyleElement | null = null;
@@ -351,7 +471,7 @@ export const Canvas = ({
           grab(true);
         }
         event.preventDefault();
-        apply(panBy(latest.current, point.x - press.at.x, point.y - press.at.y));
+        move(panBy(current(), point.x - press.at.x, point.y - press.at.y));
         press.at = point;
       };
       const onPointerUp = () => {
@@ -378,11 +498,11 @@ export const Canvas = ({
       content.removeEventListener("load", onLoad, true);
       attached.forEach((detach) => detach());
     };
-  }, [content, apply, latest, toViewport, zoomWheel, wheelGesture]);
+  }, [content, contained, move, current, toViewport, zoomWheel, wheelGesture]);
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || isTyping(event.target)) return;
+      if (!(event.metaKey || event.ctrlKey) || isTyping(event.target) || !engaged.current) return;
       if (event.key === "=" || event.key === "+") zoomStep(1);
       else if (event.key === "-") zoomStep(-1);
       else if (event.key === "0") fit();
@@ -392,7 +512,7 @@ export const Canvas = ({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [zoomStep, fit, actualSize]);
+  }, [zoomStep, fit, actualSize, engaged]);
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0 && event.button !== 1) return;
@@ -420,7 +540,7 @@ export const Canvas = ({
       const [a, b] = [...pointers.current.values()];
       const next: Pinch = { span: distance(a, b), midpoint: midpointOf(a, b) };
       const zoomed = zoomAt(
-        latest.current,
+        current(),
         next.span / pinch.current.span,
         toViewport(pinch.current.midpoint.x, pinch.current.midpoint.y),
       );
@@ -435,7 +555,10 @@ export const Canvas = ({
       return;
     }
 
-    apply(panBy(latest.current, point.x - previous.x, point.y - previous.y));
+    const asked = requested.current;
+    const fitted = asked.kind === "fit" || asked.followsFit;
+    if (contained && event.pointerType !== "mouse" && fitted) return;
+    move(panBy(current(), point.x - previous.x, point.y - previous.y));
   };
 
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -446,11 +569,17 @@ export const Canvas = ({
 
   const cursor = dragging ? "cursor-grabbing" : handTool ? "cursor-grab" : "";
   const framesInert = handTool || dragging ? "[&_iframe]:pointer-events-none" : "";
+  const touch = !contained
+    ? "touch-none"
+    : mode.kind === "fit" || mode.followsFit
+      ? "touch-pan-y"
+      : "touch-none pointer-coarse:[&_iframe]:pointer-events-none";
 
   return (
     <div
-      className={`relative min-h-0 min-w-0 flex-1 overflow-hidden touch-none select-none ${cursor} ${framesInert}`}
+      className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${touch} select-none ${cursor} ${framesInert}`}
       data-testid="canvas"
+      data-contained={contained || undefined}
       data-panning={handTool || undefined}
       data-dragging={dragging || undefined}
       ref={setViewport}

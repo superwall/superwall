@@ -18,7 +18,11 @@ export interface WorkspaceScope {
   id: string;
 }
 
-export type SourceScope = SurfaceScope | WorkspaceScope;
+export interface ProjectScope {
+  kind: "project";
+}
+
+export type SourceScope = SurfaceScope | WorkspaceScope | ProjectScope;
 
 export type PathClass = "own" | "other" | "shared" | "derived";
 
@@ -50,6 +54,7 @@ export function classifyPath(relative: string, scope: SourceScope): PathClass {
   if (scope.kind === "workspace") return "own";
   const surface = surfaceOf(relative);
   if (!surface) return "shared";
+  if (scope.kind === "project") return "other";
   return surface.kind === scope.kind && surface.id === scope.id ? "own" : "other";
 }
 
@@ -59,7 +64,8 @@ export const isSurfaceRoot = (top: string, scope?: SourceScope): boolean =>
 export const isOtherSurfaceDir = (top: string, child: string, scope: SourceScope): boolean => {
   if (scope.kind === "workspace") return false;
   const kind = SURFACE_DIRS[top];
-  return kind !== undefined && !(kind === scope.kind && child === scope.id);
+  if (kind === undefined) return false;
+  return scope.kind === "project" || !(kind === scope.kind && child === scope.id);
 };
 
 export class SourceLockUnreadableError extends Error {
@@ -85,21 +91,21 @@ const readable = (text: string): Readable => {
 export function mergeLockText(
   theirs: string | undefined,
   mine: string,
-  scope: SurfaceScope,
+  scope: SurfaceScope | ProjectScope,
   options: { replaceUnreadable?: boolean } = {},
 ): string {
   const own = readable(mine);
   if (!("lock" in own)) return mine;
-  if (theirs === undefined) return formatLock(withoutSources(own.lock));
+  if (theirs === undefined) return formatLock(scoped(own.lock, scope));
   const read = readable(theirs);
   if (!("lock" in read)) {
     if (!options.replaceUnreadable) throw new SourceLockUnreadableError(read.reason);
-    return formatLock(withoutSources(own.lock));
+    return formatLock(scoped(own.lock, scope));
   }
   return mergeLocks(read.lock, own.lock, scope);
 }
 
-function mergeLocks(other: LockFile, own: LockFile, scope: SurfaceScope): string {
+function mergeLocks(other: LockFile, own: LockFile, scope: SurfaceScope | ProjectScope): string {
   const section = (lock: LockFile) => (scope.kind === "paywall" ? lock.paywalls : lock.funnels);
   const conflicting = new Set(
     Object.entries(own.apps)
@@ -117,6 +123,10 @@ function mergeLocks(other: LockFile, own: LockFile, scope: SurfaceScope): string
     paywalls: { ...other.paywalls },
     funnels: { ...other.funnels },
   };
+  if (scope.kind === "project") {
+    if (other.origins) merged.origins = other.origins;
+    return formatLock(merged);
+  }
   const target = section(merged);
   const theirEntry = section(other)[scope.id] ?? {};
   const mineEntry = section(own)[scope.id] ?? {};
@@ -138,3 +148,8 @@ function mergeLocks(other: LockFile, own: LockFile, scope: SurfaceScope): string
 }
 
 const withoutSources = ({ sources: _, ...lock }: LockFile): LockFile => lock;
+
+const scoped = (lock: LockFile, scope: SurfaceScope | ProjectScope): LockFile => {
+  const { origins: _, ...rest } = withoutSources(lock);
+  return scope.kind === "project" ? { ...rest, paywalls: {}, funnels: {} } : withoutSources(lock);
+};

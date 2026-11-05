@@ -13,8 +13,23 @@ export { Tooltip } from "./components/Tooltip";
 export { TopBar } from "./components/chrome/TopBar";
 export { VariablesPanel } from "./components/panels/VariablesPanel";
 export { Segmented, Select, Switch } from "./components/controls";
-export { DEFAULT_DEVICE_ID, deviceById, STUDIO_DEVICES } from "./lib/devices";
-export type { StudioDevice } from "./lib/devices";
+export {
+  Canvas,
+  useCanvasScale,
+  type CanvasHandle,
+  type CanvasZoom,
+} from "./components/preview/Canvas";
+export { percent } from "./lib/canvas";
+export {
+  chromeFor,
+  DEFAULT_DEVICE_ID,
+  deviceById,
+  deviceVariablesFor,
+  isWebOnly,
+  STUDIO_DEVICES,
+  webViewportFor,
+} from "./lib/devices";
+export type { DeviceChromeSpec, SafeAreaInsets, StudioDevice } from "./lib/devices";
 export { hostStateFor, studioDefaults } from "./lib/host";
 export { hasActions } from "./lib/surfaces";
 export { devServerActions } from "./lib/actions";

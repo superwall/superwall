@@ -110,6 +110,19 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   has no project on disk) offers `["promote"]` and a `pick` that switches the
   surface, so the menu collapses to the picker and one button; the local
   studio keeps its own pick and sends a `version` only when one was chosen.
+- `Canvas` is the zoomable stage the studio previews on, with
+  `useCanvasScale` for what it draws and a `CanvasHandle` ref (`fit`,
+  `actualSize`, `zoomStep`, `zoomTo`, `zoom()`, `pan`, `hold`). `inset` sets
+  the fit margin (48px by default). `contained` is for a stage inside a page
+  that scrolls, such as a chat: a plain wheel scrolls the page, a pinch or
+  ctrl-wheel zooms, a finger scrolls the page until the stage is zoomed in,
+  and the zoom keys and Space reach it only while it is hovered or focused.
+  Resizing the stage refits it, or re-centres it at the zoom it was left at.
+  `percent` formats a scale for a zoom readout.
+- `chromeFor`, `deviceVariablesFor`, `isWebOnly` and `webViewportFor` are the
+  device rules the studio draws with: the frame chrome for a device (none on
+  web), the `device` variables a paywall reads, whether a paywall targets only
+  web, and the viewport a browser leaves on a device.
 - `StudioShell` (`position="absolute"` when the host owns the viewport) is
   the ink stage every screen expects, and it carries the `sw-studio` class
   the stylesheet scopes its base rules to.
