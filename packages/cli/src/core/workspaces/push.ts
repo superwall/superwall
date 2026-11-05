@@ -189,7 +189,11 @@ async function pushAndBuild(
       return { pushed: { ...pushed, incoming }, build, binding: current };
     } catch (error) {
       if (attempt >= PUSH_ATTEMPTS || !isConflict(error)) throw error;
-      ctx.ui.info("Someone pushed at the same moment. Pushing again on top of them.");
+      ctx.ui.info(
+        /token/i.test((error as Error).message)
+          ? "This push's token ran out. Pushing again."
+          : "Someone pushed at the same moment. Pushing again on top of them.",
+      );
     }
   }
 }

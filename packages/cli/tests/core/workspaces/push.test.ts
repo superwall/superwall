@@ -165,6 +165,23 @@ test("a 409 from the build re-mints and pushes again on top of a teammate", { sk
   assert.equal(second.apiCalls.filter((call) => call.endsWith("/source-access")).length, 2);
 });
 
+test("a token that ran out or was used is minted again, and says so", { skip }, async () => {
+  const root = project();
+  let refused = false;
+  const run = setup({
+    onBuilds: () => {
+      if (refused) return;
+      refused = true;
+      throw new ApiError("POST builds", 409, JSON.stringify({ message: "This push's token has expired. Push again." }));
+    },
+  });
+  await runWorkspacePush(run.ctx, input(root), noWait);
+  assert.equal(run.failed(), 0);
+  assert.equal(run.apiCalls.filter((call) => call.endsWith("/source-access")).length, 2);
+  assert.match(run.said("info").join(), /This push's token ran out\. Pushing again\./);
+  assert.equal(run.versions.length, 1);
+});
+
 const linkedSetup = (root: string, options: Parameters<typeof setup>[0] = {}, context: Parameters<typeof fakeContext>[1] = {}) => {
   const binding = readBinding(root)!;
   const fake = fakeWorkspaceApi({ remote, manifest: MANIFEST as never, ...options });
