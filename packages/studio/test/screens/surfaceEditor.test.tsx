@@ -663,7 +663,6 @@ describe("SurfaceEditor's smaller states", () => {
     expect(await screen.findByText("Back in the app")).toBeDefined();
     expect(screen.queryByText("In app")).toBeNull();
     expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
-
   });
 
   it("reloads a teleported preview in the app when the device changes", async () => {
