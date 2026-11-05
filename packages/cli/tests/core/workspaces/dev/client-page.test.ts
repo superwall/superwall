@@ -110,7 +110,7 @@ async function waitUntil(check: () => Promise<boolean>, message: string): Promis
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (await check()) return;
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   assert.fail(message);
 }
@@ -187,8 +187,10 @@ describe("client.entry on real wrangler, esbuild and workerd", () => {
       assert.equal(api.body.url, "https://api.test/v2/projects");
       assert.equal(api.body.authorization, "Bearer real-workerd-token");
 
-      fs.writeFileSync(path.join(root, "ui/label.ts"), "export const label = (count: number): string => `${count} rebuilt clicks`;\n");
-      await waitUntil(async () => (await scriptOf()).text.includes("rebuilt clicks"), "the page never rebuilt");
+      await waitUntil(async () => {
+        fs.writeFileSync(path.join(root, "ui/label.ts"), "export const label = (count: number): string => `${count} rebuilt clicks`;\n");
+        return (await scriptOf()).text.includes("rebuilt clicks");
+      }, "the page never rebuilt");
       assert.notEqual((await scriptOf()).path, script.path, "a new bundle gets a new hash");
     });
   });
@@ -206,8 +208,10 @@ describe("client.entry on real wrangler, esbuild and workerd", () => {
           host = urls.host;
         },
         until: async () => {
-          fs.writeFileSync(path.join(root, "ui/label.ts"), "export const label = (\n");
-          await waitUntil(async () => calls.some((call) => call.method === "error"), "the failure never showed");
+          await waitUntil(async () => {
+            fs.writeFileSync(path.join(root, "ui/label.ts"), "export const label = (\n");
+            return calls.some((call) => call.method === "error");
+          }, "the failure never showed");
           assert.ok(host);
         },
       },

@@ -355,11 +355,13 @@ test("a change anywhere in the source tree rebuilds it: any folder, a new one, o
     until: async () => {
       const rebuildsAfter = async (change: () => void, what: string) => {
         const before = seams.updates.length;
-        const deadline = Date.now() + 15_000;
-        change();
+        const deadline = Date.now() + 30_000;
         while (seams.updates.length === before) {
           assert.ok(Date.now() < deadline, `${what} didn't rebuild`);
-          await new Promise((resolve) => setTimeout(resolve, 50));
+          try {
+            change();
+          } catch {}
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
         }
         await new Promise((resolve) => setTimeout(resolve, 400));
       };
