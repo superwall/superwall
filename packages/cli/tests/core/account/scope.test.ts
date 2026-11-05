@@ -43,13 +43,13 @@ function fakeApi(projects: Project[], gets: Record<string, unknown> = {}): { api
   return { api: api as unknown as SuperwallApi, requested };
 }
 
-interface Workspace {
+interface Codebase {
   dir: string;
   lock(contents: unknown, nested?: boolean): void;
   app(source: string): void;
 }
 
-function useWorkspace(): Workspace {
+function useCodebase(): Codebase {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-scope-"));
   dirs.push(dir);
   return {
@@ -103,7 +103,7 @@ function contextFor(
       output: createCommandOutput(outputMode, ui),
       outputMode,
       interactive: options.interactive ?? false,
-      installDir: options.installDir ?? useWorkspace().dir,
+      installDir: options.installDir ?? useCodebase().dir,
       json: false,
       dryRun: false,
       target: { app: options.app, project: options.project },
@@ -194,9 +194,9 @@ test("--project that can't be opened is refused", async () => {
 });
 
 test("an app bound in superwall.lock is used without asking", async () => {
-  const workspace = useWorkspace();
-  workspace.lock({ apps: { web: 7, ios: "11" } });
-  const { ctx, calls } = contextFor({ installDir: workspace.dir });
+  const codebase = useCodebase();
+  codebase.lock({ apps: { web: 7, ios: "11" } });
+  const { ctx, calls } = contextFor({ installDir: codebase.dir });
 
   const scope = await pickScope(ctx, fakeApi([solo, monoroll]).api, true);
 
@@ -204,18 +204,18 @@ test("an app bound in superwall.lock is used without asking", async () => {
   assert.equal(scope.boundApplicationId, "11");
   assert.deepEqual(said(calls, "info"), ["Using `Monoroll iOS` - bound in superwall.lock."]);
 
-  const projectScoped = await pickScope(contextFor({ installDir: workspace.dir }).ctx, fakeApi([solo, monoroll]).api, false);
+  const projectScoped = await pickScope(contextFor({ installDir: codebase.dir }).ctx, fakeApi([solo, monoroll]).api, false);
   assert.equal(projectScoped.applicationId, undefined);
   assert.equal(projectScoped.boundApplicationId, "11");
 });
 
 test("a lock that only names a paywall finds its app through the paywall", async () => {
-  const workspace = useWorkspace();
-  workspace.lock(
+  const codebase = useCodebase();
+  codebase.lock(
     { paywalls: { home: { ios: { paywallId: 7 }, android: { paywallId: "pw_nested" } }, other: { paywallId: "pw_later" } } },
     true,
   );
-  const { ctx, calls } = contextFor({ installDir: workspace.dir });
+  const { ctx, calls } = contextFor({ installDir: codebase.dir });
   const { api, requested } = fakeApi([monoroll, partner], {
     "/v2/paywalls/pw_nested": { id: "pw_nested", application_id: 13 },
   });
@@ -228,9 +228,9 @@ test("a lock that only names a paywall finds its app through the paywall", async
 });
 
 test("a funnel's own paywall id wins over its bindings", async () => {
-  const workspace = useWorkspace();
-  workspace.lock({ funnels: { onboarding: { paywallId: "pw_funnel", ios: { paywallId: "pw_binding" } } } });
-  const { ctx } = contextFor({ installDir: workspace.dir });
+  const codebase = useCodebase();
+  codebase.lock({ funnels: { onboarding: { paywallId: "pw_funnel", ios: { paywallId: "pw_binding" } } } });
+  const { ctx } = contextFor({ installDir: codebase.dir });
   const { api, requested } = fakeApi([monoroll], {
     "/v2/paywalls/pw_funnel": { id: "pw_funnel", application_id: "12" },
   });
@@ -249,9 +249,9 @@ test("a lock that leads nowhere falls back to choosing", async () => {
     { paywalls: { home: null } },
     {},
   ]) {
-    const workspace = useWorkspace();
-    workspace.lock(contents);
-    const { ctx, calls } = contextFor({ installDir: workspace.dir });
+    const codebase = useCodebase();
+    codebase.lock(contents);
+    const { ctx, calls } = contextFor({ installDir: codebase.dir });
 
     const scope = await pickScope(ctx, fakeApi([solo]).api, true);
 
@@ -261,9 +261,9 @@ test("a lock that leads nowhere falls back to choosing", async () => {
 });
 
 test("--project wins over the lock", async () => {
-  const workspace = useWorkspace();
-  workspace.lock({ apps: { ios: "11" } });
-  const { ctx } = contextFor({ installDir: workspace.dir, project: "2" });
+  const codebase = useCodebase();
+  codebase.lock({ apps: { ios: "11" } });
+  const { ctx } = contextFor({ installDir: codebase.dir, project: "2" });
 
   assert.equal((await pickScope(ctx, fakeApi([monoroll, solo]).api, true)).projectId, "2");
 });
@@ -320,20 +320,20 @@ test("several apps and someone to ask offers the remembered default first and re
 });
 
 test("the app detected in this directory is offered first, by key or by name", async () => {
-  const byKey = useWorkspace();
+  const byKey = useCodebase();
   byKey.app('Superwall.configure(apiKey: "pk_monoroll_ios")\n');
   const keyed = contextFor({ interactive: true, installDir: byKey.dir, answers: ["11"] });
   await chooseApp(keyed.ctx, [android, ios], android);
   assert.equal(keyed.selects[0]?.initialValue, "11");
   assert.equal(keyed.selects[0]?.options[0]?.value, "11");
 
-  const byName = useWorkspace();
+  const byName = useCodebase();
   byName.app("Superwall.configure(apiKey: \"pk_other_key\")\n");
   const named = contextFor({ interactive: true, installDir: byName.dir, answers: ["13"] });
   assert.equal(await chooseApp(named.ctx, [ios, web], ios), web);
   assert.equal(named.selects[0]?.initialValue, "13");
 
-  const nameless = useWorkspace();
+  const nameless = useCodebase();
   nameless.app("// no key here\n");
   const plain = contextFor({ interactive: true, installDir: nameless.dir, answers: ["14"] });
   const unnamed = { id: 14 };
@@ -350,9 +350,9 @@ test("escaping the app choice cancels, and an unknown answer keeps the default",
 });
 
 test("the project holding this directory's key is used without asking", async () => {
-  const workspace = useWorkspace();
-  workspace.app('Superwall.configure(apiKey: "pk_monoroll_ios")\n');
-  const { ctx, calls } = contextFor({ installDir: workspace.dir });
+  const codebase = useCodebase();
+  codebase.app('Superwall.configure(apiKey: "pk_monoroll_ios")\n');
+  const { ctx, calls } = contextFor({ installDir: codebase.dir });
 
   const project = await pickProject(ctx, fakeApi([]).api, [solo, monoroll]);
 
@@ -380,9 +380,9 @@ test("several projects and nobody to ask lists the first ten", async () => {
 });
 
 test("choosing a project offers the one named like this directory first", async () => {
-  const workspace = useWorkspace();
-  workspace.app("// no key\n");
-  const { ctx, selects } = contextFor({ interactive: true, installDir: workspace.dir, answers: ["1"] });
+  const codebase = useCodebase();
+  codebase.app("// no key\n");
+  const { ctx, selects } = contextFor({ interactive: true, installDir: codebase.dir, answers: ["1"] });
 
   assert.equal(await pickProject(ctx, fakeApi([]).api, [solo, monoroll]), monoroll);
   assert.deepEqual(selects, [
@@ -398,9 +398,9 @@ test("choosing a project offers the one named like this directory first", async 
 });
 
 test("a project holding an app named like this directory is offered first", async () => {
-  const workspace = useWorkspace();
-  workspace.app("// no key\n");
-  const { ctx, selects } = contextFor({ interactive: true, installDir: workspace.dir, answers: ["3"] });
+  const codebase = useCodebase();
+  codebase.app("// no key\n");
+  const { ctx, selects } = contextFor({ interactive: true, installDir: codebase.dir, answers: ["3"] });
 
   await pickProject(ctx, fakeApi([]).api, [solo, partner]);
 
@@ -429,10 +429,10 @@ test("the bound organization comes from --app, --project or the lock", async () 
   assert.equal(await boundOrganization(contextFor({ app: "13" }).ctx, fakeApi([monoroll, partner]).api), "9");
   assert.equal(await boundOrganization(contextFor({ project: "1" }).ctx, fakeApi([monoroll, partner]).api), "7");
 
-  const workspace = useWorkspace();
-  workspace.lock({ apps: { ios: "13" } });
+  const codebase = useCodebase();
+  codebase.lock({ apps: { ios: "13" } });
   assert.equal(
-    await boundOrganization(contextFor({ installDir: workspace.dir }).ctx, fakeApi([monoroll, partner]).api),
+    await boundOrganization(contextFor({ installDir: codebase.dir }).ctx, fakeApi([monoroll, partner]).api),
     "9",
   );
 
@@ -491,8 +491,8 @@ test("apps in several organizations and someone to ask lets them choose", async 
 });
 
 test("a directory that can't be scanned detects nothing", async () => {
-  const workspace = useWorkspace();
-  const notADirectory = path.join(workspace.dir, "file");
+  const codebase = useCodebase();
+  const notADirectory = path.join(codebase.dir, "file");
   fs.writeFileSync(notADirectory, "");
   const { ctx, selects } = contextFor({ interactive: true, installDir: notADirectory, answers: ["1"] });
 
