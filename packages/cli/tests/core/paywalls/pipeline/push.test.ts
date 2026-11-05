@@ -1890,6 +1890,23 @@ test("--existing --platform skips a requested platform the surface declares but 
   assert.ok(JSON.stringify(calls).includes("plus-upgrade skipped"));
 });
 
+test("--existing --platform still refuses a surface without `platforms` once several apps are bound", async () => {
+  const project = scaffold();
+  writeApp(project.superwallDir, "android", "43");
+  const fake = await fakeApi();
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      existing: true,
+      platforms: ["ios"],
+      load: async () => declaring(project, {}),
+    }),
+    /doesn't say which platforms it's for/,
+  );
+  assert.deepEqual(fake.calls, []);
+});
+
 const twoApps = (project: FrameworkProject) => {
   writeApp(project.superwallDir, "android", "43");
   writeBinding(project.superwallDir, "paywall", "plus-upgrade", "android", { paywallId: "3080" });

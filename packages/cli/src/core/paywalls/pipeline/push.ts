@@ -198,6 +198,7 @@ function boundScope(
   for (const surface of surfaces) {
     const platforms = declared[surfaceKey(surface)];
     if (platforms === undefined) {
+      if (Object.keys(lock.apps).length > 1) planTargets({ surfaces: [surface], declared, apps: lock.apps });
       if (Object.keys(apps).length > 0) scoped.push(surface);
       continue;
     }
