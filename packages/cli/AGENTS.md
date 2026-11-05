@@ -357,6 +357,12 @@ as the viewer. The platform itself lives in a private repo.
   a limited token can't call `/v2/me` or `/v2/workspaces`, so `whoami`, drafts and the CLI's own calls
   stay on the session. An API with no `organization_id` in its answer hasn't deployed this, so warn and
   carry on.
+- **`client.entry` builds exactly as the builder does.** `bundleWorkspace` imports `buildClient` from the
+  project's own `@superwall/workspace-sdk/client-build` and passes it the esbuild that the project's
+  wrangler depends on, resolved from wrangler's folder, never the CLI's. `buildClient` refuses any other
+  version. The output reaches wrangler as `--alias @superwall/workspace-sdk/client-bundle:<absolute path>`.
+  `result.inputs` lists only the largest files, so `dev` watches the whole project except dot folders,
+  `node_modules` and `dist`. Keep the entry rules and messages in `client-build.ts` matching the builder's.
 - **Push and pull reuse the framework's git code.** `core/paywalls/source` is shared: a
   `SourceScope` of kind `workspace` owns its whole repo, so a directory named `paywalls/` means
   nothing there, and its one derived file is `superwall.workspace.json`, which records the

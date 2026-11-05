@@ -1,4 +1,5 @@
 // Generated from packages/workspace-sdk by its vendor script. Do not edit.
+import type { ClientBundle } from "./client-build";
 import type { MetricRequest, MetricSeries, ReadoutRequest, ReadoutResult } from "./metrics";
 import type { SlotContext, SlotId } from "./slots";
 import type { WorkspaceTrigger } from "./platform";
@@ -23,12 +24,36 @@ export declare const readRequest: <S extends SlotId = SlotId>(request: Request) 
  */
 export declare const superwallFetch: (path: string, init?: RequestInit) => Promise<Response>;
 /**
+ * The bundle's script or stylesheet when that's what `request` asks for, or null.
+ * `defineWorkspace({ client })` does this for you. Files are named by their hash,
+ * so they cache for good, behind the session like everything else on the origin.
+ */
+export declare const serveClientAsset: (client: ClientBundle, request: Request) => Response | null;
+export interface ClientPageOptions {
+    readonly title?: string;
+    /** The document's language. Defaults to `en`. */
+    readonly lang?: string;
+    /** Extra HTML for `<head>`. Not escaped. */
+    readonly head?: string;
+    /** The HTML the script finds. Not escaped. Defaults to `<div id="root"></div>`. */
+    readonly body?: string;
+    /** Extra response headers, such as a stricter `content-security-policy`. */
+    readonly headers?: HeadersInit;
+}
+/**
+ * The HTML document that loads the bundle. The script and stylesheet load from
+ * this origin, so the page keeps working under a stricter CSP than the platform's.
+ */
+export declare const clientPage: (client: ClientBundle, options?: ClientPageOptions) => Response;
+/**
  * One handler per kind of entrypoint, like a Worker's `fetch` / `queue` /
  * `scheduled`: `fetch` serves rendered slots (pages, panels), `metric` answers
  * `chart.source` entrypoints and `readout` answers `campaign.metric` ones. The
  * platform calls each directly.
  */
 export interface WorkspaceHandlers {
+    /** The browser bundle (`import client from "@superwall/workspace-sdk/client-bundle"`), to serve its files. */
+    readonly client?: ClientBundle;
     readonly fetch: (request: WorkspaceRequest) => Response | Promise<Response>;
     /** Required when the manifest declares a `chart.source` entrypoint. */
     readonly metric?: (request: MetricRequest) => MetricSeries | Promise<MetricSeries>;

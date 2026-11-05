@@ -5,7 +5,7 @@ export const command = defineCommand({
   name: "workspaces dev",
   summary: "Run a workspace on localhost against your real data, read-only",
   details:
-    "Bundles the workspace the way the builder does and runs it in workerd. A local page plays the dashboard: it mounts pages and widgets, sends them context and theme over the bridge, and runs metrics and readouts. API calls go out with a short-lived, read-only token as you, limited to one organization and to the routes a workspace can read. It reads everything you can read in that organization, so only run code you trust. A staff account reaches only that organization too. Writes, outside hosts and raw sockets are refused. Every change rebuilds it.",
+    "Bundles the workspace the way the builder does, including its client.entry, and runs it in workerd. A local page plays the dashboard: it mounts pages and widgets, sends them context and theme over the bridge, and runs metrics and readouts. API calls go out with a short-lived, read-only token as you, limited to one organization and to the routes a workspace can read. It reads everything you can read in that organization, so only run code you trust. A staff account reaches only that organization too. Writes, outside hosts and raw sockets are refused. Every change rebuilds it.",
   args: {
     dir: { describe: "The workspace (default: cwd)" },
   },

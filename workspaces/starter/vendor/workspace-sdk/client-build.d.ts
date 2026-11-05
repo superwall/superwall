@@ -1,0 +1,105 @@
+// Generated from packages/workspace-sdk by its vendor script. Do not edit.
+/**
+ * How a workspace's browser code becomes the module its Worker imports. This
+ * one file runs in the builder's image and in `superwall workspaces dev`, so the
+ * two can't drift. It has no imports: the caller passes its own esbuild.
+ *
+ * Nothing here runs the customer's code. esbuild parses and concatenates source,
+ * and with no plugin (`plugins` isn't an option a caller can reach) it has nowhere
+ * to run any. Its options come from here and never from the repo.
+ */
+/** The browser bundle, as a Worker sees it. */
+export interface ClientBundle {
+    readonly scriptPath: string;
+    readonly script: string;
+    readonly stylePath: string | null;
+    readonly style: string | null;
+}
+export interface ClientBuildError {
+    /** Relative to the repo, or null for an error with no location. */
+    readonly file: string | null;
+    readonly line: number | null;
+    readonly column: number | null;
+    readonly text: string;
+    /** The source line it points at. */
+    readonly lineText: string | null;
+}
+export interface ClientBuildInput {
+    readonly path: string;
+    readonly bytes: number;
+}
+export type ClientBuildResult = {
+    readonly ok: true;
+    /** Source for the module to substitute for `CLIENT_BUNDLE_MODULE`. */
+    readonly module: string;
+    readonly scriptBytes: number;
+    readonly styleBytes: number;
+    /** What's in the bundle, largest first, for a developer whose bundle is too big. */
+    readonly inputs: ReadonlyArray<ClientBuildInput>;
+} | {
+    readonly ok: false;
+    /** Readable on one line per error, each with its file and line. */
+    readonly message: string;
+    readonly errors: ReadonlyArray<ClientBuildError>;
+};
+/** The parts of esbuild's API this uses, so that the vendored copy needs no esbuild types. */
+export interface Esbuild {
+    readonly version: string;
+    readonly build: (options: never) => Promise<EsbuildResult>;
+}
+interface EsbuildFile {
+    readonly path: string;
+    readonly text: string;
+}
+interface EsbuildOutput {
+    readonly inputs: Record<string, {
+        readonly bytesInOutput: number;
+    }>;
+}
+interface EsbuildResult {
+    readonly outputFiles?: ReadonlyArray<EsbuildFile>;
+    readonly metafile?: {
+        readonly outputs: Record<string, EsbuildOutput>;
+    };
+}
+/**
+ * Every option, for this repo and entry. `tsconfigRaw` keeps esbuild from reading
+ * the repo's `tsconfig.json`; `write: false`, no splitting and data URLs for
+ * assets make the output one script and at most one stylesheet.
+ */
+export declare const clientBuildOptions: (root: string, entry: string) => {
+    absWorkingDir: string;
+    entryPoints: string[];
+    outdir: string;
+    entryNames: string;
+    write: boolean;
+    bundle: boolean;
+    splitting: boolean;
+    format: string;
+    platform: string;
+    target: string;
+    minify: boolean;
+    treeShaking: boolean;
+    sourcemap: boolean;
+    legalComments: string;
+    charset: string;
+    jsx: string;
+    jsxDev: boolean;
+    define: {
+        "process.env.NODE_ENV": string;
+    };
+    loader: {
+        [k: string]: string;
+    };
+    tsconfigRaw: string;
+    metafile: boolean;
+    logLevel: string;
+};
+/** `src/client.tsx:3:14: Expected ">"`, per error. */
+export declare const formatClientErrors: (errors: ReadonlyArray<ClientBuildError>) => string;
+/** Bundles `entry` and writes the module. A problem in the source is a result, not a throw. */
+export declare const buildClient: (esbuild: Esbuild, { root, entry }: {
+    readonly root: string;
+    readonly entry: string;
+}) => Promise<ClientBuildResult>;
+export {};

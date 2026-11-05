@@ -8,6 +8,7 @@ var DASHBOARD_ORIGINS = [
   "https://superwall.dev",
   "https://app.superwall.dev"
 ];
+var CLIENT_BUNDLE_MAX_BYTES = 8 * 1024 * 1024;
 
 // src/client.ts
 var isHostMessage = (data) => typeof data === "object" && data !== null && data.protocol === BRIDGE_PROTOCOL && typeof data._tag === "string" && typeof data.nonce === "string";

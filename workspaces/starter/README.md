@@ -9,8 +9,12 @@ Charts. It holds no credential and calls Superwall as whoever is viewing it.
     superwall workspaces push                        # build it; only you see it until an admin approves it
 
 - `superwall.json` says what it does: its scopes and entrypoints.
-- `src/worker.ts` is the code. `fetch` serves pages, `metric` answers `chart.source@1` entrypoints and
+- `src/worker.ts` is the server code. `fetch` serves pages, `metric` answers `chart.source@1` entrypoints and
   `readout` answers `campaign.metric@1` ones.
+- `src/client.tsx` is the page's browser code. `client.entry` in `superwall.json` names it, and `dev`, `try` and the
+  builder bundle it the same way, with React's JSX, TypeScript, CSS imports, and images and fonts as data URLs. There
+  is no build script, so PostCSS and Tailwind need their CSS committed, and `paths` in `tsconfig.json` don't apply
+  in browser code.
 - `superwall.workspace.json` appears on the first push and links this project to its workspace. Commit it.
 - `vendor/workspace-sdk` is generated. Refresh it with `superwall workspaces update`.
 

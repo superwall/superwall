@@ -3,7 +3,8 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 import { promisify } from "node:util";
-import { bundleDir, WorkspaceError } from "./project";
+import { buildClientAlias, explainBundleFailure } from "./client-build";
+import { bundleDir, readManifest, WorkspaceError } from "./project";
 import { BUNDLE_MAX_BYTES } from "./wire";
 
 const run = promisify(execFile);
@@ -57,7 +58,11 @@ export async function bundleWorkspace(root: string, wrangler: RunWrangler = runW
   const metafile = path.join(dir, "meta.json");
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
-  await wrangler(root, ["deploy", "--dry-run", "--outdir", out, "--metafile", metafile]);
+  const { client } = readManifest(root);
+  const alias = client === undefined ? [] : await buildClientAlias(root, client.entry, resolveWranglerPackage(root));
+  await wrangler(root, ["deploy", "--dry-run", "--outdir", out, "--metafile", metafile, ...alias]).catch((error: Error) => {
+    throw explainBundleFailure(error, client !== undefined);
+  });
 
   const files = fs.readdirSync(out).filter((file) => !file.endsWith(".map") && file !== "README.md");
   const modules = files.filter((file) => /\.m?js$/.test(file));

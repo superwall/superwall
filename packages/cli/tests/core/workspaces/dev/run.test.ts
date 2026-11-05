@@ -333,13 +333,44 @@ test("files that aren't the workspace's don't rebuild it", async () => {
   const seams = harness({
     until: async () => {
       fs.writeFileSync(path.join(root, "notes.txt"), "x");
+      fs.writeFileSync(path.join(root, "superwall.workspace.json"), "{}");
       fs.mkdirSync(path.join(root, ".wrangler"));
       fs.writeFileSync(path.join(root, ".wrangler", "x"), "x");
+      fs.mkdirSync(path.join(root, "node_modules/x"), { recursive: true });
+      fs.writeFileSync(path.join(root, "node_modules/x/index.js"), "x");
       await new Promise((resolve) => setTimeout(resolve, 600));
     },
   });
   await runWorkspaceDev(ctx, input(root), seams.runtime);
   assert.deepEqual(seams.updates, []);
+});
+
+test("a change anywhere in the source tree rebuilds it: any folder, a new one, or a file at the top", async () => {
+  const root = project();
+  fs.mkdirSync(path.join(root, "ui/deep"), { recursive: true });
+  const { ctx } = setup();
+  let count = 0;
+  const seams = harness({
+    wrangler: fakeWrangler(() => `CODE-${(count += 1)}`),
+    until: async () => {
+      const rebuildsAfter = async (change: () => void, what: string) => {
+        const before = seams.updates.length;
+        const deadline = Date.now() + 15_000;
+        change();
+        while (seams.updates.length === before) {
+          assert.ok(Date.now() < deadline, `${what} didn't rebuild`);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      };
+      await rebuildsAfter(() => fs.writeFileSync(path.join(root, "ui/deep/page.tsx"), "x"), "a nested file in another folder");
+      await rebuildsAfter(() => fs.writeFileSync(path.join(root, "client.tsx"), "x"), "a source file at the top");
+      await rebuildsAfter(() => fs.mkdirSync(path.join(root, "lib")), "a new folder");
+      await rebuildsAfter(() => fs.writeFileSync(path.join(root, "lib/helper.ts"), "x"), "a file in the new folder");
+      await rebuildsAfter(() => fs.rmSync(path.join(root, "lib"), { recursive: true }), "a removed folder");
+    },
+  });
+  await runWorkspaceDev(ctx, input(root), seams.runtime);
 });
 
 test("a failed rebuild keeps the manifest that matches the running code", async () => {

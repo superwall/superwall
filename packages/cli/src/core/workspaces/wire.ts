@@ -11,6 +11,7 @@ export const METRIC_LIMITS = { maxPoints: 5_000, maxSeries: 50, maxBytes: 256 * 
 export const READOUT_LIMITS = { maxBytes: 32 * 1024, timeoutMs: 10_000 } as const;
 export const DRAFT_MODULE_MAX_BYTES = 1024 * 1024;
 export const BUNDLE_MAX_BYTES = 10 * 1024 * 1024;
+export const CLIENT_BUNDLE_MODULE = "@superwall/workspace-sdk/client-bundle";
 
 export const isInternalPath = (pathname: string): boolean => {
   let decoded: string;

@@ -142,6 +142,7 @@ describe("dev on real workerd", () => {
     await new Promise<void>((resolve) => webSocketServer.listen(0, "127.0.0.1", resolve));
 
     const root = scratch("workerd");
+    fs.writeFileSync(path.join(root, "superwall.json"), JSON.stringify(manifest));
     fs.mkdirSync(path.join(root, "src"));
     fs.mkdirSync(path.join(root, "node_modules"));
     fs.symlinkSync(
@@ -181,8 +182,8 @@ describe("dev on real workerd", () => {
   });
 
   after(async () => {
-    await server.close();
-    await runtime.dispose();
+    await server?.close();
+    await runtime?.dispose();
     socketServer.close();
     webSocketServer.close();
   });

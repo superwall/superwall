@@ -4,7 +4,8 @@ import type { CommandContext } from "@/program/command";
 import { ApiError } from "@/core/api/client";
 import { bundleWorkspace, type RunWrangler } from "@/core/workspaces/bundle";
 import { resolveAppScope, resolveOrganization } from "@/core/workspaces/organization";
-import { MANIFEST_FILE, readManifest, readProject, WorkspaceError } from "@/core/workspaces/project";
+import { WORKSPACE_FILE } from "@/core/paywalls/source/scope";
+import { readManifest, readProject, WorkspaceError } from "@/core/workspaces/project";
 import { warnIfSdkBehind } from "@/core/workspaces/sdk";
 import { parseContextJson, type ContextInput } from "@/core/workspaces/slots";
 import { createAgentCredential } from "./credential";
@@ -36,12 +37,16 @@ export interface DevRuntimeSeams {
   onReady?: (urls: { host: string; frame: string }, rebuild: () => Promise<void>) => void;
 }
 
-const WATCHED_DIRS = ["src", "vendor"];
-const WATCHED_FILES = new Set([MANIFEST_FILE, "wrangler.jsonc", "wrangler.json", "wrangler.toml"]);
+const UNWATCHED_DIRS = new Set(["node_modules", "dist"]);
+const UNWATCHED_FILES = new Set([WORKSPACE_FILE]);
 const DEBOUNCE_MS = 150;
 const TOKEN_TTL_SECONDS = 60 * 60;
 
-function watchProject(root: string, onChange: () => void): () => void {
+const SOURCE_FILE = /\.(?:tsx?|jsx?|mts|mjs|cts|cjs|css|jsonc?|toml|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf)$/;
+
+const isWatched = (name: string) => !name.startsWith(".") && !UNWATCHED_DIRS.has(name) && !UNWATCHED_FILES.has(name);
+
+export function watchProject(root: string, onChange: () => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const changed = () => {
     clearTimeout(timer);
@@ -56,12 +61,14 @@ function watchProject(root: string, onChange: () => void): () => void {
       nested.set(name, fs.watch(dir, { recursive: true }, changed));
     }
   };
-  for (const name of WATCHED_DIRS) attach(name);
+  for (const name of fs.readdirSync(root).filter(isWatched)) attach(name);
   const top = fs.watch(root, (_event, file) => {
-    if (file === null || WATCHED_FILES.has(file)) changed();
-    if (file !== null && WATCHED_DIRS.includes(file)) {
-      attach(file);
+    if (file === null) {
       changed();
+    } else if (isWatched(file)) {
+      const wasFolder = nested.has(file);
+      attach(file);
+      if (wasFolder || nested.has(file) || SOURCE_FILE.test(file)) changed();
     }
   });
   return () => {

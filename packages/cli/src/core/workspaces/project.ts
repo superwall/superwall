@@ -26,6 +26,7 @@ export interface Entrypoint {
 
 export interface Manifest {
   name: string;
+  client?: { entry: string };
   scopes: readonly string[];
   entrypoints: readonly Entrypoint[];
 }

@@ -36,6 +36,18 @@ export declare const DASHBOARD_ORIGINS: ReadonlyArray<string>;
  * the builder records each bundle's own.
  */
 export declare const WORKSPACE_COMPATIBILITY_DATE = "2026-09-01";
+/** Where a workspace serves its browser bundle. Its files are named by their hash. */
+export declare const CLIENT_ASSET_PREFIX = "/_client/";
+/**
+ * What a Worker imports to get its browser bundle. It has types and no code: the
+ * build substitutes the bundle it made from the manifest's `client.entry`, so a
+ * Worker importing this with no `client` declared doesn't bundle.
+ */
+export declare const CLIENT_BUNDLE_MODULE = "@superwall/workspace-sdk/client-bundle";
+/** The esbuild that bundles a workspace's browser code, everywhere: the builder and `dev`. */
+export declare const CLIENT_ESBUILD_VERSION = "0.28.2";
+/** The browser bundle's script and styles together. It travels inside the Worker's bundle, which has code of its own. */
+export declare const CLIENT_BUNDLE_MAX_BYTES: number;
 /** What the platform accepts from a `metric` handler. */
 export declare const METRIC_LIMITS: {
     /** Points across every series. */

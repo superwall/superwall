@@ -53,7 +53,7 @@ export type AppMessage = {
   readonly nonce: string
 } | {
   readonly _tag: "toast"
-  readonly kind: "info" | "success" | "error"
+  readonly kind: "error" | "info" | "success"
   readonly message: string
   readonly protocol: "superwall-workspace@1"
   readonly nonce: string
@@ -74,7 +74,7 @@ export type AppMessage = {
   readonly _tag: "actionResult"
   readonly protocol: "superwall-workspace@1"
   readonly nonce: string
-  readonly status: "success" | "error" | "cancelled"
+  readonly status: "error" | "success" | "cancelled"
   readonly message?: string
   readonly refresh?: ReadonlyArray<"campaign" | "user">
 }

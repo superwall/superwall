@@ -1,6 +1,6 @@
 {
   "name": "@superwall/workspace-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Helpers for a Superwall workspace's Worker and pages. Generated; refresh it with `superwall workspaces update`.",
   "type": "module",
@@ -13,6 +13,10 @@
     "./client": {
       "types": "./client.d.ts",
       "default": "./client.mjs"
+    },
+    "./client-build": {
+      "types": "./client-build.d.ts",
+      "default": "./client-build.mjs"
     },
     "./constants": {
       "types": "./constants.d.ts",
@@ -33,6 +37,9 @@
     },
     "./platform": {
       "types": "./platform.d.ts"
+    },
+    "./client-bundle": {
+      "types": "./client-bundle.d.ts"
     }
   }
 }

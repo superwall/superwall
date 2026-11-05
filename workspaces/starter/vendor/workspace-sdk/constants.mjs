@@ -26,6 +26,10 @@ var DASHBOARD_ORIGINS = [
   "https://app.superwall.dev"
 ];
 var WORKSPACE_COMPATIBILITY_DATE = "2026-09-01";
+var CLIENT_ASSET_PREFIX = "/_client/";
+var CLIENT_BUNDLE_MODULE = "@superwall/workspace-sdk/client-bundle";
+var CLIENT_ESBUILD_VERSION = "0.28.2";
+var CLIENT_BUNDLE_MAX_BYTES = 8 * 1024 * 1024;
 var METRIC_LIMITS = {
   /** Points across every series. */
   maxPoints: 5e3,
@@ -45,6 +49,10 @@ var READOUT_LIMITS = {
 export {
   API_HOST,
   BRIDGE_PROTOCOL,
+  CLIENT_ASSET_PREFIX,
+  CLIENT_BUNDLE_MAX_BYTES,
+  CLIENT_BUNDLE_MODULE,
+  CLIENT_ESBUILD_VERSION,
   CONTEXT_HEADER,
   DASHBOARD_ORIGINS,
   ENTRYPOINT_HEADER,

@@ -80,6 +80,7 @@
     "@types/react": "^18.3.31",
     "@types/yargs": "^17.0.33",
     "ink-testing-library": "^4.0.0",
+    "react-dom": "^18.3.1",
     "tsdown": "^0.15.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
