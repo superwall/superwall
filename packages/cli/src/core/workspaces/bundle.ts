@@ -99,16 +99,28 @@ const readWranglerConfig: ReadConfig = async (root) => {
   }
 };
 
-async function acceptedConfig(root: string, read: ReadConfig): Promise<{ configPath: string; compatibility: BundleCompatibility }> {
+async function acceptedConfig(
+  root: string,
+  read: ReadConfig,
+): Promise<{ configPath: string; compatibility: BundleCompatibility; tsconfig: boolean }> {
   const { config, error } = await read(root);
   if (error !== undefined) throw new WorkspaceError(`The wrangler config could not be read: ${error}`);
   assertBuilderAccepts(config);
-  const accepted = config as { configPath: unknown; compatibility_date: string; compatibility_flags?: readonly string[] };
+  const accepted = config as {
+    configPath: unknown;
+    compatibility_date: string;
+    compatibility_flags?: readonly string[];
+    tsconfig?: unknown;
+  };
   const configPath = String(accepted.configPath);
   if (path.dirname(fs.realpathSync(path.resolve(root, configPath))) !== fs.realpathSync(root)) {
     throw new WorkspaceError("This would fail on the builder. No wrangler config was read from the repo root.");
   }
-  return { configPath, compatibility: { date: accepted.compatibility_date, flags: accepted.compatibility_flags ?? [] } };
+  return {
+    configPath,
+    compatibility: { date: accepted.compatibility_date, flags: accepted.compatibility_flags ?? [] },
+    tsconfig: typeof accepted.tsconfig === "string" && accepted.tsconfig !== "",
+  };
 }
 
 function assertInputsInRepo(root: string, meta: { inputs?: Record<string, unknown> }): void {
@@ -140,8 +152,9 @@ export async function bundleWorkspace(root: string, wrangler: RunWrangler = runW
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
   const { client } = readManifest(root);
-  const { configPath, compatibility } = await acceptedConfig(root, wrangler.readConfig ?? readWranglerConfig);
-  const alias = client === undefined ? [] : await buildClientAlias(root, client.entry, resolveWranglerPackage(root));
+  const { configPath, compatibility, tsconfig } = await acceptedConfig(root, wrangler.readConfig ?? readWranglerConfig);
+  const alias =
+    client === undefined ? [] : await buildClientAlias(root, client.entry, resolveWranglerPackage(root), tsconfig);
   await wrangler(root, ["deploy", "--dry-run", "--outdir", out, "--metafile", metafile, "--config", configPath, "--env-file", os.devNull, ...alias]).catch(
     (error: Error) => {
       throw explainBundleFailure(error, client !== undefined);

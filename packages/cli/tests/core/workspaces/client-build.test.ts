@@ -6,7 +6,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { bundleWorkspace, type RunWrangler } from "@/core/workspaces/bundle";
-import { clientEntryProblem } from "@/core/workspaces/client-build";
+import { clientEntryProblem, findConfigFiles } from "@/core/workspaces/client-build";
 import { fakeWrangler, MANIFEST, withAcceptedConfig, workspaceProject } from "./fixture";
 
 const CLI_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -124,6 +124,93 @@ test("browser code can't read a file outside the repo or its git metadata, even 
   await assert.rejects(bundleWorkspace(git, recording().wrangler), /reads files outside the repo, which isn't allowed: \.git\/config\.js\./);
 });
 
+const PATHS = JSON.stringify({ compilerOptions: { jsx: "react-jsx", paths: { "@/*": ["./src/*"] } } });
+
+test("tsconfig paths resolve in browser code, read from the root tsconfig", async () => {
+  const root = clientProject({
+    "tsconfig.json": PATHS,
+    "src/lib/label.ts": 'export const label = "from an @ import";\n',
+    "src/client.tsx": 'import { label } from "@/lib/label";\nconsole.log(label);\n',
+  });
+  const { wrangler, args } = recording();
+  await bundleWorkspace(root, wrangler);
+  const file = args()[args().indexOf("--alias") + 1]!.split(":").slice(1).join(":");
+  assert.match(fs.readFileSync(file, "utf8"), /from an @ import/);
+});
+
+test("with no tsconfig.json, jsconfig.json is read, and with neither, @ imports don't resolve", async () => {
+  const files = {
+    "src/lib/label.ts": 'export const label = "via jsconfig";\n',
+    "src/client.tsx": 'import { label } from "@/lib/label";\nconsole.log(label);\n',
+  };
+  const js = clientProject({ ...files, "jsconfig.json": PATHS });
+  await bundleWorkspace(js, recording().wrangler);
+  const both = clientProject({ ...files, "jsconfig.json": PATHS, "tsconfig.json": '{ "compilerOptions": {} }' });
+  await assert.rejects(bundleWorkspace(both, recording().wrangler), /Could not resolve "@\/lib\/label"/, "tsconfig.json wins");
+  const none = clientProject(files);
+  await assert.rejects(bundleWorkspace(none, recording().wrangler), /Could not resolve "@\/lib\/label"/);
+});
+
+test("the root tsconfig's problems stop it, in the SDK's own words, before wrangler runs", async () => {
+  const cases: readonly (readonly [Record<string, string>, RegExp])[] = [
+    [{ "tsconfig.json": '{ "extends": "./base.json" }' }, /tsconfig\.json: "extends" isn't supported in a workspace with browser code\. Put baseUrl and paths in tsconfig\.json itself\./],
+    [{ "jsconfig.json": '{ "extends": "./base.json" }' }, /jsconfig\.json: "extends" isn't supported/],
+    [{ "tsconfig.json": "{ nope" }, /tsconfig\.json is not valid JSON/],
+    [{ "tsconfig.json": "[]" }, /tsconfig\.json must be a JSON object/],
+    [{ "tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@/*": ["../outside/*"] } } }) }, /: tsconfig\.json: paths\["@\/\*"\] target "\.\.\/outside\/\*" points outside the repo\./],
+    [{ "tsconfig.json": JSON.stringify({ compilerOptions: { baseUrl: "/etc" } }) }, /: tsconfig\.json: .*baseUrl/],
+  ];
+  for (const [files, message] of cases) {
+    const root = clientProject({ ...files, "src/client.tsx": "console.log(1)" });
+    const called = recording();
+    await assert.rejects(bundleWorkspace(root, called.wrangler), message);
+    assert.deepEqual(called.args(), []);
+  }
+  const comments = clientProject({ "tsconfig.json": '{\n  // a comment\n  "compilerOptions": { "strict": true, },\n}', "src/client.tsx": "console.log(1)" });
+  await bundleWorkspace(comments, recording().wrangler);
+});
+
+test("a tsconfig below the root that covers browser code is refused, and node_modules and .git are skipped", async () => {
+  const nested = clientProject({
+    "src/tsconfig.json": "{}",
+    "src/client.tsx": "console.log(1)",
+  });
+  await assert.rejects(
+    bundleWorkspace(nested, recording().wrangler),
+    /src\/tsconfig\.json applies to src\/client\.tsx in the Worker's build but not in browser code\. Keep one tsconfig\.json at the repo root/,
+  );
+  const elsewhere = clientProject({ "server/tsconfig.json": "{}", "src/client.tsx": "console.log(1)" });
+  await bundleWorkspace(elsewhere, recording().wrangler);
+  const skipped = clientProject({
+    "node_modules/pkg/tsconfig.json": "{}",
+    ".git/tsconfig.json": "{}",
+    "src/client.tsx": "console.log(1)",
+  });
+  assert.deepEqual(findConfigFiles(skipped), []);
+  assert.deepEqual(findConfigFiles(elsewhere), ["server/tsconfig.json"]);
+  await bundleWorkspace(skipped, recording().wrangler);
+});
+
+test("more than 200 tsconfig files is refused, as the builder refuses it", async () => {
+  const files: Record<string, string> = { "src/client.tsx": "console.log(1)" };
+  for (let index = 0; index <= 200; index += 1) files[`pkgs/p${index}/tsconfig.json`] = "{}";
+  await assert.rejects(bundleWorkspace(clientProject(files), recording().wrangler), /more than 200 tsconfig\.json and jsconfig\.json files/);
+});
+
+test("a wrangler tsconfig key is refused with browser code, and allowed without", async () => {
+  const withKey = (wrangler: RunWrangler) =>
+    Object.assign(wrangler, {
+      readConfig: async (root: string) => ({
+        config: { configPath: path.join(root, "superwall.json"), main: "src/worker.ts", compatibility_date: "2026-09-01", tsconfig: "worker.tsconfig.json" },
+      }),
+    });
+  const root = clientProject({ "src/client.tsx": "console.log(1)" });
+  const called = recording();
+  await assert.rejects(bundleWorkspace(root, withKey(called.wrangler)), /This would fail on the builder\. The wrangler config's `tsconfig` isn't supported in a workspace with browser code/);
+  assert.deepEqual(called.args(), []);
+  await bundleWorkspace(workspaceProject(), withKey(recording().wrangler));
+});
+
 test("the entry's shape follows the manifest's rules", () => {
   for (const entry of ["../client.tsx", "/etc/x.ts", "src/client.css", "src//client.ts", "src/./client.ts", 5, undefined, `${"a".repeat(256)}.ts`]) {
     assert.match(clientEntryProblem(entry)!, /client\.entry must/, String(entry));
@@ -153,7 +240,7 @@ test("an SDK too old for client.entry says how to get a newer one", async () => 
   fs.writeFileSync(path.join(root, "src/client.tsx"), "console.log(1)");
   fs.mkdirSync(path.join(root, "node_modules"), { recursive: true });
   fs.symlinkSync(WRANGLER, path.join(root, "node_modules/wrangler"));
-  await assert.rejects(bundleWorkspace(root, recording().wrangler), /workspace SDK is too old.*superwall workspaces update/);
+  await assert.rejects(bundleWorkspace(root, recording().wrangler), /workspace SDK is older than the builder.*superwall workspaces update/);
 
   fs.mkdirSync(path.join(root, "node_modules/@superwall/workspace-sdk"), { recursive: true });
   fs.writeFileSync(
@@ -162,7 +249,10 @@ test("an SDK too old for client.entry says how to get a newer one", async () => 
   );
   fs.writeFileSync(path.join(root, "node_modules/@superwall/workspace-sdk/a.mjs"), "export const buildClient = () => {};");
   fs.writeFileSync(path.join(root, "node_modules/@superwall/workspace-sdk/b.mjs"), "export const CLIENT_BUNDLE_MAX_BYTES = 1;");
-  await assert.rejects(bundleWorkspace(root, recording().wrangler), /workspace SDK is too old/, "the early 0.2.0, before the fixes");
+  await assert.rejects(bundleWorkspace(root, recording().wrangler), /workspace SDK is older than the builder/, "the early 0.2.0, before the fixes");
+
+  fs.writeFileSync(path.join(root, "node_modules/@superwall/workspace-sdk/a.mjs"), "export const buildClient = () => {}; export const outsideRepoInputs = () => [];");
+  await assert.rejects(bundleWorkspace(root, recording().wrangler), /workspace SDK is older than the builder/, "0.2.x, before tsconfig paths");
 });
 
 function withEsbuild(version: string | null): string {

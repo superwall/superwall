@@ -278,6 +278,47 @@ describe("the date and flags a bundle runs on", () => {
 });
 
 describe("client.entry on real wrangler, esbuild and workerd", () => {
+  test("an @/ import resolves in browser code and in the Worker, from the root tsconfig's paths", { timeout: 120_000 }, async () => {
+    const root = reactPage();
+    fs.writeFileSync(
+      path.join(root, "tsconfig.json"),
+      '{\n  // comments, as tsc allows\n  "compilerOptions": { "jsx": "react-jsx", "paths": { "@/*": ["./*"] } },\n}',
+    );
+    fs.mkdirSync(path.join(root, "shared"));
+    fs.writeFileSync(path.join(root, "shared/words.ts"), 'export const fromWorker = "Worker reached @/shared";\nexport const fromClient = "browser reached @/shared";\n');
+    fs.writeFileSync(
+      path.join(root, "ui/client.tsx"),
+      `import { fromClient } from "@/shared/words";\nimport { label } from "@/ui/label";\ndocument.body.dataset.words = fromClient + label(1);\n`,
+    );
+    fs.writeFileSync(
+      path.join(root, "src/worker.ts"),
+      `import client from "@superwall/workspace-sdk/client-bundle";
+import { clientPage, defineWorkspace } from "@superwall/workspace-sdk/server";
+import { fromWorker } from "@/shared/words";
+export default defineWorkspace({
+  client,
+  fetch: ({ request }) => (new URL(request.url).pathname === "/words" ? new Response(fromWorker) : clientPage(client, { title: "Paths" })),
+});
+`,
+    );
+    await devOn(root, async ({ page, scriptOf }) => {
+      assert.equal(await (await page("/words")).text(), "Worker reached @/shared");
+      const script = await scriptOf();
+      assert.match(script.text, /browser reached @\/shared/);
+      assert.match(script.text, /clicks in TypeScript/);
+    });
+  });
+
+  test("on real wrangler, a wrangler tsconfig key is refused with browser code", { timeout: 120_000 }, async () => {
+    const root = reactPage();
+    fs.writeFileSync(path.join(root, "worker.tsconfig.json"), "{}");
+    fs.writeFileSync(
+      path.join(root, "wrangler.jsonc"),
+      '{ "name": "x", "main": "src/worker.ts", "compatibility_date": "2026-09-01", "tsconfig": "worker.tsconfig.json" }',
+    );
+    await assert.rejects(bundleWorkspace(root), /The wrangler config's `tsconfig` isn't supported in a workspace with browser code/);
+  });
+
   test("a React page renders through dev's frame, under the runtime's CSP, and a change anywhere rebuilds it", { timeout: 120_000 }, async () => {
     const root = reactPage();
     await devOn(root, async ({ page, scriptOf }) => {
