@@ -8,6 +8,7 @@ export const command = defineCommand({
     dir: projectDir,
     workspace,
     org: { type: "string", value: "id", describe: "The organization of a --workspace slug" },
+    all: { type: "boolean", describe: "List every version, not just the latest and the live one" },
   },
   examples: [
     ["workspaces status", "This project's workspace"],

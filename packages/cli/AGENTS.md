@@ -391,6 +391,10 @@ as the viewer. The platform itself lives in a private repo.
   3 builds) waits and repeats the same call, with nothing to push: the version exists. A long `retry_after`
   (100 versions a day) says trying soon won't help. A build failing with `busy` or `unavailable` isn't the
   person's code, so it says to push again rather than read the log.
+- **Say who can really see a version.** `author_version_id` on the workspace is what tells: it's null for a staff
+  account, which is refused a copy, so nobody sees the version until it's approved. `push` and `share` both go
+  through `visibilityOf`. `openLink` prints the app route for a workspace with an `app.page` and no `org.page`,
+  because `/workspaces/<slug>` doesn't open that page.
 - **Reading a build settles it,** so `push` polls until it finishes (20 minutes, riding out a
   few 5xx), and `status` reads an unfinished latest version. A build that fails or outlasts the
   wait fails the command. `--json` carries the outcome either way.

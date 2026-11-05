@@ -1,10 +1,10 @@
 import * as path from "node:path";
 import type { CommandContext } from "@/program/command";
 import { DASHBOARD_ORIGIN_OVERRIDE } from "@/environment";
-import { listOrganizations } from "@/core/api/orgs";
-import { getWorkspace, listVersions, listWorkspaces, type Workspace, type WorkspaceVersion } from "./api";
+import { listOrganizations, orgProjects } from "@/core/api/orgs";
+import { getMe, getWorkspace, listVersions, listWorkspaces, type Workspace, type WorkspaceVersion } from "./api";
 import { readBinding } from "./binding";
-import { WorkspaceError } from "./project";
+import { WorkspaceError, type Manifest } from "./project";
 
 export interface WorkspaceRef {
   dir?: string;
@@ -42,6 +42,72 @@ export function dashboardOrigin(apiHost: string): string {
 
 export const workspaceUrl = (apiHost: string, workspace: Pick<Workspace, "organization_id" | "slug">): string =>
   `${dashboardOrigin(apiHost)}/${workspace.organization_id}/workspaces/${encodeURIComponent(workspace.slug)}`;
+
+export const appEntrypointUrl = (
+  apiHost: string,
+  workspace: Pick<Workspace, "id" | "organization_id">,
+  applicationId: string | number,
+  entrypoint: string,
+): string =>
+  `${dashboardOrigin(apiHost)}/${workspace.organization_id}/${applicationId}/apps/${workspace.id}/${encodeURIComponent(entrypoint)}`;
+
+export interface OpenLink {
+  url: string;
+  entrypoint?: string;
+  app?: string;
+  otherApps?: boolean;
+}
+
+export async function openLink(
+  ctx: CommandContext<"required">,
+  workspace: Pick<Workspace, "id" | "organization_id" | "slug">,
+  manifest: Pick<Manifest, "entrypoints"> | null | undefined,
+): Promise<OpenLink> {
+  const fallback = { url: workspaceUrl(ctx.api.host, workspace) };
+  const entrypoints = manifest?.entrypoints ?? [];
+  const appPage = entrypoints.find((entrypoint) => entrypoint.slot === "app.page@1");
+  if (!appPage || entrypoints.some((entrypoint) => entrypoint.slot === "org.page@1")) return fallback;
+  const projects = await orgProjects(ctx.api, String(workspace.organization_id)).catch(() => []);
+  const apps = projects.flatMap((project) => project.applications ?? []);
+  const [first] = apps;
+  if (first === undefined) return fallback;
+  return {
+    url: appEntrypointUrl(ctx.api.host, workspace, String(first.id), appPage.id),
+    entrypoint: appPage.id,
+    app: String(first.name ?? first.id),
+    otherApps: apps.length > 1,
+  };
+}
+
+export const latestManifest = (versions: readonly WorkspaceVersion[]): Manifest | null | undefined =>
+  newestFirst(versions).find((version) => version.manifest !== null)?.manifest;
+
+export type VisibleTo = "everyone" | "you" | "its_author" | "nobody";
+
+export async function visibilityOf(
+  ctx: CommandContext<"required">,
+  workspaceId: string | number,
+  version: number,
+): Promise<{ visibleTo: VisibleTo; sentence: string }> {
+  const [workspace, me] = await Promise.all([
+    getWorkspace(ctx.api, workspaceId).catch(() => undefined),
+    getMe(ctx.api).catch(() => undefined),
+  ]);
+  if (workspace?.state === "turned_off") {
+    return { visibleTo: "nobody", sentence: `This workspace is turned off, so nobody can see version ${version}.` };
+  }
+  if (workspace?.active_version_id === version) return { visibleTo: "everyone", sentence: `Version ${version} is live.` };
+  if (workspace?.author_version_id === version) {
+    return { visibleTo: "you", sentence: `Only you can see version ${version} until an admin approves it.` };
+  }
+  if (me?.role === "SUPERADMIN") {
+    return {
+      visibleTo: "nobody",
+      sentence: `Nobody can see version ${version} until an admin approves it, because a staff account doesn't get a copy of its own.`,
+    };
+  }
+  return { visibleTo: "its_author", sentence: `Only its author can see version ${version} until an admin approves it.` };
+}
 
 export async function roleCanApprove(ctx: CommandContext<"required">, workspace: Pick<Workspace, "organization_id">): Promise<boolean> {
   const organizations = await listOrganizations(ctx.api).catch(() => []);

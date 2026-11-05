@@ -9,13 +9,15 @@ import { scratch } from "./fixture";
 const workspace = { id: 42, organization_id: 7, slug: "churn", name: "Churn", state: "active", active_version_id: 1 };
 const row = { entrypoint_id: "panel", slot: "user.panel@1", application_id: 9, enabled: true, position: 0 };
 
-function setup(options: Parameters<typeof fakeContext>[1] = {}) {
+function setup(options: Parameters<typeof fakeContext>[1] & { versions?: unknown[]; projects?: unknown[] } = {}) {
   const sent: { method: string; path: string; body?: unknown }[] = [];
   const api = {
     host: "https://api.superwall.com",
+    list: async () => options.projects ?? [],
     get: async (route: string) => {
       if (route.endsWith("/installations")) return { data: [row, { ...row, application_id: null, enabled: false }] };
       if (route.startsWith("/v2/workspaces?")) return { data: [workspace] };
+      if (route.endsWith("/versions")) return { data: options.versions ?? [] };
       return workspace;
     },
     put: async (route: string, body: unknown) => {
@@ -140,4 +142,11 @@ test("open prints the workspace's page, or an entrypoint in an app, and opens it
 
   const noApp = setup();
   await assert.rejects(runWorkspaceOpen(noApp.ctx, { workspace: "42", open: true, entrypoint: "panel" }), /--app/);
+});
+
+test("open on an app-only workspace goes to the app route", async () => {
+  const manifest = { name: "x", scopes: [], entrypoints: [{ id: "cohorts", slot: "app.page@1", title: "C", path: "/" }] };
+  const { ctx, said } = setup({ versions: [{ id: 3, manifest }], projects: [{ id: 1, applications: [{ id: 9, name: "Pets" }] }] });
+  await runWorkspaceOpen(ctx, { workspace: "42", open: false });
+  assert.match(said("info").join(), /\/9\/apps\/\d+\/cohorts/);
 });

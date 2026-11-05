@@ -23,7 +23,7 @@ import {
 import { readBinding, readSourceFile, writeBinding, type WorkspaceBinding } from "./binding";
 import { resolveOrganization } from "./organization";
 import { readProject, WorkspaceError, type WorkspaceProject } from "./project";
-import { workspaceUrl } from "./resolve";
+import { openLink, visibilityOf } from "./resolve";
 import { vendoredVersion, warnIfSdkBehind } from "./sdk";
 
 const PUSH_ATTEMPTS = 3;
@@ -275,7 +275,12 @@ export async function waitForBuild(
   }
 }
 
-const buildSummary = (workspace: WorkspaceBinding, pushed: DirectPushResult, build: WorkspaceBuild, url: string) => ({
+const buildSummary = (
+  workspace: WorkspaceBinding,
+  pushed: DirectPushResult,
+  build: WorkspaceBuild,
+  url: string,
+) => ({
   workspace_id: Number(workspace.workspaceId),
   slug: workspace.slug,
   version_id: build.version_id,
@@ -328,7 +333,12 @@ export async function runWorkspacePush(
     return;
   }
   const { pushed, build: started, binding } = result;
-  const url = workspaceUrl(ctx.api.host, { organization_id: Number(binding.organizationId), slug: binding.slug });
+  const link = await openLink(
+    ctx,
+    { id: Number(binding.workspaceId), organization_id: Number(binding.organizationId), slug: binding.slug },
+    project.manifest,
+  );
+  const { url } = link;
 
   const spin = ctx.ui.spinner();
   spin.start(`Building version ${started.version_id}`);
@@ -366,16 +376,18 @@ export async function runWorkspacePush(
   }
 
   spin.stop(`Built version ${build.version_id}`);
+  const { visibleTo, sentence } = await visibilityOf(ctx, binding.workspaceId, build.version_id);
   if (ctx.json) {
-    ctx.output.data(summary);
+    ctx.output.data({ ...summary, visible_to: visibleTo });
     return;
   }
-  ctx.ui.success(`Only you can see version ${build.version_id} until an admin approves it.`);
+  ctx.ui.success(sentence);
   if (pushed.incoming?.length) {
     ctx.ui.warn(
       `It runs commits from ${namesOf(pushed.incoming)} with your reads, and they aren't in this project yet. Run \`superwall workspaces pull\` to get them.`,
     );
   }
-  ctx.ui.info(`Open ${url}`);
+  ctx.ui.info(link.app ? `Open ${url} (in ${link.app})` : `Open ${url}`);
+  if (link.otherApps) ctx.ui.info(`For another app, run \`superwall workspaces open ${link.entrypoint} --app <id>\`.`);
   ctx.ui.info("To ask for review, run `superwall workspaces share`.");
 }
