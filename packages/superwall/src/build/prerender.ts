@@ -7,6 +7,9 @@ import { build as viteBuild, type InlineConfig, type Rollup } from "vite";
 import { assetFileName } from "./assets";
 import { PRERENDER_GLOBAL, entrySource, type EntrySourceOptions } from "./entry";
 import { isStripeProductIdentifier } from "../checkout/products";
+import { NO_PRODUCT, teleportPageKey } from "../checkout/teleport/pages";
+
+export { NO_PRODUCT, teleportPageKey };
 
 export type TeleportPage = { key: string; html: string };
 
@@ -23,19 +26,12 @@ export type PrerenderedTeleportPages = {
   warnings: string[];
 };
 
-export const NO_PRODUCT = "__none__";
 export const MAX_TELEPORT_PAGES = 200;
 export const MAX_TELEPORT_PAGE_BYTES = 256 * 1024;
 export const PRERENDER_URL = "https://prerender.superwall.invalid/teleport/prerender";
 
 const PAGE_LOCALE = /^[A-Za-z0-9-]+$/;
 const PAGE_REFERENCE = /^[\w.-]{1,191}$/;
-
-export const teleportPageKey = (
-  locale: string,
-  productReference: string | undefined,
-  hasIntroductoryOffer: boolean,
-): string => `${locale}/${productReference ?? NO_PRODUCT}/${hasIntroductoryOffer ? 1 : 0}`;
 
 export const stripeReferencesOf = (products: Record<string, string>): string[] =>
   Object.entries(products)

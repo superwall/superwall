@@ -35,11 +35,15 @@ export const entrySource = ({
   const checkout = checkoutNeedsPaymentUi(config.checkout) || teleport;
   const lines: string[] = [
     `import * as React from "react";`,
-    prerender
-      ? `import { renderToString } from "react-dom/server";`
-      : `import { createRoot } from "react-dom/client";`,
+    ...(prerender
+      ? [`import { renderToString } from "react-dom/server";`]
+      : teleport
+        ? []
+        : [`import { createRoot } from "react-dom/client";`]),
     `import { SuperwallProvider } from "superwall";`,
-    `import { mergeMessages } from "superwall/internal";`,
+    teleport && !prerender
+      ? `import { mergeMessages, mountApp } from "superwall/internal";`
+      : `import { mergeMessages } from "superwall/internal";`,
     `import { PaywallRouter } from "superwall/navigation";`,
     ...(checkout
       ? [
@@ -98,7 +102,9 @@ export const entrySource = ({
     ...(teleport && !prerender ? [`markTeleportScriptStart();`] : []),
     prerender
       ? `globalThis.${PRERENDER_GLOBAL} = () => renderToString(`
-      : `createRoot(document.getElementById("root")).render(`,
+      : teleport
+        ? `mountApp(document.getElementById("root"), (`
+        : `createRoot(document.getElementById("root")).render(`,
     `  <React.StrictMode>`,
     inlineProducts === undefined || Object.keys(inlineProducts).length === 0
       ? `    <SuperwallProvider config={config}>`
@@ -107,8 +113,10 @@ export const entrySource = ({
     ...(checkout ? [`      <SuperwallCheckout />`] : []),
     ...(teleport ? [`      <TeleportScreen />`] : []),
     `    </SuperwallProvider>`,
-    `  </React.StrictMode>,`,
-    `);`,
+    teleport && !prerender
+      ? `  </React.StrictMode>), config.localization);`
+      : `  </React.StrictMode>,`,
+    ...(teleport && !prerender ? [] : [`);`]),
   );
 
   return lines.join("\n");

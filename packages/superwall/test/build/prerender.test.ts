@@ -2,6 +2,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { JSDOM, VirtualConsole } from "jsdom";
+import { TextDecoder, TextEncoder } from "node:util";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   buildSnapshot,
@@ -14,7 +16,7 @@ import {
   type BuiltSnapshot,
 } from "../../src/build";
 import { discoverProject } from "../../src/discover";
-import { withTeleportPages } from "../../src/document";
+import { PRERENDER_ATTRIBUTE, withTeleportPages } from "../../src/document";
 
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixture");
 
@@ -168,6 +170,72 @@ describe("pre-rendering the teleport route", () => {
 
   it("writes the document that names its pages, and ids it by that html", () => {
     expect(fs.readFileSync(built.htmlFile, "utf8")).toBe(built.html);
+  });
+
+  const openTeleportPage = async (key: string | undefined, locale: string, tapped?: string) => {
+    const script = /<script type="module"[^>]*>([\s\S]*?)<\/script>/.exec(built.html)?.[1];
+    if (script === undefined) throw new Error("the document has no inline script");
+    const filled = key === undefined ? "" : page(built, key);
+    const attribute = key === undefined ? "" : ` ${PRERENDER_ATTRIBUTE}="${key}"`;
+    const errors: unknown[] = [];
+    const virtualConsole = new VirtualConsole();
+    virtualConsole.on("error", (...args: unknown[]) => errors.push(args));
+    const dom = new JSDOM(
+      `<!doctype html><html><head></head><body><div id="root"${attribute}>${filled}</div></body></html>`,
+      {
+        url: "https://example.superwall.app/teleport/tp",
+        runScripts: "outside-only",
+        pretendToBeVisual: true,
+        virtualConsole,
+      },
+    );
+    const window = dom.window as unknown as Window &
+      typeof globalThis & { __SW_TELEPORT__?: unknown };
+    Object.assign(window, { TextEncoder, TextDecoder });
+    window.addEventListener("error", (event) => errors.push(event.error ?? event.message));
+    window.__SW_TELEPORT__ = {
+      id: "v1:tp",
+      route: "checkout",
+      hasIntroductoryOffer: true,
+      ...(tapped === undefined ? {} : { productReference: tapped }),
+      variables: { deviceProperties: { deviceLocale: locale } },
+    };
+    const root = window.document.getElementById("root")!;
+    const before = root.querySelector("main");
+    window.eval(script.replaceAll("import.meta.url", "location.href"));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const after = root.querySelector("main");
+    const result = {
+      before,
+      after,
+      html: after?.outerHTML,
+      attribute: root.getAttribute(PRERENDER_ATTRIBUTE),
+      errors,
+    };
+    dom.window.close();
+    return result;
+  };
+
+  it("hydrates the page the worker put in #root, keeping its nodes and drawing the same frame", async () => {
+    const opened = await openTeleportPage("de/annual/1", "de-DE", "annual");
+    expect(opened.before).not.toBeNull();
+    expect(opened.after).toBe(opened.before);
+    expect(opened.html).toBe(main(page(built, "de/annual/1")));
+    expect(opened.attribute).toBeNull();
+    expect(opened.errors).toEqual([]);
+  });
+
+  it("throws away a page for another state and renders the shopper's own frame", async () => {
+    const opened = await openTeleportPage("en/monthly/0", "de-DE", "annual");
+    expect(opened.before).not.toBeNull();
+    expect(opened.after).not.toBe(opened.before);
+    expect(opened.html).toBe(main(page(built, "de/annual/1")));
+  });
+
+  it("renders in the browser as before when the worker sent no page", async () => {
+    const opened = await openTeleportPage(undefined, "en-US");
+    expect(opened.before).toBeNull();
+    expect(opened.html).toBe(main(page(built, "en/__none__/1")));
   });
 });
 
