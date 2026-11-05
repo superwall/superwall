@@ -28,7 +28,7 @@ export declare const INTERNAL_PATH_PREFIX = "/__sw/";
 export declare const isInternalPath: (pathname: string) => boolean;
 export declare const BRIDGE_PROTOCOL = "superwall-workspace@1";
 /** How long the host waits for `ready` before showing the load error. */
-export declare const MOUNT_LOAD_TIMEOUT_MS = 8000;
+export declare const MOUNT_LOAD_TIMEOUT_MS = 20000;
 /** Where the dashboard is served from: production, then staging. Nothing else may frame a workspace. */
 export declare const DASHBOARD_ORIGINS: ReadonlyArray<string>;
 /**

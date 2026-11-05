@@ -129,12 +129,14 @@ export async function runWorkspaceOpen(
   if (input.entrypoint !== undefined && input.app === undefined) {
     throw new WorkspaceError("An entrypoint opens inside an app. Say which with --app <id>.");
   }
+  const manifest = latestManifest(await listVersions(ctx.api, workspace.id).catch(() => []));
   let url: string;
   if (input.entrypoint !== undefined && input.app !== undefined) {
     const { applicationId } = await resolveAppScope(ctx.api, input.app, String(workspace.organization_id));
-    url = appEntrypointUrl(ctx.api.host, workspace, String(applicationId), input.entrypoint);
+    const entrypoint = manifest?.entrypoints.find((candidate) => candidate.id === input.entrypoint);
+    url = appEntrypointUrl(ctx.api.host, workspace, String(applicationId), entrypoint ?? { id: input.entrypoint, slot: "app.page@1", title: "" });
   } else {
-    url = (await openLink(ctx, workspace, latestManifest(await listVersions(ctx.api, workspace.id).catch(() => [])))).url;
+    url = (await openLink(ctx, workspace, manifest)).url;
   }
   if (ctx.json) {
     ctx.output.data({ url });

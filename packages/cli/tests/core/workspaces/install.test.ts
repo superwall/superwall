@@ -144,6 +144,24 @@ test("open prints the workspace's page, or an entrypoint in an app, and opens it
   await assert.rejects(runWorkspaceOpen(noApp.ctx, { workspace: "42", open: true, entrypoint: "panel" }), /--app/);
 });
 
+test("open <entrypoint> --app goes where that entrypoint shows", async () => {
+  const manifest = {
+    name: "x",
+    scopes: [],
+    entrypoints: [
+      { id: "count", slot: "chart.source@1", title: "C" },
+      { id: "card", slot: "app.dashboard.widget@1", title: "W" },
+    ],
+  };
+  const open = async (entrypoint: string) => {
+    const { ctx, said } = setup({ versions: [{ id: 3, manifest }] });
+    await runWorkspaceOpen(ctx, { workspace: "42", open: false, entrypoint, app: "9" });
+    return said("info").join();
+  };
+  assert.match(await open("count"), /\/9\/charts\?cS=workspaces/);
+  assert.match(await open("card"), /\/9\/embeds/);
+});
+
 test("open on an app-only workspace goes to the app route", async () => {
   const manifest = { name: "x", scopes: [], entrypoints: [{ id: "cohorts", slot: "app.page@1", title: "C", path: "/" }] };
   const { ctx, said } = setup({ versions: [{ id: 3, manifest }], projects: [{ id: 1, applications: [{ id: 9, name: "Pets" }] }] });

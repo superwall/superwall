@@ -18,7 +18,7 @@ var isInternalPath = (pathname) => {
   return path === "/__sw" || path.startsWith(INTERNAL_PATH_PREFIX);
 };
 var BRIDGE_PROTOCOL = "superwall-workspace@1";
-var MOUNT_LOAD_TIMEOUT_MS = 8e3;
+var MOUNT_LOAD_TIMEOUT_MS = 2e4;
 var DASHBOARD_ORIGINS = [
   "https://superwall.com",
   "https://app.superwall.com",

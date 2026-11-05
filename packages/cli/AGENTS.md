@@ -400,8 +400,10 @@ as the viewer. The platform itself lives in a private repo.
   person's code, so it says to push again rather than read the log.
 - **Say who can really see a version.** `author_version_id` on the workspace is what tells: it's null for a staff
   account, which is refused a copy, so nobody sees the version until it's approved. `push` and `share` both go
-  through `visibilityOf`. `openLink` prints the app route for a workspace with an `app.page` and no `org.page`,
-  because `/workspaces/<slug>` doesn't open that page.
+  through `visibilityOf`. `openLink` prints what opens something: `/workspaces/<slug>` for an `org.page`, which is the
+  only slot that page opens, else the app route for an `app.page`, the app's `/embeds` for widgets, tabs, panels and
+  actions, or `/charts?cS=workspaces` for metrics. An author keeps a copy marked "Not installed" until an entrypoint
+  has any install row, so `awaitingInstall` is why an approved version isn't called live.
 - **Reading a build settles it,** so `push` polls until it finishes (20 minutes, riding out a
   few 5xx), and `status` reads an unfinished latest version. A build that fails or outlasts the
   wait fails the command. `--json` carries the outcome either way.

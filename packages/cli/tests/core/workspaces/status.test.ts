@@ -51,6 +51,7 @@ function setup(versions: WorkspaceVersion[], options: { build?: WorkspaceBuild |
   const reads: string[] = [];
   const api = {
     host: "https://api.superwall.com",
+    list: async () => [{ id: 1, applications: [{ id: 9, name: "Pets" }] }],
     get: async (path: string) => {
       reads.push(path);
       if (path.endsWith("/build")) {
@@ -58,6 +59,7 @@ function setup(versions: WorkspaceVersion[], options: { build?: WorkspaceBuild |
         return options.build ?? build(versions[0]!.id);
       }
       if (path.endsWith("/versions")) return { data: versions };
+      if (path.endsWith("/installations")) return { data: [] };
       if (path.startsWith("/v2/workspaces?")) return { data: [options.workspace ?? workspace()] };
       return options.workspace ?? workspace();
     },
@@ -132,6 +134,16 @@ test("an app-only workspace's status links to the app route", async () => {
   assert.match(context.said("info").join(), /\/7\/9\/apps\/42\/cohorts/);
 });
 
+test("status doesn't call an approved workspace with nothing installed live", async () => {
+  const manifest = { name: "x", scopes: [], entrypoints: [{ id: "count", slot: "chart.source@1", title: "C" }] };
+  const context = setup([version(1, { manifest: manifest as never })], { workspace: workspace({ state: "active", active_version_id: 1, author_version_id: null }) });
+  await runWorkspaceStatus(context.ctx, { workspace: "42" });
+  assert.match(context.said("success").join(), /Approved, but nothing is installed yet, so only its author can see it/);
+  const json = setup([version(1, { manifest: manifest as never })], { json: true, workspace: workspace({ state: "active", active_version_id: 1, author_version_id: null }) });
+  await runWorkspaceStatus(json.ctx, { workspace: "42" });
+  assert.equal((json.data[0] as { awaiting_install: boolean }).awaiting_install, true);
+});
+
 test("status says why the latest build failed, and --json gives it all", async () => {
   const { ctx, said } = setup([version(2, { build_status: "FAILED", build_error: "no lockfile" })]);
   await runWorkspaceStatus(ctx, { workspace: "42" });
@@ -144,7 +156,7 @@ test("status says why the latest build failed, and --json gives it all", async (
   assert.match(empty.said("success").join(), /Nothing pushed yet/);
   const json = setup([version(1)], { json: true });
   await runWorkspaceStatus(json.ctx, { workspace: "42" });
-  assert.deepEqual(Object.keys(json.data[0] as object), ["workspace", "url", "versions", "build"]);
+  assert.deepEqual(Object.keys(json.data[0] as object), ["workspace", "url", "versions", "build", "awaiting_install"]);
 });
 
 test("a slug needs its organization", async () => {

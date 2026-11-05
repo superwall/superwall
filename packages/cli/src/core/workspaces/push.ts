@@ -376,7 +376,7 @@ export async function runWorkspacePush(
   }
 
   spin.stop(`Built version ${build.version_id}`);
-  const { visibleTo, sentence } = await visibilityOf(ctx, binding.workspaceId, build.version_id);
+  const { visibleTo, sentence } = await visibilityOf(ctx, binding.workspaceId, build.version_id, project.manifest);
   if (ctx.json) {
     ctx.output.data({ ...summary, visible_to: visibleTo });
     return;
@@ -388,6 +388,6 @@ export async function runWorkspacePush(
     );
   }
   ctx.ui.info(link.app ? `Open ${url} (in ${link.app})` : `Open ${url}`);
-  if (link.otherApps) ctx.ui.info(`For another app, run \`superwall workspaces open ${link.entrypoint} --app <id>\`.`);
+  if (link.otherApps) ctx.ui.info("Each of your other apps has the same page.");
   ctx.ui.info("To ask for review, run `superwall workspaces share`.");
 }

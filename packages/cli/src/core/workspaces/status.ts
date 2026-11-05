@@ -2,7 +2,7 @@ import type { CommandContext } from "@/program/command";
 import { ApiError } from "@/core/api/client";
 import { getBuild, getMe, listMembers, listVersions, requestDeploy, type OrganizationMember, type Workspace, type WorkspaceBuild, type WorkspaceVersion } from "./api";
 import { WorkspaceError } from "./project";
-import { latestManifest, newestFirst, openLink, pickVersion, roleCanApprove, resolveWorkspace, visibilityOf, type WorkspaceRef } from "./resolve";
+import { awaitingInstall, latestManifest, newestFirst, openLink, pickVersion, roleCanApprove, resolveWorkspace, visibilityOf, type WorkspaceRef } from "./resolve";
 
 const SHOWN_VERSIONS = 3;
 
@@ -47,15 +47,17 @@ export async function runWorkspaceStatus(ctx: CommandContext<"required">, input:
   if (build) versions = versions.map((version) => (version.id === build.version.id ? build.version : version));
 
   const { url } = await openLink(ctx, workspace, latestManifest(versions));
+  const live = versions.find((version) => version.id === workspace.active_version_id);
+  const notInstalled = workspace.state === "active" && (await awaitingInstall(ctx.api, workspace.id, live?.manifest));
   if (ctx.json) {
-    ctx.output.data({ workspace, url, versions, build: build ?? null });
+    ctx.output.data({ workspace, url, versions, build: build ?? null, awaiting_install: notInstalled });
     return;
   }
-  ctx.ui.success(`${workspace.name} (\`${workspace.slug}\`, id ${workspace.id}): ${STATE_LABEL[workspace.state]}`);
+  const label = notInstalled ? "Approved, but nothing is installed yet, so only its author can see it" : STATE_LABEL[workspace.state];
+  ctx.ui.success(`${workspace.name} (\`${workspace.slug}\`, id ${workspace.id}): ${label}`);
   ctx.ui.info(`Open ${url}`);
   const newest = input.all ? versions : versions.slice(0, SHOWN_VERSIONS);
-  const active = versions.find((version) => version.id === workspace.active_version_id);
-  const shown = active && !newest.includes(active) ? [...newest, active] : newest;
+  const shown = live && !newest.includes(live) ? [...newest, live] : newest;
   ctx.ui.list({
     empty: "No versions yet. Run `superwall workspaces push`.",
     items: shown.map((version) => ({
@@ -139,7 +141,7 @@ export async function runWorkspaceShare(ctx: CommandContext<"required">, input: 
   }
   const requested = await requestDeploy(ctx.api, workspace.id, version.id);
   const { admin, names } = await approvers(ctx, workspace);
-  const { visibleTo, sentence } = await visibilityOf(ctx, workspace.id, version.id);
+  const { visibleTo, sentence } = await visibilityOf(ctx, workspace.id, version.id, version.manifest);
   if (ctx.json) {
     ctx.output.data({ ...requested, can_approve: admin, approvers: names, visible_to: visibleTo });
     return;

@@ -2,7 +2,7 @@ import { ApiError } from "@/core/api/client";
 import type { CommandContext } from "@/program/command";
 import { approveVersion, type WorkspaceVersion } from "./api";
 import { WorkspaceError, type Manifest } from "./project";
-import { roleCanApprove, pickVersion, resolveWorkspace, type WorkspaceRef } from "./resolve";
+import { awaitingInstall, roleCanApprove, pickVersion, resolveWorkspace, type WorkspaceRef } from "./resolve";
 
 export interface ApproveInput extends WorkspaceRef {
   version?: string;
@@ -138,6 +138,11 @@ const diffLines = (diff: readonly SectionDiff[]): string[] =>
     ...removed.map((item) => `  - ${item}`),
   ]);
 
+function commitLine(message: string): string {
+  const [subject = "", note] = message.split(/\n\n+/);
+  return subject.startsWith("push workspace/") && note && !note.startsWith("Superwall-") ? note : subject;
+}
+
 const ONLY_ADMINS =
   "Only organization owners and admins can approve workspace versions. Ask one of them to review this version.";
 
@@ -176,7 +181,7 @@ export async function runWorkspaceApprove(ctx: CommandContext<"required">, input
     ctx.ui.report(
       [
         `${workspace.name}, version ${version.id} (${version.commit_sha.slice(0, 12)})`,
-        ...(version.commit_message ? [version.commit_message.split("\n")[0] ?? ""] : []),
+        ...(version.commit_message ? [commitLine(version.commit_message)] : []),
         "",
         "What it can do:",
         ...manifestLines(proposed),
@@ -239,6 +244,10 @@ export async function runWorkspaceApprove(ctx: CommandContext<"required">, input
     ctx.output.data({ approved: true, ...details, version: approved });
     return;
   }
-  ctx.ui.success(`Approved version ${version.id}. It's live for everyone it's installed for.`);
+  ctx.ui.success(
+    (await awaitingInstall(ctx.api, workspace.id, version.manifest))
+      ? `Approved version ${version.id}. Nothing is installed yet, so only its author can see it until you choose where it shows.`
+      : `Approved version ${version.id}. It's live for everyone it's installed for.`,
+  );
   ctx.ui.info(`Choose where it shows with \`superwall workspaces install <entrypoint> --workspace ${workspace.id}\`.`);
 }
