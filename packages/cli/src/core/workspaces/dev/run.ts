@@ -164,6 +164,7 @@ export async function runWorkspaceDev(
   const runtime = await (seams.startRuntime ?? startMiniflare)({
     root,
     module: first.module,
+    compatibility: first.compatibility,
     outbound: createOutbound({
       apiOrigin: ctx.api.host,
       credential,
@@ -196,7 +197,7 @@ export async function runWorkspaceDev(
         try {
           const nextManifest = readManifest(root);
           const next = await bundleWorkspace(root, seams.wrangler);
-          await runtime.update(next.module);
+          await runtime.update(next.module, next.compatibility);
           manifest = nextManifest;
           ctx.ui.step(`Rebuilt, ${next.bytes} bytes`);
           started.publish({ type: "reload" });

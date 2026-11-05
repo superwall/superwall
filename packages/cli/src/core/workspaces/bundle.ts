@@ -12,9 +12,15 @@ import { assertBuilderAccepts, outsideRepoProblem, workerInputsOutside } from ".
 
 const run = promisify(execFile);
 
+export interface BundleCompatibility {
+  date: string;
+  flags: readonly string[];
+}
+
 export interface BuiltBundle {
   module: string;
   bytes: number;
+  compatibility: BundleCompatibility;
 }
 
 export type ReadConfig = (root: string) => Promise<{ config?: unknown; error?: string }>;
@@ -93,15 +99,16 @@ const readWranglerConfig: ReadConfig = async (root) => {
   }
 };
 
-async function acceptedConfig(root: string, read: ReadConfig): Promise<string> {
+async function acceptedConfig(root: string, read: ReadConfig): Promise<{ configPath: string; compatibility: BundleCompatibility }> {
   const { config, error } = await read(root);
   if (error !== undefined) throw new WorkspaceError(`The wrangler config could not be read: ${error}`);
   assertBuilderAccepts(config);
-  const configPath = String((config as { configPath: unknown }).configPath);
+  const accepted = config as { configPath: unknown; compatibility_date: string; compatibility_flags?: readonly string[] };
+  const configPath = String(accepted.configPath);
   if (path.dirname(fs.realpathSync(path.resolve(root, configPath))) !== fs.realpathSync(root)) {
     throw new WorkspaceError("This would fail on the builder. No wrangler config was read from the repo root.");
   }
-  return configPath;
+  return { configPath, compatibility: { date: accepted.compatibility_date, flags: accepted.compatibility_flags ?? [] } };
 }
 
 function assertInputsInRepo(root: string, meta: { inputs?: Record<string, unknown> }): void {
@@ -133,7 +140,7 @@ export async function bundleWorkspace(root: string, wrangler: RunWrangler = runW
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
   const { client } = readManifest(root);
-  const configPath = await acceptedConfig(root, wrangler.readConfig ?? readWranglerConfig);
+  const { configPath, compatibility } = await acceptedConfig(root, wrangler.readConfig ?? readWranglerConfig);
   const alias = client === undefined ? [] : await buildClientAlias(root, client.entry, resolveWranglerPackage(root));
   await wrangler(root, ["deploy", "--dry-run", "--outdir", out, "--metafile", metafile, "--config", configPath, "--env-file", os.devNull, ...alias]).catch(
     (error: Error) => {
@@ -165,5 +172,5 @@ export async function bundleWorkspace(root: string, wrangler: RunWrangler = runW
   if (bytes > BUNDLE_MAX_BYTES) {
     throw new WorkspaceError(`The bundle is ${bytes} bytes; the limit is ${BUNDLE_MAX_BYTES}.`);
   }
-  return { module, bytes };
+  return { module, bytes, compatibility };
 }

@@ -60,6 +60,18 @@ test("the rest of the config's rules", () => {
   refuses({ configPath: "x", main: "a" }, /needs a compatibility_date/);
 });
 
+test("the bundle's date has to be one the runtime takes, and its flags on the short list", () => {
+  refuses({ ...VALID, compatibility_date: "2024-09-22" }, /compatibility_date must be between 2024-09-23 and today \(found: 2024-09-22\)/);
+  refuses({ ...VALID, compatibility_date: "2999-01-01" }, /and today \(found: 2999-01-01\)/);
+  assert.doesNotThrow(() => assertBuilderAccepts({ ...VALID, compatibility_date: "2024-09-23" }));
+  assert.doesNotThrow(() => assertBuilderAccepts({ ...VALID, compatibility_flags: ["nodejs_compat", "nodejs_als", "nodejs_compat_v2"] }));
+  assert.doesNotThrow(() => assertBuilderAccepts({ ...VALID, compatibility_flags: "not a list" }));
+  refuses(
+    { ...VALID, compatibility_flags: ["nodejs_compat", "experimental"] },
+    /These compatibility_flags are not supported in workspaces: experimental\. Allowed: nodejs_compat, nodejs_compat_v2, nodejs_als\./,
+  );
+});
+
 test("inputs outside the repo: its parents, absolute paths and its git metadata, but not the toolchain", () => {
   const inputs = ["src/worker.ts", "../secret.js", "/etc/passwd", ".git/config", "..", ".git", "../node_modules/wrangler/x.js", ".github/a.js", "..x/y.js"];
   assert.deepEqual(workerInputsOutside(inputs, (input) => input.includes("node_modules/wrangler")), ["../secret.js", "/etc/passwd", ".git/config", "..", ".git"]);

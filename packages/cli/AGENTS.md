@@ -370,6 +370,7 @@ as the viewer. The platform itself lives in a private repo.
   and runs wrangler with the builder's small environment, so a committed `.env`, a shell's
   `CLOUDFLARE_ENV` or `.wrangler/deploy/config.json` have no effect. A bundle reading a file outside
   the repo is refused, for browser code and for the Worker, where only wrangler's own folder is allowed.
+  A bundle runs on its own `compatibility_date` and allow-listed flags, in `dev` as on the platform.
 - **Push and pull reuse the framework's git code.** `core/paywalls/source` is shared: a
   `SourceScope` of kind `workspace` owns its whole repo, so a directory named `paywalls/` means
   nothing there, and its one derived file is `superwall.workspace.json`, which records the

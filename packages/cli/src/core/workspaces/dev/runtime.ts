@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { resolveWranglerPackage } from "@/core/workspaces/bundle";
+import { resolveWranglerPackage, type BundleCompatibility } from "@/core/workspaces/bundle";
 import { WORKSPACE_COMPATIBILITY_DATE } from "@/core/workspaces/wire";
 import { WorkspaceError } from "@/core/workspaces/project";
 import { rebuildResponse } from "./outbound";
@@ -45,6 +45,7 @@ export class Egress extends WorkerEntrypoint {
 const load = (env, exports, narrowed) =>
   env.LOADER.get(narrowed ? "app" : "organization", () => ({
     compatibilityDate: env.COMPATIBILITY_DATE,
+    compatibilityFlags: env.COMPATIBILITY_FLAGS,
     mainModule: "platform.mjs",
     modules: {
       "platform.mjs": { js: ${JSON.stringify(MAIN_MODULE)} },
@@ -87,27 +88,30 @@ export type Outbound = (request: Request, caller: CallerScope) => Promise<Respon
 
 export interface DevRuntime {
   fetch(url: string, init: RequestInit, caller?: CallerScope): Promise<Response>;
-  update(module: string): Promise<void>;
+  update(module: string, compatibility?: BundleCompatibility): Promise<void>;
   dispose(): Promise<void>;
 }
 
 export interface RuntimeOptions {
   root: string;
   module: string;
+  compatibility?: BundleCompatibility;
   outbound: Outbound;
 }
 
 export type StartRuntime = (options: RuntimeOptions) => Promise<DevRuntime>;
 
-export const workerOptions = (module: string) => ({
+const DEFAULT_COMPATIBILITY: BundleCompatibility = { date: WORKSPACE_COMPATIBILITY_DATE, flags: [] };
+
+export const workerOptions = (module: string, compatibility: BundleCompatibility = DEFAULT_COMPATIBILITY) => ({
   name: "workspace-host",
   compatibilityDate: WORKSPACE_COMPATIBILITY_DATE,
   modules: [{ type: "ESModule", path: "host.mjs", contents: HOST_MODULE }],
-  bindings: { CUSTOMER_MODULE: module, COMPATIBILITY_DATE: WORKSPACE_COMPATIBILITY_DATE },
+  bindings: { CUSTOMER_MODULE: module, COMPATIBILITY_DATE: compatibility.date, COMPATIBILITY_FLAGS: compatibility.flags },
   workerLoaders: { LOADER: {} },
 });
 
-export const startMiniflare: StartRuntime = async ({ root, module, outbound }) => {
+export const startMiniflare: StartRuntime = async ({ root, module, compatibility, outbound }) => {
   const entry = createRequire(resolveWranglerPackage(root)).resolve("miniflare");
   const {
     Miniflare,
@@ -125,16 +129,16 @@ export const startMiniflare: StartRuntime = async ({ root, module, outbound }) =
   };
   const egress = (caller: CallerScope) => async (request: Request) =>
     rebuildResponse(await outbound(request, caller), RuntimeResponse);
-  const options = (code: string) =>
+  const options = (code: string, runsOn?: BundleCompatibility) =>
     convertV4MiniflareOptions({
       workers: [
         {
-          ...workerOptions(code),
+          ...workerOptions(code, runsOn),
           serviceBindings: { EGRESS: egress({ narrowed: false }), EGRESS_APP: egress({ narrowed: true }) },
         },
       ],
     });
-  const miniflare = new Miniflare(options(module));
+  const miniflare = new Miniflare(options(module, compatibility));
   try {
     await miniflare.ready;
   } catch (error) {
@@ -149,7 +153,7 @@ export const startMiniflare: StartRuntime = async ({ root, module, outbound }) =
       if (caller?.narrowed) headers.set(NARROWED_HEADER, "1");
       return miniflare.dispatchFetch(url, { ...init, headers, redirect: "manual" });
     },
-    update: (code) => miniflare.setOptions(options(code)),
+    update: (code, runsOn) => miniflare.setOptions(options(code, runsOn)),
     dispose: () => miniflare.dispose(),
   };
 };

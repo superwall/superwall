@@ -253,6 +253,40 @@ export default defineWorkspace({ client, fetch: () => clientPage(client, { title
   });
 });
 
+describe("the date and flags a bundle runs on", () => {
+  test("it runs on its own, as on the platform, and a change takes effect on the next rebuild", { timeout: 120_000 }, async () => {
+    const worker = `export default { fetch: () => new Response(String(typeof globalThis.Buffer)) };`;
+    const root = reactPage();
+    fs.writeFileSync(path.join(root, "superwall.json"), JSON.stringify({ name: "Flags", scopes: [], entrypoints: [{ id: "home", slot: "org.page@1", title: "Home", path: "/" }] }));
+    fs.writeFileSync(path.join(root, "src/worker.ts"), worker);
+    fs.writeFileSync(path.join(root, "wrangler.jsonc"), `{ ${BASE_CONFIG} }`);
+    let origins = { host: "", frame: "" };
+    let rebuild!: () => Promise<void>;
+    const { ctx } = context();
+    await runWorkspaceDev(ctx, { dir: root, port: 0, org: "21450" }, {
+      fetchImpl: JSON_API,
+      onReady: (urls, trigger) => {
+        origins = urls;
+        rebuild = trigger;
+      },
+      until: async () => {
+        const body = async () => {
+          const { host, frame } = origins;
+          const created = await fetch(`${host}/__dev/sessions`, { method: "POST", headers: { origin: host }, body: JSON.stringify({ entrypoint: "home", input: {} }) });
+          const { connect_url } = (await created.json()) as { connect_url: string };
+          const connected = await fetch(connect_url, { redirect: "manual" });
+          const cookie = connected.headers.get("set-cookie")!.split(";")[0]!;
+          return (await fetch(`${frame}/`, { headers: { cookie } })).text();
+        };
+        assert.equal(await body(), "undefined", "no flag, no Buffer");
+        fs.writeFileSync(path.join(root, "wrangler.jsonc"), `{ ${BASE_CONFIG}, "compatibility_flags": ["nodejs_compat"] }`);
+        await rebuild();
+        assert.equal(await body(), "function", "nodejs_compat reached the loaded bundle");
+      },
+    });
+  });
+});
+
 describe("client.entry on real wrangler, esbuild and workerd", () => {
   test("a React page renders through dev's frame, under the runtime's CSP, and a change anywhere rebuilds it", { timeout: 120_000 }, async () => {
     const root = reactPage();

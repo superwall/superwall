@@ -122,6 +122,8 @@ export const KNOWN_WRANGLER_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 const COMPATIBILITY_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MIN_COMPATIBILITY_DATE = "2024-09-23";
+const COMPATIBILITY_FLAGS: ReadonlySet<unknown> = new Set(["nodejs_compat", "nodejs_compat_v2", "nodejs_als"]);
 
 function builderProblem(config: unknown): string | undefined {
   if (!isRecord(config)) return "No wrangler config (wrangler.jsonc, wrangler.json or wrangler.toml) was found.";
@@ -140,6 +142,15 @@ function builderProblem(config: unknown): string | undefined {
   if (typeof config.main !== "string" || config.main.length === 0) return "The wrangler config needs a `main` entry point.";
   if (typeof config.compatibility_date !== "string" || !COMPATIBILITY_DATE.test(config.compatibility_date)) {
     return "The wrangler config needs a compatibility_date (YYYY-MM-DD).";
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (config.compatibility_date < MIN_COMPATIBILITY_DATE || config.compatibility_date > today) {
+    return `compatibility_date must be between ${MIN_COMPATIBILITY_DATE} and today (found: ${config.compatibility_date}).`;
+  }
+  const flags: readonly unknown[] = Array.isArray(config.compatibility_flags) ? config.compatibility_flags : [];
+  const refused = flags.filter((flag) => !COMPATIBILITY_FLAGS.has(flag));
+  if (refused.length > 0) {
+    return `These compatibility_flags are not supported in workspaces: ${refused.join(", ")}. Allowed: ${[...COMPATIBILITY_FLAGS].join(", ")}.`;
   }
   return undefined;
 }
