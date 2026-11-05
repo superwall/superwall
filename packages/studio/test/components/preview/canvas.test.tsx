@@ -51,15 +51,18 @@ const setUp = (viewport: Size, content: Size) => {
   vi.stubGlobal("PointerEvent", TestPointerEvent);
 };
 
+type CanvasOptions = { contained?: boolean; inset?: number };
+
 const mount = (
   viewport: Size = { width: 1000, height: 800 },
   content: Size = { width: 2000, height: 1000 },
+  options: CanvasOptions = {},
 ) => {
   setUp(viewport, content);
   const handle = React.createRef<CanvasHandle>();
   const zoom = { current: { scale: 1, fitted: true } as CanvasZoom };
   const tree = (fitKey: string) => (
-    <Canvas fitKey={fitKey} ref={handle} onZoom={(next) => (zoom.current = next)}>
+    <Canvas fitKey={fitKey} ref={handle} onZoom={(next) => (zoom.current = next)} {...options}>
       <div>
         frame
         <Scale />
@@ -76,10 +79,10 @@ const mount = (
   return { view, tree, canvas, layer, api, zoom };
 };
 
-const mountWithFrame = () => {
+const mountWithFrame = (options: CanvasOptions = {}) => {
   setUp({ width: 1000, height: 800 }, { width: 400, height: 800 });
   const view = render(
-    <Canvas fitKey="a">
+    <Canvas fitKey="a" {...options}>
       <iframe title="paywall" src="about:blank" />
     </Canvas>,
   );
@@ -135,6 +138,27 @@ const wheelAt = (node: EventTarget, init: WheelEventInit) => {
 const swipe = (node: EventTarget, trace: ReadonlyArray<[number, number]>) =>
   trace.map(([deltaX, deltaY]) => wheelAt(node, { deltaX, deltaY }));
 
+const observed: Array<() => void> = [];
+
+class TestResizeObserver {
+  constructor(callback: () => void) {
+    observed.push(callback);
+  }
+  observe() {}
+  disconnect() {}
+}
+
+const resizeViewport = (size: Size) => {
+  sizes.canvas = size;
+  act(() => observed.forEach((measure) => measure()));
+};
+
+const key = (init: KeyboardEventInit) => {
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", init));
+  });
+};
+
 const transformOf = (layer: HTMLElement) => {
   const match = /translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([\d.]+)\)/.exec(
     layer.style.transform,
@@ -148,6 +172,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  observed.length = 0;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -655,5 +680,237 @@ describe("Canvas", () => {
     act(() => api().zoomStep(1));
     view.rerender(tree("b"));
     expect(transformOf(layer)).toEqual(fitted);
+  });
+});
+
+describe("Canvas inset and zoom handle", () => {
+  it("fits inside a custom inset", () => {
+    const { layer } = mount(undefined, undefined, { inset: 8 });
+    const fitted = transformOf(layer);
+    expect(fitted.scale).toBeCloseTo(984 / 2000);
+    expect(fitted.x).toBeCloseTo(8);
+  });
+
+  it("zooms to a scale with the stage centred, clamped, and reports the zoom at once", () => {
+    const { layer, api } = mount();
+    expect(api().zoom()).toEqual({ scale: 904 / 2000, fitted: true });
+
+    act(() => {
+      api().zoomTo(1);
+      expect(api().zoom()).toEqual({ scale: 1, fitted: false });
+      api().zoomStep(1);
+    });
+    expect(transformOf(layer).scale).toBe(1.25);
+
+    act(() => api().zoomTo(100));
+    expect(transformOf(layer)).toEqual({
+      scale: 4,
+      x: 48 + (904 - 8000) / 2,
+      y: 48 + (704 - 4000) / 2,
+    });
+  });
+});
+
+describe("Canvas resize", () => {
+  it("refits a panned stage and re-centres a zoomed one when the stage changes size", () => {
+    vi.stubGlobal("ResizeObserver", TestResizeObserver);
+    const { layer, api, zoom } = mount();
+
+    act(() => api().pan(40, 20));
+    resizeViewport({ width: 600, height: 800 });
+    expect(zoom.current.fitted).toBe(true);
+    expect(transformOf(layer).scale).toBeCloseTo(504 / 2000);
+
+    act(() => api().zoomTo(1));
+    resizeViewport({ width: 800, height: 800 });
+    expect(transformOf(layer)).toEqual({
+      scale: 1,
+      x: 48 + (704 - 2000) / 2,
+      y: 48 + (704 - 1000) / 2,
+    });
+    expect(zoom.current).toEqual({ scale: 1, fitted: false });
+
+    resizeViewport({ width: 800, height: 800 });
+    expect(transformOf(layer).scale).toBe(1);
+  });
+
+  it("leaves a fitted stage to refit by itself, and ignores the first measurement", () => {
+    vi.stubGlobal("ResizeObserver", TestResizeObserver);
+    sizes.canvas = { width: 0, height: 0 };
+    sizes["canvas-content"] = { width: 2000, height: 1000 };
+    mockSizes();
+    const handle = React.createRef<CanvasHandle>();
+    render(
+      <Canvas fitKey="a" ref={handle}>
+        <div />
+      </Canvas>,
+    );
+    const layer = screen.getByTestId("canvas-content");
+    act(() => handle.current?.pan(5, 5));
+    resizeViewport({ width: 1000, height: 800 });
+    expect(transformOf(layer).x).toBe(5);
+
+    act(() => handle.current?.fit());
+    resizeViewport({ width: 600, height: 800 });
+    expect(transformOf(layer).scale).toBeCloseTo(504 / 2000);
+  });
+});
+
+describe("Canvas contained", () => {
+  it("leaves a plain wheel to the page but zooms on a pinch", () => {
+    const { canvas, layer } = mount(undefined, undefined, { contained: true });
+    const fitted = transformOf(layer);
+    expect(canvas.hasAttribute("data-contained")).toBe(true);
+
+    expect(wheelAt(canvas, { deltaY: 40 })).toBe(false);
+    expect(transformOf(layer)).toEqual(fitted);
+
+    expect(wheelAt(canvas, { deltaY: -100, ctrlKey: true })).toBe(true);
+    expect(transformOf(layer).scale).toBeGreaterThan(fitted.scale);
+  });
+
+  it("leaves a plain wheel over its paywall to the page too", () => {
+    const { layer, target } = mountWithFrame({ contained: true });
+    const fitted = transformOf(layer);
+    nextGesture();
+    expect(
+      swipe(target, [
+        [0, 20],
+        [0, 20],
+      ]),
+    ).toEqual([false, false]);
+    expect(transformOf(layer)).toEqual(fitted);
+  });
+
+  it("lets a finger scroll the page until zoomed, then moves the stage", () => {
+    const { canvas, api } = mount(undefined, undefined, { contained: true });
+    expect(canvas.className).toContain("touch-pan-y");
+
+    act(() => api().zoomTo(1));
+    expect(canvas.className).not.toContain("touch-pan-y");
+    expect(canvas.className).toContain("touch-none pointer-coarse:[&_iframe]:pointer-events-none");
+  });
+
+  it("answers the keyboard and Space only while hovered or focused", () => {
+    const { canvas, layer } = mount(undefined, undefined, { contained: true });
+    const fitted = transformOf(layer);
+
+    key({ key: "=", metaKey: true });
+    key({ code: "Space" });
+    expect(transformOf(layer)).toEqual(fitted);
+    expect(canvas.hasAttribute("data-panning")).toBe(false);
+
+    fireEvent.pointerEnter(canvas);
+    key({ key: "=", metaKey: true });
+    expect(transformOf(layer).scale).toBe(0.57);
+    key({ code: "Space" });
+    expect(canvas.hasAttribute("data-panning")).toBe(true);
+    act(() => {
+      window.dispatchEvent(new FocusEvent("blur"));
+    });
+    expect(canvas.hasAttribute("data-panning")).toBe(false);
+
+    fireEvent.pointerLeave(canvas);
+    key({ key: "=", metaKey: true });
+    expect(transformOf(layer).scale).toBe(0.57);
+
+    const button = document.createElement("button");
+    canvas.appendChild(button);
+    fireEvent.focusIn(button);
+    key({ key: "-", metaKey: true });
+    expect(transformOf(layer).scale).toBe(0.46);
+
+    const inner = document.createElement("button");
+    canvas.appendChild(inner);
+    fireEvent.focusOut(button, { relatedTarget: inner });
+    key({ key: "=", metaKey: true });
+    expect(transformOf(layer).scale).toBe(0.58);
+
+    fireEvent.focusOut(inner, { relatedTarget: document.body });
+    key({ key: "=", metaKey: true });
+    expect(transformOf(layer).scale).toBe(0.58);
+  });
+});
+
+describe("Canvas pointers and keys", () => {
+  it("pinches with two fingers around their midpoint, then pans with the one left", () => {
+    const { canvas, layer } = mount();
+    canvas.setPointerCapture = () => {};
+    const fitted = transformOf(layer);
+
+    fireEvent.pointerDown(canvas, {
+      pointerId: 1,
+      clientX: 400,
+      clientY: 400,
+      pointerType: "touch",
+    });
+    fireEvent.pointerDown(canvas, {
+      pointerId: 2,
+      clientX: 600,
+      clientY: 400,
+      pointerType: "touch",
+    });
+    fireEvent.pointerMove(canvas, {
+      pointerId: 2,
+      clientX: 800,
+      clientY: 400,
+      pointerType: "touch",
+    });
+    const pinched = transformOf(layer);
+    expect(pinched.scale).toBeCloseTo(fitted.scale * 2);
+
+    fireEvent.pointerUp(canvas, { pointerId: 2 });
+    fireEvent.pointerMove(canvas, {
+      pointerId: 1,
+      clientX: 410,
+      clientY: 420,
+      pointerType: "touch",
+    });
+    expect(transformOf(layer).x).toBeCloseTo(pinched.x + 10);
+    expect(transformOf(layer).y).toBeCloseTo(pinched.y + 20);
+    fireEvent.pointerUp(canvas, { pointerId: 1 });
+  });
+
+  it("ignores a right click and a pointer it cannot capture, and keeps the context menu off a drag", () => {
+    const { canvas, layer } = mount();
+    const fitted = transformOf(layer);
+
+    fireEvent.pointerDown(canvas, { pointerId: 1, button: 2 });
+    expect(canvas.hasAttribute("data-dragging")).toBe(false);
+
+    canvas.setPointerCapture = () => {
+      throw new Error("no such pointer");
+    };
+    fireEvent.pointerDown(canvas, { pointerId: 1, button: 0 });
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 50, clientY: 50 });
+    expect(transformOf(layer)).toEqual(fitted);
+
+    expect(fireEvent.contextMenu(canvas)).toBe(true);
+    canvas.setPointerCapture = () => {};
+    fireEvent.pointerDown(canvas, { pointerId: 1, button: 0 });
+    expect(fireEvent.contextMenu(canvas)).toBe(false);
+    fireEvent.pointerUp(canvas, { pointerId: 1 });
+  });
+
+  it("shows actual size on Cmd-1 and leaves other shortcuts alone", () => {
+    const { layer } = mount();
+    const fitted = transformOf(layer);
+    key({ key: "k", metaKey: true });
+    expect(transformOf(layer)).toEqual(fitted);
+    key({ key: "1", metaKey: true });
+    expect(transformOf(layer).scale).toBe(1);
+  });
+
+  it("skips a frame whose document it may not read", () => {
+    setUp({ width: 1000, height: 800 }, { width: 400, height: 800 });
+    vi.spyOn(HTMLIFrameElement.prototype, "contentDocument", "get").mockImplementation(() => {
+      throw new DOMException("Blocked a frame", "SecurityError");
+    });
+    const view = render(
+      <Canvas fitKey="a">
+        <iframe title="paywall" src="about:blank" />
+      </Canvas>,
+    );
+    expect(() => view.unmount()).not.toThrow();
   });
 });
