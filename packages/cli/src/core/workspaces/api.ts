@@ -28,6 +28,8 @@ export interface WorkspaceVersion {
   build_status: BuildStatus;
   build_error: string | null;
   manifest: Manifest | null;
+  compatibility_date: string | null;
+  compatibility_flags: readonly string[];
   deploy_requested_at: string | null;
   created_at: string;
   grant: WorkspaceGrant | null;
@@ -70,6 +72,17 @@ const versionPath = (id: string | number, version: string | number) =>
   `${workspacePath(id)}/versions/${encodeURIComponent(String(version))}`;
 
 export const getMe = (api: SuperwallApi) => api.get<{ name?: string | null; email?: string | null }>("/v2/me");
+
+export interface OrganizationMember {
+  status: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+  project_access_mode: string;
+}
+
+export const listMembers = async (api: SuperwallApi, organizationId: string | number) =>
+  (await api.get<{ data: OrganizationMember[] }>(`/v2/organizations/${encodeURIComponent(String(organizationId))}/access/members`)).data;
 
 export const getWorkspace = (api: SuperwallApi, id: string | number) => api.get<Workspace>(workspacePath(id));
 

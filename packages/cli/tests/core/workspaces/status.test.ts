@@ -23,6 +23,8 @@ const version = (id: number, overrides: Partial<WorkspaceVersion> = {}): Workspa
   build_status: "SUCCEEDED",
   build_error: null,
   manifest: null,
+  compatibility_date: null,
+  compatibility_flags: [],
   deploy_requested_at: null,
   created_at: "2026-11-05T00:00:00Z",
   grant: null,
@@ -161,11 +163,52 @@ test("share asks for review of the latest built version, and says who sees it", 
   const { ctx, posts, said } = setup([version(1), version(2), version(3, { build_status: "FAILED" })]);
   await runWorkspaceShare(ctx, { workspace: "42" });
   assert.deepEqual(posts, ["/v2/workspaces/42/versions/2/request-deploy"]);
-  assert.match(said("success").join(), /Only you can see it until an admin approves it/);
+  assert.match(said("success").join(), /marked for review\. Only you can see it until an admin approves it/);
   assert.match(said("info").join(), /workspaces approve 2 --workspace 42/);
   const json = setup([version(2)], { json: true });
   await runWorkspaceShare(json.ctx, { workspace: "42" });
   assert.equal(json.data.length, 1);
+});
+
+test("share tells a member who can't approve who to ask, when that's knowable", async () => {
+  const member = (name: string | null, email: string | null, role: string, overrides: object = {}) => ({ status: "active", name, email, role, project_access_mode: "ALL_PROJECTS", ...overrides });
+  const run = async (role: string, members: unknown[] | Error, options: { json?: boolean } = {}) => {
+    const context = setup([version(2)], options);
+    const { get } = (context.ctx as unknown as { api: { get: (path: string) => Promise<unknown> } }).api;
+    (context.ctx as unknown as { api: { get: unknown } }).api.get = async (path: string) => {
+      if (path === "/v2/me/organizations") return { data: [{ id: 7, role }] };
+      if (path === "/v2/organizations/7/access/members") {
+        if (members instanceof Error) throw members;
+        return { data: members };
+      }
+      return get(path);
+    };
+    await runWorkspaceShare(context.ctx, { workspace: "42" });
+    return context;
+  };
+
+  const asked = await run("USER", [
+    member("Alex Owner", "alex@example.com", "OWNER"),
+    member(null, "sam@example.com", "ADMIN"),
+    member("Restricted Admin", "r@example.com", "ADMIN", { project_access_mode: "RESTRICTED" }),
+    member("Invited Owner", "i@example.com", "OWNER", { status: "pending" }),
+    member("Another User", "u@example.com", "USER"),
+    member(null, null, "ADMIN"),
+  ]);
+  assert.match(asked.said("info").join(), /Nobody is told automatically\. Ask one of the people who can approve it: Alex Owner, sam@example\.com\./);
+
+  const many = await run("EDITOR", ["A", "B", "C", "D", "E", "F", "G"].map((name) => member(name, null, "ADMIN")));
+  assert.match(many.said("info").join(), /A, B, C, D, E or 2 more\./);
+
+  const unknowable = await run("USER", new ApiError("GET members", 403, "{}"));
+  assert.match(unknowable.said("info").join(), /Ask an organization owner or admin to approve it\./);
+
+  const admin = await run("OWNER", [member("Alex Owner", null, "OWNER")]);
+  assert.doesNotMatch(admin.said("info").join(), /Nobody is told/);
+
+  const json = await run("USER", [member("Alex Owner", null, "OWNER")], { json: true });
+  assert.deepEqual((json.data[0] as { approvers: string[]; can_approve: boolean }).approvers, ["Alex Owner"]);
+  assert.equal((json.data[0] as { can_approve: boolean }).can_approve, false);
 });
 
 test("share won't ask about what's live, or when nothing's built", async () => {

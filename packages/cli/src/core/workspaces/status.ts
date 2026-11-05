@@ -1,8 +1,8 @@
 import type { CommandContext } from "@/program/command";
 import { ApiError } from "@/core/api/client";
-import { getBuild, listVersions, requestDeploy, type WorkspaceBuild, type WorkspaceVersion } from "./api";
+import { getBuild, listMembers, listVersions, requestDeploy, type Workspace, type WorkspaceBuild, type WorkspaceVersion } from "./api";
 import { WorkspaceError } from "./project";
-import { newestFirst, pickVersion, resolveWorkspace, workspaceUrl, type WorkspaceRef } from "./resolve";
+import { canApprove, newestFirst, pickVersion, resolveWorkspace, workspaceUrl, type WorkspaceRef } from "./resolve";
 
 const SHOWN_VERSIONS = 5;
 
@@ -96,6 +96,26 @@ export interface ShareInput extends WorkspaceRef {
   version?: string;
 }
 
+const NAMES_SHOWN = 5;
+
+async function whoCanApprove(ctx: CommandContext<"required">, workspace: Workspace): Promise<string[]> {
+  const members = await listMembers(ctx.api, workspace.organization_id).catch(() => []);
+  return members
+    .filter(
+      (member) =>
+        member.status === "active" && (member.role === "OWNER" || member.role === "ADMIN") && member.project_access_mode !== "RESTRICTED",
+    )
+    .map((member) => member.name || member.email)
+    .filter((name): name is string => Boolean(name));
+}
+
+function askLine(names: readonly string[]): string {
+  if (names.length === 0) return "Ask an organization owner or admin to approve it.";
+  const shown = names.slice(0, NAMES_SHOWN).join(", ");
+  const more = names.length > NAMES_SHOWN ? ` or ${names.length - NAMES_SHOWN} more` : "";
+  return `Ask one of the people who can approve it: ${shown}${more}.`;
+}
+
 export async function runWorkspaceShare(ctx: CommandContext<"required">, input: ShareInput): Promise<void> {
   const workspace = await resolveWorkspace(ctx, input);
   const { version } = await pickVersion(ctx, workspace, input.version, (candidate) => candidate.build_status === "SUCCEEDED");
@@ -103,10 +123,13 @@ export async function runWorkspaceShare(ctx: CommandContext<"required">, input: 
     throw new WorkspaceError(`Version ${version.id} is already live. Push a new version to ask for review.`);
   }
   const requested = await requestDeploy(ctx.api, workspace.id, version.id);
+  const admin = await canApprove(ctx, workspace);
+  const names = admin ? [] : await whoCanApprove(ctx, workspace);
   if (ctx.json) {
-    ctx.output.data(requested);
+    ctx.output.data({ ...requested, can_approve: admin, approvers: names });
     return;
   }
-  ctx.ui.success(`Asked for review of version ${version.id}. Only you can see it until an admin approves it.`);
+  ctx.ui.success(`Version ${version.id} is marked for review. Only you can see it until an admin approves it.`);
+  if (!admin) ctx.ui.info(`Nobody is told automatically. ${askLine(names)}`);
   ctx.ui.info(`An admin approves it with \`superwall workspaces approve ${version.id} --workspace ${workspace.id}\`.`);
 }

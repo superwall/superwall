@@ -30,6 +30,9 @@ const PUSH_ATTEMPTS = 3;
 const POLL_INTERVAL_MS = 2_000;
 const POLL_TIMEOUT_MS = 20 * 60 * 1000;
 const POLL_FAILURES_ALLOWED = 5;
+const LONGEST_WAIT_SECONDS = 5 * 60;
+const DEFAULT_RETRY_AFTER_SECONDS = 60;
+const RETRY_LATER_CODES = new Set(["busy", "unavailable"]);
 
 export interface PushInput {
   dir?: string;
@@ -145,6 +148,51 @@ async function signedInAuthor(api: SuperwallApi): Promise<{ name: string; email:
   return { name: me.name || me.email, email: me.email };
 }
 
+function retryAfterOf(error: unknown): number | undefined {
+  if (!(error instanceof ApiError) || error.status !== 429) return undefined;
+  try {
+    const seconds = (JSON.parse(error.body ?? "{}") as { retry_after?: unknown }).retry_after;
+    return typeof seconds === "number" && seconds > 0 ? seconds : DEFAULT_RETRY_AFTER_SECONDS;
+  } catch {
+    return DEFAULT_RETRY_AFTER_SECONDS;
+  }
+}
+
+async function startBuildWhenThereIsRoom(
+  ctx: CommandContext<"required">,
+  workspaceId: string,
+  commitSha: string,
+  tokenId: string,
+  seams: PushSeams,
+): Promise<WorkspaceBuild> {
+  const wait = seams.sleep ?? sleep;
+  const now = seams.now ?? Date.now;
+  const deadline = now() + POLL_TIMEOUT_MS;
+  let told = false;
+  for (;;) {
+    try {
+      return await startBuild(ctx.api, workspaceId, commitSha, tokenId);
+    } catch (error) {
+      const seconds = retryAfterOf(error);
+      if (seconds === undefined) throw error;
+      const { message } = error as ApiError;
+      if (seconds > LONGEST_WAIT_SECONDS) {
+        throw new WorkspaceError(
+          `${message} Trying again soon won't help, because the limit covers the last day. Your source is pushed, so run \`superwall workspaces push\` again later.`,
+        );
+      }
+      if (now() >= deadline) {
+        throw new WorkspaceError(
+          `${message} There's still no room after 20 minutes. Your source is pushed, so run \`superwall workspaces push\` again later.`,
+        );
+      }
+      if (!told) ctx.ui.info(`${message} This will keep trying on its own, with nothing to push again.`);
+      told = true;
+      await wait(seconds * 1000);
+    }
+  }
+}
+
 const isTransient = (error: unknown): boolean =>
   error instanceof ApiUnreachableError || (error instanceof ApiError && error.status >= 500);
 
@@ -154,6 +202,7 @@ async function pushAndBuild(
   binding: WorkspaceBinding,
   files: readonly SourceFile[],
   input: PushInput,
+  seams: PushSeams,
 ): Promise<{ pushed: DirectPushResult; build: WorkspaceBuild; binding: WorkspaceBinding }> {
   let current = binding;
   const incoming: SourceCommit[] = [];
@@ -185,7 +234,7 @@ async function pushAndBuild(
     };
     writeBinding(root, current);
     try {
-      const build = await startBuild(ctx.api, current.workspaceId, pushed.commitSha, access.token_id);
+      const build = await startBuildWhenThereIsRoom(ctx, current.workspaceId, pushed.commitSha, access.token_id, seams);
       return { pushed: { ...pushed, incoming }, build, binding: current };
     } catch (error) {
       if (attempt >= PUSH_ATTEMPTS || !isConflict(error)) throw error;
@@ -272,7 +321,7 @@ export async function runWorkspacePush(
   if (!collected.ok) throw new WorkspaceError(collected.reason);
   let result: Awaited<ReturnType<typeof pushAndBuild>>;
   try {
-    result = await pushAndBuild(ctx, project.root, linked, collected.files, input);
+    result = await pushAndBuild(ctx, project.root, linked, collected.files, input, seams);
   } catch (error) {
     if (!(error instanceof IncomingCommitsRefused)) throw error;
     refusedPush(ctx, error);
@@ -306,7 +355,11 @@ export async function runWorkspacePush(
     } else {
       const where = build.step ? ` at ${build.step}` : "";
       ctx.ui.error(`The build failed${where}: ${build.failure?.message ?? "the builder gave no reason."}`);
-      ctx.ui.info("See its log with `superwall workspaces logs`.");
+      ctx.ui.info(
+        build.failure && RETRY_LATER_CODES.has(build.failure.code)
+          ? "It isn't your code. Run `superwall workspaces push` again in a few minutes, and it retries this version."
+          : "See its log with `superwall workspaces logs`.",
+      );
     }
     ctx.fail();
     return;
