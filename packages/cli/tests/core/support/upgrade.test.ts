@@ -14,6 +14,7 @@ import {
   selectAutoUpdate,
 } from "@/core/support/upgrade";
 import { command as upgrade } from "@/commands/support/upgrade";
+import { readSkillsSync, writeSkillsSync } from "@/core/state/config";
 import { VERSION } from "@/environment";
 import { restoreBin, useBin } from "../../helpers/bin";
 import { runCommand } from "../../helpers/command";
@@ -21,8 +22,14 @@ import { restoreFetch, useFetch } from "../../helpers/fetch";
 import { clearHomes, useHome } from "../../helpers/home";
 
 const REGISTRY = "registry.npmjs.org/superwall/latest";
+const GITHUB_HEAD = "api.github.com/repos/superwall/skills/commits/next";
 const testContext = process.env.NODE_TEST_CONTEXT;
-const saved = { off: process.env.SUPERWALL_NO_UPDATE, ci: process.env.CI, target: process.env.SW_AUTO_UPDATE };
+const saved = {
+  off: process.env.SUPERWALL_NO_UPDATE,
+  ci: process.env.CI,
+  target: process.env.SW_AUTO_UPDATE,
+};
+const scratch: string[] = [];
 
 function restoreEnv(key: string, value: string | undefined): void {
   if (value === undefined) delete process.env[key];
@@ -30,6 +37,7 @@ function restoreEnv(key: string, value: string | undefined): void {
 }
 
 afterEach(() => {
+  for (const dir of scratch.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   restoreEnv("NODE_TEST_CONTEXT", testContext);
   restoreEnv("SUPERWALL_NO_UPDATE", saved.off);
   restoreEnv("CI", saved.ci);
@@ -40,7 +48,11 @@ afterEach(() => {
   process.exitCode = 0;
 });
 
-const [MAJOR, MINOR, PATCH] = VERSION.split(".").map((part) => parseInt(part, 10)) as [number, number, number];
+const [MAJOR, MINOR, PATCH] = VERSION.split(".").map((part) => parseInt(part, 10)) as [
+  number,
+  number,
+  number,
+];
 const MINOR_BUMP = `${MAJOR}.${MINOR + 1}.0`;
 const PATCH_BUMP = `${MAJOR}.${MINOR}.${PATCH + 1}`;
 const MAJOR_BUMP = `${MAJOR + 1}.0.0`;
@@ -54,7 +66,10 @@ function writeConfig(home: string, config: Record<string, unknown>): void {
 }
 
 function readConfig(home: string): Record<string, unknown> {
-  return JSON.parse(fs.readFileSync(path.join(home, "config.json"), "utf8")) as Record<string, unknown>;
+  return JSON.parse(fs.readFileSync(path.join(home, "config.json"), "utf8")) as Record<
+    string,
+    unknown
+  >;
 }
 
 function autoUpdating(): void {
@@ -78,6 +93,33 @@ function readCheck(home: string): unknown {
   const file = path.join(home, "config.json");
   if (!fs.existsSync(file)) return undefined;
   return (JSON.parse(fs.readFileSync(file, "utf8")) as { updateCheck?: unknown }).updateCheck;
+}
+
+const SYNC_SKILLS = `"${process.execPath}" -e 'const fs = require("fs"), file = process.env.SUPERWALL_HOME + "/config.json"; const config = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {}; config.skillsSync = { cliVersion: process.env.SYNCED_VERSION || "99.0.0", syncedAt: new Date(Date.now() + Number(process.env.SYNCED_OFFSET || 0)).toISOString(), ref: "next" }; fs.writeFileSync(file, JSON.stringify(config))'`;
+
+function fakeGlobalInstall(cli = SYNC_SKILLS): {
+  npmArgs(): string;
+  cliArgs(): string;
+  cliCwd(): string;
+} {
+  const prefix = fs.mkdtempSync(path.join(os.tmpdir(), "sw-upgrade-prefix-"));
+  scratch.push(prefix);
+  fs.mkdirSync(path.join(prefix, "bin"));
+  const installed = path.join(prefix, "bin", "superwall");
+  fs.writeFileSync(
+    installed,
+    `#!/bin/sh\npwd > "${prefix}/cwd"\necho "$@" > "${prefix}/args"\necho "Installing"; echo "npm warn" >&2\n${cli}\n`,
+  );
+  fs.chmodSync(installed, 0o755);
+  const bin = useBin({
+    npm: `if [ "$1" = prefix ]; then echo "${prefix}"; exit 0; fi\necho "$@" > "$(dirname "$0")/args"; echo "added 1 package"`,
+  });
+  const read = (dir: string) => fs.readFileSync(path.join(dir, "args"), "utf8").trim();
+  return {
+    npmArgs: () => read(bin),
+    cliArgs: () => read(prefix),
+    cliCwd: () => fs.readFileSync(path.join(prefix, "cwd"), "utf8").trim(),
+  };
 }
 
 function recordStream(): { write(chunk: string): boolean; written: string[] } {
@@ -197,14 +239,136 @@ test("a failing or versionless registry answer leaves the cache untouched", asyn
 test("an upgrade installs the release, records it as checked and ends on the latest version", async () => {
   const home = useHome();
   useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
-  const bin = useBin({ npm: 'echo "$@" > "$(dirname "$0")/args"; echo "added 1 package"' });
+  const install = fakeGlobalInstall();
 
   const result = await runCommand(upgrade);
 
-  assert.equal(fs.readFileSync(path.join(bin, "args"), "utf8").trim(), "install --global superwall@99.0.0");
-  assert.match(result.said("spinner.stop").join(), new RegExp(`Upgraded \`${VERSION}\` → \`99\.0\.0\``));
+  assert.equal(install.npmArgs(), "install --global superwall@99.0.0");
+  assert.match(
+    result.said("spinner.stop").join(),
+    new RegExp(`Upgraded \`${VERSION}\` → \`99\.0\.0\``),
+  );
   assert.deepEqual(result.said("outro"), ["You're on the latest version."]);
   assert.equal((readCheck(home) as { latest: string }).latest, "99.0.0");
+});
+
+test("an upgrade syncs the skills with the newly installed CLI, outside any project", async () => {
+  useHome();
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  const install = fakeGlobalInstall();
+
+  const result = await runCommand(upgrade);
+
+  assert.equal(install.cliArgs(), "skills --force --yes");
+  assert.equal(install.cliCwd(), fs.realpathSync(os.tmpdir()));
+  assert.deepEqual(result.said("spinner.start").slice(-1), ["Checking Superwall skills"]);
+  assert.deepEqual(result.said("spinner.stop").slice(-1), ["Superwall skills updated"]);
+  assert.deepEqual(result.said("warn"), []);
+
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  const asJson = await runCommand(upgrade, { json: true });
+  assert.deepEqual(asJson.json, { upgraded: true, from: VERSION, to: "99.0.0", skills: "updated" });
+});
+
+test("skills the new CLI can't sync are reported without failing the upgrade", async () => {
+  useHome();
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  fakeGlobalInstall(`${SYNC_SKILLS}; exit 1`);
+
+  const result = await runCommand(upgrade);
+
+  assert.deepEqual(result.said("spinner.stop").slice(-2), [
+    `Upgraded \`${VERSION}\` → \`99.0.0\``,
+    "Superwall skills not updated",
+  ]);
+  assert.deepEqual(result.said("warn"), [
+    "Couldn't update the Superwall skills. Run `superwall skills --force` to retry.",
+  ]);
+  assert.deepEqual(result.said("outro"), ["You're on the latest version."]);
+  assert.notEqual(process.exitCode, 1);
+});
+
+test("a sync the new CLI didn't record, for its own version, since it started, is not updated", async () => {
+  for (const cli of [
+    "exit 0",
+    `SYNCED_VERSION=98.0.0 ${SYNC_SKILLS}`,
+    `SYNCED_OFFSET=-60000 ${SYNC_SKILLS}`,
+  ]) {
+    useHome();
+    useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+    fakeGlobalInstall(cli);
+
+    const result = await runCommand(upgrade, { json: true });
+
+    assert.deepEqual(
+      result.json,
+      { upgraded: true, from: VERSION, to: "99.0.0", skills: "failed" },
+      cli,
+    );
+    restoreBin();
+  }
+});
+
+test("skills are not updated when the newly installed CLI can't be found or run", async () => {
+  useHome();
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "sw-upgrade-prefix-"));
+  scratch.push(empty);
+  const unrunnable = fs.mkdtempSync(path.join(os.tmpdir(), "sw-upgrade-prefix-"));
+  scratch.push(unrunnable);
+  fs.mkdirSync(path.join(unrunnable, "bin"));
+  fs.writeFileSync(path.join(unrunnable, "bin", "superwall"), "not executable");
+
+  for (const npm of [
+    "exit 0",
+    'if [ "$1" = prefix ]; then exit 1; fi',
+    `if [ "$1" = prefix ]; then echo "${empty}"; fi`,
+    `if [ "$1" = prefix ]; then echo "${unrunnable}"; fi`,
+  ]) {
+    useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+    useBin({ npm });
+
+    const result = await runCommand(upgrade, { json: true });
+
+    assert.deepEqual(
+      result.json,
+      { upgraded: true, from: VERSION, to: "99.0.0", skills: "failed" },
+      npm,
+    );
+    assert.notEqual(process.exitCode, 1);
+    restoreBin();
+  }
+});
+
+test("on the latest version, upgrade checks the skills repo now and syncs what moved", async () => {
+  useHome();
+  writeSkillsSync({
+    cliVersion: VERSION,
+    syncedAt: new Date().toISOString(),
+    ref: "next",
+    sourceSha: "abc",
+  });
+  const bin = useBin({ npx: 'echo "$@" >> "$(dirname "$0")/npx-calls"', git: "exit 1" });
+  const npxCalls = () => {
+    const file = path.join(bin, "npx-calls");
+    return fs.existsSync(file) ? fs.readFileSync(file, "utf8").trim().split("\n") : [];
+  };
+
+  useFetch([
+    { match: REGISTRY, body: { version: VERSION } },
+    { match: GITHUB_HEAD, body: { sha: "abc" } },
+  ]);
+  const current = await runCommand(upgrade, { json: true });
+  assert.deepEqual(current.json, { upgraded: false, version: VERSION, skills: "current" });
+  assert.deepEqual(npxCalls(), []);
+
+  useFetch([
+    { match: REGISTRY, body: { version: VERSION } },
+    { match: GITHUB_HEAD, body: { sha: "moved" } },
+  ]);
+  const moved = await runCommand(upgrade);
+  assert.deepEqual(moved.said("spinner.stop").slice(-1), ["Superwall skills updated"]);
+  assert.equal(npxCalls().length, 2);
+  assert.equal(readSkillsSync()?.sourceSha, "moved");
 });
 
 test("a failed install with nothing on stderr still points at the manual command", async () => {
@@ -270,10 +434,16 @@ test("a release already being installed is not started again for a day", () => {
   assert.ok(Date.now() - Date.parse(recorded.startedAt) < 60_000);
   assert.equal(selectAutoUpdate(), null);
 
-  writeConfig(home, { updateCheck, autoUpdate: { version: MINOR_BUMP, startedAt: "2000-01-01T00:00:00.000Z" } });
+  writeConfig(home, {
+    updateCheck,
+    autoUpdate: { version: MINOR_BUMP, startedAt: "2000-01-01T00:00:00.000Z" },
+  });
   assert.equal(selectAutoUpdate(), MINOR_BUMP);
 
-  writeConfig(home, { updateCheck, autoUpdate: { version: PATCH_BUMP, startedAt: new Date().toISOString() } });
+  writeConfig(home, {
+    updateCheck,
+    autoUpdate: { version: PATCH_BUMP, startedAt: new Date().toISOString() },
+  });
   assert.equal(selectAutoUpdate(), MINOR_BUMP);
 });
 
@@ -288,14 +458,19 @@ test("a started update says so in one dim line", () => {
 test("an automatic update installs the version it was given, without asking the registry", async () => {
   const home = useHome();
   const log = useFetch([]);
-  const install = globalInstall();
+  const install = fakeGlobalInstall(`SYNCED_VERSION=${MINOR_BUMP} ${SYNC_SKILLS}`);
   process.env.SW_AUTO_UPDATE = MINOR_BUMP;
 
   const result = await runCommand(upgrade, { json: true });
 
   assert.equal(log.length, 0);
-  assert.equal(fs.readFileSync(path.join(install.bin, "args"), "utf8").trim(), `install --global superwall@${MINOR_BUMP}`);
-  assert.deepEqual(result.json, { upgraded: true, from: VERSION, to: MINOR_BUMP });
+  assert.equal(install.npmArgs(), `install --global superwall@${MINOR_BUMP}`);
+  assert.deepEqual(result.json, {
+    upgraded: true,
+    from: VERSION,
+    to: MINOR_BUMP,
+    skills: "updated",
+  });
   assert.equal((readCheck(home) as { latest: string }).latest, MINOR_BUMP);
 });
 
@@ -303,7 +478,12 @@ test("only the CLI npm installed globally counts as a global install", () => {
   const install = globalInstall();
 
   assert.equal(isGlobalInstall(install.entry), true);
-  assert.equal(isGlobalInstall(path.join(os.tmpdir(), "project", "node_modules", "superwall", "bin", "superwall.js")), false);
+  assert.equal(
+    isGlobalInstall(
+      path.join(os.tmpdir(), "project", "node_modules", "superwall", "bin", "superwall.js"),
+    ),
+    false,
+  );
   assert.equal(isGlobalInstall(), false);
 });
 
@@ -318,11 +498,18 @@ test("an npm that can't name its global root means no global install", () => {
 
 test("an automatic update to a version that isn't newer does nothing", async () => {
   useHome();
+  writeSkillsSync({
+    cliVersion: VERSION,
+    syncedAt: new Date().toISOString(),
+    ref: "next",
+    sourceSha: "abc",
+  });
+  useFetch([{ match: GITHUB_HEAD, body: { sha: "abc" } }]);
   const install = globalInstall();
   process.env.SW_AUTO_UPDATE = VERSION;
 
   const result = await runCommand(upgrade, { json: true });
 
   assert.equal(fs.existsSync(path.join(install.bin, "args")), false);
-  assert.deepEqual(result.json, { upgraded: false, version: VERSION });
+  assert.deepEqual(result.json, { upgraded: false, version: VERSION, skills: "current" });
 });

@@ -65,6 +65,8 @@ test("the instructions route analytics to query and machine work to the CLI", ()
   assert.match(text, /Analytics: query runs ClickHouse SQL/);
   assert.match(text, /Confirm with the user before calling one/);
   assert.match(text, /asc_ tools/);
+  assert.match(text, /feedback reports to the Superwall team/);
+  assert.match(text, /call it yourself without asking/);
 });
 
 test("apiFor sends the caller's token to the host it names", async () => {
@@ -111,13 +113,15 @@ test("hints follow what the command does", () => {
     "products_update", "campaigns_placements_create", "campaigns_audiences_update", "campaigns_variants_update", "asc_builds_attach", "paywalls_publish",
     "apps_update", "campaigns_variants_create", "campaigns_variants_weights", "users_update",
     "asc_keys_import", "asc_notification_url_set", "asc_prices_set", "asc_availability_set",
-    "asc_offers_create", "asc_release_phased", "feedback", "events_retry",
+    "asc_offers_create", "asc_release_phased", "events_retry",
   ]) {
     assert.equal(tool(name).annotations.destructiveHint, true, name);
     assert.equal(tool(name).annotations.readOnlyHint, false, name);
   }
   assert.equal(tool("entitlements_grants_create").annotations.readOnlyHint, false);
   assert.equal(tool("entitlements_grants_create").annotations.destructiveHint, false);
+  assert.equal(tool("feedback").annotations.readOnlyHint, false);
+  assert.equal(tool("feedback").annotations.destructiveHint, false, "agents send feedback without asking");
   assert.equal(tool("paywalls_publish").annotations.openWorldHint, false);
   assert.equal(tool("paywalls_publish").annotations.idempotentHint, false);
 });

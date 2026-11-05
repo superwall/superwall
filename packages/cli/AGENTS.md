@@ -131,8 +131,11 @@ skill.
   a write that timed out may already have landed. The API reference is cached
   for a day and a stale copy still answers offline. A browser login reaches
   every organization and stores no organization name; an API key belongs to one
-  and stores its name. `feedback` looks the app's account up best-effort and
-  never waits or fails on it.
+  and stores its name. `feedback` posts to `/v2/feedback`, which merges a
+  report into an existing request or opens one. It also always sends the
+  telemetry event (except on a 429), which feeds the team's Slack channel, so a
+  report is never lost and the channel keeps every report. It is an MCP `write`, not
+  `destructive`: agents send it without asking (Superwall's terms cover it).
 - **Source pushes never erase.** A version only counts as pushed once its
   source has landed and been linked: `superwall.lock` records the snapshot
   with `sourcePending: <version>` until then, so a rerun finishes that
@@ -396,6 +399,18 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   installs from the copy; the URL install is the fallback. Skill install never
   fails `login`. Bundled skills count as stale on any CLI version change; the
   public repo is checked by HEAD sha, at most daily, and kept as is offline.
+- **`upgrade` brings the skills along.** After installing a release it runs
+  the new binary (`$(npm prefix -g)/bin/superwall skills --force --yes`, from
+  the temp dir so the launcher can't hand off to a project-local install), so
+  the bundle installed is the new version's and the stamp names it; the old
+  process would install its own bundle and stamp its own version. When the CLI
+  is already current (or runs under npx) it checks the repo head right away
+  instead of waiting out the daily window, so skills released between CLI
+  versions arrive too. "Updated" needs both the bundled and the live install:
+  `superwall skills` exits 0 when only the bundle installed, so after the child
+  exits the parent also requires the sync stamp it wrote (only written when both
+  succeed) to name the new version and postdate the spawn. A skills failure is
+  a warning with the retry command, never a failed upgrade: the CLI did upgrade.
 - **Telemetry is anonymous by design**: a random persisted id, enum/boolean/
   number properties only, no person profiles, and a fetch timeout shorter than
   the exit flush so an unreachable endpoint can't hold the process open.

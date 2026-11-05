@@ -609,6 +609,16 @@ asking. The framework itself is built to be written by agents: a plain npm
 project, file-based routes, ordinary React state — conventions an agent
 already knows, so it gets a paywall right on the first try.
 
+When an agent confirms a Superwall bug, a wrong doc or a capability you needed
+that Superwall lacks, it reports it with `superwall feedback` on its own and
+tells you in one line. Reports reach the Superwall team with your account, and
+the same request from many teams is merged into one:
+
+```bash
+superwall feedback "no way to end a campaign on a schedule" --kind idea \
+  --use-case "runs a Black Friday offer that must stop at midnight" --app <app> --json
+```
+
 ## Upgrading to 2.0
 
 2.0 renamed several commands; the old names are unknown commands now.

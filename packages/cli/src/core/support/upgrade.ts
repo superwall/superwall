@@ -1,11 +1,19 @@
 import { execFileSync } from "node:child_process";
-import { realpathSync } from "node:fs";
-import { sep } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import pc from "picocolors";
 import type { CommandContext } from "@/program/command";
+import type { SkillsUpdate } from "@/core/support/skills";
 import { spawnStream } from "@/core/workflows/agent/drivers/spawn";
-import { readAutoUpdate, readUpdateCheck, writeAutoUpdate, writeUpdateCheck } from "@/core/state/config";
+import {
+  readAutoUpdate,
+  readSkillsSync,
+  readUpdateCheck,
+  writeAutoUpdate,
+  writeUpdateCheck,
+} from "@/core/state/config";
 import { AUTO_UPDATE, RUNNING_VIA_NPX, VERSION } from "@/environment";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -72,7 +80,9 @@ export async function flushUpdateCheck(capMs = 2000): Promise<void> {
 export function maybeNotifyUpdate(stream: Pick<NodeJS.WriteStream, "write">): void {
   const latest = selectAvailableUpdate();
   if (!latest) return;
-  stream.write(`${pc.dim(`Update available ${VERSION} → ${latest} · run \`superwall upgrade\``)}\n`);
+  stream.write(
+    `${pc.dim(`Update available ${VERSION} → ${latest} · run \`superwall upgrade\``)}\n`,
+  );
 }
 
 export function selectAutoUpdate(): string | null {
@@ -80,7 +90,8 @@ export function selectAutoUpdate(): string | null {
   const latest = selectAvailableUpdate();
   if (!latest || majorOf(latest) !== majorOf(VERSION)) return null;
   const last = readAutoUpdate();
-  if (last?.version === latest && Date.now() - Date.parse(last.startedAt) < CHECK_INTERVAL_MS) return null;
+  if (last?.version === latest && Date.now() - Date.parse(last.startedAt) < CHECK_INTERVAL_MS)
+    return null;
   return latest;
 }
 
@@ -105,14 +116,64 @@ export function isGlobalInstall(file: string = fileURLToPath(import.meta.url)): 
   }
 }
 
+const SKILLS_OUTCOME: Record<SkillsUpdate, string> = {
+  current: "Superwall skills are up to date",
+  updated: "Superwall skills updated",
+  failed: "Superwall skills not updated",
+};
+
+async function updateAgentSkills(
+  ctx: CommandContext<"none">,
+  work: () => Promise<SkillsUpdate>,
+): Promise<SkillsUpdate> {
+  const spin = ctx.ui.spinner();
+  spin.start("Checking Superwall skills");
+  const skills = await work().catch((): SkillsUpdate => "failed");
+  spin.stop(SKILLS_OUTCOME[skills]);
+  if (skills === "failed") {
+    ctx.ui.warn("Couldn't update the Superwall skills. Run `superwall skills --force` to retry.");
+  }
+  return skills;
+}
+
+async function updateSkillsInProcess(): Promise<SkillsUpdate> {
+  const { updateSkills } = await import("@/core/support/skills");
+  return updateSkills();
+}
+
+async function updateSkillsWithInstalledCli(version: string): Promise<SkillsUpdate> {
+  const prefix: string[] = [];
+  const { code } = await spawnStream({
+    bin: "npm",
+    args: ["prefix", "--global"],
+    cwd: process.cwd(),
+    onStdoutLine: (line) => prefix.push(line.trim()),
+  });
+  const bin = prefix[0] ? join(prefix[0], "bin", "superwall") : undefined;
+  if (code !== 0 || !bin || !existsSync(bin)) return "failed";
+  const startedAt = Date.now();
+  const result = await spawnStream({
+    bin,
+    args: ["skills", "--force", "--yes"],
+    cwd: tmpdir(),
+    onStdoutLine: () => {},
+    onStderrLine: () => {},
+  });
+  if (result.code !== 0) return "failed";
+  const sync = readSkillsSync();
+  const synced = sync?.cliVersion === version && Date.parse(sync.syncedAt) >= startedAt;
+  return synced ? "updated" : "failed";
+}
+
 export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): Promise<void> {
   const { ui } = ctx;
 
   if (RUNNING_VIA_NPX()) {
-    if (ctx.json) return ctx.output.data({ upgraded: false, via: "npx" });
     ui.info(
       "You're running via npx, which always fetches the latest published version - nothing to upgrade.",
     );
+    const skills = await updateAgentSkills(ctx, updateSkillsInProcess);
+    if (ctx.json) return ctx.output.data({ upgraded: false, via: "npx", skills });
     return;
   }
 
@@ -126,7 +187,8 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
   }
   if (!isNewerVersion(latest, VERSION)) {
     spin.stop(`You're on the latest version (\`${VERSION}\`)`);
-    if (ctx.json) return ctx.output.data({ upgraded: false, version: VERSION });
+    const skills = await updateAgentSkills(ctx, updateSkillsInProcess);
+    if (ctx.json) return ctx.output.data({ upgraded: false, version: VERSION, skills });
     return;
   }
 
@@ -148,6 +210,7 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
   }
   writeUpdateCheck({ latest, checkedAt: new Date().toISOString() });
   spin.stop(`Upgraded \`${VERSION}\` → \`${latest}\``);
-  if (ctx.json) return ctx.output.data({ upgraded: true, from: VERSION, to: latest });
+  const skills = await updateAgentSkills(ctx, () => updateSkillsWithInstalledCli(latest));
+  if (ctx.json) return ctx.output.data({ upgraded: true, from: VERSION, to: latest, skills });
   ui.outro("You're on the latest version.");
 }
