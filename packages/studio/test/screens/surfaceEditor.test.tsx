@@ -654,7 +654,10 @@ describe("SurfaceEditor's smaller states", () => {
       view("plan", 1),
     ]);
     expect(await screen.findByText("Teleported to the browser")).toBeDefined();
-    expect(screen.getByRole("status", { name: "In browser" })).toBeDefined();
+    const footer = within(screen.getByTestId("canvas-footer"));
+    expect(footer.getByRole("status", { name: "In browser" })).toBeDefined();
+    expect(footer.getByRole("switch", { name: "Introductory offer" })).toBeDefined();
+    expect(within(screen.getByTestId("device-frame")).queryByRole("status")).toBeNull();
     expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBe("phone");
     expect(screen.getByTestId("browser-bottom-bar")).toBeDefined();
     expect(screen.getAllByTitle("plus-upgrade preview")).toEqual([frame]);
@@ -662,7 +665,9 @@ describe("SurfaceEditor's smaller states", () => {
 
     await send([view("index", 0, "back")]);
     expect(await screen.findByText("Back in the app")).toBeDefined();
-    expect(screen.getByRole("status", { name: "In app" })).toBeDefined();
+    expect(
+      within(screen.getByTestId("canvas-footer")).getByRole("status", { name: "In app" }),
+    ).toBeDefined();
     expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Reload preview" }));
@@ -855,7 +860,9 @@ describe("SurfaceEditor's smaller states", () => {
         }),
       );
     });
-    expect(screen.getByRole("status", { name: "In browser" })).toBeDefined();
+    const badge = screen.getByRole("status", { name: "In browser" });
+    expect(screen.getByText("Original").parentElement?.contains(badge)).toBe(true);
+    expect(within(screen.getByTestId("canvas-footer")).queryByRole("status")).toBeNull();
 
     view.rerender(editor(second));
     await act(async () => {});

@@ -160,22 +160,19 @@ const StagePane = ({
   return (
     <div className="flex flex-none flex-col gap-2">
       {label && (
-        <span
-          className="origin-bottom-left text-xs whitespace-nowrap text-fg-tertiary"
+        <div
+          className="relative w-fit origin-bottom-left"
           style={{ transform: `scale(${1 / scale})` }}
         >
-          {label}
-        </span>
+          <span className="text-xs whitespace-nowrap text-fg-tertiary">{label}</span>
+          {place?.teleported && (
+            <div className="absolute top-1/2 left-full ml-2 -translate-y-1/2">
+              <PlaceBadge place={place} />
+            </div>
+          )}
+        </div>
       )}
       <div className="relative">
-        {place?.teleported && (
-          <div
-            className="absolute right-0 bottom-full mb-2 origin-bottom-right"
-            style={{ transform: `scale(${1 / scale})` }}
-          >
-            <PlaceBadge place={place} />
-          </div>
-        )}
         {image && !broken ? (
           <div
             className="flex flex-none items-center justify-center overflow-hidden bg-black"
@@ -248,6 +245,7 @@ const CanvasFooter = ({ children }: React.PropsWithChildren) => {
   const scale = useCanvasScale();
   return (
     <div
+      data-testid="canvas-footer"
       className="w-fit origin-top self-center"
       style={{ transform: `scale(${1 / scale})` }}
       onPointerDown={(event) => event.stopPropagation()}
@@ -674,7 +672,6 @@ export const SurfaceEditor = ({
                 landscape={landscape}
                 theme={theme}
                 browser={browserFor(local.place, web)}
-                place={local.place}
                 onResize={
                   responsive
                     ? (next) =>
@@ -685,16 +682,23 @@ export const SurfaceEditor = ({
               />
             </div>
             <CanvasFooter>
-              <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-fg-secondary select-none">
-                <Switch
-                  label="Introductory offer"
-                  checked={hasIntroductoryOffer(hostState)}
-                  onChange={(checked) =>
-                    setEdited((current) => ({ ...current, introductoryOfferEligible: checked }))
-                  }
-                />
-                Introductory offer
-              </label>
+              <div className="relative">
+                {local.place.teleported && (
+                  <div className="absolute top-1/2 right-full mr-3 -translate-y-1/2">
+                    <PlaceBadge place={local.place} />
+                  </div>
+                )}
+                <label className="flex cursor-pointer items-center gap-2 py-1 text-sm text-fg-secondary select-none">
+                  <Switch
+                    label="Introductory offer"
+                    checked={hasIntroductoryOffer(hostState)}
+                    onChange={(checked) =>
+                      setEdited((current) => ({ ...current, introductoryOfferEligible: checked }))
+                    }
+                  />
+                  Introductory offer
+                </label>
+              </div>
             </CanvasFooter>
           </div>
         </Canvas>
