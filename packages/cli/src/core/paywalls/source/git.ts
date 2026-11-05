@@ -315,9 +315,8 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
       ? await snapshotLocal(run, dir, input.files, scope, head, committing)
       : undefined;
 
-    const replacesEverything = scope.kind === "workspace" && input.overwrite === true;
     materializeSourceTree(dir, input.files, scope, {
-      onRemote: onRemote && !replacesEverything,
+      onRemote: onRemote && scope.kind !== "workspace",
       overwrite: input.overwrite,
     });
 

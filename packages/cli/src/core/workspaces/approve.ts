@@ -49,12 +49,15 @@ interface FullManifest extends Manifest {
   storage?: { sql?: boolean; kv?: boolean };
 }
 
-const secretLabel = (secret: { name: string; host: string; inject: string }) => `${secret.name} to ${secret.host} (${secret.inject})`;
+const quoted = (text: string): string => JSON.stringify(text);
+
+const secretLabel = (secret: { name: string; host: string; inject: string }) =>
+  `${secret.name} to ${secret.host} (${quoted(secret.inject)})`;
 
 const metricLabel = (metric: NonNullable<Manifest["entrypoints"][number]["metric"]>): string => {
   const breakdowns = (metric.breakdowns ?? []).map((breakdown) => breakdown.key);
   const filters = (metric.filters ?? []).map(
-    (filter) => `${filter.key} (${filter.values.map((option) => option.value).join(", ")})`,
+    (filter) => `${filter.key} (${filter.values.map((option) => quoted(option.value)).join(", ")})`,
   );
   return [
     metric.value_type ?? "number",
@@ -69,7 +72,7 @@ const entrypointLabel = (entrypoint: Manifest["entrypoints"][number]) =>
   [
     `${entrypoint.id}: ${entrypoint.slot}`,
     entrypoint.path ? `at ${entrypoint.path}` : undefined,
-    `"${entrypoint.title}"`,
+    quoted(entrypoint.title),
     entrypoint.metric ? `metric: ${metricLabel(entrypoint.metric)}` : undefined,
   ]
     .filter(Boolean)

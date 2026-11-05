@@ -179,7 +179,7 @@ test("every kind of authority shows up in a diff", () => {
   const diff = diffSides(sideOf(live, true), sideOf(rich, false));
   assert.deepEqual(diff.map((section) => section.section), ["scopes", "backgroundScopes", "egress", "secrets", "entrypoints", "crons", "events", "storage"]);
   assert.deepEqual(diff[0], { section: "scopes", title: "Scopes", added: ["users:read"], removed: ["data:read"] });
-  assert.ok(diff[3]?.added[0]?.includes("KEY to a.example.com (url)"));
+  assert.ok(diff[3]?.added[0]?.includes("KEY to a.example.com (\"url\")"));
   assert.deepEqual(diffSides(sideOf(rich, false), sideOf(rich, false)), []);
   assert.deepEqual(sideOf(undefined, true).scopes, []);
   assert.deepEqual(sideOf(version(1, { manifest: null }), false).scopes, []);
@@ -191,6 +191,22 @@ test("a changed entrypoint path or title is a change", () => {
   assert.equal(diff[0]?.section, "entrypoints");
   assert.equal(diff[0]?.added.length, 1);
   assert.equal(diff[0]?.removed.length, 1);
+});
+
+test("free text in a manifest can't read the same as something else it could say", () => {
+  const withEntrypoint = (entrypoint: object) => version(2, { manifest: manifest({ entrypoints: [entrypoint] }) as never });
+  const metric = (values: string[]) => ({
+    id: "m",
+    slot: "chart.source@1",
+    title: "M",
+    metric: { filters: [{ key: "store", name: "F", values: values.map((value) => ({ value, label: value })) }] },
+  });
+  const changes = (before: object, after: object) => diffSides(sideOf(withEntrypoint(before), false), sideOf(withEntrypoint(after), false));
+
+  assert.equal(changes(metric(["A, B"]), metric(["A", "B"]))[0]?.section, "entrypoints", "a value with a comma");
+  const page = { id: "p", slot: "app.page@1", title: "T", path: "/x" };
+  assert.equal(changes(page, { ...page, title: 'T" at "/y', path: "/x" })[0]?.section, "entrypoints");
+  assert.equal(changes({ ...page, title: 'T" metric: "number' }, { ...page, metric: { value_type: "number" } })[0]?.section, "entrypoints");
 });
 
 test("a metric reads plainly, and a new breakdown or filter value is a change", () => {
@@ -212,7 +228,7 @@ test("a metric reads plainly, and a new breakdown or filter value is a change", 
       }) as never,
     });
   const base = sideOf(metric(["A"]), false);
-  assert.deepEqual(base.entrypoints, ['m: chart.source@1 "M" metric: percentage, filtered by store (A)']);
+  assert.deepEqual(base.entrypoints, ['m: chart.source@1 "M" metric: percentage, filtered by store ("A")']);
   assert.equal(diffSides(base, sideOf(metric(["A", "B"]), false))[0]?.section, "entrypoints");
   assert.match(sideOf(metric(["A"], ["plan"]), false).entrypoints[0]!, /split by plan/);
   const bare = version(2, { manifest: manifest({ entrypoints: [{ id: "m", slot: "chart.source@1", title: "M", metric: {} }] }) as never });

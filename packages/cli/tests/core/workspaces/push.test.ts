@@ -425,6 +425,31 @@ test("with no sync point, a differing source repo is refused, and --overwrite-so
   assert.ok(!remote.filesOf(repo).includes("src/extra.ts"), "a file only the repo had is gone");
 });
 
+test("with no sync point, a file only the source repo has is refused too, not quietly built as you", { skip }, async () => {
+  const root = await pushedOnce({ "src/shared.ts": "base" });
+  const binding = readBinding(root)!;
+  await teammateCommit(root, "teammate.ts");
+
+  const fresh = project({ "src/shared.ts": "base" });
+  fs.writeFileSync(path.join(fresh, "superwall.workspace.json"), JSON.stringify({ workspace_id: Number(binding.workspaceId), organization_id: 7, slug: binding.slug }));
+  const run = linkedSetup(fresh);
+  const head = remote.headOf(run.repo);
+  await assert.rejects(runWorkspacePush(run.ctx, input(fresh), noWait), /differs from this project in teammate\.ts.*superwall workspaces pull/s);
+  assert.equal(remote.headOf(run.repo), head);
+  assert.equal(run.apiCalls.filter((call) => call.endsWith("/builds")).length, 0);
+});
+
+test("with no sync point, adding files alongside the same source still pushes", { skip }, async () => {
+  const root = await pushedOnce({ "src/shared.ts": "base" });
+  const binding = readBinding(root)!;
+  const fresh = project({ "src/shared.ts": "base", "src/new.ts": "mine" });
+  fs.writeFileSync(path.join(fresh, "superwall.workspace.json"), JSON.stringify({ workspace_id: Number(binding.workspaceId), organization_id: 7, slug: binding.slug }));
+  const run = linkedSetup(fresh);
+  await runWorkspacePush(run.ctx, input(fresh), noWait);
+  assert.equal(run.failed(), 0);
+  assert.ok(remote.filesOf(run.repo).includes("src/new.ts"));
+});
+
 test("a failed build shows the builder's message and fails the command", { skip }, async () => {
   const root = project();
   const { ctx, said, failed, versions } = setup({
