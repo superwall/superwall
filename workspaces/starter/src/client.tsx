@@ -16,7 +16,10 @@ type Projects = ReadonlyArray<{ name: string }>;
 // The API says why it refused, so show that. A 403 usually means a scope superwall.json doesn't declare,
 // or a route this slot can't reach.
 const readProjects = async (response: Response): Promise<Projects> => {
-  const body = (await response.json().catch(() => null)) as { data?: Projects; message?: string } | null;
+  const body = (await response.json().catch(() => null)) as {
+    data?: Projects;
+    message?: string;
+  } | null;
   if (response.ok && body?.data) return body.data;
   throw new Error(body?.message ?? `The API answered ${response.status}.`);
 };
