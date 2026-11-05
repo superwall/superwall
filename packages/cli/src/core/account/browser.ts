@@ -19,7 +19,7 @@ export function openBrowser(url: string, deps: BrowserDeps = {}): Promise<boolea
   const env = deps.env ?? process.env;
   if (env.BROWSER === "none" || !hasDisplay(env, platform)) return Promise.resolve(false);
   const cmd = platform === "darwin" ? "open" : platform === "win32" ? "cmd" : "xdg-open";
-  const args = platform === "win32" ? ["/c", "start", "", url] : [url];
+  const args = platform === "win32" ? ["/c", "start", "", url.replaceAll("&", "^&")] : [url];
   return new Promise((resolve) => {
     try {
       const child = (deps.spawn ?? nodeSpawn)(cmd, args, { stdio: "ignore", detached: true });

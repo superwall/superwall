@@ -45,3 +45,15 @@ export const team = {
   value: "id",
   describe: "The Apple team, when your organization has several",
 } as const satisfies FlagSpec;
+
+export const workspace = {
+  type: "string",
+  value: "workspace",
+  describe: "The workspace: an id, or a slug with --org (default: this project's)",
+} as const satisfies FlagSpec;
+
+export const projectDir = {
+  type: "string",
+  value: "path",
+  describe: "The workspace project (default: cwd)",
+} as const satisfies FlagSpec;

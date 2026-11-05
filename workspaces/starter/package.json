@@ -1,0 +1,20 @@
+{
+  "name": "superwall-workspace-starter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@superwall/workspace-sdk": "file:vendor/workspace-sdk",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9",
+    "typescript": "5.9.3",
+    "wrangler": "4.157.0"
+  }
+}

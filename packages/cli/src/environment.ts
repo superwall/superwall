@@ -26,6 +26,7 @@ export const ASSET_HOST = (): string =>
   resolveEnv("SUPERWALL_ASSET_HOST") ?? "https://user-content.superwalleditor.com/user-content/hl";
 export const API_HOST_OVERRIDE = (): string | undefined => resolveEnv("SUPERWALL_API_HOST");
 export const API_HOST = (): string => API_HOST_OVERRIDE() ?? "https://api.superwall.com";
+export const DASHBOARD_ORIGIN_OVERRIDE = (): string | undefined => resolveEnv("SUPERWALL_DASHBOARD_ORIGIN");
 export const CLI_CLIENT_ID = (): string =>
   resolveEnv("SUPERWALL_CLI_CLIENT_ID") ?? "client_01KWEWM154D2T28NZAS02B8MWT";
 export const OAUTH_SCOPE = "openid profile email offline_access";

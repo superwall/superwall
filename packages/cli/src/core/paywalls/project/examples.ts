@@ -1,26 +1,15 @@
-import { execFile } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
-import { promisify } from "node:util";
-import { gunzipSync } from "node:zlib";
 import { field } from "@/core/json";
+import {
+  downloadRepoDir,
+  PUBLIC_REF as EXAMPLES_REF,
+  PUBLIC_REPO as EXAMPLES_REPO,
+  RepoDownloadError as ExampleError,
+  type FetchLike,
+} from "@/core/repo/download";
 
-const run = promisify(execFile);
-
-export const EXAMPLES_REPO = process.env.SUPERWALL_EXAMPLES_REPO ?? "superwall/superwall";
-const EXAMPLES_REF = process.env.SUPERWALL_EXAMPLES_REF ?? "main";
-
-export class ExampleError extends Error {}
-
-interface FetchResponse {
-  ok: boolean;
-  status: number;
-  arrayBuffer(): Promise<ArrayBuffer>;
-  json(): Promise<unknown>;
-}
-
-export type FetchLike = (url: string) => Promise<FetchResponse>;
+export { EXAMPLES_REPO, ExampleError, type FetchLike };
 
 export async function listExamples(fetchImpl: FetchLike = fetch): Promise<string[]> {
   const response = await fetchImpl(
@@ -48,44 +37,13 @@ export async function downloadExample(
     throw new ExampleError(`\`${name}\` is not an example name.`);
   }
 
-  const response = await fetchImpl(
-    `https://codeload.github.com/${EXAMPLES_REPO}/tar.gz/refs/heads/${EXAMPLES_REF}`,
+  await downloadRepoDir(
+    `examples/${name}`,
+    target,
+    `No example named \`${name}\` in github.com/${EXAMPLES_REPO} — ` +
+      "run `superwall create` without --example to pick from the list.",
+    fetchImpl,
   );
-  if (!response.ok) {
-    throw new ExampleError(
-      `Could not download github.com/${EXAMPLES_REPO} (HTTP ${response.status}). ` +
-        "Check your network, then try again.",
-    );
-  }
-
-  let archive: Buffer;
-  try {
-    archive = gunzipSync(Buffer.from(await response.arrayBuffer()));
-  } catch {
-    throw new ExampleError(`The download of github.com/${EXAMPLES_REPO} was damaged. Try again.`);
-  }
-  const tarball = path.join(os.tmpdir(), `superwall-example-${process.pid}.tar`);
-  fs.writeFileSync(tarball, archive);
-  const prefix = `${EXAMPLES_REPO.split("/")[1]}-${EXAMPLES_REF.replace(/\//g, "-")}`;
-  fs.mkdirSync(target, { recursive: true });
-  try {
-    await run("tar", [
-      "-xf",
-      tarball,
-      "-C",
-      target,
-      "--strip-components",
-      "3",
-      `${prefix}/examples/${name}`,
-    ]);
-  } catch {
-    throw new ExampleError(
-      `No example named \`${name}\` in github.com/${EXAMPLES_REPO} — ` +
-        "run `superwall create` without --example to pick from the list.",
-    );
-  } finally {
-    fs.rmSync(tarball, { force: true });
-  }
 
   if (!fs.existsSync(path.join(target, "package.json"))) {
     throw new ExampleError(`Example \`${name}\` did not contain a project.`);
