@@ -131,6 +131,7 @@ export const buildSnapshot = async (
     base: "./",
     logLevel: "warn",
     assetsInclude: EXTRA_ASSET_TYPES.map((extension) => `**/*.${extension}`),
+    esbuild: { jsx: "automatic", jsxImportSource: "react" },
     plugins: [
       react(),
       ...(platform === undefined ? [] : [resolveConfigProducts(surface.configFile, products)]),
