@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { parseAst as rollupParse } from "vite";
+import { build as viteBuild, parseAst as rollupParse } from "vite";
 import {
   buildSnapshot,
   rewriteConfigProducts,
@@ -14,6 +14,11 @@ import {
 import { discoverProject } from "../../src/discover";
 import { buildStudioProject } from "../../src/preview/project";
 import { attachSurfaceDetails, surfaceDetailsFrom } from "../../src/preview/device";
+
+vi.mock("vite", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("vite")>();
+  return { ...actual, build: vi.fn(actual.build) };
+});
 
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixture");
 const BASE = "https://user-content.test/user-content/hl/42";
@@ -299,6 +304,17 @@ describe("checkout is bundled only where it is asked for", () => {
 
     expect(built.html).toContain("js.stripe.com");
     expect(built.html).toContain("checkout-sheet-wrapper");
+  }, 120_000);
+
+  it("compiles the framework's checkout with the automatic JSX runtime", async () => {
+    vi.mocked(viteBuild).mockClear();
+    const built = await buildSnapshot(project(), surface("paid"), {});
+
+    expect(vi.mocked(viteBuild).mock.calls[0]?.[0]?.esbuild).toEqual({
+      jsx: "automatic",
+      jsxImportSource: "react",
+    });
+    expect(built.html).not.toMatch(/\bReact\.createElement\b/);
   }, 120_000);
 
   it("carries it for applePay too, which falls back to the same sheet", async () => {
