@@ -341,6 +341,26 @@ test("it asks once per commit: the next push only asks about newer ones, and a p
   assert.doesNotMatch(afterPull.said("warn").join(), /runs commits from/);
 });
 
+test("a file a pull couldn't write stays pending: pulling again gets it, and a push can't delete it", { skip }, async () => {
+  const root = await pushedOnce();
+  const synced = readBinding(root)!.syncedCommit;
+  await teammateCommit(root, "blocked.txt");
+  fs.appendFileSync(path.join(root, ".gitignore"), "blocked.txt\n");
+  fs.writeFileSync(path.join(root, "blocked.txt"), "ignored and mine");
+
+  const first = linkedSetup(root);
+  await runWorkspacePull(first.ctx, { dir: root, theirs: false });
+  assert.match(first.said("warn").join(), /Not pulled.*blocked\.txt.*Move it, then pull again/);
+  assert.equal(readBinding(root)!.syncedCommit, synced, "the sync point stays put");
+  assert.equal(fs.readFileSync(path.join(root, "blocked.txt"), "utf8"), "ignored and mine");
+
+  fs.rmSync(path.join(root, "blocked.txt"));
+  const second = linkedSetup(root);
+  await runWorkspacePull(second.ctx, { dir: root, theirs: false });
+  assert.equal(fs.readFileSync(path.join(root, "blocked.txt"), "utf8"), "theirs");
+  assert.equal(readBinding(root)!.syncedCommit, remote.headOf(second.repo));
+});
+
 test("--overwrite-source replaces a teammate's work knowingly, with nothing to confirm", { skip }, async () => {
   const root = await pushedOnce();
   await teammateCommit(root, "theirs.txt");

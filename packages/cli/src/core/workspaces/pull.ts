@@ -28,7 +28,9 @@ function report(ctx: CommandContext<"required">, slug: string, head: string, wri
   ctx.ui.success(written.length === 0 ? "Already up to date." : `Pulled ${written.length} ${written.length === 1 ? "file" : "files"} of \`${slug}\`.`);
   if (written.length > 0) ctx.ui.list({ items: written.map((label) => ({ label })) });
   if (skipped.length > 0) {
-    ctx.ui.warn(`Left alone, because a file of yours that git doesn't track is in the way: ${skipped.join(", ")}.`);
+    ctx.ui.warn(
+      `Not pulled, because a file of yours that git doesn't track is in the way: ${skipped.join(", ")}. Move it, then pull again.`,
+    );
   }
 }
 
@@ -72,8 +74,9 @@ export async function runWorkspacePull(ctx: CommandContext<"required">, input: W
     workspaceId: String(workspace.id),
     organizationId: String(workspace.organization_id),
     slug: workspace.slug,
-    syncedCommit: pulled.head,
-    reviewedCommit: pulled.head,
+    ...(skipped.length > 0
+      ? { syncedCommit: linked?.syncedCommit, reviewedCommit: linked?.reviewedCommit }
+      : { syncedCommit: pulled.head, reviewedCommit: pulled.head }),
   };
   writeBinding(root, binding);
   report(ctx, workspace.slug, pulled.head, written, skipped);
