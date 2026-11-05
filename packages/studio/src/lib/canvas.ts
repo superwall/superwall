@@ -4,33 +4,44 @@ export type Size = { width: number; height: number };
 
 export const MIN_SCALE = 0.1;
 export const MAX_SCALE = 4;
-export const FIT_INSET = { top: 48, right: 48, bottom: 48, left: 48 };
+export type Inset = { top: number; right: number; bottom: number; left: number };
+
+export const FIT_INSET: Inset = { top: 48, right: 48, bottom: 48, left: 48 };
 
 const STEP_FACTOR = 1.25;
 
 export const clampScale = (scale: number): number =>
   Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
 
-export const fitTransform = (content: Size, viewport: Size): CanvasTransform => {
+export const fitTransform = (
+  content: Size,
+  viewport: Size,
+  inset: Inset = FIT_INSET,
+): CanvasTransform => {
   if (content.width <= 0 || content.height <= 0 || viewport.width <= 0 || viewport.height <= 0) {
     return { scale: 1, x: 0, y: 0 };
   }
-  const room = insetRoom(viewport);
+  const room = insetRoom(viewport, inset);
   const scale = clampScale(Math.min(1, room.width / content.width, room.height / content.height));
-  return centered(scale, content, viewport);
+  return centered(scale, content, viewport, inset);
 };
 
-const insetRoom = (viewport: Size): Size => ({
-  width: viewport.width - FIT_INSET.left - FIT_INSET.right,
-  height: viewport.height - FIT_INSET.top - FIT_INSET.bottom,
+const insetRoom = (viewport: Size, inset: Inset): Size => ({
+  width: viewport.width - inset.left - inset.right,
+  height: viewport.height - inset.top - inset.bottom,
 });
 
-export const centered = (scale: number, content: Size, viewport: Size): CanvasTransform => {
-  const room = insetRoom(viewport);
+export const centered = (
+  scale: number,
+  content: Size,
+  viewport: Size,
+  inset: Inset = FIT_INSET,
+): CanvasTransform => {
+  const room = insetRoom(viewport, inset);
   return {
     scale,
-    x: FIT_INSET.left + (room.width - content.width * scale) / 2,
-    y: FIT_INSET.top + (room.height - content.height * scale) / 2,
+    x: inset.left + (room.width - content.width * scale) / 2,
+    y: inset.top + (room.height - content.height * scale) / 2,
   };
 };
 

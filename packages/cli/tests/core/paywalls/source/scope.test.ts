@@ -206,3 +206,48 @@ test("a workspace owns everything in its repo, whatever a directory is called", 
   assert.equal(isSurfaceRoot("paywalls"), true);
   assert.equal(isOtherSurfaceDir("paywalls", "x", scope), false);
 });
+
+test("a project source push owns only the shared files and keeps every surface as the repo has it", () => {
+  const project = { kind: "project" as const };
+  assert.equal(classifyPath("design/tokens.css", project), "shared");
+  assert.equal(classifyPath("paywalls/a/app/index.tsx", project), "other");
+  assert.equal(classifyPath("superwall.lock", project), "derived");
+  assert.equal(isOtherSurfaceDir("paywalls", "a", project), true);
+  assert.equal(isOtherSurfaceDir("design", "a", project), false);
+
+  const theirs = formatLock(
+    lock({
+      paywalls: { a: { ios: { paywallId: "1", snapshot: "theirs" } } },
+      origins: { "paywall/a": { paywallId: "1", url: "theirs" } },
+    }),
+  );
+  const mine = formatLock(lock({ apps: { ios: "42", android: "43" }, paywalls: { a: { ios: { paywallId: "1", snapshot: "mine" } } } }));
+  const merged = mergeLockText(theirs, mine, project);
+  assert.match(merged, /"snapshot": "theirs"/);
+  assert.match(merged, /"android": "43"/);
+  assert.match(merged, /"origins"/);
+  assert.doesNotMatch(mergeLockText(formatLock(lock()), mine, project), /"origins"/);
+});
+
+test("a project push into a repo with no lock, or over an unreadable one, binds no paywall, funnel or origin", () => {
+  const project = { kind: "project" as const };
+  const mine = formatLock(
+    lock({
+      apps: { ios: "42" },
+      paywalls: { a: { ios: { paywallId: "1", snapshot: "mine" } } },
+      funnels: { f: { web: { paywallId: "2", snapshot: "mine" } } },
+      origins: { "paywall/a": { paywallId: "1", url: "mine" } },
+    }),
+  );
+  for (const merged of [
+    mergeLockText(undefined, mine, project),
+    mergeLockText("{ truncated", mine, project, { replaceUnreadable: true }),
+  ]) {
+    const parsed = JSON.parse(merged) as LockFile;
+    assert.deepEqual(parsed.apps, { ios: "42" });
+    assert.deepEqual(parsed.paywalls, {});
+    assert.deepEqual(parsed.funnels, {});
+    assert.equal(parsed.origins, undefined);
+  }
+  assert.match(mergeLockText(undefined, mine, { kind: "paywall", id: "a" }), /"origins"/);
+});

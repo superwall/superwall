@@ -165,3 +165,14 @@ test("a workspace commit names the workspace and its SDK", () => {
     "push workspace/churn\n\nSuperwall-Workspace: 42\nSuperwall-Surface: workspace/churn\n",
   );
 });
+
+test("a project source commit names the app and framework, with the note as its body", () => {
+  assert.equal(
+    buildCommitMessage({ kind: "project", applicationId: "42", framework: "0.4.2", cli: "2.0.0", note: " Rounder\r\ncorners " }),
+    "publish project source\n\nRounder\ncorners\n\nSuperwall-Application: 42\nSuperwall-Framework: 0.4.2\nSuperwall-Cli: 2.0.0\n",
+  );
+  assert.equal(
+    buildCommitMessage({ kind: "project", applicationId: "42", framework: "0.4.2" }),
+    "publish project source\n\nSuperwall-Application: 42\nSuperwall-Framework: 0.4.2\n",
+  );
+});

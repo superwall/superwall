@@ -20,19 +20,36 @@ export interface WorkspaceCommitInput {
   note?: string;
 }
 
-export type CommitMessageInput = SurfaceCommitInput | WorkspaceCommitInput;
+interface ProjectCommitInput {
+  kind: "project";
+  applicationId: string;
+  framework: string;
+  cli?: string;
+  note?: string;
+}
+
+export type CommitMessageInput = SurfaceCommitInput | WorkspaceCommitInput | ProjectCommitInput;
+
+const noteBody = (note: string | undefined): string => {
+  const text = note?.replace(/\r\n?/g, "\n").trim();
+  return text ? `\n${text}\n` : "";
+};
 
 const workspaceCommitMessage = (input: WorkspaceCommitInput): string => {
   const surface = `workspace/${input.surface}`;
   const trailers = [`Superwall-Workspace: ${input.workspaceId}`, `Superwall-Surface: ${surface}`];
   if (input.sdk) trailers.push(`Superwall-Workspace-Sdk: ${input.sdk}`);
   if (input.cli) trailers.push(`Superwall-Cli: ${input.cli}`);
-  const note = input.note?.replace(/\r\n?/g, "\n").trim();
-  return `push ${surface}\n${note ? `\n${note}\n` : ""}\n${trailers.join("\n")}\n`;
+  return `push ${surface}\n${noteBody(input.note)}\n${trailers.join("\n")}\n`;
 };
 
 export const buildCommitMessage = (input: CommitMessageInput): string => {
   if (input.kind === "workspace") return workspaceCommitMessage(input);
+  if (input.kind === "project") {
+    const trailers = [`Superwall-Application: ${input.applicationId}`, `Superwall-Framework: ${input.framework}`];
+    if (input.cli) trailers.push(`Superwall-Cli: ${input.cli}`);
+    return `publish project source\n${noteBody(input.note)}\n${trailers.join("\n")}\n`;
+  }
   const surface = `${input.kind}/${input.surface}`;
   const subject = `publish ${surface} v${input.version}`;
 
@@ -50,9 +67,7 @@ export const buildCommitMessage = (input: CommitMessageInput): string => {
   trailers.push(`Superwall-Framework: ${input.framework}`);
   if (input.cli) trailers.push(`Superwall-Cli: ${input.cli}`);
 
-  const note = input.note?.replace(/\r\n?/g, "\n").trim();
-  const body = note ? `\n${note}\n` : "";
-  return `${subject}\n${body}\n${trailers.join("\n")}\n`;
+  return `${subject}\n${noteBody(input.note)}\n${trailers.join("\n")}\n`;
 };
 
 export const tokenSecret = (token: string): string => token.split("?")[0] ?? token;

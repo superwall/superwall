@@ -181,3 +181,23 @@ test("the output path nests the platform only when there is one", () => {
     path.join("/o", "paywall", "pro", "web", "index.html"),
   );
 });
+
+test("a literal a design token holds is reported as a warning, and the build still writes", async () => {
+  const project = scaffold(["pro"]);
+  const surface = project.surfaces[0]!;
+  surface.dir = path.join(project.superwallDir, "paywalls", "pro");
+  fs.mkdirSync(path.join(surface.dir, "app"), { recursive: true });
+  fs.mkdirSync(path.join(project.superwallDir, "design"));
+  fs.writeFileSync(path.join(project.superwallDir, "design", "tokens.css"), ":root { --space-4: 16px; }\n");
+  fs.writeFileSync(path.join(surface.dir, "app", "theme.css"), ".a { padding: 16px; }\n");
+  const warnings: string[] = [];
+  const warn = ui.warn;
+  ui.warn = (message: string) => void warnings.push(message);
+  try {
+    const outcomes = await runBuildPipeline(contextFor().context, { dir: project.root, load: async () => frameworkFor(project, []) });
+    assert.equal(outcomes.length, 1);
+  } finally {
+    ui.warn = warn;
+  }
+  assert.deepEqual(warnings.map((warning) => warning.includes("var(--space-4)")), [true]);
+});

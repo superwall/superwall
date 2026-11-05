@@ -239,6 +239,13 @@ landed stays pending, so `promote` still won't ship it. With no project,
 `superwall pull --app <id> [dir]` creates `superwall/` from the app's source,
 so you can work on an app's paywalls without its codebase or GitHub.
 
+A change to the shared design system (`DESIGN.md`, `design/`, `components/`)
+reaches every paywall that imports it. `publish --existing --source` ships it:
+`--existing` rebuilds only the paywalls already on Superwall and never creates
+one, and `--source` pushes the project source to every app, also those whose
+paywalls built the same. Push and build warn when a paywall hard-codes a value
+that `design/tokens.css` already holds, naming the token to use instead.
+
 The full reference — assets, localization, trials, transitions, web
 checkout, troubleshooting — lives at
 [superwall.com/docs/framework](https://superwall.com/docs/framework).
