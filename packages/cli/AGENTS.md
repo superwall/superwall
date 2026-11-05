@@ -132,9 +132,13 @@ skill.
   for a day and a stale copy still answers offline. A browser login reaches
   every organization and stores no organization name; an API key belongs to one
   and stores its name. `feedback` posts to `/v2/feedback`, which merges a
-  report into an existing request or opens one. It also always sends the
-  telemetry event (except on a 429), which feeds the team's Slack channel, so a
-  report is never lost and the channel keeps every report. It is an MCP `write`, not
+  report into an existing request or opens one. It also sends the telemetry
+  event, which feeds the team's Slack channel, so a report is never lost and
+  the channel keeps every report. It falls back to that event alone when the
+  endpoint answers an error, can't be reached, gives a body it can't parse, or
+  the login has expired. A 429 stops it, and so does any other error from the
+  api: that is a host stopping the call (embedded-agent asks the user first),
+  so nothing is sent. It is an MCP `write`, not
   `destructive`: agents send it without asking (Superwall's terms cover it).
 - **Source pushes never erase.** A version only counts as pushed once its
   source has landed and been linked: `superwall.lock` records the snapshot

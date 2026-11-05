@@ -15,6 +15,7 @@ import {
   runFeedback,
 } from "@/core/support/feedback/send";
 import { ApiError, ApiUnreachableError, type SuperwallApi } from "@/core/api/client";
+import { NotLoggedInError } from "@/core/account/errors";
 import { writeOnboardedApp } from "@/core/state/config";
 import { command as feedback } from "@/commands/support/feedback";
 import { defineCommand } from "@/program/command";
@@ -334,7 +335,7 @@ test("signed in, a report goes to the feedback endpoint and the team's feed, and
 });
 
 test("when the endpoint isn't there or fails, the report goes to the team the old way", async () => {
-  for (const failure of [new ApiError("POST /v2/feedback", 404, "{}"), new ApiError("POST /v2/feedback", 503), new ApiUnreachableError("https://api.example.com", new Error("offline"))]) {
+  for (const failure of [new ApiError("POST /v2/feedback", 404, "{}"), new ApiError("POST /v2/feedback", 503), new ApiUnreachableError("https://api.example.com", new Error("offline")), new NotLoggedInError(), new SyntaxError("Unexpected token < in JSON")]) {
     useHome();
     const log = useFetch([{ match: "/capture/", body: {} }]);
     const api = lookupApi({ post: async () => Promise.reject(failure) });
