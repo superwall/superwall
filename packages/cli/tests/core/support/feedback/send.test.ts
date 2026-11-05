@@ -301,7 +301,7 @@ const merged = {
   request: { id: 7, title: "Webhooks retry policy", kind: "idea", status: "planned", report_count: 14, organization_count: 9 },
 };
 
-test("signed in, a report goes to the feedback endpoint and answers with the request it joined", async () => {
+test("signed in, a report goes to the feedback endpoint and the team's feed, and answers with the request it joined", async () => {
   useHome();
   const log = useFetch([{ match: "/capture/", body: {} }]);
   const posts: { path: string; body: unknown }[] = [];
@@ -318,7 +318,10 @@ test("signed in, a report goes to the feedback endpoint and answers with the req
     api,
   });
   assert.deepEqual(result.json, merged);
-  assert.equal(log.length, 0);
+  // The team's feed still gets the event, naming the request it joined.
+  assert.equal(log.length, 1);
+  assert.equal(sentProperties(log).feedback_request_id, 7);
+  assert.equal(sentProperties(log).feedback_outcome, "merged");
   assert.equal(posts[0]?.path, "/v2/feedback");
   const body = posts[0]?.body as Record<string, unknown>;
   assert.equal(body.kind, "idea");

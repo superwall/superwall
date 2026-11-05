@@ -174,6 +174,7 @@ export function buildFeedbackEvent(
     authMethod?: string;
   } | null,
   osRelease?: string,
+  report?: FeedbackReport,
 ): Record<string, unknown> {
   return {
     api_key: TELEMETRY_KEY(),
@@ -203,13 +204,18 @@ export function buildFeedbackEvent(
       email: session?.userEmail ?? null,
       org_name: session?.orgName ?? null,
       auth_method: session?.authMethod ?? null,
+      // Set when the feedback endpoint also took the report, so the team's feed links to it.
+      feedback_report_id: report?.id ?? null,
+      feedback_outcome: report?.outcome ?? null,
+      feedback_request_id: report?.request.id ?? null,
+      feedback_request_title: report?.request.title ?? null,
     },
   };
 }
 
-async function sendToTelemetry(feedback: Feedback, via: FeedbackVia): Promise<boolean> {
+async function sendToTelemetry(feedback: Feedback, via: FeedbackVia, report?: FeedbackReport): Promise<boolean> {
   const osRelease = proc ? await import("node:os").then((os) => os.release()).catch(() => undefined) : undefined;
-  const payload = buildFeedbackEvent(feedback, via, readAnonymousId(), readSession(), osRelease);
+  const payload = buildFeedbackEvent(feedback, via, readAnonymousId(), readSession(), osRelease, report);
   try {
     const res = await fetch(`${TELEMETRY_HOST()}/capture/`, {
       method: "POST",
@@ -225,8 +231,9 @@ async function sendToTelemetry(feedback: Feedback, via: FeedbackVia): Promise<bo
 
 async function submitFeedback(api: SuperwallApi | undefined, feedback: Feedback, via: FeedbackVia): Promise<FeedbackResult> {
   const report = api ? await sendToApi(api, feedback, via) : undefined;
+  // Always sent too: the team's feedback feed (PostHog, forwarded to Slack) reads this event.
+  const submitted = await sendToTelemetry(feedback, via, report);
   if (report) return report;
-  const submitted = await sendToTelemetry(feedback, via);
   return submitted ? { submitted, outcome: "queued" } : { submitted };
 }
 
