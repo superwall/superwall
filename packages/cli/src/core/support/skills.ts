@@ -335,6 +335,7 @@ async function skillsOutOfDate(verify = false): Promise<boolean> {
 
 interface SyncSkillsResult {
   ok: boolean;
+  current: boolean;
   commands: string[];
 }
 
@@ -358,7 +359,7 @@ async function syncSkills(
       });
     }
   }
-  return { ok, commands: [bundled.command, pub.command] };
+  return { ok, current: pub.ok, commands: [bundled.command, pub.command] };
 }
 
 export async function ensureSkillsCurrent(
@@ -385,8 +386,8 @@ export type SkillsUpdate = "current" | "updated" | "failed";
 
 export async function updateSkills(): Promise<SkillsUpdate> {
   if (!(await skillsOutOfDate(true))) return "current";
-  const { ok } = await syncSkills({ trigger: "upgrade" });
-  return ok ? "updated" : "failed";
+  const { ok, current } = await syncSkills({ trigger: "upgrade" });
+  return ok && current ? "updated" : "failed";
 }
 
 interface SkillsInput {

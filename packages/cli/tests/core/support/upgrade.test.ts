@@ -37,7 +37,9 @@ function readCheck(home: string): unknown {
   return (JSON.parse(fs.readFileSync(file, "utf8")) as { updateCheck?: unknown }).updateCheck;
 }
 
-function fakeGlobalInstall(cli = "exit 0"): { npmArgs(): string; cliArgs(): string; cliCwd(): string } {
+const SYNC_SKILLS = `"${process.execPath}" -e 'const fs = require("fs"), file = process.env.SUPERWALL_HOME + "/config.json"; const config = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {}; config.skillsSync = { cliVersion: process.env.SYNCED_VERSION || "99.0.0", syncedAt: new Date(Date.now() + Number(process.env.SYNCED_OFFSET || 0)).toISOString(), ref: "next" }; fs.writeFileSync(file, JSON.stringify(config))'`;
+
+function fakeGlobalInstall(cli = SYNC_SKILLS): { npmArgs(): string; cliArgs(): string; cliCwd(): string } {
   const prefix = fs.mkdtempSync(path.join(os.tmpdir(), "sw-upgrade-prefix-"));
   scratch.push(prefix);
   fs.mkdirSync(path.join(prefix, "bin"));
@@ -203,7 +205,7 @@ test("an upgrade syncs the skills with the newly installed CLI, outside any proj
 test("skills the new CLI can't sync are reported without failing the upgrade", async () => {
   useHome();
   useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
-  fakeGlobalInstall("exit 1");
+  fakeGlobalInstall(`${SYNC_SKILLS}; exit 1`);
 
   const result = await runCommand(upgrade);
 
@@ -216,6 +218,19 @@ test("skills the new CLI can't sync are reported without failing the upgrade", a
   ]);
   assert.deepEqual(result.said("outro"), ["You're on the latest version."]);
   assert.notEqual(process.exitCode, 1);
+});
+
+test("a sync the new CLI didn't record, for its own version, since it started, is not updated", async () => {
+  for (const cli of ["exit 0", `SYNCED_VERSION=98.0.0 ${SYNC_SKILLS}`, `SYNCED_OFFSET=-60000 ${SYNC_SKILLS}`]) {
+    useHome();
+    useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+    fakeGlobalInstall(cli);
+
+    const result = await runCommand(upgrade, { json: true });
+
+    assert.deepEqual(result.json, { upgraded: true, from: VERSION, to: "99.0.0", skills: "failed" }, cli);
+    restoreBin();
+  }
 });
 
 test("skills are not updated when the newly installed CLI can't be found or run", async () => {

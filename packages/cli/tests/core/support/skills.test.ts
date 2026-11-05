@@ -386,7 +386,7 @@ test("day-old skills are checked against the repo head, and refreshed only when 
 test("an update checks the repo head at once, even when the skills synced minutes ago", async () => {
   const recent = { cliVersion: VERSION, syncedAt: new Date().toISOString(), ref: "next", sourceSha: "abc" };
   useHome();
-  const tools = fakeTools({ git: false });
+  const tools = fakeTools();
 
   writeSkillsSync(recent);
   const log = useFetch([{ match: GITHUB_HEAD, body: { sha: "abc" } }]);
@@ -403,13 +403,22 @@ test("an update checks the repo head at once, even when the skills synced minute
 test("an update installs skills that were never synced, and says when the install failed", async () => {
   useHome();
   useFetch([{ match: GITHUB_HEAD, body: { sha: "head-sha" } }]);
-  const installed = fakeTools({ git: false });
+  const installed = fakeTools();
 
   assert.equal(await updateSkills(), "updated");
   assert.equal(installed.npxCalls().length, 2);
 
   useHome();
-  fakeTools({ npxCode: 1, git: false });
+  fakeTools({ npxCode: 1 });
+  assert.equal(await updateSkills(), "failed");
+  assert.equal(readSkillsSync(), undefined);
+});
+
+test("an update whose bundled skills install but whose live skills fail is not updated", async () => {
+  useHome();
+  useFetch([{ match: GITHUB_HEAD, body: { sha: "head-sha" } }]);
+  useBin({ npx: 'case "$4" in */dist/skills) exit 0;; esac; exit 1', git: "exit 1" });
+
   assert.equal(await updateSkills(), "failed");
   assert.equal(readSkillsSync(), undefined);
 });

@@ -403,8 +403,11 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   process would install its own bundle and stamp its own version. When the CLI
   is already current (or runs under npx) it checks the repo head right away
   instead of waiting out the daily window, so skills released between CLI
-  versions arrive too. A skills failure is a warning with the retry command,
-  never a failed upgrade: the CLI did upgrade.
+  versions arrive too. "Updated" needs both the bundled and the live install:
+  `superwall skills` exits 0 when only the bundle installed, so after the child
+  exits the parent also requires the sync stamp it wrote (only written when both
+  succeed) to name the new version and postdate the spawn. A skills failure is
+  a warning with the retry command, never a failed upgrade: the CLI did upgrade.
 - **Telemetry is anonymous by design**: a random persisted id, enum/boolean/
   number properties only, no person profiles, and a fetch timeout shorter than
   the exit flush so an unreachable endpoint can't hold the process open.

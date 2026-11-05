@@ -73,7 +73,10 @@ test("installs the newer version globally, then its skills", async () => {
   useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
   const bin = useBin({ npm: 'if [ "$1" = prefix ]; then dirname "$0"; fi' });
   fs.mkdirSync(path.join(bin, "bin"));
-  fs.writeFileSync(path.join(bin, "bin", "superwall"), "#!/bin/sh\nexit 0\n");
+  fs.writeFileSync(
+    path.join(bin, "bin", "superwall"),
+    `#!${process.execPath}\nconst fs = require("fs"), file = process.env.SUPERWALL_HOME + "/config.json";\nfs.writeFileSync(file, JSON.stringify({ skillsSync: { cliVersion: "99.0.0", syncedAt: new Date().toISOString() } }));\n`,
+  );
   fs.chmodSync(path.join(bin, "bin", "superwall"), 0o755);
 
   const result = await runCommand(upgrade, { json: true });

@@ -5,7 +5,7 @@ import pc from "picocolors";
 import type { CommandContext } from "@/program/command";
 import type { SkillsUpdate } from "@/core/support/skills";
 import { spawnStream } from "@/core/workflows/agent/drivers/spawn";
-import { writeUpdateCheck, readUpdateCheck } from "@/core/state/config";
+import { readSkillsSync, writeUpdateCheck, readUpdateCheck } from "@/core/state/config";
 import { RUNNING_VIA_NPX, VERSION } from "@/environment";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -96,7 +96,7 @@ async function updateSkillsInProcess(): Promise<SkillsUpdate> {
   return updateSkills();
 }
 
-async function updateSkillsWithInstalledCli(): Promise<SkillsUpdate> {
+async function updateSkillsWithInstalledCli(version: string): Promise<SkillsUpdate> {
   const prefix: string[] = [];
   const { code } = await spawnStream({
     bin: "npm",
@@ -106,6 +106,7 @@ async function updateSkillsWithInstalledCli(): Promise<SkillsUpdate> {
   });
   const bin = prefix[0] ? join(prefix[0], "bin", "superwall") : undefined;
   if (code !== 0 || !bin || !existsSync(bin)) return "failed";
+  const startedAt = Date.now();
   const result = await spawnStream({
     bin,
     args: ["skills", "--force", "--yes"],
@@ -113,7 +114,10 @@ async function updateSkillsWithInstalledCli(): Promise<SkillsUpdate> {
     onStdoutLine: () => {},
     onStderrLine: () => {},
   });
-  return result.code === 0 ? "updated" : "failed";
+  if (result.code !== 0) return "failed";
+  const sync = readSkillsSync();
+  const synced = sync?.cliVersion === version && Date.parse(sync.syncedAt) >= startedAt;
+  return synced ? "updated" : "failed";
 }
 
 export async function runUpgrade(ctx: CommandContext<"none">): Promise<void> {
@@ -161,7 +165,7 @@ export async function runUpgrade(ctx: CommandContext<"none">): Promise<void> {
   }
   writeUpdateCheck({ latest, checkedAt: new Date().toISOString() });
   spin.stop(`Upgraded \`${VERSION}\` → \`${latest}\``);
-  const skills = await updateAgentSkills(ctx, updateSkillsWithInstalledCli);
+  const skills = await updateAgentSkills(ctx, () => updateSkillsWithInstalledCli(latest));
   if (ctx.json) return ctx.output.data({ upgraded: true, from: VERSION, to: latest, skills });
   ui.outro("You're on the latest version.");
 }
