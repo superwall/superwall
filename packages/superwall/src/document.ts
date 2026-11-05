@@ -42,6 +42,21 @@ export const ROUTE_ASSETS_ID = "sw-route-assets";
 
 export const TELEPORT_BOOT_META = "sw-teleport-boot";
 
+export const TELEPORT_PAGES_META = "sw-teleport-pages";
+
+export const PRERENDER_ATTRIBUTE = "data-sw-prerender";
+
+export const withTeleportPages = (html: string, locales: readonly string[]): string => {
+  if (locales.length === 0) return html;
+  const tag = `<meta name="${TELEPORT_PAGES_META}" content="${locales.join(" ")}">`;
+  const boot = new RegExp(`<meta name="${TELEPORT_BOOT_META}"[^>]*>`).exec(html);
+  if (boot !== null) {
+    const end = boot.index + boot[0].length;
+    return `${html.slice(0, end)}${tag}${html.slice(end)}`;
+  }
+  return html.replace(/<head[^>]*>/i, (head) => `${head}${tag}`);
+};
+
 export const VIEWPORT_FIT_GUARD = `new MutationObserver((records) => records.forEach((record) => record.addedNodes.forEach((node) => { if (node.nodeName === "META" && node.name === "viewport" && !/viewport-fit/.test(node.content)) node.content += ", viewport-fit=cover"; }))).observe(document.head, { childList: true });`;
 
 export type DocumentOptions = {

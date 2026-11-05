@@ -206,6 +206,17 @@ describe("introductory offer", () => {
     transport.accept({ event_name: "template_substitutions_prefix", prefix: null });
     expect(session.getSnapshot().introductoryOffer.eligible).toBe(false);
   });
+
+  it("opens with the eligibility it was given, before any host message", () => {
+    const session = createSuperwallSession({
+      transport: new TestTransport(),
+      introductoryOffer: { eligible: true },
+    });
+
+    expect(session.getSnapshot().introductoryOffer.eligible).toBe(true);
+    expect(session.getSnapshot().state).toMatchObject({ products: { hasIntroductoryOffer: true } });
+    expect(session.getSnapshot().variables).toEqual({});
+  });
 });
 
 describe("localization", () => {

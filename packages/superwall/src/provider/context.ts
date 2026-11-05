@@ -59,11 +59,16 @@ export const SuperwallProvider = ({
 
   if (ownedSession.current === null || ownedTransport.current !== transport) {
     ownedTransport.current = transport;
+    const boot = readTeleportBoot();
     ownedSession.current = createSuperwallSession({
       config,
       transport,
       inlineProducts,
-      variables: readTeleportBoot()?.variables,
+      variables: boot?.variables,
+      introductoryOffer:
+        boot?.hasIntroductoryOffer === undefined
+          ? undefined
+          : { eligible: boot.hasIntroductoryOffer },
     });
   }
 

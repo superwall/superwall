@@ -3,7 +3,7 @@ import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHostTransport, recordingDelegate } from "@superwall/host";
 import type { ITransport, TOutgoingMessage } from "@superwall/runtime";
-import { useTranslation, useUser } from "../../src/hooks";
+import { useSuperwallSnapshot, useTranslation, useUser } from "../../src/hooks";
 import { PaywallRouter, type Entry, type RouteMap } from "../../src/navigation/index";
 import {
   HOST_STATE_TIMEOUT_MS,
@@ -330,6 +330,25 @@ describe("a teleport page's first render", () => {
       </SuperwallProvider>,
     );
     expect(first[0]).toEqual(["a1", "de", "Hol dir Pro"]);
+  });
+
+  it("already shows the trial the shopper was offered in the app", () => {
+    Reflect.set(window, "__SW_TELEPORT__", {
+      id: "v1:tp",
+      route: "checkout",
+      hasIntroductoryOffer: true,
+    });
+    const first: unknown[] = [];
+    const Probe = () => {
+      first.push(useSuperwallSnapshot().introductoryOffer.eligible);
+      return null;
+    };
+    render(
+      <SuperwallProvider transport={recording()}>
+        <Probe />
+      </SuperwallProvider>,
+    );
+    expect(first[0]).toBe(true);
   });
 
   it("starts empty on a page that is no teleport", () => {

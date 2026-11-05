@@ -98,6 +98,25 @@ describe("entrySource", () => {
     );
   });
 
+  it("renders the same tree to a string for the pre-render, without mounting or timing it", () => {
+    const options = {
+      entryDir,
+      project,
+      surface: surface(),
+      config: { teleport: { route: "checkout" } },
+    };
+    const source = entrySource({ ...options, target: "prerender" });
+    expect(source).toContain('import { renderToString } from "react-dom/server";');
+    expect(source).toContain(
+      'import { SuperwallCheckout, TeleportScreen } from "superwall/checkout";',
+    );
+    expect(source).toContain("globalThis.__SW_PRERENDER__ = () => renderToString(");
+    expect(source).not.toContain("createRoot");
+    expect(source).not.toContain("markTeleportScriptStart");
+    const tree = (text: string) => text.slice(text.indexOf("  <React.StrictMode>"));
+    expect(tree(source)).toBe(tree(entrySource(options)));
+  });
+
   it("prefixes ./ for a file that sits beside the entry", () => {
     const source = entrySource({
       entryDir,

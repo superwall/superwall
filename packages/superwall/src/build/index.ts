@@ -4,11 +4,12 @@ import {
   backgroundOf,
   checkoutModeOf,
   normalizePlatform,
+  teleportOf,
   type SuperwallBillingPlan,
   type SuperwallConfig,
 } from "@superwall/runtime";
 import react from "@vitejs/plugin-react-swc";
-import { build as viteBuild } from "vite";
+import { build as viteBuild, type InlineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import {
   ASSET_INLINE_LIMIT,
@@ -22,7 +23,8 @@ import {
   type SnapshotAsset,
 } from "./assets";
 import { assertBundlerBuilds } from "./bundler";
-import { entrySource } from "./entry";
+import { entrySource, type EntrySourceOptions } from "./entry";
+import { prerenderTeleportPages, type TeleportPage } from "./prerender";
 import {
   inlineProductsOf,
   resolveBillingPlans,
@@ -35,11 +37,12 @@ import { loadSurfaceConfig } from "../config/load";
 import { localesOf } from "../config/messages";
 import type { PaywallDefinition } from "../config/paywall";
 import type { DiscoveredSurface, Project } from "../discover";
-import { renderDocument } from "../document";
+import { renderDocument, withTeleportPages } from "../document";
 
 export * from "./assets";
 export * from "./products";
 export { entrySource, type EntrySourceOptions } from "./entry";
+export * from "./prerender";
 
 export type BuiltSnapshot = {
   surface: DiscoveredSurface;
@@ -59,6 +62,8 @@ export type BuiltSnapshot = {
   assets: SnapshotAsset[];
   assetBytes: number;
   externalSources: string[];
+  teleportPages: TeleportPage[];
+  warnings: string[];
 };
 
 export type BuildOptions = {
@@ -105,18 +110,16 @@ export const buildSnapshot = async (
   const settings = paywallSettingsOf(config);
   const locales = localesOf(project, surface, definition);
 
-  fs.writeFileSync(
-    path.join(entryDir, "entry.jsx"),
-    entrySource({
-      entryDir,
-      project,
-      surface,
-      config,
-      products: platform === undefined ? undefined : products,
-      inlineProducts:
-        platform === undefined ? undefined : inlineProductsOf(products, options.catalogue),
-    }),
-  );
+  const entry: Omit<EntrySourceOptions, "target"> = {
+    entryDir,
+    project,
+    surface,
+    config,
+    products: platform === undefined ? undefined : products,
+    inlineProducts:
+      platform === undefined ? undefined : inlineProductsOf(products, options.catalogue),
+  };
+  fs.writeFileSync(path.join(entryDir, "entry.jsx"), entrySource(entry));
   fs.writeFileSync(
     path.join(entryDir, "index.html"),
     renderDocument({ title: `${surface.id} — superwall`, config, entry: "./entry.jsx" }),
@@ -124,7 +127,7 @@ export const buildSnapshot = async (
 
   let collected: CollectedAssets = { assets: [], routes: {}, externalSources: [] };
 
-  await viteBuild({
+  const shared: InlineConfig = {
     configFile: false,
     envFile: false,
     root: entryDir,
@@ -135,10 +138,6 @@ export const buildSnapshot = async (
     plugins: [
       react(),
       ...(platform === undefined ? [] : [resolveConfigProducts(surface.configFile, products)]),
-      collectAssets(entryDir, project.superwallDir, surface, assetBaseUrl, (value) => {
-        collected = value;
-      }),
-      viteSingleFile({ useRecommendedBuildConfig: false, removeViteModuleLoader: true }),
     ],
     resolve: {
       dedupe: ["react", "react-dom"],
@@ -148,15 +147,29 @@ export const buildSnapshot = async (
       ? {}
       : { experimental: { renderBuiltUrl: (filename) => `${assetBaseUrl}/${filename}` } }),
     build: {
-      outDir,
-      emptyOutDir: true,
-      assetsDir: "",
-      cssCodeSplit: false,
       assetsInlineLimit:
         assetBaseUrl === undefined
           ? Number.MAX_SAFE_INTEGER
           : (filePath: string, content: Buffer) =>
               alwaysHosted(filePath) ? false : content.length <= ASSET_INLINE_LIMIT,
+    },
+  };
+
+  await viteBuild({
+    ...shared,
+    plugins: [
+      ...(shared.plugins ?? []),
+      collectAssets(entryDir, project.superwallDir, surface, assetBaseUrl, (value) => {
+        collected = value;
+      }),
+      viteSingleFile({ useRecommendedBuildConfig: false, removeViteModuleLoader: true }),
+    ],
+    build: {
+      ...shared.build,
+      outDir,
+      emptyOutDir: true,
+      assetsDir: "",
+      cssCodeSplit: false,
       rollupOptions: {
         output: {
           inlineDynamicImports: true,
@@ -168,9 +181,22 @@ export const buildSnapshot = async (
 
   if (collected.misplaced !== undefined) throw new Error(collected.misplaced);
 
-  const html = injectRouteAssets(
-    fs.readFileSync(path.join(outDir, "index.html"), "utf8"),
-    collected.routes,
+  const route = teleportOf(config.teleport)?.route;
+  const prerendered =
+    platform === undefined || route === undefined
+      ? { locales: [], pages: [], warnings: [] }
+      : await prerenderTeleportPages({
+          entry,
+          vite: shared,
+          route,
+          defaultLocale: config.localization?.defaultLocale ?? "en",
+          locales,
+          products,
+        });
+
+  const html = withTeleportPages(
+    injectRouteAssets(fs.readFileSync(path.join(outDir, "index.html"), "utf8"), collected.routes),
+    prerendered.locales,
   );
   const htmlFile = path.join(outDir, "snapshot.html");
   fs.writeFileSync(htmlFile, html);
@@ -193,5 +219,7 @@ export const buildSnapshot = async (
     assets: collected.assets,
     assetBytes: collected.assets.reduce((total, asset) => total + asset.bytes, 0),
     externalSources: collected.externalSources,
+    teleportPages: prerendered.pages,
+    warnings: prerendered.warnings,
   };
 };

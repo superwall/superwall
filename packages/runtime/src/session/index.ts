@@ -121,12 +121,19 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
     for (const listener of listeners) listener();
   };
 
-  if (options.variables !== undefined) {
+  if (options.variables !== undefined || options.introductoryOffer !== undefined) {
     commit({
-      variables: options.variables,
-      device: recordFromVariables(options.variables, "device"),
-      user: recordFromVariables(options.variables, "user"),
-      params: recordFromVariables(options.variables, "params"),
+      ...(options.variables === undefined
+        ? {}
+        : {
+            variables: options.variables,
+            device: recordFromVariables(options.variables, "device"),
+            user: recordFromVariables(options.variables, "user"),
+            params: recordFromVariables(options.variables, "params"),
+          }),
+      ...(options.introductoryOffer === undefined
+        ? {}
+        : { introductoryOffer: options.introductoryOffer }),
     });
   }
 
