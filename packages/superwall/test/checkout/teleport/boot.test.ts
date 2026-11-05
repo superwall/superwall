@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   encodeQueryPatch,
+  hostVariablesOf,
   introductoryOfferFromFragment,
   prepaidCardsFromFragment,
   readTeleportBoot,
@@ -124,10 +125,42 @@ describe("readTeleportBoot", () => {
     expect(readTeleportBoot()?.query).toEqual({ goal: "sleep", level: "1" });
   });
 
+  it("reads the shopper's variables the worker injected, with its deviceProperties as the device", () => {
+    boot({
+      id: "v1:tp",
+      route: "checkout",
+      variables: {
+        deviceProperties: { deviceLocale: "de_DE", platform: "iOS" },
+        user: { aliasId: "a1" },
+        products: [],
+        params: { source: "onboarding" },
+      },
+    });
+    expect(readTeleportBoot()?.variables).toEqual({
+      device: { deviceLocale: "de_DE", platform: "iOS" },
+      user: { aliasId: "a1" },
+      products: [],
+      params: { source: "onboarding" },
+    });
+    boot({ id: "v1:tp", route: "checkout", variables: "x" });
+    expect(readTeleportBoot()).not.toHaveProperty("variables");
+  });
+
   it("is nothing where there is no window", () => {
     vi.stubGlobal("window", undefined);
     expect(readTeleportBoot()).toBeUndefined();
     vi.unstubAllGlobals();
+  });
+});
+
+describe("hostVariablesOf", () => {
+  it("takes only an object, and leaves out a device that is not one", () => {
+    expect(hostVariablesOf(undefined)).toBeUndefined();
+    expect(hostVariablesOf(["x"])).toBeUndefined();
+    expect(hostVariablesOf(null)).toBeUndefined();
+    expect(hostVariablesOf({ deviceProperties: "x", user: { aliasId: "a1" } })).toEqual({
+      user: { aliasId: "a1" },
+    });
   });
 });
 

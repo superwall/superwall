@@ -21,6 +21,7 @@ import {
   type SuperwallProductInput,
 } from "../products";
 import { snapshotPatchFor } from "./incoming";
+import { recordFromVariables } from "./variables";
 import * as outgoing from "./outgoing";
 import { createPurchaseTracker } from "./purchases";
 import { createRestoreTracker } from "./restores";
@@ -119,6 +120,15 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
 
     for (const listener of listeners) listener();
   };
+
+  if (options.variables !== undefined) {
+    commit({
+      variables: options.variables,
+      device: recordFromVariables(options.variables, "device"),
+      user: recordFromVariables(options.variables, "user"),
+      params: recordFromVariables(options.variables, "params"),
+    });
+  }
 
   const post = (message: TOutgoingMessage) => {
     transport.postMessage(message);

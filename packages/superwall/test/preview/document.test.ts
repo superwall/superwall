@@ -4,6 +4,7 @@ import {
   injectPlatformLayer,
   PLATFORM_STYLESHEET_URL,
   renderDocument,
+  TELEPORT_BOOT_META,
   VIEWPORT_FIT_GUARD,
 } from "../../src/document";
 import { injectWebviewSimulation } from "../../src/preview/webview";
@@ -45,6 +46,14 @@ describe("renderDocument", () => {
     expect(html).toContain('<div id="root">');
     // Any <style> here would silently diverge preview from production.
     expect(html).not.toContain("<style");
+  });
+});
+
+describe("TELEPORT_BOOT_META", () => {
+  it("tells the teleport worker this paywall boots from the variables it injects", () => {
+    const html = doc();
+    expect(html).toContain(`<meta name="${TELEPORT_BOOT_META}" content="1" />`);
+    expect(html.indexOf(TELEPORT_BOOT_META)).toBeLessThan(html.indexOf("</head>"));
   });
 });
 

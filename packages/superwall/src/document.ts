@@ -40,6 +40,8 @@ export const PLATFORM_STYLESHEET_URL = "https://api.superwall.com/runtime/live.c
 
 export const ROUTE_ASSETS_ID = "sw-route-assets";
 
+export const TELEPORT_BOOT_META = "sw-teleport-boot";
+
 export const VIEWPORT_FIT_GUARD = `new MutationObserver((records) => records.forEach((record) => record.addedNodes.forEach((node) => { if (node.nodeName === "META" && node.name === "viewport" && !/viewport-fit/.test(node.content)) node.content += ", viewport-fit=cover"; }))).observe(document.head, { childList: true });`;
 
 export type DocumentOptions = {
@@ -61,6 +63,7 @@ export const renderDocument = ({ title, config, entry }: DocumentOptions): strin
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="${TELEPORT_BOOT_META}" content="1" />
     <script>${VIEWPORT_FIT_GUARD}</script>
     <title>${title}</title>
   </head>

@@ -150,6 +150,50 @@ describe("variables", () => {
   });
 });
 
+describe("variables known before the host speaks", () => {
+  const config: SuperwallConfig = {
+    localization: {
+      defaultLocale: "en",
+      messages: { en: { title: "Go Pro" }, de: { title: "Hol dir Pro" } },
+    },
+  };
+
+  it("open the session with that device, user, params and locale, without listening", () => {
+    const session = createSuperwallSession({
+      transport: new TestTransport(),
+      config,
+      variables: {
+        device: { deviceLocale: "de_DE", platform: "iOS" },
+        user: { aliasId: "a1" },
+        params: { source: "teleport" },
+      },
+    });
+
+    const snapshot = session.getSnapshot();
+    expect(snapshot.status).toBe("idle");
+    expect(snapshot.device).toEqual({ deviceLocale: "de_DE", platform: "iOS" });
+    expect(snapshot.user).toEqual({ aliasId: "a1" });
+    expect(snapshot.params).toEqual({ source: "teleport" });
+    expect(snapshot.locale).toBe("de");
+    expect(session.t("title")).toBe("Hol dir Pro");
+    expect(snapshot.state).toMatchObject({ user: { aliasId: "a1" } });
+  });
+
+  it("are not the host's answer, so a write before the host's first state still survives it", () => {
+    const transport = new TestTransport();
+    const session = createSuperwallSession({ transport, variables: { user: { aliasId: "a1" } } });
+    session.start();
+
+    session.setUserAttributes({ plan: "pro" });
+    transport.accept({
+      event_name: "template_variables",
+      variables: { user: { aliasId: "a1", plan: "stale" } },
+    });
+
+    expect(session.getSnapshot().user).toEqual({ aliasId: "a1", plan: "pro" });
+  });
+});
+
 describe("introductory offer", () => {
   it("derives eligibility from the substitutions prefix", () => {
     const { session, transport } = createSession();
