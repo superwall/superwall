@@ -37,7 +37,7 @@ import { loadSurfaceConfig } from "../config/load";
 import { localesOf } from "../config/messages";
 import type { PaywallDefinition } from "../config/paywall";
 import type { DiscoveredSurface, Project } from "../discover";
-import { renderDocument, withTeleportPages } from "../document";
+import { renderDocument, withModuleScriptsLast, withTeleportPages } from "../document";
 
 export * from "./assets";
 export * from "./products";
@@ -195,7 +195,9 @@ export const buildSnapshot = async (
         });
 
   const html = withTeleportPages(
-    injectRouteAssets(fs.readFileSync(path.join(outDir, "index.html"), "utf8"), collected.routes),
+    withModuleScriptsLast(
+      injectRouteAssets(fs.readFileSync(path.join(outDir, "index.html"), "utf8"), collected.routes),
+    ),
     prerendered.locales,
   );
   const htmlFile = path.join(outDir, "snapshot.html");

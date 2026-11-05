@@ -164,6 +164,13 @@ describe("pre-rendering the teleport route", () => {
     expect(html).not.toContain('data-sw-route="index"');
   });
 
+  it("puts #root ahead of the inline app script, so a page the worker puts there paints first", () => {
+    const root = built.html.indexOf('<div id="root">');
+    expect(root).toBeGreaterThan(0);
+    expect(root).toBeLessThan(built.html.indexOf('<script type="module"'));
+    expect(root).toBeGreaterThan(built.html.indexOf("<style"));
+  });
+
   it("tells the worker which locales have pages, default first", () => {
     expect(built.html).toContain(`<meta name="sw-teleport-pages" content="en de">`);
   });
