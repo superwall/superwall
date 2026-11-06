@@ -1,6 +1,6 @@
 {
   "name": "@superwall/protocol",
-  "version": "2.5.1",
+  "version": "2.6.0-beta.1",
   "description": "The Superwall SDK ↔ paywall message protocol: message schemas, transports, initialization params.",
   "keywords": [
     "paywall",
