@@ -145,6 +145,7 @@ async function updateSkillsWithInstalledCli(version: string): Promise<SkillsUpda
   const prefix: string[] = [];
   const { code } = await spawnStream({
     bin: "npm",
+    cmdShim: true,
     args: ["prefix", "--global"],
     cwd: process.cwd(),
     onStdoutLine: (line) => prefix.push(line.trim()),
@@ -158,6 +159,7 @@ async function updateSkillsWithInstalledCli(version: string): Promise<SkillsUpda
   const startedAt = Date.now();
   const result = await spawnStream({
     bin,
+    cmdShim: true,
     args: ["skills", "--force", "--yes"],
     cwd: tmpdir(),
     onStdoutLine: () => {},
@@ -200,6 +202,7 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
   const errors: string[] = [];
   const { code } = await spawnStream({
     bin: "npm",
+    cmdShim: true,
     args: ["install", "--global", `superwall@${latest}`],
     cwd: process.cwd(),
     onStdoutLine: () => {},

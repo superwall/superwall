@@ -280,6 +280,7 @@ async function runInstall(
   if (opts.dryRun) return { ok: true, command };
   const { code } = await spawnStream({
     bin: "npx",
+    cmdShim: true,
     args,
     cwd: process.cwd(),
     onStdoutLine: () => {},

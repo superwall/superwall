@@ -135,7 +135,7 @@ function onWindows(): () => string[] {
   delete process.env.ComSpec;
   delete process.env.COMSPEC;
   const dir = useBin({
-    "cmd.exe": `printf '%s\\n' "$*" >> "$(dirname "$0")/lines"; line="$4"; line="\${line#\\"}"; eval "\${line%\\"}"`,
+    "cmd.exe": `printf '%s\\n' "$*" >> "$(dirname "$0")/lines"; line="$4"; line="\${line#\\"}"; line="\${line%\\"}"; eval "$(printf '%s' "$line" | sed 's/\\^\\(.\\)/\\1/g; s/\\^\\(.\\)/\\1/g')"`,
   });
   Object.defineProperty(process, "platform", { value: "win32" });
   return () => fs.readFileSync(path.join(dir, "lines"), "utf8").trim().split("\n");
@@ -299,9 +299,9 @@ test("on Windows, the upgrade runs npm through cmd and syncs skills with superwa
   const result = await runCommand(upgrade, { json: true });
 
   assert.deepEqual(cmd(), [
-    '/d /s /c "npm install --global superwall@99.0.0"',
-    '/d /s /c "npm prefix --global"',
-    `/d /s /c "${install.prefix}/superwall.cmd skills --force --yes"`,
+    '/d /s /c "npm ^^^"install^^^" ^^^"--global^^^" ^^^"superwall@99.0.0^^^""',
+    '/d /s /c "npm ^^^"prefix^^^" ^^^"--global^^^""',
+    `/d /s /c "${install.prefix}/superwall.cmd ^^^"skills^^^" ^^^"--force^^^" ^^^"--yes^^^""`,
   ]);
   assert.equal(install.npmArgs(), "install --global superwall@99.0.0");
   assert.equal(install.cliArgs(), "skills --force --yes");

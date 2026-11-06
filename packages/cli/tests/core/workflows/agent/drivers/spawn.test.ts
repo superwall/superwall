@@ -5,7 +5,8 @@ import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import {
   onPath,
-  quoteForCmd,
+  escapeCmdCommand,
+  escapeCmdShimArgument,
   readVersion,
   spawnStream,
 } from "@/core/workflows/agent/drivers/spawn";
@@ -79,19 +80,28 @@ test("stdout and stderr stream line by line, skipping blank lines, with the exit
   assert.deepEqual(err, ["oops"]);
 });
 
-test("on Windows the command runs through cmd.exe with each argument quoted whole", async () => {
+function onWindows(): () => void {
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   const comspec = process.env.ComSpec;
   delete process.env.ComSpec;
   delete process.env.COMSPEC;
-  onlyBins({ "cmd.exe": `for a in "$@"; do printf '%s\\n' "[$a]"; done` });
   Object.defineProperty(process, "platform", { value: "win32" });
+  return () => {
+    if (platform) Object.defineProperty(process, "platform", platform);
+    if (comspec !== undefined) process.env.ComSpec = comspec;
+  };
+}
+
+test("on Windows a cmd shim runs through cmd.exe with every argument escaped", async () => {
+  onlyBins({ "cmd.exe": `for a in "$@"; do printf '%s\\n' "[$a]"; done` });
+  const restore = onWindows();
   const out: string[] = [];
   try {
     const { code } = await spawnStream({
       bin: "npx",
-      args: ["-y", "skills@latest", "add", "C:\\Users\\First Last\\skills", "--copy"],
+      args: ["-y", "C:\\Users\\First Last\\skills"],
       cwd: tempDir(),
+      cmdShim: true,
       onStdoutLine: (line) => out.push(line),
     });
 
@@ -100,27 +110,47 @@ test("on Windows the command runs through cmd.exe with each argument quoted whol
       "[/d]",
       "[/s]",
       "[/c]",
-      '["npx -y skills@latest add "C:\\Users\\First Last\\skills" --copy"]',
+      '["npx ^^^"-y^^^" ^^^"C:\\Users\\First^^^ Last\\skills^^^""]',
     ]);
   } finally {
-    if (platform) Object.defineProperty(process, "platform", platform);
-    if (comspec !== undefined) process.env.ComSpec = comspec;
+    restore();
   }
 });
 
-test("an argument is quoted for cmd only when it needs it", () => {
-  assert.equal(quoteForCmd("--global"), "--global");
-  assert.equal(quoteForCmd("skills@latest"), "skills@latest");
-  assert.equal(quoteForCmd("C:\\Users\\me\\skills"), "C:\\Users\\me\\skills");
+test("on Windows a native binary still starts directly, without cmd.exe", async () => {
+  onlyBins({ "cmd.exe": "echo via-cmd", fake: 'printf "%s\\n" "$1"' });
+  const restore = onWindows();
+  const out: string[] = [];
+  try {
+    const prompt = 'line one\nsay "hi" & exit';
+    const { code } = await spawnStream({
+      bin: "fake",
+      args: [prompt],
+      cwd: tempDir(),
+      onStdoutLine: (line) => out.push(line),
+    });
+
+    assert.equal(code, 0);
+    assert.deepEqual(out, ["line one", 'say "hi" & exit']);
+  } finally {
+    restore();
+  }
+});
+
+test("cmd metacharacters are caret-escaped twice so neither cmd nor the shim can split an argument", () => {
+  assert.equal(escapeCmdShimArgument("--global"), '^^^"--global^^^"');
+  assert.equal(escapeCmdShimArgument(""), '^^^"^^^"');
   assert.equal(
-    quoteForCmd("C:\\Program Files\\nodejs\\npx.cmd"),
-    '"C:\\Program Files\\nodejs\\npx.cmd"',
+    escapeCmdShimArgument('touch "main & run'),
+    '^^^"touch^^^ \\^^^"main^^^ ^^^&^^^ run^^^"',
   );
-  assert.equal(quoteForCmd("a&b|c<d>e^(f)"), '"a&b|c<d>e^(f)"');
-  assert.equal(quoteForCmd(""), '""');
-  assert.equal(quoteForCmd('say "hi"'), '"say \\"hi\\""');
-  assert.equal(quoteForCmd('C:\\dir\\"x'), '"C:\\dir\\\\\\"x"');
-  assert.equal(quoteForCmd("C:\\First Last\\"), '"C:\\First Last\\\\"');
+  assert.equal(escapeCmdShimArgument("100%PATH%"), '^^^"100^^^%PATH^^^%^^^"');
+  assert.equal(escapeCmdShimArgument("C:\\dir\\"), '^^^"C:\\dir\\\\^^^"');
+  assert.equal(escapeCmdShimArgument('C:\\dir\\"x'), '^^^"C:\\dir\\\\\\^^^"x^^^"');
+  assert.equal(
+    escapeCmdCommand("C:\\Program Files\\nodejs\\superwall.cmd"),
+    "C:\\Program^ Files\\nodejs\\superwall.cmd",
+  );
 });
 
 test("arguments reach the binary, and stderr is ignored without a listener", async () => {
