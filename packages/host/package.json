@@ -1,6 +1,6 @@
 {
   "name": "@superwall/host",
-  "version": "2.6.0-beta.1",
+  "version": "2.6.0-beta.2",
   "description": "A Superwall paywall host for browsers and tests: answers the paywall's ping the way the SDKs do and replies to its events with the SDK's messages.",
   "keywords": [
     "host",
