@@ -132,8 +132,9 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   the sheet's `@property` rules at document level, where browsers expect them.
 - `@superwall/studio/products` is the pure mapping from a dashboard product
   (the v2 API shape) to the variables a paywall reads (`price`, `periodly`,
-  `trialPeriodDays`, …). The CLI and the hosted studio share it, so the
-  Variables panel shows the same numbers in both.
+  `trialPeriodDays`, `trialPeriodPrice`, …), with amounts in the currency's
+  own minor units. `superwall dev` uses it; the dashboard builds its samples
+  with its own pricing engine, so the two must be kept in step by hand.
 - `@superwall/studio/contract` is a types-only entry: the action, status,
   samples and app-scheme shapes the CLI implements for the framework's
   preview server, importable from node without DOM types.

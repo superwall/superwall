@@ -38,8 +38,6 @@ const SYMBOLS: Record<string, string> = {
   ZAR: "R",
 };
 
-const MINOR = 100;
-
 const PER_YEAR: Record<string, number> = { day: 365, week: 52, month: 12, year: 1 };
 
 const symbolFor = (currency: string): string => SYMBOLS[currency.toUpperCase()] ?? "";
@@ -50,6 +48,44 @@ const money = (amount: number, currency: string): string => {
   } catch {
     return `${symbolFor(currency)}${amount.toFixed(2)}`;
   }
+};
+
+const fractionDigits = (currency: string): number => {
+  try {
+    const parts = new Intl.NumberFormat("en-US", { style: "currency", currency }).formatToParts(0);
+    return parts.find((part) => part.type === "fraction")?.value.length ?? 0;
+  } catch {
+    return 2;
+  }
+};
+
+const majorUnits = (amount: number, currency: string): number =>
+  amount / 10 ** fractionDigits(currency);
+
+const trialVariables = (
+  product: DashboardProduct,
+  currency: string,
+  days: number,
+): Record<string, unknown> | undefined => {
+  const trialPrice = product.trial_price;
+  const amount = trialPrice?.amount ?? 0;
+  if (amount !== 0 && trialPrice?.currency?.toUpperCase() !== currency) return undefined;
+
+  const raw = majorUnits(amount, currency);
+  const yearly = (raw * 365) / days;
+  return {
+    trialPeriodDays: days,
+    trialPeriodWeeks: Math.floor(days / 7),
+    trialPeriodMonths: Math.floor(days / 30),
+    trialPeriodYears: Math.floor(days / 365),
+    trialPeriodText: `${days}-day`,
+    rawTrialPeriodPrice: raw,
+    trialPeriodPrice: money(raw, currency),
+    trialPeriodDailyPrice: money(raw / days, currency),
+    trialPeriodWeeklyPrice: money(yearly / 52, currency),
+    trialPeriodMonthlyPrice: money(yearly / 12, currency),
+    trialPeriodYearlyPrice: money(yearly, currency),
+  };
 };
 
 const PERIODLY: Record<string, string> = {
@@ -95,7 +131,7 @@ export const productVariables = (product: DashboardProduct): Record<string, unkn
   if (!price || typeof price.amount !== "number" || !price.currency) return variables;
 
   const currency = price.currency.toUpperCase();
-  const value = price.amount / MINOR;
+  const value = majorUnits(price.amount, currency);
   variables.price = money(value, currency);
   variables.rawPrice = value;
   variables.currencyCode = currency;
@@ -116,8 +152,7 @@ export const productVariables = (product: DashboardProduct): Record<string, unkn
 
   const trialDays = product.subscription?.trial_period_days;
   if (typeof trialDays === "number" && trialDays > 0) {
-    variables.trialPeriodDays = trialDays;
-    variables.trialPeriodText = `${trialDays}-day`;
+    Object.assign(variables, trialVariables(product, currency, trialDays) ?? {});
   }
 
   return variables;
