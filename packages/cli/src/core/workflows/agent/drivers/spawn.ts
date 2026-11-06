@@ -53,13 +53,25 @@ interface SpawnStreamResult {
   code: number | null;
 }
 
+export function quoteForCmd(arg: string): string {
+  if (/^[\w\-.:\\/@=+,]+$/.test(arg)) return arg;
+  const escaped = arg
+    .replace(/(\\*)"/g, (_, slashes: string) => `${slashes}${slashes}\\"`)
+    .replace(/(\\+)$/, "$1$1");
+  return `"${escaped}"`;
+}
+
 export function spawnStream(opts: SpawnStreamOptions): Promise<SpawnStreamResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(opts.bin, opts.args, {
+    const options = {
       cwd: opts.cwd,
       signal: opts.signal,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+      stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"],
+    };
+    const child =
+      process.platform === "win32"
+        ? spawn([opts.bin, ...opts.args].map(quoteForCmd).join(" "), { ...options, shell: true })
+        : spawn(opts.bin, opts.args, options);
 
     const out = createInterface({ input: child.stdout });
     out.on("line", (line) => {

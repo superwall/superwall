@@ -3,7 +3,12 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
-import { onPath, readVersion, spawnStream } from "@/core/workflows/agent/drivers/spawn";
+import {
+  onPath,
+  quoteForCmd,
+  readVersion,
+  spawnStream,
+} from "@/core/workflows/agent/drivers/spawn";
 import { restoreBin, useBin } from "../../../../helpers/bin";
 
 const dirs: string[] = [];
@@ -74,6 +79,50 @@ test("stdout and stderr stream line by line, skipping blank lines, with the exit
   assert.deepEqual(err, ["oops"]);
 });
 
+test("on Windows the command runs through cmd.exe with each argument quoted whole", async () => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  const comspec = process.env.ComSpec;
+  delete process.env.ComSpec;
+  delete process.env.COMSPEC;
+  onlyBins({ "cmd.exe": `for a in "$@"; do printf '%s\\n' "[$a]"; done` });
+  Object.defineProperty(process, "platform", { value: "win32" });
+  const out: string[] = [];
+  try {
+    const { code } = await spawnStream({
+      bin: "npx",
+      args: ["-y", "skills@latest", "add", "C:\\Users\\First Last\\skills", "--copy"],
+      cwd: tempDir(),
+      onStdoutLine: (line) => out.push(line),
+    });
+
+    assert.equal(code, 0);
+    assert.deepEqual(out, [
+      "[/d]",
+      "[/s]",
+      "[/c]",
+      '["npx -y skills@latest add "C:\\Users\\First Last\\skills" --copy"]',
+    ]);
+  } finally {
+    if (platform) Object.defineProperty(process, "platform", platform);
+    if (comspec !== undefined) process.env.ComSpec = comspec;
+  }
+});
+
+test("an argument is quoted for cmd only when it needs it", () => {
+  assert.equal(quoteForCmd("--global"), "--global");
+  assert.equal(quoteForCmd("skills@latest"), "skills@latest");
+  assert.equal(quoteForCmd("C:\\Users\\me\\skills"), "C:\\Users\\me\\skills");
+  assert.equal(
+    quoteForCmd("C:\\Program Files\\nodejs\\npx.cmd"),
+    '"C:\\Program Files\\nodejs\\npx.cmd"',
+  );
+  assert.equal(quoteForCmd("a&b|c<d>e^(f)"), '"a&b|c<d>e^(f)"');
+  assert.equal(quoteForCmd(""), '""');
+  assert.equal(quoteForCmd('say "hi"'), '"say \\"hi\\""');
+  assert.equal(quoteForCmd('C:\\dir\\"x'), '"C:\\dir\\\\\\"x"');
+  assert.equal(quoteForCmd("C:\\First Last\\"), '"C:\\First Last\\\\"');
+});
+
 test("arguments reach the binary, and stderr is ignored without a listener", async () => {
   onlyBins({ fake: 'echo "$1|$2"; echo "noise" >&2' });
   const out: string[] = [];
@@ -104,7 +153,12 @@ test("an unwritable transcript never interrupts the run", async () => {
   onlyBins({ fake: 'echo "line"' });
   const out: string[] = [];
 
-  const { code } = await spawnStream({ bin: "fake", args: [], cwd: tempDir(), onStdoutLine: (line) => out.push(line) });
+  const { code } = await spawnStream({
+    bin: "fake",
+    args: [],
+    cwd: tempDir(),
+    onStdoutLine: (line) => out.push(line),
+  });
 
   assert.equal(code, 0);
   assert.deepEqual(out, ["line"]);
