@@ -1,6 +1,0 @@
-{
-  // A workspace has an entry point and a compatibility date, and no bindings: it reaches everything through fetch.
-  "name": "superwall-workspace-starter",
-  "main": "src/worker.ts",
-  "compatibility_date": "2026-09-01",
-}

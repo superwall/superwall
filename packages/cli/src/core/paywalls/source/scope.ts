@@ -13,8 +13,8 @@ export interface SurfaceScope {
   id: string;
 }
 
-export interface WorkspaceScope {
-  kind: "workspace";
+export interface ArtifactScope {
+  kind: "artifact";
   id: string;
 }
 
@@ -22,20 +22,20 @@ export interface ProjectScope {
   kind: "project";
 }
 
-export type SourceScope = SurfaceScope | WorkspaceScope | ProjectScope;
+export type SourceScope = SurfaceScope | ArtifactScope | ProjectScope;
 
 export type PathClass = "own" | "other" | "shared" | "derived";
 
 export const LOCK_FILE = "superwall.lock";
 
-export const WORKSPACE_FILE = "superwall.workspace.json";
+export const ARTIFACT_FILE = "superwall.artifact.json";
 
 export const DERIVED_FILES: ReadonlySet<string> = new Set([LOCK_FILE, TYPES_FILE]);
 
-export const WORKSPACE_DERIVED_FILES: ReadonlySet<string> = new Set([WORKSPACE_FILE]);
+export const ARTIFACT_DERIVED_FILES: ReadonlySet<string> = new Set([ARTIFACT_FILE]);
 
 export const derivedFilesOf = (scope: SourceScope): ReadonlySet<string> =>
-  scope.kind === "workspace" ? WORKSPACE_DERIVED_FILES : DERIVED_FILES;
+  scope.kind === "artifact" ? ARTIFACT_DERIVED_FILES : DERIVED_FILES;
 
 const SURFACE_DIRS: Readonly<Record<string, SurfaceKind>> = {
   paywalls: "paywall",
@@ -51,7 +51,7 @@ export function surfaceOf(relative: string): SurfaceScope | undefined {
 
 export function classifyPath(relative: string, scope: SourceScope): PathClass {
   if (derivedFilesOf(scope).has(relative)) return "derived";
-  if (scope.kind === "workspace") return "own";
+  if (scope.kind === "artifact") return "own";
   const surface = surfaceOf(relative);
   if (!surface) return "shared";
   if (scope.kind === "project") return "other";
@@ -59,10 +59,10 @@ export function classifyPath(relative: string, scope: SourceScope): PathClass {
 }
 
 export const isSurfaceRoot = (top: string, scope?: SourceScope): boolean =>
-  scope?.kind !== "workspace" && SURFACE_DIRS[top] !== undefined;
+  scope?.kind !== "artifact" && SURFACE_DIRS[top] !== undefined;
 
 export const isOtherSurfaceDir = (top: string, child: string, scope: SourceScope): boolean => {
-  if (scope.kind === "workspace") return false;
+  if (scope.kind === "artifact") return false;
   const kind = SURFACE_DIRS[top];
   if (kind === undefined) return false;
   return scope.kind === "project" || !(kind === scope.kind && child === scope.id);

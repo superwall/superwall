@@ -195,13 +195,13 @@ test("only paywalls and funnels are surface roots", () => {
   assert.equal(isSurfaceRoot("components"), false);
 });
 
-test("a workspace owns everything in its repo, whatever a directory is called", () => {
-  const scope = { kind: "workspace", id: "churn" } as const;
+test("an artifact owns everything in its repo, whatever a directory is called", () => {
+  const scope = { kind: "artifact", id: "churn" } as const;
   assert.equal(classifyPath("paywalls/x/app/index.tsx", scope), "own");
   assert.equal(classifyPath("superwall.lock", scope), "own");
   assert.equal(classifyPath("superwall.d.ts", scope), "own");
   assert.equal(classifyPath("src/worker.ts", scope), "own");
-  assert.equal(classifyPath("superwall.workspace.json", scope), "derived");
+  assert.equal(classifyPath("superwall.artifact.json", scope), "derived");
   assert.equal(isSurfaceRoot("paywalls", scope), false);
   assert.equal(isSurfaceRoot("paywalls"), true);
   assert.equal(isOtherSurfaceDir("paywalls", "x", scope), false);

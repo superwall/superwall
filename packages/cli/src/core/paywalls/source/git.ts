@@ -158,7 +158,7 @@ export function materializeSourceTree(
   for (const file of files) {
     if (classifyPath(file.path, scope) === "other") continue;
     if (file.content.byteLength > LARGE_FILE_BYTES) large.push(file.path);
-    if (file.path === LOCK_FILE && scope.kind !== "workspace") {
+    if (file.path === LOCK_FILE && scope.kind !== "artifact") {
       write(
         file.path,
         mergeLockText(
@@ -178,7 +178,7 @@ export function materializeSourceTree(
   if (large.length > 0) {
     ui.warn(
       `Committing ${large.length > 1 ? `${large.length} files` : large[0]} over 50 MB — ` +
-        `every future clone of this ${scope.kind === "workspace" ? "workspace's" : "app's"} source repo pays for it.`,
+        `every future clone of this ${scope.kind === "artifact" ? "artifact's" : "app's"} source repo pays for it.`,
     );
   }
 }
@@ -200,9 +200,9 @@ export class SourceConflictError extends Error {
     kind: SourceScope["kind"] = "paywall",
   ) {
     super(
-      kind === "workspace"
+      kind === "artifact"
         ? `Someone else pushed changes to ${listFiles(files)} since this project last synced. ` +
-            "Run `superwall workspaces pull` to bring their changes into this project, then push again, or rerun with --overwrite-source to replace this workspace's source with yours."
+            "Run `superwall artifacts pull` to bring their changes into this project, then push again, or rerun with --overwrite-source to replace this artifact's source with yours."
         : `Someone else published changes to ${listFiles(files)} since this project last synced. ` +
             "Run `superwall pull` to bring their changes into this project, then publish again — or rerun with --overwrite-source to replace " +
             `${replaced(kind)} with yours.`,
@@ -216,9 +216,9 @@ export class SourceDivergedError extends Error {
     kind: SourceScope["kind"] = "paywall",
   ) {
     super(
-      kind === "workspace"
+      kind === "artifact"
         ? `The source repo differs from this project in ${listFiles(files)}, and this project records no sync point to merge from. ` +
-            "Run `superwall workspaces pull` to merge the source repo into this project, then push again, or rerun with --overwrite-source to replace this workspace's source with yours."
+            "Run `superwall artifacts pull` to merge the source repo into this project, then push again, or rerun with --overwrite-source to replace this artifact's source with yours."
         : `The source repo differs from this project in ${listFiles(files)}, and superwall.lock records no sync point to merge from. ` +
             "Run `superwall pull` to merge the source repo into this project, then publish again — or rerun with --overwrite-source to replace " +
             `${replaced(kind)} with yours.`,
@@ -326,7 +326,7 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     const unsynced = onRemote && scope.kind === "project";
 
     materializeSourceTree(dir, input.files, scope, {
-      onRemote: onRemote && scope.kind !== "workspace",
+      onRemote: onRemote && scope.kind !== "artifact",
       overwrite: input.overwrite,
     });
 
@@ -524,7 +524,7 @@ async function mergeUpstream(
       (text) => text,
       () => undefined,
     );
-  if (scope.kind !== "workspace") {
+  if (scope.kind !== "artifact") {
     const theirsLock = await show(upstream, LOCK_FILE);
     const mineLock = await show(own, LOCK_FILE);
     const lock = mineLock === undefined ? theirsLock : mergeLockText(theirsLock, mineLock, scope);
