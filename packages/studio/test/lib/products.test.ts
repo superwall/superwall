@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { productVariables } from "../../src/lib/products";
 
 const trialKeys = (variables: Record<string, unknown>) =>
@@ -187,15 +187,6 @@ describe("productVariables", () => {
   });
 
   describe("a trial", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date("2026-11-06T12:00:00Z"));
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
     const annual = {
       identifier: "annual",
       price: { amount: 5999, currency: "USD" },
@@ -208,13 +199,13 @@ describe("productVariables", () => {
         subscription: { period: "year", period_count: 1, trial_period_days: 7 },
       });
 
+      expect(variables).not.toHaveProperty("trialPeriodEndDate");
       expect(variables).toMatchObject({
         trialPeriodDays: 7,
         trialPeriodWeeks: 1,
         trialPeriodMonths: 0,
         trialPeriodYears: 0,
         trialPeriodText: "7-day",
-        trialPeriodEndDate: "November 13, 2026",
         rawTrialPeriodPrice: 0,
         trialPeriodPrice: "$0.00",
         trialPeriodDailyPrice: "$0.00",
@@ -242,7 +233,6 @@ describe("productVariables", () => {
           trialPeriodMonths: 1,
           rawTrialPeriodPrice: 0,
           trialPeriodPrice: "$0.00",
-          trialPeriodEndDate: "December 6, 2026",
         });
       }
     });

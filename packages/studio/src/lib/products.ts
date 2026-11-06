@@ -62,13 +62,6 @@ const fractionDigits = (currency: string): number => {
 const majorUnits = (amount: number, currency: string): number =>
   amount / 10 ** fractionDigits(currency);
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const endDate = (days: number): string =>
-  new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
-    new Date(Date.now() + days * DAY_MS),
-  );
-
 const trialVariables = (
   product: DashboardProduct,
   currency: string,
@@ -86,7 +79,6 @@ const trialVariables = (
     trialPeriodMonths: Math.floor(days / 30),
     trialPeriodYears: Math.floor(days / 365),
     trialPeriodText: `${days}-day`,
-    trialPeriodEndDate: endDate(days),
     rawTrialPeriodPrice: raw,
     trialPeriodPrice: money(raw, currency),
     trialPeriodDailyPrice: money(raw / days, currency),
