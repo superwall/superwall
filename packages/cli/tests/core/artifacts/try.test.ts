@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { ApiError } from "@/core/api/client";
+import { afterEach, test } from "node:test";
+import { ApiError, ApiUnreachableError, createSuperwallApi } from "@/core/api/client";
 import { dashboardOrigin } from "@/core/artifacts/resolve";
 import { runArtifactTry, type TryInput } from "@/core/artifacts/try";
 import { DRAFT_MODULE_MAX_BYTES } from "@/core/artifacts/wire";
@@ -217,4 +217,56 @@ test("--filter is checked before anything is uploaded", async () => {
   const { ctx, posts } = context();
   await assert.rejects(runArtifactTry(ctx, input(project(), { filter: ["nope"] }), { wrangler: fakeWrangler() }), /takes key=value/);
   assert.deepEqual(posts, []);
+});
+
+const realFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
+
+// The draft id is the sha256 of the manifest and module, so sending the same draft twice stores it once.
+const dropped = (code: string) => Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(`write ${code}`), { code }) });
+
+function realApiContext(answers: Record<string, unknown[]>) {
+  const sent: string[] = [];
+  globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+    const url = new URL(String(input));
+    if (url.host !== "api.superwall.com") return new Response("", { status: 404 });
+    sent.push(`${init.method} ${url.pathname}`);
+    const next = answers[url.pathname]?.shift();
+    if (next instanceof Error) throw next;
+    return new Response(JSON.stringify(next ?? {}), { status: 200 });
+  }) as typeof fetch;
+  const { ctx, calls } = context();
+  (ctx as any).api = createSuperwallApi({ authMethod: "api_key", apiKey: "sk_test", host: "https://api.superwall.com", createdAt: "now" });
+  return { ctx, calls, sent };
+}
+
+test("an upload whose connection drops is sent again, and the run goes on", async () => {
+  const { ctx, calls, sent } = realApiContext({
+    "/v2/artifacts/drafts": [dropped("EPIPE"), dropped("ECONNRESET"), DRAFT],
+    [`/v2/artifacts/drafts/${DRAFT.id}/metric`]: [{ series: SERIES }],
+  });
+  await runArtifactTry(ctx, input(project()), { wrangler: fakeWrangler("MODULE") });
+  assert.deepEqual(sent, ["POST /v2/artifacts/drafts", "POST /v2/artifacts/drafts", "POST /v2/artifacts/drafts", `POST /v2/artifacts/drafts/${DRAFT.id}/metric`]);
+  assert.match(String(calls.find((call) => call.method === "success")?.value), /real runtime, as you/);
+});
+
+test("an upload that keeps dropping stops after three attempts and says why", async () => {
+  const { ctx, sent } = realApiContext({ "/v2/artifacts/drafts": [dropped("EPIPE"), dropped("EPIPE"), dropped("EPIPE"), DRAFT] });
+  await assert.rejects(runArtifactTry(ctx, input(project()), { wrangler: fakeWrangler("MODULE") }), (error: Error) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.match(error.message, /^Lost the connection while sending to the Superwall API at https:\/\/api\.superwall\.com \(EPIPE\)\./);
+    return true;
+  });
+  assert.equal(sent.length, 3);
+});
+
+test("running the metric isn't sent twice, and a dropped one says so", async () => {
+  const { ctx, sent } = realApiContext({
+    "/v2/artifacts/drafts": [DRAFT],
+    [`/v2/artifacts/drafts/${DRAFT.id}/metric`]: [dropped("ECONNRESET"), { series: SERIES }],
+  });
+  await assert.rejects(runArtifactTry(ctx, input(project()), { wrangler: fakeWrangler("MODULE") }), ApiUnreachableError);
+  assert.equal(sent.filter((call) => call.endsWith("/metric")).length, 1);
 });

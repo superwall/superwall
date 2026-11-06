@@ -127,8 +127,16 @@ skill.
   endpoints (analytics, App Store Connect, Search Ads) take the organization of
   the app the command is about (`api.forOrg`), so nobody selects one.
   Organizations opened by id or link aren't memberships, so the CLI remembers
-  them in its config and lists them, marked not a member. Only GETs are retried:
-  a write that timed out may already have landed. The API reference is cached
+  them in its config and lists them, marked not a member. Only GETs are retried
+  on a busy answer: a write that timed out may already have landed. A write that
+  is safe to repeat passes `idempotent: true`, and only then is a connection that
+  dropped mid-request (EPIPE, ECONNRESET, `UND_ERR_SOCKET`) sent again, three
+  attempts in all; an HTTP answer, a 4xx included, is never retried, and neither
+  is a connection that never opened. `ApiUnreachableError` names the socket's code
+  (`fetchFailureOf` digs it out of Node's `cause`, an AggregateError, or Bun's
+  error) and says "Lost the connection" for a drop, keeping the network hint for
+  DNS and connect failures. `api get|post|…` adds no reference hint to a typed 404
+  (`resource_missing`): the path is right and only the thing is gone. The API reference is cached
   for a day and a stale copy still answers offline. A browser login reaches
   every organization and stores no organization name; an API key belongs to one
   and stores its name. `feedback` posts to `/v2/feedback`, which merges a
@@ -371,7 +379,9 @@ as the viewer. The platform itself lives in a private repo.
   API-key login can't mint one.
 - **`try` is the real runtime.** A metric prints its series; a frame uploads and opens
   `/<org>/artifact-drafts/<draft>` on the dashboard (`SUPERWALL_DASHBOARD_ORIGIN`
-  overrides the host, which otherwise follows the API's stage). Readouts aren't there
+  overrides the host, which otherwise follows the API's stage). The upload is `idempotent`: a draft's
+  id is the sha256 of its manifest and module, and storing it again overwrites the same draft, so a
+  dropped upload is sent again. The metric run on it isn't. Readouts aren't there
   yet: `tryReadout` is the seam and says to use `dev`. A 400 is the author's own code
   or manifest, so it's shown bare, with no API hint.
 - **Two loaded isolates, one bundle.** A frame with an app in its context gets its own
@@ -433,7 +443,10 @@ as the viewer. The platform itself lives in a private repo.
   through `visibilityOf`. `openLink` prints what opens something: `/artifacts/<slug>` for an `org.page`, which is the
   only slot that page opens, else the app route for an `app.page`, the app's `/embeds` for widgets, tabs, panels and
   actions, or `/charts?cS=artifacts` for metrics. An author keeps a copy marked "Not installed" until an entrypoint
-  has any install row, so `awaitingInstall` is why an approved version isn't called live.
+  has any install row, so `awaitingInstall` is why an approved version isn't called live. `installHints` is the
+  per-entrypoint half: `push` and `approve` print one line for each entrypoint (every slot but `org.page@1`) with
+  no installation row, naming where it won't show and the `install` command (with the app id when the organization
+  has one app), and carry them as `not_installed` in `--json`. Installations that can't be read claim nothing.
 - **Reading a build settles it,** so `push` polls until it finishes (20 minutes, riding out a
   few 5xx), and `status` reads an unfinished latest version. A build that fails or outlasts the
   wait fails the command. `--json` carries the outcome either way.

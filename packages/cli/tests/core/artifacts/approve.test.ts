@@ -3,7 +3,17 @@ import { test } from "node:test";
 import { ApiError } from "@/core/api/client";
 import { diffSides, runArtifactApprove, sideOf, type ApproveInput } from "@/core/artifacts/approve";
 import type { Artifact, ArtifactVersion } from "@/core/artifacts/api";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { writeBinding } from "@/core/artifacts/binding";
 import { fakeContext } from "./fake-api";
+
+const bound = (): string => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "artifact-approve-"));
+  writeBinding(root, { artifactId: "42", organizationId: "7", slug: "churn" });
+  return root;
+};
 
 const entrypoint = { id: "home", slot: "org.page@1", title: "Home", path: "/" };
 const manifest = (overrides: Record<string, unknown> = {}) => ({
@@ -165,6 +175,55 @@ test("approving something with nothing installed says only its author can see it
   const { ctx, said } = setup([version(2, { manifest: metricOnly as never })], { interactive: true, mode: "rich", confirm: true }, null);
   await runArtifactApprove(ctx, input());
   assert.match(said("success").join(), /Nothing is installed yet, so only its author can see it until you choose where it shows/);
+});
+
+test("approving a metric that isn't installed says Charts won't show it, and how to install it", async () => {
+  const charted = manifest({
+    entrypoints: [
+      entrypoint,
+      { id: "transactions", slot: "chart.source@1", title: "Transactions", metric: {} },
+      { id: "card", slot: "app.dashboard.widget@1", title: "Card", path: "/card" },
+      { id: "custom", slot: "future.slot@9", title: "", path: "/x" },
+    ],
+  });
+  const installed = [{ entrypoint_id: "card", slot: "app.dashboard.widget@1", application_id: 5, enabled: true, position: 0 }];
+  const run = (projects: unknown[], json = false, ref: Partial<ApproveInput> = {}) => {
+    const { ctx, said, data, posts } = setup([version(2, { manifest: charted as never })], { interactive: !json, mode: json ? "json" : "rich", confirm: true, json }, null);
+    const api = (ctx as any).api;
+    const get = api.get;
+    api.get = async (path: string) => (path.endsWith("/installations") ? { data: installed } : get(path));
+    api.list = async () => projects;
+    return runArtifactApprove(ctx, input({ yes: true, acceptChanges: true, ...ref })).then(() => ({ said, data, posts }));
+  };
+
+  const oneApp = await run([{ id: 1, applications: [{ id: 5, name: "Fit" }] }]);
+  assert.deepEqual(oneApp.said("info"), [
+    'Charts won\'t show "Transactions" until you install it: superwall artifacts install transactions --app 5 --artifact 42',
+    '"custom" won\'t show until you install it: superwall artifacts install custom --app 5 --artifact 42',
+  ]);
+
+  const inProject = await run([{ id: 1, applications: [{ id: 5 }, { id: 6 }] }], false, { artifact: undefined, dir: bound() });
+  assert.match(inProject.said("info")[0]!, /: superwall artifacts install transactions --app <app-id>$/);
+
+  const json = await run([], true);
+  const [answer] = json.data as [{ not_installed: unknown[] }];
+  assert.deepEqual(answer.not_installed, [
+    { entrypoint_id: "transactions", slot: "chart.source@1", command: "superwall artifacts install transactions --app <app-id> --artifact 42" },
+    { entrypoint_id: "custom", slot: "future.slot@9", command: "superwall artifacts install custom --app <app-id> --artifact 42" },
+  ]);
+});
+
+test("installations that can't be read claim nothing", async () => {
+  const metricOnly = manifest({ entrypoints: [{ id: "count", slot: "chart.source@1", title: "C", metric: {} }] });
+  const { ctx, said } = setup([version(2, { manifest: metricOnly as never })], { interactive: true, mode: "rich", confirm: true }, null);
+  const api = (ctx as any).api;
+  const get = api.get;
+  api.get = async (path: string) => {
+    if (path.endsWith("/installations")) throw new Error("down");
+    return get(path);
+  };
+  await runArtifactApprove(ctx, input());
+  assert.deepEqual(said("info"), ["Choose where it shows with `superwall artifacts install <entrypoint> --artifact 42`."]);
 });
 
 test("a yes in a terminal approves, and points at install", async () => {

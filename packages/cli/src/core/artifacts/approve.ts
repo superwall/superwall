@@ -2,7 +2,15 @@ import { ApiError } from "@/core/api/client";
 import type { CommandContext } from "@/program/command";
 import { approveVersion, type ArtifactVersion } from "./api";
 import { ArtifactError, type Manifest } from "./project";
-import { awaitingInstall, roleCanApprove, pickVersion, resolveArtifact, type ArtifactRef } from "./resolve";
+import {
+  awaitingInstall,
+  installHints,
+  notInstalledOf,
+  roleCanApprove,
+  pickVersion,
+  resolveArtifact,
+  type ArtifactRef,
+} from "./resolve";
 
 export interface ApproveInput extends ArtifactRef {
   version?: string;
@@ -240,8 +248,9 @@ export async function runArtifactApprove(ctx: CommandContext<"required">, input:
     refuse("forbidden", error.message);
     return;
   }
+  const hints = await installHints(ctx.api, artifact, version.manifest, { artifactFlag: input.artifact !== undefined });
   if (ctx.json) {
-    ctx.output.data({ approved: true, ...details, version: approved });
+    ctx.output.data({ approved: true, ...details, version: approved, not_installed: hints.map(notInstalledOf) });
     return;
   }
   ctx.ui.success(
@@ -249,5 +258,8 @@ export async function runArtifactApprove(ctx: CommandContext<"required">, input:
       ? `Approved version ${version.id}. Nothing is installed yet, so only its author can see it until you choose where it shows.`
       : `Approved version ${version.id}. It's live for everyone it's installed for.`,
   );
-  ctx.ui.info(`Choose where it shows with \`superwall artifacts install <entrypoint> --artifact ${artifact.id}\`.`);
+  if (hints.length === 0) {
+    ctx.ui.info(`Choose where it shows with \`superwall artifacts install <entrypoint> --artifact ${artifact.id}\`.`);
+  }
+  for (const hint of hints) ctx.ui.info(hint.sentence);
 }
