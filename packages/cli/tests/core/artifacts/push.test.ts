@@ -242,6 +242,22 @@ function appOnlyProject(): string {
   return root;
 }
 
+test("a push names each entrypoint that won't show until it's installed", { skip }, async () => {
+  const projects = [{ id: 1, applications: [{ id: 42, name: "Pets" }] }];
+  const run = setup({ projects, installations: [{ entrypoint_id: "panel", slot: "user.panel@1", application_id: 42, enabled: true, position: 0 }] });
+  await runArtifactPush(run.ctx, input(project()), noWait);
+  const info = run.said("info");
+  const hint = 'Charts won\'t show "Count" until you install it: superwall artifacts install count --app 42';
+  assert.ok(info.includes(hint), info.join("\n"));
+  assert.ok(info.indexOf(hint) < info.findIndex((line) => line.includes("artifacts share")));
+  assert.ok(!info.some((line) => /install (home|panel)/.test(line)), "an org page needs no install, and the panel has one");
+
+  const json = setup({ projects, installations: [] });
+  const quiet = fakeContext(json.api, { json: true });
+  await runArtifactPush(quiet.ctx, input(project()), noWait);
+  assert.deepEqual((quiet.data[0] as { not_installed: { entrypoint_id: string }[] }).not_installed.map((row) => row.entrypoint_id), ["panel", "count", "lift"]);
+});
+
 test("an app-only artifact prints the app route, which opens something", { skip }, async () => {
   const projects = [{ id: 1, applications: [{ id: 42, name: "Pets" }, { id: 43, name: "Cats" }] }];
   const run = setup({ projects, manifest: APP_ONLY as never });
@@ -704,7 +720,7 @@ test("--json carries the outcome either way", { skip }, async () => {
   await runArtifactPush(good.ctx, input(root), noWait);
   assert.deepEqual(
     Object.keys(good.data[0] as object),
-    ["artifact_id", "slug", "version_id", "commit_sha", "source", "status", "step", "failure", "steps", "merged_commits", "url", "visible_to"],
+    ["artifact_id", "slug", "version_id", "commit_sha", "source", "status", "step", "failure", "steps", "merged_commits", "url", "visible_to", "not_installed"],
   );
   assert.equal((good.data[0] as { status: string }).status, "succeeded");
 

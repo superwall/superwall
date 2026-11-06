@@ -61,6 +61,10 @@ export const appEntrypointUrl = (apiHost: string, artifact: Linked, applicationI
   return `${app}/apps/${artifact.id}/${encodeURIComponent(entrypoint.id)}`;
 };
 
+async function orgApps(api: SuperwallApi, organizationId: number | string) {
+  return (await orgProjects(api, String(organizationId))).flatMap((project) => project.applications ?? []);
+}
+
 export interface OpenLink {
   url: string;
   app?: string;
@@ -81,8 +85,7 @@ export async function openLink(
   const entrypoints = manifest?.entrypoints ?? [];
   const main = mainEntrypoint(entrypoints);
   if (!main || entrypoints.some((entrypoint) => entrypoint.slot === "org.page@1")) return fallback;
-  const projects = await orgProjects(ctx.api, String(artifact.organization_id)).catch(() => []);
-  const apps = projects.flatMap((project) => project.applications ?? []);
+  const apps = await orgApps(ctx.api, artifact.organization_id).catch(() => []);
   const [first] = apps;
   if (first === undefined) return fallback;
   return {
@@ -103,6 +106,58 @@ export async function awaitingInstall(
   if (installed === undefined) return false;
   return entrypoints.every((entrypoint) => !installed.some((row) => row.entrypoint_id === entrypoint.id));
 }
+
+// Where an installed entrypoint shows, by slot. An org.page shows on its own, so it's never here.
+const INSTALL_SURFACE: Readonly<Record<string, string>> = {
+  "chart.source@1": "Charts",
+  "campaign.metric@1": "Campaigns",
+  "campaign.tab@1": "Campaigns",
+  "app.dashboard.widget@1": "The app dashboard",
+  "user.panel@1": "User pages",
+  "user.action@1": "User pages",
+};
+
+export interface InstallHint {
+  entrypoint_id: string;
+  slot: string;
+  command: string;
+  sentence: string;
+}
+
+/**
+ * One line per entrypoint that has no installation yet, saying what won't show it and the command that
+ * installs it. Empty when the installations can't be read, so a failed read never claims anything.
+ */
+export async function installHints(
+  api: SuperwallApi,
+  artifact: Pick<Artifact, "id" | "organization_id">,
+  manifest: Pick<Manifest, "entrypoints"> | null | undefined,
+  { artifactFlag = false }: { artifactFlag?: boolean } = {},
+): Promise<InstallHint[]> {
+  const installable = (manifest?.entrypoints ?? []).filter((entrypoint) => entrypoint.slot !== "org.page@1");
+  if (installable.length === 0) return [];
+  const installed = await listInstallations(api, artifact.id).catch(() => undefined);
+  if (installed === undefined) return [];
+  const missing = installable.filter((entrypoint) => !installed.some((row) => row.entrypoint_id === entrypoint.id));
+  if (missing.length === 0) return [];
+  const apps = await orgApps(api, artifact.organization_id).catch(() => []);
+  const app = apps.length === 1 ? String(apps[0]!.id) : "<app-id>";
+  return missing.map((entrypoint) => {
+    const command = [
+      `superwall artifacts install ${entrypoint.id}`,
+      `--app ${app}`,
+      ...(artifactFlag ? [`--artifact ${artifact.id}`] : []),
+    ].join(" ");
+    const title = JSON.stringify(entrypoint.title || entrypoint.id);
+    const surface = INSTALL_SURFACE[entrypoint.slot];
+    const sentence = surface
+      ? `${surface} won't show ${title} until you install it: ${command}`
+      : `${title} won't show until you install it: ${command}`;
+    return { entrypoint_id: entrypoint.id, slot: entrypoint.slot, command, sentence };
+  });
+}
+
+export const notInstalledOf = ({ entrypoint_id, slot, command }: InstallHint) => ({ entrypoint_id, slot, command });
 
 export const latestManifest = (versions: readonly ArtifactVersion[]): Manifest | null | undefined =>
   newestFirst(versions).find((version) => version.manifest !== null)?.manifest;

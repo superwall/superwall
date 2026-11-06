@@ -18,9 +18,11 @@ export interface FakeApiOptions {
   tokenIdOf?: (mint: number) => string;
   staff?: boolean;
   projects?: unknown[];
+  /** What GET installations answers. Left out, it's a 404, as if it couldn't be read. */
+  installations?: unknown[];
 }
 
-export function fakeArtifactApi({ remote, manifest, buildSequence, onBuilds, me = { name: "Pat Pusher", email: "pat@example.com" }, tokenIdOf = (mint) => `tok_${mint}`, staff = false, projects = [] }: FakeApiOptions) {
+export function fakeArtifactApi({ remote, manifest, buildSequence, onBuilds, me = { name: "Pat Pusher", email: "pat@example.com" }, tokenIdOf = (mint) => `tok_${mint}`, staff = false, projects = [], installations }: FakeApiOptions) {
   const artifacts: Artifact[] = [];
   const versions: ArtifactVersion[] = [];
   const calls: string[] = [];
@@ -80,6 +82,7 @@ export function fakeArtifactApi({ remote, manifest, buildSequence, onBuilds, me 
         }
         return toBuild(version, step);
       }
+      if (installations !== undefined && /^\/v2\/artifacts\/\d+\/installations$/.test(url.pathname)) return { data: installations };
       const versionList = /^\/v2\/artifacts\/(\d+)\/versions$/.exec(url.pathname);
       if (versionList) return { data: versions.filter((version) => version.artifact_id === Number(versionList[1])) };
       const one = /^\/v2\/artifacts\/(\d+)$/.exec(url.pathname);

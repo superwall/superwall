@@ -154,14 +154,21 @@ function replaceDirectory(stage: string, target: string, rename: typeof fs.renam
   fs.rmSync(outgoing, { recursive: true, force: true });
 }
 
-function pointPackageAtSdk(file: string): void {
+/** Returns whether package.json had to change. */
+function pointPackageAtSdk(file: string): boolean {
   const text = fs.readFileSync(file, "utf8");
   const parsed = JSON.parse(text) as { dependencies?: Record<string, string> };
-  if (parsed.dependencies?.["@superwall/artifact-sdk"] === "file:vendor/artifact-sdk") return;
+  if (parsed.dependencies?.["@superwall/artifact-sdk"] === "file:vendor/artifact-sdk") return false;
   parsed.dependencies = { ...parsed.dependencies, "@superwall/artifact-sdk": "file:vendor/artifact-sdk" };
   const indent = /^([ \t]+)"/m.exec(text)?.[1] ?? "  ";
   fs.writeFileSync(file, `${JSON.stringify(parsed, null, indent)}${text.endsWith("\n") ? "\n" : ""}`);
+  return true;
 }
+
+const readIfPresent = (file: string): string | undefined => (fs.existsSync(file) ? fs.readFileSync(file, "utf8") : undefined);
+
+const commitList = (files: readonly string[]): string =>
+  files.length === 1 ? files[0]! : `${files.slice(0, -1).join(", ")} and ${files.at(-1)}`;
 
 function readStageVersion(stage: string): string {
   const { version } = JSON.parse(fs.readFileSync(path.join(stage, "package.json"), "utf8")) as { version?: string };
@@ -208,16 +215,27 @@ export async function runArtifactUpdate(
     fs.rmSync(stage, { recursive: true, force: true });
   }
   spin.stop(before === version ? `Already on the latest artifact SDK, ${version}` : `Artifact SDK ${version}`);
-  pointPackageAtSdk(packageFile);
+  const sdkChanged = before !== version;
+  const packageChanged = pointPackageAtSdk(packageFile);
+  const changed = [...(sdkChanged ? ["vendor/artifact-sdk"] : []), ...(packageChanged ? ["package.json"] : [])];
 
   if (!input.install) {
-    ctx.ui.info("Run `npm install` to update package-lock.json, then commit vendor/artifact-sdk and the lockfile.");
+    if (changed.length > 0) {
+      ctx.ui.info(`Run \`npm install\` to update package-lock.json, then commit ${commitList([...changed, "the lockfile"])}.`);
+    }
     return;
   }
+  const lockFile = path.join(root, "package-lock.json");
+  const lockBefore = readIfPresent(lockFile);
   try {
     await (runtime.install ?? npmInstall)(root);
-    ctx.ui.success("Updated package-lock.json. Commit vendor/artifact-sdk and the lockfile.");
   } catch {
     ctx.ui.warn("`npm install` failed. Run it yourself to update package-lock.json.");
+    return;
+  }
+  if (readIfPresent(lockFile) !== lockBefore) {
+    ctx.ui.success(`Updated package-lock.json. Commit ${commitList([...changed, "the lockfile"])}.`);
+  } else if (changed.length > 0) {
+    ctx.ui.success(`Commit ${commitList(changed)}.`);
   }
 }

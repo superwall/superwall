@@ -61,22 +61,80 @@ export class ApiError extends Error {
   }
 }
 
+// Codes for a connection that opened and then dropped. Anything else (DNS, refused, timed out) never got through.
+const DROPPED_CODES: ReadonlySet<string> = new Set([
+  "EPIPE",
+  "ECONNRESET",
+  "ECONNABORTED",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CLOSED",
+]);
+const DROPPED_MESSAGE = /other side closed|socket hang up|socket connection was closed/i;
+
+interface FetchFailure {
+  code?: string;
+  message?: string;
+}
+
+// Node's fetch throws `TypeError: fetch failed` and keeps the reason in `cause` (sometimes an AggregateError
+// of one per address). Bun puts the code on the error itself. Take the deepest error that says something.
+function fetchFailureOf(error: unknown): FetchFailure {
+  let found: FetchFailure = {};
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (typeof current === "object" && current !== null && !seen.has(current)) {
+    seen.add(current);
+    const code = Reflect.get(current, "code");
+    const message = Reflect.get(current, "message");
+    const useful = typeof message === "string" && message !== "" && message !== "fetch failed" ? message : undefined;
+    if (typeof code === "string" && code !== "") found = { code, message: useful };
+    else if (found.code === undefined && useful !== undefined) found = { message: useful };
+    const errors = Reflect.get(current, "errors");
+    current = Reflect.get(current, "cause") ?? (Array.isArray(errors) ? errors[0] : undefined);
+  }
+  return found;
+}
+
+const failureLabel = ({ code, message }: FetchFailure): string | undefined => {
+  if (code === undefined) return message;
+  return message === undefined || message.includes(code) ? code : `${code}: ${message}`;
+};
+
 export class ApiUnreachableError extends Error {
+  /** The connection opened and then dropped, so the API may or may not have got the request. */
+  readonly dropped: boolean;
+  readonly code?: string;
+
   constructor(host: string, cause: unknown) {
     const local = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(host);
+    const failure = fetchFailureOf(cause);
+    const dropped =
+      (failure.code !== undefined && DROPPED_CODES.has(failure.code)) || DROPPED_MESSAGE.test(failure.message ?? "");
+    const label = failureLabel(failure);
+    const why = label === undefined ? "" : ` (${label})`;
     super(
-      `Couldn't reach the Superwall API at ${host}.\n` +
-        (local
-          ? "  That's a local address — start the API, or unset SUPERWALL_API_HOST to use production."
-          : "  Check your network or proxy, then try again."),
+      dropped
+        ? `Lost the connection ${failure.code === "EPIPE" ? "while sending to" : "to"} the Superwall API at ${host}${why}.\n` +
+            "  It closed before the request finished. Try again."
+        : `Couldn't reach the Superwall API at ${host}${why}.\n` +
+            (local
+              ? "  That's a local address — start the API, or unset SUPERWALL_API_HOST to use production."
+              : "  Check your network or proxy, then try again."),
     );
     this.name = "ApiUnreachableError";
     this.cause = cause;
+    this.dropped = dropped;
+    if (failure.code !== undefined) this.code = failure.code;
   }
 }
 
 interface RequestOptions {
   headers?: Record<string, string>;
+  /**
+   * Sending this request twice does what sending it once does. A connection that drops mid-request is
+   * then retried, three attempts in all, since nobody can tell whether the API got it.
+   */
+  idempotent?: boolean;
 }
 
 export type SuperwallApi = {
@@ -96,6 +154,8 @@ export type SuperwallApi = {
 const PAGE_LIMIT = 50;
 const GET_RETRIES = 3;
 const RETRYABLE = new Set([429, 502, 503, 504]);
+const DROPPED_ATTEMPTS = 3;
+const DROPPED_BACKOFF_MS = 250;
 
 async function parseApiError(request: string, res: Response): Promise<ApiError> {
   const text = await res.text().catch(() => "");
@@ -141,7 +201,7 @@ export const createSuperwallApi = (
     options: RequestOptions = {},
   ): Promise<T> => {
     const token = await authorized();
-    const attempt = () => {
+    const once = () => {
       return send(`${host()}${path}`, {
         method,
         headers: {
@@ -153,6 +213,19 @@ export const createSuperwallApi = (
         },
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
+    };
+    // Only a dropped connection is retried here, and only when sending twice is safe: an HTTP answer,
+    // 4xx included, is the API's verdict, and a request that never connected won't connect by waiting.
+    const attempt = async (): Promise<Response> => {
+      for (let tried = 1; ; tried++) {
+        try {
+          return await once();
+        } catch (error) {
+          const again = options.idempotent === true && error instanceof ApiUnreachableError && error.dropped;
+          if (!again || tried >= DROPPED_ATTEMPTS) throw error;
+          await new Promise((done) => setTimeout(done, DROPPED_BACKOFF_MS * 2 ** (tried - 1)));
+        }
+      }
     };
     let res = await attempt();
     for (

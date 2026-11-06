@@ -39,9 +39,14 @@ interface Draft {
   expires_at: string;
 }
 
-async function postDraft<T>(ctx: CommandContext<"required">, path: string, body: unknown): Promise<T> {
+async function postDraft<T>(
+  ctx: CommandContext<"required">,
+  path: string,
+  body: unknown,
+  options: { idempotent?: boolean } = {},
+): Promise<T> {
   try {
-    return await ctx.api.post<T>(path, body);
+    return await ctx.api.post<T>(path, body, options);
   } catch (error) {
     if (error instanceof ApiError && error.status === 400) throw new ArtifactError(error.message);
     throw error;
@@ -58,11 +63,14 @@ async function uploadDraft(
   if (bytes > DRAFT_MODULE_MAX_BYTES) {
     throw new ArtifactError(`The bundle is ${bytes} bytes; a draft can be ${DRAFT_MODULE_MAX_BYTES} at most.`);
   }
-  return postDraft<Draft>(ctx, "/v2/artifacts/drafts", {
-    organization_id: Number(organizationId),
-    manifest: project.manifest,
-    module,
-  });
+  // A draft's id is the sha256 of its manifest and module, and storing it again overwrites that same
+  // draft, so an upload whose connection dropped is safe to send again.
+  return postDraft<Draft>(
+    ctx,
+    "/v2/artifacts/drafts",
+    { organization_id: Number(organizationId), manifest: project.manifest, module },
+    { idempotent: true },
+  );
 }
 
 async function tryMetric(

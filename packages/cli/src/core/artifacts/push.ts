@@ -23,7 +23,7 @@ import {
 import { readBinding, readSourceFile, writeBinding, type ArtifactBinding } from "./binding";
 import { resolveOrganization } from "./organization";
 import { readProject, ArtifactError, type ArtifactProject } from "./project";
-import { openLink, visibilityOf } from "./resolve";
+import { installHints, notInstalledOf, openLink, visibilityOf } from "./resolve";
 import { vendoredVersion, warnIfSdkBehind } from "./sdk";
 
 const PUSH_ATTEMPTS = 3;
@@ -377,8 +377,13 @@ export async function runArtifactPush(
 
   spin.stop(`Built version ${build.version_id}`);
   const { visibleTo, sentence } = await visibilityOf(ctx, binding.artifactId, build.version_id, project.manifest);
+  const hints = await installHints(
+    ctx.api,
+    { id: Number(binding.artifactId), organization_id: Number(binding.organizationId) },
+    build.version?.manifest ?? project.manifest,
+  );
   if (ctx.json) {
-    ctx.output.data({ ...summary, visible_to: visibleTo });
+    ctx.output.data({ ...summary, visible_to: visibleTo, not_installed: hints.map(notInstalledOf) });
     return;
   }
   ctx.ui.success(sentence);
@@ -389,5 +394,6 @@ export async function runArtifactPush(
   }
   ctx.ui.info(link.app ? `Open ${url} (in ${link.app})` : `Open ${url}`);
   if (link.otherApps) ctx.ui.info("Each of your other apps has the same page.");
+  for (const hint of hints) ctx.ui.info(hint.sentence);
   ctx.ui.info("To ask for review, run `superwall artifacts share`.");
 }

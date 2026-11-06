@@ -269,3 +269,32 @@ test("update needs an artifact", async () => {
   const { ctx } = context();
   await assert.rejects(runArtifactUpdate(ctx, { dir: scratch(), install: false }), /superwall artifacts create/);
 });
+
+test("update says to commit only what changed, and nothing when nothing did", async () => {
+  const root = artifactProject();
+  writeVendoredSdk(root, "0.2.0");
+  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "x", dependencies: { "@superwall/artifact-sdk": "file:vendor/artifact-sdk" } }));
+  fs.writeFileSync(path.join(root, "package-lock.json"), "{}\n");
+
+  const same = context();
+  await runArtifactUpdate(same.ctx, { dir: root, install: true }, { fetch: download(), install: async () => {} });
+  assert.deepEqual(same.said("success"), []);
+  const quiet = context();
+  await runArtifactUpdate(quiet.ctx, { dir: root, install: false }, { fetch: download() });
+  assert.deepEqual(quiet.said("info"), []);
+
+  const relocked = context();
+  await runArtifactUpdate(relocked.ctx, { dir: root, install: true }, {
+    fetch: download(),
+    install: async () => fs.writeFileSync(path.join(root, "package-lock.json"), '{"lockfileVersion":3}\n'),
+  });
+  assert.deepEqual(relocked.said("success"), ["Updated package-lock.json. Commit the lockfile."]);
+
+  writeVendoredSdk(root, "0.1.0");
+  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "x" }));
+  const behind = context();
+  await runArtifactUpdate(behind.ctx, { dir: root, install: false }, { fetch: download() });
+  assert.deepEqual(behind.said("info"), [
+    "Run `npm install` to update package-lock.json, then commit vendor/artifact-sdk, package.json and the lockfile.",
+  ]);
+});

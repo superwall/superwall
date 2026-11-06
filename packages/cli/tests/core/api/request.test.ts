@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { resolveReferenceHint } from "@/core/api/request";
+import { ApiError } from "@/core/api/client";
+import { namesMissingResource, resolveReferenceHint, runApiRequest } from "@/core/api/request";
 import { clearHomes, useHome } from "../../helpers/home";
 import { restoreFetch, useFetch } from "../../helpers/fetch";
 
@@ -43,4 +44,25 @@ test("with the reference unreachable, the hint still says where to look", async 
   useHome();
   useFetch([{ match: "/openapi.json", fail: true }]);
   assert.equal(await resolveReferenceHint("get", "/v2/x"), "The API reference: superwall api docs <words>");
+});
+
+test("a thing the API says is gone isn't told its endpoint doesn't exist", async () => {
+  useHome();
+  useFetch([{ match: "/openapi.json", body: spec }]);
+  const gone = (body: Record<string, unknown>, status = 404) => new ApiError("GET /v2/artifacts/99", status, JSON.stringify(body));
+  const ctx = { output: { data: () => undefined } } as never;
+  const failing = (error: Error) => ({ get: async () => { throw error; } }) as never;
+
+  const missing = gone({ message: "No such Artifact: '99'", code: "resource_missing", type: "invalid_request_error" });
+  await assert.rejects(runApiRequest(ctx, failing(missing), { verb: "get", path: "/v2/artifacts/99", data: [] }), (error: Error) => {
+    assert.equal(error.message, "No such Artifact: '99'");
+    return true;
+  });
+  assert.ok(namesMissingResource(gone({ message: "x", type: "resource_missing" })));
+  assert.ok(namesMissingResource(gone({ message: "x", resource_type: "artifact" })));
+  assert.ok(!namesMissingResource(gone({ message: "x", code: "resource_missing" }, 400)), "only a 404 says it's gone");
+  assert.ok(!namesMissingResource(gone({ message: "Not Found" })));
+
+  // A 404 with nothing typed about it is still a path the reference may not know.
+  await assert.rejects(runApiRequest(ctx, failing(new ApiError("GET /v2/campaign/2071", 404, "")), { verb: "get", path: "/v2/campaign/2071", data: [] }), /No endpoint has this path/);
 });
