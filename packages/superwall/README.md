@@ -183,6 +183,18 @@ tap: a config `checkout: "applePay"` prepares it on its own, and on a
 `checkout: "sheet"` paywall `prefetch(reference, { checkout: "applePay" })`
 does; a `purchase(reference, { checkout: "applePay" })` of anything else opens
 the sheet, with `reason` `not_prepared`.
+`useApplePayCard()` says whether Apple Pay is set up with a card on this
+device, in the app (iOS SDK) and on every web host alike, from Apple's
+`ApplePaySession.canMakePaymentsWithActiveCard` for the page's own Stripe
+merchant, `merchant.<hostname>.stripe` (Superwall registers both the in-app
+paywall domain and the teleport domain with the customer's Stripe account):
+`checking` until Apple answers, then `ready` or `unavailable` with a typed
+`ApplePayCardReason` (`no_active_card`; `unsupported_browser`, as on Android,
+desktop Chrome and Studio there; `insecure_context`; `cross_origin_frame`;
+`check_failed`; `timed_out` after 1.5 seconds), `message` and `error?`. Any
+usable card counts, Apple Cash with no balance too, so `ready` means Apple Pay
+is set up, not that a payment will succeed. `checkApplePayCard()` is the same
+check as a promise for code outside React; Apple is asked once per page.
 
 `useUserAttribute(key, parser)` is one user attribute as typed state —
 `useQueryState`'s API with the same parsers, kept by the host SDK across
@@ -315,7 +327,10 @@ works as usual, and going back from it (or `close()`) returns to the app
 through its universal link, falling back to its URL scheme. Options:
 `route`, `overlay` (the teleport screen), `fallbacks` (a store product the
 screen offers instead), `completion` (`"confirmation"` or `"direct"`),
-`introductoryOfferEligibility`.
+`introductoryOfferEligibility`. Teleport pays off only when the shopper can
+pay with Apple Pay on the web page, so check `useApplePayCard()` before
+sending them there and keep them in the app (the store purchase) when it is
+not `ready`.
 
 ### Dev — the studio
 
@@ -475,7 +490,7 @@ Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1`.
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …)                             |
 | `superwall/config`     | `definePaywall`                                                                                                   |
-| `superwall/hooks`      | every hook, `readAttribute` + parsers, `createSuperwall` and `useSuperwallSession`                                |
+| `superwall/hooks`      | every hook, `readAttribute` + parsers, `checkApplePayCard`, `createSuperwall` and `useSuperwallSession`           |
 | `superwall/navigation` | `useRouter`, `useIsFocused`, `useQueryState` + parsers, `replayStack`, `PaywallRouter`                            |
 | `superwall/checkout`   | web checkout (Stripe) and `TeleportScreen` — bundled only when `config.checkout` or `config.teleport` asks for it |
 | `superwall/assets`     | ambient types for asset imports                                                                                   |
