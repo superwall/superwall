@@ -316,3 +316,85 @@ test("a dashboard migration is named and rerun by its paywall id", () => {
   assert.equal(migrationSource(migration), "255456");
   assert.equal(migrationCommand(migration), "superwall migrate 255456");
 });
+
+test("a paywall dry run reads the paywall and its document, says what it would create, and writes nothing", async () => {
+  const root = scratch("dry-paywall");
+  const target = path.join(root, "superwall");
+  const calls: RendererCall[] = [];
+  const { api, sent } = routedApi({ "GET /v2/paywalls/255456": PAYWALL });
+
+  const origin = await scaffoldFromPaywall(recordingRenderer(calls), api, {
+    root,
+    target,
+    paywallId: "255456",
+    newProject: true,
+    dryRun: true,
+    fetchText: async () => FORCE_UPDATE,
+  });
+
+  assert.equal(origin.slug, "force-update");
+  assert.equal(fs.existsSync(target), false);
+  assert.deepEqual(said(calls, "step"), [
+    "Would create a superwall project in superwall",
+    "Would create superwall/paywalls/force-update from `Force Update`",
+    "Would record paywall 255456 in superwall.lock",
+    "Would save app 42 for ios in superwall.lock, the paywall's app",
+  ]);
+  assert.deepEqual(said(calls, "success"), []);
+  assert.deepEqual(sent.map((call) => call.path), ["/v2/paywalls/255456"]);
+});
+
+test("a paywall dry run into a project leaves its lock alone and still refuses a surface that exists", async () => {
+  const root = scratch("dry-paywall-existing");
+  const lock = JSON.stringify({ version: 1, apps: { ios: "7" } });
+  fs.writeFileSync(path.join(root, "superwall.lock"), lock);
+  const calls: RendererCall[] = [];
+  const { api } = routedApi({
+    "GET /v2/paywalls/255456": { id: 255456, name: "Force Update", application_id: 42, application_platform: "ios" },
+  });
+  const options = { root, target: root, paywallId: "255456", newProject: false, dryRun: true };
+
+  await scaffoldFromPaywall(recordingRenderer(calls), api, options);
+
+  assert.deepEqual(said(calls, "step"), ["Would create ./paywalls/force-update from `Force Update`"]);
+  assert.equal(fs.readFileSync(path.join(root, "superwall.lock"), "utf8"), lock);
+  assert.equal(fs.existsSync(path.join(root, "paywalls")), false);
+
+  fs.mkdirSync(path.join(root, "paywalls", "force-update"), { recursive: true });
+  fs.writeFileSync(path.join(root, "paywalls", "force-update", "config.ts"), "");
+  await assert.rejects(scaffoldFromPaywall(recordingRenderer(), api, options), /already exists in \. —/);
+});
+
+test("a screen dry run reports the inventory and the surface it would create, and copies no screenshot", () => {
+  const root = scratch("dry-screen");
+  fs.mkdirSync(path.join(root, "App"));
+  fs.writeFileSync(
+    path.join(root, "App", "WelcomeView.swift"),
+    'import SwiftUI\nstruct WelcomeView: View {\n  var body: some View {\n    Button("Continue") { go() }\n  }\n}\n',
+  );
+  fs.writeFileSync(path.join(root, "shot.png"), "png");
+  const target = path.join(root, "superwall");
+  const calls: RendererCall[] = [];
+  const options = {
+    root,
+    target,
+    file: "App/WelcomeView.swift",
+    newProject: true,
+    screenshot: path.join(root, "shot.png"),
+    dryRun: true,
+  };
+
+  const screen = scaffoldFromScreen(recordingRenderer(calls), options);
+
+  assert.equal(screen.slug, "welcome");
+  assert.equal(fs.existsSync(target), false);
+  assert.deepEqual(said(calls, "step"), [
+    "Read `../App/WelcomeView.swift` (SwiftUI): 1 string, 0 assets, 0 products, 1 action",
+    "Would create a superwall project in superwall",
+    "Would create superwall/paywalls/welcome for `Welcome`",
+  ]);
+
+  fs.mkdirSync(path.join(target, "paywalls", "welcome"), { recursive: true });
+  fs.writeFileSync(path.join(target, "paywalls", "welcome", "config.ts"), "");
+  assert.throws(() => scaffoldFromScreen(recordingRenderer(), options), /`paywalls\/welcome` already exists/);
+});
