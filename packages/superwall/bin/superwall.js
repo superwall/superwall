@@ -27,6 +27,29 @@ const resolveLocalBin = () => {
   return undefined;
 };
 
+const dependsOnSuperwall = (dir) => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+    return ["dependencies", "devDependencies", "peerDependencies"].some(
+      (field) => pkg?.[field]?.superwall !== undefined,
+    );
+  } catch {
+    return false;
+  }
+};
+
+const projectTsconfig = () => {
+  const nested = path.join(process.cwd(), "superwall");
+  const projectDir = fs.existsSync(path.join(nested, "package.json"))
+    ? nested
+    : dependsOnSuperwall(process.cwd())
+      ? process.cwd()
+      : undefined;
+  if (projectDir === undefined) return false;
+  const tsconfig = path.join(projectDir, "tsconfig.json");
+  return fs.existsSync(tsconfig) ? tsconfig : false;
+};
+
 const localBin = resolveLocalBin();
 if (localBin && fs.existsSync(localBin)) {
   // Hand off to the project-local install — it registers its own tsx and
@@ -44,12 +67,18 @@ if (localBin && fs.existsSync(localBin)) {
     }
   }
 
-  const projectDir = fs.existsSync(path.join(process.cwd(), "superwall", "package.json"))
-    ? path.join(process.cwd(), "superwall")
-    : process.cwd();
-  const tsconfig = path.join(projectDir, "tsconfig.json");
   const { register } = await import("tsx/esm/api");
-  register({ tsconfig: fs.existsSync(tsconfig) ? tsconfig : false });
+  const tsconfig = projectTsconfig();
+  try {
+    register({ tsconfig });
+  } catch (error) {
+    if (tsconfig === false) throw error;
+    const reason = error instanceof Error ? error.message : String(error);
+    process.stderr.write(
+      `Couldn't read ${path.relative(process.cwd(), tsconfig)} (${reason}) — loading TypeScript without it.\n`,
+    );
+    register({ tsconfig: false });
+  }
 
   const { main } = await import("@superwall/cli");
   await main();
