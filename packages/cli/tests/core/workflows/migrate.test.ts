@@ -147,6 +147,85 @@ describe("in a terminal", () => {
     assert.match(text(calls, "report"), /Rebuilt the screen\./);
   });
 
+  test("a screen migration dry run reports the plan and writes nothing, asking for no screenshot", async () => {
+    useHome();
+    useFetch([]);
+    const runs = useAgents({ claude: [] });
+    const root = appWithScreen("screen-dry");
+    const { calls, failed } = await runWorkflow(
+      (ctx) => runScreenMigration(ctx, { path: path.join(root, "App", "UpdateRequiredView.swift"), screenshot: undefined }, false),
+      { installDir: root, answers: {}, dryRun: true },
+    );
+    assert.equal(failed, false, text(calls, "error"));
+    assert.equal(fs.existsSync(path.join(root, "superwall")), false);
+    assert.deepEqual(prompted(calls, "select"), []);
+    assert.deepEqual(prompted(calls, "confirm"), []);
+    assert.deepEqual(prompted(calls, "text"), []);
+    assert.equal(runs.length, 0);
+    assert.match(text(calls, "step"), /Would create a superwall project in superwall/);
+    assert.match(text(calls, "step"), /Would create superwall\/paywalls\/update-required/);
+    assert.equal(text(calls, "outro"), "Dry run - no changes made.");
+  });
+
+  test("a screen migration dry run still refuses a missing screenshot", async () => {
+    useHome();
+    const root = appWithScreen("screen-dry-shot");
+    const { calls, failed } = await runWorkflow(
+      (ctx) => runScreenMigration(ctx, { path: path.join(root, "App", "UpdateRequiredView.swift"), screenshot: "nope.png" }, false),
+      { installDir: root, dryRun: true },
+    );
+    assert.equal(failed, true);
+    assert.match(text(calls, "error"), /No screenshot at `nope\.png`\./);
+    assert.equal(fs.existsSync(path.join(root, "superwall")), false);
+  });
+
+  test("a screen migration dry run on a scaffolded screen offers no rebuild and runs no agent", async () => {
+    useHome();
+    useFetch([]);
+    const runs = useAgents({ claude: [] });
+    const root = appWithScreen("screen-dry-again");
+    const file = path.join(root, "App", "UpdateRequiredView.swift");
+    await migrateScreen(root, { path: file });
+    const lock = fs.readFileSync(path.join(root, "superwall", "superwall.lock"), "utf8");
+    const { calls, failed } = await runWorkflow((ctx) => runScreenMigration(ctx, { path: file, screenshot: undefined }, false), {
+      installDir: root,
+      answers: {},
+      dryRun: true,
+    });
+    assert.equal(failed, false, text(calls, "error"));
+    assert.match(text(calls, "info"), /`paywalls\/update-required` was scaffolded from/);
+    assert.deepEqual(prompted(calls, "select"), []);
+    assert.deepEqual(prompted(calls, "confirm"), []);
+    assert.equal(runs.length, 0);
+    assert.equal(fs.readFileSync(path.join(root, "superwall", "superwall.lock"), "utf8"), lock);
+    assert.equal(text(calls, "outro"), "Dry run - no changes made.");
+  });
+
+  test("a paywall migration dry run reads the paywall, reports the plan and writes nothing", async () => {
+    useHome({ authMethod: "api_key", apiKey: "sk_live_x", orgName: "Acme Inc", userEmail: "ana@acme.dev" });
+    const log = useFetch([
+      {
+        match: "/v2/paywalls/255456",
+        body: { id: 255456, name: "Force Update", application_id: 42, application_platform: "ios", paywall_url: "https://runtime.example/store/document/abc" },
+      },
+      { match: "runtime.example/store/document/abc", text: fs.readFileSync(path.resolve("tests/fixtures/origin/force-update.html"), "utf8") },
+    ]);
+    const runs = useAgents({ claude: [] });
+    const root = scratch("paywall-dry");
+    const { calls, failed } = await runWorkflow((ctx) => runPaywallMigration(ctx, "255456", false), {
+      installDir: root,
+      dryRun: true,
+    });
+    assert.equal(failed, false, text(calls, "error"));
+    assert.equal(fs.existsSync(path.join(root, "superwall")), false);
+    assert.equal(runs.length, 0);
+    assert.deepEqual(log.map((entry) => entry.method), ["GET", "GET"]);
+    assert.match(text(calls, "step"), /Would create superwall\/paywalls\/force-update from `Force Update`/);
+    assert.match(text(calls, "step"), /Would record paywall 255456 in superwall\.lock/);
+    assert.match(text(calls, "step"), /Would save app 42 for ios in superwall\.lock/);
+    assert.equal(text(calls, "outro"), "Dry run - no changes made.");
+  });
+
   test("the provider migration needs a coding agent and an app", async () => {
     useHome();
     useAgents({});
@@ -236,6 +315,28 @@ describe("in a terminal", () => {
     const { failed } = await migrateProvider(expoApp({}, { "react-native-purchases": "7.0.0" }));
     assert.equal(failed, false);
     assert.deepEqual(runs.map((run) => run.driver), ["claude", "codex"]);
+  });
+
+  test("a paywall migration dry run on a scaffolded paywall offers no rebuild and runs no agent", async () => {
+    useHome();
+    useFetch([]);
+    const runs = useAgents({ claude: [] });
+    const root = scratch("paywall-dry-again");
+    const dir = path.join(root, "superwall");
+    fs.mkdirSync(path.join(dir, "paywalls", "force-update"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ dependencies: { superwall: "latest" } }));
+    fs.writeFileSync(path.join(dir, "paywalls", "force-update", "MIGRATION.md"), "# brief\n- Pages: 1\n");
+    writeOrigin(dir, "paywall", "force-update", { paywallId: "255456", url: "https://runtime.example/store/document/abc" });
+    const { calls, failed } = await runWorkflow((ctx) => runPaywallMigration(ctx, "255456", false), {
+      installDir: root,
+      answers: {},
+      dryRun: true,
+    });
+    assert.equal(failed, false, text(calls, "error"));
+    assert.deepEqual(prompted(calls, "select"), []);
+    assert.deepEqual(prompted(calls, "confirm"), []);
+    assert.equal(runs.length, 0);
+    assert.equal(text(calls, "outro"), "Dry run - no changes made.");
   });
 
   test("a scaffolded paywall rebuilt by the agent asks about the studio, and declining it ends the run", async () => {
