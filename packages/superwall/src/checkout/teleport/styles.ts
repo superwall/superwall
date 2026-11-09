@@ -329,7 +329,7 @@ export const TELEPORT_SCREEN_CSS = `
 .sw-teleport-dim-hint {
   position: absolute;
   inset-inline: 0;
-  top: calc(50% + 64px);
+  top: calc(50% + 112px);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
