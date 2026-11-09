@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { compareVersions, latestVersion, vendoredVersion, warnIfSdkBehind } from "@/core/artifacts/sdk";
+import { VERSION } from "@/environment";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
 import { artifactProject, writeVendoredSdk } from "./fixture";
 
@@ -63,12 +64,32 @@ test("no vendored package: says how to add it, without asking the network", asyn
   assert.equal(vendoredVersion(root), undefined);
 });
 
-test("latestVersion reads the public repo's starter", async () => {
-  let url = "";
+test("latestVersion reads the starter at this CLI's release tag, as update installs it", async () => {
+  const urls: string[] = [];
   const version = await latestVersion(async (requested) => {
-    url = requested;
+    urls.push(requested);
     return { ok: true, json: async () => ({ version: "1.2.3" }) };
   });
   assert.equal(version, "1.2.3");
-  assert.match(url, /raw\.githubusercontent\.com\/superwall\/superwall\/main\/artifacts\/starter\/vendor\/artifact-sdk\/package\.json/);
+  assert.deepEqual(urls, [
+    `https://raw.githubusercontent.com/superwall/superwall/refs/tags/v${VERSION}/artifacts/starter/vendor/artifact-sdk/package.json`,
+  ]);
+});
+
+test("latestVersion falls back to main for an untagged build, and stops on any other failure", async () => {
+  const urls: string[] = [];
+  const version = await latestVersion(async (requested) => {
+    urls.push(requested);
+    return requested.includes("/refs/tags/")
+      ? { ok: false, status: 404, json: async () => ({}) }
+      : { ok: true, json: async () => ({ version: "1.2.4" }) };
+  });
+  assert.equal(version, "1.2.4");
+  assert.match(urls[1]!, /\/superwall\/superwall\/refs\/heads\/main\/artifacts\/starter\//);
+  urls.length = 0;
+  assert.equal(
+    await latestVersion(async (requested) => (urls.push(requested), { ok: false, status: 500, json: async () => ({}) })),
+    undefined,
+  );
+  assert.equal(urls.length, 1);
 });

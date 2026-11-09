@@ -3,10 +3,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { RepoDownloadError } from "@/core/repo/download";
+import { VERSION } from "@/environment";
 import { ArtifactError } from "@/core/artifacts/project";
 import { runArtifactCreate, runArtifactUpdate, type CreateRuntime } from "@/core/artifacts/starter";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
-import { repoTarball, respondWith, scratch, artifactProject, writeVendoredSdk } from "./fixture";
+import { repoArchive, respondWith, scratch, artifactProject, writeVendoredSdk } from "./fixture";
 
 const STARTER = {
   "artifacts/starter/package.json": JSON.stringify({ name: "superwall-artifact-starter", dependencies: {} }),
@@ -35,7 +36,7 @@ function context() {
   };
 }
 
-const download = (): CreateRuntime["fetch"] => respondWith(200, repoTarball(STARTER)) as never;
+const download = (): CreateRuntime["fetch"] => respondWith(200, repoArchive(STARTER)) as never;
 const json = (file: string) => JSON.parse(fs.readFileSync(file, "utf8"));
 
 test("create downloads only the starter, names it after its directory and installs", async () => {
@@ -106,7 +107,7 @@ test("a failed create . leaves the empty directory it was given", async () => {
     await assert.rejects(runArtifactCreate(ctx, { dir: ".", install: false }, { fetch: respondWith(500, Buffer.from("")) as never }), /HTTP 500/);
     assert.ok(fs.existsSync(target));
     await assert.rejects(
-      runArtifactCreate(ctx, { dir: ".", install: false }, { fetch: respondWith(200, repoTarball({ "artifacts/starter/README.md": "no project" })) as never }),
+      runArtifactCreate(ctx, { dir: ".", install: false }, { fetch: respondWith(200, repoArchive({ "artifacts/starter/README.md": "no project" })) as never }),
     );
     assert.ok(fs.existsSync(target));
     assert.deepEqual(fs.readdirSync(target), []);
@@ -124,7 +125,7 @@ test("a failed download leaves nothing behind", async () => {
   );
   assert.equal(fs.existsSync(target), false);
   await assert.rejects(
-    runArtifactCreate(ctx, { dir: target, install: false }, { fetch: respondWith(200, repoTarball({ "other/x": "" })) as never }),
+    runArtifactCreate(ctx, { dir: target, install: false }, { fetch: respondWith(200, repoArchive({ "other/x": "" })) as never }),
     /No starter at artifacts\/starter/,
   );
   assert.equal(fs.existsSync(target), false);
@@ -188,11 +189,11 @@ test("update keeps what's there when the download fails, and survives a failed i
   );
   assert.equal(json(path.join(root, "vendor/artifact-sdk/package.json")).version, "0.1.0");
   await assert.rejects(
-    runArtifactUpdate(ctx, { dir: root, install: false }, { fetch: respondWith(200, repoTarball({ "artifacts/starter/vendor/artifact-sdk/package.json": "{}" })) as never }),
+    runArtifactUpdate(ctx, { dir: root, install: false }, { fetch: respondWith(200, repoArchive({ "artifacts/starter/vendor/artifact-sdk/package.json": "{}" })) as never }),
     /has no version/,
   );
   await assert.rejects(
-    runArtifactUpdate(ctx, { dir: root, install: false }, { fetch: respondWith(200, repoTarball({ "other/x": "" })) as never }),
+    runArtifactUpdate(ctx, { dir: root, install: false }, { fetch: respondWith(200, repoArchive({ "other/x": "" })) as never }),
     /No artifact SDK/,
   );
   await runArtifactUpdate(ctx, { dir: root, install: true }, {
@@ -297,4 +298,56 @@ test("update says to commit only what changed, and nothing when nothing did", as
   assert.deepEqual(behind.said("info"), [
     "Run `npm install` to update package-lock.json, then commit vendor/artifact-sdk, package.json and the lockfile.",
   ]);
+});
+
+const recording = (status: (url: string) => number) => {
+  const urls: string[] = [];
+  const archive = repoArchive(STARTER);
+  const fetchImpl = async (url: string) => {
+    urls.push(url);
+    return respondWith(status(url), status(url) === 200 ? archive : Buffer.from(""))(url);
+  };
+  return { urls, fetch: fetchImpl as never as CreateRuntime["fetch"] };
+};
+
+const TAG_ARCHIVE = `https://codeload.github.com/superwall/superwall/tar.gz/refs/tags/v${VERSION}`;
+const MAIN_ARCHIVE = "https://codeload.github.com/superwall/superwall/tar.gz/refs/heads/main";
+
+test("create and update read the starter at this CLI's release tag, not the moving main", async () => {
+  const { urls, fetch } = recording(() => 200);
+  const { ctx } = context();
+  await runArtifactCreate(ctx, { dir: path.join(scratch(), "pinned"), install: false }, { fetch });
+  assert.deepEqual(urls, [TAG_ARCHIVE]);
+
+  urls.length = 0;
+  const root = artifactProject();
+  writeVendoredSdk(root, "0.1.0");
+  await runArtifactUpdate(ctx, { dir: root, install: false }, { fetch });
+  assert.deepEqual(urls, [TAG_ARCHIVE]);
+});
+
+test("an untagged build falls back to main; a starter missing at the tag names the tag", async () => {
+  const { urls, fetch } = recording((url) => (url.includes("/refs/tags/") ? 404 : 200));
+  const { ctx } = context();
+  const target = path.join(scratch(), "untagged");
+  await runArtifactCreate(ctx, { dir: target, install: false }, { fetch });
+  assert.deepEqual(urls, [TAG_ARCHIVE, MAIN_ARCHIVE]);
+  assert.ok(fs.existsSync(path.join(target, "superwall.json")));
+
+  await assert.rejects(
+    runArtifactCreate(ctx, { dir: path.join(scratch(), "moved"), install: false }, { fetch: respondWith(200, repoArchive({ "workspaces/starter/package.json": "{}" })) as never }),
+    new RegExp(`^Error: No starter at artifacts/starter in github\\.com/superwall/superwall at v${VERSION.replaceAll(".", "\\.")}\\. Update the CLI`),
+  );
+});
+
+test("SUPERWALL_EXAMPLES_REF still points the download at a branch", async () => {
+  process.env.SUPERWALL_EXAMPLES_REF = "main";
+  try {
+    const { urls, fetch } = recording(() => 200);
+    const { ctx } = context();
+    await runArtifactCreate(ctx, { dir: path.join(scratch(), "branch"), install: false }, { fetch });
+    assert.deepEqual(urls, [MAIN_ARCHIVE]);
+  } finally {
+    delete process.env.SUPERWALL_EXAMPLES_REF;
+  }
 });
