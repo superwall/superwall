@@ -257,8 +257,13 @@ const said = (calls: RendererCall[], method: string) =>
   calls.filter((call) => call.method === method).map((call) => String(call.value));
 
 const scratch: string[] = [];
+const platform = Object.getOwnPropertyDescriptor(process, "platform");
+const comspec = process.env.ComSpec;
 
 afterEach(() => {
+  if (platform) Object.defineProperty(process, "platform", platform);
+  if (comspec === undefined) delete process.env.ComSpec;
+  else process.env.ComSpec = comspec;
   restoreFetch();
   restoreBin();
   clearHomes();
@@ -317,6 +322,29 @@ test("stale skills are reinstalled from a normalised clone and the sync is recor
   assert.equal(sync?.sourceSha, "head-sha");
   assert.equal(sync?.ref, "next");
   assert.ok(log.some((entry) => entry.url.includes(GITHUB_HEAD)));
+});
+
+test("on Windows the skills install runs npx through cmd.exe", async () => {
+  useHome();
+  useFetch([{ match: GITHUB_HEAD, body: { sha: "head-sha" } }]);
+  const tools = fakeTools();
+  delete process.env.ComSpec;
+  delete process.env.COMSPEC;
+  const shell = useBin({
+    "cmd.exe": `printf '%s\\n' "$*" >> "$(/usr/bin/dirname "$0")/lines"; line="$4"; line="\${line#\\"}"; line="\${line%\\"}"; eval "$(printf '%s' "$line" | /usr/bin/sed 's/\\^\\(.\\)/\\1/g; s/\\^\\(.\\)/\\1/g')"`,
+  });
+  Object.defineProperty(process, "platform", { value: "win32" });
+  recordSpinner();
+
+  await ensureSkillsCurrent(true);
+
+  const lines = readFileSync(join(shell, "lines"), "utf8").trim().split("\n");
+  assert.equal(lines.length, 2);
+  for (const line of lines) assert.match(line, /^\/d \/s \/c "npx \^\^\^"-y\^\^\^" \^\^\^"skills@latest\^\^\^" \^\^\^"add\^\^\^" /);
+  const [bundled, pub] = tools.npxCalls();
+  assert.deepEqual(bundled?.slice(0, 3), ["-y", "skills@latest", "add"]);
+  assert.equal(pub?.[3], join(tools.cloneTarget(), "skills"));
+  assert.equal(readSkillsSync()?.sourceSha, "head-sha");
 });
 
 test("a required install says it installed, and records no sha when GitHub cannot be reached", async () => {
