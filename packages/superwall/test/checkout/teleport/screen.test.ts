@@ -88,13 +88,13 @@ describe("the teleport screen, as paywall.js draws it", () => {
   it("shows one hint on the dim, mirrored by its direction, and none once the dim is leaving", () => {
     const dim = createReturnDim();
     phoneWindow(402, 874);
-    dim.showHint("Tap to return to the app", "rtl");
+    dim.showHint("Tap to go back to the app", "rtl");
     dim.showHint("Again", "ltr");
     const hints = dim.root.querySelectorAll<HTMLElement>(".sw-teleport-dim-hint");
     expect(hints).toHaveLength(1);
     expect(hints[0]?.dir).toBe("rtl");
     expect(hints[0]?.querySelector(".sw-teleport-dim-caption")?.textContent).toBe(
-      "Tap to return to the app",
+      "Tap to go back to the app",
     );
 
     expect(hints[0]?.dataset.side).toBe("ltr");
@@ -253,7 +253,7 @@ describe("the teleport screen, as paywall.js draws it", () => {
 
     phoneWindow(874, 402);
     const sideways = createReturnDim();
-    sideways.showHint("Tap to return to the app", "ltr");
+    sideways.showHint("Tap to go back to the app", "ltr");
     expect(sideways.root.querySelector(".sw-teleport-dim-hint")).toBeNull();
     expect(sideways.root.isConnected).toBe(true);
   });

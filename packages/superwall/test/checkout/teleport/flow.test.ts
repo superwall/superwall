@@ -1573,7 +1573,7 @@ describe("the web half of a teleport", () => {
     expect(hint?.dataset.state).toBe("open");
     expect(hint?.dir).toBe("ltr");
     expect(hint?.querySelector("svg.sw-teleport-dim-arrow")).not.toBeNull();
-    expect(hint?.textContent).toBe("Tap to return to the app");
+    expect(hint?.textContent).toBe("Tap to go back to the app");
     window.dispatchEvent(new Event("focus"));
     expect(dim?.dataset.state).toBe("closing");
     expect(hint?.parentElement).toBe(dim);
@@ -1609,7 +1609,7 @@ describe("the web half of a teleport", () => {
     await settle(APP_OPEN_WAIT_MS);
     window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport-dim-hint")?.textContent).toBe(
-      "Tap to unlock your purchase in the app",
+      "You're all set. Tap to go back to the app",
     );
   });
 
@@ -1625,7 +1625,7 @@ describe("the web half of a teleport", () => {
     back?.click();
     window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport-dim-hint")?.textContent).toBe(
-      "Tippe, um deinen Kauf in der App freizuschalten",
+      "Fertig. Tippe, um zur App zurückzukehren",
     );
   });
 

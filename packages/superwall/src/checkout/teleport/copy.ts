@@ -46,8 +46,8 @@ const COPY = {
       poweredBy: "Powered by Superwall",
     },
     returning: {
-      closed: "Tap to return to the app",
-      purchased: "Tap to unlock your purchase in the app",
+      closed: "Tap to go back to the app",
+      purchased: "You're all set. Tap to go back to the app",
     },
   },
   es: {
@@ -68,7 +68,7 @@ const COPY = {
     },
     returning: {
       closed: "Toca para volver a la app",
-      purchased: "Toca para activar tu compra en la app",
+      purchased: "Todo listo. Toca para volver a la app",
     },
   },
   fr: {
@@ -90,7 +90,7 @@ const COPY = {
     },
     returning: {
       closed: "Touchez pour revenir à l'app",
-      purchased: "Touchez pour activer votre achat dans l'app",
+      purchased: "C'est fait. Touchez pour revenir à l'app",
     },
   },
   de: {
@@ -112,7 +112,7 @@ const COPY = {
     },
     returning: {
       closed: "Tippe, um zur App zurückzukehren",
-      purchased: "Tippe, um deinen Kauf in der App freizuschalten",
+      purchased: "Fertig. Tippe, um zur App zurückzukehren",
     },
   },
   it: {
@@ -134,7 +134,7 @@ const COPY = {
     },
     returning: {
       closed: "Tocca per tornare all'app",
-      purchased: "Tocca per sbloccare il tuo acquisto nell'app",
+      purchased: "Tutto pronto. Tocca per tornare all'app",
     },
   },
   pt: {
@@ -156,7 +156,7 @@ const COPY = {
     },
     returning: {
       closed: "Toque para voltar ao app",
-      purchased: "Toque para liberar sua compra no app",
+      purchased: "Tudo pronto. Toque para voltar ao app",
     },
   },
   nl: {
@@ -178,7 +178,7 @@ const COPY = {
     },
     returning: {
       closed: "Tik om terug te gaan naar de app",
-      purchased: "Tik om je aankoop in de app te ontgrendelen",
+      purchased: "Helemaal klaar. Tik om terug te gaan naar de app",
     },
   },
   sv: {
@@ -199,7 +199,7 @@ const COPY = {
     },
     returning: {
       closed: "Tryck för att gå tillbaka till appen",
-      purchased: "Tryck för att låsa upp ditt köp i appen",
+      purchased: "Klart. Tryck för att gå tillbaka till appen",
     },
   },
   da: {
@@ -221,7 +221,7 @@ const COPY = {
     },
     returning: {
       closed: "Tryk for at gå tilbage til appen",
-      purchased: "Tryk for at låse dit køb op i appen",
+      purchased: "Det er klaret. Tryk for at gå tilbage til appen",
     },
   },
   nb: {
@@ -243,7 +243,7 @@ const COPY = {
     },
     returning: {
       closed: "Trykk for å gå tilbake til appen",
-      purchased: "Trykk for å låse opp kjøpet ditt i appen",
+      purchased: "Alt klart. Trykk for å gå tilbake til appen",
     },
   },
   fi: {
@@ -264,7 +264,7 @@ const COPY = {
     },
     returning: {
       closed: "Napauta palataksesi sovellukseen",
-      purchased: "Napauta avataksesi ostoksesi sovelluksessa",
+      purchased: "Valmista. Napauta palataksesi sovellukseen",
     },
   },
   pl: {
@@ -285,7 +285,7 @@ const COPY = {
     },
     returning: {
       closed: "Stuknij, aby wrócić do aplikacji",
-      purchased: "Stuknij, aby odblokować zakup w aplikacji",
+      purchased: "Gotowe. Stuknij, aby wrócić do aplikacji",
     },
   },
   cs: {
@@ -307,7 +307,7 @@ const COPY = {
     },
     returning: {
       closed: "Klepnutím se vrátíte do aplikace",
-      purchased: "Klepnutím odemknete nákup v aplikaci",
+      purchased: "Hotovo. Klepnutím se vrátíte do aplikace",
     },
   },
   sk: {
@@ -328,7 +328,7 @@ const COPY = {
     },
     returning: {
       closed: "Klepnutím sa vrátite do aplikácie",
-      purchased: "Klepnutím odomknete nákup v aplikácii",
+      purchased: "Hotovo. Klepnutím sa vrátite do aplikácie",
     },
   },
   hu: {
@@ -350,7 +350,7 @@ const COPY = {
     },
     returning: {
       closed: "Koppintson a visszatéréshez az alkalmazásba",
-      purchased: "Koppintson a vásárlás feloldásához az alkalmazásban",
+      purchased: "Minden kész. Koppintson a visszatéréshez az alkalmazásba",
     },
   },
   ro: {
@@ -372,7 +372,7 @@ const COPY = {
     },
     returning: {
       closed: "Atinge pentru a reveni în aplicație",
-      purchased: "Atinge pentru a debloca achiziția în aplicație",
+      purchased: "Gata. Atinge pentru a reveni în aplicație",
     },
   },
   hr: {
@@ -394,7 +394,7 @@ const COPY = {
     },
     returning: {
       closed: "Dodirnite za povratak u aplikaciju",
-      purchased: "Dodirnite za otključavanje kupnje u aplikaciji",
+      purchased: "Sve je spremno. Dodirnite za povratak u aplikaciju",
     },
   },
   el: {
@@ -415,7 +415,7 @@ const COPY = {
     },
     returning: {
       closed: "Πατήστε για επιστροφή στην εφαρμογή",
-      purchased: "Πατήστε για ξεκλείδωμα της αγοράς στην εφαρμογή",
+      purchased: "Όλα έτοιμα. Πατήστε για επιστροφή στην εφαρμογή",
     },
   },
   tr: {
@@ -437,7 +437,7 @@ const COPY = {
     },
     returning: {
       closed: "Uygulamaya dönmek için dokunun",
-      purchased: "Satın aldığınızı uygulamada açmak için dokunun",
+      purchased: "Her şey hazır. Uygulamaya dönmek için dokunun",
     },
   },
   ru: {
@@ -458,7 +458,7 @@ const COPY = {
     },
     returning: {
       closed: "Нажмите, чтобы вернуться в приложение",
-      purchased: "Нажмите, чтобы открыть покупку в приложении",
+      purchased: "Готово. Нажмите, чтобы вернуться в приложение",
     },
   },
   uk: {
@@ -479,7 +479,7 @@ const COPY = {
     },
     returning: {
       closed: "Торкніться, щоб повернутися в застосунок",
-      purchased: "Торкніться, щоб відкрити покупку в застосунку",
+      purchased: "Готово. Торкніться, щоб повернутися в застосунок",
     },
   },
   ja: {
@@ -500,7 +500,7 @@ const COPY = {
     },
     returning: {
       closed: "タップしてアプリに戻る",
-      purchased: "タップしてアプリで購入を有効にする",
+      purchased: "完了しました。タップしてアプリに戻る",
     },
   },
   ko: {
@@ -521,7 +521,7 @@ const COPY = {
     },
     returning: {
       closed: "탭하여 앱으로 돌아가기",
-      purchased: "탭하여 앱에서 구매 항목 잠금 해제",
+      purchased: "모두 완료되었습니다. 탭하여 앱으로 돌아가기",
     },
   },
   "zh-Hans": {
@@ -542,7 +542,7 @@ const COPY = {
     },
     returning: {
       closed: "轻点以返回应用",
-      purchased: "轻点以在应用中解锁你的购买",
+      purchased: "一切就绪。轻点以返回应用",
     },
   },
   "zh-Hant": {
@@ -563,7 +563,7 @@ const COPY = {
     },
     returning: {
       closed: "點一下以返回 App",
-      purchased: "點一下以在 App 中解鎖你的購買項目",
+      purchased: "一切就緒。點一下以返回 App",
     },
   },
   ar: {
@@ -585,7 +585,7 @@ const COPY = {
     },
     returning: {
       closed: "اضغط للعودة إلى التطبيق",
-      purchased: "اضغط لفتح عملية الشراء في التطبيق",
+      purchased: "تم كل شيء. اضغط للعودة إلى التطبيق",
     },
   },
   he: {
@@ -607,7 +607,7 @@ const COPY = {
     },
     returning: {
       closed: "הקישו כדי לחזור לאפליקציה",
-      purchased: "הקישו כדי לפתוח את הרכישה באפליקציה",
+      purchased: "הכול מוכן. הקישו כדי לחזור לאפליקציה",
     },
   },
   hi: {
@@ -629,7 +629,7 @@ const COPY = {
     },
     returning: {
       closed: "ऐप पर लौटने के लिए टैप करें",
-      purchased: "ऐप में अपनी खरीदारी अनलॉक करने के लिए टैप करें",
+      purchased: "सब तैयार है। ऐप पर लौटने के लिए टैप करें",
     },
   },
   id: {
@@ -650,7 +650,7 @@ const COPY = {
     },
     returning: {
       closed: "Ketuk untuk kembali ke aplikasi",
-      purchased: "Ketuk untuk membuka pembelian Anda di aplikasi",
+      purchased: "Semua beres. Ketuk untuk kembali ke aplikasi",
     },
   },
   ms: {
@@ -671,7 +671,7 @@ const COPY = {
     },
     returning: {
       closed: "Ketik untuk kembali ke aplikasi",
-      purchased: "Ketik untuk membuka pembelian anda dalam aplikasi",
+      purchased: "Semua selesai. Ketik untuk kembali ke aplikasi",
     },
   },
   th: {
@@ -692,7 +692,7 @@ const COPY = {
     },
     returning: {
       closed: "แตะเพื่อกลับไปที่แอป",
-      purchased: "แตะเพื่อปลดล็อกสิ่งที่คุณซื้อในแอป",
+      purchased: "เรียบร้อยแล้ว แตะเพื่อกลับไปที่แอป",
     },
   },
   vi: {
@@ -714,7 +714,7 @@ const COPY = {
     },
     returning: {
       closed: "Chạm để quay lại ứng dụng",
-      purchased: "Chạm để mở khóa giao dịch mua trong ứng dụng",
+      purchased: "Đã xong. Chạm để quay lại ứng dụng",
     },
   },
 } satisfies Record<string, LocaleCopy>;
