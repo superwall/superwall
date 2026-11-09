@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
   AppScheme,
@@ -145,6 +145,43 @@ export class FrameworkNotFoundError extends Error {
   }
 }
 
+/**
+ * A directory the framework's tools can't work under. tsx, which loads TypeScript, cuts a file's
+ * path at `?`, so `src/build/index.ts` under `Good Deal? AI/` is compiled as JavaScript and fails
+ * on its first type. Vite reads both `?` and `#` in a path as the start of a URL query or fragment,
+ * so it can't build or preview a project below either. A symlink doesn't help: both resolve it to
+ * the real path. Neither is ours to change, so the CLI says so before they fail.
+ */
+export class UnsupportedProjectPathError extends Error {
+  constructor(
+    readonly dir: string,
+    readonly segment: string,
+  ) {
+    const chars = ["?", "#"].filter((char) => segment.includes(char)).map((char) => `\`${char}\``);
+    super(
+      `superwall can't work in ${dir}: the directory \`${segment}\` has ${chars.join(" and ")} in its name, ` +
+        "which the build tools read as part of a URL, so the project's files can't be loaded.\n" +
+        `Rename \`${segment}\`, or move the project to a path without \`?\` or \`#\`. ` +
+        "A symlink doesn't help: the tools resolve it to the real path.",
+    );
+  }
+}
+
+const realpath = (dir: string): string => {
+  try {
+    return realpathSync(dir);
+  } catch {
+    return dir;
+  }
+};
+
+/** Throws when a directory of `dir`'s real path has one of `chars` in its name. */
+export function assertWorkablePath(dir: string, chars: "?" | "?#" = "?#"): void {
+  const real = realpath(dir);
+  const segment = real.split(sep).find((part) => [...chars].some((char) => part.includes(char)));
+  if (segment !== undefined) throw new UnsupportedProjectPathError(real, segment);
+}
+
 async function importSubpath(packageDir: string, subpath: string): Promise<Record<string, unknown>> {
   const require = createRequire(join(packageDir, "package.json"));
   return import(pathToFileURL(require.resolve(subpath)).href);
@@ -185,7 +222,10 @@ export function frameworkVersion(cwd: string): string {
 }
 
 export async function resolveFramework(cwd: string): Promise<Framework> {
+  // tsx loads the framework and every surface's config.ts: neither may sit below a `?`.
+  assertWorkablePath(cwd, "?");
   const dir = resolveFrameworkDir(cwd);
+  assertWorkablePath(dir, "?");
 
   const [discover, build, preview] = await Promise.all([
     importSubpath(dir, "superwall/discover"),
@@ -198,10 +238,23 @@ export async function resolveFramework(cwd: string): Promise<Framework> {
       ? (preview.buildStudioProject as Framework["studioProject"])
       : undefined;
 
+  const buildSnapshot = fn<Framework["buildSnapshot"]>(build, "buildSnapshot", "superwall/build");
+  const startPreviewServer = fn<Framework["startPreviewServer"]>(
+    preview,
+    "startPreviewServer",
+    "superwall/preview",
+  );
+  // Vite builds and previews: no project root below a `?` or a `#`.
   return {
     discoverProject: fn(discover, "discoverProject", "superwall/discover"),
-    buildSnapshot: fn(build, "buildSnapshot", "superwall/build"),
-    startPreviewServer: fn(preview, "startPreviewServer", "superwall/preview"),
+    buildSnapshot: async (project, surface, options) => {
+      assertWorkablePath(project.root);
+      return buildSnapshot(project, surface, options);
+    },
+    startPreviewServer: async (roots, options) => {
+      for (const root of typeof roots === "string" ? [roots] : roots) assertWorkablePath(root);
+      return startPreviewServer(roots, options);
+    },
     studioProject,
   };
 }
