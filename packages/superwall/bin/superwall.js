@@ -47,9 +47,9 @@ if (localBin && fs.existsSync(localBin)) {
   const projectDir = fs.existsSync(path.join(process.cwd(), "superwall", "package.json"))
     ? path.join(process.cwd(), "superwall")
     : process.cwd();
-  const tsconfig = path.join(projectDir, "tsconfig.json");
   const { register } = await import("tsx/esm/api");
-  register({ tsconfig: fs.existsSync(tsconfig) ? tsconfig : false });
+  const { registerTypeScript } = await import("./typescript.js");
+  registerTypeScript(projectDir, register);
 
   const { main } = await import("@superwall/cli");
   await main();

@@ -141,7 +141,10 @@ self-describing npm project — clone it, install, `superwall dev`:
 
 Commands resolve the framework from `<cwd>/superwall/` first, then `<cwd>`,
 so they work from the host root and from inside the directory alike; `.env` is
-read from both, the project's own file winning.
+read from both, the project's own file winning. The CLI registers tsx with that
+directory's `tsconfig.json` (`bin/typescript.js`), and without it when tsx can't
+read it, e.g. a monorepo root whose `extends` names a package not yet installed:
+the user's tsconfig never stops a command, and a superwall project is warned.
 
 ## Repository layout
 
