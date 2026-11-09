@@ -295,7 +295,7 @@ const ARROW_HEAD_ANGLE = Math.PI / 4;
 const ARROW_STROKE = 3;
 const CAPTION_MARGIN = 24;
 
-const RTL_SYSTEM_LANGUAGES = new Set(["ar", "he", "fa", "ur"]);
+const RTL_SYSTEM_LANGUAGES = new Set<string | undefined>(["ar", "he", "fa", "ur"]);
 
 const safariMajor = (userAgent: string): number | undefined => {
   const match = /Version\/(\d+)/.exec(userAgent);
@@ -306,7 +306,7 @@ export const openButtonAnchor = (
   view: PromptView,
 ): { x: number; y: number; side: "ltr" | "rtl" } | undefined => {
   if (view.screenWidth > WIDEST_PHONE || view.innerWidth > view.innerHeight) return undefined;
-  const language = view.language.toLowerCase().split("-")[0] ?? "";
+  const [language] = view.language.toLowerCase().split("-");
   const side = RTL_SYSTEM_LANGUAGES.has(language) ? "rtl" : "ltr";
   const x = side === "rtl" ? OPEN_CENTER_INSET : view.innerWidth - OPEN_CENTER_INSET;
   const major = safariMajor(view.userAgent);
