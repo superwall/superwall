@@ -351,6 +351,39 @@ describe("a pre-render that fails", () => {
     }
   }, 120_000);
 
+  it("lists no locale when no page rendered, and names a lone unpriced product as it", async () => {
+    const edge = surface("edge");
+    const entryDir = fs.mkdtempSync(path.join(FIXTURE, "superwall/.superwall/prerender-"));
+    try {
+      const result = await prerenderTeleportPages({
+        entry: {
+          entryDir,
+          project: project(),
+          surface: edge,
+          config: { teleport: { route: "checkout" } },
+        },
+        vite: {
+          configFile: false,
+          root: entryDir,
+          logLevel: "silent",
+          plugins: [{ name: "exports-nothing", renderChunk: () => "void 0" }],
+        },
+        route: "checkout",
+        defaultLocale: "en",
+        locales: ["de"],
+        products: { annual: "stripe|live:price_annual" },
+      });
+      expect(result.pages).toEqual([]);
+      expect(result.locales).toEqual([]);
+      expect(result.warnings).toEqual([
+        "No teleport page for `annual`: this build has no store price for it, so the page would show none. `superwall push` prices them.",
+        "Some teleport pages were not pre-rendered and render in the browser instead: the pre-render bundle exported nothing.",
+      ]);
+    } finally {
+      fs.rmSync(entryDir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
   it("says so when a bundle sets no renderer", () => {
     expect(() =>
       renderTeleportPage("void 0", "checkout", {

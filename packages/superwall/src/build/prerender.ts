@@ -127,16 +127,7 @@ export const renderTeleportPage = (
   }
 };
 
-const bundledCode = (output: Rollup.RollupOutput | Rollup.RollupOutput[] | unknown): string => {
-  const outputs = Array.isArray(output) ? output : [output];
-  for (const result of outputs) {
-    const chunk = (result as Rollup.RollupOutput).output?.find(
-      (item): item is Rollup.OutputChunk => item.type === "chunk" && item.isEntry,
-    );
-    if (chunk) return chunk.code;
-  }
-  throw new Error("the pre-render build produced no script");
-};
+const bundledCode = (output: unknown): string => (output as Rollup.RollupOutput).output[0].code;
 
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);

@@ -42,6 +42,8 @@ describe("expectedTeleportPageKey", () => {
     expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("en/__none__/1");
     boot({ hasIntroductoryOffer: true });
     expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("en/__none__/1");
+    boot({ hasIntroductoryOffer: true, ...device({ deviceLocale: 49 }) });
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("en/__none__/1");
   });
 });
 

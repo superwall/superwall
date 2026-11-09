@@ -4,6 +4,7 @@ import {
   backgroundOf,
   checkoutModeOf,
   normalizePlatform,
+  resolveLocale,
   teleportOf,
   type SuperwallBillingPlan,
   type SuperwallConfig,
@@ -128,6 +129,10 @@ export const buildSnapshot = async (
 
   let collected: CollectedAssets = { assets: [], routes: {}, externalSources: [] };
 
+  const plugins = [
+    react(),
+    ...(platform === undefined ? [] : [resolveConfigProducts(surface.configFile, products)]),
+  ];
   const shared: InlineConfig = {
     configFile: false,
     envFile: false,
@@ -136,10 +141,7 @@ export const buildSnapshot = async (
     logLevel: "warn",
     assetsInclude: EXTRA_ASSET_TYPES.map((extension) => `**/*.${extension}`),
     esbuild: { jsx: "automatic", jsxImportSource: "react" },
-    plugins: [
-      react(),
-      ...(platform === undefined ? [] : [resolveConfigProducts(surface.configFile, products)]),
-    ],
+    plugins,
     resolve: {
       dedupe: ["react", "react-dom"],
       alias: { "@": project.superwallDir },
@@ -159,7 +161,7 @@ export const buildSnapshot = async (
   await viteBuild({
     ...shared,
     plugins: [
-      ...(shared.plugins ?? []),
+      ...plugins,
       collectAssets(entryDir, project.superwallDir, surface, assetBaseUrl, (value) => {
         collected = value;
       }),
@@ -190,7 +192,7 @@ export const buildSnapshot = async (
           entry,
           vite: shared,
           route,
-          defaultLocale: config.localization?.defaultLocale ?? "en",
+          defaultLocale: resolveLocale(undefined, config.localization),
           locales,
           products,
         });

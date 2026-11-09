@@ -62,6 +62,16 @@ describe("teleport page timing", () => {
     expect(marks(TELEPORT_MARKS.paymentReady)).toEqual([]);
   });
 
+  it("never throws where the browser has no performance timeline", () => {
+    onTeleportPage();
+    vi.stubGlobal("performance", undefined);
+    try {
+      expect(() => markTeleportPage(TELEPORT_MARKS.scriptStart)).not.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("never throws when the browser refuses a mark", () => {
     onTeleportPage();
     vi.spyOn(performance, "mark").mockImplementation(() => {

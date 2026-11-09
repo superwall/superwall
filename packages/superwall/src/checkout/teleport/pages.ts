@@ -31,7 +31,6 @@ const requestedLocale = (boot: TeleportBoot): string | undefined => {
 };
 
 const openingRoute = (boot: TeleportBoot): string => {
-  if (typeof window === "undefined") return boot.route;
   const asked = new URLSearchParams(window.location.search).get(NAV_QUERY_KEY);
   return asked === null || asked === "" ? boot.route : asked;
 };

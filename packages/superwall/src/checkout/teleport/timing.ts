@@ -12,7 +12,6 @@ export type TeleportMark = (typeof TELEPORT_MARKS)[keyof typeof TELEPORT_MARKS];
 export const markTeleportPage = (mark: TeleportMark): void => {
   if (readTeleportBoot() === undefined) return;
   try {
-    if (typeof performance === "undefined") return;
     if (performance.getEntriesByName(mark, "mark").length > 0) return;
     performance.mark(mark);
   } catch {}
