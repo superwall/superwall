@@ -6,6 +6,7 @@ import { afterEach, test } from "node:test";
 import {
   outputFile,
   teleportPageFile,
+  unbuiltTeleportPages,
   parseBuildPlatforms,
   runBuildPipeline,
   type BuildContext,
@@ -266,4 +267,26 @@ test("the step line counts the teleport pages a build made", async () => {
   });
   assert.equal(steps.length, 1);
   assert.match(steps[0]!, /1 teleport page\b/);
+});
+
+test("a platform-neutral build of a teleporting paywall says how to build its teleport pages", async () => {
+  const project = scaffold(["pro"]);
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-build-out-"));
+  dirs.push(out);
+  const base = frameworkFor(project, []);
+  const infos: string[] = [];
+  const info = ui.info;
+  ui.info = (text) => void infos.push(text);
+  const load = async (): Promise<Framework> => ({
+    ...base,
+    buildSnapshot: async (...args) => ({ ...(await base.buildSnapshot(...args)), teleportRoute: "checkout" }),
+  });
+  try {
+    await runBuildPipeline(contextFor().context, { dir: project.root, out, load });
+    await runBuildPipeline(contextFor().context, { dir: project.root, out, platforms: ["ios"], load });
+  } finally {
+    ui.info = info;
+  }
+  assert.deepEqual(infos, [unbuiltTeleportPages({ kind: "paywall", id: "pro" }, "checkout")]);
+  assert.match(infos[0]!, /superwall build --id pro --platform ios/);
 });

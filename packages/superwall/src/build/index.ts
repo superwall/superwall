@@ -62,6 +62,7 @@ export type BuiltSnapshot = {
   assets: SnapshotAsset[];
   assetBytes: number;
   externalSources: string[];
+  teleportRoute: string | undefined;
   teleportPages: TeleportPage[];
   warnings: string[];
 };
@@ -221,6 +222,7 @@ export const buildSnapshot = async (
     assets: collected.assets,
     assetBytes: collected.assets.reduce((total, asset) => total + asset.bytes, 0),
     externalSources: collected.externalSources,
+    teleportRoute: route,
     teleportPages: prerendered.pages,
     warnings: prerendered.warnings,
   };

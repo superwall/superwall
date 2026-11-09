@@ -77,6 +77,7 @@ export interface BuiltSnapshot {
   assets?: BuiltSnapshotAsset[];
   assetBytes?: number;
   externalSources?: string[];
+  teleportRoute?: string;
   teleportPages?: BuiltTeleportPage[];
   warnings?: string[];
 }

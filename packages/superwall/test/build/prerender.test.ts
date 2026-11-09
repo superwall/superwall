@@ -249,6 +249,7 @@ describe("pre-rendering the teleport route", () => {
 describe("when there is nothing to pre-render", () => {
   it("renders no pages without a platform, as the preview builds", async () => {
     const built = await buildSnapshot(project(), surface("teleport"), {});
+    expect(built.teleportRoute).toBe("checkout");
     expect(built.teleportPages).toEqual([]);
     expect(built.warnings).toEqual([]);
     expect(built.html).not.toContain("sw-teleport-pages");
@@ -256,6 +257,7 @@ describe("when there is nothing to pre-render", () => {
 
   it("renders no pages for a paywall without teleport.route", async () => {
     const built = await buildSnapshot(project(), surface("stores"), { platform: "ios" });
+    expect(built.teleportRoute).toBeUndefined();
     expect(built.teleportPages).toEqual([]);
     expect(built.warnings).toEqual([]);
   }, 120_000);

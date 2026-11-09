@@ -52,6 +52,10 @@ export function parseBuildPlatforms(values: readonly string[]): Array<string | u
   return platforms.length === 0 ? [undefined] : platforms;
 }
 
+export function unbuiltTeleportPages(surface: Pick<FrameworkSurface, "kind" | "id">, route: string): string {
+  return `${surface.kind}/${surface.id} teleports from "${route}", but its teleport pages are pre-rendered per platform: run \`superwall build --id ${surface.id} --platform ios\` to build them.`;
+}
+
 export function teleportPageFile(file: string, key: string): string {
   return path.join(path.dirname(file), "teleport", `${key}.html`);
 }
@@ -126,6 +130,9 @@ export async function runBuildPipeline(context: BuildContext, options: BuildInpu
         text: `${surface.kind}/${surface.id}${platform ? ` ${platform}` : ""} ${pc.dim(`${kb(built.bytes)} · ${built.snapshotId.slice(0, 8)}${teleport}`)} → ${path.relative(process.cwd(), file)}`,
       });
       for (const warning of built.warnings ?? []) ui.warn(warning);
+      if (platform === undefined && built.teleportRoute !== undefined) {
+        ui.info(unbuiltTeleportPages(surface, built.teleportRoute));
+      }
     }
   }
   context.output.render({
