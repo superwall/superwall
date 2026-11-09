@@ -63,7 +63,9 @@ export async function runPaywallMigration(
       target,
       paywallId,
       newProject: existingDir === undefined,
+      dryRun: ctx.dryRun,
     });
+    if (ctx.dryRun) return endDryRun(ctx, `superwall migrate ${paywallId}`);
     migration = migrationFor(target, origin.id);
     if (migration === undefined) {
       throw new Error(
@@ -74,6 +76,7 @@ export async function runPaywallMigration(
     ui.info(
       `\`paywalls/${migration.surfaceId}\` was scaffolded from paywall ${paywallId} — picking up the rebuild.`,
     );
+    if (ctx.dryRun) return endDryRun(ctx, `superwall migrate ${paywallId}`);
   }
 
   const choice = await offerMigration(ui, interactive, migration);
@@ -90,6 +93,17 @@ export async function runPaywallMigration(
     blocks.outro(`Done.  ${DASHBOARD_URL}`),
   );
   if (opening) await startStudio(migration.superwallDir, migration.surfaceId);
+}
+
+/**
+ * A dry run stops after the plan: no files, no lock entries, and no agent run
+ * (the rebuild is the agent editing the project).
+ */
+function endDryRun(ctx: WorkflowOptions, command: string): void {
+  ctx.output.render(
+    blocks.nextSteps([`Run \`${command}\` without --dry-run to scaffold it and rebuild with your agent.`]),
+    blocks.outro("Dry run - no changes made."),
+  );
 }
 
 async function pickScreen(ctx: WorkflowOptions): Promise<string | undefined> {
@@ -159,14 +173,18 @@ export async function runScreenMigration(
     if (screenshot !== undefined && !fs.existsSync(screenshot)) {
       throw new Error(`No screenshot at \`${screen.screenshot}\`.`);
     }
-    if (screenshot === undefined && interactive) screenshot = await askForScreenshot(ui);
+    if (screenshot === undefined && interactive && !ctx.dryRun) {
+      screenshot = await askForScreenshot(ui);
+    }
     scaffoldFromScreen(ui, {
       root: installDir,
       target,
       file,
       newProject: existingDir === undefined,
       screenshot,
+      dryRun: ctx.dryRun,
     });
+    if (ctx.dryRun) return endDryRun(ctx, `superwall migrate --screen ${shown}`);
     migration = screenMigrationFor(target, file);
     if (migration === undefined) {
       throw new Error(`\`${shown}\` was not recorded in superwall.lock — nothing to rebuild.`);
@@ -175,6 +193,7 @@ export async function runScreenMigration(
     ui.info(
       `\`paywalls/${migration.surfaceId}\` was scaffolded from \`${shown}\` — picking up the rebuild.`,
     );
+    if (ctx.dryRun) return endDryRun(ctx, `superwall migrate --screen ${shown}`);
   }
 
   const choice = await offerMigration(ui, interactive, migration);
