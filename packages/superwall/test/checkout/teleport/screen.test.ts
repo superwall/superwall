@@ -93,7 +93,7 @@ describe("the teleport screen, as paywall.js draws it", () => {
     expect(hints[0]?.dataset.side).toBe("ltr");
     const arrow = hints[0]?.querySelectorAll(".sw-teleport-dim-arrow path");
     expect(arrow).toHaveLength(2);
-    expect(arrow?.[0]?.getAttribute("d")).toMatch(new RegExp(`L${window.innerWidth - 61.5} [\\d.]+$`));
+    expect(arrow?.[0]?.getAttribute("d")).toMatch(new RegExp(` ${window.innerWidth - 61.5} [\\d.]+$`));
 
     const leaving = createReturnDim();
     leaving.remove();
@@ -172,14 +172,16 @@ describe("the teleport screen, as paywall.js draws it", () => {
     expect(arrowTailX(340.5, "ltr", { left: 200, right: 210 })).toBe(284.5);
   });
 
-  it("draws the arrow as one straight line from the caption to Open, its head turned along it", () => {
+  it("draws the arrow as one clean arc from the caption up to Open, its head turned along the arc's end", () => {
     const layout = { tipX: 340.5, tipY: 483.2, tailY: 539.2, captionTop: 548.7 };
-    const [line, head] = arrowPaths(284.5, layout);
-    expect(line).toBe("M284.5 539.2L340.5 483.2");
-    expect(head).toBe("M340.5 493.2L340.5 483.2L330.5 483.2");
-    const [straight, straightHead] = arrowPaths(340.5, layout);
-    expect(straight).toBe("M340.5 539.2L340.5 483.2");
-    expect(straightHead).toBe("M347.6 490.3L340.5 483.2L333.4 490.3");
+    const [arc, head] = arrowPaths(284.5, layout);
+    expect(arc).toBe("M284.5 539.2Q324.8 523.5 340.5 483.2");
+    expect(head).toBe("M344.5 492.4L340.5 483.2L331.3 487.2");
+    const [mirrored, mirroredHead] = arrowPaths(117.5, { ...layout, tipX: 61.5 });
+    expect(mirrored).toBe("M117.5 539.2Q77.2 523.5 61.5 483.2");
+    expect(mirroredHead).toBe("M70.7 487.2L61.5 483.2L57.5 492.4");
+    const [upright] = arrowPaths(340.5, layout);
+    expect(upright).toBe("M340.5 539.2Q328.2 511.2 340.5 483.2");
   });
 
   it("puts Open on the left when the phone, not the paywall, reads right to left", () => {

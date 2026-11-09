@@ -288,6 +288,7 @@ const ALERT_BOTTOM_BELOW_OPEN = 10;
 const HINT_GAP = 14;
 const ARROW_RISE = 56;
 const ARROW_SWEEP = 56;
+const ARROW_BOW = 0.22;
 const ARROW_HEAD = 10;
 const ARROW_HEAD_ANGLE = Math.PI / 4;
 const ARROW_STROKE = 3;
@@ -353,11 +354,16 @@ const round = (value: number) => Math.round(value * 10) / 10;
 
 export const arrowPaths = (tailX: number, layout: HintLayout): [string, string] => {
   const { tipX, tipY, tailY } = layout;
-  const angle = Math.atan2(tailY - tipY, tailX - tipX);
+  const dx = tipX - tailX;
+  const dy = tipY - tailY;
+  const flip = dx > 0 ? 1 : -1;
+  const controlX = (tailX + tipX) / 2 - dy * ARROW_BOW * flip;
+  const controlY = (tailY + tipY) / 2 + dx * ARROW_BOW * flip;
+  const angle = Math.atan2(controlY - tipY, controlX - tipX);
   const barb = (turn: number) =>
     `${round(tipX + ARROW_HEAD * Math.cos(angle + turn))} ${round(tipY + ARROW_HEAD * Math.sin(angle + turn))}`;
   return [
-    `M${round(tailX)} ${round(tailY)}L${round(tipX)} ${round(tipY)}`,
+    `M${round(tailX)} ${round(tailY)}Q${round(controlX)} ${round(controlY)} ${round(tipX)} ${round(tipY)}`,
     `M${barb(-ARROW_HEAD_ANGLE)}L${round(tipX)} ${round(tipY)}L${barb(ARROW_HEAD_ANGLE)}`,
   ];
 };
