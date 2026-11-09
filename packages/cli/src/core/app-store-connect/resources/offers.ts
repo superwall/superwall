@@ -65,23 +65,108 @@ async function resolveOfferTerritories(session: AscSession, subscription: string
   return availability.territories;
 }
 
-async function createIntroductoryOffer(
+interface PlannedOffers {
+  /** The subscription PATCH that creates the offers inline. */
+  body: ReturnType<typeof bulkSubscriptionPatch>;
+  /** Territories the offer goes to. */
+  territories: string[];
+  /** Territories Apple has no price point for. */
+  skipped: string[];
+}
+
+/** Everything that can fail without changing anything (price points) happens here, before any write. */
+async function planIntroductoryOffer(
   session: AscSession,
   subscription: string,
   terms: OfferTerms,
   territories: readonly string[],
   base: { territory: string; price?: number },
-): Promise<string[]> {
+): Promise<PlannedOffers> {
   if (terms.offerMode === "FREE_TRIAL") {
-    await session.send("patch", `/v1/subscriptions/${subscription}`, bulkSubscriptionPatch(subscription, { offers: introductoryOfferEntries(subscription, territories, terms) }));
-    return [];
+    const body = bulkSubscriptionPatch(subscription, { offers: introductoryOfferEntries(subscription, territories, terms) });
+    return { body, territories: [...territories], skipped: [] };
   }
   if (base.price === undefined) throw new UsageError(`A ${terms.offerMode} offer needs --price, in ${base.territory}.`);
   const point = await findPricePoint(session, "subscription", subscription, base.territory, base.price);
   const { points, skipped } = await resolveTerritoryPoints(session, { territory: base.territory, point }, territories);
   const offers = introductoryOfferEntries(subscription, [...points.keys()], terms, points);
-  await session.send("patch", `/v1/subscriptions/${subscription}`, bulkSubscriptionPatch(subscription, { offers }));
-  return skipped;
+  return { body: bulkSubscriptionPatch(subscription, { offers }), territories: [...points.keys()], skipped };
+}
+
+export interface OfferReplacement {
+  /** Offers that haven't started, or that a new offer starting today replaces: deleted. */
+  remove: OfferView[];
+  /** Running offers that end the day before the new one starts. */
+  end: { offer: OfferView; endDate: string }[];
+}
+
+const isoDay = (date: Date) => date.toISOString().slice(0, 10);
+
+function dayBefore(day: string): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return isoDay(date);
+}
+
+/**
+ * Apple refuses (409) an introductory offer whose dates overlap another one in the same territory,
+ * though App Store Connect's own UI replaces it. This plans that replacement for the territories the
+ * new offer goes to: an overlapping offer that hasn't started is deleted; one that is running ends
+ * the day before the new one starts, or is deleted when the new one starts today. Offers that ended
+ * before today, and offers in other territories, are left alone. Dates are inclusive `yyyy-mm-dd`.
+ */
+export function planOfferReplacement(
+  existing: readonly OfferView[],
+  territories: readonly string[],
+  terms: Pick<OfferTerms, "startDate" | "endDate">,
+  today: string,
+): OfferReplacement {
+  const targets = new Set(territories);
+  const start = terms.startDate && terms.startDate > today ? terms.startDate : today;
+  const end = terms.endDate;
+  const plan: OfferReplacement = { remove: [], end: [] };
+  for (const offer of existing) {
+    if (!offer.territory || !targets.has(offer.territory)) continue;
+    if (offer.endDate && offer.endDate < today) continue;
+    const overlaps = (!offer.endDate || offer.endDate >= start) && (!end || !offer.startDate || offer.startDate <= end);
+    if (!overlaps) continue;
+    const started = !offer.startDate || offer.startDate <= today;
+    if (started && start > today) plan.end.push({ offer, endDate: dayBefore(start) });
+    else plan.remove.push(offer);
+  }
+  return plan;
+}
+
+function describeReplacement(plan: OfferReplacement): string {
+  const where = (offers: readonly OfferView[]) => offers.map((offer) => `${offer.territory} (${offer.id})`).join(", ");
+  const lines: string[] = [];
+  if (plan.remove.length) lines.push(`Delete ${plural(plan.remove.length, "existing introductory offer")} it overlaps: ${where(plan.remove)}`);
+  for (const { offer, endDate } of plan.end) lines.push(`End the running offer in ${where([offer])} on ${endDate}`);
+  return lines.join("\n");
+}
+
+async function replaceOverlappingOffers(session: AscSession, plan: OfferReplacement, done: string[]): Promise<void> {
+  for (const { offer, endDate } of plan.end) {
+    await session.send("patch", `/v1/subscriptionIntroductoryOffers/${offer.id}`, {
+      data: { type: "subscriptionIntroductoryOffers", id: offer.id, attributes: { endDate } },
+    });
+    done.push(`ended ${offer.territory} (${offer.id}) on ${endDate}`);
+  }
+  for (const offer of plan.remove) {
+    await session.send("delete", `/v1/subscriptionIntroductoryOffers/${offer.id}`);
+    done.push(`deleted ${offer.territory} (${offer.id}, ${[offer.offerMode, offer.duration, offer.customerPrice].filter(Boolean).join(" ")})`);
+  }
+}
+
+/** A failure after an existing offer was changed says which, so nothing is lost silently. */
+async function withReplacedNote(done: readonly string[], write: () => Promise<void>): Promise<void> {
+  try {
+    await write();
+  } catch (error) {
+    if (done.length === 0) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message}\nThe new offer wasn't created, but existing offers were already changed: ${done.join("; ")}. Recreate them with \`asc offers create\` if you need them back.`);
+  }
 }
 
 export async function runOffersCreate(session: AscSession, input: AscInput): Promise<AscOutput> {
@@ -97,12 +182,32 @@ export async function runOffersCreate(session: AscSession, input: AscInput): Pro
   };
   const territories = await resolveOfferTerritories(session, subscription, textOf(input, "availableTerritories"));
   const base = { territory: textOf(input, "territory") ?? DEFAULT_TERRITORY, price: numberOf(input, "price") };
-  const skipped = await createIntroductoryOffer(session, subscription, terms, territories, base);
+  const planned = await planIntroductoryOffer(session, subscription, terms, territories, base);
+  const replacement = planOfferReplacement(await listIntroductoryOffers(session, subscription), planned.territories, terms, isoDay(new Date()));
+  const replacing = replacement.remove.length + replacement.end.length > 0;
+  if (replacing) {
+    await assertConfirmed(session, input.yes, `${describeReplacement(replacement)}\nthen create the new ${terms.offerMode} offer in ${plural(planned.territories.length, "territory")}`);
+  }
+  const done: string[] = [];
+  await withReplacedNote(done, async () => {
+    await replaceOverlappingOffers(session, replacement, done);
+    await session.send("patch", `/v1/subscriptions/${subscription}`, planned.body);
+  });
   if (session.dryRun) return { value: undefined };
   const offers = await listIntroductoryOffers(session, subscription);
+  const replaced = {
+    deleted: replacement.remove.map((offer) => offer.id),
+    ended: replacement.end.map(({ offer, endDate }) => ({ id: offer.id, endDate })),
+  };
   return {
-    value: { introductoryOffers: offers, ...(skipped.length ? { skippedTerritories: skipped } : {}) },
-    heading: `Created a ${terms.offerMode} introductory offer in ${plural(territories.length - skipped.length, "territory")}`,
+    value: {
+      introductoryOffers: offers,
+      ...(replacing ? { replaced } : {}),
+      ...(planned.skipped.length ? { skippedTerritories: planned.skipped } : {}),
+    },
+    heading:
+      `Created a ${terms.offerMode} introductory offer in ${plural(planned.territories.length, "territory")}` +
+      (replacing ? `, replacing ${plural(replacement.remove.length + replacement.end.length, "overlapping offer")}` : ""),
   };
 }
 
