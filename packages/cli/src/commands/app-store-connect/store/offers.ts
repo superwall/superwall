@@ -4,7 +4,7 @@ import { runOffersCreate, runOffersList, OFFER_DURATIONS, OFFER_MODES, runOffers
 export const command = defineAscResource({
   name: "asc offers",
   summary: "Introductory offers of a subscription: free trials and discounted first periods",
-  details: `Apple keeps one introductory offer per territory. create writes it to every territory the
+  details: `Apple keeps one running and one upcoming introductory offer per territory. create writes it to every territory the
 subscription is available in (or --available-territories) in one request; a paid offer is
 priced in --territory and equalized.`,
   operations: [
@@ -18,7 +18,10 @@ priced in --territory and equalized.`,
     {
       name: "create",
       summary: "Create an introductory offer in every territory",
-      details: "Creates introductory offers in the selected territories. New offers with overlapping dates overwrite existing introductory offers.",
+      details: `Creates introductory offers in the selected territories. Apple refuses an offer whose dates overlap
+an existing one in the same territory, so create replaces those first: one that hasn't started is
+deleted, a running one ends the day before the new one starts, or is deleted when the new one starts
+today. It asks before changing existing offers (--yes to go ahead); --dry-run shows what it would do.`,
       flags: {
         subscription: { type: "string", value: "id", describe: "The subscription's id", required: true },
         offerMode: { type: "string", value: "mode", describe: "What the customer pays", required: true, choices: OFFER_MODES },
@@ -30,6 +33,7 @@ priced in --territory and equalized.`,
         startDate: { type: "string", value: "yyyy-mm-dd", describe: "When it starts" },
         endDate: { type: "string", value: "yyyy-mm-dd", describe: "When it ends" },
       },
+      confirm: true,
       effect: "destructive",
       run: runOffersCreate,
     },

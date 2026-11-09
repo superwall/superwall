@@ -1,0 +1,142 @@
+{
+  "appPolicies": {
+    "eula": "",
+    "policies": [
+      {
+        "locale": "en_US",
+        "policyText": "",
+        "policyURL": ""
+      }
+    ]
+  },
+  "identifier": "66666666",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "77777777",
+      "localizations": [
+        {
+          "description": "",
+          "displayName": "Lifetime",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.example.lifetime",
+      "referenceName": "Lifetime",
+      "type": "NonConsumable"
+    }
+  ],
+  "settings": {
+    "_askToBuyEnabled": false,
+    "_billingGracePeriodEnabled": false,
+    "_billingIssuesEnabled": false,
+    "_compatibilityTimeRate": {
+      "3": 6
+    },
+    "_disableDialogs": false,
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_renewalBillingIssuesEnabled": false,
+    "_storeKitErrors": [
+      {
+        "enabled": false,
+        "name": "Load Products"
+      },
+      {
+        "enabled": false,
+        "name": "Purchase"
+      },
+      {
+        "enabled": false,
+        "name": "Verification"
+      },
+      {
+        "enabled": false,
+        "name": "App Store Sync"
+      },
+      {
+        "enabled": false,
+        "name": "Subscription Status"
+      },
+      {
+        "enabled": false,
+        "name": "App Transaction"
+      },
+      {
+        "enabled": false,
+        "name": "Manage Subscriptions Sheet"
+      },
+      {
+        "enabled": false,
+        "name": "Refund Request Sheet"
+      },
+      {
+        "enabled": false,
+        "name": "Offer Code Redeem Sheet"
+      }
+    ],
+    "_storefront": "USA",
+    "_timeRate": 1003
+  },
+  "subscriptionGroups": [
+    {
+      "id": "22222222",
+      "localizations": [],
+      "name": "Pro",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "billingPlans": [
+            {
+              "billingPlanType": "BILLED_UPFRONT",
+              "commitmentDisplayPrice": "9.99",
+              "displayPrice": "9.99",
+              "internalID": "33333333",
+              "isEnabled": true
+            },
+            {
+              "billingPlanType": "MONTHLY",
+              "commitmentDisplayPrice": "11.88",
+              "displayPrice": "0.99",
+              "internalID": "44444444",
+              "isEnabled": true
+            }
+          ],
+          "codeOffers": [],
+          "displayPrice": "9.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "11111111",
+          "introductoryOffers": [
+            {
+              "billingPlanType": "BILLED_UPFRONT",
+              "internalID": "55555555",
+              "numberOfPeriods": 1,
+              "paymentMode": "free",
+              "subscriptionPeriod": "P1W"
+            }
+          ],
+          "localizations": [
+            {
+              "description": "",
+              "displayName": "Monthly",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.example.monthly",
+          "recurringSubscriptionPeriod": "P1M",
+          "referenceName": "Monthly",
+          "subscriptionGroupID": "22222222",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 5,
+    "minor": 0
+  }
+}

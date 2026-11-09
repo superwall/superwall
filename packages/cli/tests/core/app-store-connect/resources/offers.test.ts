@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { command as offers } from "@/commands/app-store-connect/store/offers";
+import { ApiError } from "@/core/api/client";
+import { planOfferReplacement, type OfferView } from "@/core/app-store-connect/resources/offers";
 import { ascRoutes, link, one, page } from "../../../helpers/asc-proxy";
 import { EQUALIZATIONS, subscriptionView, USA_POINTS } from "../../../helpers/asc-store";
 import { runCommand } from "../../../helpers/command";
@@ -12,11 +14,15 @@ afterEach(() => {
 const OFFERS = "GET /v1/subscriptions/601/introductoryOffers?include=territory,subscriptionPricePoint&limit=200&fields[subscriptionPricePoints]=customerPrice";
 
 test("a free trial goes to every territory the subscription is sold in, in one PATCH", async () => {
-  const { api, writes } = ascRoutes({ ...subscriptionView("601"), "PATCH /v1/subscriptions/601": { data: one("subscriptions", "601") } });
+  const { api, writes } = ascRoutes({
+    ...subscriptionView("601"),
+    "DELETE /v1/subscriptionIntroductoryOffers/O1": undefined,
+    "PATCH /v1/subscriptions/601": { data: one("subscriptions", "601") },
+  });
   const result = await runCommand(offers, {
     api,
     words: ["create"],
-    flags: { subscription: "601", offerMode: "free-trial", duration: "TWO_WEEKS", endDate: "2027-01-01" },
+    flags: { subscription: "601", offerMode: "free-trial", duration: "TWO_WEEKS", endDate: "2027-01-01", yes: true },
   });
   const offer = (territory: string) => ({
     type: "subscriptionIntroductoryOffers",
@@ -25,6 +31,7 @@ test("a free trial goes to every territory the subscription is sold in, in one P
     relationships: { subscription: link("subscriptions", "601"), territory: link("territories", territory) },
   });
   assert.deepEqual(writes(), [
+    { method: "DELETE", path: "/v1/subscriptionIntroductoryOffers/O1" },
     {
       method: "PATCH",
       path: "/v1/subscriptions/601",
@@ -45,7 +52,7 @@ test("a free trial goes to every territory the subscription is sold in, in one P
       },
     },
   ]);
-  assert.deepEqual(result.said("success"), ["Created a FREE_TRIAL introductory offer in 2 territories"]);
+  assert.deepEqual(result.said("success"), ["Created a FREE_TRIAL introductory offer in 2 territories, replacing 1 overlapping offer"]);
 });
 
 test("a paid offer is priced in its territory and equalized, skipping territories Apple has no point for", async () => {
@@ -53,6 +60,7 @@ test("a paid offer is priced in its territory and equalized, skipping territorie
     ...subscriptionView("601"),
     [USA_POINTS("601")]: page([one("subscriptionPricePoints", "P-USA", { customerPrice: "0.99" })]),
     [EQUALIZATIONS("P-USA")]: page([one("subscriptionPricePoints", "P-CAN", {}, { territory: link("territories", "CAN") })]),
+    "DELETE /v1/subscriptionIntroductoryOffers/O1": undefined,
     "PATCH /v1/subscriptions/601": { data: one("subscriptions", "601") },
   });
   const result = await runCommand(offers, {
@@ -66,16 +74,19 @@ test("a paid offer is priced in its territory and equalized, skipping territorie
       price: "0.99",
       availableTerritories: "USA,CAN,ATA",
       startDate: "2026-11-01",
+      yes: true,
     },
     json: true,
   });
-  const body = writes()[0]?.body as { included: { attributes: unknown; relationships: { subscriptionPricePoint?: unknown } }[] };
+  assert.deepEqual(writes()[0], { method: "DELETE", path: "/v1/subscriptionIntroductoryOffers/O1" });
+  const body = writes()[1]?.body as { included: { attributes: unknown; relationships: { subscriptionPricePoint?: unknown } }[] };
   assert.deepEqual(
     body.included.map((entry) => entry.relationships.subscriptionPricePoint),
     [link("subscriptionPricePoints", "P-USA"), link("subscriptionPricePoints", "P-CAN")],
   );
   assert.deepEqual(body.included[0]?.attributes, { offerMode: "PAY_UP_FRONT", duration: "ONE_MONTH", numberOfPeriods: 1, startDate: "2026-11-01" });
   assert.deepEqual((result.json as { skippedTerritories: string[] }).skippedTerritories, ["ATA"]);
+  assert.deepEqual((result.json as { replaced: unknown }).replaced, { deleted: ["O1"], ended: [] });
 });
 
 test("a paid offer without --price, or for a subscription sold nowhere, is refused", async () => {
@@ -128,4 +139,127 @@ test("list, update and delete", async () => {
       "DELETE /v1/subscriptionIntroductoryOffers/O2",
     ],
   );
+});
+
+const TODAY = new Date().toISOString().slice(0, 10);
+
+/** A subscription whose USA offer is running: $17.99 paid up front for a year, as in feedback #16. */
+function runningOffer(extra: Record<string, unknown> = {}) {
+  return ascRoutes({
+    ...subscriptionView("601"),
+    [OFFERS]: page(
+      [
+        one("subscriptionIntroductoryOffers", "O-USA", { offerMode: "PAY_UP_FRONT", duration: "ONE_YEAR", numberOfPeriods: 1, startDate: "2026-09-01" }, {
+          territory: link("territories", "USA"),
+          subscriptionPricePoint: link("subscriptionPricePoints", "P-1799"),
+        }),
+        one("subscriptionIntroductoryOffers", "O-CAN", { offerMode: "FREE_TRIAL", duration: "ONE_WEEK", numberOfPeriods: 1 }, { territory: link("territories", "CAN") }),
+      ],
+      { included: [one("subscriptionPricePoints", "P-1799", { customerPrice: "17.99" })] },
+    ),
+    [USA_POINTS("601")]: page([one("subscriptionPricePoints", "P-1749", { customerPrice: "17.49" })]),
+    [EQUALIZATIONS("P-1749")]: page([]),
+    "DELETE /v1/subscriptionIntroductoryOffers/O-USA": undefined,
+    "PATCH /v1/subscriptionIntroductoryOffers/O-USA": { data: one("subscriptionIntroductoryOffers", "O-USA") },
+    "PATCH /v1/subscriptions/601": { data: one("subscriptions", "601") },
+    ...extra,
+  });
+}
+
+const PAY_UP_FRONT = { subscription: "601", offerMode: "PAY_UP_FRONT", duration: "ONE_YEAR", numberOfPeriods: "1", price: "17.49", territory: "USA", availableTerritories: "USA" };
+
+test("create replaces the running offer it overlaps in its territory, after asking (feedback #16)", async () => {
+  const { api, writes } = runningOffer();
+  const refused = await runCommand(offers, { api, words: ["create"], flags: { ...PAY_UP_FRONT, startDate: TODAY } });
+  assert.deepEqual(refused.said("error"), [
+    "Delete 1 existing introductory offer it overlaps: USA (O-USA)\nthen create the new PAY_UP_FRONT offer in 1 territory\nNothing was changed. Pass --yes to go ahead.",
+  ]);
+  assert.deepEqual(writes(), []);
+
+  const result = await runCommand(offers, { api, words: ["create"], flags: { ...PAY_UP_FRONT, startDate: TODAY, yes: true }, json: true });
+  assert.deepEqual(
+    writes().map((request) => `${request.method} ${request.path}`),
+    ["DELETE /v1/subscriptionIntroductoryOffers/O-USA", "PATCH /v1/subscriptions/601"],
+  );
+  const body = writes()[1]?.body as { included: { attributes: unknown; relationships: { territory: unknown; subscriptionPricePoint: unknown } }[] };
+  assert.deepEqual(body.included.map((entry) => [entry.relationships.territory, entry.relationships.subscriptionPricePoint]), [
+    [link("territories", "USA"), link("subscriptionPricePoints", "P-1749")],
+  ]);
+  assert.deepEqual((result.json as { replaced: unknown }).replaced, { deleted: ["O-USA"], ended: [] });
+});
+
+test("a later start ends the running offer the day before, and deletes an upcoming one it overlaps", async () => {
+  const { api, writes } = runningOffer({
+    [OFFERS]: page([
+      one("subscriptionIntroductoryOffers", "O-USA", { offerMode: "PAY_UP_FRONT", duration: "ONE_YEAR", numberOfPeriods: 1 }, { territory: link("territories", "USA") }),
+      one("subscriptionIntroductoryOffers", "O-NEXT", { offerMode: "FREE_TRIAL", duration: "ONE_WEEK", numberOfPeriods: 1, startDate: "2099-06-01" }, {
+        territory: link("territories", "USA"),
+      }),
+    ]),
+    "DELETE /v1/subscriptionIntroductoryOffers/O-NEXT": undefined,
+  });
+  const result = await runCommand(offers, { api, words: ["create"], flags: { ...PAY_UP_FRONT, startDate: "2099-01-01", yes: true } });
+  assert.deepEqual(writes().slice(0, 2), [
+    {
+      method: "PATCH",
+      path: "/v1/subscriptionIntroductoryOffers/O-USA",
+      body: { data: { type: "subscriptionIntroductoryOffers", id: "O-USA", attributes: { endDate: "2098-12-31" } } },
+    },
+    { method: "DELETE", path: "/v1/subscriptionIntroductoryOffers/O-NEXT" },
+  ]);
+  assert.deepEqual(result.said("success"), ["Created a PAY_UP_FRONT introductory offer in 1 territory, replacing 2 overlapping offers"]);
+});
+
+test("a dry run plans the replacement without asking, and an offer elsewhere changes nothing", async () => {
+  const { api, writes } = runningOffer();
+  const planned = await runCommand(offers, { api, words: ["create"], flags: { ...PAY_UP_FRONT, dryRun: true }, json: true });
+  const { requests } = planned.json as { requests: { method: string; path: string }[] };
+  assert.deepEqual(
+    requests.filter((request) => request.method !== "GET").map((request) => `${request.method} ${request.path}`),
+    ["DELETE /v1/subscriptionIntroductoryOffers/O-USA", "PATCH /v1/subscriptions/601"],
+  );
+  assert.deepEqual(writes(), []);
+
+  const elsewhere = runningOffer({
+    [OFFERS]: page([one("subscriptionIntroductoryOffers", "O-CAN", { offerMode: "FREE_TRIAL" }, { territory: link("territories", "CAN") })]),
+  });
+  const created = await runCommand(offers, { api: elsewhere.api, words: ["create"], flags: PAY_UP_FRONT });
+  assert.deepEqual(created.said("success"), ["Created a PAY_UP_FRONT introductory offer in 1 territory"]);
+  assert.deepEqual(elsewhere.writes().map((request) => request.method), ["PATCH"]);
+});
+
+test("when Apple refuses the new offer after an old one went, the error says which", async () => {
+  const refusal = new ApiError("PATCH x", 409, JSON.stringify({ errors: [{ detail: "Overlapping offer" }] }));
+  const { api } = runningOffer({ "PATCH /v1/subscriptions/601": refusal });
+  const result = await runCommand(offers, { api, words: ["create"], flags: { ...PAY_UP_FRONT, yes: true } });
+  assert.deepEqual(result.said("error"), [
+    "App Store Connect refused PATCH x (409):\n  • Overlapping offer\nThe new offer wasn't created, but existing offers were already changed: deleted USA (O-USA, PAY_UP_FRONT ONE_YEAR 17.99). Recreate them with `asc offers create` if you need them back.",
+  ]);
+  const before = runningOffer({ "DELETE /v1/subscriptionIntroductoryOffers/O-USA": refusal });
+  const untouched = await runCommand(offers, { api: before.api, words: ["create"], flags: { ...PAY_UP_FRONT, yes: true } });
+  assert.deepEqual(untouched.said("error"), ["App Store Connect refused PATCH x (409):\n  • Overlapping offer"]);
+});
+
+test("planOfferReplacement keeps offers elsewhere, already over, or clear of the new dates", () => {
+  const today = "2026-11-08";
+  const offer = (id: string, view: Partial<OfferView>): OfferView => ({ id, territory: "USA", ...view });
+  const existing = [
+    offer("running", {}),
+    offer("canada", { territory: "CAN" }),
+    offer("over", { startDate: "2026-10-01", endDate: "2026-11-01" }),
+    offer("december", { startDate: "2026-12-01", endDate: "2026-12-31" }),
+    { id: "nowhere" },
+  ];
+  const ids = (plan: ReturnType<typeof planOfferReplacement>) => ({
+    remove: plan.remove.map((o) => o.id),
+    end: plan.end.map(({ offer: o, endDate }) => `${o.id}@${endDate}`),
+  });
+  assert.deepEqual(ids(planOfferReplacement(existing, ["USA"], { endDate: "2026-11-30" }, today)), { remove: ["running"], end: [] });
+  assert.deepEqual(ids(planOfferReplacement(existing, ["USA"], { startDate: "2026-11-01" }, today)), { remove: ["running", "december"], end: [] });
+  assert.deepEqual(ids(planOfferReplacement(existing, ["USA", "CAN"], { startDate: "2026-11-20" }, today)), {
+    remove: ["december"],
+    end: ["running@2026-11-19", "canada@2026-11-19"],
+  });
+  assert.deepEqual(ids(planOfferReplacement(existing, ["USA"], { startDate: "2027-01-01" }, today)), { remove: [], end: ["running@2026-12-31"] });
+  assert.deepEqual(ids(planOfferReplacement(existing, ["MEX"], {}, today)), { remove: [], end: [] });
 });

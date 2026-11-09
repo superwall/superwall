@@ -68,7 +68,7 @@ test("generateStoreKit maps product identifiers into a valid-ish config", () => 
     sk.products.map((p) => p.productID),
     ["com.app.pro", "com.app.plus"],
   );
-  assert.equal(sk.version.major, 3);
+  assert.equal(sk.version.major, 5);
 });
 
 const APP = { projectId: "5", applicationId: "8" };
