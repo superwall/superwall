@@ -328,13 +328,7 @@ export const TELEPORT_SCREEN_CSS = `
 }
 .sw-teleport-dim-hint {
   position: absolute;
-  inset-inline: 0;
-  top: calc(50% + 112px);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
-  padding-inline: 32px;
+  inset: 0;
   color: #fff;
   opacity: 0;
   transform: translateY(8px);
@@ -347,16 +341,21 @@ export const TELEPORT_SCREEN_CSS = `
   transform: none;
 }
 .sw-teleport-dim-arrow {
-  width: 44px;
-  height: 58px;
-  margin-inline-end: 8px;
+  position: absolute;
+  left: var(--sw-arrow-left);
+  top: var(--sw-arrow-top);
+  width: 72px;
+  height: 64px;
 }
-.sw-teleport-dim-hint[dir="rtl"] .sw-teleport-dim-arrow {
+.sw-teleport-dim-hint[data-side="rtl"] .sw-teleport-dim-arrow {
   transform: scaleX(-1);
 }
 .sw-teleport-dim-caption {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(var(--sw-arrow-top) + 76px);
   margin: 0;
-  align-self: stretch;
+  padding-inline: 32px;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Helvetica Neue", sans-serif;
   font-size: 17px;
   font-weight: 600;

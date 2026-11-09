@@ -269,13 +269,63 @@ export type ReturnDim = {
   remove(): void;
 };
 
+export type PromptView = {
+  userAgent: string;
+  language: string;
+  innerWidth: number;
+  innerHeight: number;
+  screenHeight: number;
+};
+
+const OPEN_CENTER_INSET = 61.5;
+const CLASSIC_OPEN_BOTTOM_BELOW_CENTER = 37;
+const GLASS_OPEN_BOTTOM_BELOW_SCREEN_CENTER = 20.7;
+const GLASS_BOTTOM_BAR = 98;
+const FIRST_GLASS_SAFARI = 26;
+const ARROW_WIDTH = 72;
+const ARROW_HEIGHT = 64;
+const ARROW_TIP_X = 60;
+const ARROW_TIP_GAP = 10;
+
+const RTL_SYSTEM_LANGUAGES = new Set(["ar", "he", "fa", "ur"]);
+
+const safariMajor = (userAgent: string): number | undefined => {
+  const match = /Version\/(\d+)/.exec(userAgent);
+  return match?.[1] === undefined ? undefined : Number(match[1]);
+};
+
+export const openButtonAnchor = (
+  view: PromptView,
+): { x: number; y: number; side: "ltr" | "rtl" } => {
+  const language = view.language.toLowerCase().split("-")[0] ?? "";
+  const side = RTL_SYSTEM_LANGUAGES.has(language) ? "rtl" : "ltr";
+  const x = side === "rtl" ? OPEN_CENTER_INSET : view.innerWidth - OPEN_CENTER_INSET;
+  const major = safariMajor(view.userAgent);
+  if (major !== undefined && major < FIRST_GLASS_SAFARI) {
+    return { x, y: view.innerHeight / 2 + CLASSIC_OPEN_BOTTOM_BELOW_CENTER, side };
+  }
+  const top =
+    view.innerHeight >= view.screenHeight
+      ? 0
+      : Math.max(0, view.screenHeight - view.innerHeight - GLASS_BOTTOM_BAR);
+  return { x, y: view.screenHeight / 2 + GLASS_OPEN_BOTTOM_BELOW_SCREEN_CENTER - top, side };
+};
+
+const currentView = (): PromptView => ({
+  userAgent: navigator.userAgent,
+  language: navigator.language,
+  innerWidth: window.innerWidth,
+  innerHeight: window.innerHeight,
+  screenHeight: window.screen.height,
+});
+
 const hintArrow = (): Element => {
   const svg = svgElement("svg", {
     class: "sw-teleport-dim-arrow",
-    viewBox: "0 0 48 64",
+    viewBox: `0 0 ${ARROW_WIDTH} ${ARROW_HEIGHT}`,
     "aria-hidden": "true",
   });
-  for (const d of ["M12 60C10 34 20 16 38 7", "M26 5l13 2-4 13"]) {
+  for (const d of ["M6 58C30 58 58 42 60 4", "M51 13L60 3L69 13"]) {
     svg.append(
       svgElement("path", {
         d,
@@ -288,6 +338,14 @@ const hintArrow = (): Element => {
     );
   }
   return svg;
+};
+
+const placeHint = (hint: HTMLElement): void => {
+  const anchor = openButtonAnchor(currentView());
+  const tipX = anchor.side === "rtl" ? ARROW_WIDTH - ARROW_TIP_X : ARROW_TIP_X;
+  hint.dataset.side = anchor.side;
+  hint.style.setProperty("--sw-arrow-left", `${anchor.x - tipX}px`);
+  hint.style.setProperty("--sw-arrow-top", `${anchor.y + ARROW_TIP_GAP}px`);
 };
 
 export const createReturnDim = (): ReturnDim => {
@@ -307,6 +365,7 @@ export const createReturnDim = (): ReturnDim => {
       const hint = element("div", "sw-teleport-dim-hint");
       hint.dir = dir;
       hint.dataset.state = "closed";
+      placeHint(hint);
       hint.append(hintArrow(), element("p", "sw-teleport-dim-caption", caption));
       root.append(hint);
       void hint.offsetWidth;

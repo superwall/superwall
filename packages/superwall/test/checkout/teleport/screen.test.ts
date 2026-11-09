@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createReturnDim,
+  openButtonAnchor,
   createTeleportScreen,
   poweredByHref,
 } from "../../../src/checkout/teleport/screen";
+
+const safari = (version: string) =>
+  `Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${version} Mobile/15E148 Safari/604.1`;
 
 const options = {
   surface: "overlay" as const,
@@ -83,9 +87,73 @@ describe("the teleport screen, as paywall.js draws it", () => {
       "Tap to go back to the app",
     );
 
+    expect(hints[0]?.dataset.side).toBe("ltr");
+    expect(hints[0]?.style.getPropertyValue("--sw-arrow-left")).toBe(
+      `${window.innerWidth - 61.5 - 60}px`,
+    );
+
     const leaving = createReturnDim();
     leaving.remove();
     leaving.showHint("Late", "ltr");
     expect(leaving.root.querySelector(".sw-teleport-dim-hint")).toBeNull();
+  });
+
+  it.each([
+    [
+      "iOS 27.2, page under the bars",
+      { userAgent: safari("27.2"), innerWidth: 402, innerHeight: 874, screenHeight: 874 },
+      340.5,
+      457.7,
+    ],
+    [
+      "iOS 26.5, page under the bars",
+      { userAgent: safari("26.5"), innerWidth: 440, innerHeight: 956, screenHeight: 956 },
+      378.5,
+      498.7,
+    ],
+    [
+      "iOS 26.5, page between the bars",
+      { userAgent: safari("26.5"), innerWidth: 402, innerHeight: 714, screenHeight: 874 },
+      340.5,
+      395.7,
+    ],
+    [
+      "iOS 18.6",
+      { userAgent: safari("18.6"), innerWidth: 402, innerHeight: 678, screenHeight: 874 },
+      340.5,
+      376,
+    ],
+    [
+      "iOS 17.5 on a 375 pt screen",
+      { userAgent: safari("17.5"), innerWidth: 375, innerHeight: 547, screenHeight: 667 },
+      313.5,
+      310.5,
+    ],
+    [
+      "a browser that isn't Safari",
+      { userAgent: "CriOS/140", innerWidth: 402, innerHeight: 874, screenHeight: 874 },
+      340.5,
+      457.7,
+    ],
+  ])("puts Open's bottom centre where %s draws it", (_, view, x, y) => {
+    const anchor = openButtonAnchor({ language: "en-US", ...view });
+    expect(anchor.x).toBeCloseTo(x, 1);
+    expect(anchor.y).toBeCloseTo(y, 1);
+    expect(anchor.side).toBe("ltr");
+  });
+
+  it("puts Open on the left when the phone, not the paywall, reads right to left", () => {
+    const view = {
+      userAgent: safari("27.2"),
+      innerWidth: 402,
+      innerHeight: 874,
+      screenHeight: 874,
+    };
+    expect(openButtonAnchor({ ...view, language: "ar" })).toMatchObject({ x: 61.5, side: "rtl" });
+    expect(openButtonAnchor({ ...view, language: "he-IL" }).side).toBe("rtl");
+    expect(openButtonAnchor({ ...view, language: "de-DE" })).toMatchObject({
+      x: 340.5,
+      side: "ltr",
+    });
   });
 });
