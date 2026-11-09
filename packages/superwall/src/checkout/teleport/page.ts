@@ -64,7 +64,7 @@ export type ReturnHint = { caption: string; dir: "ltr" | "rtl" };
 
 const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnResult> =>
   new Promise((resolve) => {
-    const dim = createReturnDim();
+    let dim: ReturnType<typeof createReturnDim> | undefined;
     let prompted = false;
     let answered = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -74,24 +74,28 @@ const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnResul
       window.removeEventListener("focus", focus);
       window.removeEventListener("pagehide", hide);
       document.removeEventListener("visibilitychange", leave);
-      dim.remove();
+      dim?.remove();
       resolve(result);
     };
     const blur = (event: Event) => {
       if (event.target instanceof Node || prompted) return;
       prompted = true;
       clearTimeout(timer);
+      dim = createReturnDim();
       if (hint !== undefined) dim.showHint(hint.caption, hint.dir);
     };
     const focus = (event: Event) => {
       if (event.target instanceof Node || !prompted || answered) return;
       answered = true;
-      dim.remove();
+      dim?.remove();
       timer = setTimeout(() => finish("cancelled"), ANSWER_WAIT_MS);
     };
-    const hide = () => finish("opened");
+    const asking = () => prompted && !answered;
+    const hide = () => {
+      if (!asking()) finish("opened");
+    };
     const leave = () => {
-      if (document.visibilityState === "hidden") finish("opened");
+      if (document.visibilityState === "hidden" && !asking()) finish("opened");
     };
     window.addEventListener("blur", blur);
     window.addEventListener("focus", focus);

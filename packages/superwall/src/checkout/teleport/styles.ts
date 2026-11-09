@@ -317,7 +317,7 @@ export const TELEPORT_SCREEN_CSS = `
   position: fixed;
   inset: 0;
   z-index: 2147483647;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.85);
   opacity: 0;
   transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -333,10 +333,10 @@ export const TELEPORT_SCREEN_CSS = `
   inset: 0;
   color: #fff;
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(4px);
   transition:
-    opacity 240ms cubic-bezier(0.23, 1, 0.32, 1),
-    transform 240ms cubic-bezier(0.23, 1, 0.32, 1);
+    opacity 360ms cubic-bezier(0.23, 1, 0.32, 1) 80ms,
+    transform 360ms cubic-bezier(0.23, 1, 0.32, 1) 80ms;
 }
 .sw-teleport-dim-hint[data-state="open"] {
   opacity: 1;

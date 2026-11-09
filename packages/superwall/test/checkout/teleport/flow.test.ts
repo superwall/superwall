@@ -1399,19 +1399,20 @@ describe("the web half of a teleport", () => {
     expect(go.mock.calls).toEqual([["myapp://x"], ["https://a.superwall.link/x"]]);
   });
 
-  it("dims while iOS asks, lifts the dim on Cancel, and resolves cancelled", async () => {
+  it("dims only once iOS asks, lifts the dim on Cancel, and resolves cancelled", async () => {
     boot({ appLinkUrl: undefined });
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     let result: string | undefined;
     void teleportPage(fakeSession().session)
       .returnToApp("closed")
       .then((value) => (result = value));
+    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=closed");
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+
+    window.dispatchEvent(new Event("blur"));
     const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
     expect(dim?.dataset.state).toBe("open");
     expect(dim?.getAttribute("aria-hidden")).toBe("true");
-    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=closed");
-
-    window.dispatchEvent(new Event("blur"));
     await settle(PROMPT_WAIT_MS * 4);
     expect(dim?.dataset.state).toBe("open");
     expect(result).toBeUndefined();
@@ -1429,8 +1430,8 @@ describe("the web half of a teleport", () => {
     boot({ appLinkUrl: undefined });
     vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     const result = teleportPage(fakeSession().session).returnToApp("closed");
-    const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
     window.dispatchEvent(new Event("blur"));
+    const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
     window.dispatchEvent(new Event("focus"));
     expect(dim?.dataset.state).toBe("closing");
     await settle(ANSWER_WAIT_MS / 2);
@@ -1438,7 +1439,7 @@ describe("the web half of a teleport", () => {
     await expect(result).resolves.toBe("opened");
   });
 
-  it("lifts the dim and resolves no_app when no prompt comes up", async () => {
+  it("never dims and resolves no_app when no prompt comes up", async () => {
     boot({ appLinkUrl: undefined });
     vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     let result: string | undefined;
@@ -1449,10 +1450,26 @@ describe("the web half of a teleport", () => {
     expect(result).toBeUndefined();
     await settle(1);
     expect(result).toBe("no_app");
-    const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
-    expect(dim?.dataset.state).toBe("closing");
-    dim?.dispatchEvent(new Event("transitionend"));
     expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+  });
+
+  it("keeps the dim while Safari is backgrounded with the prompt still up", async () => {
+    boot({ appLinkUrl: undefined });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    let result: string | undefined;
+    void teleportPage(fakeSession().session)
+      .returnToApp("closed")
+      .then((value) => (result = value));
+    window.dispatchEvent(new Event("blur"));
+    setVisibility("hidden");
+    window.dispatchEvent(new Event("pagehide"));
+    await settle(ANSWER_WAIT_MS * 2);
+    setVisibility("visible");
+    expect(result).toBeUndefined();
+    expect(document.querySelector(".sw-teleport-dim")?.getAttribute("data-state")).toBe("open");
+    window.dispatchEvent(new Event("focus"));
+    await settle(ANSWER_WAIT_MS);
+    expect(result).toBe("cancelled");
   });
 
   it("resolves opened when the scheme opens the app with no prompt", async () => {
@@ -1472,15 +1489,17 @@ describe("the web half of a teleport", () => {
     void teleportPage(fakeSession().session)
       .returnToApp()
       .then((value) => (result = value));
-    const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
     const field = document.body.appendChild(document.createElement("input"));
     window.dispatchEvent(new Event("focus"));
     field.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
     await settle(PROMPT_WAIT_MS / 2);
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
     window.dispatchEvent(new Event("blur"));
     window.dispatchEvent(new Event("blur"));
     field.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
-    expect(dim?.dataset.state).toBe("open");
+    const dims = document.querySelectorAll<HTMLElement>(".sw-teleport-dim");
+    expect(dims).toHaveLength(1);
+    expect(dims[0]?.dataset.state).toBe("open");
     window.dispatchEvent(new Event("focus"));
     await settle(ANSWER_WAIT_MS - 10);
     window.dispatchEvent(new Event("focus"));
@@ -1506,8 +1525,9 @@ describe("the web half of a teleport", () => {
     const cancelled = teleportPage(fakeSession().session).returnToApp("closed");
     await settle(APP_OPEN_WAIT_MS);
     expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=closed");
-    expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
     window.dispatchEvent(new Event("blur"));
+    expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
     window.dispatchEvent(new Event("focus"));
     await settle(ANSWER_WAIT_MS);
     await expect(cancelled).resolves.toBe("cancelled");
@@ -1536,9 +1556,10 @@ describe("the web half of a teleport", () => {
     expect(back?.getAttribute("href")).toBe("myapp://superwall/return?reason=purchased");
     back?.addEventListener("click", (event) => event.preventDefault());
     back?.click();
-    expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
     expect(go).not.toHaveBeenCalled();
-    await settle(PROMPT_WAIT_MS);
+    window.dispatchEvent(new Event("blur"));
+    expect(document.querySelector(".sw-teleport-dim")?.getAttribute("data-state")).toBe("open");
+    window.dispatchEvent(new Event("focus"));
     expect(document.querySelector(".sw-teleport-dim")?.getAttribute("data-state")).toBe("closing");
   });
 
@@ -1553,6 +1574,7 @@ describe("the web half of a teleport", () => {
     expect(document.querySelector(".sw-teleport-dim")).toBeNull();
     await settle(APP_OPEN_WAIT_MS);
     expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
+    window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
   });
 
@@ -1560,10 +1582,10 @@ describe("the web half of a teleport", () => {
     boot({ appLinkUrl: undefined });
     vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     void teleportPage(fakeSession().session).returnToApp("closed");
+    expect(document.querySelector(".sw-teleport-dim-hint")).toBeNull();
+    window.dispatchEvent(new Event("blur"));
+    window.dispatchEvent(new Event("blur"));
     const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
-    expect(dim?.querySelector(".sw-teleport-dim-hint")).toBeNull();
-    window.dispatchEvent(new Event("blur"));
-    window.dispatchEvent(new Event("blur"));
     const hints = dim?.querySelectorAll<HTMLElement>(".sw-teleport-dim-hint");
     expect(hints).toHaveLength(1);
     const hint = hints?.[0];
