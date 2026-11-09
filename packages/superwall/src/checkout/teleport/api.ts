@@ -3,6 +3,7 @@ import type { CheckoutStatus } from "../types";
 import { fetchWithRetry } from "../api/fetch";
 import { subscriptionsApiUrl } from "../api/url";
 import { SESSION_QUERY_FIELD, sessionQueryOf, TAPPED_PRODUCT_QUERY_KEY } from "./boot";
+import type { ReturnAttempt, ReturnReason } from "./teleporter";
 
 export type CreatedTeleport = { teleportId: string; url: string };
 
@@ -172,6 +173,23 @@ export const completeTeleportCheckout = async (
     keepalive: true,
     headers: headers(publicApiKey),
     body: JSON.stringify({ checkoutContextId }),
+  });
+};
+
+export type TeleportReturnReport = ReturnAttempt & {
+  teleportId: string;
+  reason: ReturnReason;
+};
+
+export const reportTeleportReturn = async (
+  publicApiKey: string,
+  report: TeleportReturnReport,
+): Promise<void> => {
+  await fetch(subscriptionsApiUrl("checkout/teleport/return"), {
+    method: "POST",
+    keepalive: true,
+    headers: headers(publicApiKey),
+    body: JSON.stringify(report),
   });
 };
 

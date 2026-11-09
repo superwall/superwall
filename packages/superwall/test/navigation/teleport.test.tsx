@@ -213,13 +213,18 @@ describe("teleporting from the app", () => {
   });
 });
 
-const bootWebHalf = () =>
+const bootWebHalf = () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("{}")),
+  );
   Reflect.set(window, "__SW_TELEPORT__", {
     id: "v1:tp",
     route: "checkout",
     returnUrl: "myapp://superwall/return",
     session: { query: { goal: "sleep" } },
   });
+};
 
 describe("the web half of a teleport", () => {
   it("opens on the teleported route with the answers, and goes back to the app from it", async () => {

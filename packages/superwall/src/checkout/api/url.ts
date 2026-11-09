@@ -12,7 +12,8 @@ export type SubscriptionsApiPath =
   | "checkout/teleport/status"
   | "checkout/teleport/session"
   | "checkout/teleport/session/read"
-  | "checkout/teleport/introductory-offer";
+  | "checkout/teleport/introductory-offer"
+  | "checkout/teleport/return";
 
 const BASE_URL_BY_ENV: Record<SubscriptionsApiEnvironment, string> = {
   local: "http://localhost:3045/subscriptions-api/public/v1",

@@ -31,6 +31,12 @@ export type ReturnReason = "purchased" | "closed";
 
 export type ReturnResult = "opened" | "cancelled" | "no_app";
 
+export type ReturnAttempt = {
+  result: ReturnResult;
+  via: "universal" | "scheme";
+  prompt: boolean;
+};
+
 type TeleportBase = {
   getStatus(): TeleportStatus;
   subscribe(listener: () => void): () => void;
@@ -68,6 +74,7 @@ export type TeleportPage = TeleportBase & {
   completePurchase(checkoutContextId: string): Promise<void>;
   followFragment(): void;
   returnToApp(reason?: ReturnReason): Promise<ReturnResult>;
+  returning(): boolean;
 };
 
 export type Teleporter = AppTeleport | TeleportPage;
@@ -102,6 +109,9 @@ export const createStatusStore = (initial: TeleportStatus) => {
   let status = initial;
   return {
     getStatus: () => status,
+    notify: () => {
+      for (const listener of listeners) listener();
+    },
     setStatus: (next: TeleportStatus) => {
       if (JSON.stringify(next) === JSON.stringify(status)) return;
       status = next;

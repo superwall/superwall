@@ -165,7 +165,8 @@ and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedempt
 `useUserAttribute`, `useLocalResource`, `useSuperwallEvent`,
 `useGameController`, `useTeleport` (a teleport's typed `status` —
 `idle`, `waiting`, `arrived`, `completed` — with `prefetch`, `reopen`,
-`cancel` and `returnToApp`, for a paywall that draws its own teleport screen),
+`cancel`, `returnToApp` and `returning`, for a paywall that draws its own
+teleport screen),
 `useApplePay` says whether direct Apple Pay, the wallet the browser opens
 itself, is available on a web host (Web SDK, hosted web paywall, teleport page
 or browser): `{ available: true }`, or `{ available: false, reason, message,
@@ -312,7 +313,10 @@ teleport screen and redeems the purchase once it is paid. `teleport.route`
 is prepared when the paywall opens, and `useTeleport().prefetch(route)`
 prepares any other. On the web page the flow opens on the route; navigation
 works as usual, and going back from it (or `close()`) returns to the app
-through its universal link, falling back to its URL scheme. Options:
+through its universal link, falling back to its URL scheme. While iOS asks
+"Open in App?", the page dims with an arrow at Open; `returnToApp()` and the
+web half's `close()` resolve `"opened"`, `"cancelled"` or `"no_app"`, and
+each return is reported to Superwall. Options:
 `route`, `overlay` (the teleport screen), `fallbacks` (a store product the
 screen offers instead), `completion` (`"confirmation"` or `"direct"`),
 `introductoryOfferEligibility`.
