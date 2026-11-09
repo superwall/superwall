@@ -179,6 +179,19 @@ describe("variables known before the host speaks", () => {
     expect(snapshot.state).toMatchObject({ user: { aliasId: "a1" } });
   });
 
+  it("open with the products they carry, merged over the prices the build baked inline", () => {
+    const session = createSuperwallSession({
+      transport: new TestTransport(),
+      config: { products: { card14: "live:price_1:14days-free" } },
+      inlineProducts: { card14: { price: "$59.99", period: "year", trialPeriodDays: 14 } },
+      variables: { products: [{ card14: { price: "$49.99" } }] },
+    });
+
+    expect(session.getSnapshot().productsByReference.card14?.variables).toEqual(
+      expect.objectContaining({ price: "$49.99", period: "year", trialPeriodDays: 14 }),
+    );
+  });
+
   it("are not the host's answer, so a write before the host's first state still survives it", () => {
     const transport = new TestTransport();
     const session = createSuperwallSession({ transport, variables: { user: { aliasId: "a1" } } });

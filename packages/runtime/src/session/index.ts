@@ -1,5 +1,6 @@
 import type {
   TIncomingMessage,
+  TIncomingMessageTemplateVariables,
   TIncomingMessageTransactionAbandon,
   TIncomingMessageTransactionComplete,
   TOutgoingMessage,
@@ -121,6 +122,17 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
     for (const listener of listeners) listener();
   };
 
+  const mergeDeliveredProducts = (delivered: TIncomingMessageTemplateVariables["variables"]) => {
+    const variables = productVariablesFromTemplateVariables(delivered);
+    for (const [reference, values] of variables) {
+      const baked = inline[reference];
+      if (baked) variables.set(reference, { ...baked, ...values });
+    }
+    if (variables.size > 0) raw = mergeProductVariables(raw, variables);
+  };
+
+  if (options.variables !== undefined) mergeDeliveredProducts(options.variables);
+
   if (options.variables !== undefined || options.introductoryOffer !== undefined) {
     commit({
       ...(options.variables === undefined
@@ -213,15 +225,9 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
       case "products":
         raw = mergeIncomingProducts(raw, message.products);
         break;
-      case "template_variables": {
-        const variables = productVariablesFromTemplateVariables(message.variables);
-        for (const [reference, delivered] of variables) {
-          const baked = inline[reference];
-          if (baked) variables.set(reference, { ...baked, ...delivered });
-        }
-        if (variables.size > 0) raw = mergeProductVariables(raw, variables);
+      case "template_variables":
+        mergeDeliveredProducts(message.variables);
         break;
-      }
       case "freeTrial_start": {
         const reminder = trialReminderFor(snapshot.config, message, {
           products: raw,

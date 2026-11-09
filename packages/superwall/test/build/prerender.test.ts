@@ -53,8 +53,12 @@ describe("teleport page keys", () => {
         test: "test:price_2",
         store: "pro_999_month",
         "has space": "live:price_3",
+        __none__: "live:price_4",
+        "..": "live:price_5",
+        ".": "live:price_6",
+        "v1.2": "live:price_7",
       }),
-    ).toEqual(["annual", "test"]);
+    ).toEqual(["annual", "test", "v1.2"]);
   });
 
   it("puts the default locale first and renders every product, none and both trials per locale", () => {

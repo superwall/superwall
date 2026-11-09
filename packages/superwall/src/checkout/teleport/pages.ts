@@ -11,6 +11,11 @@ import { NAV_QUERY_KEY, readTeleportBoot, type TeleportBoot } from "./boot";
 
 export const NO_PRODUCT = "__none__";
 
+const PAGE_REFERENCE = /^[\w.-]{1,191}$/;
+
+export const isTeleportPageReference = (reference: string): boolean =>
+  PAGE_REFERENCE.test(reference) && reference !== NO_PRODUCT && !/^\.+$/.test(reference);
+
 export const teleportPageKey = (
   locale: string,
   productReference: string | undefined,
@@ -43,6 +48,9 @@ export const expectedTeleportPageKey = (
   if (boot === undefined || boot.hasIntroductoryOffer === undefined) return undefined;
   const prerendered = teleportOf(config.teleport)?.route;
   if (prerendered === undefined || openingRoute(boot) !== prerendered) return undefined;
+  if (boot.productReference !== undefined && !isTeleportPageReference(boot.productReference)) {
+    return undefined;
+  }
   const { localization } = config;
   return teleportPageKey(
     resolveLocale(requestedLocale(boot), localization),

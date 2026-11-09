@@ -45,6 +45,17 @@ describe("expectedTeleportPageKey", () => {
   });
 });
 
+describe("a product reference no page can be named for", () => {
+  it("is nothing for the no-product marker or a dot segment, so no page is ever taken for it", () => {
+    for (const productReference of ["__none__", "..", "."]) {
+      boot({ hasIntroductoryOffer: true, productReference });
+      expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBeUndefined();
+    }
+    boot({ hasIntroductoryOffer: true, productReference: "v1.2" });
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("en/v1.2/1");
+  });
+});
+
 describe("the route a page opens on", () => {
   const trial = { hasIntroductoryOffer: true, ...device({ deviceLocale: "de" }) };
 

@@ -23,7 +23,7 @@ export default function Plan() {
   const { purchase, prefetch } = usePurchase();
   const { t } = useTranslation();
   const haptics = useHaptics();
-  const { eligible: trial } = useIntroductoryOffer();
+  const { eligible } = useIntroductoryOffer();
   const [goal] = useQueryState("goal", goalParser);
   const [notice, setNotice] = React.useState<string>();
 
@@ -36,6 +36,8 @@ export default function Plan() {
   const pro = getProduct("pro");
   const selected = getProduct(reference);
   const chosen = GOALS.find((entry) => entry.id === goal);
+  // Eligibility is paywall-wide; the trial is the selected plan's own.
+  const trial = eligible === true && Number(selected?.variables.trialPeriodDays ?? 0) > 0;
 
   // Warm the checkout for the plan on screen, so Subscribe opens it at once.
   React.useEffect(() => {

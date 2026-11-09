@@ -7,7 +7,7 @@ import { build as viteBuild, type InlineConfig, type Rollup } from "vite";
 import { assetFileName } from "./assets";
 import { PRERENDER_GLOBAL, entrySource, type EntrySourceOptions } from "./entry";
 import { isStripeProductIdentifier } from "../checkout/products";
-import { NO_PRODUCT, teleportPageKey } from "../checkout/teleport/pages";
+import { NO_PRODUCT, isTeleportPageReference, teleportPageKey } from "../checkout/teleport/pages";
 
 export { NO_PRODUCT, teleportPageKey };
 
@@ -31,13 +31,12 @@ export const MAX_TELEPORT_PAGE_BYTES = 256 * 1024;
 export const PRERENDER_URL = "https://prerender.superwall.invalid/teleport/prerender";
 
 const PAGE_LOCALE = /^[A-Za-z0-9-]+$/;
-const PAGE_REFERENCE = /^[\w.-]{1,191}$/;
 
 export const stripeReferencesOf = (products: Record<string, string>): string[] =>
   Object.entries(products)
     .filter(
       ([reference, identifier]) =>
-        isStripeProductIdentifier(identifier) && PAGE_REFERENCE.test(reference),
+        isStripeProductIdentifier(identifier) && isTeleportPageReference(reference),
     )
     .map(([reference]) => reference);
 
