@@ -157,3 +157,43 @@ export const productVariables = (product: DashboardProduct): Record<string, unkn
 
   return variables;
 };
+
+export interface ProductSummary {
+  price?: string;
+  equivalents: string[];
+  trial?: string;
+}
+
+const text = (value: unknown): string | undefined =>
+  typeof value === "string" && value !== "" ? value : undefined;
+
+const count = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+export const productSummary = (variables: Record<string, unknown>): ProductSummary => {
+  const price = text(variables.price);
+  if (!price) return { equivalents: [] };
+
+  const period = text(variables.period);
+  const days = count(variables.periodDays) ?? 0;
+  const per = (key: string, unit: string, longerThanDays: number): string[] => {
+    const value = text(variables[key]);
+    return value && days > longerThanDays ? [`${value} / ${unit}`] : [];
+  };
+  const equivalents = [...per("monthlyPrice", "month", 30), ...per("weeklyPrice", "week", 7)];
+
+  const trialDays = count(variables.trialPeriodDays);
+  const trialPrice = text(variables.trialPeriodPrice);
+  const trial =
+    trialDays === undefined || trialDays <= 0
+      ? undefined
+      : count(variables.rawTrialPeriodPrice) === 0 || !trialPrice
+        ? `${trialDays}-day free trial`
+        : `${trialDays}-day trial for ${trialPrice}`;
+
+  return {
+    price: period ? `${price} / ${period}` : price,
+    equivalents,
+    ...(trial ? { trial } : {}),
+  };
+};

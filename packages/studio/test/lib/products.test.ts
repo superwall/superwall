@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { productVariables } from "../../src/lib/products";
+import { productSummary, productVariables } from "../../src/lib/products";
 
 const trialKeys = (variables: Record<string, unknown>) =>
   Object.keys(variables).filter((key) => key.toLowerCase().includes("trial"));
@@ -318,5 +318,63 @@ describe("productVariables", () => {
       price: { amount: 1234, currency: "US" },
     });
     expect(variables).toMatchObject({ price: "12.34", rawPrice: 12.34, currencySymbol: "" });
+  });
+});
+
+describe("productSummary", () => {
+  it("reads a yearly subscription with its equivalents and a free trial", () => {
+    expect(
+      productSummary(
+        productVariables({
+          identifier: "pro_5999_year",
+          price: { amount: 5999, currency: "USD" },
+          subscription: { period: "year", trial_period_days: 7 },
+        }),
+      ),
+    ).toEqual({
+      price: "$59.99 / year",
+      equivalents: ["$5.00 / month", "$1.15 / week"],
+      trial: "7-day free trial",
+    });
+  });
+
+  it("gives a monthly plan only its weekly equivalent, and a weekly plan none", () => {
+    const monthly = productSummary(
+      productVariables({
+        price: { amount: 999, currency: "USD" },
+        subscription: { period: "month" },
+      }),
+    );
+    expect(monthly.equivalents).toEqual(["$2.31 / week"]);
+
+    const weekly = productSummary(
+      productVariables({
+        price: { amount: 299, currency: "USD" },
+        subscription: { period: "week" },
+      }),
+    );
+    expect(weekly).toEqual({ price: "$2.99 / week", equivalents: [] });
+  });
+
+  it("names a paid trial by its price", () => {
+    const summary = productSummary(
+      productVariables({
+        price: { amount: 999, currency: "USD" },
+        trial_price: { amount: 99, currency: "USD" },
+        subscription: { period: "month", trial_period_days: 3 },
+      }),
+    );
+    expect(summary.trial).toBe("3-day trial for $0.99");
+  });
+
+  it("reads a one-time product as its price alone", () => {
+    expect(productSummary(productVariables({ price: { amount: 299, currency: "EUR" } }))).toEqual({
+      price: "€2.99",
+      equivalents: [],
+    });
+  });
+
+  it("invents nothing for a product without a price", () => {
+    expect(productSummary({ identifier: "lifetime" })).toEqual({ equivalents: [] });
   });
 });
