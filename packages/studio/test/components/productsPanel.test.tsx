@@ -66,9 +66,20 @@ describe("ProductsPanel", () => {
     expect(screen.queryByText("Not in Superwall")).toBeNull();
   });
 
-  it("shows slots as checking until the catalog arrives", () => {
-    render(<ProductsPanel products={products} samples={{}} />);
+  it("shows slots as checking while the catalog is on its way", () => {
+    render(<ProductsPanel products={products} samples={{}} pending />);
     expect(screen.getAllByText("Checking…")).toHaveLength(2);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("Not in Superwall")).toBeNull();
+  });
+
+  it("says there is no catalog when the host sent none, never checking forever", () => {
+    render(<ProductsPanel products={products} samples={{}} />);
+    expect(screen.queryByText("Checking…")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe(
+      "No product catalog to check these against.",
+    );
+    expect(screen.getAllByText("Couldn’t check")).toHaveLength(2);
     expect(screen.queryByText("Not in Superwall")).toBeNull();
   });
 

@@ -1104,3 +1104,98 @@ describe("SurfaceEditor promoting and rolling back", () => {
     });
   });
 });
+
+const panel = () => screen.getByRole("complementary", { hidden: true });
+
+describe("SurfaceEditor's Products panel", () => {
+  const twoSlots: StudioSurface = {
+    kind: "paywall",
+    id: "plus-upgrade",
+    routes: ["index"],
+    locales: [],
+    products: { annual: "pro_year", monthly: "pro_month" },
+  };
+  const priced = {
+    price: "$59.99",
+    rawPrice: 59.99,
+    period: "year",
+    periodly: "yearly",
+    periodCount: 1,
+    currencyCode: "USD",
+    currencySymbol: "$",
+  };
+  const editor = (
+    surface: StudioSurface,
+    samples: React.ComponentProps<typeof SurfaceEditor>["samples"],
+  ) =>
+    renderEditor(
+      <SurfaceEditor
+        source={{ title: "chatgpt", surfaces: [surface], previewUrl: () => "/preview" }}
+        surface={surface}
+        samples={samples}
+      />,
+    );
+
+  it("counts the slots on the button and lists them in config order", () => {
+    editor(twoSlots, { products: { pro_year: priced, pro_month: { ...priced, period: "month" } } });
+
+    const button = screen.getByRole("button", { name: "Products, 2" });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(button);
+
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(panel().getAttribute("aria-hidden")).toBe("false");
+    const headings = within(panel())
+      .getAllByText(/^(annual|monthly)$/)
+      .map((node) => node.textContent);
+    expect(headings).toEqual(["annual", "monthly"]);
+    expect(within(panel()).getByText("pro_year")).toBeDefined();
+  });
+
+  it("opens one side panel at a time, and closes on a second press", () => {
+    editor(twoSlots, { products: { pro_year: priced, pro_month: priced } });
+    const products = screen.getByRole("button", { name: "Products, 2" });
+    const variables = screen.getByRole("button", { name: /^Variables/ });
+
+    fireEvent.click(variables);
+    expect(variables.getAttribute("aria-expanded")).toBe("true");
+    expect(within(panel()).getByText("Variables")).toBeDefined();
+
+    fireEvent.click(products);
+    expect(variables.getAttribute("aria-expanded")).toBe("false");
+    expect(products.getAttribute("aria-expanded")).toBe("true");
+    expect(within(panel()).getByText("Products")).toBeDefined();
+
+    fireEvent.click(products);
+    expect(products.getAttribute("aria-expanded")).toBe("false");
+    expect(panel().getAttribute("aria-hidden")).toBe("true");
+    expect(within(panel()).getByText("Products")).toBeDefined();
+
+    fireEvent.click(products);
+    fireEvent.click(within(panel()).getByRole("button", { name: "Close products" }));
+    expect(panel().getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("flags a missing product on the button", () => {
+    editor(twoSlots, { products: { pro_year: priced } });
+
+    fireEvent.click(screen.getByRole("button", { name: "View anyway" }));
+    fireEvent.click(screen.getByRole("button", { name: "Products, 1 missing" }));
+    expect(within(panel()).getByText("Not in Superwall")).toBeDefined();
+  });
+
+  it("flags a catalog it couldn't read, never calling a product missing", () => {
+    editor(twoSlots, { unreachable: "the API did not answer" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Products, couldn’t check" }));
+    expect(within(panel()).queryByText("Not in Superwall")).toBeNull();
+    expect(within(panel()).getAllByText("Couldn’t check")).toHaveLength(2);
+  });
+
+  it("reads plainly with no products declared", () => {
+    editor({ ...twoSlots, products: {} }, {});
+
+    fireEvent.click(screen.getByRole("button", { name: "Products" }));
+    expect(within(panel()).getByText("No products")).toBeDefined();
+  });
+});

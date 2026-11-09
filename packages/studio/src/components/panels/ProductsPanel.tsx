@@ -11,9 +11,9 @@ type SlotState =
   | { kind: "unchecked" }
   | { kind: "loading" };
 
-const slotState = (identifier: string, samples: Samples): SlotState => {
+const slotState = (identifier: string, samples: Samples, pending: boolean): SlotState => {
   if (samples.unreachable) return { kind: "unchecked" };
-  if (!samples.products) return { kind: "loading" };
+  if (!samples.products) return { kind: pending ? "loading" : "unchecked" };
   const variables = samples.products[identifier];
   return variables === undefined ? { kind: "missing" } : { kind: "ok", variables };
 };
@@ -115,9 +115,11 @@ const Slot = ({
 export const ProductsPanel = ({
   products,
   samples,
+  pending = false,
 }: {
   products: Record<string, string> | undefined;
   samples: Samples;
+  pending?: boolean;
 }) => {
   const slots = Object.entries(products ?? {});
 
@@ -148,12 +150,20 @@ export const ProductsPanel = ({
           <span className="min-w-0">Couldn’t check these products · {samples.unreachable}</span>
         </div>
       )}
+      {!samples.unreachable && !samples.products && !pending && (
+        <p
+          role="status"
+          className="m-0 border-b border-border px-4 py-2.5 text-xs text-fg-tertiary"
+        >
+          No product catalog to check these against.
+        </p>
+      )}
       {slots.map(([reference, identifier]) => (
         <Slot
           key={reference}
           reference={reference}
           identifier={identifier}
-          state={slotState(identifier, samples)}
+          state={slotState(identifier, samples, pending)}
         />
       ))}
       <p className="m-0 px-4 py-3.5 text-xs text-fg-tertiary">
