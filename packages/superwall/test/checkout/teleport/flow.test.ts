@@ -1609,7 +1609,7 @@ describe("the web half of a teleport", () => {
     await settle(APP_OPEN_WAIT_MS);
     window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport-dim-hint")?.textContent).toBe(
-      "You're all set. Tap to go back to the app",
+      "You're all set.\nTap to go back to the app",
     );
   });
 
@@ -1625,7 +1625,7 @@ describe("the web half of a teleport", () => {
     back?.click();
     window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport-dim-hint")?.textContent).toBe(
-      "Fertig. Tippe, um zur App zurückzukehren",
+      "Fertig.\nTippe, um zur App zurückzukehren",
     );
   });
 

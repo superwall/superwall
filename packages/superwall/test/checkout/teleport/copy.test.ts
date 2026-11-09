@@ -57,7 +57,7 @@ describe("teleportCopyFor", () => {
     const english = teleportCopyFor("en").returning;
     expect(english).toEqual({
       closed: "Tap to go back to the app",
-      purchased: "You're all set. Tap to go back to the app",
+      purchased: "You're all set.\nTap to go back to the app",
     });
     for (const locale of locales) {
       const { closed, purchased } = teleportCopyFor(locale).returning;

@@ -164,6 +164,7 @@ export const TELEPORT_SCREEN_CSS = `
   font-weight: 600;
   line-height: 1.25;
   text-wrap: balance;
+  white-space: pre-line;
 }
 .sw-teleport-body {
   margin: 0;
@@ -171,6 +172,7 @@ export const TELEPORT_SCREEN_CSS = `
   font: -apple-system-body;
   line-height: 1.35;
   text-wrap: balance;
+  white-space: pre-line;
   color: var(--sw-teleport-muted);
 }
 .sw-teleport-actions {
@@ -360,6 +362,7 @@ export const TELEPORT_SCREEN_CSS = `
   font-weight: 600;
   line-height: 1.35;
   text-wrap: balance;
+  white-space: pre-line;
 }
 @media (prefers-reduced-motion: reduce) {
   .sw-teleport-dim { transition: none; }
