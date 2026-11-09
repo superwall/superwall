@@ -113,6 +113,7 @@ interface ScreenScaffoldOptions {
   file: string;
   newProject: boolean;
   screenshot?: string;
+  dryRun?: boolean;
 }
 
 const ORIGINAL_SCREENSHOT = "original.png";
@@ -128,20 +129,23 @@ export function scaffoldFromScreen(ui: Renderer, options: ScreenScaffoldOptions)
     );
   }
 
-  if (options.newProject) writeProjectFiles(target, projectPackageName(root));
-  writeSurfaceFiles(target, screen.slug, screenConfigSource(screen));
-  let screenshot: string | undefined;
-  if (options.screenshot !== undefined) {
-    fs.copyFileSync(options.screenshot, path.join(surfaceDir, ORIGINAL_SCREENSHOT));
-    screenshot = ORIGINAL_SCREENSHOT;
+  const where = path.relative(root, target) || ".";
+  if (!options.dryRun) {
+    if (options.newProject) writeProjectFiles(target, projectPackageName(root));
+    writeSurfaceFiles(target, screen.slug, screenConfigSource(screen));
+    let screenshot: string | undefined;
+    if (options.screenshot !== undefined) {
+      fs.copyFileSync(options.screenshot, path.join(surfaceDir, ORIGINAL_SCREENSHOT));
+      screenshot = ORIGINAL_SCREENSHOT;
+    }
+    fs.writeFileSync(path.join(surfaceDir, "MIGRATION.md"), screenBrief(screen, screenshot));
+    const origin: ScreenOrigin = {
+      path: screen.path,
+      framework: screen.framework,
+      ...(screenshot === undefined ? {} : { screenshot }),
+    };
+    writeOrigin(target, "paywall", screen.slug, origin);
   }
-  fs.writeFileSync(path.join(surfaceDir, "MIGRATION.md"), screenBrief(screen, screenshot));
-  const origin: ScreenOrigin = {
-    path: screen.path,
-    framework: screen.framework,
-    ...(screenshot === undefined ? {} : { screenshot }),
-  };
-  writeOrigin(target, "paywall", screen.slug, origin);
 
   const actions = inventory.actions.reduce((sum, action) => sum + action.count, 0);
   const found = [
@@ -151,8 +155,9 @@ export function scaffoldFromScreen(ui: Renderer, options: ScreenScaffoldOptions)
     `${actions} action${actions === 1 ? "" : "s"}`,
   ].join(", ");
   ui.step(`Read \`${screen.path}\` (${screenFrameworkLabel(screen.framework)}): ${found}`);
+  if (options.dryRun && options.newProject) ui.step(`Would create a superwall project in ${where}`);
   ui.step(
-    `Created ${path.relative(root, target) || "."}/paywalls/${screen.slug} for \`${screen.name}\``,
+    `${options.dryRun ? "Would create" : "Created"} ${where}/paywalls/${screen.slug} for \`${screen.name}\``,
   );
   if (inventory.productIds.length > 0) {
     ui.warn(
@@ -167,6 +172,7 @@ interface ScaffoldOptions {
   target: string;
   paywallId: string;
   newProject: boolean;
+  dryRun?: boolean;
   fetchText?: (url: string) => Promise<string | undefined>;
 }
 
@@ -214,15 +220,31 @@ export async function scaffoldFromPaywall(
       `\`paywalls/${origin.slug}\` already exists in ${path.relative(root, target) || "."} — rename or remove it first.`,
     );
   }
+  const where = path.relative(root, target) || ".";
+  if (options.dryRun) {
+    if (options.newProject) ui.step(`Would create a superwall project in ${where}`);
+    ui.step(`Would create ${where}/paywalls/${origin.slug} from \`${origin.name}\``);
+    if (origin.url !== undefined) {
+      ui.step(`Would record paywall ${origin.id} in superwall.lock`);
+    }
+    if (
+      origin.applicationId !== undefined &&
+      origin.platform !== undefined &&
+      readLock(target).apps[origin.platform] === undefined
+    ) {
+      ui.step(
+        `Would save app ${origin.applicationId} for ${origin.platform} in superwall.lock, the paywall's app`,
+      );
+    }
+    return origin;
+  }
   if (options.newProject) writeProjectFiles(target, projectPackageName(root));
   writeSurfaceFiles(target, origin.slug, originConfigSource(origin));
   fs.writeFileSync(path.join(target, "paywalls", origin.slug, "MIGRATION.md"), originBrief(origin));
   if (origin.url !== undefined) {
     writeOrigin(target, "paywall", origin.slug, { paywallId: origin.id, url: origin.url });
   }
-  ui.step(
-    `Created ${path.relative(root, target) || "."}/paywalls/${origin.slug} from \`${origin.name}\``,
-  );
+  ui.step(`Created ${where}/paywalls/${origin.slug} from \`${origin.name}\``);
   if (origin.products.some((product) => product.identifier === "missing")) {
     ui.warn(
       "Some product slots have no store product on the dashboard — fix them in config.ts before pushing.",
