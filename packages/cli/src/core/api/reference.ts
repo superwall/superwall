@@ -12,6 +12,11 @@ export interface DocField {
   required: boolean;
   description?: string;
   fields?: DocField[];
+  /**
+   * The object (or each item of the array) takes exactly `fields`: the spec
+   * declares it with `additionalProperties: false` and no union around it.
+   */
+  closed?: boolean;
 }
 
 export interface DocOperation {
@@ -63,21 +68,40 @@ function objectOf(schema: Schema | undefined): Schema | undefined {
   return undefined;
 }
 
+/** An object schema, or an array's item schema, with no union around it. */
+function plainObjectOf(schema: Schema | undefined): Schema | undefined {
+  if (!schema || schema.anyOf || schema.oneOf) return undefined;
+  if (schema.properties) return schema;
+  if (schema.type === "array") return plainObjectOf(schema.items);
+  return undefined;
+}
+
 function fieldsOf(schema: Schema | undefined, depth = 0): DocField[] | undefined {
   const object = objectOf(schema);
   if (!object?.properties || depth >= MAX_DEPTH) return undefined;
   const required = new Set<string>(object.required ?? []);
   return Object.entries<Schema>(object.properties).map(([name, field]) => {
     const nested = fieldsOf(field, depth + 1);
+    const closed = nested !== undefined && plainObjectOf(field)?.additionalProperties === false;
     return {
       name,
       type: typeOf(field),
       required: required.has(name),
       ...(field.description ? { description: oneLine(field.description) } : {}),
       ...(nested ? { fields: nested } : {}),
+      ...(closed ? { closed } : {}),
     };
   });
 }
+
+/**
+ * What one object of a body field takes, for help and errors:
+ * `variant_id (string, required), percentage (integer, required)`.
+ */
+export const itemShape = (field: DocField): string | undefined =>
+  field.fields
+    ?.map((item) => `${item.name} (${item.type}${item.required ? ", required" : ""})`)
+    .join(", ");
 
 const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim();
 
