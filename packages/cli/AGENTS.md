@@ -560,6 +560,14 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   installs from the copy; the URL install is the fallback. Skill install never
   fails `login`. Bundled skills count as stale on any CLI version change; the
   public repo is checked by HEAD sha, at most daily, and kept as is offline.
+- **Child processes start through `invocation()`** (`src/core/process.ts`).
+  On Windows, npm-installed tools (`npm`, `npx`, `pnpm`, `yarn`, `claude`,
+  `codex`) are `.cmd` scripts: `spawn`/`execFile` without a shell don't find
+  them (`spawn npx ENOENT`) and Node refuses to start one directly. It finds the
+  program on `PATH`/`PATHEXT` and runs a `.cmd` through `cmd.exe` with every
+  argument caret-quoted (cross-spawn's rules), never through `shell: true`'s
+  unquoted join. `spawnStream`/`readVersion` already use it; a new spawn of
+  anything but a known `.exe` must too.
 - **`upgrade` brings the skills along.** After installing a release it runs
   the new binary (`$(npm prefix -g)/bin/superwall skills --force --yes`, from
   the temp dir so the launcher can't hand off to a project-local install), so

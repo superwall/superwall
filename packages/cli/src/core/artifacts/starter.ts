@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
 import type { CommandContext } from "@/program/command";
+import { invocation } from "@/core/process";
 import { downloadRepoDir, PUBLIC_REPO, RepoDownloadError, type FetchLike } from "@/core/repo/download";
 import { MANIFEST_FILE, readManifest, VENDORED_SDK, ArtifactError } from "./project";
 import { compareVersions, STARTER_DIR, vendoredVersion } from "./sdk";
@@ -13,9 +14,10 @@ const run = promisify(execFile);
 type Install = (root: string) => Promise<void>;
 
 const npmInstall: Install = async (root) => {
-  await run("npm", ["install", "--no-audit", "--no-fund"], {
+  const npm = invocation("npm", ["install", "--no-audit", "--no-fund"]);
+  await run(npm.command, npm.args, {
+    ...npm.options,
     cwd: root,
-    shell: process.platform === "win32",
     timeout: 300_000,
   });
 };

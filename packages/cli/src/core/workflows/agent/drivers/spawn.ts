@@ -2,6 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
+import { invocation } from "@/core/process";
 
 const execFileAsync = promisify(execFile);
 
@@ -17,7 +18,9 @@ function writeTranscript(line: string): void {
 
 export async function readVersion(bin: string): Promise<string | undefined> {
   try {
-    const { stdout } = await execFileAsync(bin, ["--version"], {
+    const run = invocation(bin, ["--version"]);
+    const { stdout } = await execFileAsync(run.command, run.args, {
+      ...run.options,
       timeout: 5000,
     });
     return stdout.trim().split("\n")[0];
@@ -55,7 +58,9 @@ interface SpawnStreamResult {
 
 export function spawnStream(opts: SpawnStreamOptions): Promise<SpawnStreamResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(opts.bin, opts.args, {
+    const run = invocation(opts.bin, opts.args);
+    const child = spawn(run.command, run.args, {
+      ...run.options,
       cwd: opts.cwd,
       signal: opts.signal,
       stdio: ["ignore", "pipe", "pipe"],

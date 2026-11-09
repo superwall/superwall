@@ -5,6 +5,7 @@ import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import pc from "picocolors";
 import type { CommandContext } from "@/program/command";
+import { invocation } from "@/core/process";
 import type { SkillsUpdate } from "@/core/support/skills";
 import { spawnStream } from "@/core/workflows/agent/drivers/spawn";
 import {
@@ -105,7 +106,9 @@ export function printAutoUpdate(stream: Pick<NodeJS.WriteStream, "write">, versi
 
 export function isGlobalInstall(file: string = fileURLToPath(import.meta.url)): boolean {
   try {
-    const root = execFileSync("npm", ["root", "--global"], {
+    const npm = invocation("npm", ["root", "--global"]);
+    const root = execFileSync(npm.command, npm.args, {
+      ...npm.options,
       encoding: "utf8",
       timeout: 3000,
       stdio: ["ignore", "pipe", "ignore"],

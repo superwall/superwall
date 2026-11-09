@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { resolveScopeFromKey } from "@/core/account/bind";
 import type { SuperwallApi } from "@/core/api/client";
 import { findApplication } from "@/core/api/lookup";
+import { invocation } from "@/core/process";
 import {
   createApplication,
   listApplications,
@@ -57,7 +58,8 @@ const LOCKFILES: ReadonlyArray<readonly [string, string]> = [
 
 async function available(manager: string): Promise<boolean> {
   try {
-    await run(manager, ["--version"], { shell: process.platform === "win32" });
+    const version = invocation(manager, ["--version"]);
+    await run(version.command, version.args, version.options);
     return true;
   } catch {
     return false;
@@ -91,9 +93,10 @@ export async function installDependencies(
   const spin = ui.spinner();
   spin.start(`Installing dependencies with ${manager}`);
   try {
-    await run(manager, ["install"], {
+    const install = invocation(manager, ["install"]);
+    await run(install.command, install.args, {
+      ...install.options,
       cwd: target,
-      shell: process.platform === "win32",
       timeout: 300_000,
     });
     spin.stop("Dependencies installed");
