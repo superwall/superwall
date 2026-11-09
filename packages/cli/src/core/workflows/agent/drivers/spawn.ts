@@ -47,19 +47,38 @@ interface SpawnStreamOptions {
   onStdoutLine: (line: string) => void;
   onStderrLine?: (line: string) => void;
   signal?: AbortSignal;
+  cmdShim?: boolean;
 }
 
 interface SpawnStreamResult {
   code: number | null;
 }
 
+const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+
+export function escapeCmdCommand(bin: string): string {
+  return bin.replace(CMD_META, "^$1");
+}
+
+export function escapeCmdShimArgument(arg: string): string {
+  const quoted = `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1")}"`;
+  return quoted.replace(CMD_META, "^$1").replace(CMD_META, "^$1");
+}
+
 export function spawnStream(opts: SpawnStreamOptions): Promise<SpawnStreamResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(opts.bin, opts.args, {
+    const options = {
       cwd: opts.cwd,
       signal: opts.signal,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+      stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"],
+    };
+    const child =
+      opts.cmdShim && process.platform === "win32"
+        ? spawn([escapeCmdCommand(opts.bin), ...opts.args.map(escapeCmdShimArgument)].join(" "), {
+            ...options,
+            shell: true,
+          })
+        : spawn(opts.bin, opts.args, options);
 
     const out = createInterface({ input: child.stdout });
     out.on("line", (line) => {

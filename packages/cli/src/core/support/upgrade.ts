@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
@@ -105,7 +105,7 @@ export function printAutoUpdate(stream: Pick<NodeJS.WriteStream, "write">, versi
 
 export function isGlobalInstall(file: string = fileURLToPath(import.meta.url)): boolean {
   try {
-    const root = execFileSync("npm", ["root", "--global"], {
+    const root = execSync("npm root --global", {
       encoding: "utf8",
       timeout: 3000,
       stdio: ["ignore", "pipe", "ignore"],
@@ -145,15 +145,21 @@ async function updateSkillsWithInstalledCli(version: string): Promise<SkillsUpda
   const prefix: string[] = [];
   const { code } = await spawnStream({
     bin: "npm",
+    cmdShim: true,
     args: ["prefix", "--global"],
     cwd: process.cwd(),
     onStdoutLine: (line) => prefix.push(line.trim()),
   });
-  const bin = prefix[0] ? join(prefix[0], "bin", "superwall") : undefined;
+  const bin = prefix[0]
+    ? process.platform === "win32"
+      ? join(prefix[0], "superwall.cmd")
+      : join(prefix[0], "bin", "superwall")
+    : undefined;
   if (code !== 0 || !bin || !existsSync(bin)) return "failed";
   const startedAt = Date.now();
   const result = await spawnStream({
     bin,
+    cmdShim: true,
     args: ["skills", "--force", "--yes"],
     cwd: tmpdir(),
     onStdoutLine: () => {},
@@ -196,6 +202,7 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
   const errors: string[] = [];
   const { code } = await spawnStream({
     bin: "npm",
+    cmdShim: true,
     args: ["install", "--global", `superwall@${latest}`],
     cwd: process.cwd(),
     onStdoutLine: () => {},
