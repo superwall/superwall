@@ -9,7 +9,19 @@ beforeEach(() => {
   writeApiIndex([
     op("GET", "/v2/campaigns/{id}"),
     op("PUT", "/v2/campaigns/{id}/audiences/{audience_id}/weights", {
-      body: [{ name: "weights", type: "object", required: true, description: "Variant id to percentage" }],
+      body: [
+        {
+          name: "weights",
+          type: "object[]",
+          required: true,
+          description: "Treatment-variant weights. The HOLDOUT variant (if any) is auto-balanced to (100 - sum).",
+          fields: [
+            { name: "variant_id", type: "string", required: true },
+            { name: "percentage", type: "integer", required: true },
+          ],
+          closed: true,
+        },
+      ],
     }),
     op("POST", "/v2/campaigns/{id}/archive"),
     op("PATCH", "/v2/campaigns/{id}/placements/{placement_id}", {
@@ -48,11 +60,15 @@ test("variant weights send a typed JSON body, and a placement update a typed fie
   const calls: ApiCall[] = [];
   const api = fakeResourceApi(calls);
 
-  await runLine('campaigns variants weights 9081 3 --weights {"11":60,"12":40} --json', { api });
+  await runLine('campaigns variants weights 9081 3 --weights [{"variant_id":"11","percentage":60},{"variant_id":"12","percentage":40}] --json', { api });
   await runLine("campaigns placements update 9081 77 --event-name paywall_open --json", { api });
 
   assert.deepEqual(calls, [
-    { method: "PUT", path: "/v2/campaigns/9081/audiences/3/weights", body: { weights: { 11: 60, 12: 40 } } },
+    {
+      method: "PUT",
+      path: "/v2/campaigns/9081/audiences/3/weights",
+      body: { weights: [{ variant_id: "11", percentage: 60 }, { variant_id: "12", percentage: 40 }] },
+    },
     { method: "PATCH", path: "/v2/campaigns/9081/placements/77", body: { event_name: "paywall_open" } },
   ]);
 });
@@ -99,6 +115,42 @@ test("campaigns --help lists every nested resource, and a nested resource's help
   assert.match(nested, /purchasers +<campaign> <audience> +Users who bought after seeing it/);
 
   const weights = await helpLine("campaigns variants weights --help");
-  assert.match(weights, /--weights <object> +required Variant id to percentage/);
+  assert.match(weights, /--weights <object\[\]> +required Treatment-variant weights\./);
+  assert.match(
+    weights.replace(/\s+/g, " "),
+    /Each item takes: variant_id \(string, required\), percentage \(integer, required\)\./,
+  );
+  assert.match(weights.replace(/\s+/g, " "), /--weights '\[\{"variant_id":"<variant>","percentage":50\}/);
+  const create = (await helpLine("campaigns variants create --help")).replace(/\s+/g, " ");
+  assert.match(create, /add each treatment with --percentage 0, then set the split with `campaigns variants weights`/);
   assert.match(weights, /--dry-run/);
+});
+
+test("variant weights keyed by id are refused before anything is sent, dry run included, naming what each takes", async () => {
+  const calls: ApiCall[] = [];
+  const api = fakeResourceApi(calls);
+  const expected =
+    /^superwall campaigns variants weights: --weights item 1 doesn't take "id" and needs "variant_id"\. Each item takes: variant_id \(string, required\), percentage \(integer, required\)\.$/;
+
+  for (const dryRun of ["", " --dry-run"]) {
+    const refused = await runLine(
+      `campaigns variants weights 9081 3 --weights [{"id":"11","percentage":50},{"id":"12","percentage":50}]${dryRun} --json`,
+      { api },
+    );
+    assert.match((refused.json as { error: { message: string } }).error.message, expected);
+  }
+  const missing = await runLine('campaigns variants weights 9081 3 --weights [{"variant_id":"11"}] --json', { api });
+  assert.match((missing.json as { error: { message: string } }).error.message, /--weights item 1 needs "percentage"\./);
+  assert.deepEqual(calls, []);
+
+  const planned = await runLine(
+    'campaigns variants weights 9081 3 --weights [{"variant_id":"11","percentage":50}] --dry-run --json',
+    { api },
+  );
+  assert.deepEqual(planned.json, {
+    method: "PUT",
+    path: "/v2/campaigns/9081/audiences/3/weights",
+    body: { weights: [{ variant_id: "11", percentage: 50 }] },
+  });
+  assert.deepEqual(calls, []);
 });

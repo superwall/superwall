@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import type { DocField } from "@/core/api/reference";
+import { itemShape, type DocField } from "@/core/api/reference";
 import { cmd, detailLines, exampleLines, renderPage, table, visible } from "@/ui/help-layout";
 import {
   argLabel,
@@ -71,7 +71,10 @@ function formatFieldRows(fields: (DocField & { in?: string })[]): [string, strin
     const bare = field.type.replace(/\s*\|\s*null\b/g, "").trim();
     const type = bare === "boolean" ? "" : ` ${pc.dim(`<${bare.length > 24 ? `${bare.slice(0, 23)}…` : bare}>`)}`;
     const required = field.required ? `${pc.yellow("required")} ` : "";
-    return [`${cmd(flag)}${type}`, `${required}${field.description ?? ""}`];
+    const shape = /^object(\[\])?$/.test(bare) ? itemShape(field) : undefined;
+    const takes = shape ? `${bare === "object" ? "Takes" : "Each item takes"}: ${shape}.` : "";
+    const description = [field.description, takes].filter(Boolean).join(" ");
+    return [`${cmd(flag)}${type}`, `${required}${description}`];
   });
 }
 

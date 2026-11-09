@@ -175,7 +175,8 @@ export const command = defineResource({
         {
           name: "create",
           summary: "Add a variant",
-          details: "Adding the first treatment without a percentage gives it 100% and zeroes existing variant weights, including the holdout. This can change live traffic.",
+          details:
+            "Adding the first treatment without a percentage gives it 100% and zeroes existing variant weights, including the holdout. This can change live traffic. A new audience's holdout holds 100%, so a --percentage above 0 is refused until the other variants leave room: to split traffic, add each treatment with --percentage 0, then set the split with `campaigns variants weights`.",
           effect: "destructive",
           method: "POST",
           path: "/v2/campaigns/{id}/audiences/{audience_id}/variants",
@@ -199,7 +200,8 @@ export const command = defineResource({
         {
           name: "weights",
           summary: "Set each variant's share of traffic",
-          details: "Overwrites allocation percentages for existing variants and changes live traffic distribution.",
+          details:
+            'Overwrites allocation percentages for existing variants and changes live traffic distribution. Name every treatment by its variant id (`campaigns get <campaign>` lists them): --weights \'[{"variant_id":"<variant>","percentage":50},{"variant_id":"<variant>","percentage":40}]\'. The holdout gets what is left (here 10).',
           effect: "destructive",
           method: "PUT",
           path: "/v2/campaigns/{id}/audiences/{audience_id}/weights",

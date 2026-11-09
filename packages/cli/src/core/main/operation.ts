@@ -1,7 +1,7 @@
 import type { CommandContext } from "@/program/command";
 import { boundOrganization, pickOrganization, pickScope } from "@/core/account/scope";
 import { parseParams } from "@/core/api/params";
-import type { DocOperation } from "@/core/api/reference";
+import { itemShape, type DocField, type DocOperation } from "@/core/api/reference";
 import { RESOURCES, type ResourceName } from "@/core/api/resources";
 import { testModeWarning } from "@/core/main/bundle-id";
 import { apiCall } from "@/ui/spinner";
@@ -212,6 +212,10 @@ async function callOperation(
       );
   }
   Object.assign(sendsBody ? body : query, parseParams(flags.data));
+  for (const [name, value] of Object.entries(body)) {
+    const field = bodyFields.get(name);
+    if (field) checkShape(command, field, value);
+  }
   await fillScope(ctx, op, spec, pathValues, query, body);
   const missing = (spec?.params ?? []).filter((param) => {
     return param.in === "query" && param.required && query[param.name] === undefined;
@@ -261,6 +265,36 @@ async function callOperation(
   const done = method === "GET" ? undefined : `${op.summary} — done`;
   if (Object.keys(merged).length === 0) return renderValue(ctx, response, done);
   renderValue(ctx, { ...(response as Record<string, unknown>), ...merged }, done);
+}
+
+const quoted = (names: string[]): string => names.map((name) => `"${name}"`).join(", ");
+
+/**
+ * Refuses an object, or an array of them, that the spec says takes exactly
+ * certain keys, when a key is unknown or a required one is missing. It runs
+ * before anything is sent and before a dry run prints, so `--dry-run` shows
+ * the same refusal the API would give, with what each item takes.
+ */
+function checkShape(command: string, field: DocField, value: unknown): void {
+  if (!field.closed || !field.fields || value === null || typeof value !== "object") return;
+  const many = Array.isArray(value);
+  const allowed = new Set(field.fields.map((item) => item.name));
+  for (const [index, item] of (many ? value : [value]).entries()) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) continue;
+    const unknown = Object.keys(item).filter((key) => !allowed.has(key));
+    const missing = field.fields
+      .filter((key) => key.required && !(key.name in item))
+      .map((key) => key.name);
+    if (unknown.length === 0 && missing.length === 0) continue;
+    const problems = [
+      ...(unknown.length > 0 ? [`doesn't take ${quoted(unknown)}`] : []),
+      ...(missing.length > 0 ? [`needs ${quoted(missing)}`] : []),
+    ];
+    const where = many ? `${toFlag(field.name)} item ${index + 1}` : toFlag(field.name);
+    throw new Error(
+      `${command}: ${where} ${problems.join(" and ")}. ${many ? "Each item takes" : "It takes"}: ${itemShape(field)}.`,
+    );
+  }
 }
 
 async function fillScope(

@@ -3,6 +3,7 @@ import { afterEach, test } from "node:test";
 import {
   deriveApiIndex,
   findOperations,
+  itemShape,
   listMatchingOperations,
   resolveApiIndex,
   matchesPath,
@@ -320,4 +321,48 @@ test("the reference downloads from the API host and says when it can't", async (
   useHome();
   useFetch([{ match: "/openapi.json", status: 503 }]);
   await assert.rejects(resolveApiIndex(), { message: "Couldn't fetch the Superwall API reference (HTTP 503)." });
+});
+
+test("an object field, or an array of them, declared with no other keys is marked closed; a union or an open one is not", () => {
+  const derived = deriveApiIndex({
+    paths: {
+      "/v2/things": {
+        put: {
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    weights: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: { variant_id: { type: "string" }, percentage: { type: "integer" } },
+                        required: ["variant_id", "percentage"],
+                        additionalProperties: false,
+                      },
+                    },
+                    single: { type: "object", properties: { a: { type: "string" } }, additionalProperties: false },
+                    open: { type: "object", properties: { a: { type: "string" } } },
+                    union: {
+                      anyOf: [
+                        { type: "object", properties: { a: { type: "string" } }, additionalProperties: false },
+                        { type: "object", properties: { b: { type: "string" } }, additionalProperties: false },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const body = derived.operations[0]!.body!;
+  const closed = Object.fromEntries(body.map((field) => [field.name, field.closed === true]));
+  assert.deepEqual(closed, { weights: true, single: true, open: false, union: false });
+  assert.equal(itemShape(body[0]!), "variant_id (string, required), percentage (integer, required)");
+  assert.equal(itemShape({ name: "plain", type: "string", required: false }), undefined);
 });
