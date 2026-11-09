@@ -65,11 +65,11 @@ export async function runPaywallMigration(
       newProject: existingDir === undefined,
       dryRun,
     });
-    if (dryRun) {
+    if (dryRun && origin.url !== undefined) {
       ui.outro("Dry run - no changes made.");
       return;
     }
-    migration = migrationFor(target, origin.id);
+    migration = dryRun ? undefined : migrationFor(target, origin.id);
     if (migration === undefined) {
       throw new Error(
         `Paywall ${paywallId} has no served document to rebuild from — nothing was recorded in superwall.lock.`,

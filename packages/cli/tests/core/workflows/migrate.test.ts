@@ -226,6 +226,22 @@ describe("in a terminal", () => {
     assert.equal(text(calls, "outro"), "Dry run - no changes made.");
   });
 
+  test("a paywall migration dry run fails like the real run when the paywall has no served document", async () => {
+    useHome({ authMethod: "api_key", apiKey: "sk_live_x", orgName: "Acme Inc", userEmail: "ana@acme.dev" });
+    useFetch([{ match: "/v2/paywalls/255456", body: { id: 255456, name: "Force Update" } }]);
+    const runs = useAgents({ claude: [] });
+    const root = scratch("paywall-dry-no-document");
+    const { calls, failed } = await runWorkflow((ctx) => runPaywallMigration(ctx, "255456", false), {
+      installDir: root,
+      dryRun: true,
+    });
+    assert.equal(failed, true);
+    assert.match(text(calls, "error"), /Paywall 255456 has no served document to rebuild from/);
+    assert.doesNotMatch(text(calls, "outro"), /Dry run - no changes made\./);
+    assert.equal(fs.existsSync(path.join(root, "superwall")), false);
+    assert.equal(runs.length, 0);
+  });
+
   test("the provider migration needs a coding agent and an app", async () => {
     useHome();
     useAgents({});
