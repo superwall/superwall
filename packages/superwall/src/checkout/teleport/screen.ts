@@ -289,6 +289,7 @@ const HINT_GAP = 14;
 const ARROW_RISE = 56;
 const ARROW_SWEEP = 56;
 const ARROW_HEAD = 7;
+const ARROW_SHAFT = 18;
 const ARROW_STROKE = 3;
 const CAPTION_CAP_INSET = 5;
 const TAIL_INSET = 16;
@@ -352,8 +353,10 @@ const round = (value: number) => Math.round(value * 10) / 10;
 
 export const arrowPaths = (tailX: number, layout: HintLayout): [string, string] => {
   const { tipX, tipY, tailY } = layout;
-  const bend = (tailY - tipY) * 0.55;
-  const [sx, sy, tx, ty, b] = [tailX, tailY, tipX, tipY, bend].map(round) as [
+  const shaftY = tipY + ARROW_SHAFT;
+  const bend = (tailY - shaftY) * 0.55;
+  const [sx, sy, tx, ty, my, b] = [tailX, tailY, tipX, tipY, shaftY, bend].map(round) as [
+    number,
     number,
     number,
     number,
@@ -361,7 +364,7 @@ export const arrowPaths = (tailX: number, layout: HintLayout): [string, string] 
     number,
   ];
   return [
-    `M${sx} ${sy}C${sx} ${round(sy - b)} ${tx} ${round(ty + b)} ${tx} ${ty}`,
+    `M${sx} ${sy}C${sx} ${round(sy - b)} ${tx} ${round(my + b)} ${tx} ${my}L${tx} ${ty}`,
     `M${round(tx - ARROW_HEAD)} ${round(ty + ARROW_HEAD)}L${tx} ${ty}L${round(tx + ARROW_HEAD)} ${round(ty + ARROW_HEAD)}`,
   ];
 };

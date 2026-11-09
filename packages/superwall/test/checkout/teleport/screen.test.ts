@@ -93,7 +93,7 @@ describe("the teleport screen, as paywall.js draws it", () => {
     expect(hints[0]?.dataset.side).toBe("ltr");
     const arrow = hints[0]?.querySelectorAll(".sw-teleport-dim-arrow path");
     expect(arrow).toHaveLength(2);
-    expect(arrow?.[0]?.getAttribute("d")).toMatch(new RegExp(` ${window.innerWidth - 61.5} [\\d.]+$`));
+    expect(arrow?.[0]?.getAttribute("d")).toMatch(new RegExp(`L${window.innerWidth - 61.5} [\\d.]+$`));
 
     const leaving = createReturnDim();
     leaving.remove();
@@ -175,7 +175,7 @@ describe("the teleport screen, as paywall.js draws it", () => {
   it("draws the arrow leaving the caption straight up and arriving straight up at Open", () => {
     const layout = { tipX: 340.5, tipY: 483.2, tailY: 539.2, captionTop: 548.7 };
     const [curve, head] = arrowPaths(284.5, layout);
-    expect(curve).toBe("M284.5 539.2C284.5 508.4 340.5 514 340.5 483.2");
+    expect(curve).toBe("M284.5 539.2C284.5 518.3 340.5 522.1 340.5 501.2L340.5 483.2");
     expect(head).toBe("M333.5 490.2L340.5 483.2L347.5 490.2");
   });
 
