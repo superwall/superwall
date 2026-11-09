@@ -172,11 +172,14 @@ describe("the teleport screen, as paywall.js draws it", () => {
     expect(arrowTailX(340.5, "ltr", { left: 200, right: 210 })).toBe(284.5);
   });
 
-  it("draws the arrow leaving the caption straight up and arriving straight up at Open", () => {
+  it("draws the arrow as one straight line from the caption to Open, its head turned along it", () => {
     const layout = { tipX: 340.5, tipY: 483.2, tailY: 539.2, captionTop: 548.7 };
-    const [curve, head] = arrowPaths(284.5, layout);
-    expect(curve).toBe("M284.5 539.2C284.5 518.3 340.5 522.1 340.5 501.2L340.5 483.2");
-    expect(head).toBe("M333.5 490.2L340.5 483.2L347.5 490.2");
+    const [line, head] = arrowPaths(284.5, layout);
+    expect(line).toBe("M284.5 539.2L340.5 483.2");
+    expect(head).toBe("M340.5 493.2L340.5 483.2L330.5 483.2");
+    const [straight, straightHead] = arrowPaths(340.5, layout);
+    expect(straight).toBe("M340.5 539.2L340.5 483.2");
+    expect(straightHead).toBe("M347.6 490.3L340.5 483.2L333.4 490.3");
   });
 
   it("puts Open on the left when the phone, not the paywall, reads right to left", () => {

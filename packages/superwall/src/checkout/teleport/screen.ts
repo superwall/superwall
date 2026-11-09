@@ -288,8 +288,8 @@ const ALERT_BOTTOM_BELOW_OPEN = 10;
 const HINT_GAP = 14;
 const ARROW_RISE = 56;
 const ARROW_SWEEP = 56;
-const ARROW_HEAD = 7;
-const ARROW_SHAFT = 18;
+const ARROW_HEAD = 10;
+const ARROW_HEAD_ANGLE = Math.PI / 4;
 const ARROW_STROKE = 3;
 const CAPTION_CAP_INSET = 5;
 const TAIL_INSET = 16;
@@ -353,19 +353,12 @@ const round = (value: number) => Math.round(value * 10) / 10;
 
 export const arrowPaths = (tailX: number, layout: HintLayout): [string, string] => {
   const { tipX, tipY, tailY } = layout;
-  const shaftY = tipY + ARROW_SHAFT;
-  const bend = (tailY - shaftY) * 0.55;
-  const [sx, sy, tx, ty, my, b] = [tailX, tailY, tipX, tipY, shaftY, bend].map(round) as [
-    number,
-    number,
-    number,
-    number,
-    number,
-    number,
-  ];
+  const angle = Math.atan2(tailY - tipY, tailX - tipX);
+  const barb = (turn: number) =>
+    `${round(tipX + ARROW_HEAD * Math.cos(angle + turn))} ${round(tipY + ARROW_HEAD * Math.sin(angle + turn))}`;
   return [
-    `M${sx} ${sy}C${sx} ${round(sy - b)} ${tx} ${round(my + b)} ${tx} ${my}L${tx} ${ty}`,
-    `M${round(tx - ARROW_HEAD)} ${round(ty + ARROW_HEAD)}L${tx} ${ty}L${round(tx + ARROW_HEAD)} ${round(ty + ARROW_HEAD)}`,
+    `M${round(tailX)} ${round(tailY)}L${round(tipX)} ${round(tipY)}`,
+    `M${barb(-ARROW_HEAD_ANGLE)}L${round(tipX)} ${round(tipY)}L${barb(ARROW_HEAD_ANGLE)}`,
   ];
 };
 
