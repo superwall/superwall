@@ -113,9 +113,7 @@ export const entrySource = ({
     ...(checkout ? [`      <SuperwallCheckout />`] : []),
     ...(teleport ? [`      <TeleportScreen />`] : []),
     `    </SuperwallProvider>`,
-    teleport && !prerender
-      ? `  </React.StrictMode>), config);`
-      : `  </React.StrictMode>,`,
+    teleport && !prerender ? `  </React.StrictMode>), config);` : `  </React.StrictMode>,`,
     ...(teleport && !prerender ? [] : [`);`]),
   );
 

@@ -9,7 +9,9 @@ export default function Checkout() {
   return (
     <main>
       <h1>{t("checkout.title")}</h1>
-      <p data-product={tapped ?? "none"}>{tapped === undefined ? "Pick a plan" : getProduct(tapped)?.variables.price}</p>
+      <p data-product={tapped ?? "none"}>
+        {tapped === undefined ? "Pick a plan" : getProduct(tapped)?.variables.price}
+      </p>
       <p>{eligible ? "Trial included" : "No trial"}</p>
     </main>
   );
