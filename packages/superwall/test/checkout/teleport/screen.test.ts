@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createTeleportScreen, poweredByHref } from "../../../src/checkout/teleport/screen";
+import {
+  createReturnDim,
+  createTeleportScreen,
+  poweredByHref,
+} from "../../../src/checkout/teleport/screen";
 
 const options = {
   surface: "overlay" as const,
@@ -17,7 +21,7 @@ const move = (target: EventTarget | null | undefined) => {
 
 afterEach(() => {
   vi.useRealTimers();
-  document.querySelectorAll(".sw-teleport").forEach((node) => node.remove());
+  document.querySelectorAll(".sw-teleport, .sw-teleport-dim").forEach((node) => node.remove());
   document.getElementById("sw-teleport-style")?.remove();
 });
 
@@ -66,5 +70,22 @@ describe("the teleport screen, as paywall.js draws it", () => {
 
   it("credits the subdomain it was served from", () => {
     expect(new URL(poweredByHref()).searchParams.get("utm_source")).toBe("localhost");
+  });
+
+  it("shows one hint on the dim, mirrored by its direction, and none once the dim is leaving", () => {
+    const dim = createReturnDim();
+    dim.showHint("Tap to go back to the app", "rtl");
+    dim.showHint("Again", "ltr");
+    const hints = dim.root.querySelectorAll<HTMLElement>(".sw-teleport-dim-hint");
+    expect(hints).toHaveLength(1);
+    expect(hints[0]?.dir).toBe("rtl");
+    expect(hints[0]?.querySelector(".sw-teleport-dim-caption")?.textContent).toBe(
+      "Tap to go back to the app",
+    );
+
+    const leaving = createReturnDim();
+    leaving.remove();
+    leaving.showHint("Late", "ltr");
+    expect(leaving.root.querySelector(".sw-teleport-dim-hint")).toBeNull();
   });
 });

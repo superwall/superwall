@@ -1542,6 +1542,76 @@ describe("the web half of a teleport", () => {
     expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
   });
 
+  it("points at Open with the back caption only once the prompt is up, and fades it with the dim", async () => {
+    boot({ appLinkUrl: undefined });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    void teleportPage(fakeSession().session).returnToApp("closed");
+    const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
+    expect(dim?.querySelector(".sw-teleport-dim-hint")).toBeNull();
+    window.dispatchEvent(new Event("blur"));
+    window.dispatchEvent(new Event("blur"));
+    const hints = dim?.querySelectorAll<HTMLElement>(".sw-teleport-dim-hint");
+    expect(hints).toHaveLength(1);
+    const hint = hints?.[0];
+    expect(hint?.dataset.state).toBe("open");
+    expect(hint?.dir).toBe("ltr");
+    expect(hint?.querySelector("svg.sw-teleport-dim-arrow")).not.toBeNull();
+    expect(hint?.textContent).toBe("Tap to go back to the app");
+    window.dispatchEvent(new Event("focus"));
+    expect(dim?.dataset.state).toBe("closing");
+    expect(hint?.parentElement).toBe(dim);
+  });
+
+  it("captions a return with no reason as a back, in the device's language and direction", () => {
+    boot({ appLinkUrl: undefined });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    void teleportPage(fakeSession({ device: { deviceLocale: "he_IL" } }).session).returnToApp();
+    window.dispatchEvent(new Event("blur"));
+    const hint = document.querySelector<HTMLElement>(".sw-teleport-dim-hint");
+    expect(hint?.dir).toBe("rtl");
+    expect(hint?.textContent).toBe("הקישו כדי לחזור לאפליקציה");
+  });
+
+  it("never points at a prompt that didn't come up", async () => {
+    boot({ appLinkUrl: undefined });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const result = teleportPage(fakeSession().session).returnToApp("closed");
+    await settle(PROMPT_WAIT_MS);
+    await expect(result).resolves.toBe("no_app");
+    window.dispatchEvent(new Event("blur"));
+    expect(document.querySelector(".sw-teleport-dim-hint")).toBeNull();
+  });
+
+  it("captions the scheme after a direct completion as redeeming the purchase", async () => {
+    boot();
+    api({ "checkout/session/complete": {} });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(
+      fakeSession({ teleport: { route: "checkout", completion: "direct" } }).session,
+    ).completePurchase("ctx");
+    await settle(APP_OPEN_WAIT_MS);
+    window.dispatchEvent(new Event("blur"));
+    expect(document.querySelector(".sw-teleport-dim-hint")?.textContent).toBe(
+      "Tap to go back to the app and redeem your purchase",
+    );
+  });
+
+  it("captions Return to App on the confirmation screen as redeeming the purchase", async () => {
+    boot({ appLinkUrl: undefined });
+    api({ "checkout/session/complete": {} });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession({ device: { deviceLocale: "de_DE" } }).session).completePurchase(
+      "ctx",
+    );
+    const back = document.querySelector<HTMLAnchorElement>("a.sw-teleport-primary");
+    back?.addEventListener("click", (event) => event.preventDefault());
+    back?.click();
+    window.dispatchEvent(new Event("blur"));
+    expect(document.querySelector(".sw-teleport-dim-hint")?.textContent).toBe(
+      "Tippe, um zur App zurückzukehren und deinen Kauf einzulösen",
+    );
+  });
+
   it("navigates the page itself", () => {
     pageNavigation.assign("#teleport");
     expect(window.location.hash).toBe("#teleport");

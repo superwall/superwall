@@ -265,7 +265,29 @@ export const createTeleportScreen = (options: TeleportScreenOptions): TeleportSc
 
 export type ReturnDim = {
   readonly root: HTMLElement;
+  showHint(caption: string, dir: "ltr" | "rtl"): void;
   remove(): void;
+};
+
+const hintArrow = (): Element => {
+  const svg = svgElement("svg", {
+    class: "sw-teleport-dim-arrow",
+    viewBox: "0 0 48 64",
+    "aria-hidden": "true",
+  });
+  for (const d of ["M12 60C10 34 20 16 38 7", "M26 5l13 2-4 13"]) {
+    svg.append(
+      svgElement("path", {
+        d,
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "3",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      }),
+    );
+  }
+  return svg;
 };
 
 export const createReturnDim = (): ReturnDim => {
@@ -280,6 +302,16 @@ export const createReturnDim = (): ReturnDim => {
   let removed = false;
   return {
     root,
+    showHint: (caption, dir) => {
+      if (removed || root.querySelector(".sw-teleport-dim-hint")) return;
+      const hint = element("div", "sw-teleport-dim-hint");
+      hint.dir = dir;
+      hint.dataset.state = "closed";
+      hint.append(hintArrow(), element("p", "sw-teleport-dim-caption", caption));
+      root.append(hint);
+      void hint.offsetWidth;
+      hint.dataset.state = "open";
+    },
     remove: () => {
       if (removed) return;
       removed = true;

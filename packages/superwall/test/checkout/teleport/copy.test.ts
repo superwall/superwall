@@ -18,4 +18,53 @@ describe("teleportCopyFor", () => {
     expect(teleportCopyFor("zh_Hans_TW")).toBe(teleportCopyFor("zh-Hans"));
     expect(teleportCopyFor("en").dir).toBeUndefined();
   });
+
+  it("captions a return to the app in every language, with the purchase named only after one", () => {
+    const locales = [
+      "en",
+      "es",
+      "fr",
+      "de",
+      "it",
+      "pt",
+      "nl",
+      "sv",
+      "da",
+      "nb",
+      "fi",
+      "pl",
+      "cs",
+      "sk",
+      "hu",
+      "ro",
+      "hr",
+      "el",
+      "tr",
+      "ru",
+      "uk",
+      "ja",
+      "ko",
+      "zh-Hans",
+      "zh-Hant",
+      "ar",
+      "he",
+      "hi",
+      "id",
+      "ms",
+      "th",
+      "vi",
+    ];
+    const english = teleportCopyFor("en").returning;
+    expect(english).toEqual({
+      closed: "Tap to go back to the app",
+      purchased: "Tap to go back to the app and redeem your purchase",
+    });
+    for (const locale of locales) {
+      const { closed, purchased } = teleportCopyFor(locale).returning;
+      expect(closed.trim(), locale).not.toBe("");
+      expect(purchased.length, locale).toBeGreaterThan(closed.length);
+      if (locale !== "en")
+        expect([closed, purchased], locale).not.toEqual([english.closed, english.purchased]);
+    }
+  });
 });

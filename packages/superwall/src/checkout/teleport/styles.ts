@@ -326,8 +326,47 @@ export const TELEPORT_SCREEN_CSS = `
   pointer-events: none;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+.sw-teleport-dim-hint {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% + 64px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  padding-inline: 32px;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 240ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 240ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.sw-teleport-dim-hint[data-state="open"] {
+  opacity: 1;
+  transform: none;
+}
+.sw-teleport-dim-arrow {
+  width: 44px;
+  height: 58px;
+  margin-inline-end: 8px;
+}
+.sw-teleport-dim-hint[dir="rtl"] .sw-teleport-dim-arrow {
+  transform: scaleX(-1);
+}
+.sw-teleport-dim-caption {
+  margin: 0;
+  align-self: stretch;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Helvetica Neue", sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: balance;
+}
 @media (prefers-reduced-motion: reduce) {
   .sw-teleport-dim { transition: none; }
+  .sw-teleport-dim-hint { transform: none; transition: none; }
   .sw-teleport-content { transform: none; }
   .sw-teleport-arc { animation: none; }
   .sw-teleport-orbit { animation-duration: 3s; }
