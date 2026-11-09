@@ -168,7 +168,15 @@ export const prerenderTeleportPages = async ({
       ],
     };
   }
-  const planned = teleportPageVariants(defaultLocale, locales, stripeReferencesOf(products));
+  const stripe = stripeReferencesOf(products);
+  const priced = stripe.filter((reference) => entry.inlineProducts?.[reference] !== undefined);
+  const unpriced = stripe.filter((reference) => !priced.includes(reference));
+  const planned = teleportPageVariants(defaultLocale, locales, priced);
+  if (unpriced.length > 0) {
+    planned.warnings.push(
+      `No teleport page for ${unpriced.map((reference) => `\`${reference}\``).join(", ")}: this build has no store price for ${unpriced.length === 1 ? "it" : "them"}, so the page would show none. \`superwall push\` prices them.`,
+    );
+  }
 
   const file = path.join(entry.entryDir, "prerender.jsx");
   fs.writeFileSync(file, entrySource({ ...entry, target: "prerender" }));

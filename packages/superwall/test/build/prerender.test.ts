@@ -255,6 +255,16 @@ describe("when there is nothing to pre-render", () => {
     expect(built.html).not.toContain("sw-teleport-pages");
   }, 120_000);
 
+  it("renders no product's page without its store price, and says how to get one", async () => {
+    const built = await buildSnapshot(project(), surface("teleport"), { platform: "ios" });
+    expect(built.teleportPages.map((teleportPage) => teleportPage.key).toSorted()).toEqual(
+      ["de/__none__/0", "de/__none__/1", "en/__none__/0", "en/__none__/1"].toSorted(),
+    );
+    expect(built.warnings).toEqual([
+      "No teleport page for `annual`, `monthly`: this build has no store price for them, so the page would show none. `superwall push` prices them.",
+    ]);
+  }, 120_000);
+
   it("renders no pages for a paywall without teleport.route", async () => {
     const built = await buildSnapshot(project(), surface("stores"), { platform: "ios" });
     expect(built.teleportRoute).toBeUndefined();

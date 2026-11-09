@@ -19,6 +19,7 @@ export default {
     forGoal: "A plan for {goal}.",
     body: "Pay here with Stripe, then head back to the app. It unlocks on its own.",
     fromApp: "Continued from the app.",
+    trial: "Your free trial is included.",
     monthly: "Monthly",
     pro: "Pro",
     empty: "—",

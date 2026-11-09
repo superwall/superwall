@@ -1,12 +1,20 @@
 import * as React from "react";
-import { useHaptics, useProducts, usePurchase, useTeleport, useTranslation } from "superwall/hooks";
+import {
+  useHaptics,
+  useIntroductoryOffer,
+  useProducts,
+  usePurchase,
+  useTeleport,
+  useTranslation,
+} from "superwall/hooks";
 import { parseAsStringEnum, useQueryState, useRouter } from "superwall/navigation";
 import { GOALS, goalParser } from "../components/goals";
 
 // This page is the teleport route: in an iOS app it opens in the shopper's
-// browser, with the goal from the app already set. The plan lives in the URL
-// too, so a reload lands back on the plan that was picked.
-const planParser = parseAsStringEnum(["monthly", "pro"]).withDefault("monthly");
+// browser, with the goal from the app already set and the plan they tapped
+// selected. The plan lives in the URL too, so a reload lands back on the plan
+// that was picked.
+const planParser = parseAsStringEnum(["monthly", "pro"]);
 
 export default function Plan() {
   const router = useRouter();
@@ -15,12 +23,15 @@ export default function Plan() {
   const { purchase, prefetch } = usePurchase();
   const { t } = useTranslation();
   const haptics = useHaptics();
+  const { eligible: trial } = useIntroductoryOffer();
   const [goal] = useQueryState("goal", goalParser);
   const [notice, setNotice] = React.useState<string>();
 
   // Typed against the config: naming a product this paywall does not declare
   // is a compile error, not an undefined price on someone's phone.
-  const [reference, setReference] = useQueryState("plan", planParser);
+  const [picked, setReference] = useQueryState("plan", planParser);
+  const reference =
+    picked ?? (teleport.status === "arrived" ? teleport.productReference : undefined) ?? "monthly";
   const monthly = getProduct("monthly");
   const pro = getProduct("pro");
   const selected = getProduct(reference);
@@ -52,6 +63,7 @@ export default function Plan() {
           {t("plan.body")}
         </p>
         {teleport.status === "arrived" ? <p className="notice">{t("plan.fromApp")}</p> : null}
+        {trial ? <p className="notice">{t("plan.trial")}</p> : null}
       </div>
 
       <div className="plans">
