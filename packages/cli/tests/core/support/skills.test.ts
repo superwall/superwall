@@ -497,3 +497,33 @@ test("the picker falls back to the skills it knows when the repo cannot be liste
     assert.deepEqual(said(calls, "warn"), ["Nothing selected."]);
   }
 });
+
+test("on Windows the skills install runs npx, a .cmd script, through cmd.exe", async () => {
+  useHome();
+  useFetch([{ match: GITHUB_HEAD, body: { sha: "head-sha" } }]);
+  const dir = mkdtempSync(join(tmpdir(), "sw-skills-win-"));
+  scratch.push(dir);
+  writeFileSync(join(dir, "npx.cmd"), "");
+  const lines = join(dir, "cmd-lines");
+  const comspec = join(dir, "cmd");
+  writeFileSync(comspec, `#!/bin/sh\nprintf '%s|%s\\n' "$1 $2 $3" "$4" >> "${lines}"\n`);
+  fs.chmodSync(comspec, 0o755);
+  const saved = { PATH: process.env.PATH, ComSpec: process.env.ComSpec };
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  process.env.PATH = dir;
+  process.env.ComSpec = comspec;
+  Object.defineProperty(process, "platform", { value: "win32" });
+  try {
+    assert.equal(await updateSkills(), "updated");
+  } finally {
+    if (platform) Object.defineProperty(process, "platform", platform);
+    process.env.PATH = saved.PATH;
+    if (saved.ComSpec === undefined) delete process.env.ComSpec;
+    else process.env.ComSpec = saved.ComSpec;
+  }
+
+  const ran = readFileSync(lines, "utf8").trim().split("\n");
+  assert.equal(ran.length, 2);
+  for (const line of ran) assert.match(line, /^\/d \/s \/c\|"npx \^"-y\^" \^"skills@latest\^" \^"add\^" /);
+  assert.match(ran[1] ?? "", /\^"https:\/\/github\.com\/superwall\/skills\/tree\/next\^"/);
+});
