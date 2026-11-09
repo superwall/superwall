@@ -287,13 +287,11 @@ const FIRST_GLASS_SAFARI = 26;
 const ALERT_BOTTOM_BELOW_OPEN = 10;
 const HINT_GAP = 14;
 const ARROW_RISE = 56;
-const ARROW_SWEEP = 56;
-const ARROW_BOW = 0.22;
+const ARROW_SWEEP = 52;
 const ARROW_HEAD = 10;
 const ARROW_HEAD_ANGLE = Math.PI / 4;
 const ARROW_STROKE = 3;
-const CAPTION_CAP_INSET = 5;
-const TAIL_INSET = 16;
+const CAPTION_MARGIN = 24;
 
 const RTL_SYSTEM_LANGUAGES = new Set(["ar", "he", "fa", "ur"]);
 
@@ -331,59 +329,58 @@ const currentView = (): PromptView => ({
   screenHeight: window.screen.height,
 });
 
-export type HintLayout = { tipX: number; tipY: number; tailY: number; captionTop: number };
+export type HintLayout = {
+  tipX: number;
+  tipY: number;
+  tailX: number;
+  tailY: number;
+  captionLeft: number;
+  captionWidth: number;
+  captionAlign: "left" | "right";
+};
 
-export const hintLayout = (anchor: { x: number; y: number }): HintLayout => {
+export const hintLayout = (
+  anchor: { x: number; y: number; side: "ltr" | "rtl" },
+  width: number,
+): HintLayout => {
   const cap = ARROW_STROKE / 2;
   const tipY = anchor.y + ALERT_BOTTOM_BELOW_OPEN + HINT_GAP + cap;
   const tailY = tipY + ARROW_RISE;
-  return { tipX: anchor.x, tipY, tailY, captionTop: tailY + cap + HINT_GAP - CAPTION_CAP_INSET };
-};
-
-export const arrowTailX = (
-  tipX: number,
-  side: "ltr" | "rtl",
-  line: { left: number; right: number } | undefined,
-): number => {
-  const toward = side === "rtl" ? tipX + ARROW_SWEEP : tipX - ARROW_SWEEP;
-  if (line === undefined || line.right - line.left < TAIL_INSET * 2) return toward;
-  return Math.min(Math.max(toward, line.left + TAIL_INSET), line.right - TAIL_INSET);
+  if (anchor.side === "rtl") {
+    const tailX = anchor.x + ARROW_SWEEP;
+    const captionLeft = tailX + cap + HINT_GAP;
+    return {
+      tipX: anchor.x,
+      tipY,
+      tailX,
+      tailY,
+      captionLeft,
+      captionWidth: Math.max(0, width - CAPTION_MARGIN - captionLeft),
+      captionAlign: "left",
+    };
+  }
+  const tailX = anchor.x - ARROW_SWEEP;
+  return {
+    tipX: anchor.x,
+    tipY,
+    tailX,
+    tailY,
+    captionLeft: CAPTION_MARGIN,
+    captionWidth: Math.max(0, tailX - cap - HINT_GAP - CAPTION_MARGIN),
+    captionAlign: "right",
+  };
 };
 
 const round = (value: number) => Math.round(value * 10) / 10;
 
-export const arrowPaths = (tailX: number, layout: HintLayout): [string, string] => {
-  const { tipX, tipY, tailY } = layout;
-  const dx = tipX - tailX;
-  const dy = tipY - tailY;
-  const flip = dx > 0 ? 1 : -1;
-  const controlX = (tailX + tipX) / 2 - dy * ARROW_BOW * flip;
-  const controlY = (tailY + tipY) / 2 + dx * ARROW_BOW * flip;
-  const angle = Math.atan2(controlY - tipY, controlX - tipX);
+export const arrowPaths = (layout: HintLayout): [string, string] => {
+  const { tipX, tipY, tailX, tailY } = layout;
   const barb = (turn: number) =>
-    `${round(tipX + ARROW_HEAD * Math.cos(angle + turn))} ${round(tipY + ARROW_HEAD * Math.sin(angle + turn))}`;
+    `${round(tipX + ARROW_HEAD * Math.cos(Math.PI / 2 + turn))} ${round(tipY + ARROW_HEAD * Math.sin(Math.PI / 2 + turn))}`;
   return [
-    `M${round(tailX)} ${round(tailY)}Q${round(controlX)} ${round(controlY)} ${round(tipX)} ${round(tipY)}`,
+    `M${round(tailX)} ${round(tailY)}Q${round(tipX)} ${round(tailY)} ${round(tipX)} ${round(tipY)}`,
     `M${barb(-ARROW_HEAD_ANGLE)}L${round(tipX)} ${round(tipY)}L${barb(ARROW_HEAD_ANGLE)}`,
   ];
-};
-
-const firstLine = (
-  caption: HTMLElement,
-  origin: HTMLElement,
-): { left: number; right: number } | undefined => {
-  const range = document.createRange();
-  range.selectNodeContents(caption);
-  if (typeof range.getClientRects !== "function") return undefined;
-  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0);
-  if (rects.length === 0) return undefined;
-  const top = Math.min(...rects.map((rect) => rect.top));
-  const line = rects.filter((rect) => rect.top - top < 4);
-  const offset = origin.getBoundingClientRect().left;
-  return {
-    left: Math.min(...line.map((rect) => rect.left)) - offset,
-    right: Math.max(...line.map((rect) => rect.right)) - offset,
-  };
 };
 
 const hintArrow = (paths: [string, string]): Element => {
@@ -421,14 +418,15 @@ export const createReturnDim = (): ReturnDim => {
       hint.dir = dir;
       hint.dataset.state = "closed";
       const anchor = openButtonAnchor(currentView());
-      const layout = hintLayout(anchor);
+      const layout = hintLayout(anchor, window.innerWidth);
       hint.dataset.side = anchor.side;
       const text = element("p", "sw-teleport-dim-caption", caption);
-      text.style.top = `${layout.captionTop}px`;
-      hint.append(text);
+      text.style.top = `${layout.tailY}px`;
+      text.style.left = `${layout.captionLeft}px`;
+      text.style.width = `${layout.captionWidth}px`;
+      text.style.textAlign = layout.captionAlign;
+      hint.append(hintArrow(arrowPaths(layout)), text);
       root.append(hint);
-      const tail = arrowTailX(layout.tipX, anchor.side, firstLine(text, hint));
-      hint.prepend(hintArrow(arrowPaths(tail, layout)));
       void hint.offsetWidth;
       hint.dataset.state = "open";
     },

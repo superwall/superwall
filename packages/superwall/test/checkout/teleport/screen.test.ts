@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createReturnDim,
   arrowPaths,
-  arrowTailX,
   hintLayout,
   openButtonAnchor,
   createTeleportScreen,
@@ -151,37 +150,32 @@ describe("the teleport screen, as paywall.js draws it", () => {
     expect(anchor.side).toBe("ltr");
   });
 
-  it("leaves the same gap from the alert to the arrow as from the arrow to the caption's capitals", () => {
-    const layout = hintLayout({ x: 340.5, y: 457.7 });
-    const alertBottom = 457.7 + 10;
-    const arrowTop = layout.tipY - 1.5;
-    const arrowBottom = layout.tailY + 1.5;
-    const capitalsTop = layout.captionTop + 5;
-    expect(arrowTop - alertBottom).toBeCloseTo(14, 5);
-    expect(capitalsTop - arrowBottom).toBeCloseTo(14, 5);
+  it("leaves the same gap from the alert to the arrow as from the arrow's tail to the caption", () => {
+    const layout = hintLayout({ x: 340.5, y: 457.7, side: "ltr" }, 402);
+    expect(layout.tipY - 1.5 - (457.7 + 10)).toBeCloseTo(14, 5);
     expect(layout.tipX).toBe(340.5);
+    expect(layout.tailX).toBe(288.5);
+    expect(layout.tailY).toBeCloseTo(layout.tipY + 56, 5);
+    expect(layout.tailX - 1.5 - (layout.captionLeft + layout.captionWidth)).toBeCloseTo(14, 5);
+    expect(layout).toMatchObject({ captionLeft: 24, captionAlign: "right" });
   });
 
-  it("starts the arrow inside the caption's first line, toward Open's side", () => {
-    expect(arrowTailX(340.5, "ltr", { left: 100, right: 300 })).toBe(284);
-    expect(arrowTailX(340.5, "ltr", { left: 20, right: 380 })).toBe(284.5);
-    expect(arrowTailX(340.5, "ltr", { left: 150, right: 250 })).toBe(234);
-    expect(arrowTailX(61.5, "rtl", { left: 150, right: 250 })).toBe(166);
-    expect(arrowTailX(61.5, "rtl", { left: 100, right: 300 })).toBe(117.5);
-    expect(arrowTailX(340.5, "ltr", undefined)).toBe(284.5);
-    expect(arrowTailX(340.5, "ltr", { left: 200, right: 210 })).toBe(284.5);
+  it("puts the caption on the arrow's other side when Open is on the left", () => {
+    const layout = hintLayout({ x: 61.5, y: 457.7, side: "rtl" }, 402);
+    expect(layout.tailX).toBe(113.5);
+    expect(layout.captionLeft - 1.5 - layout.tailX).toBeCloseTo(14, 5);
+    expect(layout.captionLeft + layout.captionWidth).toBeCloseTo(402 - 24, 5);
+    expect(layout.captionAlign).toBe("left");
+    expect(hintLayout({ x: 30, y: 0, side: "ltr" }, 60).captionWidth).toBe(0);
   });
 
-  it("draws the arrow as one clean arc from the caption up to Open, its head turned along the arc's end", () => {
-    const layout = { tipX: 340.5, tipY: 483.2, tailY: 539.2, captionTop: 548.7 };
-    const [arc, head] = arrowPaths(284.5, layout);
-    expect(arc).toBe("M284.5 539.2Q324.8 523.5 340.5 483.2");
-    expect(head).toBe("M344.5 492.4L340.5 483.2L331.3 487.2");
-    const [mirrored, mirroredHead] = arrowPaths(117.5, { ...layout, tipX: 61.5 });
-    expect(mirrored).toBe("M117.5 539.2Q77.2 523.5 61.5 483.2");
-    expect(mirroredHead).toBe("M70.7 487.2L61.5 483.2L57.5 492.4");
-    const [upright] = arrowPaths(340.5, layout);
-    expect(upright).toBe("M340.5 539.2Q328.2 511.2 340.5 483.2");
+  it("draws one curve that leaves the caption sideways and ends pointing straight up at Open", () => {
+    const layout = hintLayout({ x: 340.5, y: 457.7, side: "ltr" }, 402);
+    const [arc, head] = arrowPaths(layout);
+    expect(arc).toBe("M288.5 539.2Q340.5 539.2 340.5 483.2");
+    expect(head).toBe("M347.6 490.3L340.5 483.2L333.4 490.3");
+    const [mirrored] = arrowPaths(hintLayout({ x: 61.5, y: 457.7, side: "rtl" }, 402));
+    expect(mirrored).toBe("M113.5 539.2Q61.5 539.2 61.5 483.2");
   });
 
   it("puts Open on the left when the phone, not the paywall, reads right to left", () => {

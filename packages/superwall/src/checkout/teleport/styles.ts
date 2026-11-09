@@ -315,7 +315,7 @@ export const TELEPORT_SCREEN_CSS = `
   position: fixed;
   inset: 0;
   z-index: 2147483647;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.7);
   opacity: 0;
   transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -349,14 +349,12 @@ export const TELEPORT_SCREEN_CSS = `
 }
 .sw-teleport-dim-caption {
   position: absolute;
-  inset-inline: 0;
   margin: 0;
-  padding-inline: 32px;
+  transform: translateY(-50%);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Helvetica Neue", sans-serif;
   font-size: 17px;
   font-weight: 600;
   line-height: 1.35;
-  text-align: center;
   text-wrap: balance;
 }
 @media (prefers-reduced-motion: reduce) {
