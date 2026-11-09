@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { productVariables } from "../../src/lib/products";
 
+const trialKeys = (variables: Record<string, unknown>) =>
+  Object.keys(variables).filter((key) => key.toLowerCase().includes("trial"));
+
 describe("productVariables", () => {
   it("derives the variables a paywall reads from what Superwall knows", () => {
     const variables = productVariables({
@@ -181,5 +184,139 @@ describe("productVariables", () => {
     });
     expect(variables.currencySymbol).toBe("");
     expect(typeof variables.price).toBe("string");
+  });
+
+  describe("a trial", () => {
+    const annual = {
+      identifier: "annual",
+      price: { amount: 5999, currency: "USD" },
+    };
+
+    it("a free trial reads as $0.00 and 0, the way the SDK sends it", () => {
+      const variables = productVariables({
+        ...annual,
+        trial_price: { amount: 0, currency: "USD" },
+        subscription: { period: "year", period_count: 1, trial_period_days: 7 },
+      });
+
+      expect(variables).not.toHaveProperty("trialPeriodEndDate");
+      expect(variables).toMatchObject({
+        trialPeriodDays: 7,
+        trialPeriodWeeks: 1,
+        trialPeriodMonths: 0,
+        trialPeriodYears: 0,
+        trialPeriodText: "7-day",
+        rawTrialPeriodPrice: 0,
+        trialPeriodPrice: "$0.00",
+        trialPeriodDailyPrice: "$0.00",
+        trialPeriodWeeklyPrice: "$0.00",
+        trialPeriodMonthlyPrice: "$0.00",
+        trialPeriodYearlyPrice: "$0.00",
+      });
+    });
+
+    it("a trial with no price counts as free", () => {
+      const withoutPrice = productVariables({
+        ...annual,
+        subscription: { period: "year", period_count: 1, trial_period_days: 30 },
+      });
+      const withoutAmount = productVariables({
+        ...annual,
+        trial_price: { currency: "USD" },
+        subscription: { period: "year", period_count: 1, trial_period_days: 30 },
+      });
+
+      for (const variables of [withoutPrice, withoutAmount]) {
+        expect(variables).toMatchObject({
+          trialPeriodDays: 30,
+          trialPeriodWeeks: 4,
+          trialPeriodMonths: 1,
+          rawTrialPeriodPrice: 0,
+          trialPeriodPrice: "$0.00",
+        });
+      }
+    });
+
+    it("a paid intro spreads its price over the trial's length", () => {
+      const variables = productVariables({
+        ...annual,
+        trial_price: { amount: 199, currency: "usd" },
+        subscription: { period: "year", period_count: 1, trial_period_days: 7 },
+      });
+
+      expect(variables).toMatchObject({
+        rawTrialPeriodPrice: 1.99,
+        trialPeriodPrice: "$1.99",
+        trialPeriodDailyPrice: "$0.28",
+        trialPeriodWeeklyPrice: "$2.00",
+        trialPeriodMonthlyPrice: "$8.65",
+        trialPeriodYearlyPrice: "$103.76",
+      });
+    });
+
+    it("a paid trial in another currency is dropped rather than shown in the wrong one", () => {
+      const otherCurrency = productVariables({
+        ...annual,
+        trial_price: { amount: 199, currency: "EUR" },
+        subscription: { period: "year", period_count: 1, trial_period_days: 7 },
+      });
+      const noCurrency = productVariables({
+        ...annual,
+        trial_price: { amount: 199 },
+        subscription: { period: "year", period_count: 1, trial_period_days: 7 },
+      });
+
+      expect(trialKeys(otherCurrency)).toEqual([]);
+      expect(trialKeys(noCurrency)).toEqual([]);
+      expect(otherCurrency.price).toBe("$59.99");
+    });
+
+    it("a free trial is kept whatever currency it was stored in", () => {
+      const variables = productVariables({
+        ...annual,
+        trial_price: { amount: 0, currency: "EUR" },
+        subscription: { period: "year", period_count: 1, trial_period_days: 3 },
+      });
+
+      expect(variables).toMatchObject({ trialPeriodDays: 3, trialPeriodPrice: "$0.00" });
+    });
+
+    it("a trial of zero days is no trial", () => {
+      const variables = productVariables({
+        ...annual,
+        trial_price: { amount: 0, currency: "USD" },
+        subscription: { period: "year", period_count: 1, trial_period_days: 0 },
+      });
+
+      expect(trialKeys(variables)).toEqual([]);
+    });
+  });
+
+  it("reads amounts in the currency's own minor units", () => {
+    const yen = productVariables({
+      price: { amount: 1200, currency: "JPY" },
+      trial_price: { amount: 300, currency: "JPY" },
+      subscription: { period: "month", period_count: 1, trial_period_days: 7 },
+    });
+    expect(yen).toMatchObject({
+      price: "¥1,200",
+      rawPrice: 1200,
+      rawTrialPeriodPrice: 300,
+      trialPeriodPrice: "¥300",
+    });
+
+    const dinar = productVariables({
+      price: { amount: 1500, currency: "KWD" },
+      subscription: { period: "month", period_count: 1 },
+    });
+    expect(dinar.rawPrice).toBe(1.5);
+    expect(dinar.price).toMatch(/^KWD\s1\.500$/);
+  });
+
+  it("treats a currency code Intl cannot read as two decimals", () => {
+    const variables = productVariables({
+      price: { amount: 1234, currency: "US" },
+    });
+    expect(variables).toMatchObject({ price: "12.34", rawPrice: 12.34, currencySymbol: "" });
   });
 });

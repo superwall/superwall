@@ -3,7 +3,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
-import { onPath, readVersion, spawnStream } from "@/core/workflows/agent/drivers/spawn";
+import {
+  onPath,
+  escapeCmdCommand,
+  escapeCmdShimArgument,
+  readVersion,
+  spawnStream,
+} from "@/core/workflows/agent/drivers/spawn";
 import { restoreBin, useBin } from "../../../../helpers/bin";
 
 const dirs: string[] = [];
@@ -74,6 +80,79 @@ test("stdout and stderr stream line by line, skipping blank lines, with the exit
   assert.deepEqual(err, ["oops"]);
 });
 
+function onWindows(): () => void {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  const comspec = process.env.ComSpec;
+  delete process.env.ComSpec;
+  delete process.env.COMSPEC;
+  Object.defineProperty(process, "platform", { value: "win32" });
+  return () => {
+    if (platform) Object.defineProperty(process, "platform", platform);
+    if (comspec !== undefined) process.env.ComSpec = comspec;
+  };
+}
+
+test("on Windows a cmd shim runs through cmd.exe with every argument escaped", async () => {
+  onlyBins({ "cmd.exe": `for a in "$@"; do printf '%s\\n' "[$a]"; done` });
+  const restore = onWindows();
+  const out: string[] = [];
+  try {
+    const { code } = await spawnStream({
+      bin: "npx",
+      args: ["-y", "C:\\Users\\First Last\\skills"],
+      cwd: tempDir(),
+      cmdShim: true,
+      onStdoutLine: (line) => out.push(line),
+    });
+
+    assert.equal(code, 0);
+    assert.deepEqual(out, [
+      "[/d]",
+      "[/s]",
+      "[/c]",
+      '["npx ^^^"-y^^^" ^^^"C:\\Users\\First^^^ Last\\skills^^^""]',
+    ]);
+  } finally {
+    restore();
+  }
+});
+
+test("on Windows a native binary still starts directly, without cmd.exe", async () => {
+  onlyBins({ "cmd.exe": "echo via-cmd", fake: 'printf "%s\\n" "$1"' });
+  const restore = onWindows();
+  const out: string[] = [];
+  try {
+    const prompt = 'line one\nsay "hi" & exit';
+    const { code } = await spawnStream({
+      bin: "fake",
+      args: [prompt],
+      cwd: tempDir(),
+      onStdoutLine: (line) => out.push(line),
+    });
+
+    assert.equal(code, 0);
+    assert.deepEqual(out, ["line one", 'say "hi" & exit']);
+  } finally {
+    restore();
+  }
+});
+
+test("cmd metacharacters are caret-escaped twice so neither cmd nor the shim can split an argument", () => {
+  assert.equal(escapeCmdShimArgument("--global"), '^^^"--global^^^"');
+  assert.equal(escapeCmdShimArgument(""), '^^^"^^^"');
+  assert.equal(
+    escapeCmdShimArgument('touch "main & run'),
+    '^^^"touch^^^ \\^^^"main^^^ ^^^&^^^ run^^^"',
+  );
+  assert.equal(escapeCmdShimArgument("100%PATH%"), '^^^"100^^^%PATH^^^%^^^"');
+  assert.equal(escapeCmdShimArgument("C:\\dir\\"), '^^^"C:\\dir\\\\^^^"');
+  assert.equal(escapeCmdShimArgument('C:\\dir\\"x'), '^^^"C:\\dir\\\\\\^^^"x^^^"');
+  assert.equal(
+    escapeCmdCommand("C:\\Program Files\\nodejs\\superwall.cmd"),
+    "C:\\Program^ Files\\nodejs\\superwall.cmd",
+  );
+});
+
 test("arguments reach the binary, and stderr is ignored without a listener", async () => {
   onlyBins({ fake: 'echo "$1|$2"; echo "noise" >&2' });
   const out: string[] = [];
@@ -104,7 +183,12 @@ test("an unwritable transcript never interrupts the run", async () => {
   onlyBins({ fake: 'echo "line"' });
   const out: string[] = [];
 
-  const { code } = await spawnStream({ bin: "fake", args: [], cwd: tempDir(), onStdoutLine: (line) => out.push(line) });
+  const { code } = await spawnStream({
+    bin: "fake",
+    args: [],
+    cwd: tempDir(),
+    onStdoutLine: (line) => out.push(line),
+  });
 
   assert.equal(code, 0);
   assert.deepEqual(out, ["line"]);

@@ -130,7 +130,7 @@ test("BROWSER=none never opens a browser", async () => {
 
 test("cmd doesn't get a bare & to cut the URL at", async () => {
   const calls: { cmd: string; args: readonly string[] }[] = [];
-  const opened = await openBrowser("https://app.superwall.com/1/workspace-drafts/d?entrypoint=home&app=2", {
+  const opened = await openBrowser("https://app.superwall.com/1/artifact-drafts/d?entrypoint=home&app=2", {
     platform: "win32",
     env: {},
     spawn: ((cmd: string, args: readonly string[]) => {
@@ -140,6 +140,6 @@ test("cmd doesn't get a bare & to cut the URL at", async () => {
   });
   assert.equal(opened, true);
   assert.deepEqual(calls, [
-    { cmd: "cmd", args: ["/c", "start", "", "https://app.superwall.com/1/workspace-drafts/d?entrypoint=home^&app=2"] },
+    { cmd: "cmd", args: ["/c", "start", "", "https://app.superwall.com/1/artifact-drafts/d?entrypoint=home^&app=2"] },
   ]);
 });

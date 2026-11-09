@@ -66,19 +66,19 @@ import { command as doctor } from "./support/doctor";
 import { command as feedback } from "./support/feedback";
 import { command as skills } from "./support/skills";
 import { command as upgrade } from "./support/upgrade";
-import { command as workspacesApprove } from "./workspaces/approve";
-import { command as workspacesCreate } from "./workspaces/create";
-import { command as workspacesDev } from "./workspaces/dev";
-import { command as workspacesInstall } from "./workspaces/install";
-import { command as workspacesList } from "./workspaces/list";
-import { command as workspacesLogs } from "./workspaces/logs";
-import { command as workspacesOpen } from "./workspaces/open";
-import { command as workspacesPull } from "./workspaces/pull";
-import { command as workspacesPush } from "./workspaces/push";
-import { command as workspacesShare } from "./workspaces/share";
-import { command as workspacesStatus } from "./workspaces/status";
-import { command as workspacesTry } from "./workspaces/try";
-import { command as workspacesUpdate } from "./workspaces/update";
+import { command as artifactsApprove } from "./artifacts/approve";
+import { command as artifactsCreate } from "./artifacts/create";
+import { command as artifactsDev } from "./artifacts/dev";
+import { command as artifactsInstall } from "./artifacts/install";
+import { command as artifactsList } from "./artifacts/list";
+import { command as artifactsLogs } from "./artifacts/logs";
+import { command as artifactsOpen } from "./artifacts/open";
+import { command as artifactsPull } from "./artifacts/pull";
+import { command as artifactsPush } from "./artifacts/push";
+import { command as artifactsShare } from "./artifacts/share";
+import { command as artifactsStatus } from "./artifacts/status";
+import { command as artifactsTry } from "./artifacts/try";
+import { command as artifactsUpdate } from "./artifacts/update";
 import { command as integrate } from "./workflows/integrate";
 import { command as migrate } from "./workflows/migrate";
 import { command as review } from "./workflows/review";
@@ -123,32 +123,32 @@ export const GROUPS: readonly Group[] = [
     commands: [create, dev, build, push, promote, publish, pull],
   },
   {
-    id: "workspaces",
-    title: "Workspaces",
-    prefix: "workspaces",
+    id: "artifacts",
+    title: "Artifacts",
+    prefix: "artifacts",
     channel: "next",
     topics: [
       {
-        name: "workspaces",
+        name: "artifacts",
         summary: "Mini-apps that add pages, panels and metrics to the Superwall dashboard",
         details:
-          "A workspace is a Worker with a superwall.json manifest. It holds no credential: it calls Superwall as whoever is viewing it.",
+          "An artifact is a Worker with a superwall.json manifest. It holds no credential: it calls Superwall as whoever is viewing it.",
       },
     ],
     commands: [
-      workspacesCreate,
-      workspacesDev,
-      workspacesTry,
-      workspacesUpdate,
-      workspacesPush,
-      workspacesPull,
-      workspacesStatus,
-      workspacesLogs,
-      workspacesShare,
-      workspacesApprove,
-      workspacesInstall,
-      workspacesList,
-      workspacesOpen,
+      artifactsCreate,
+      artifactsDev,
+      artifactsTry,
+      artifactsUpdate,
+      artifactsPush,
+      artifactsPull,
+      artifactsStatus,
+      artifactsLogs,
+      artifactsShare,
+      artifactsApprove,
+      artifactsInstall,
+      artifactsList,
+      artifactsOpen,
     ],
   },
   {

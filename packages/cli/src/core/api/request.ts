@@ -28,10 +28,17 @@ export async function runApiRequest(
     }
   }).catch(async (error: unknown) => {
     if (!(error instanceof ApiError) || error.status >= 500 || error.status === 401) throw error;
+    // The endpoint answered that the thing it was asked for is gone; its path is fine, so the
+    // reference has nothing to add.
+    if (namesMissingResource(error)) throw error;
     throw new Error(`${error.message}\n${await resolveReferenceHint(verb, path)}`, { cause: error });
   });
   ctx.output.data(res ?? { ok: true });
 }
+
+export const namesMissingResource = ({ status, detail }: ApiError): boolean =>
+  status === 404 &&
+  (detail.code === "resource_missing" || detail.type === "resource_missing" || detail.resourceType !== undefined);
 
 export async function resolveReferenceHint(verb: string, path: string): Promise<string> {
   const index = await resolveApiIndex().catch(() => undefined);

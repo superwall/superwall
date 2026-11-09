@@ -447,3 +447,94 @@ test("patch() sends its JSON body, and errors without a body or with a JSON scal
     assert.equal(error.message, `HTTP 400 — ${body}`);
   }
 });
+
+// What Node's fetch throws: `TypeError: fetch failed`, with the socket's error as its cause.
+const nodeFetchFailure = (code: string, message: string) =>
+  Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(message), { code }) });
+
+function dropThenAnswer(failures: unknown[]): { method: string; body: unknown }[] {
+  const sent: { method: string; body: unknown }[] = [];
+  globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+    sent.push({ method: init?.method ?? "GET", body: init?.body });
+    const failure = failures.shift();
+    if (failure !== undefined) throw failure;
+    return new Response('{"id":"draft"}', { status: 200 });
+  }) as typeof fetch;
+  return sent;
+}
+
+test("an idempotent write whose connection drops is sent again, with the same body", async () => {
+  const sent = dropThenAnswer([nodeFetchFailure("EPIPE", "write EPIPE"), nodeFetchFailure("UND_ERR_SOCKET", "other side closed")]);
+  const started = Date.now();
+  assert.deepEqual(await api().post("/v2/artifacts/drafts", { module: "x" }, { idempotent: true }), { id: "draft" });
+  assert.ok(Date.now() - started >= 700, "it backs off between attempts");
+  assert.deepEqual(sent.map((call) => call.method), ["POST", "POST", "POST"]);
+  assert.deepEqual(new Set(sent.map((call) => call.body)), new Set(['{"module":"x"}']));
+});
+
+test("a dropped connection is tried three times in all, then says what dropped it", async () => {
+  const sent = dropThenAnswer([1, 2, 3, 4].map(() => nodeFetchFailure("EPIPE", "write EPIPE")));
+  await assert.rejects(api().post("/v2/artifacts/drafts", {}, { idempotent: true }), (error: unknown) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.equal(error.dropped, true);
+    assert.equal(error.code, "EPIPE");
+    assert.equal(
+      error.message,
+      "Lost the connection while sending to the Superwall API at https://api.example.com (EPIPE).\n  It closed before the request finished. Try again.",
+    );
+    return true;
+  });
+  assert.equal(sent.length, 3);
+});
+
+test("a dropped connection isn't retried for a write that didn't say it's safe to repeat", async () => {
+  const sent = dropThenAnswer([nodeFetchFailure("ECONNRESET", "read ECONNRESET")]);
+  await assert.rejects(api().post("/v2/paywalls", {}), (error: unknown) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.match(error.message, /^Lost the connection to the Superwall API at https:\/\/api\.example\.com \(ECONNRESET\)\./);
+    return true;
+  });
+  assert.equal(sent.length, 1);
+});
+
+test("a connection that never opened isn't retried, and keeps the network hint with its cause", async () => {
+  const sent = dropThenAnswer([nodeFetchFailure("ENOTFOUND", "getaddrinfo ENOTFOUND api.example.com")]);
+  await assert.rejects(api().post("/v2/artifacts/drafts", {}, { idempotent: true }), (error: unknown) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.equal(error.dropped, false);
+    assert.equal(
+      error.message,
+      "Couldn't reach the Superwall API at https://api.example.com (ENOTFOUND).\n  Check your network or proxy, then try again.",
+    );
+    return true;
+  });
+  assert.equal(sent.length, 1);
+});
+
+test("an HTTP answer to an idempotent write is never retried, 4xx included", async () => {
+  const methods = respond([400, 200]);
+  await assert.rejects(api().post("/v2/artifacts/drafts", {}, { idempotent: true }), ApiError);
+  assert.deepEqual(methods, ["POST"]);
+});
+
+test("the cause is found wherever the runtime put it", () => {
+  const host = "https://api.example.com";
+  const label = (cause: unknown) => new ApiUnreachableError(host, cause).message.split("\n")[0];
+  // undici's own socket error: its message adds something the code doesn't.
+  assert.equal(label(nodeFetchFailure("UND_ERR_SOCKET", "other side closed")), `Lost the connection to the Superwall API at ${host} (UND_ERR_SOCKET: other side closed).`);
+  // Bun puts the code on the error it throws.
+  const bun = Object.assign(new Error("The socket connection was closed unexpectedly."), { code: "ECONNRESET" });
+  assert.equal(new ApiUnreachableError(host, bun).dropped, true);
+  // A connect to every address failing arrives as an AggregateError.
+  const refused = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:443"), { code: "ECONNREFUSED" });
+  const aggregate = Object.assign(new TypeError("fetch failed"), { cause: new AggregateError([refused], "") });
+  assert.equal(label(aggregate), `Couldn't reach the Superwall API at ${host} (ECONNREFUSED).`);
+  // No code at all: the message is what there is, and a bare "fetch failed" says nothing.
+  assert.equal(label(Object.assign(new TypeError("fetch failed"), { cause: new Error("socket hang up") })), `Lost the connection to the Superwall API at ${host} (socket hang up).`);
+  assert.equal(label(new TypeError("fetch failed")), `Couldn't reach the Superwall API at ${host}.`);
+  assert.equal(label("not an error"), `Couldn't reach the Superwall API at ${host}.`);
+  // A cause that points back at itself doesn't loop.
+  const loop: { cause?: unknown; code: string } = { code: "EPIPE" };
+  loop.cause = loop;
+  assert.equal(new ApiUnreachableError(host, loop).code, "EPIPE");
+});

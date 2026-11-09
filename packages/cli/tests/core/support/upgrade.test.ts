@@ -30,6 +30,8 @@ const saved = {
   target: process.env.SW_AUTO_UPDATE,
 };
 const scratch: string[] = [];
+const platform = Object.getOwnPropertyDescriptor(process, "platform");
+const comspec = process.env.ComSpec;
 
 function restoreEnv(key: string, value: string | undefined): void {
   if (value === undefined) delete process.env[key];
@@ -37,6 +39,8 @@ function restoreEnv(key: string, value: string | undefined): void {
 }
 
 afterEach(() => {
+  if (platform) Object.defineProperty(process, "platform", platform);
+  restoreEnv("ComSpec", comspec);
   for (const dir of scratch.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   restoreEnv("NODE_TEST_CONTEXT", testContext);
   restoreEnv("SUPERWALL_NO_UPDATE", saved.off);
@@ -97,29 +101,44 @@ function readCheck(home: string): unknown {
 
 const SYNC_SKILLS = `"${process.execPath}" -e 'const fs = require("fs"), file = process.env.SUPERWALL_HOME + "/config.json"; const config = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {}; config.skillsSync = { cliVersion: process.env.SYNCED_VERSION || "99.0.0", syncedAt: new Date(Date.now() + Number(process.env.SYNCED_OFFSET || 0)).toISOString(), ref: "next" }; fs.writeFileSync(file, JSON.stringify(config))'`;
 
-function fakeGlobalInstall(cli = SYNC_SKILLS): {
+function fakeGlobalInstall(
+  cli = SYNC_SKILLS,
+  installed = (prefix: string) => path.join(prefix, "bin", "superwall"),
+): {
+  prefix: string;
   npmArgs(): string;
   cliArgs(): string;
   cliCwd(): string;
 } {
   const prefix = fs.mkdtempSync(path.join(os.tmpdir(), "sw-upgrade-prefix-"));
   scratch.push(prefix);
-  fs.mkdirSync(path.join(prefix, "bin"));
-  const installed = path.join(prefix, "bin", "superwall");
+  const shim = installed(prefix);
+  fs.mkdirSync(path.dirname(shim), { recursive: true });
   fs.writeFileSync(
-    installed,
+    shim,
     `#!/bin/sh\npwd > "${prefix}/cwd"\necho "$@" > "${prefix}/args"\necho "Installing"; echo "npm warn" >&2\n${cli}\n`,
   );
-  fs.chmodSync(installed, 0o755);
+  fs.chmodSync(shim, 0o755);
   const bin = useBin({
     npm: `if [ "$1" = prefix ]; then echo "${prefix}"; exit 0; fi\necho "$@" > "$(dirname "$0")/args"; echo "added 1 package"`,
   });
   const read = (dir: string) => fs.readFileSync(path.join(dir, "args"), "utf8").trim();
   return {
+    prefix,
     npmArgs: () => read(bin),
     cliArgs: () => read(prefix),
     cliCwd: () => fs.readFileSync(path.join(prefix, "cwd"), "utf8").trim(),
   };
+}
+
+function onWindows(): () => string[] {
+  delete process.env.ComSpec;
+  delete process.env.COMSPEC;
+  const dir = useBin({
+    "cmd.exe": `printf '%s\\n' "$*" >> "$(dirname "$0")/lines"; line="$4"; line="\${line#\\"}"; line="\${line%\\"}"; eval "$(printf '%s' "$line" | sed 's/\\^\\(.\\)/\\1/g; s/\\^\\(.\\)/\\1/g')"`,
+  });
+  Object.defineProperty(process, "platform", { value: "win32" });
+  return () => fs.readFileSync(path.join(dir, "lines"), "utf8").trim().split("\n");
 }
 
 function recordStream(): { write(chunk: string): boolean; written: string[] } {
@@ -268,6 +287,25 @@ test("an upgrade syncs the skills with the newly installed CLI, outside any proj
   useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
   const asJson = await runCommand(upgrade, { json: true });
   assert.deepEqual(asJson.json, { upgraded: true, from: VERSION, to: "99.0.0", skills: "updated" });
+});
+
+test("on Windows, the upgrade runs npm through cmd and syncs skills with superwall.cmd under the prefix", async () => {
+  useHome();
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  const install = fakeGlobalInstall(SYNC_SKILLS, (prefix) => path.join(prefix, "superwall.cmd"));
+
+  const cmd = onWindows();
+
+  const result = await runCommand(upgrade, { json: true });
+
+  assert.deepEqual(cmd(), [
+    '/d /s /c "npm ^^^"install^^^" ^^^"--global^^^" ^^^"superwall@99.0.0^^^""',
+    '/d /s /c "npm ^^^"prefix^^^" ^^^"--global^^^""',
+    `/d /s /c "${install.prefix}/superwall.cmd ^^^"skills^^^" ^^^"--force^^^" ^^^"--yes^^^""`,
+  ]);
+  assert.equal(install.npmArgs(), "install --global superwall@99.0.0");
+  assert.equal(install.cliArgs(), "skills --force --yes");
+  assert.deepEqual(result.json, { upgraded: true, from: VERSION, to: "99.0.0", skills: "updated" });
 });
 
 test("skills the new CLI can't sync are reported without failing the upgrade", async () => {
@@ -485,6 +523,15 @@ test("only the CLI npm installed globally counts as a global install", () => {
     false,
   );
   assert.equal(isGlobalInstall(), false);
+});
+
+test("on Windows, npm is asked for its global root through cmd", () => {
+  const install = globalInstall();
+
+  const cmd = onWindows();
+
+  assert.equal(isGlobalInstall(install.entry), true);
+  assert.deepEqual(cmd(), ['/d /s /c "npm root --global"']);
 });
 
 test("an npm that can't name its global root means no global install", () => {
