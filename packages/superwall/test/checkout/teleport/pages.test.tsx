@@ -5,6 +5,7 @@ import { expectedTeleportPageKey, mountApp } from "../../../src/checkout/telepor
 import { PRERENDER_ATTRIBUTE } from "../../../src/document";
 
 const localization = { defaultLocale: "en", messages: { en: {}, de: {}, "pt-BR": {} } };
+const config = { localization, teleport: { route: "checkout" } };
 
 const boot = (value: Record<string, unknown>) =>
   Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout", ...value });
@@ -15,14 +16,15 @@ const device = (properties: Record<string, unknown>) => ({
 
 afterEach(() => {
   Reflect.deleteProperty(window, "__SW_TELEPORT__");
+  window.history.replaceState(null, "", "/");
   document.body.replaceChildren();
 });
 
 describe("expectedTeleportPageKey", () => {
   it("is nothing off a teleport page or before the trial is known", () => {
-    expect(expectedTeleportPageKey(undefined, localization)).toBeUndefined();
+    expect(expectedTeleportPageKey(undefined, config)).toBeUndefined();
     boot(device({ deviceLocale: "de-DE" }));
-    expect(expectedTeleportPageKey(readTeleportBoot(), localization)).toBeUndefined();
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBeUndefined();
   });
 
   it("resolves the locale as the session does: region, then language, then the default", () => {
@@ -31,15 +33,42 @@ describe("expectedTeleportPageKey", () => {
       productReference: "annual",
       ...device({ deviceLocale: "pt_br" }),
     });
-    expect(expectedTeleportPageKey(readTeleportBoot(), localization)).toBe("pt-BR/annual/1");
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("pt-BR/annual/1");
     boot({ hasIntroductoryOffer: false, ...device({ deviceLocale: "de-AT" }) });
-    expect(expectedTeleportPageKey(readTeleportBoot(), localization)).toBe("de/__none__/0");
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("de/__none__/0");
     boot({ hasIntroductoryOffer: false, ...device({ deviceLanguageCode: "de" }) });
-    expect(expectedTeleportPageKey(readTeleportBoot(), localization)).toBe("de/__none__/0");
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("de/__none__/0");
     boot({ hasIntroductoryOffer: true, ...device({ deviceLocale: "ja-JP" }) });
-    expect(expectedTeleportPageKey(readTeleportBoot(), localization)).toBe("en/__none__/1");
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("en/__none__/1");
     boot({ hasIntroductoryOffer: true });
-    expect(expectedTeleportPageKey(readTeleportBoot(), localization)).toBe("en/__none__/1");
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("en/__none__/1");
+  });
+});
+
+describe("the route a page opens on", () => {
+  const trial = { hasIntroductoryOffer: true, ...device({ deviceLocale: "de" }) };
+
+  it("matches when the page opens on teleport.route, from the boot or sw_nav", () => {
+    boot(trial);
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("de/__none__/1");
+    window.history.replaceState(null, "", "/?sw_nav=checkout");
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBe("de/__none__/1");
+  });
+
+  it("is nothing when sw_nav, the boot or the config names another route", () => {
+    boot(trial);
+    window.history.replaceState(null, "", "/?sw_nav=plan");
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBeUndefined();
+    window.history.replaceState(null, "", "/?sw_nav=checkout,plan");
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBeUndefined();
+    window.history.replaceState(null, "", "/");
+    boot({ ...trial, route: "plan" });
+    expect(expectedTeleportPageKey(readTeleportBoot(), config)).toBeUndefined();
+    boot(trial);
+    expect(expectedTeleportPageKey(readTeleportBoot(), { localization })).toBeUndefined();
+    expect(
+      expectedTeleportPageKey(readTeleportBoot(), { localization, teleport: true }),
+    ).toBeUndefined();
   });
 });
 
@@ -62,7 +91,7 @@ describe("mountApp", () => {
     const paragraph = element.firstChild;
     let mounted: ReturnType<typeof mountApp> | undefined;
     act(() => {
-      mounted = mountApp(element, <p>Jetzt</p>, localization);
+      mounted = mountApp(element, <p>Jetzt</p>, config);
     });
     expect(mounted?.hydrated).toBe(true);
     expect(element.firstChild).toBe(paragraph);
@@ -85,7 +114,7 @@ describe("mountApp", () => {
       const before = element.firstChild;
       let mounted: ReturnType<typeof mountApp> | undefined;
       act(() => {
-        mounted = mountApp(element, <p>Jetzt</p>, localization);
+        mounted = mountApp(element, <p>Jetzt</p>, config);
       });
       expect(mounted?.hydrated).toBe(false);
       expect(element.innerHTML).toBe("<p>Jetzt</p>");
@@ -95,11 +124,28 @@ describe("mountApp", () => {
     }
   });
 
+  it("renders from scratch when sw_nav reopens another route", () => {
+    boot({
+      hasIntroductoryOffer: true,
+      productReference: "annual",
+      ...device({ deviceLocale: "de" }),
+    });
+    window.history.replaceState(null, "", "/?sw_nav=plan");
+    const element = container("de/annual/1", "<p>Jetzt</p>");
+    let mounted: ReturnType<typeof mountApp> | undefined;
+    act(() => {
+      mounted = mountApp(element, <p>Plan</p>, config);
+    });
+    expect(mounted?.hydrated).toBe(false);
+    expect(element.innerHTML).toBe("<p>Plan</p>");
+    act(() => mounted?.root.unmount());
+  });
+
   it("renders from scratch off a teleport page", () => {
     const element = container("en/__none__/1", "<p>stale</p>");
     let mounted: ReturnType<typeof mountApp> | undefined;
     act(() => {
-      mounted = mountApp(element, <p>Hello</p>, localization);
+      mounted = mountApp(element, <p>Hello</p>, config);
     });
     expect(mounted?.hydrated).toBe(false);
     expect(element.innerHTML).toBe("<p>Hello</p>");

@@ -105,7 +105,7 @@ describe("entrySource", () => {
     });
     expect(source).toContain('import { mergeMessages, mountApp } from "superwall/internal";');
     expect(source).toContain('mountApp(document.getElementById("root"), (');
-    expect(source).toContain("</React.StrictMode>), config.localization);");
+    expect(source).toContain("</React.StrictMode>), config);");
     expect(source).not.toContain("createRoot");
   });
 

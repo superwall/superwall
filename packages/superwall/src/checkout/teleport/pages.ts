@@ -1,8 +1,13 @@
 import type { ReactNode } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
-import { resolveLocale, type SuperwallLocalizationConfig } from "@superwall/runtime";
+import {
+  resolveLocale,
+  teleportOf,
+  type SuperwallLocalizationConfig,
+  type SuperwallTeleportConfig,
+} from "@superwall/runtime";
 import { PRERENDER_ATTRIBUTE } from "../../document";
-import { readTeleportBoot, type TeleportBoot } from "./boot";
+import { NAV_QUERY_KEY, readTeleportBoot, type TeleportBoot } from "./boot";
 
 export const NO_PRODUCT = "__none__";
 
@@ -20,11 +25,25 @@ const requestedLocale = (boot: TeleportBoot): string | undefined => {
   return typeof requested === "string" ? requested : undefined;
 };
 
+const openingRoute = (boot: TeleportBoot): string => {
+  if (typeof window === "undefined") return boot.route;
+  const asked = new URLSearchParams(window.location.search).get(NAV_QUERY_KEY);
+  return asked === null || asked === "" ? boot.route : asked;
+};
+
+export type TeleportPageConfig = {
+  localization?: SuperwallLocalizationConfig;
+  teleport?: SuperwallTeleportConfig;
+};
+
 export const expectedTeleportPageKey = (
   boot: TeleportBoot | undefined,
-  localization: SuperwallLocalizationConfig | undefined,
+  config: TeleportPageConfig,
 ): string | undefined => {
   if (boot === undefined || boot.hasIntroductoryOffer === undefined) return undefined;
+  const prerendered = teleportOf(config.teleport)?.route;
+  if (prerendered === undefined || openingRoute(boot) !== prerendered) return undefined;
+  const { localization } = config;
   return teleportPageKey(
     resolveLocale(requestedLocale(boot), localization),
     boot.productReference,
@@ -37,11 +56,11 @@ export type MountedApp = { root: Root; hydrated: boolean };
 export const mountApp = (
   element: HTMLElement,
   app: ReactNode,
-  localization: SuperwallLocalizationConfig | undefined,
+  config: TeleportPageConfig,
 ): MountedApp => {
   const page = element.getAttribute(PRERENDER_ATTRIBUTE);
   element.removeAttribute(PRERENDER_ATTRIBUTE);
-  const expected = expectedTeleportPageKey(readTeleportBoot(), localization);
+  const expected = expectedTeleportPageKey(readTeleportBoot(), config);
   if (page !== null && page === expected && element.firstChild !== null) {
     return { root: hydrateRoot(element, app), hydrated: true };
   }

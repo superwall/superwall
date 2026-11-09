@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import {
   outputFile,
+  teleportPageFile,
   parseBuildPlatforms,
   runBuildPipeline,
   type BuildContext,
@@ -200,4 +201,69 @@ test("a literal a design token holds is reported as a warning, and the build sti
     ui.warn = warn;
   }
   assert.deepEqual(warnings.map((warning) => warning.includes("var(--space-4)")), [true]);
+});
+
+test("teleport pages are written beside the document and listed, and pre-render warnings are shown", async () => {
+  const project = scaffold(["pro"]);
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-build-out-"));
+  dirs.push(out);
+  const base = frameworkFor(project, []);
+  const framework: Framework = {
+    ...base,
+    buildSnapshot: async (...args) => ({
+      ...(await base.buildSnapshot(...args)),
+      teleportPages: [
+        { key: "en/annual/1", html: "<main>annual</main>" },
+        { key: "en/__none__/0", html: "<main>none</main>" },
+      ],
+      warnings: ["teleport page de/annual/1 failed to pre-render: boom"],
+    }),
+  };
+  const stale = path.join(out, "paywall", "pro", "teleport", "de", "old", "1.html");
+  fs.mkdirSync(path.dirname(stale), { recursive: true });
+  fs.writeFileSync(stale, "stale");
+  const warnings: string[] = [];
+  const warn = ui.warn;
+  ui.warn = (message: string) => void warnings.push(message);
+  const { context, stdout } = contextFor(true);
+  try {
+    await runBuildPipeline(context, { dir: project.root, out, load: async () => framework });
+  } finally {
+    ui.warn = warn;
+  }
+
+  const parsed = JSON.parse(stdout()) as { builds: Array<{ file: string; teleportPages: string[] }> };
+  const file = parsed.builds[0]!.file;
+  assert.deepEqual(parsed.builds[0]?.teleportPages, ["en/annual/1", "en/__none__/0"]);
+  assert.equal(fs.readFileSync(teleportPageFile(file, "en/annual/1"), "utf8"), "<main>annual</main>");
+  assert.equal(teleportPageFile(file, "en/annual/1"), path.join(out, "paywall", "pro", "teleport", "en", "annual", "1.html"));
+  assert.equal(fs.existsSync(stale), false);
+  assert.deepEqual(warnings, ["teleport page de/annual/1 failed to pre-render: boom"]);
+});
+
+test("the step line counts the teleport pages a build made", async () => {
+  const project = scaffold(["pro"]);
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-build-out-"));
+  dirs.push(out);
+  const base = frameworkFor(project, []);
+  const steps: string[] = [];
+  const { context } = contextFor();
+  const render = context.output.render.bind(context.output);
+  context.output.render = (event) => {
+    if (event.kind === "step") steps.push(event.text);
+    render(event);
+  };
+  await runBuildPipeline(context, {
+    dir: project.root,
+    out,
+    load: async () => ({
+      ...base,
+      buildSnapshot: async (...args) => ({
+        ...(await base.buildSnapshot(...args)),
+        teleportPages: [{ key: "en/__none__/1", html: "<main/>" }],
+      }),
+    }),
+  });
+  assert.equal(steps.length, 1);
+  assert.match(steps[0]!, /1 teleport page\b/);
 });

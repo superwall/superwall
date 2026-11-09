@@ -114,7 +114,7 @@ export const entrySource = ({
     ...(teleport ? [`      <TeleportScreen />`] : []),
     `    </SuperwallProvider>`,
     teleport && !prerender
-      ? `  </React.StrictMode>), config.localization);`
+      ? `  </React.StrictMode>), config);`
       : `  </React.StrictMode>,`,
     ...(teleport && !prerender ? [] : [`);`]),
   );
