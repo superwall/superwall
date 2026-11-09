@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createReturnDim,
+  arrowPaths,
+  arrowTailX,
+  hintLayout,
   openButtonAnchor,
   createTeleportScreen,
   poweredByHref,
@@ -88,9 +91,9 @@ describe("the teleport screen, as paywall.js draws it", () => {
     );
 
     expect(hints[0]?.dataset.side).toBe("ltr");
-    expect(hints[0]?.style.getPropertyValue("--sw-arrow-left")).toBe(
-      `${window.innerWidth - 61.5 - 60}px`,
-    );
+    const arrow = hints[0]?.querySelectorAll(".sw-teleport-dim-arrow path");
+    expect(arrow).toHaveLength(2);
+    expect(arrow?.[0]?.getAttribute("d")).toMatch(new RegExp(` ${window.innerWidth - 61.5} [\\d.]+$`));
 
     const leaving = createReturnDim();
     leaving.remove();
@@ -121,13 +124,19 @@ describe("the teleport screen, as paywall.js draws it", () => {
       "iOS 18.6",
       { userAgent: safari("18.6"), innerWidth: 402, innerHeight: 678, screenHeight: 874 },
       340.5,
-      376,
+      377.5,
+    ],
+    [
+      "iOS 18.6 on a 375 pt screen",
+      { userAgent: safari("18.6"), innerWidth: 375, innerHeight: 547, screenHeight: 667 },
+      313.5,
+      312,
     ],
     [
       "iOS 17.5 on a 375 pt screen",
       { userAgent: safari("17.5"), innerWidth: 375, innerHeight: 547, screenHeight: 667 },
       313.5,
-      310.5,
+      308.8,
     ],
     [
       "a browser that isn't Safari",
@@ -140,6 +149,34 @@ describe("the teleport screen, as paywall.js draws it", () => {
     expect(anchor.x).toBeCloseTo(x, 1);
     expect(anchor.y).toBeCloseTo(y, 1);
     expect(anchor.side).toBe("ltr");
+  });
+
+  it("leaves the same gap from the alert to the arrow as from the arrow to the caption's capitals", () => {
+    const layout = hintLayout({ x: 340.5, y: 457.7 });
+    const alertBottom = 457.7 + 10;
+    const arrowTop = layout.tipY - 1.5;
+    const arrowBottom = layout.tailY + 1.5;
+    const capitalsTop = layout.captionTop + 5;
+    expect(arrowTop - alertBottom).toBeCloseTo(14, 5);
+    expect(capitalsTop - arrowBottom).toBeCloseTo(14, 5);
+    expect(layout.tipX).toBe(340.5);
+  });
+
+  it("starts the arrow inside the caption's first line, toward Open's side", () => {
+    expect(arrowTailX(340.5, "ltr", { left: 100, right: 300 })).toBe(284);
+    expect(arrowTailX(340.5, "ltr", { left: 20, right: 380 })).toBe(284.5);
+    expect(arrowTailX(340.5, "ltr", { left: 150, right: 250 })).toBe(234);
+    expect(arrowTailX(61.5, "rtl", { left: 150, right: 250 })).toBe(166);
+    expect(arrowTailX(61.5, "rtl", { left: 100, right: 300 })).toBe(117.5);
+    expect(arrowTailX(340.5, "ltr", undefined)).toBe(284.5);
+    expect(arrowTailX(340.5, "ltr", { left: 200, right: 210 })).toBe(284.5);
+  });
+
+  it("draws the arrow leaving the caption straight up and arriving straight up at Open", () => {
+    const layout = { tipX: 340.5, tipY: 483.2, tailY: 539.2, captionTop: 548.7 };
+    const [curve, head] = arrowPaths(284.5, layout);
+    expect(curve).toBe("M284.5 539.2C284.5 508.4 340.5 514 340.5 483.2");
+    expect(head).toBe("M333.5 490.2L340.5 483.2L347.5 490.2");
   });
 
   it("puts Open on the left when the phone, not the paywall, reads right to left", () => {

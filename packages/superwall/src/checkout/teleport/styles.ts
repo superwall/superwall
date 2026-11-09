@@ -342,18 +342,14 @@ export const TELEPORT_SCREEN_CSS = `
 }
 .sw-teleport-dim-arrow {
   position: absolute;
-  left: var(--sw-arrow-left);
-  top: var(--sw-arrow-top);
-  width: 72px;
-  height: 64px;
-}
-.sw-teleport-dim-hint[data-side="rtl"] .sw-teleport-dim-arrow {
-  transform: scaleX(-1);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 .sw-teleport-dim-caption {
   position: absolute;
   inset-inline: 0;
-  top: calc(var(--sw-arrow-top) + 76px);
   margin: 0;
   padding-inline: 32px;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Helvetica Neue", sans-serif;

@@ -6,7 +6,6 @@ import {
   completeTeleportCheckout,
   readTeleportQuery,
   readTeleportStatus,
-  reportTeleportReturn,
 } from "./api";
 import { readTeleportBoot, type TeleportBoot } from "./boot";
 import { teleportCopyFor } from "./copy";
@@ -184,13 +183,14 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
   };
 
   const report = (reason: ReturnReason, attempt: ReturnAttempt) => {
-    const key = publicApiKey();
-    if (key === "") return;
-    reportTeleportReturn(key, { teleportId: boot.id, reason, ...attempt }).catch(
-      (error: unknown) => {
-        console.warn("Reporting the return to the app failed:", error);
-      },
-    );
+    paywall.postMessage({
+      event_name: "teleport_return_result",
+      teleport_id: boot.id,
+      reason,
+      result: attempt.result,
+      via: attempt.via,
+      prompt: attempt.prompt,
+    });
   };
 
   const track = (

@@ -278,14 +278,20 @@ export type PromptView = {
 };
 
 const OPEN_CENTER_INSET = 61.5;
-const CLASSIC_OPEN_BOTTOM_BELOW_CENTER = 37;
+const CLASSIC_OPEN_BOTTOM_BELOW_CENTER = 38.5;
+const COMPACT_ALERT_OPEN_BOTTOM_BELOW_CENTER = 35.3;
+const FIRST_ROOMY_ALERT_SAFARI = 18;
 const GLASS_OPEN_BOTTOM_BELOW_SCREEN_CENTER = 20.7;
 const GLASS_BOTTOM_BAR = 98;
 const FIRST_GLASS_SAFARI = 26;
-const ARROW_WIDTH = 72;
-const ARROW_HEIGHT = 64;
-const ARROW_TIP_X = 60;
-const ARROW_TIP_GAP = 10;
+const ALERT_BOTTOM_BELOW_OPEN = 10;
+const HINT_GAP = 14;
+const ARROW_RISE = 56;
+const ARROW_SWEEP = 56;
+const ARROW_HEAD = 7;
+const ARROW_STROKE = 3;
+const CAPTION_CAP_INSET = 5;
+const TAIL_INSET = 16;
 
 const RTL_SYSTEM_LANGUAGES = new Set(["ar", "he", "fa", "ur"]);
 
@@ -302,7 +308,11 @@ export const openButtonAnchor = (
   const x = side === "rtl" ? OPEN_CENTER_INSET : view.innerWidth - OPEN_CENTER_INSET;
   const major = safariMajor(view.userAgent);
   if (major !== undefined && major < FIRST_GLASS_SAFARI) {
-    return { x, y: view.innerHeight / 2 + CLASSIC_OPEN_BOTTOM_BELOW_CENTER, side };
+    const below =
+      major < FIRST_ROOMY_ALERT_SAFARI
+        ? COMPACT_ALERT_OPEN_BOTTOM_BELOW_CENTER
+        : CLASSIC_OPEN_BOTTOM_BELOW_CENTER;
+    return { x, y: view.innerHeight / 2 + below, side };
   }
   const top =
     view.innerHeight >= view.screenHeight
@@ -319,33 +329,76 @@ const currentView = (): PromptView => ({
   screenHeight: window.screen.height,
 });
 
-const hintArrow = (): Element => {
-  const svg = svgElement("svg", {
-    class: "sw-teleport-dim-arrow",
-    viewBox: `0 0 ${ARROW_WIDTH} ${ARROW_HEIGHT}`,
-    "aria-hidden": "true",
-  });
-  for (const d of ["M6 58C30 58 58 42 60 4", "M51 13L60 3L69 13"]) {
+export type HintLayout = { tipX: number; tipY: number; tailY: number; captionTop: number };
+
+export const hintLayout = (anchor: { x: number; y: number }): HintLayout => {
+  const cap = ARROW_STROKE / 2;
+  const tipY = anchor.y + ALERT_BOTTOM_BELOW_OPEN + HINT_GAP + cap;
+  const tailY = tipY + ARROW_RISE;
+  return { tipX: anchor.x, tipY, tailY, captionTop: tailY + cap + HINT_GAP - CAPTION_CAP_INSET };
+};
+
+export const arrowTailX = (
+  tipX: number,
+  side: "ltr" | "rtl",
+  line: { left: number; right: number } | undefined,
+): number => {
+  const toward = side === "rtl" ? tipX + ARROW_SWEEP : tipX - ARROW_SWEEP;
+  if (line === undefined || line.right - line.left < TAIL_INSET * 2) return toward;
+  return Math.min(Math.max(toward, line.left + TAIL_INSET), line.right - TAIL_INSET);
+};
+
+const round = (value: number) => Math.round(value * 10) / 10;
+
+export const arrowPaths = (tailX: number, layout: HintLayout): [string, string] => {
+  const { tipX, tipY, tailY } = layout;
+  const bend = (tailY - tipY) * 0.55;
+  const [sx, sy, tx, ty, b] = [tailX, tailY, tipX, tipY, bend].map(round) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  return [
+    `M${sx} ${sy}C${sx} ${round(sy - b)} ${tx} ${round(ty + b)} ${tx} ${ty}`,
+    `M${round(tx - ARROW_HEAD)} ${round(ty + ARROW_HEAD)}L${tx} ${ty}L${round(tx + ARROW_HEAD)} ${round(ty + ARROW_HEAD)}`,
+  ];
+};
+
+const firstLine = (
+  caption: HTMLElement,
+  origin: HTMLElement,
+): { left: number; right: number } | undefined => {
+  const range = document.createRange();
+  range.selectNodeContents(caption);
+  if (typeof range.getClientRects !== "function") return undefined;
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0);
+  if (rects.length === 0) return undefined;
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const line = rects.filter((rect) => rect.top - top < 4);
+  const offset = origin.getBoundingClientRect().left;
+  return {
+    left: Math.min(...line.map((rect) => rect.left)) - offset,
+    right: Math.max(...line.map((rect) => rect.right)) - offset,
+  };
+};
+
+const hintArrow = (paths: [string, string]): Element => {
+  const svg = svgElement("svg", { class: "sw-teleport-dim-arrow", "aria-hidden": "true" });
+  for (const d of paths) {
     svg.append(
       svgElement("path", {
         d,
         fill: "none",
         stroke: "currentColor",
-        "stroke-width": "3",
+        "stroke-width": String(ARROW_STROKE),
         "stroke-linecap": "round",
         "stroke-linejoin": "round",
       }),
     );
   }
   return svg;
-};
-
-const placeHint = (hint: HTMLElement): void => {
-  const anchor = openButtonAnchor(currentView());
-  const tipX = anchor.side === "rtl" ? ARROW_WIDTH - ARROW_TIP_X : ARROW_TIP_X;
-  hint.dataset.side = anchor.side;
-  hint.style.setProperty("--sw-arrow-left", `${anchor.x - tipX}px`);
-  hint.style.setProperty("--sw-arrow-top", `${anchor.y + ARROW_TIP_GAP}px`);
 };
 
 export const createReturnDim = (): ReturnDim => {
@@ -365,9 +418,15 @@ export const createReturnDim = (): ReturnDim => {
       const hint = element("div", "sw-teleport-dim-hint");
       hint.dir = dir;
       hint.dataset.state = "closed";
-      placeHint(hint);
-      hint.append(hintArrow(), element("p", "sw-teleport-dim-caption", caption));
+      const anchor = openButtonAnchor(currentView());
+      const layout = hintLayout(anchor);
+      hint.dataset.side = anchor.side;
+      const text = element("p", "sw-teleport-dim-caption", caption);
+      text.style.top = `${layout.captionTop}px`;
+      hint.append(text);
       root.append(hint);
+      const tail = arrowTailX(layout.tipX, anchor.side, firstLine(text, hint));
+      hint.prepend(hintArrow(arrowPaths(tail, layout)));
       void hint.offsetWidth;
       hint.dataset.state = "open";
     },

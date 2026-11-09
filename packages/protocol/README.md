@@ -91,6 +91,7 @@ the schemas strip what they do not declare.
 | `page_view`                                                            | `type`, `page_node_id`, `page_name`, `navigation_node_id`, `flow_position`, previous page |
 | `initiate_web_checkout`, `stripe_checkout_*`, `post_checkout_complete` | web checkout lifecycle, keyed by `checkout_context_id` and `product_identifier`           |
 | `discount_redemption_result`                                           | `code`, `valid`, optional `reason`, `appliedProductCount`                                 |
+| `teleport_return_result`                                               | `teleport_id`, `reason`, `result` (`opened`, `cancelled`, `no_app`), `via`, `prompt`      |
 | `var_click`, `page_styles`, `has_set_dom`                              | editor state                                                                              |
 
 ## Transports

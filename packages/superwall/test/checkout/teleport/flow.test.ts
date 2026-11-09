@@ -95,11 +95,14 @@ const fakeSession = ({
   };
 };
 
+const returnResults = (posted: Record<string, unknown>[]) =>
+  posted.filter((message) => message.event_name === "teleport_return_result");
+
 type Reply = unknown | ((body: unknown) => unknown);
 
 const api = (routes: Record<string, Reply[] | Reply>) => {
   const queues = new Map(
-    Object.entries({ "checkout/teleport/return": {}, ...routes }).map(([path, reply]) => [
+    Object.entries(routes).map(([path, reply]) => [
       path,
       Array.isArray(reply) ? [...reply] : [reply],
     ]),
@@ -1618,118 +1621,100 @@ describe("the web half of a teleport", () => {
     );
   });
 
-  it("reports each return once, with how it went", async () => {
+  it("reports each return once to the host, with how it went", async () => {
     boot({ appLinkUrl: undefined });
-    const calls = api({});
+    api({});
     vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
-    const reports = () => calls.filter((call) => call.path === "checkout/teleport/return");
 
-    const cancelled = teleportPage(fakeSession().session).returnToApp("closed");
+    const first = fakeSession();
+    const cancelled = teleportPage(first.session).returnToApp("closed");
     window.dispatchEvent(new Event("blur"));
     window.dispatchEvent(new Event("focus"));
-    expect(reports()).toHaveLength(0);
+    expect(returnResults(first.posted)).toHaveLength(0);
     await settle(ANSWER_WAIT_MS);
     await expect(cancelled).resolves.toBe("cancelled");
-    expect(reports()).toHaveLength(1);
-    expect(reports()[0]?.body).toEqual({
-      teleportId: "v1:tp",
-      reason: "closed",
-      via: "scheme",
-      prompt: true,
-      result: "cancelled",
-    });
-    expect(reports()[0]?.init.keepalive).toBe(true);
-    expect(reports()[0]?.init.headers).toMatchObject({ Authorization: "Bearer pk_test" });
+    expect(returnResults(first.posted)).toEqual([
+      {
+        event_name: "teleport_return_result",
+        teleport_id: "v1:tp",
+        reason: "closed",
+        result: "cancelled",
+        via: "scheme",
+        prompt: true,
+      },
+    ]);
 
-    const unopened = teleportPage(fakeSession().session).returnToApp();
+    const second = fakeSession();
+    const unopened = teleportPage(second.session).returnToApp();
     await settle(PROMPT_WAIT_MS);
     await unopened;
-    expect(reports()[1]?.body).toEqual({
-      teleportId: "v1:tp",
-      reason: "closed",
-      via: "scheme",
-      prompt: false,
-      result: "no_app",
-    });
+    expect(returnResults(second.posted)).toEqual([
+      expect.objectContaining({ reason: "closed", result: "no_app", via: "scheme", prompt: false }),
+    ]);
 
     boot();
-    const opened = teleportPage(fakeSession().session).returnToApp("closed");
+    const third = fakeSession();
+    const opened = teleportPage(third.session).returnToApp("closed");
     setVisibility("hidden");
     await settle(APP_OPEN_WAIT_MS);
     await opened;
-    expect(reports()[2]?.body).toMatchObject({ via: "universal", prompt: false, result: "opened" });
-    expect(reports()).toHaveLength(3);
+    expect(returnResults(third.posted)).toEqual([
+      expect.objectContaining({ result: "opened", via: "universal", prompt: false }),
+    ]);
   });
 
   it("reports a return after a purchase, direct or from Return to App, as purchased", async () => {
     boot({ appLinkUrl: undefined });
-    const calls = api({ "checkout/session/complete": {} });
+    api({ "checkout/session/complete": [{}, {}] });
     vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
-    const reports = () =>
-      calls.filter((call) => call.path === "checkout/teleport/return").map((call) => call.body);
 
-    await teleportPage(
-      fakeSession({ teleport: { route: "checkout", completion: "direct" } }).session,
-    ).completePurchase("ctx");
+    const direct = fakeSession({ teleport: { route: "checkout", completion: "direct" } });
+    await teleportPage(direct.session).completePurchase("ctx");
     window.dispatchEvent(new Event("pagehide"));
     await settle();
-    expect(reports()).toEqual([
-      { teleportId: "v1:tp", reason: "purchased", via: "scheme", prompt: false, result: "opened" },
+    expect(returnResults(direct.posted)).toEqual([
+      {
+        event_name: "teleport_return_result",
+        teleport_id: "v1:tp",
+        reason: "purchased",
+        result: "opened",
+        via: "scheme",
+        prompt: false,
+      },
     ]);
 
-    await teleportPage(fakeSession().session).completePurchase("ctx");
+    const screen = fakeSession();
+    await teleportPage(screen.session).completePurchase("ctx");
     const back = document.querySelector<HTMLAnchorElement>("a.sw-teleport-primary");
     back?.addEventListener("click", (event) => event.preventDefault());
     back?.click();
     await settle(PROMPT_WAIT_MS);
-    expect(reports()[1]).toMatchObject({ reason: "purchased", result: "no_app" });
+    expect(returnResults(screen.posted)).toEqual([
+      expect.objectContaining({ reason: "purchased", result: "no_app" }),
+    ]);
   });
 
-  it("reports nothing without a key or a link, and only warns when the report fails", async () => {
+  it("reports without a public key, and nothing when there is no link to return through", async () => {
     vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     boot({ appLinkUrl: undefined });
-    const calls = api({
-      "checkout/session/complete": {},
-      "checkout/teleport/return": [new Error("down"), new Response("", { status: 404 })],
-    });
-    const reports = () => calls.filter((call) => call.path === "checkout/teleport/return");
+    api({ "checkout/session/complete": {} });
 
-    const keyless = teleportPage(
-      fakeSession({ device: { publicApiKey: "" } }).session,
-    ).returnToApp();
+    const keyless = fakeSession({ device: { publicApiKey: "" } });
+    const unkeyed = teleportPage(keyless.session).returnToApp();
     await settle(PROMPT_WAIT_MS);
-    await expect(keyless).resolves.toBe("no_app");
-    expect(reports()).toHaveLength(0);
+    await expect(unkeyed).resolves.toBe("no_app");
+    expect(returnResults(keyless.posted)).toHaveLength(1);
 
     boot({ appLinkUrl: undefined, returnUrl: undefined });
-    await teleportPage(fakeSession().session).returnToApp();
-    const direct = teleportPage(
-      fakeSession({ teleport: { route: "checkout", completion: "direct" } }).session,
-    );
-    await direct.completePurchase("ctx");
-    expect(direct.returning()).toBe(false);
+    const linkless = fakeSession();
+    await teleportPage(linkless.session).returnToApp();
+    const direct = fakeSession({ teleport: { route: "checkout", completion: "direct" } });
+    const page = teleportPage(direct.session);
+    await page.completePurchase("ctx");
+    expect(page.returning()).toBe(false);
     expect(document.querySelector(".sw-teleport[role=status]")).not.toBeNull();
-    expect(reports()).toHaveLength(0);
-
-    boot({ appLinkUrl: undefined });
-    const failing = teleportPage(fakeSession().session).returnToApp();
-    await settle(PROMPT_WAIT_MS);
-    await expect(failing).resolves.toBe("no_app");
-    await settle();
-    expect(reports()).toHaveLength(1);
-    expect(warn).toHaveBeenCalledWith("Reporting the return to the app failed:", expect.any(Error));
-
-    warn.mockClear();
-    const refused = teleportPage(fakeSession().session).returnToApp();
-    await settle(PROMPT_WAIT_MS);
-    await expect(refused).resolves.toBe("no_app");
-    await settle();
-    expect(reports()).toHaveLength(2);
-    expect(warn).toHaveBeenCalledWith(
-      "Reporting the return to the app failed:",
-      expect.objectContaining({ message: expect.stringContaining("404") }),
-    );
+    expect(returnResults(linkless.posted)).toHaveLength(0);
+    expect(returnResults(direct.posted)).toHaveLength(0);
   });
 
   it("is returning from the hand-off until the last return settles", async () => {
