@@ -371,3 +371,73 @@ test("a screen origin recorded without its surface is reported, not rebuilt from
   assert.equal(failed, false, text(calls, "error"));
   assert.match(text(calls, "info"), /picking up the rebuild/);
 });
+
+const filesUnder = (dir: string): string[] =>
+  fs.existsSync(dir) ? (fs.readdirSync(dir, { recursive: true }) as string[]).sort() : [];
+
+test("migrate <id> --dry-run reads the paywall, prints the plan, and writes nothing", async () => {
+  const root = scratch("migrate-dry-run");
+  fs.writeFileSync(path.join(root, "App.swift"), "// app\n");
+  useHome({ apiKey: "sk_live_x" });
+  process.env.SUPERWALL_API_HOST = "https://api.example.com";
+  const sent = useFetch([
+    { match: "/v2/paywalls/255456", body: originRow },
+    { match: "/v2/projects", body: { data: [], has_more: false } },
+  ]);
+
+  const { calls, failed } = await migrate({ paywall: "255456", installDir: root, dryRun: true });
+
+  assert.equal(failed, false, text(calls, "error"));
+  assert.deepEqual(filesUnder(root), ["App.swift"]);
+  const note = calls.find((call) => call.method === "note")?.value as { value: string; title: string };
+  assert.equal(note.title, "Migration plan");
+  const plan = note.value;
+  assert.match(plan, /^Would create in superwall\/:/);
+  for (const file of [
+    "package.json",
+    "DESIGN.md",
+    "paywalls/force-update/config.ts",
+    "paywalls/force-update/app/index.tsx",
+    "paywalls/force-update/messages/en.ts",
+    "paywalls/force-update/MIGRATION.md",
+  ]) {
+    assert.match(plan, new RegExp(`\\n  ${file.replaceAll(".", "\\.")}(\\n|$)`));
+  }
+  assert.match(plan, /Would record in superwall\/superwall\.lock:\n  origins\["paywall\/force-update"\] → paywall 255456\n  apps\.ios → app 43674/);
+  assert.doesNotMatch(text(calls, "step"), /Created/);
+  assert.match(text(calls, "outro"), /Dry run - no changes made/);
+  assert.equal(calls.some((call) => call.method === "select"), false);
+  assert.ok(sent.every((request) => request.method === "GET"));
+});
+
+test("migrate <id> --dry-run on a paywall already scaffolded stops before the rebuild", async () => {
+  const root = scratch("migrate-dry-run-existing");
+  scaffoldProject(path.join(root, "superwall"));
+  const before = filesUnder(root);
+
+  const { calls, failed } = await migrate({ paywall: "255456", installDir: root, dryRun: true });
+
+  assert.equal(failed, false, text(calls, "error"));
+  assert.deepEqual(filesUnder(root), before);
+  assert.match(text(calls, "outro"), /Dry run - no changes made/);
+  assert.equal(calls.some((call) => call.method === "select"), false);
+});
+
+test("migrate --screen --dry-run lists the scaffold and the screenshot copy, and writes nothing", async () => {
+  const { root, file } = appWithScreen("screen-dry-run");
+  const shot = path.join(root, "shot.png");
+  fs.writeFileSync(shot, "png");
+  const before = filesUnder(root);
+
+  const { calls, failed } = await migrate({ screen: file, screenshot: shot, installDir: root, dryRun: true });
+
+  assert.equal(failed, false, text(calls, "error"));
+  assert.deepEqual(filesUnder(root), before);
+  const note = calls.find((call) => call.method === "note")?.value as { value: string; title: string };
+  assert.equal(note.title, "Migration plan");
+  const plan = note.value;
+  assert.match(plan, /\n  paywalls\/update-required\/config\.ts\n/);
+  assert.match(plan, /\n  paywalls\/update-required\/original\.png\n/);
+  assert.match(plan, /origins\["paywall\/update-required"\] → `\.\.\/App\/UpdateRequiredView\.swift`/);
+  assert.match(text(calls, "outro"), /Dry run - no changes made/);
+});

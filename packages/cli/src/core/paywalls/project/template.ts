@@ -80,49 +80,64 @@ const BASE = "/*\n * Element defaults and the shared component classes, built on
 
 const BUTTON = "import type { ButtonHTMLAttributes } from \"react\";\n\ntype ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {\n  variant?: \"primary\" | \"secondary\";\n};\n\n/** The design system's button: `.button` in design/base.css, filled with the accent when primary. */\nexport function Button({ variant = \"secondary\", className, type = \"button\", ...props }: ButtonProps) {\n  const classes = [\"button\", variant === \"primary\" ? \"button--primary\" : \"\", className ?? \"\"].filter(Boolean).join(\" \");\n  return <button type={type} className={classes} {...props} />;\n}\n";
 
-const writer =
-  (target: string) =>
-  (relative: string, content: string): void => {
-    const destination = path.join(target, relative);
-    fs.mkdirSync(path.dirname(destination), { recursive: true });
-    fs.writeFileSync(destination, content);
-  };
+/**
+ * One file the scaffold writes, relative to the superwall directory. `ifAbsent`
+ * files (the design system) are written only when missing, so a user's own copy
+ * is never replaced. Writers and dry-run plans both read these lists, so a plan
+ * names exactly what a real run would write.
+ */
+export interface ScaffoldFile {
+  path: string;
+  content: string;
+  ifAbsent?: boolean;
+}
 
-const absentWriter =
-  (target: string) =>
-  (relative: string, content: string): void => {
-    const destination = path.join(target, relative);
-    if (fs.existsSync(destination)) return;
-    fs.mkdirSync(path.dirname(destination), { recursive: true });
-    fs.writeFileSync(destination, content);
-  };
+const designSystemFiles = (): ScaffoldFile[] => [
+  { path: "DESIGN.md", content: DESIGN_MD, ifAbsent: true },
+  { path: "design/tokens.css", content: TOKENS, ifAbsent: true },
+  { path: "design/base.css", content: BASE, ifAbsent: true },
+  { path: "components/Button.tsx", content: BUTTON, ifAbsent: true },
+];
 
-function writeDesignSystem(target: string): void {
-  const file = absentWriter(target);
-  file("DESIGN.md", DESIGN_MD);
-  file("design/tokens.css", TOKENS);
-  file("design/base.css", BASE);
-  file("components/Button.tsx", BUTTON);
+export const projectFiles = (target: string, name?: string): ScaffoldFile[] => [
+  { path: "package.json", content: packageJson(name ?? projectPackageName(target)) },
+  { path: "tsconfig.json", content: TSCONFIG },
+  { path: "superwall.d.ts", content: SUPERWALL_DTS },
+  { path: ".gitignore", content: GITIGNORE },
+  { path: "README.md", content: README },
+];
+
+export const surfaceFiles = (surfaceId: string, config: string): ScaffoldFile[] => [
+  ...designSystemFiles(),
+  { path: `paywalls/${surfaceId}/config.ts`, content: config },
+  { path: `paywalls/${surfaceId}/messages/en.ts`, content: MESSAGES },
+  { path: `paywalls/${surfaceId}/app/index.tsx`, content: INDEX },
+  { path: `paywalls/${surfaceId}/app/layout.tsx`, content: LAYOUT },
+  { path: `paywalls/${surfaceId}/app/theme.css`, content: THEME },
+  { path: `paywalls/${surfaceId}/components/Wordmark.tsx`, content: WORDMARK },
+];
+
+/** The files of `files` a write into `target` would create or replace, in order. */
+export const plannedFiles = (target: string, files: ScaffoldFile[]): string[] =>
+  files
+    .filter((file) => !file.ifAbsent || !fs.existsSync(path.join(target, file.path)))
+    .map((file) => file.path);
+
+export function writeFiles(target: string, files: ScaffoldFile[]): void {
+  for (const file of files) {
+    const destination = path.join(target, file.path);
+    if (file.ifAbsent && fs.existsSync(destination)) continue;
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.writeFileSync(destination, file.content);
+  }
 }
 
 export function writeProjectFiles(target: string, name?: string): void {
-  const file = writer(target);
-  file("package.json", packageJson(name ?? projectPackageName(target)));
-  file("tsconfig.json", TSCONFIG);
-  file("superwall.d.ts", SUPERWALL_DTS);
-  file(".gitignore", GITIGNORE);
-  file("README.md", README);
+  writeFiles(target, projectFiles(target, name));
 }
 
 export function writeSurfaceFiles(target: string, surfaceId: string, config: string): void {
-  writeDesignSystem(target);
-  const file = writer(target);
-  file(`paywalls/${surfaceId}/config.ts`, config);
-  file(`paywalls/${surfaceId}/messages/en.ts`, MESSAGES);
-  file(`paywalls/${surfaceId}/app/index.tsx`, INDEX);
-  file(`paywalls/${surfaceId}/app/layout.tsx`, LAYOUT);
-  file(`paywalls/${surfaceId}/app/theme.css`, THEME);
-  file(`paywalls/${surfaceId}/components/Wordmark.tsx`, WORDMARK);
+  writeFiles(target, surfaceFiles(surfaceId, config));
 }
 
 export function starterConfig(name: string): string {

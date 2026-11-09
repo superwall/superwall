@@ -28,7 +28,13 @@ import {
   type OriginPaywall,
 } from "./project/origin";
 import { projectPackageName } from "./project/scaffold";
-import { writeProjectFiles, writeSurfaceFiles } from "./project/template";
+import {
+  plannedFiles,
+  projectFiles,
+  surfaceFiles,
+  writeFiles,
+  type ScaffoldFile,
+} from "./project/template";
 import {
   readScreen,
   screenBrief,
@@ -107,12 +113,35 @@ export function screenMigrationFor(
   );
 }
 
+/** Prints a dry run's plan: the files a scaffold would write and the lock entries it would add. */
+function showScaffoldPlan(
+  ui: Renderer,
+  root: string,
+  target: string,
+  files: string[],
+  lockEntries: string[],
+): void {
+  const dir = path.relative(root, target) || ".";
+  ui.note(
+    [
+      `Would create in ${dir}/:`,
+      ...files.map((file) => `  ${file}`),
+      ...(lockEntries.length === 0
+        ? []
+        : [`Would record in ${dir}/superwall.lock:`, ...lockEntries.map((entry) => `  ${entry}`)]),
+    ].join("\n"),
+    "Migration plan",
+  );
+}
+
 interface ScreenScaffoldOptions {
   root: string;
   target: string;
   file: string;
   newProject: boolean;
   screenshot?: string;
+  /** Read the screen and print what would be written, writing nothing. */
+  dryRun?: boolean;
 }
 
 const ORIGINAL_SCREENSHOT = "original.png";
@@ -128,21 +157,12 @@ export function scaffoldFromScreen(ui: Renderer, options: ScreenScaffoldOptions)
     );
   }
 
-  if (options.newProject) writeProjectFiles(target, projectPackageName(root));
-  writeSurfaceFiles(target, screen.slug, screenConfigSource(screen));
-  let screenshot: string | undefined;
-  if (options.screenshot !== undefined) {
-    fs.copyFileSync(options.screenshot, path.join(surfaceDir, ORIGINAL_SCREENSHOT));
-    screenshot = ORIGINAL_SCREENSHOT;
-  }
-  fs.writeFileSync(path.join(surfaceDir, "MIGRATION.md"), screenBrief(screen, screenshot));
-  const origin: ScreenOrigin = {
-    path: screen.path,
-    framework: screen.framework,
-    ...(screenshot === undefined ? {} : { screenshot }),
-  };
-  writeOrigin(target, "paywall", screen.slug, origin);
-
+  const screenshot = options.screenshot === undefined ? undefined : ORIGINAL_SCREENSHOT;
+  const files: ScaffoldFile[] = [
+    ...(options.newProject ? projectFiles(target, projectPackageName(root)) : []),
+    ...surfaceFiles(screen.slug, screenConfigSource(screen)),
+    { path: `paywalls/${screen.slug}/MIGRATION.md`, content: screenBrief(screen, screenshot) },
+  ];
   const actions = inventory.actions.reduce((sum, action) => sum + action.count, 0);
   const found = [
     `${inventory.copy.length} string${inventory.copy.length === 1 ? "" : "s"}`,
@@ -151,6 +171,23 @@ export function scaffoldFromScreen(ui: Renderer, options: ScreenScaffoldOptions)
     `${actions} action${actions === 1 ? "" : "s"}`,
   ].join(", ");
   ui.step(`Read \`${screen.path}\` (${screenFrameworkLabel(screen.framework)}): ${found}`);
+  if (options.dryRun) {
+    showScaffoldPlan(ui, root, target, [
+      ...plannedFiles(target, files),
+      ...(screenshot === undefined ? [] : [`paywalls/${screen.slug}/${screenshot}`]),
+    ], [`origins["paywall/${screen.slug}"] → \`${screen.path}\``]);
+    return screen;
+  }
+  writeFiles(target, files);
+  if (options.screenshot !== undefined) {
+    fs.copyFileSync(options.screenshot, path.join(surfaceDir, ORIGINAL_SCREENSHOT));
+  }
+  const origin: ScreenOrigin = {
+    path: screen.path,
+    framework: screen.framework,
+    ...(screenshot === undefined ? {} : { screenshot }),
+  };
+  writeOrigin(target, "paywall", screen.slug, origin);
   ui.step(
     `Created ${path.relative(root, target) || "."}/paywalls/${screen.slug} for \`${screen.name}\``,
   );
@@ -168,6 +205,8 @@ interface ScaffoldOptions {
   paywallId: string;
   newProject: boolean;
   fetchText?: (url: string) => Promise<string | undefined>;
+  /** Read the paywall and print what would be written, writing nothing. */
+  dryRun?: boolean;
 }
 
 const fetchDocument = (url: string): Promise<string | undefined> =>
@@ -214,9 +253,23 @@ export async function scaffoldFromPaywall(
       `\`paywalls/${origin.slug}\` already exists in ${path.relative(root, target) || "."} — rename or remove it first.`,
     );
   }
-  if (options.newProject) writeProjectFiles(target, projectPackageName(root));
-  writeSurfaceFiles(target, origin.slug, originConfigSource(origin));
-  fs.writeFileSync(path.join(target, "paywalls", origin.slug, "MIGRATION.md"), originBrief(origin));
+  const files: ScaffoldFile[] = [
+    ...(options.newProject ? projectFiles(target, projectPackageName(root)) : []),
+    ...surfaceFiles(origin.slug, originConfigSource(origin)),
+    { path: `paywalls/${origin.slug}/MIGRATION.md`, content: originBrief(origin) },
+  ];
+  const bindsApp =
+    origin.applicationId !== undefined &&
+    origin.platform !== undefined &&
+    readLock(target).apps[origin.platform] === undefined;
+  if (options.dryRun) {
+    showScaffoldPlan(ui, root, target, plannedFiles(target, files), [
+      ...(origin.url === undefined ? [] : [`origins["paywall/${origin.slug}"] → paywall ${origin.id}`]),
+      ...(bindsApp ? [`apps.${origin.platform} → app ${origin.applicationId}`] : []),
+    ]);
+    return origin;
+  }
+  writeFiles(target, files);
   if (origin.url !== undefined) {
     writeOrigin(target, "paywall", origin.slug, { paywallId: origin.id, url: origin.url });
   }
@@ -229,21 +282,18 @@ export async function scaffoldFromPaywall(
     );
   }
 
-  if (origin.applicationId !== undefined && origin.platform !== undefined) {
-    const lock = readLock(target);
-    if (lock.apps[origin.platform] === undefined) {
-      writeApp(target, origin.platform, origin.applicationId);
-      const known = await listApplications(api).catch((): Application[] => []);
-      const app = known.find((candidate) => String(candidate.id) === origin.applicationId);
-      if (app) {
-        ui.success(
-          `Pushes go to \`${app.name ?? app.id}\`, the paywall's app — saved in superwall.lock, so commit that file.`,
-        );
-      } else {
-        ui.success(
-          `Pushes go to app ${origin.applicationId}, the paywall's app — saved in superwall.lock.`,
-        );
-      }
+  if (bindsApp && origin.applicationId !== undefined && origin.platform !== undefined) {
+    writeApp(target, origin.platform, origin.applicationId);
+    const known = await listApplications(api).catch((): Application[] => []);
+    const app = known.find((candidate) => String(candidate.id) === origin.applicationId);
+    if (app) {
+      ui.success(
+        `Pushes go to \`${app.name ?? app.id}\`, the paywall's app — saved in superwall.lock, so commit that file.`,
+      );
+    } else {
+      ui.success(
+        `Pushes go to app ${origin.applicationId}, the paywall's app — saved in superwall.lock.`,
+      );
     }
   }
   return origin;
