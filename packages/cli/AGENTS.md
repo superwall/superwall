@@ -188,6 +188,13 @@ skill.
   catalogue is keyed by identifiers users choose, so it is a null-prototype
   object and read with `Object.hasOwn`: a product named `constructor` must
   not resolve to `Object.prototype`.
+- **No project below a `?` or a `#`.** tsx cuts a TypeScript file's path at
+  `?` (it compiles `Good Deal? AI/…/index.ts` as JavaScript) and vite reads
+  both as a URL query or fragment, so `resolveFramework` refuses a framework or
+  project under a `?`, its `buildSnapshot`/`startPreviewServer` refuse a root
+  under either, and `create` refuses before writing anything
+  (`UnsupportedProjectPathError`, `project/framework.ts`). Spaces, `%` and `&`
+  work. A symlink doesn't help: node and vite resolve it to the real path.
 - **The design-token lint** (`project/design-lint.ts`) is a warning on `build`
   and `push`, never a stop, so a project from before the design system still
   ships. A surface's `config.ts` is not read: the host paints its

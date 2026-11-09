@@ -17,6 +17,7 @@ import {
   ExampleError,
   listExamples,
 } from "@/core/paywalls/project/examples";
+import { assertWorkablePath } from "@/core/paywalls/project/framework";
 import { slugOf } from "@/core/paywalls/project/origin";
 import { projectPackageName } from "@/core/paywalls/project/scaffold";
 import { LoginRequiredError, requireApi } from "@/core/paywalls/project/session";
@@ -141,6 +142,8 @@ export async function runCreate(
   ui.intro(`Superwall ${pc.dim("create")}`);
 
   const root = path.resolve(options.dir ?? process.cwd());
+  // Refuse before anything is written: nothing would build or preview there.
+  assertWorkablePath(root);
   const existing = projectDirOf(root);
   if (existing !== undefined) {
     await addSurface(ctx, options, existing, deps);

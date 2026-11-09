@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import type { PaywallMigration } from "@/core/paywalls/migration";
 import { runCreate } from "@/core/paywalls/project/create";
+import { UnsupportedProjectPathError } from "@/core/paywalls/project/framework";
 import type { CommandContext } from "@/program/command";
 import { createCommandOutput } from "@/program/output";
 import type { Renderer } from "@/ui";
@@ -543,4 +544,18 @@ test("inside a project, --from with nobody to ask leaves the rebuild for later",
 
   assert.deepEqual(studio, []);
   assert.match(nextSteps(calls)[0] ?? "", /^superwall migrate 255456/);
+});
+
+test("a folder below a `?` or a `#` is refused before anything is written", async () => {
+  for (const name of ["Good Deal? AI", "notes#2"]) {
+    const root = path.join(scratch("odd"), name, "my-app");
+    fs.mkdirSync(root, { recursive: true });
+
+    await assert.rejects(
+      create({ dir: root, yes: true }),
+      (error: unknown) => error instanceof UnsupportedProjectPathError && error.segment === name,
+    );
+    assert.deepEqual(fs.readdirSync(root), []);
+    assert.deepEqual(ran(), []);
+  }
 });

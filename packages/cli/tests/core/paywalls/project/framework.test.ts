@@ -5,16 +5,22 @@ import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import {
   FrameworkNotFoundError,
+  UnsupportedProjectPathError,
+  assertWorkablePath,
   frameworkVersion,
   resolveFramework,
   resolveFrameworkDir,
+  type FrameworkProject,
+  type FrameworkSurface,
 } from "@/core/paywalls/project/framework";
 
 const dirs: string[] = [];
 
-function scaffold(pkg: unknown, exports: Record<string, string> = {}): string {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "superwall-framework-")));
-  dirs.push(dir);
+function scaffold(pkg: unknown, exports: Record<string, string> = {}, parent?: string): string {
+  const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "superwall-framework-")));
+  dirs.push(scratch);
+  const dir = parent === undefined ? scratch : path.join(scratch, parent, "app");
+  fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "app" }));
 
   const installed = path.join(dir, "node_modules/superwall");
@@ -293,4 +299,69 @@ test("a superwall/ directory with no install of its own falls back to the host r
 test("framework.ts imports nothing through the @ alias, since packages/superwall typechecks it directly", () => {
   const source = fs.readFileSync(new URL("../../../../src/core/paywalls/project/framework.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /from "@\//);
+});
+
+const LOADABLE = {
+  name: "superwall",
+  version: "1.0.0",
+  type: "module",
+  exports: {
+    "./discover": "./discover.js",
+    "./build": "./build.js",
+    "./preview": "./preview.js",
+    "./package.json": "./package.json",
+  },
+};
+
+const LOADABLE_FILES = {
+  "discover.js": "export const discoverProject = (root) => ({ root, surfaces: [], diagnostics: [] });\n",
+  "build.js": "export const buildSnapshot = async (project) => ({ built: project.root });\n",
+  "preview.js": "export const startPreviewServer = async (roots) => ({ roots });\n",
+};
+
+const surface: FrameworkSurface = { kind: "paywall", id: "pro", dir: "", configFile: "", routes: [] };
+const projectAt = (root: string): FrameworkProject => ({ root, superwallDir: root, surfaces: [], diagnostics: [] });
+
+test("a framework below a directory named with `?` is refused before tsx cuts its paths there", async () => {
+  const dir = scaffold(LOADABLE, LOADABLE_FILES, "Good Deal? AI");
+
+  await assert.rejects(resolveFramework(dir), (error: unknown) => {
+    assert.ok(error instanceof UnsupportedProjectPathError);
+    assert.equal(error.segment, "Good Deal? AI");
+    assert.match(error.message, /the directory `Good Deal\? AI` has `\?` in its name/);
+    assert.match(error.message, /Rename `Good Deal\? AI`, or move the project to a path without `\?` or `#`/);
+    assert.match(error.message, /A symlink doesn't help/);
+    return true;
+  });
+});
+
+test("a project below a `#` loads, but neither builds nor previews, as vite cannot", async () => {
+  const dir = scaffold(LOADABLE, LOADABLE_FILES, "notes#2");
+  const framework = await resolveFramework(dir);
+
+  assert.deepEqual(framework.discoverProject(dir), { root: dir, surfaces: [], diagnostics: [] });
+  await assert.rejects(framework.buildSnapshot(projectAt(dir), surface), /the directory `notes#2` has `#` in its name/);
+  await assert.rejects(framework.startPreviewServer([dir], { port: 0 }), UnsupportedProjectPathError);
+  await assert.rejects(framework.startPreviewServer(dir, { port: 0 }), UnsupportedProjectPathError);
+});
+
+test("spaces, `%` and `&` in a project path build and preview as any other", async () => {
+  const dir = scaffold(LOADABLE, LOADABLE_FILES, "My App 100% & co");
+  const framework = await resolveFramework(dir);
+
+  assert.deepEqual(await framework.buildSnapshot(projectAt(dir), surface), { built: dir });
+  assert.deepEqual(await framework.startPreviewServer(dir, { port: 0 }), { roots: dir });
+});
+
+test("a path is judged by where it really is, and a missing one as written", () => {
+  const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "superwall-framework-")));
+  dirs.push(scratch);
+  const real = path.join(scratch, "a?b");
+  fs.mkdirSync(real);
+  fs.symlinkSync(real, path.join(scratch, "plain"));
+
+  assert.throws(() => assertWorkablePath(path.join(scratch, "plain")), UnsupportedProjectPathError);
+  assert.throws(() => assertWorkablePath(path.join(scratch, "missing", "x#y")), /`x#y` has `#`/);
+  assert.doesNotThrow(() => assertWorkablePath(path.join(scratch, "missing", "x#y"), "?"));
+  assert.throws(() => assertWorkablePath(path.join(scratch, "a?#b")), /has `\?` and `#` in its name/);
 });
