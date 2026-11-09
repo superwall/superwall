@@ -1691,7 +1691,7 @@ describe("the web half of a teleport", () => {
     boot({ appLinkUrl: undefined });
     const calls = api({
       "checkout/session/complete": {},
-      "checkout/teleport/return": new Error("down"),
+      "checkout/teleport/return": [new Error("down"), new Response("", { status: 404 })],
     });
     const reports = () => calls.filter((call) => call.path === "checkout/teleport/return");
 
@@ -1719,6 +1719,17 @@ describe("the web half of a teleport", () => {
     await settle();
     expect(reports()).toHaveLength(1);
     expect(warn).toHaveBeenCalledWith("Reporting the return to the app failed:", expect.any(Error));
+
+    warn.mockClear();
+    const refused = teleportPage(fakeSession().session).returnToApp();
+    await settle(PROMPT_WAIT_MS);
+    await expect(refused).resolves.toBe("no_app");
+    await settle();
+    expect(reports()).toHaveLength(2);
+    expect(warn).toHaveBeenCalledWith(
+      "Reporting the return to the app failed:",
+      expect.objectContaining({ message: expect.stringContaining("404") }),
+    );
   });
 
   it("is returning from the hand-off until the last return settles", async () => {

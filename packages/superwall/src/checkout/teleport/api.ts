@@ -185,12 +185,15 @@ export const reportTeleportReturn = async (
   publicApiKey: string,
   report: TeleportReturnReport,
 ): Promise<void> => {
-  await fetch(subscriptionsApiUrl("checkout/teleport/return"), {
+  const response = await fetch(subscriptionsApiUrl("checkout/teleport/return"), {
     method: "POST",
     keepalive: true,
     headers: headers(publicApiKey),
     body: JSON.stringify(report),
   });
+  if (!response.ok) {
+    throw new Error(`The teleport backend refused the return report: ${response.status}`);
+  }
 };
 
 export const teleportStatusUrls = () => ({
