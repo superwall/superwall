@@ -262,3 +262,33 @@ export const createTeleportScreen = (options: TeleportScreenOptions): TeleportSc
     },
   };
 };
+
+export type ReturnDim = {
+  readonly root: HTMLElement;
+  remove(): void;
+};
+
+export const createReturnDim = (): ReturnDim => {
+  ensureStyle();
+  const root = element("div", "sw-teleport-dim");
+  root.setAttribute("aria-hidden", "true");
+  root.dataset.state = "closed";
+  document.body.append(root);
+  void root.offsetWidth;
+  root.dataset.state = "open";
+
+  let removed = false;
+  return {
+    root,
+    remove: () => {
+      if (removed) return;
+      removed = true;
+      root.dataset.state = "closing";
+      const detach = () => root.remove();
+      root.addEventListener("transitionend", (event) => event.target === root && detach(), {
+        once: true,
+      });
+      setTimeout(detach, EXIT_MS + 50);
+    },
+  };
+};

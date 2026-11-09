@@ -4,7 +4,9 @@ import { isLoading, startLoading, subscribeLoading } from "../../../src/checkout
 import { checkoutUrlFor, TELEPORT_TTL_MS } from "../../../src/checkout/teleport/app";
 import { teleportFor } from "../../../src/checkout/teleport/flow";
 import {
+  ANSWER_WAIT_MS,
   APP_OPEN_WAIT_MS,
+  PROMPT_WAIT_MS,
   openApp,
   pageNavigation,
   restoreTeleportQuery,
@@ -188,7 +190,7 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
   Reflect.deleteProperty(window, "__SW_TELEPORT__");
   Reflect.deleteProperty(window, "app");
-  document.querySelectorAll(".sw-teleport").forEach((node) => node.remove());
+  document.querySelectorAll(".sw-teleport, .sw-teleport-dim").forEach((node) => node.remove());
 });
 
 describe("whether a paywall can teleport", () => {
@@ -1381,6 +1383,163 @@ describe("the web half of a teleport", () => {
       shared: false,
     });
     expect(go.mock.calls).toEqual([["myapp://x"], ["https://a.superwall.link/x"]]);
+  });
+
+  it("dims while iOS asks, lifts the dim on Cancel, and resolves cancelled", async () => {
+    boot({ appLinkUrl: undefined });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    let result: string | undefined;
+    void teleportPage(fakeSession().session)
+      .returnToApp("closed")
+      .then((value) => (result = value));
+    const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
+    expect(dim?.dataset.state).toBe("open");
+    expect(dim?.getAttribute("aria-hidden")).toBe("true");
+    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=closed");
+
+    window.dispatchEvent(new Event("blur"));
+    await settle(PROMPT_WAIT_MS * 4);
+    expect(dim?.dataset.state).toBe("open");
+    expect(result).toBeUndefined();
+
+    window.dispatchEvent(new Event("focus"));
+    expect(dim?.dataset.state).toBe("closing");
+    await settle(ANSWER_WAIT_MS - 1);
+    expect(result).toBeUndefined();
+    await settle(1);
+    expect(result).toBe("cancelled");
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+  });
+
+  it("lifts the dim on Open and resolves opened once the app comes up", async () => {
+    boot({ appLinkUrl: undefined });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const result = teleportPage(fakeSession().session).returnToApp("closed");
+    const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
+    window.dispatchEvent(new Event("blur"));
+    window.dispatchEvent(new Event("focus"));
+    expect(dim?.dataset.state).toBe("closing");
+    await settle(ANSWER_WAIT_MS / 2);
+    setVisibility("hidden");
+    await expect(result).resolves.toBe("opened");
+  });
+
+  it("lifts the dim and resolves no_app when no prompt comes up", async () => {
+    boot({ appLinkUrl: undefined });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    let result: string | undefined;
+    void teleportPage(fakeSession().session)
+      .returnToApp()
+      .then((value) => (result = value));
+    await settle(PROMPT_WAIT_MS - 1);
+    expect(result).toBeUndefined();
+    await settle(1);
+    expect(result).toBe("no_app");
+    const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
+    expect(dim?.dataset.state).toBe("closing");
+    dim?.dispatchEvent(new Event("transitionend"));
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+  });
+
+  it("resolves opened when the scheme opens the app with no prompt", async () => {
+    boot({ appLinkUrl: undefined });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const result = teleportPage(fakeSession().session).returnToApp();
+    window.dispatchEvent(new Event("pagehide"));
+    await expect(result).resolves.toBe("opened");
+    await settle(PROMPT_WAIT_MS + ANSWER_WAIT_MS);
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+  });
+
+  it("reads only the window's own focus, and only the first answer to its prompt", async () => {
+    boot({ appLinkUrl: undefined });
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    let result: string | undefined;
+    void teleportPage(fakeSession().session)
+      .returnToApp()
+      .then((value) => (result = value));
+    const dim = document.querySelector<HTMLElement>(".sw-teleport-dim");
+    const field = document.body.appendChild(document.createElement("input"));
+    window.dispatchEvent(new Event("focus"));
+    field.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
+    await settle(PROMPT_WAIT_MS / 2);
+    window.dispatchEvent(new Event("blur"));
+    window.dispatchEvent(new Event("blur"));
+    field.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+    expect(dim?.dataset.state).toBe("open");
+    window.dispatchEvent(new Event("focus"));
+    await settle(ANSWER_WAIT_MS - 10);
+    window.dispatchEvent(new Event("focus"));
+    setVisibility("hidden");
+    setVisibility("visible");
+    await settle(10);
+    expect(result).toBe("opened");
+    field.remove();
+  });
+
+  it("opens through the universal link with no dim, and dims only for the scheme after it", async () => {
+    boot();
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const opened = teleportPage(fakeSession().session).returnToApp("closed");
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+    setVisibility("hidden");
+    await settle(APP_OPEN_WAIT_MS);
+    await expect(opened).resolves.toBe("opened");
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+    expect(go).toHaveBeenCalledTimes(1);
+
+    setVisibility("visible");
+    const cancelled = teleportPage(fakeSession().session).returnToApp("closed");
+    await settle(APP_OPEN_WAIT_MS);
+    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=closed");
+    expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
+    window.dispatchEvent(new Event("blur"));
+    window.dispatchEvent(new Event("focus"));
+    await settle(ANSWER_WAIT_MS);
+    await expect(cancelled).resolves.toBe("cancelled");
+  });
+
+  it("resolves no_app for a universal link that doesn't open without a scheme, a page without a link, or no teleport", async () => {
+    vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    boot({ returnUrl: undefined });
+    const unopened = teleportPage(fakeSession().session).returnToApp();
+    await settle(APP_OPEN_WAIT_MS);
+    await expect(unopened).resolves.toBe("no_app");
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+    boot({ returnUrl: undefined, appLinkUrl: undefined });
+    await expect(teleportPage(fakeSession().session).returnToApp()).resolves.toBe("no_app");
+    await expect(teleportPage(fakeSession({ teleport: null }).session).returnToApp()).resolves.toBe(
+      "no_app",
+    );
+  });
+
+  it("dims when Return to App is tapped on the confirmation screen and its link is the scheme", async () => {
+    boot({ appLinkUrl: undefined });
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession().session).completePurchase("ctx");
+    const back = document.querySelector<HTMLAnchorElement>("a.sw-teleport-primary");
+    expect(back?.getAttribute("href")).toBe("myapp://superwall/return?reason=purchased");
+    back?.addEventListener("click", (event) => event.preventDefault());
+    back?.click();
+    expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
+    expect(go).not.toHaveBeenCalled();
+    await settle(PROMPT_WAIT_MS);
+    expect(document.querySelector(".sw-teleport-dim")?.getAttribute("data-state")).toBe("closing");
+  });
+
+  it("falls back to the scheme a second after Return to App follows the universal link", async () => {
+    boot();
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession().session).completePurchase("ctx");
+    const back = document.querySelector<HTMLAnchorElement>("a.sw-teleport-primary");
+    back?.addEventListener("click", (event) => event.preventDefault());
+    back?.click();
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+    await settle(APP_OPEN_WAIT_MS);
+    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
+    expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
   });
 
   it("navigates the page itself", () => {

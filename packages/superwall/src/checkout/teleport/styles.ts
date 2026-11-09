@@ -311,7 +311,23 @@ export const TELEPORT_SCREEN_CSS = `
   from { opacity: 1; stroke-dasharray: 0 1; stroke-dashoffset: -0.5; }
   to { opacity: 1; stroke-dasharray: 1 0; stroke-dashoffset: 0; }
 }
+.sw-teleport-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.sw-teleport-dim[data-state="open"] {
+  opacity: 1;
+}
+.sw-teleport-dim[data-state="closing"] {
+  pointer-events: none;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
 @media (prefers-reduced-motion: reduce) {
+  .sw-teleport-dim { transition: none; }
   .sw-teleport-content { transform: none; }
   .sw-teleport-arc { animation: none; }
   .sw-teleport-orbit { animation-duration: 3s; }

@@ -5,11 +5,12 @@ import { startLoading, stopLoading } from "../loading";
 import { completeTeleportCheckout, readTeleportQuery, readTeleportStatus } from "./api";
 import { readTeleportBoot, type TeleportBoot } from "./boot";
 import { teleportCopyFor } from "./copy";
-import { createTeleportScreen, poweredByHref } from "./screen";
+import { createReturnDim, createTeleportScreen, poweredByHref } from "./screen";
 import {
   createStatusStore,
   withTimeout,
   type ReturnReason,
+  type ReturnResult,
   type TeleportPage,
   type TeleportSession,
 } from "./teleporter";
@@ -19,6 +20,8 @@ const PAGE_COMPLETE_WAIT_MS = 8_000;
 const PAGE_TAP_CHECK_MS = 1_500;
 const PAGE_TAP_LOADER_DELAY_MS = 200;
 export const APP_OPEN_WAIT_MS = 1_000;
+export const PROMPT_WAIT_MS = 500;
+export const ANSWER_WAIT_MS = 3_000;
 
 type QueryWriter = {
   get(key: string): string | null;
@@ -57,33 +60,84 @@ export const pageNavigation = {
   },
 };
 
-const fallBackToScheme = (boot: TeleportBoot, reason?: ReturnReason): void => {
-  const scheme = boot.returnUrl;
-  if (scheme === undefined || (boot.appLinkUrl ?? scheme) === scheme) return;
-  let opened = false;
-  const leave = () => {
-    if (document.visibilityState === "hidden") opened = true;
-  };
-  const hide = () => {
-    opened = true;
-  };
-  document.addEventListener("visibilitychange", leave);
-  window.addEventListener("pagehide", hide);
-  setTimeout(() => {
-    document.removeEventListener("visibilitychange", leave);
-    window.removeEventListener("pagehide", hide);
-    if (!opened && document.visibilityState === "visible") {
-      pageNavigation.assign(withReason(scheme, reason));
-    }
-  }, APP_OPEN_WAIT_MS);
-};
+const watchPrompt = (assign: () => void): Promise<ReturnResult> =>
+  new Promise((resolve) => {
+    const dim = createReturnDim();
+    let prompted = false;
+    let answered = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const finish = (result: ReturnResult) => {
+      clearTimeout(timer);
+      window.removeEventListener("blur", blur);
+      window.removeEventListener("focus", focus);
+      window.removeEventListener("pagehide", hide);
+      document.removeEventListener("visibilitychange", leave);
+      dim.remove();
+      resolve(result);
+    };
+    const blur = (event: Event) => {
+      if (event.target instanceof Node || prompted) return;
+      prompted = true;
+      clearTimeout(timer);
+    };
+    const focus = (event: Event) => {
+      if (event.target instanceof Node || !prompted || answered) return;
+      answered = true;
+      dim.remove();
+      timer = setTimeout(() => finish("cancelled"), ANSWER_WAIT_MS);
+    };
+    const hide = () => finish("opened");
+    const leave = () => {
+      if (document.visibilityState === "hidden") finish("opened");
+    };
+    window.addEventListener("blur", blur);
+    window.addEventListener("focus", focus);
+    window.addEventListener("pagehide", hide);
+    document.addEventListener("visibilitychange", leave);
+    timer = setTimeout(() => finish("no_app"), PROMPT_WAIT_MS);
+    assign();
+  });
 
-export const openApp = (boot: TeleportBoot, reason?: ReturnReason): boolean => {
-  const link = boot.appLinkUrl ?? boot.returnUrl;
-  if (link === undefined) return false;
-  pageNavigation.assign(withReason(link, reason));
-  fallBackToScheme(boot, reason);
-  return true;
+const assignScheme = (scheme: string): Promise<ReturnResult> =>
+  watchPrompt(() => pageNavigation.assign(scheme));
+
+const universalLink = (boot: TeleportBoot): string | undefined =>
+  boot.appLinkUrl === boot.returnUrl ? undefined : boot.appLinkUrl;
+
+const fallBackToScheme = (boot: TeleportBoot, reason?: ReturnReason): Promise<ReturnResult> =>
+  new Promise((resolve) => {
+    let opened = false;
+    const leave = () => {
+      if (document.visibilityState === "hidden") opened = true;
+    };
+    const hide = () => {
+      opened = true;
+    };
+    document.addEventListener("visibilitychange", leave);
+    window.addEventListener("pagehide", hide);
+    setTimeout(() => {
+      document.removeEventListener("visibilitychange", leave);
+      window.removeEventListener("pagehide", hide);
+      if (opened || document.visibilityState !== "visible") resolve("opened");
+      else if (boot.returnUrl === undefined) resolve("no_app");
+      else resolve(assignScheme(withReason(boot.returnUrl, reason)));
+    }, APP_OPEN_WAIT_MS);
+  });
+
+const followTappedLink = (boot: TeleportBoot, reason: ReturnReason): Promise<ReturnResult> =>
+  universalLink(boot) === undefined ? watchPrompt(() => {}) : fallBackToScheme(boot, reason);
+
+export const openApp = (
+  boot: TeleportBoot,
+  reason?: ReturnReason,
+): Promise<ReturnResult> | undefined => {
+  const link = universalLink(boot);
+  if (link !== undefined) {
+    pageNavigation.assign(withReason(link, reason));
+    return fallBackToScheme(boot, reason);
+  }
+  if (boot.returnUrl === undefined) return undefined;
+  return assignScheme(withReason(boot.returnUrl, reason));
 };
 
 export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot): TeleportPage => {
@@ -123,7 +177,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
                 label: copy.success.action,
                 kind: "primary",
                 href: returnUrl,
-                onClick: () => fallBackToScheme(boot, "purchased"),
+                onClick: () => void followTappedLink(boot, "purchased"),
               },
             ],
     });
@@ -140,7 +194,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
   };
 
   const returnAfterPurchase = (): boolean =>
-    settings()?.completion === "direct" && openApp(boot, "purchased");
+    settings()?.completion === "direct" && openApp(boot, "purchased") !== undefined;
 
   const checkSettled = (atBoot = false): Promise<boolean> => {
     if (settled) return Promise.resolve(true);
@@ -242,9 +296,9 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
       tapped = next;
       store.setStatus({ status: "arrived", productReference: next });
     },
-    returnToApp: (reason) => {
-      if (settings() === undefined) return;
-      openApp(boot, reason);
+    returnToApp: async (reason) => {
+      if (settings() === undefined) return "no_app";
+      return (await openApp(boot, reason)) ?? "no_app";
     },
     attach: () => {
       const follow = () => teleporter.followFragment();

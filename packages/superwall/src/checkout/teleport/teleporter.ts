@@ -29,6 +29,8 @@ export type TeleportRequest = {
 
 export type ReturnReason = "purchased" | "closed";
 
+export type ReturnResult = "opened" | "cancelled" | "no_app";
+
 type TeleportBase = {
   getStatus(): TeleportStatus;
   subscribe(listener: () => void): () => void;
@@ -65,7 +67,7 @@ export type TeleportPage = TeleportBase & {
   watchPresentation(): () => void;
   completePurchase(checkoutContextId: string): Promise<void>;
   followFragment(): void;
-  returnToApp(reason?: ReturnReason): void;
+  returnToApp(reason?: ReturnReason): Promise<ReturnResult>;
 };
 
 export type Teleporter = AppTeleport | TeleportPage;
