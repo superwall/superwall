@@ -1243,6 +1243,14 @@ describe("which route a teleport opens", () => {
 describe("the web half of a teleport", () => {
   beforeEach(() => {
     api({});
+    for (const [target, key, value] of [
+      [window, "innerWidth", 402],
+      [window, "innerHeight", 874],
+      [window.screen, "width", 402],
+      [window.screen, "height", 874],
+    ] as const) {
+      Object.defineProperty(target, key, { configurable: true, value });
+    }
   });
 
   it("arrives with the product tapped in the app, binds the purchase, then completes", async () => {
@@ -1565,7 +1573,7 @@ describe("the web half of a teleport", () => {
     expect(hint?.dataset.state).toBe("open");
     expect(hint?.dir).toBe("ltr");
     expect(hint?.querySelector("svg.sw-teleport-dim-arrow")).not.toBeNull();
-    expect(hint?.textContent).toBe("Tap to go back to the app");
+    expect(hint?.textContent).toBe("Tap to return to the app");
     window.dispatchEvent(new Event("focus"));
     expect(dim?.dataset.state).toBe("closing");
     expect(hint?.parentElement).toBe(dim);
@@ -1601,7 +1609,7 @@ describe("the web half of a teleport", () => {
     await settle(APP_OPEN_WAIT_MS);
     window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport-dim-hint")?.textContent).toBe(
-      "Tap to go back to the app and redeem your purchase",
+      "Tap to unlock your purchase in the app",
     );
   });
 
@@ -1617,7 +1625,7 @@ describe("the web half of a teleport", () => {
     back?.click();
     window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport-dim-hint")?.textContent).toBe(
-      "Tippe, um zur App zurückzukehren und deinen Kauf einzulösen",
+      "Tippe, um deinen Kauf in der App freizuschalten",
     );
   });
 

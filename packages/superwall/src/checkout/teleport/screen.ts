@@ -274,10 +274,12 @@ export type PromptView = {
   language: string;
   innerWidth: number;
   innerHeight: number;
+  screenWidth: number;
   screenHeight: number;
 };
 
 const OPEN_CENTER_INSET = 61.5;
+const WIDEST_PHONE = 500;
 const CLASSIC_OPEN_BOTTOM_BELOW_CENTER = 38.5;
 const COMPACT_ALERT_OPEN_BOTTOM_BELOW_CENTER = 35.3;
 const FIRST_ROOMY_ALERT_SAFARI = 18;
@@ -302,7 +304,8 @@ const safariMajor = (userAgent: string): number | undefined => {
 
 export const openButtonAnchor = (
   view: PromptView,
-): { x: number; y: number; side: "ltr" | "rtl" } => {
+): { x: number; y: number; side: "ltr" | "rtl" } | undefined => {
+  if (view.screenWidth > WIDEST_PHONE || view.innerWidth > view.innerHeight) return undefined;
   const language = view.language.toLowerCase().split("-")[0] ?? "";
   const side = RTL_SYSTEM_LANGUAGES.has(language) ? "rtl" : "ltr";
   const x = side === "rtl" ? OPEN_CENTER_INSET : view.innerWidth - OPEN_CENTER_INSET;
@@ -326,6 +329,7 @@ const currentView = (): PromptView => ({
   language: navigator.language,
   innerWidth: window.innerWidth,
   innerHeight: window.innerHeight,
+  screenWidth: window.screen.width,
   screenHeight: window.screen.height,
 });
 
@@ -414,10 +418,11 @@ export const createReturnDim = (): ReturnDim => {
     root,
     showHint: (caption, dir) => {
       if (removed || root.querySelector(".sw-teleport-dim-hint")) return;
+      const anchor = openButtonAnchor(currentView());
+      if (anchor === undefined) return;
       const hint = element("div", "sw-teleport-dim-hint");
       hint.dir = dir;
       hint.dataset.state = "closed";
-      const anchor = openButtonAnchor(currentView());
       const layout = hintLayout(anchor, window.innerWidth);
       hint.dataset.side = anchor.side;
       const text = element("p", "sw-teleport-dim-caption", caption);

@@ -340,6 +340,9 @@ export const TELEPORT_SCREEN_CSS = `
   opacity: 1;
   transform: none;
 }
+.sw-teleport-dim .sw-teleport-dim-arrow {
+  color: #fff;
+}
 .sw-teleport-dim-arrow {
   position: absolute;
   inset: 0;
@@ -347,9 +350,10 @@ export const TELEPORT_SCREEN_CSS = `
   height: 100%;
   overflow: visible;
 }
-.sw-teleport-dim-caption {
+.sw-teleport-dim .sw-teleport-dim-caption {
   position: absolute;
   margin: 0;
+  color: #fff;
   transform: translateY(-50%);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Helvetica Neue", sans-serif;
   font-size: 17px;

@@ -25,6 +25,13 @@ const move = (target: EventTarget | null | undefined) => {
   return event.defaultPrevented;
 };
 
+const phoneWindow = (width: number, height: number) => {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
+  Object.defineProperty(window.screen, "width", { configurable: true, value: width });
+  Object.defineProperty(window.screen, "height", { configurable: true, value: height });
+};
+
 afterEach(() => {
   vi.useRealTimers();
   document.querySelectorAll(".sw-teleport, .sw-teleport-dim").forEach((node) => node.remove());
@@ -80,19 +87,22 @@ describe("the teleport screen, as paywall.js draws it", () => {
 
   it("shows one hint on the dim, mirrored by its direction, and none once the dim is leaving", () => {
     const dim = createReturnDim();
-    dim.showHint("Tap to go back to the app", "rtl");
+    phoneWindow(402, 874);
+    dim.showHint("Tap to return to the app", "rtl");
     dim.showHint("Again", "ltr");
     const hints = dim.root.querySelectorAll<HTMLElement>(".sw-teleport-dim-hint");
     expect(hints).toHaveLength(1);
     expect(hints[0]?.dir).toBe("rtl");
     expect(hints[0]?.querySelector(".sw-teleport-dim-caption")?.textContent).toBe(
-      "Tap to go back to the app",
+      "Tap to return to the app",
     );
 
     expect(hints[0]?.dataset.side).toBe("ltr");
     const arrow = hints[0]?.querySelectorAll(".sw-teleport-dim-arrow path");
     expect(arrow).toHaveLength(2);
-    expect(arrow?.[0]?.getAttribute("d")).toMatch(new RegExp(` ${window.innerWidth - 61.5} [\\d.]+$`));
+    expect(arrow?.[0]?.getAttribute("d")).toMatch(
+      new RegExp(` ${window.innerWidth - 61.5} [\\d.]+$`),
+    );
 
     const leaving = createReturnDim();
     leaving.remove();
@@ -103,51 +113,93 @@ describe("the teleport screen, as paywall.js draws it", () => {
   it.each([
     [
       "iOS 27.2, page under the bars",
-      { userAgent: safari("27.2"), innerWidth: 402, innerHeight: 874, screenHeight: 874 },
+      {
+        userAgent: safari("27.2"),
+        innerWidth: 402,
+        innerHeight: 874,
+        screenWidth: 402,
+        screenHeight: 874,
+      },
       340.5,
       457.7,
     ],
     [
       "iOS 26.5, page under the bars",
-      { userAgent: safari("26.5"), innerWidth: 440, innerHeight: 956, screenHeight: 956 },
+      {
+        userAgent: safari("26.5"),
+        innerWidth: 440,
+        innerHeight: 956,
+        screenWidth: 440,
+        screenHeight: 956,
+      },
       378.5,
       498.7,
     ],
     [
       "iOS 26.5, page between the bars",
-      { userAgent: safari("26.5"), innerWidth: 402, innerHeight: 714, screenHeight: 874 },
+      {
+        userAgent: safari("26.5"),
+        innerWidth: 402,
+        innerHeight: 714,
+        screenWidth: 402,
+        screenHeight: 874,
+      },
       340.5,
       395.7,
     ],
     [
       "iOS 18.6",
-      { userAgent: safari("18.6"), innerWidth: 402, innerHeight: 678, screenHeight: 874 },
+      {
+        userAgent: safari("18.6"),
+        innerWidth: 402,
+        innerHeight: 678,
+        screenWidth: 402,
+        screenHeight: 874,
+      },
       340.5,
       377.5,
     ],
     [
       "iOS 18.6 on a 375 pt screen",
-      { userAgent: safari("18.6"), innerWidth: 375, innerHeight: 547, screenHeight: 667 },
+      {
+        userAgent: safari("18.6"),
+        innerWidth: 375,
+        innerHeight: 547,
+        screenWidth: 375,
+        screenHeight: 667,
+      },
       313.5,
       312,
     ],
     [
       "iOS 17.5 on a 375 pt screen",
-      { userAgent: safari("17.5"), innerWidth: 375, innerHeight: 547, screenHeight: 667 },
+      {
+        userAgent: safari("17.5"),
+        innerWidth: 375,
+        innerHeight: 547,
+        screenWidth: 375,
+        screenHeight: 667,
+      },
       313.5,
       308.8,
     ],
     [
       "a browser that isn't Safari",
-      { userAgent: "CriOS/140", innerWidth: 402, innerHeight: 874, screenHeight: 874 },
+      {
+        userAgent: "CriOS/140",
+        innerWidth: 402,
+        innerHeight: 874,
+        screenWidth: 402,
+        screenHeight: 874,
+      },
       340.5,
       457.7,
     ],
   ])("puts Open's bottom centre where %s draws it", (_, view, x, y) => {
     const anchor = openButtonAnchor({ language: "en-US", ...view });
-    expect(anchor.x).toBeCloseTo(x, 1);
-    expect(anchor.y).toBeCloseTo(y, 1);
-    expect(anchor.side).toBe("ltr");
+    expect(anchor?.x).toBeCloseTo(x, 1);
+    expect(anchor?.y).toBeCloseTo(y, 1);
+    expect(anchor?.side).toBe("ltr");
   });
 
   it("leaves the same gap from the alert to the arrow as from the arrow's tail to the caption", () => {
@@ -178,15 +230,44 @@ describe("the teleport screen, as paywall.js draws it", () => {
     expect(mirrored).toBe("M113.5 539.2Q61.5 539.2 61.5 483.2");
   });
 
+  it("leaves the arrow out on an iPad or a phone held sideways, where nobody measured the alert", () => {
+    const phone = {
+      userAgent: safari("27.2"),
+      language: "en-US",
+      innerWidth: 402,
+      innerHeight: 874,
+      screenWidth: 402,
+      screenHeight: 874,
+    };
+    expect(openButtonAnchor(phone)).toBeDefined();
+    expect(
+      openButtonAnchor({
+        ...phone,
+        innerWidth: 1024,
+        innerHeight: 1292,
+        screenWidth: 1024,
+        screenHeight: 1366,
+      }),
+    ).toBeUndefined();
+    expect(openButtonAnchor({ ...phone, innerWidth: 874, innerHeight: 402 })).toBeUndefined();
+
+    phoneWindow(874, 402);
+    const sideways = createReturnDim();
+    sideways.showHint("Tap to return to the app", "ltr");
+    expect(sideways.root.querySelector(".sw-teleport-dim-hint")).toBeNull();
+    expect(sideways.root.isConnected).toBe(true);
+  });
+
   it("puts Open on the left when the phone, not the paywall, reads right to left", () => {
     const view = {
       userAgent: safari("27.2"),
       innerWidth: 402,
       innerHeight: 874,
+      screenWidth: 402,
       screenHeight: 874,
     };
     expect(openButtonAnchor({ ...view, language: "ar" })).toMatchObject({ x: 61.5, side: "rtl" });
-    expect(openButtonAnchor({ ...view, language: "he-IL" }).side).toBe("rtl");
+    expect(openButtonAnchor({ ...view, language: "he-IL" })?.side).toBe("rtl");
     expect(openButtonAnchor({ ...view, language: "de-DE" })).toMatchObject({
       x: 340.5,
       side: "ltr",

@@ -2,11 +2,7 @@ import { teleportOf } from "@superwall/runtime";
 import { asString } from "../api/decode";
 import { checkoutEvents } from "../events";
 import { startLoading, stopLoading } from "../loading";
-import {
-  completeTeleportCheckout,
-  readTeleportQuery,
-  readTeleportStatus,
-} from "./api";
+import { completeTeleportCheckout, readTeleportQuery, readTeleportStatus } from "./api";
 import { readTeleportBoot, type TeleportBoot } from "./boot";
 import { teleportCopyFor } from "./copy";
 import { createReturnDim, createTeleportScreen, poweredByHref } from "./screen";
