@@ -315,7 +315,7 @@ export const TELEPORT_SCREEN_CSS = `
   position: fixed;
   inset: 0;
   z-index: 2147483647;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.75);
   opacity: 0;
   transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
 }
