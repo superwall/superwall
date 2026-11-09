@@ -9,7 +9,6 @@ import { createReturnDim, createTeleportScreen, poweredByHref } from "./screen";
 import {
   createStatusStore,
   withTimeout,
-  type ReturnAttempt,
   type ReturnReason,
   type ReturnResult,
   type TeleportPage,
@@ -63,7 +62,7 @@ export const pageNavigation = {
 
 export type ReturnHint = { caption: string; dir: "ltr" | "rtl" };
 
-const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnAttempt> =>
+const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnResult> =>
   new Promise((resolve) => {
     const dim = createReturnDim();
     let prompted = false;
@@ -76,7 +75,7 @@ const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnAttem
       window.removeEventListener("pagehide", hide);
       document.removeEventListener("visibilitychange", leave);
       dim.remove();
-      resolve({ result, via: "scheme", prompt: prompted });
+      resolve(result);
     };
     const blur = (event: Event) => {
       if (event.target instanceof Node || prompted) return;
@@ -102,7 +101,7 @@ const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnAttem
     assign();
   });
 
-const assignScheme = (scheme: string, hint?: ReturnHint): Promise<ReturnAttempt> =>
+const assignScheme = (scheme: string, hint?: ReturnHint): Promise<ReturnResult> =>
   watchPrompt(() => pageNavigation.assign(scheme), hint);
 
 const universalLink = (boot: TeleportBoot): string | undefined =>
@@ -112,7 +111,7 @@ const fallBackToScheme = (
   boot: TeleportBoot,
   reason?: ReturnReason,
   hint?: ReturnHint,
-): Promise<ReturnAttempt> =>
+): Promise<ReturnResult> =>
   new Promise((resolve) => {
     let opened = false;
     const leave = () => {
@@ -127,9 +126,9 @@ const fallBackToScheme = (
       document.removeEventListener("visibilitychange", leave);
       window.removeEventListener("pagehide", hide);
       if (opened || document.visibilityState !== "visible") {
-        resolve({ result: "opened", via: "universal", prompt: false });
+        resolve("opened");
       } else if (boot.returnUrl === undefined) {
-        resolve({ result: "no_app", via: "universal", prompt: false });
+        resolve("no_app");
       } else resolve(assignScheme(withReason(boot.returnUrl, reason), hint));
     }, APP_OPEN_WAIT_MS);
   });
@@ -138,7 +137,7 @@ const followTappedLink = (
   boot: TeleportBoot,
   reason: ReturnReason,
   hint: ReturnHint,
-): Promise<ReturnAttempt> =>
+): Promise<ReturnResult> =>
   universalLink(boot) === undefined
     ? watchPrompt(() => {}, hint)
     : fallBackToScheme(boot, reason, hint);
@@ -147,7 +146,7 @@ export const openApp = (
   boot: TeleportBoot,
   reason?: ReturnReason,
   hint?: ReturnHint,
-): Promise<ReturnAttempt> | undefined => {
+): Promise<ReturnResult> | undefined => {
   const link = universalLink(boot);
   if (link !== undefined) {
     pageNavigation.assign(withReason(link, reason));
@@ -178,29 +177,14 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     return { caption: copy.returning[reason], dir: copy.dir ?? "ltr" };
   };
 
-  const report = (reason: ReturnReason, attempt: ReturnAttempt) => {
-    paywall.postMessage({
-      event_name: "teleport_return_result",
-      teleport_id: boot.id,
-      reason,
-      result: attempt.result,
-      via: attempt.via,
-      prompt: attempt.prompt,
-    });
-  };
-
-  const track = (
-    reason: ReturnReason,
-    attempt: Promise<ReturnAttempt> | undefined,
-  ): Promise<ReturnResult> => {
+  const track = (attempt: Promise<ReturnResult> | undefined): Promise<ReturnResult> => {
     if (attempt === undefined) return Promise.resolve("no_app");
     returns += 1;
     if (returns === 1) store.notify();
-    return attempt.then((done) => {
+    return attempt.then((result) => {
       returns -= 1;
       if (returns === 0) store.notify();
-      report(reason, done);
-      return done.result;
+      return result;
     });
   };
 
@@ -229,10 +213,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
                 kind: "primary",
                 href: returnUrl,
                 onClick: () =>
-                  void track(
-                    "purchased",
-                    followTappedLink(boot, "purchased", hintFor("purchased")),
-                  ),
+                  void track(followTappedLink(boot, "purchased", hintFor("purchased"))),
               },
             ],
     });
@@ -252,7 +233,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     if (settings()?.completion !== "direct") return false;
     const attempt = openApp(boot, "purchased", hintFor("purchased"));
     if (attempt === undefined) return false;
-    void track("purchased", attempt);
+    void track(attempt);
     return true;
   };
 
@@ -358,7 +339,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     },
     returnToApp: async (reason) => {
       if (settings() === undefined) return "no_app";
-      return track(reason ?? "closed", openApp(boot, reason, hintFor(reason)));
+      return track(openApp(boot, reason, hintFor(reason)));
     },
     returning: () => returns > 0,
     attach: () => {

@@ -316,7 +316,7 @@ works as usual, and going back from it (or `close()`) returns to the app
 through its universal link, falling back to its URL scheme. While iOS asks
 "Open in App?", the page dims with an arrow at Open; `returnToApp()` and the
 web half's `close()` resolve `"opened"`, `"cancelled"` or `"no_app"`, and
-each return is reported to Superwall. Options:
+`useTeleport().returning` is true while one is in flight. Options:
 `route`, `overlay` (the teleport screen), `fallbacks` (a store product the
 screen offers instead), `completion` (`"confirmation"` or `"direct"`),
 `introductoryOfferEligibility`.

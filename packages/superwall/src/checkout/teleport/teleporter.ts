@@ -31,12 +31,6 @@ export type ReturnReason = "purchased" | "closed";
 
 export type ReturnResult = "opened" | "cancelled" | "no_app";
 
-export type ReturnAttempt = {
-  result: ReturnResult;
-  via: "universal" | "scheme";
-  prompt: boolean;
-};
-
 type TeleportBase = {
   getStatus(): TeleportStatus;
   subscribe(listener: () => void): () => void;

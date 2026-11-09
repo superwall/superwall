@@ -191,15 +191,6 @@ const teleportWatchStart = z.object({
 
 const teleportWatchEnd = z.object({ event_name: z.literal("teleport_watch_end") });
 
-const teleportReturnResult = z.object({
-  event_name: z.literal("teleport_return_result"),
-  teleport_id: z.string(),
-  reason: z.enum(["purchased", "closed"]),
-  result: z.enum(["opened", "cancelled", "no_app"]),
-  via: z.enum(["universal", "scheme"]),
-  prompt: z.boolean(),
-});
-
 const postCheckoutComplete = z.object({
   event_name: z.literal("post_checkout_complete"),
   checkout_context_id: z.string(),
@@ -271,7 +262,6 @@ export const OutgoingMessageSchema = z.union([
   pageView,
   teleportWatchStart,
   teleportWatchEnd,
-  teleportReturnResult,
 ]);
 
 export type TOutgoingMessage = z.infer<typeof OutgoingMessageSchema>;

@@ -137,23 +137,6 @@ describe("OutgoingMessageSchema", () => {
     rejects({ event_name: "teleport_watch_start", teleport_id: "v1:abc" });
     accepts({ event_name: "teleport_watch_end" });
     accepts({
-      event_name: "teleport_return_result",
-      teleport_id: "v1:abc",
-      reason: "purchased",
-      result: "cancelled",
-      via: "scheme",
-      prompt: true,
-    });
-    rejects({
-      event_name: "teleport_return_result",
-      teleport_id: "v1:abc",
-      reason: "closed",
-      result: "dismissed",
-      via: "scheme",
-      prompt: true,
-    });
-    rejects({ event_name: "teleport_return_result", teleport_id: "v1:abc", result: "opened" });
-    accepts({
       event_name: "stripe_checkout_complete",
       checkout_context_id: "ctx",
       product_identifier: "p",
