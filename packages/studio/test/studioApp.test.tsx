@@ -459,10 +459,10 @@ describe("a product Superwall has no record of", () => {
 
 const openProducts = (name: string) => {
   fireEvent.click(screen.getByRole("button", { name }));
-  return within(document.querySelector("aside") as HTMLElement);
+  return within(screen.getByRole("dialog", { name: "Products" }));
 };
 
-describe("the Products panel", () => {
+describe("the Products popup", () => {
   it("checks while the catalogue is on its way, then shows what each slot sells", async () => {
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
     let answer: ((value: unknown) => void) | undefined;

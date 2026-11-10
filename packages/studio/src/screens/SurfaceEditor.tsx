@@ -2,6 +2,7 @@ import * as React from "react";
 import { hasIntroductoryOffer, type HostDelegate, type HostState } from "@superwall/host";
 import { ActionMenu, type ActionProgress } from "../components/menus/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/menus/CompareMenu";
+import { ProductsMenu } from "../components/menus/ProductsMenu";
 import {
   Canvas,
   useCanvasScale,
@@ -25,7 +26,6 @@ import {
   RotateIcon,
   SlidersIcon,
   SunIcon,
-  CartIcon,
 } from "../components/icons";
 import { Tooltip } from "../components/Tooltip";
 import { SidePanel } from "../components/panels/SidePanel";
@@ -36,7 +36,6 @@ import {
   type VariableGroups,
   type VariableRow,
 } from "../components/panels/VariablesPanel";
-import { ProductsPanel } from "../components/panels/ProductsPanel";
 import {
   browserLayoutFor,
   chromeFor,
@@ -255,11 +254,7 @@ export const SurfaceEditor = ({
   const [theme, setTheme] = React.useState<"light" | "dark">("light");
   const [locale, setLocale] = React.useState<string | undefined>(undefined);
   const [edited, setEdited] = React.useState<VariableOverrides>({});
-  const [panel, setPanel] = React.useState<"variables" | "products" | undefined>(undefined);
-  const shownPanel = React.useRef<"variables" | "products">("variables");
-  if (panel) shownPanel.current = panel;
-  const togglePanel = (next: "variables" | "products") =>
-    setPanel((open) => (open === next ? undefined : next));
+  const [panelOpen, setPanelOpen] = React.useState(false);
   const [compareWith, setCompareWith] = React.useState<CompareTarget | undefined>(() =>
     hasOriginal(surface) && new URLSearchParams(window.location.search).get("compare") === "origin"
       ? { type: "origin" }
@@ -515,15 +510,6 @@ export const SurfaceEditor = ({
   React.useEffect(() => setDismissedProducts(false), [surface]);
   const unverified = samples.unreachable;
   const shippable = missingProducts.length === 0;
-  const slotCount = Object.keys(surface.products ?? {}).length;
-  const productsFlagged = slotCount > 0 && (Boolean(unverified) || missingProducts.length > 0);
-  const productsLabel = productsFlagged
-    ? unverified
-      ? "Products, couldn’t check"
-      : `Products, ${missingProducts.length} missing`
-    : slotCount > 0
-      ? `Products, ${slotCount}`
-      : "Products";
   const overrideCount =
     Object.keys(edited.user ?? {}).length +
     Object.keys(edited.params ?? {}).length +
@@ -683,16 +669,8 @@ export const SurfaceEditor = ({
           </div>
         </Canvas>
 
-        <SidePanel
-          open={panel !== undefined}
-          title={shownPanel.current === "products" ? "Products" : "Variables"}
-          onClose={() => setPanel(undefined)}
-        >
-          {shownPanel.current === "products" ? (
-            <ProductsPanel products={surface.products} samples={samples} pending={samplesPending} />
-          ) : (
-            <VariablesPanel overrides={edited} groups={groups} onChange={setEdited} />
-          )}
+        <SidePanel open={panelOpen} title="Variables" onClose={() => setPanelOpen(false)}>
+          <VariablesPanel overrides={edited} groups={groups} onChange={setEdited} />
         </SidePanel>
       </div>
 
@@ -805,26 +783,12 @@ export const SurfaceEditor = ({
             onSelect={setCompareWith}
           />
         )}
+        <ProductsMenu products={surface.products} samples={samples} pending={samplesPending} />
         <button
           type="button"
           className="sw-btn"
-          aria-expanded={panel === "products"}
-          aria-label={productsLabel}
-          onClick={() => togglePanel("products")}
-        >
-          <CartIcon />
-          Products
-          {productsFlagged ? (
-            <AlertTriangleIcon className="text-warning" />
-          ) : (
-            slotCount > 0 && <span className="text-fg-tertiary tabular-nums">{slotCount}</span>
-          )}
-        </button>
-        <button
-          type="button"
-          className="sw-btn"
-          aria-expanded={panel === "variables"}
-          onClick={() => togglePanel("variables")}
+          aria-expanded={panelOpen}
+          onClick={() => setPanelOpen((open) => !open)}
         >
           <SlidersIcon />
           Variables
