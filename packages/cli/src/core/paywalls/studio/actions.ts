@@ -11,7 +11,8 @@ import { resolveBinding } from "@/core/paywalls/binding/binding";
 import { planTargets, wantedPlatforms, type SurfaceTarget } from "@/core/paywalls/binding/targets";
 import {
   listApplicationCatalogue,
-  listProjectProducts,
+  listProjectCatalogue,
+  productListings,
   projectForApplication,
 } from "@/core/paywalls/products";
 import {
@@ -23,7 +24,11 @@ import {
   type StudioScreenshot,
 } from "@/core/paywalls/project/framework";
 import { readLock } from "@/core/paywalls/project/lock";
-import { appScheme, detectAppTransportSecurity, schemeSearchRoots } from "@/core/paywalls/project/scheme";
+import {
+  appScheme,
+  detectAppTransportSecurity,
+  schemeSearchRoots,
+} from "@/core/paywalls/project/scheme";
 import { requireApi } from "@/core/paywalls/project/session";
 import { collectProjectDeclarations } from "@/core/paywalls/project/types";
 import { warnNotPortable } from "@/core/paywalls/source/portability";
@@ -54,7 +59,9 @@ const resolveScreenshots = (session: PreviewImages): StudioScreenshot[] => {
   const reviewed =
     reviewUrl === undefined
       ? undefined
-      : ([...regular].reverse().find((page) => page.page_index === session.apple_review_image?.page_index) ??
+      : ([...regular]
+          .reverse()
+          .find((page) => page.page_index === session.apple_review_image?.page_index) ??
         regular.at(-1));
   const hosts = new Map<number | undefined, { label: string; overlays: number }>();
   const shots: StudioScreenshot[] = [];
@@ -63,7 +70,10 @@ const resolveScreenshots = (session: PreviewImages): StudioScreenshot[] => {
   for (const page of pages) {
     const url = page.app_store_image?.url ?? (page === reviewed ? reviewUrl : page.url);
     if (page.kind === "overlay") {
-      const host = hosts.get(page.page_index) ?? { label: `Page ${(page.page_index ?? 0) + 1}`, overlays: 0 };
+      const host = hosts.get(page.page_index) ?? {
+        label: `Page ${(page.page_index ?? 0) + 1}`,
+        overlays: 0,
+      };
       host.overlays += 1;
       hosts.set(page.page_index, host);
       const label = page.page_name?.trim() || `${host.label} · Overlay ${host.overlays}`;
@@ -93,7 +103,9 @@ export function createStudioActions(
   let api: SuperwallApi | undefined;
   const ensureApi = async () => (api ??= await requireApi(false));
 
-  const readPreviewImages = async (surface: FrameworkSurface): Promise<PreviewImages | undefined> => {
+  const readPreviewImages = async (
+    surface: FrameworkSurface,
+  ): Promise<PreviewImages | undefined> => {
     const lock = readLock(project.superwallDir);
     const bindings = (surface.kind === "paywall" ? lock.paywalls : lock.funnels)[surface.id];
     const bound = bindings === undefined ? undefined : Object.values(bindings)[0];
@@ -145,11 +157,11 @@ export function createStudioActions(
           return { unreachable: "This project is not bound to an app yet." };
         const query = `?application_id=${encodeURIComponent(applicationId)}`;
         let unreachable: string | undefined;
-        const [device, user, products] = await Promise.all([
+        const [device, user, catalogue] = await Promise.all([
           client.get<Sample>(`/v2/users/device-properties-sample${query}`).catch(() => undefined),
           client.get<Sample>(`/v2/users/properties-sample${query}`).catch(() => undefined),
           projectForApplication(client, applicationId)
-            .then((projectId) => (projectId ? listProjectProducts(client, projectId) : undefined))
+            .then((projectId) => (projectId ? listProjectCatalogue(client, projectId) : undefined))
             .catch((error: unknown) => {
               unreachable = reason(error);
               return undefined;
@@ -158,7 +170,8 @@ export function createStudioActions(
         return {
           device: device?.properties,
           user: user?.properties,
-          products,
+          products: catalogue?.variables,
+          catalog: catalogue && productListings(catalogue),
           live: { device: device?.live === true, user: user?.live === true },
           unreachable,
         };

@@ -1,9 +1,19 @@
 import * as React from "react";
 import { InlineCode } from "../InlineCode";
-import { AlertTriangleIcon, CartIcon, CheckIcon, CopyIcon } from "../icons";
+import {
+  AlertTriangleIcon,
+  AppleIcon,
+  BoxIcon,
+  CartIcon,
+  CheckIcon,
+  CopyIcon,
+  GooglePlayIcon,
+  StripeIcon,
+  type IconComponent,
+} from "../icons";
 import { MenuPopup, useDismiss, usePopupAlign } from "./Menu";
 import { productSummary } from "../../lib/products";
-import type { Samples } from "../../lib/contract";
+import type { ProductListing, ProductStore, Samples } from "../../lib/contract";
 
 type SlotState =
   | { kind: "ok"; variables: Record<string, unknown> }
@@ -18,7 +28,68 @@ const slotState = (identifier: string, samples: Samples, pending: boolean): Slot
   return variables === undefined ? { kind: "missing" } : { kind: "ok", variables };
 };
 
-const CopyButton = ({ value, label }: { value: string; label: string }) => {
+const STORES: Record<ProductStore, { label: string; icon: IconComponent }> = {
+  "app-store": { label: "App Store", icon: AppleIcon },
+  "play-store": { label: "Google Play", icon: GooglePlayIcon },
+  stripe: { label: "Stripe", icon: StripeIcon },
+  custom: { label: "Custom", icon: BoxIcon },
+};
+
+const storesOf = (listing: ProductListing | undefined) =>
+  (listing?.stores ?? []).flatMap((store) => (Object.hasOwn(STORES, store) ? [STORES[store]] : []));
+
+const StoreTile = ({
+  state,
+  listing,
+}: {
+  state: SlotState;
+  listing: ProductListing | undefined;
+}) => {
+  const [store] = storesOf(listing);
+  const Mark = state.kind === "missing" ? AlertTriangleIcon : (store?.icon ?? CartIcon);
+  return (
+    <span
+      className={`flex size-8 shrink-0 items-center justify-center rounded-sm border ${
+        state.kind === "missing"
+          ? "border-destructive/40 text-destructive-foreground"
+          : "border-border bg-muted text-fg-secondary"
+      }`}
+    >
+      <Mark />
+    </span>
+  );
+};
+
+const Price = ({ state }: { state: SlotState }) => {
+  if (state.kind !== "ok") return null;
+  const summary = productSummary(state.variables);
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-0.5">
+      {summary.price ? (
+        <span className="text-sm/5 font-medium tabular-nums">{summary.price}</span>
+      ) : (
+        <span className="text-sm/5 text-fg-tertiary">No price on record</span>
+      )}
+      {summary.trial && <span className="text-xs/4 text-fg-secondary">{summary.trial}</span>}
+    </div>
+  );
+};
+
+const STATUS: Record<Exclude<SlotState["kind"], "ok">, { text: string; tone: string }> = {
+  loading: { text: "Checking…", tone: "text-fg-tertiary" },
+  missing: { text: "Not in Superwall", tone: "text-destructive-foreground" },
+  unchecked: { text: "Couldn’t check", tone: "text-warning-foreground" },
+};
+
+const Identifier = ({
+  value,
+  label,
+  className,
+}: {
+  value: string;
+  label: string;
+  className: string;
+}) => {
   const [copied, setCopied] = React.useState(false);
   React.useEffect(() => {
     if (!copied) return;
@@ -29,8 +100,9 @@ const CopyButton = ({ value, label }: { value: string; label: string }) => {
   return (
     <button
       type="button"
-      className="sw-btn sw-btn--sm sw-btn--icon sw-btn--ghost shrink-0"
+      className={`group/id flex min-w-0 cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-mono hover:text-foreground ${className}`}
       aria-label={copied ? `Copied ${label}` : `Copy ${label}`}
+      title={value}
       onClick={() => {
         navigator.clipboard?.writeText(value).then(
           () => setCopied(true),
@@ -38,70 +110,56 @@ const CopyButton = ({ value, label }: { value: string; label: string }) => {
         );
       }}
     >
-      {copied ? <CheckIcon className="text-success" /> : <CopyIcon />}
+      <span className="truncate">{value}</span>
+      {copied ? (
+        <CheckIcon className="size-3 text-success" />
+      ) : (
+        <CopyIcon className="size-3 opacity-0 group-hover/id:opacity-100 group-focus-visible/id:opacity-100" />
+      )}
     </button>
   );
-};
-
-const Flag = ({ tone, children }: React.PropsWithChildren<{ tone: "destructive" | "warning" }>) => (
-  <span
-    className={`ms-auto flex shrink-0 items-center gap-1 text-xs ${
-      tone === "destructive" ? "text-destructive-foreground" : "text-warning-foreground"
-    }`}
-  >
-    <AlertTriangleIcon className="size-3" />
-    {children}
-  </span>
-);
-
-const detail = (state: SlotState): string | undefined => {
-  if (state.kind === "loading") return "Checking…";
-  if (state.kind === "missing") return "No product with this identifier";
-  if (state.kind === "unchecked") return undefined;
-  const summary = productSummary(state.variables);
-  if (!summary.price) return "No price on record";
-  return summary.trial ? `${summary.price} · ${summary.trial}` : summary.price;
 };
 
 const Slot = ({
   reference,
   identifier,
   state,
+  listing,
 }: {
   reference: string;
   identifier: string;
   state: SlotState;
+  listing: ProductListing | undefined;
 }) => {
-  const line = detail(state);
-  const equivalents = state.kind === "ok" ? productSummary(state.variables).equivalents : [];
+  const stores = storesOf(listing)
+    .map((store) => store.label)
+    .join(" + ");
+  const name = listing?.name && listing.name !== identifier ? listing.name : undefined;
+  const status = state.kind === "ok" ? undefined : STATUS[state.kind];
+  const copy = `${reference} identifier`;
 
   return (
-    <section aria-label={reference} className="flex flex-col gap-1.5">
-      <div className="flex min-h-5 items-center gap-2 px-0.5">
-        <span className="truncate text-sm font-medium">{reference}</span>
-        {state.kind === "missing" && <Flag tone="destructive">Not in Superwall</Flag>}
-        {state.kind === "unchecked" && <Flag tone="warning">Couldn’t check</Flag>}
-      </div>
-      <div
-        className={`flex min-h-11 items-center gap-1 rounded-sm border bg-background py-1.5 ps-2.5 pe-1 ${
-          state.kind === "missing" ? "border-destructive/40" : "border-border"
-        }`}
-      >
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-mono text-xs/5" title={identifier}>
-            {identifier}
+    <section aria-label={reference} className="flex items-center gap-3 px-3 py-2.5">
+      <StoreTile state={state} listing={listing} />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 items-center gap-2 text-sm/5">
+          {name ? (
+            <span className="truncate font-medium">{name}</span>
+          ) : (
+            <Identifier value={identifier} label={copy} className="text-[0.8125rem]" />
+          )}
+          <span className="sw-chip h-4.5 shrink-0 font-mono text-[0.6875rem] font-normal text-fg-secondary">
+            {reference}
           </span>
-          {line && (
-            <span className="truncate text-xs/4 text-fg-secondary tabular-nums">{line}</span>
-          )}
-          {equivalents.length > 0 && (
-            <span className="truncate text-xs/4 text-fg-tertiary tabular-nums">
-              {equivalents.join(" · ")}
-            </span>
-          )}
         </div>
-        <CopyButton value={identifier} label={`${reference} identifier`} />
+        <div className="flex min-w-0 items-center gap-1.5 text-xs/4 text-fg-tertiary">
+          {status && <span className={`shrink-0 ${status.tone}`}>{status.text}</span>}
+          {stores && <span className="shrink-0">{stores}</span>}
+          {stores && name && <span aria-hidden="true">·</span>}
+          {name && <Identifier value={identifier} label={copy} className="text-xs" />}
+        </div>
       </div>
+      <Price state={state} />
     </section>
   );
 };
@@ -157,7 +215,7 @@ export const ProductsMenu = ({
       </button>
 
       {open && (
-        <MenuPopup popupRef={popupRef} anchor={menuRef} side="top" align={align} className="w-80">
+        <MenuPopup popupRef={popupRef} anchor={menuRef} side="top" align={align} className="w-104">
           <div role="dialog" aria-label="Products" className="flex min-h-0 flex-col">
             {slots.length > 0 && !samples.unreachable && !samples.products && !pending && (
               <p
@@ -172,9 +230,13 @@ export const ProductsMenu = ({
                 This paywall sells nothing yet.
               </p>
             ) : (
-              <div className="flex max-h-96 scroll-fade flex-col gap-3 overflow-y-auto p-3">
+              <div className="flex max-h-96 scroll-fade flex-col divide-y divide-border overflow-y-auto">
                 {slots.map((slot) => (
-                  <Slot key={slot.reference} {...slot} />
+                  <Slot
+                    key={slot.reference}
+                    {...slot}
+                    listing={samples.catalog?.[slot.identifier]}
+                  />
                 ))}
               </div>
             )}

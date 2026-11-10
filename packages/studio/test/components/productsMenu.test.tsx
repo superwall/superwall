@@ -14,6 +14,8 @@ const products = { annual: "pro_5999_year", weekly: "pro_499_week" };
 const open = (name: string | RegExp = /^Products/) =>
   fireEvent.click(screen.getByRole("button", { name }));
 
+const slotNamed = (name: string) => within(screen.getByRole("region", { name }));
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -43,8 +45,8 @@ describe("ProductsMenu", () => {
 
     const first = within(slots[0]!);
     expect(first.getByText("pro_5999_year")).toBeTruthy();
-    expect(first.getByText("$59.99 / year · 7-day free trial")).toBeTruthy();
-    expect(first.getByText("$5.00 / month · $1.15 / week")).toBeTruthy();
+    expect(first.getByText("$59.99 / year")).toBeTruthy();
+    expect(first.getByText("7-day free trial")).toBeTruthy();
 
     const second = within(slots[1]!);
     expect(second.getByText("$4.99 / week")).toBeTruthy();
@@ -57,7 +59,6 @@ describe("ProductsMenu", () => {
     open();
     const weekly = within(screen.getByRole("region", { name: "weekly" }));
     expect(weekly.getByText("Not in Superwall")).toBeTruthy();
-    expect(weekly.getByText("No product with this identifier")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Products, 1 missing" })).toBeTruthy();
     expect(
       within(screen.getByRole("region", { name: "annual" })).queryByText("Not in Superwall"),
@@ -71,6 +72,30 @@ describe("ProductsMenu", () => {
     expect(screen.getAllByText("Couldn’t check")).toHaveLength(2);
     expect(screen.queryByText("Not in Superwall")).toBeNull();
     expect(screen.getByRole("button", { name: "Products, couldn’t check" })).toBeTruthy();
+  });
+
+  it("names each product and the store that sells it", () => {
+    render(
+      <ProductsMenu
+        products={{ annual: "pro_5999_year", web: "prod_web", both: "pro_both", gift: "grant" }}
+        samples={{
+          products: { pro_5999_year: annual, prod_web: {}, pro_both: {}, grant: {} },
+          catalog: {
+            pro_5999_year: { name: "Pro Annual", stores: ["app-store"] },
+            prod_web: { name: "prod_web", stores: ["stripe"] },
+            pro_both: { stores: ["play-store", "custom", "paddle" as never] },
+          },
+        }}
+      />,
+    );
+    open();
+
+    expect(slotNamed("annual").getByText("App Store")).toBeTruthy();
+    expect(slotNamed("annual").getByText("Pro Annual")).toBeTruthy();
+    expect(slotNamed("web").getByText("Stripe")).toBeTruthy();
+    expect(slotNamed("web").getAllByText("prod_web")).toHaveLength(1);
+    expect(slotNamed("both").getByText("Google Play + Custom")).toBeTruthy();
+    expect(slotNamed("gift").queryByText(/Store|Stripe|Custom|Play/)).toBeNull();
   });
 
   it("closes on a second press, on Escape and on a press outside", () => {

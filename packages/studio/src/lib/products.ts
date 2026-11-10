@@ -160,7 +160,6 @@ export const productVariables = (product: DashboardProduct): Record<string, unkn
 
 export interface ProductSummary {
   price?: string;
-  equivalents: string[];
   trial?: string;
 }
 
@@ -172,16 +171,9 @@ const count = (value: unknown): number | undefined =>
 
 export const productSummary = (variables: Record<string, unknown>): ProductSummary => {
   const price = text(variables.price);
-  if (!price) return { equivalents: [] };
+  if (!price) return {};
 
   const period = text(variables.period);
-  const days = count(variables.periodDays) ?? 0;
-  const per = (key: string, unit: string, longerThanDays: number): string[] => {
-    const value = text(variables[key]);
-    return value && days > longerThanDays ? [`${value} / ${unit}`] : [];
-  };
-  const equivalents = [...per("monthlyPrice", "month", 30), ...per("weeklyPrice", "week", 7)];
-
   const trialDays = count(variables.trialPeriodDays);
   const trialPrice = text(variables.trialPeriodPrice);
   const trial =
@@ -193,7 +185,6 @@ export const productSummary = (variables: Record<string, unknown>): ProductSumma
 
   return {
     price: period ? `${price} / ${period}` : price,
-    equivalents,
     ...(trial ? { trial } : {}),
   };
 };

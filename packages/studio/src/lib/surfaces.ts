@@ -13,6 +13,8 @@ export type { StudioPresentation } from "./presentation";
 
 export type {
   AppScheme,
+  ProductListing,
+  ProductStore,
   Samples,
   StudioActionName,
   StudioActionProgress,
