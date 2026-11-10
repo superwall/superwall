@@ -28,11 +28,27 @@ const slotState = (identifier: string, samples: Samples, pending: boolean): Slot
   return variables === undefined ? { kind: "missing" } : { kind: "ok", variables };
 };
 
-const STORES: Record<ProductStore, { label: string; icon: IconComponent }> = {
-  "app-store": { label: "App Store", icon: AppleIcon },
-  "play-store": { label: "Google Play", icon: GooglePlayIcon },
-  stripe: { label: "Stripe", icon: StripeIcon },
-  custom: { label: "Custom", icon: BoxIcon },
+const STORES: Record<
+  ProductStore,
+  { label: string; icon: IconComponent; names: readonly string[] }
+> = {
+  "app-store": {
+    label: "App Store",
+    icon: AppleIcon,
+    names: ["ios", "apple", "appstore", "iphone"],
+  },
+  "play-store": {
+    label: "Google Play",
+    icon: GooglePlayIcon,
+    names: ["android", "google", "googleplay", "play", "playstore"],
+  },
+  stripe: { label: "Stripe", icon: StripeIcon, names: ["stripe", "web"] },
+  custom: { label: "Custom", icon: BoxIcon, names: ["custom"] },
+};
+
+const namesItsStore = (reference: string, listing: ProductListing | undefined) => {
+  const [store] = storesOf(listing);
+  return store?.names.includes(reference.toLowerCase().replace(/[^a-z]/g, "")) ?? false;
 };
 
 const storesOf = (listing: ProductListing | undefined) =>
@@ -64,11 +80,11 @@ const Price = ({ state }: { state: SlotState }) => {
   if (state.kind !== "ok") return null;
   const summary = productSummary(state.variables);
   return (
-    <div className="flex shrink-0 flex-col items-end gap-0.5">
+    <div className="flex shrink-0 flex-col items-end">
       {summary.price ? (
         <span className="text-sm/5 font-medium tabular-nums">{summary.price}</span>
       ) : (
-        <span className="text-sm/5 text-fg-tertiary">No price on record</span>
+        <span className="text-sm/5 text-fg-tertiary">No price in Superwall</span>
       )}
       {summary.trial && <span className="text-xs/4 text-fg-secondary">{summary.trial}</span>}
     </div>
@@ -85,10 +101,12 @@ const Identifier = ({
   value,
   label,
   className,
+  children,
 }: {
   value: string;
   label: string;
   className: string;
+  children?: React.ReactNode;
 }) => {
   const [copied, setCopied] = React.useState(false);
   React.useEffect(() => {
@@ -98,25 +116,28 @@ const Identifier = ({
   }, [copied]);
 
   return (
-    <button
-      type="button"
-      className={`group/id flex min-w-0 cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-mono hover:text-foreground ${className}`}
-      aria-label={copied ? `Copied ${label}` : `Copy ${label}`}
-      title={value}
-      onClick={() => {
-        navigator.clipboard?.writeText(value).then(
-          () => setCopied(true),
-          () => setCopied(false),
-        );
-      }}
-    >
-      <span className="truncate">{value}</span>
+    <>
+      <button
+        type="button"
+        className={`peer/id min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 font-mono hover:text-foreground ${className}`}
+        aria-label={copied ? `Copied ${label}` : `Copy ${label}`}
+        title={value}
+        onClick={() => {
+          navigator.clipboard?.writeText(value).then(
+            () => setCopied(true),
+            () => setCopied(false),
+          );
+        }}
+      >
+        {value}
+      </button>
+      {children}
       {copied ? (
-        <CheckIcon className="size-3 text-success" />
+        <CheckIcon className="size-3 shrink-0 text-success" />
       ) : (
-        <CopyIcon className="size-3 opacity-0 group-hover/id:opacity-100 group-focus-visible/id:opacity-100" />
+        <CopyIcon className="size-3 shrink-0 opacity-0 peer-hover/id:opacity-100 peer-focus-visible/id:opacity-100" />
       )}
-    </button>
+    </>
   );
 };
 
@@ -137,20 +158,27 @@ const Slot = ({
   const name = listing?.name && listing.name !== identifier ? listing.name : undefined;
   const status = state.kind === "ok" ? undefined : STATUS[state.kind];
   const copy = `${reference} identifier`;
+  const badge = !namesItsStore(reference, listing) && (
+    <span className="sw-chip h-4.5 shrink-0 font-mono text-[0.6875rem] font-normal text-fg-secondary">
+      {reference}
+    </span>
+  );
 
   return (
-    <section aria-label={reference} className="flex items-center gap-3 px-3 py-2.5">
+    <section aria-label={reference} className="flex items-center gap-3 px-3 py-2">
       <StoreTile state={state} listing={listing} />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex min-w-0 items-center gap-2 text-sm/5">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 items-center gap-1.5 text-sm/5">
           {name ? (
-            <span className="truncate font-medium">{name}</span>
+            <>
+              <span className="truncate font-medium">{name}</span>
+              {badge}
+            </>
           ) : (
-            <Identifier value={identifier} label={copy} className="text-[0.8125rem]" />
+            <Identifier value={identifier} label={copy} className="text-[0.8125rem]/5">
+              {badge}
+            </Identifier>
           )}
-          <span className="sw-chip h-4.5 shrink-0 font-mono text-[0.6875rem] font-normal text-fg-secondary">
-            {reference}
-          </span>
         </div>
         <div className="flex min-w-0 items-center gap-1.5 text-xs/4 text-fg-tertiary">
           {status && <span className={`shrink-0 ${status.tone}`}>{status.text}</span>}

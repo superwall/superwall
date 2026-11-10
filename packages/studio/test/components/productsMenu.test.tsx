@@ -98,6 +98,28 @@ describe("ProductsMenu", () => {
     expect(slotNamed("gift").queryByText(/Store|Stripe|Custom|Play/)).toBeNull();
   });
 
+  it("drops the slot badge when it only repeats the store", () => {
+    render(
+      <ProductsMenu
+        products={{ Android: "play_year", web: "prod_web", annual: "pro_5999_year", ios: "x" }}
+        samples={{
+          products: { play_year: {}, prod_web: {}, pro_5999_year: annual, x: {} },
+          catalog: {
+            play_year: { name: "Pro Play", stores: ["play-store"] },
+            prod_web: { stores: ["stripe"] },
+            pro_5999_year: { name: "Pro Annual", stores: ["app-store"] },
+          },
+        }}
+      />,
+    );
+    open();
+
+    expect(slotNamed("Android").queryByText("Android")).toBeNull();
+    expect(slotNamed("web").queryByText("web")).toBeNull();
+    expect(slotNamed("annual").getByText("annual")).toBeTruthy();
+    expect(slotNamed("ios").getByText("ios")).toBeTruthy();
+  });
+
   it("closes on a second press, on Escape and on a press outside", () => {
     render(<ProductsMenu products={products} samples={{ products: { pro_5999_year: annual } }} />);
     const button = screen.getByRole("button", { name: "Products, 1 missing" });
@@ -148,7 +170,7 @@ describe("ProductsMenu", () => {
       />,
     );
     open();
-    expect(screen.getByText("No price on record")).toBeTruthy();
+    expect(screen.getByText("No price in Superwall")).toBeTruthy();
   });
 
   it("shows how to add products when the paywall declares none", () => {
