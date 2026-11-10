@@ -28,27 +28,11 @@ const slotState = (identifier: string, samples: Samples, pending: boolean): Slot
   return variables === undefined ? { kind: "missing" } : { kind: "ok", variables };
 };
 
-const STORES: Record<
-  ProductStore,
-  { label: string; icon: IconComponent; names: readonly string[] }
-> = {
-  "app-store": {
-    label: "App Store",
-    icon: AppleIcon,
-    names: ["ios", "apple", "appstore", "iphone"],
-  },
-  "play-store": {
-    label: "Google Play",
-    icon: GooglePlayIcon,
-    names: ["android", "google", "googleplay", "play", "playstore"],
-  },
-  stripe: { label: "Stripe", icon: StripeIcon, names: ["stripe", "web"] },
-  custom: { label: "Custom", icon: BoxIcon, names: ["custom"] },
-};
-
-const namesItsStore = (reference: string, listing: ProductListing | undefined) => {
-  const [store] = storesOf(listing);
-  return store?.names.includes(reference.toLowerCase().replace(/[^a-z]/g, "")) ?? false;
+const STORES: Record<ProductStore, { label: string; icon: IconComponent }> = {
+  "app-store": { label: "App Store", icon: AppleIcon },
+  "play-store": { label: "Google Play", icon: GooglePlayIcon },
+  stripe: { label: "Stripe", icon: StripeIcon },
+  custom: { label: "Custom", icon: BoxIcon },
 };
 
 const storesOf = (listing: ProductListing | undefined) =>
@@ -158,7 +142,7 @@ const Slot = ({
   const name = listing?.name && listing.name !== identifier ? listing.name : undefined;
   const status = state.kind === "ok" ? undefined : STATUS[state.kind];
   const copy = `${reference} identifier`;
-  const badge = !namesItsStore(reference, listing) && (
+  const badge = (
     <span className="sw-chip h-4.5 shrink-0 font-mono text-[0.6875rem] font-normal text-fg-secondary">
       {reference}
     </span>

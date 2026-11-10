@@ -7,11 +7,7 @@ import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import { createStudioActions } from "@/core/paywalls/studio/actions";
 import { VERSION } from "@/environment";
-import type {
-  Framework,
-  FrameworkProject,
-  FrameworkSurface,
-} from "@/core/paywalls/project/framework";
+import type { Framework, FrameworkProject, FrameworkSurface } from "@/core/paywalls/project/framework";
 import { readLock, writeApp, writeBinding } from "@/core/paywalls/project/lock";
 import { useRenderer } from "@/ui";
 import { selectRenderer } from "@/ui/select";
@@ -236,7 +232,9 @@ test("the build is told where this app's assets are hosted, using the resolved a
 
   await createStudioActions(framework, project).run("push", surface);
 
-  assert.deepEqual(builds, ["https://user-content.superwalleditor.com/user-content/hl/42"]);
+  assert.deepEqual(builds, [
+    "https://user-content.superwalleditor.com/user-content/hl/42",
+  ]);
 });
 
 test("hosted assets are synced before the push and travel with the version", async () => {
@@ -316,18 +314,7 @@ test("publishing from the studio onto a source repo holding a teammate's paywall
   fs.mkdirSync(path.join(work, "paywalls/b"), { recursive: true });
   fs.writeFileSync(path.join(work, "paywalls/b/config.ts"), "b\n");
   execFileSync("git", ["-C", work, "add", "-A"]);
-  execFileSync("git", [
-    "-C",
-    work,
-    "-c",
-    "user.name=t",
-    "-c",
-    "user.email=t@t",
-    "commit",
-    "--quiet",
-    "-m",
-    "teammate",
-  ]);
+  execFileSync("git", ["-C", work, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "-m", "teammate"]);
   execFileSync("git", ["-C", work, "push", "--quiet", "origin", "HEAD:main"]);
   const project = boundProject();
   fs.mkdirSync(path.join(project.superwallDir, "paywalls/plus-upgrade"), { recursive: true });
@@ -369,10 +356,7 @@ test("status reports an unreachable API instead of throwing", async () => {
   const actions = createStudioActions(framework, project);
   const status = await actions.status(surface);
   assert.deepEqual(Object.keys(status), ["unreachable"]);
-  assert.match(
-    status.unreachable ?? "",
-    /Couldn't reach the Superwall API at http:\/\/127\.0\.0\.1:1/,
-  );
+  assert.match(status.unreachable ?? "", /Couldn't reach the Superwall API at http:\/\/127\.0\.0\.1:1/);
 });
 
 test("promote from the studio links without creating and never builds", async () => {
@@ -380,10 +364,8 @@ test("promote from the studio links without creating and never builds", async ()
   const project = boundProject();
 
   const steps: string[] = [];
-  const result = await createStudioActions(framework, project).run(
-    "promote",
-    surface,
-    (step, state) => steps.push(`${step}:${state}`),
+  const result = await createStudioActions(framework, project).run("promote", surface, (step, state) =>
+    steps.push(`${step}:${state}`),
   );
 
   assert.deepEqual(result, { ok: true, version: 7, live: true });
@@ -396,9 +378,12 @@ test("promote carries the version the studio picked, and only that", async () =>
   const api = await startApi();
   const project = boundProject();
 
-  const result = await createStudioActions(framework, project).run("promote", surface, undefined, {
-    version: 5,
-  });
+  const result = await createStudioActions(framework, project).run(
+    "promote",
+    surface,
+    undefined,
+    { version: 5 },
+  );
 
   assert.deepEqual(result, { ok: true, version: 7, live: true });
   assert.deepEqual(JSON.parse(api.bodies["/v2/paywalls/208540/promote"] ?? "{}"), { version: 5 });
@@ -415,15 +400,16 @@ test("a picked version refuses a surface on several platforms, naming the CLI fl
   const declaring: Framework = {
     ...framework,
     studioProject: async () => ({
-      surfaces: [
-        { kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["ios", "android"] },
-      ],
+      surfaces: [{ kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["ios", "android"] }],
     }),
   };
 
-  const result = await createStudioActions(declaring, project).run("promote", surface, undefined, {
-    version: 5,
-  });
+  const result = await createStudioActions(declaring, project).run(
+    "promote",
+    surface,
+    undefined,
+    { version: 5 },
+  );
 
   assert.equal(result.ok, false);
   if (!result.ok) {
@@ -472,17 +458,13 @@ test("a surface declared for two platforms is built, pushed, and promoted once p
   const declaring: Framework = {
     ...framework,
     studioProject: async () => ({
-      surfaces: [
-        { kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["ios", "android"] },
-      ],
+      surfaces: [{ kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["ios", "android"] }],
     }),
   };
 
   const steps: string[] = [];
-  const result = await createStudioActions(declaring, project).run(
-    "publish",
-    surface,
-    (step, state) => steps.push(`${step}:${state}`),
+  const result = await createStudioActions(declaring, project).run("publish", surface, (step, state) =>
+    steps.push(`${step}:${state}`),
   );
 
   assert.deepEqual(result, { ok: true, version: 7, live: true });
@@ -553,11 +535,7 @@ test("samples are fetched for the project's first app, and a missing catalogue i
 
   assert.deepEqual(samples?.live, { device: false, user: false });
   assert.equal(samples?.products, undefined);
-  assert.equal(
-    samples?.unreachable,
-    undefined,
-    "a 404 on optional sample endpoints is not an outage",
-  );
+  assert.equal(samples?.unreachable, undefined, "a 404 on optional sample endpoints is not an outage");
 });
 
 test("samples explain an unbound project instead of throwing", async () => {
@@ -598,9 +576,7 @@ test("a two-platform studio push sends each app its own product id and store", a
       products: { annual: options?.platform === "android" ? "pro_year_play" : "pro_year" },
     }),
     studioProject: async () => ({
-      surfaces: [
-        { kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["ios", "android"] },
-      ],
+      surfaces: [{ kind: "paywall", id: "plus-upgrade", products: {}, platforms: ["ios", "android"] }],
     }),
   };
 
@@ -621,10 +597,7 @@ test("a studio push sends the store the project's catalogue records, so a custom
   const api = await startApi();
   api.gate = (url) => {
     if (url.startsWith("/v2/projects")) {
-      return {
-        status: 200,
-        body: { data: [{ id: 9, applications: [{ id: 42 }] }], has_more: false },
-      };
+      return { status: 200, body: { data: [{ id: 9, applications: [{ id: 42 }] }], has_more: false } };
     }
     if (url.startsWith("/v2/products")) {
       return {
@@ -694,11 +667,7 @@ test("the studio relays the API's private-beta refusal verbatim", async () => {
   );
 
   assert.equal(result.ok, false);
-  if (!result.ok)
-    assert.match(
-      result.error,
-      /^Superwall for Agents is in private beta and isn't enabled for this app yet\./,
-    );
+  if (!result.ok) assert.match(result.error, /^Superwall for Agents is in private beta and isn't enabled for this app yet\./);
 });
 
 const PROJECTS = {
@@ -708,8 +677,7 @@ const PROJECTS = {
 
 test("appScheme takes the bound app's scheme from the dashboard", async () => {
   const api = await startApi();
-  api.gate = (url) =>
-    url.startsWith("/v2/projects") ? { status: 200, body: PROJECTS } : undefined;
+  api.gate = (url) => (url.startsWith("/v2/projects") ? { status: 200, body: PROJECTS } : undefined);
   const project = boundProject();
 
   const scheme = await createStudioActions(framework, project).appScheme?.();
@@ -835,10 +803,7 @@ test("imports from outside superwall/ are pushed with the source and warned abou
   assert.match(shown, /Superwall-Portable: false/);
   const warnings = calls.filter((call) => call.method === "warn").map((call) => String(call.value));
   assert.equal(warnings.length, 1);
-  assert.match(
-    warnings[0] ?? "",
-    /^2 imports resolve outside superwall\/ \(\.\.\/shared\/a\.ts, \.\.\/shared\/theme\.ts\)/,
-  );
+  assert.match(warnings[0] ?? "", /^2 imports resolve outside superwall\/ \(\.\.\/shared\/a\.ts, \.\.\/shared\/theme\.ts\)/);
 });
 
 test("a project with no source to commit fails after the version is pushed, before any promote", async () => {
@@ -847,10 +812,8 @@ test("a project with no source to commit fails after the version is pushed, befo
   fs.writeFileSync(path.join(project.superwallDir, ".gitignore"), "*\n");
 
   const steps: string[] = [];
-  const result = await createStudioActions(framework, project).run(
-    "publish",
-    surface,
-    (step, state) => steps.push(`${step}:${state}`),
+  const result = await createStudioActions(framework, project).run("publish", surface, (step, state) =>
+    steps.push(`${step}:${state}`),
   );
 
   assert.equal(result.ok, false);
@@ -864,8 +827,7 @@ const funnel: FrameworkSurface = { ...surface, kind: "funnel", id: "welcome" };
 
 test("status reads a funnel's binding and lists no versions when the API returns none", async () => {
   const api = await startApi();
-  api.gate = (url) =>
-    url.endsWith("/versions") ? { status: 200, body: { object: "list" } } : undefined;
+  api.gate = (url) => (url.endsWith("/versions") ? { status: 200, body: { object: "list" } } : undefined);
   const project = scaffold();
   writeApp(project.superwallDir, "ios", "42");
   writeBinding(project.superwallDir, "funnel", "welcome", "ios", { paywallId: "208542" });
@@ -877,10 +839,8 @@ test("status reads a funnel's binding and lists no versions when the API returns
   assert.ok(api.calls.includes("GET /v2/paywalls/208542"));
 });
 
-const previewImages =
-  (body: unknown, status = 200) =>
-  (url: string) =>
-    url === "/v2/paywalls/208540/preview-images" ? { status, body } : undefined;
+const previewImages = (body: unknown, status = 200) => (url: string) =>
+  url === "/v2/paywalls/208540/preview-images" ? { status, body } : undefined;
 
 test("every captured page is a screenshot, the last one the App Store review render", async () => {
   const api = await startApi();
@@ -908,12 +868,7 @@ test("overlays keep the capture's name, else are numbered under the page they op
     pages: [
       { page_index: 0, page_name: "Plans", kind: "page", url: "https://img.test/plans.png" },
       { page_index: 0, kind: "overlay", url: "https://img.test/discount.png" },
-      {
-        page_index: 0,
-        page_name: "Plans — Exit offer",
-        kind: "overlay",
-        url: "https://img.test/exit.png",
-      },
+      { page_index: 0, page_name: "Plans — Exit offer", kind: "overlay", url: "https://img.test/exit.png" },
       { page_index: 3, kind: "overlay", url: "https://img.test/orphan.png" },
       { page_index: 0, kind: "overlay" },
     ],
@@ -945,11 +900,7 @@ test("the review render falls back to the last page, or is the only page when no
     { label: "Page 2", url: "https://img.test/review.png" },
   ]);
 
-  api.gate = previewImages({
-    status: "ready",
-    pages: [],
-    apple_review_image: { url: "https://img.test/review.png" },
-  });
+  api.gate = previewImages({ status: "ready", pages: [], apple_review_image: { url: "https://img.test/review.png" } });
   assert.deepEqual(await actions.screenshots?.(surface), [
     { label: "Page 1", url: "https://img.test/review.png" },
   ]);
@@ -960,24 +911,9 @@ test("a page's own App Store render wins over its phone-sized capture", async ()
   api.gate = previewImages({
     status: "ready",
     pages: [
-      {
-        page_index: 0,
-        page_name: "Welcome",
-        url: "https://img.test/welcome.png",
-        app_store_image: { url: "https://img.test/welcome-1290.png" },
-      },
-      {
-        page_index: 0,
-        kind: "overlay",
-        url: "https://img.test/sheet.png",
-        app_store_image: { url: "https://img.test/sheet-1290.png" },
-      },
-      {
-        page_index: 1,
-        page_name: "Plans",
-        url: "https://img.test/plans.png",
-        app_store_image: null,
-      },
+      { page_index: 0, page_name: "Welcome", url: "https://img.test/welcome.png", app_store_image: { url: "https://img.test/welcome-1290.png" } },
+      { page_index: 0, kind: "overlay", url: "https://img.test/sheet.png", app_store_image: { url: "https://img.test/sheet-1290.png" } },
+      { page_index: 1, page_name: "Plans", url: "https://img.test/plans.png", app_store_image: null },
     ],
     apple_review_image: { url: "https://img.test/review.png", page_index: 1 },
   });
@@ -1032,11 +968,7 @@ test("a framework older than the page list still gets the single image it asks f
   });
   assert.equal(await actions.screenshot?.(surface), "https://img.test/review.png");
 
-  api.gate = previewImages({
-    status: "ready",
-    pages: [{ url: "https://img.test/page-1.png" }],
-    apple_review_image: null,
-  });
+  api.gate = previewImages({ status: "ready", pages: [{ url: "https://img.test/page-1.png" }], apple_review_image: null });
   assert.equal(await actions.screenshot?.(surface), "https://img.test/page-1.png");
 
   api.gate = previewImages({ status: "pending" });
@@ -1047,8 +979,5 @@ test("a screenshot request that fails for any other reason is not swallowed", as
   const api = await startApi();
   api.gate = previewImages({ error: "boom" }, 500);
 
-  await assert.rejects(
-    createStudioActions(framework, boundProject()).screenshots?.(surface) ?? Promise.resolve(),
-    /500/,
-  );
+  await assert.rejects(createStudioActions(framework, boundProject()).screenshots?.(surface) ?? Promise.resolve(), /500/);
 });

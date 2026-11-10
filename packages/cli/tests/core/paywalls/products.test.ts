@@ -160,11 +160,7 @@ test("an app's catalogue is its project's, and an app without a project has an e
   assert.deepEqual((await listApplicationCatalogue(api, "42")).stores, {
     stripe_elite1w: ["custom"],
   });
-  assert.deepEqual(await listApplicationCatalogue(api, "43"), {
-    variables: {},
-    stores: {},
-    names: {},
-  });
+  assert.deepEqual(await listApplicationCatalogue(api, "43"), { variables: {}, stores: {}, names: {} });
 });
 
 test("an app's project is found by the app id, and an app that can't be found has none", async () => {

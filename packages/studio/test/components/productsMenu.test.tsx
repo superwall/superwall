@@ -98,7 +98,7 @@ describe("ProductsMenu", () => {
     expect(slotNamed("gift").queryByText(/Store|Stripe|Custom|Play/)).toBeNull();
   });
 
-  it("drops the slot badge when it only repeats the store", () => {
+  it("keeps the slot badge when it repeats the store", () => {
     render(
       <ProductsMenu
         products={{ Android: "play_year", web: "prod_web", annual: "pro_5999_year", ios: "x" }}
@@ -114,8 +114,8 @@ describe("ProductsMenu", () => {
     );
     open();
 
-    expect(slotNamed("Android").queryByText("Android")).toBeNull();
-    expect(slotNamed("web").queryByText("web")).toBeNull();
+    expect(slotNamed("Android").getByText("Android")).toBeTruthy();
+    expect(slotNamed("web").getByText("web")).toBeTruthy();
     expect(slotNamed("annual").getByText("annual")).toBeTruthy();
     expect(slotNamed("ios").getByText("ios")).toBeTruthy();
   });
