@@ -189,13 +189,19 @@ describe("ProductsMenu", () => {
     open();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Copy annual identifier" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Copy annual identifier: pro_5999_year" }),
+      );
     });
     expect(writeText).toHaveBeenCalledWith("pro_5999_year");
-    expect(screen.getByRole("button", { name: "Copied annual identifier" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copied annual identifier: pro_5999_year" }),
+    ).toBeTruthy();
 
     act(() => vi.advanceTimersByTime(1500));
-    expect(screen.getByRole("button", { name: "Copy annual identifier" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy annual identifier: pro_5999_year" }),
+    ).toBeTruthy();
   });
 
   it("does not claim a copy that failed", async () => {
@@ -205,8 +211,12 @@ describe("ProductsMenu", () => {
     open();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Copy annual identifier" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Copy annual identifier: pro_5999_year" }),
+      );
     });
-    expect(screen.getByRole("button", { name: "Copy annual identifier" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy annual identifier: pro_5999_year" }),
+    ).toBeTruthy();
   });
 });

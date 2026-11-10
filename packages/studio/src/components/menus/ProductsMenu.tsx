@@ -104,7 +104,7 @@ const Identifier = ({
       <button
         type="button"
         className={`peer/id min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 font-mono hover:text-foreground ${className}`}
-        aria-label={copied ? `Copied ${label}` : `Copy ${label}`}
+        aria-label={copied ? `Copied ${label}: ${value}` : `Copy ${label}: ${value}`}
         title={value}
         onClick={() => {
           navigator.clipboard?.writeText(value).then(
