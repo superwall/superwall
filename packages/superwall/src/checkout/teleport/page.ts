@@ -22,6 +22,7 @@ const PAGE_TAP_LOADER_DELAY_MS = 200;
 export const APP_OPEN_WAIT_MS = 1_000;
 export const PROMPT_WAIT_MS = 500;
 export const ANSWER_WAIT_MS = 3_000;
+export const FOCUS_WAIT_MS = 3_000;
 
 type QueryWriter = {
   get(key: string): string | null;
@@ -72,6 +73,7 @@ const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnResul
       clearTimeout(timer);
       window.removeEventListener("blur", blur);
       window.removeEventListener("focus", focus);
+      window.removeEventListener("focus", ask);
       window.removeEventListener("pagehide", hide);
       document.removeEventListener("visibilitychange", leave);
       dim?.remove();
@@ -97,12 +99,21 @@ const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnResul
     const leave = () => {
       if (document.visibilityState === "hidden" && !asking()) finish("opened");
     };
-    window.addEventListener("blur", blur);
-    window.addEventListener("focus", focus);
+    const ask = () => {
+      window.removeEventListener("focus", ask);
+      clearTimeout(timer);
+      window.addEventListener("blur", blur);
+      window.addEventListener("focus", focus);
+      timer = setTimeout(() => finish("no_app"), PROMPT_WAIT_MS);
+      assign();
+    };
     window.addEventListener("pagehide", hide);
     document.addEventListener("visibilitychange", leave);
-    timer = setTimeout(() => finish("no_app"), PROMPT_WAIT_MS);
-    assign();
+    if (document.hasFocus()) ask();
+    else {
+      window.addEventListener("focus", ask);
+      timer = setTimeout(ask, FOCUS_WAIT_MS);
+    }
   });
 
 const assignScheme = (scheme: string, hint?: ReturnHint): Promise<ReturnResult> =>

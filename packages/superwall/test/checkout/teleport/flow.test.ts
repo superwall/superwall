@@ -5,6 +5,7 @@ import { checkoutUrlFor, TELEPORT_TTL_MS } from "../../../src/checkout/teleport/
 import { teleportFor } from "../../../src/checkout/teleport/flow";
 import {
   ANSWER_WAIT_MS,
+  FOCUS_WAIT_MS,
   APP_OPEN_WAIT_MS,
   PROMPT_WAIT_MS,
   openApp,
@@ -178,6 +179,7 @@ const attach = (session: AttachedSession) => {
 beforeEach(() => {
   vi.useFakeTimers();
   Reflect.set(window, "app", {});
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
 });
 
 afterEach(async () => {
@@ -1424,6 +1426,36 @@ describe("the web half of a teleport", () => {
     await settle(1);
     expect(result).toBe("cancelled");
     expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+  });
+
+  it("opens the app only once the page has focus back, as after Apple Pay closes", async () => {
+    boot({ appLinkUrl: undefined });
+    vi.mocked(document.hasFocus).mockReturnValue(false);
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const result = teleportPage(fakeSession().session).returnToApp("purchased");
+    window.dispatchEvent(new Event("blur"));
+    await settle(FOCUS_WAIT_MS - 1);
+    expect(go).not.toHaveBeenCalled();
+    expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+
+    window.dispatchEvent(new Event("focus"));
+    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
+    window.dispatchEvent(new Event("blur"));
+    expect(document.querySelector<HTMLElement>(".sw-teleport-dim")?.dataset.state).toBe("open");
+    window.dispatchEvent(new Event("focus"));
+    await settle(ANSWER_WAIT_MS);
+    await expect(result).resolves.toBe("cancelled");
+  });
+
+  it("still opens the app when the page never gets focus back", async () => {
+    boot({ appLinkUrl: undefined });
+    vi.mocked(document.hasFocus).mockReturnValue(false);
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const result = teleportPage(fakeSession().session).returnToApp("closed");
+    await settle(FOCUS_WAIT_MS);
+    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=closed");
+    await settle(PROMPT_WAIT_MS);
+    await expect(result).resolves.toBe("no_app");
   });
 
   it("lifts the dim on Open and resolves opened once the app comes up", async () => {

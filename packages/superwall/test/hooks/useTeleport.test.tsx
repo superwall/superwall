@@ -38,6 +38,7 @@ afterEach(() => {
 describe("useTeleport on the web half", () => {
   it("is returning while iOS asks, and resolves how the return went", async () => {
     bootWebHalf();
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
     const { result } = renderWithProvider(() => useTeleport(), { config, host: { device } });
     await flush();
     expect(result.current.returning).toBe(false);
