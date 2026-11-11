@@ -610,6 +610,58 @@ test("postText waits for its own, longer deadline", async () => {
   assert.equal(calls.length, 1);
 });
 
+function stallBody(): Call[] {
+  const calls: Call[] = [];
+  globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+    calls.push({ url: String(input), init });
+    const { signal } = init;
+    const open = setInterval(() => {}, 1000);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        signal?.addEventListener(
+          "abort",
+          () => {
+            clearInterval(open);
+            controller.error(signal.reason);
+          },
+          { once: true },
+        );
+      },
+    });
+    return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  return calls;
+}
+
+test("an answer whose body stalls is the same timeout, for reads, writes and postText", async () => {
+  const calls = stallBody();
+  const api = createSuperwallApi(SESSION, { timeoutMs: 20, textTimeoutMs: 40 });
+  const host = "The Superwall API at https://api.example.com didn't answer within";
+  const landed = "The change may or may not have been applied. Check before sending it again.";
+  await assert.rejects(api.get("/v2/campaigns"), (error: unknown) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.equal(error.timedOut, true);
+    assert.equal(error.message, `${host} 0.02s.\n  Try again.`);
+    return true;
+  });
+  await assert.rejects(api.post("/v2/campaigns/1/placements", {}, { idempotent: true }), (error: unknown) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.equal(error.message, `${host} 0.02s.\n  ${landed}`);
+    return true;
+  });
+  await assert.rejects(api.postText("/v2/query", "SELECT 1"), (error: unknown) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.equal(error.message, `${host} 0.04s.\n  ${landed}`);
+    return true;
+  });
+  assert.equal(calls.length, 3);
+});
+
+test("a body that fails for another reason keeps its own error", async () => {
+  mockTextFetch(() => ({ body: "not json" }));
+  await assert.rejects(createSuperwallApi(SESSION).get("/v2/thing"), SyntaxError);
+});
+
 test("every request carries a deadline, and an answer in time isn't a timeout", async () => {
   const calls = mockFetch(() => ({ body: { ok: true } }));
   assert.deepEqual(await createSuperwallApi(SESSION).get("/v2/thing"), { ok: true });

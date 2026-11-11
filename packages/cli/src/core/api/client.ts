@@ -218,6 +218,15 @@ export const createSuperwallApi = (
     }
   };
 
+  const read = async <T>(body: () => Promise<T>, deadline: Deadline): Promise<T> => {
+    try {
+      return await body();
+    } catch (error) {
+      if (isTimeout(error)) throw new ApiUnreachableError(host(), error, deadline);
+      throw error;
+    }
+  };
+
   const authorized = async (): Promise<string> => {
     const resolved = await resolveAuthToken(session);
     session = resolved.session;
@@ -268,7 +277,7 @@ export const createSuperwallApi = (
     }
     if (!res.ok) throw await parseApiError(`${method} ${path}`, res);
     if (res.status === 204) return undefined as T;
-    return (await res.json()) as T;
+    return read(() => res.json() as Promise<T>, { ms: timeoutMs, write: method !== "GET" });
   };
 
   const api: SuperwallApi = {
@@ -299,7 +308,7 @@ export const createSuperwallApi = (
       };
       const res = await send(`${host()}${path}`, init, textTimeoutMs);
       if (!res.ok) throw await parseApiError(`POST ${path}`, res);
-      return res.text();
+      return read(() => res.text(), { ms: textTimeoutMs, write: true });
     },
     async list<T>(path: string) {
       const out: T[] = [];
