@@ -110,7 +110,7 @@ async function create(
   const ui = setup.answers === undefined ? recordingRenderer(calls) : answeringRenderer(setup.answers, calls);
   await runCreate(
     context(ui, setup.interactive ?? false),
-    { yes: false, install: true, connect: false, ...options },
+    { yes: false, install: true, connect: false, git: true, ...options },
     studioRuntime(studio, setup.choice, setup.open),
   );
   return { calls, studio };
@@ -205,6 +205,19 @@ test("the minimal template lands in superwall/, installed, committed, with the d
   ]);
   assert.deepEqual(nextSteps(calls), ["cd superwall && bun dev", "superwall integrate"]);
   assert.deepEqual(studio, []);
+});
+
+test("--no-git scaffolds without running a single git command", async () => {
+  const root = appRoot("no-git");
+  const { calls } = await create({ dir: root, git: false });
+
+  assert.ok(fs.existsSync(path.join(root, "superwall", "paywalls", "pro", "config.ts")));
+  assert.deepEqual(
+    ran().filter((line) => line.startsWith("git ")),
+    [],
+  );
+  assert.deepEqual(said(calls, "step"), ["Created superwall/ from the minimal template", "Next steps"]);
+  assert.deepEqual(nextSteps(calls), ["cd superwall && bun dev", "superwall integrate"]);
 });
 
 test("an install that leaves superwall/ without the framework keeps the working command in the next step", async () => {

@@ -49,6 +49,7 @@ interface CreateOptions {
   yes: boolean;
   install: boolean;
   connect: boolean;
+  git: boolean;
 }
 
 interface Rebuild {
@@ -264,7 +265,7 @@ export async function runCreate(
     ? await installDependencies(ui, target, manager)
     : { installed: false, command: `${manager} install` };
 
-  await initGit(ui, root);
+  if (options.git) await initGit(ui, root);
 
   const rebuild = await offerRebuild(ctx, options, migration, deps);
 
