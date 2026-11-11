@@ -184,13 +184,27 @@ test("npm runs scripts with run; every other manager runs them directly", () => 
   assert.equal(devCommand("pnpm"), "pnpm dev");
 });
 
+const LANDS = `/bin/mkdir -p node_modules/superwall && echo '{"name":"superwall"}' > node_modules/superwall/package.json`;
+
+function installer(log: string, name: string, lands: string, exits: Record<string, number> = {}): void {
+  const cases = Object.entries(exits)
+    .map(([args, code]) => `  "${args}") exit ${code} ;;`)
+    .join("\n");
+  process.env.PATH = useBin({
+    [name]: `echo "${name} $* @ $(pwd -P)" >> "${log}"\ncase "$*" in\n${cases}\n  "${lands}") ${LANDS} ;;\nesac\nexit 0`,
+  });
+}
+
 test("installing runs the manager's install inside superwall/ and reports it", async () => {
   const target = scratch("install");
   const log = path.join(scratch("log"), "ran.log");
-  onlyTools(log, { bun: {} });
+  installer(log, "bun", "install");
   const calls: RendererCall[] = [];
 
-  assert.equal(await installDependencies(recordingRenderer(calls), target, "bun"), true);
+  assert.deepEqual(await installDependencies(recordingRenderer(calls), target, "bun"), {
+    installed: true,
+    command: "bun install",
+  });
   assert.deepEqual(ran(log), [`bun install @ ${target}`]);
   assert.deepEqual(calls, [
     { method: "spinner.start", value: "Installing dependencies with bun" },
@@ -200,12 +214,102 @@ test("installing runs the manager's install inside superwall/ and reports it", a
 
 test("a failed install never fails the command, it says how to finish by hand", async () => {
   const target = scratch("install-fail");
-  onlyTools(path.join(scratch("log"), "ran.log"), { pnpm: { install: 1 } });
+  const log = path.join(scratch("log"), "ran.log");
+  installer(log, "pnpm", "never", { install: 1 });
   const calls: RendererCall[] = [];
 
-  assert.equal(await installDependencies(recordingRenderer(calls), target, "pnpm"), false);
+  assert.deepEqual(await installDependencies(recordingRenderer(calls), target, "pnpm"), {
+    installed: false,
+    command: "pnpm install",
+  });
+  assert.deepEqual(ran(log), [`pnpm install @ ${target}`]);
   assert.deepEqual(said(calls, "spinner.stop"), [
     "`pnpm install` failed — run it yourself in superwall/",
+  ]);
+});
+
+test("a pnpm install the parent workspace swallowed is retried outside the workspace", async () => {
+  const target = scratch("pnpm-excluded");
+  const log = path.join(scratch("log"), "ran.log");
+  installer(log, "pnpm", "install --ignore-workspace");
+  const calls: RendererCall[] = [];
+
+  assert.deepEqual(await installDependencies(recordingRenderer(calls), target, "pnpm"), {
+    installed: true,
+    command: "pnpm install --ignore-workspace",
+  });
+  assert.deepEqual(ran(log), [
+    `pnpm install @ ${target}`,
+    `pnpm install --ignore-workspace @ ${target}`,
+  ]);
+  assert.deepEqual(said(calls, "spinner.stop"), [
+    "Dependencies installed with `pnpm install --ignore-workspace` — superwall/ is outside the pnpm workspace",
+  ]);
+});
+
+test("a pnpm workspace member installs once, on the shared lockfile", async () => {
+  const target = scratch("pnpm-member");
+  const log = path.join(scratch("log"), "ran.log");
+  installer(log, "pnpm", "install");
+  const calls: RendererCall[] = [];
+
+  assert.deepEqual(await installDependencies(recordingRenderer(calls), target, "pnpm"), {
+    installed: true,
+    command: "pnpm install",
+  });
+  assert.deepEqual(ran(log), [`pnpm install @ ${target}`]);
+  assert.deepEqual(said(calls, "spinner.stop"), ["Dependencies installed"]);
+});
+
+test("a framework hoisted above superwall/ counts as installed", async () => {
+  const root = scratch("hoisted");
+  const target = path.join(root, "superwall");
+  fs.mkdirSync(path.join(root, "node_modules", "superwall"), { recursive: true });
+  fs.writeFileSync(path.join(root, "node_modules", "superwall", "package.json"), '{"name":"superwall"}');
+  fs.mkdirSync(target);
+  const log = path.join(scratch("log"), "ran.log");
+  installer(log, "pnpm", "never");
+
+  const result = await installDependencies(recordingRenderer([]), target, "pnpm");
+  assert.deepEqual(result, { installed: true, command: "pnpm install" });
+  assert.deepEqual(ran(log), [`pnpm install @ ${target}`]);
+});
+
+test("a pnpm retry that fails names the command to run by hand", async () => {
+  const target = scratch("pnpm-retry-fail");
+  installer(path.join(scratch("log"), "ran.log"), "pnpm", "never", { "install --ignore-workspace": 1 });
+  const calls: RendererCall[] = [];
+
+  assert.deepEqual(await installDependencies(recordingRenderer(calls), target, "pnpm"), {
+    installed: false,
+    command: "pnpm install --ignore-workspace",
+  });
+  assert.deepEqual(said(calls, "spinner.stop"), [
+    "`pnpm install --ignore-workspace` failed — run it yourself in superwall/",
+  ]);
+});
+
+test("an install that exits clean without the framework is never reported as installed", async () => {
+  const calls: RendererCall[] = [];
+  const pnpmTarget = scratch("pnpm-empty");
+  installer(path.join(scratch("log"), "ran.log"), "pnpm", "never");
+  assert.deepEqual(await installDependencies(recordingRenderer(calls), pnpmTarget, "pnpm"), {
+    installed: false,
+    command: "pnpm install --ignore-workspace",
+  });
+  restoreBin();
+
+  const bunTarget = scratch("bun-empty");
+  const log = path.join(scratch("log"), "ran.log");
+  installer(log, "bun", "never");
+  assert.deepEqual(await installDependencies(recordingRenderer(calls), bunTarget, "bun"), {
+    installed: false,
+    command: "bun install",
+  });
+  assert.deepEqual(ran(log), [`bun install @ ${bunTarget}`]);
+  assert.deepEqual(said(calls, "spinner.stop"), [
+    "`pnpm install --ignore-workspace` finished, but superwall is still not installed for superwall/ — install it there before `superwall dev`",
+    "`bun install` finished, but superwall is still not installed for superwall/ — install it there before `superwall dev`",
   ]);
 });
 

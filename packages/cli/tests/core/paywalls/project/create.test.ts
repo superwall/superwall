@@ -32,7 +32,7 @@ beforeEach(() => {
   log = path.join(scratch("log"), "ran.log");
   const record = `echo "\${0##*/} $* @ $(pwd -P)" >> "${log}"`;
   process.env.PATH = useBin({
-    bun: record,
+    bun: `${record}\ncase "$1" in install) /bin/mkdir -p node_modules/superwall && echo '{"name":"superwall"}' > node_modules/superwall/package.json ;; esac`,
     git: `${record}\ncase "$1" in rev-parse) exit 128 ;; esac`,
     tar: `exec "${tar}" "$@"`,
   });
@@ -205,6 +205,23 @@ test("the minimal template lands in superwall/, installed, committed, with the d
   ]);
   assert.deepEqual(nextSteps(calls), ["cd superwall && bun dev", "superwall integrate"]);
   assert.deepEqual(studio, []);
+});
+
+test("an install that leaves superwall/ without the framework keeps the working command in the next step", async () => {
+  const root = appRoot("excluded");
+  fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "");
+  const record = `echo "\${0##*/} $* @ $(pwd -P)" >> "${log}"`;
+  useBin({ pnpm: record });
+  const { calls } = await create({ dir: root });
+
+  assert.deepEqual(
+    ran().filter((line) => line.startsWith("pnpm install")),
+    [
+      `pnpm install @ ${path.join(root, "superwall")}`,
+      `pnpm install --ignore-workspace @ ${path.join(root, "superwall")}`,
+    ],
+  );
+  assert.deepEqual(nextSteps(calls)[0], "cd superwall && pnpm install --ignore-workspace && pnpm dev");
 });
 
 test("skipping the install puts it in the next step", async () => {

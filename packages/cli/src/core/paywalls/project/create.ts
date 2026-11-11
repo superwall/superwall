@@ -259,7 +259,9 @@ export async function runCreate(
   }
 
   const manager = await detectPackageManager(root);
-  const installed = options.install && (await installDependencies(ui, target, manager));
+  const install = options.install
+    ? await installDependencies(ui, target, manager)
+    : { installed: false, command: `${manager} install` };
 
   await initGit(ui, root);
 
@@ -274,9 +276,9 @@ export async function runCreate(
         },
       ];
 
-  const dev = installed
+  const dev = install.installed
     ? `cd superwall && ${devCommand(manager)}`
-    : `cd superwall && ${manager} install && ${devCommand(manager)}`;
+    : `cd superwall && ${install.command} && ${devCommand(manager)}`;
 
   ui.step("Next steps");
   ui.list({

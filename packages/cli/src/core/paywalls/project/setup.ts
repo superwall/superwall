@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import * as path from "node:path";
 import { promisify } from "node:util";
 import { resolveScopeFromKey } from "@/core/account/bind";
@@ -83,25 +84,61 @@ export function devCommand(manager: string): string {
   return manager === "npm" ? "npm run dev" : `${manager} dev`;
 }
 
-export async function installDependencies(
-  ui: Renderer,
-  target: string,
-  manager: string,
-): Promise<boolean> {
-  const spin = ui.spinner();
-  spin.start(`Installing dependencies with ${manager}`);
+export interface InstallResult {
+  installed: boolean;
+  command: string;
+}
+
+function frameworkInstalled(target: string): boolean {
   try {
-    await run(manager, ["install"], {
+    createRequire(path.join(target, "package.json")).resolve("superwall/package.json");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function runInstall(target: string, manager: string, flags: string[]): Promise<boolean> {
+  try {
+    await run(manager, ["install", ...flags], {
       cwd: target,
       shell: process.platform === "win32",
       timeout: 300_000,
     });
-    spin.stop("Dependencies installed");
     return true;
   } catch {
-    spin.stop(`\`${manager} install\` failed — run it yourself in superwall/`);
     return false;
   }
+}
+
+export async function installDependencies(
+  ui: Renderer,
+  target: string,
+  manager: string,
+): Promise<InstallResult> {
+  const spin = ui.spinner();
+  spin.start(`Installing dependencies with ${manager}`);
+  const attempts = manager === "pnpm" ? [[], ["--ignore-workspace"]] : [[]];
+  let command = `${manager} install`;
+  for (const flags of attempts) {
+    command = [manager, "install", ...flags].join(" ");
+    if (!(await runInstall(target, manager, flags))) {
+      spin.stop(`\`${command}\` failed — run it yourself in superwall/`);
+      return { installed: false, command };
+    }
+    if (frameworkInstalled(target)) {
+      spin.stop(
+        flags.length === 0
+          ? "Dependencies installed"
+          : `Dependencies installed with \`${command}\` — superwall/ is outside the pnpm workspace`,
+      );
+      return { installed: true, command };
+    }
+  }
+  spin.stop(
+    `\`${command}\` finished, but superwall is still not installed for superwall/ — install it there before \`superwall dev\``,
+  );
+  return { installed: false, command };
 }
 
 export async function initGit(ui: Renderer, root: string): Promise<void> {
