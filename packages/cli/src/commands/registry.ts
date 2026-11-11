@@ -9,6 +9,7 @@ import { command as apiDocs } from "./api/docs";
 import { command as get } from "./api/get";
 import { command as patch } from "./api/patch";
 import { command as post } from "./api/post";
+import { command as put } from "./api/put";
 import { command as ascApps } from "./app-store-connect/store/apps";
 import { command as ascAvailability } from "./app-store-connect/store/availability";
 import { command as ascBuilds } from "./app-store-connect/release/builds";
@@ -173,7 +174,7 @@ export const GROUPS: readonly Group[] = [
         details: "Search the reference for any endpoint, its parameters and body. get, post, patch and delete send any request to it.",
       },
     ],
-    commands: [apiDocs, get, post, patch, del],
+    commands: [apiDocs, get, post, put, patch, del],
   },
   {
     id: "app-store-connect",
