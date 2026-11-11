@@ -79,7 +79,7 @@ test("existing products can be written out as a StoreKit file for Xcode", async 
   process.chdir(dir);
   const { calls } = await products(
     { select: ["export"] },
-    { existing: [{ id: "p1", identifier: "pro_monthly" }, { id: "p2", identifier: "pro_yearly" }], teams: [{ team_id: "T1" }] },
+    { existing: [{ id: "p1", identifier: "pro_monthly", price: { amount: 999, currency: "USD" } }, { id: "p2", identifier: "pro_yearly", price: { amount: 4999, currency: "USD" } }], teams: [{ team_id: "T1" }] },
   );
   assert.deepEqual(said(calls, "success"), ["2 products already in Superwall.", "Wrote `Superwall.storekit` with 2 products."]);
   assert.equal(optionsOf(calls)[0]?.hint, "Connected");
@@ -87,7 +87,7 @@ test("existing products can be written out as a StoreKit file for Xcode", async 
   const written = JSON.parse(fs.readFileSync(path.join(dir, "Superwall.storekit"), "utf8")) as { products: { productID: string }[] };
   assert.deepEqual(written.products.map((product) => product.productID), ["pro_monthly", "pro_yearly"]);
 
-  const single = await products({ select: ["export"] }, { existing: [{ identifier: "pro" }] });
+  const single = await products({ select: ["export"] }, { existing: [{ identifier: "pro", price: { amount: 999, currency: "USD" } }] });
   assert.deepEqual(said(single.calls, "success"), ["1 product already in Superwall.", "Wrote `Superwall.storekit` with 1 product."]);
 });
 

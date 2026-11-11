@@ -400,6 +400,7 @@ function renderCheck(ok: boolean, text: string): void {
 
 function writeStoreKit(products: Row[]): void {
   const out = "Superwall.storekit";
-  writeFileSync(out, `${formatJson(generateStoreKit(products))}\n`);
-  ui.success(`Wrote \`${out}\` with ${formatCount(products.length, "product")}.`);
+  const { file, written } = generateStoreKit(products);
+  writeFileSync(out, `${formatJson(file)}\n`);
+  ui.success(`Wrote \`${out}\` with ${formatCount(written, "product")}.`);
 }
