@@ -11,7 +11,8 @@ import { resolveBinding } from "@/core/paywalls/binding/binding";
 import { planTargets, wantedPlatforms, type SurfaceTarget } from "@/core/paywalls/binding/targets";
 import {
   listApplicationCatalogue,
-  listProjectProducts,
+  listProjectCatalogue,
+  productListings,
   projectForApplication,
 } from "@/core/paywalls/products";
 import {
@@ -145,11 +146,11 @@ export function createStudioActions(
           return { unreachable: "This project is not bound to an app yet." };
         const query = `?application_id=${encodeURIComponent(applicationId)}`;
         let unreachable: string | undefined;
-        const [device, user, products] = await Promise.all([
+        const [device, user, catalogue] = await Promise.all([
           client.get<Sample>(`/v2/users/device-properties-sample${query}`).catch(() => undefined),
           client.get<Sample>(`/v2/users/properties-sample${query}`).catch(() => undefined),
           projectForApplication(client, applicationId)
-            .then((projectId) => (projectId ? listProjectProducts(client, projectId) : undefined))
+            .then((projectId) => (projectId ? listProjectCatalogue(client, projectId) : undefined))
             .catch((error: unknown) => {
               unreachable = reason(error);
               return undefined;
@@ -158,7 +159,8 @@ export function createStudioActions(
         return {
           device: device?.properties,
           user: user?.properties,
-          products,
+          products: catalogue?.variables,
+          catalog: catalogue && productListings(catalogue),
           live: { device: device?.live === true, user: user?.live === true },
           unreachable,
         };

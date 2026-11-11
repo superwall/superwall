@@ -2,6 +2,7 @@ import * as React from "react";
 import { hasIntroductoryOffer, type HostDelegate, type HostState } from "@superwall/host";
 import { ActionMenu, type ActionProgress } from "../components/menus/ActionMenu";
 import { CompareMenu, type CompareOption } from "../components/menus/CompareMenu";
+import { ProductsMenu } from "../components/menus/ProductsMenu";
 import {
   Canvas,
   useCanvasScale,
@@ -239,11 +240,13 @@ export const SurfaceEditor = ({
   source,
   surface,
   samples,
+  samplesPending = false,
   actions,
 }: {
   source: StudioSource;
   surface: StudioSurface;
   samples: Samples;
+  samplesPending?: boolean;
   actions?: React.ReactNode;
 }) => {
   const [deviceId, setDeviceId] = React.useState(DEFAULT_DEVICE_ID);
@@ -780,6 +783,7 @@ export const SurfaceEditor = ({
             onSelect={setCompareWith}
           />
         )}
+        <ProductsMenu products={surface.products} samples={samples} pending={samplesPending} />
         <button
           type="button"
           className="sw-btn"

@@ -38,11 +38,14 @@ export const StudioApp = ({
   }, []);
 
   const shipping = source.actions !== undefined;
+  const [samplesPending, setSamplesPending] = React.useState(shipping);
   React.useEffect(() => {
     if (!shipping) return;
     let cancelled = false;
     fetchSamples().then((value) => {
-      if (!cancelled) setSamples(value);
+      if (cancelled) return;
+      setSamples(value);
+      setSamplesPending(false);
     });
     return () => {
       cancelled = true;
@@ -67,7 +70,12 @@ export const StudioApp = ({
     <StudioHostProvider mode={mode} home={home}>
       <StudioShell>
         {active ? (
-          <SurfaceEditor source={source} surface={active} samples={samples} />
+          <SurfaceEditor
+            source={source}
+            surface={active}
+            samples={samples}
+            samplesPending={samplesPending}
+          />
         ) : (
           <SurfaceList source={source} onOpen={(surface) => navigate(surfacePath(surface))} />
         )}

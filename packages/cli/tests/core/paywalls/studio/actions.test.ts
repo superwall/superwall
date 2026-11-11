@@ -714,7 +714,14 @@ test("samples carry the app's live properties and the products its project sells
                 status: 200,
                 body: {
                   data: [
-                    { identifier: "pro_annual", price: { amount: 5999, currency: "USD" } },
+                    {
+                      identifier: "pro_annual",
+                      name: "Pro Annual",
+                      platform: "ios",
+                      store: "app_store",
+                      price: { amount: 5999, currency: "USD" },
+                    },
+                    { identifier: "grant", platform: "promotional", store: null },
                     { price: { amount: 100, currency: "USD" } },
                   ],
                 },
@@ -727,8 +734,12 @@ test("samples carry the app's live properties and the products its project sells
   assert.deepEqual(samples?.device, { osVersion: "18.0" });
   assert.deepEqual(samples?.user, { plan: "free" });
   assert.deepEqual(samples?.live, { device: true, user: false });
-  assert.deepEqual(Object.keys(samples?.products ?? {}), ["pro_annual"]);
+  assert.deepEqual(Object.keys(samples?.products ?? {}), ["pro_annual", "grant"]);
   assert.equal(samples?.products?.pro_annual?.price, "$59.99");
+  assert.deepEqual(samples?.catalog, {
+    pro_annual: { name: "Pro Annual", stores: ["app-store"] },
+    grant: {},
+  });
   assert.equal(samples?.unreachable, undefined);
 });
 
