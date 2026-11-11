@@ -170,6 +170,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
   let pageCheck: Promise<boolean> | undefined;
   let pageCheckedAt = 0;
   let returns = 0;
+  let successShown = false;
 
   const settings = () => teleportOf(paywall.getSnapshot().config?.teleport);
   const publicApiKey = () => asString(paywall.getSnapshot().device.publicApiKey);
@@ -193,6 +194,8 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
   };
 
   const showSuccess = (paidElsewhere: boolean) => {
+    if (successShown) return;
+    successShown = true;
     const copy = copyFor();
     const link = boot.appLinkUrl ?? boot.returnUrl;
     const returnUrl = link === undefined ? undefined : withReason(link, "purchased");
@@ -237,7 +240,9 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     if (settings()?.completion !== "direct") return false;
     const attempt = openApp(boot, "purchased", hintFor("purchased"));
     if (attempt === undefined) return false;
-    void track(attempt);
+    void track(attempt).then((result) => {
+      if (result !== "opened") showSuccess(false);
+    });
     return true;
   };
 
