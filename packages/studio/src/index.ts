@@ -62,6 +62,8 @@ export { parseProjectPayload, type StudioProjectPayload } from "./lib/project";
 export type {
   AppScheme,
   PreviewUrlBuilder,
+  ProductListing,
+  ProductStore,
   Samples,
   StudioActionName,
   StudioActionProgress,
