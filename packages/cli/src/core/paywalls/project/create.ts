@@ -48,6 +48,7 @@ interface CreateOptions {
   yes: boolean;
   install: boolean;
   connect: boolean;
+  git: boolean;
 }
 
 interface Rebuild {
@@ -261,7 +262,7 @@ export async function runCreate(
   const manager = await detectPackageManager(root);
   const installed = options.install && (await installDependencies(ui, target, manager));
 
-  await initGit(ui, root);
+  if (options.git) await initGit(ui, root);
 
   const rebuild = await offerRebuild(ctx, options, migration, deps);
 
