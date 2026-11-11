@@ -442,8 +442,8 @@ export const createReturnDim = (): ReturnDim => {
       removed = true;
       root.dataset.state = "closing";
       const detach = () => root.remove();
-      root.addEventListener("transitionend", (event) => event.target === root && detach(), {
-        once: true,
+      root.addEventListener("transitionend", (event) => {
+        if (event.target === root) detach();
       });
       setTimeout(detach, EXIT_MS + 50);
     },

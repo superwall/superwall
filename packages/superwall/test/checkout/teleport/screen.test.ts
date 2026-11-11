@@ -111,6 +111,18 @@ describe("the teleport screen, as paywall.js draws it", () => {
     expect(leaving.root.querySelector(".sw-teleport-dim-hint")).toBeNull();
   });
 
+  it("detaches the dim when its own fade ends, not when a child's does", () => {
+    const dim = createReturnDim();
+    phoneWindow(402, 874);
+    dim.showHint("Tap to go back to the app", "ltr");
+    document.body.append(dim.root);
+    dim.remove();
+    dim.root.firstElementChild?.dispatchEvent(new Event("transitionend", { bubbles: true }));
+    expect(dim.root.isConnected).toBe(true);
+    dim.root.dispatchEvent(new Event("transitionend"));
+    expect(dim.root.isConnected).toBe(false);
+  });
+
   it.each([
     [
       "iOS 27.2, page under the bars",
