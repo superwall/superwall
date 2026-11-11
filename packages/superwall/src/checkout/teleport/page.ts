@@ -5,7 +5,7 @@ import { startLoading, stopLoading } from "../loading";
 import { completeTeleportCheckout, readTeleportQuery, readTeleportStatus } from "./api";
 import { readTeleportBoot, type TeleportBoot } from "./boot";
 import { teleportCopyFor } from "./copy";
-import { createReturnDim, createTeleportScreen, poweredByHref } from "./screen";
+import { createReturnDim, createTeleportScreen, poweredByHref, promptsLikeSafari } from "./screen";
 import {
   createStatusStore,
   withTimeout,
@@ -83,6 +83,7 @@ const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnResul
       if (event.target instanceof Node || prompted) return;
       prompted = true;
       clearTimeout(timer);
+      if (!promptsLikeSafari(navigator.userAgent)) return;
       dim = createReturnDim();
       if (hint !== undefined) dim.showHint(hint.caption, hint.dir);
     };

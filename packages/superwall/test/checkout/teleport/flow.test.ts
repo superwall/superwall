@@ -1504,6 +1504,25 @@ describe("the web half of a teleport", () => {
     expect(result).toBe("cancelled");
   });
 
+  it.each([
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/140.0 Mobile/15E148 Safari/605.1.15",
+  ])(
+    "never dims in a browser other than Safari, and still reads the answer (%s)",
+    async (agent) => {
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue(agent);
+      boot({ appLinkUrl: undefined });
+      vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+      const result = teleportPage(fakeSession().session).returnToApp("closed");
+      window.dispatchEvent(new Event("blur"));
+      expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+      window.dispatchEvent(new Event("focus"));
+      await settle(ANSWER_WAIT_MS);
+      await expect(result).resolves.toBe("cancelled");
+      expect(document.querySelector(".sw-teleport-dim")).toBeNull();
+    },
+  );
+
   it("resolves opened when the scheme opens the app with no prompt", async () => {
     boot({ appLinkUrl: undefined });
     vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);

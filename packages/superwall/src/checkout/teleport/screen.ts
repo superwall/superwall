@@ -297,6 +297,11 @@ const CAPTION_MARGIN = 24;
 
 const RTL_SYSTEM_LANGUAGES = new Set<string | undefined>(["ar", "he", "fa", "ur"]);
 
+const OTHER_IOS_BROWSERS = /\b(CriOS|FxiOS|EdgiOS|OPiOS|OPT|GSA|DuckDuckGo|Brave|YaBrowser|Arc)\//;
+
+export const promptsLikeSafari = (userAgent: string): boolean =>
+  !OTHER_IOS_BROWSERS.test(userAgent);
+
 const safariMajor = (userAgent: string): number | undefined => {
   const match = /Version\/(\d+)/.exec(userAgent);
   return match?.[1] === undefined ? undefined : Number(match[1]);

@@ -6,6 +6,7 @@ import {
   openButtonAnchor,
   createTeleportScreen,
   poweredByHref,
+  promptsLikeSafari,
 } from "../../../src/checkout/teleport/screen";
 
 const safari = (version: string) =>
@@ -272,5 +273,37 @@ describe("the teleport screen, as paywall.js draws it", () => {
       x: 340.5,
       side: "ltr",
     });
+  });
+});
+
+describe("promptsLikeSafari", () => {
+  it.each([
+    [
+      "Safari",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1",
+      true,
+    ],
+    [
+      "Chrome",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0 Mobile/15E148 Safari/604.1",
+      false,
+    ],
+    [
+      "Firefox",
+      "Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/140.0 Mobile/15E148 Safari/605.1.15",
+      false,
+    ],
+    [
+      "Edge",
+      "Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 EdgiOS/140.0 Mobile/15E148 Safari/605.1.15",
+      false,
+    ],
+    [
+      "the Google app",
+      "Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/380.0 Mobile/15E148 Safari/604.1",
+      false,
+    ],
+  ])("tells %s apart", (_, agent, expected) => {
+    expect(promptsLikeSafari(agent)).toBe(expected);
   });
 });
