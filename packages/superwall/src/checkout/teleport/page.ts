@@ -61,7 +61,7 @@ export const pageNavigation = {
   },
 };
 
-export type ReturnHint = { caption: string; dir: "ltr" | "rtl" };
+export type ReturnHint = { caption: string; dir: "ltr" | "rtl"; answered?: () => void };
 
 const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnResult> =>
   new Promise((resolve) => {
@@ -90,6 +90,7 @@ const watchPrompt = (assign: () => void, hint?: ReturnHint): Promise<ReturnResul
       if (event.target instanceof Node || !prompted || answered) return;
       answered = true;
       dim?.remove();
+      hint?.answered?.();
       timer = setTimeout(() => finish("cancelled"), ANSWER_WAIT_MS);
     };
     const asking = () => prompted && !answered;
@@ -249,7 +250,10 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
 
   const returnAfterPurchase = (): boolean => {
     if (settings()?.completion !== "direct") return false;
-    const attempt = openApp(boot, "purchased", hintFor("purchased"));
+    const attempt = openApp(boot, "purchased", {
+      ...hintFor("purchased"),
+      answered: () => showSuccess(false),
+    });
     if (attempt === undefined) return false;
     void track(attempt).then((result) => {
       if (result !== "opened") showSuccess(false);

@@ -1663,7 +1663,7 @@ describe("the web half of a teleport", () => {
     );
   });
 
-  it("shows the confirmation after a direct completion the shopper cancelled, once, and none when the app opened", async () => {
+  it("shows the confirmation the moment the shopper answers a direct completion, once, and when no prompt came up", async () => {
     const direct = () =>
       teleportPage(fakeSession({ teleport: { route: "checkout", completion: "direct" } }).session);
     boot({ appLinkUrl: undefined });
@@ -1678,9 +1678,9 @@ describe("the web half of a teleport", () => {
     window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport[role=status]")).toBeNull();
     window.dispatchEvent(new Event("focus"));
-    await settle(ANSWER_WAIT_MS);
     expect(document.querySelector(".sw-teleport-title")?.textContent).toBe("You're all set");
     expect(document.querySelector("a.sw-teleport-primary")).not.toBeNull();
+    await settle(ANSWER_WAIT_MS);
 
     expect(await cancelled.whenUnsettled()).toBe(false);
     await settle(PROMPT_WAIT_MS);
@@ -1699,7 +1699,7 @@ describe("the web half of a teleport", () => {
     window.dispatchEvent(new Event("focus"));
     setVisibility("hidden");
     await settle(ANSWER_WAIT_MS);
-    expect(document.querySelector(".sw-teleport[role=status]")).toBeNull();
+    expect(document.querySelectorAll(".sw-teleport-title")).toHaveLength(1);
   });
 
   it("captions Return to App on the confirmation screen as redeeming the purchase", async () => {
