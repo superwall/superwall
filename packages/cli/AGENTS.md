@@ -135,9 +135,17 @@ skill.
   is a connection that never opened. `ApiUnreachableError` names the socket's code
   (`fetchFailureOf` digs it out of Node's `cause`, an AggregateError, or Bun's
   error) and says "Lost the connection" for a drop, keeping the network hint for
-  DNS and connect failures. `api get|post|…` adds no reference hint to a typed 404
-  (`resource_missing`): the path is right and only the thing is gone. The API reference is cached
-  for a day and a stale copy still answers offline. A browser login reaches
+  DNS and connect failures. Every request has a deadline (`REQUEST_TIMEOUT_MS`,
+  60s; `TEXT_TIMEOUT_MS`, 5 minutes, for the `query` SQL call), so a stalled API
+  ends in an `ApiUnreachableError` with `timedOut` set instead of a silent wait. A
+  timeout is never sent again, a GET or an `idempotent` write included, so the wait
+  stays one deadline long; for a write the message says the change may or may not
+  have been applied. The OAuth refresh has its own deadline (15s): a refresh that
+  stalls or can't connect is a `LoginUnreachableError`, never "not logged in",
+  unless the session also holds an API key to fall back on. `api get|post|…` adds
+  no reference hint to a typed 404 (`resource_missing`): the path is right and
+  only the thing is gone. The API reference is cached for a day and a stale copy
+  still answers offline; its download gives up after 10s. A browser login reaches
   every organization and stores no organization name; an API key belongs to one
   and stores its name. `feedback` posts to `/v2/feedback`, which merges a
   report into an existing request or opens one. It also sends the telemetry
