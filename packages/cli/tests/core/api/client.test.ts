@@ -538,3 +538,81 @@ test("the cause is found wherever the runtime put it", () => {
   loop.cause = loop;
   assert.equal(new ApiUnreachableError(host, loop).code, "EPIPE");
 });
+
+function stall(): Call[] {
+  const calls: Call[] = [];
+  globalThis.fetch = ((input: string | URL, init: RequestInit = {}) => {
+    calls.push({ url: String(input), init });
+    return new Promise<Response>((_resolve, reject) => {
+      const { signal } = init;
+      if (!signal) return;
+      const open = setInterval(() => {}, 1000);
+      const onAbort = () => {
+        clearInterval(open);
+        reject(signal.reason);
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }) as typeof fetch;
+  return calls;
+}
+
+test("a write the API never answers stops at the deadline and says it may have landed", async () => {
+  const calls = stall();
+  const api = createSuperwallApi(SESSION, { timeoutMs: 20 });
+  await assert.rejects(api.post("/v2/campaigns/1/placements", { event_name: "recipes" }), (error: unknown) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.equal(error.timedOut, true);
+    assert.equal(error.dropped, false);
+    assert.equal(
+      error.message,
+      "The Superwall API at https://api.example.com didn't answer within 0.02s.\n  The change may or may not have been applied. Check before sending it again.",
+    );
+    return true;
+  });
+  assert.equal(calls.length, 1);
+});
+
+test("a read the API never answers stops at the deadline and is sent once", async () => {
+  const calls = stall();
+  const api = createSuperwallApi(SESSION, { timeoutMs: 20 });
+  await assert.rejects(api.get("/v2/campaigns"), (error: unknown) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.equal(error.timedOut, true);
+    assert.equal(
+      error.message,
+      "The Superwall API at https://api.example.com didn't answer within 0.02s.\n  Try again.",
+    );
+    return true;
+  });
+  assert.equal(calls.length, 1);
+});
+
+test("a timed-out write isn't sent again even when it's safe to repeat", async () => {
+  const calls = stall();
+  const api = createSuperwallApi(SESSION, { timeoutMs: 20 });
+  await assert.rejects(api.post("/v2/artifacts/drafts", {}, { idempotent: true }), (error: unknown) => {
+    return error instanceof ApiUnreachableError && error.timedOut;
+  });
+  assert.equal(calls.length, 1);
+});
+
+test("postText waits for its own, longer deadline", async () => {
+  const calls = stall();
+  const api = createSuperwallApi(SESSION, { timeoutMs: 20, textTimeoutMs: 150 });
+  const started = Date.now();
+  await assert.rejects(api.postText("/v2/query", "SELECT 1"), (error: unknown) => {
+    assert.ok(error instanceof ApiUnreachableError);
+    assert.match(error.message, /didn't answer within 0\.15s\.\n  The change may or may not have been applied\./);
+    return true;
+  });
+  assert.ok(Date.now() - started >= 140, "the request deadline didn't cut it short");
+  assert.equal(calls.length, 1);
+});
+
+test("every request carries a deadline, and an answer in time isn't a timeout", async () => {
+  const calls = mockFetch(() => ({ body: { ok: true } }));
+  assert.deepEqual(await createSuperwallApi(SESSION).get("/v2/thing"), { ok: true });
+  assert.ok(calls[0]!.init.signal instanceof AbortSignal);
+  assert.equal(new ApiUnreachableError("https://api.example.com", new Error("boom")).timedOut, false);
+});

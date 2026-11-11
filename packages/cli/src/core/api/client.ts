@@ -100,12 +100,34 @@ const failureLabel = ({ code, message }: FetchFailure): string | undefined => {
   return message === undefined || message.includes(code) ? code : `${code}: ${message}`;
 };
 
+interface Deadline {
+  ms: number;
+  write: boolean;
+}
+
+const isTimeout = (error: unknown): boolean => error instanceof Error && error.name === "TimeoutError";
+
 export class ApiUnreachableError extends Error {
   /** The connection opened and then dropped, so the API may or may not have got the request. */
   readonly dropped: boolean;
+  /** The API didn't answer before the deadline, so it may or may not have got the request. */
+  readonly timedOut: boolean;
   readonly code?: string;
 
-  constructor(host: string, cause: unknown) {
+  constructor(host: string, cause: unknown, deadline?: Deadline) {
+    if (deadline !== undefined) {
+      super(
+        `The Superwall API at ${host} didn't answer within ${deadline.ms / 1000}s.\n` +
+          (deadline.write
+            ? "  The change may or may not have been applied. Check before sending it again."
+            : "  Try again."),
+      );
+      this.name = "ApiUnreachableError";
+      this.cause = cause;
+      this.dropped = false;
+      this.timedOut = true;
+      return;
+    }
     const local = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(host);
     const failure = fetchFailureOf(cause);
     const dropped =
@@ -124,6 +146,7 @@ export class ApiUnreachableError extends Error {
     this.name = "ApiUnreachableError";
     this.cause = cause;
     this.dropped = dropped;
+    this.timedOut = false;
     if (failure.code !== undefined) this.code = failure.code;
   }
 }
@@ -156,6 +179,8 @@ const GET_RETRIES = 3;
 const RETRYABLE = new Set([429, 502, 503, 504]);
 const DROPPED_ATTEMPTS = 3;
 const DROPPED_BACKOFF_MS = 250;
+const REQUEST_TIMEOUT_MS = 60_000;
+const TEXT_TIMEOUT_MS = 300_000;
 
 async function parseApiError(request: string, res: Response): Promise<ApiError> {
   const text = await res.text().catch(() => "");
@@ -174,17 +199,22 @@ function retryDelay(res: Response, retry: number): number {
 
 export const createSuperwallApi = (
   initial: Session,
-  { userAgent = USER_AGENT() }: { userAgent?: string } = {},
+  {
+    userAgent = USER_AGENT(),
+    timeoutMs = REQUEST_TIMEOUT_MS,
+    textTimeoutMs = TEXT_TIMEOUT_MS,
+  }: { userAgent?: string; timeoutMs?: number; textTimeoutMs?: number } = {},
 ): SuperwallApi => {
   let session = initial;
 
   const host = (): string => resolveApiHost(session);
 
-  const send = async (url: string, init: RequestInit): Promise<Response> => {
+  const send = async (url: string, init: RequestInit, ms = timeoutMs): Promise<Response> => {
     try {
-      return await fetch(url, init);
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
     } catch (error) {
-      throw new ApiUnreachableError(host(), error);
+      if (!isTimeout(error)) throw new ApiUnreachableError(host(), error);
+      throw new ApiUnreachableError(host(), error, { ms, write: init.method !== "GET" });
     }
   };
 
@@ -257,7 +287,7 @@ export const createSuperwallApi = (
     del: (path, options) => request("DELETE", path, undefined, options),
     async postText(path, body) {
       const token = await authorized();
-      const res = await send(`${host()}${path}`, {
+      const init = {
         method: "POST",
         headers: {
           authorization: `Bearer ${token}`,
@@ -266,7 +296,8 @@ export const createSuperwallApi = (
           "content-type": "text/plain; charset=utf-8",
         },
         body,
-      });
+      };
+      const res = await send(`${host()}${path}`, init, textTimeoutMs);
       if (!res.ok) throw await parseApiError(`POST ${path}`, res);
       return res.text();
     },
