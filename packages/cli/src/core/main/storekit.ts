@@ -10,7 +10,7 @@ import { textOf } from "./input";
 
 type StoreKitSkipReason = "no_identifier" | "other_store" | "no_price";
 
-interface StoreKitSkipped {
+export interface StoreKitSkipped {
   identifier: string;
   reason: StoreKitSkipReason;
 }
@@ -61,12 +61,30 @@ export async function writeStoreKit(context: CommandContext, api: SuperwallApi, 
     listResource(api, "products", scope),
   );
   const outFile = textOf(out) ?? "Superwall.storekit";
-  const { file, written } = generateStoreKit(products);
+  const { file, written, skipped } = generateStoreKit(products);
   writeFileSync(outFile, `${formatJson(file)}\n`);
   if (context.json) {
-    return context.output.data({ path: outFile, products: written });
+    return context.output.data({ path: outFile, products: written, skipped });
   }
   context.ui.success(`Wrote \`${outFile}\` with ${written} product${written === 1 ? "" : "s"}`);
+  for (const line of describeSkipped(skipped)) context.ui.warn(line);
+}
+
+const SKIP_REASONS: Array<[StoreKitSkipReason, string]> = [
+  ["other_store", "not sold on the App Store"],
+  ["no_price", "with no price in Superwall"],
+  ["no_identifier", "with no store identifier"],
+];
+
+export function describeSkipped(skipped: StoreKitSkipped[]): string[] {
+  const lines: string[] = [];
+  for (const [reason, label] of SKIP_REASONS) {
+    const names = skipped.filter((product) => product.reason === reason).map((product) => product.identifier);
+    if (names.length === 0) continue;
+    const listed = names.filter(Boolean).map((name) => `\`${name}\``).join(", ");
+    lines.push(`Left out ${names.length} product${names.length === 1 ? "" : "s"} ${label}${listed ? `: ${listed}` : ""}`);
+  }
+  return lines;
 }
 
 export function generateStoreKit(products: Row[], options: StoreKitOptions = {}): StoreKitExport {
@@ -184,6 +202,7 @@ function introductoryOffer(product: Row, subscription: Record<string, unknown>, 
   return {
     displayPrice: displayPrice(trialAmount),
     internalID: offerID,
+    numberOfPeriods: 1,
     paymentMode: "payUpFront",
     subscriptionPeriod,
   };

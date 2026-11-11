@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import { command as products } from "@/commands/main/products";
-import { generateStoreKit } from "@/core/main/storekit";
+import { describeSkipped, generateStoreKit } from "@/core/main/storekit";
 import { said } from "../../helpers/answers";
 import { runCommand } from "../../helpers/command";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
@@ -150,7 +150,7 @@ test("a trial becomes the introductory offer Xcode would write for that length",
   assert.equal(offer(undefined), null);
   assert.equal(offer(null), null);
   assert.equal(offer(0), null);
-  assert.deepEqual(offer(7, USD(99)), { displayPrice: "0.99", internalID: "000003E8", paymentMode: "payUpFront", subscriptionPeriod: "P1W" });
+  assert.deepEqual(offer(7, USD(99)), { displayPrice: "0.99", internalID: "000003E8", numberOfPeriods: 1, paymentMode: "payUpFront", subscriptionPeriod: "P1W" });
 });
 
 test("a one-time product stays a top-level product at its real price, named by its name", () => {
@@ -245,9 +245,54 @@ test("products storekit writes Superwall.storekit here by default, and --json sa
   const dir = scratch();
   process.chdir(dir);
   const { result } = await storekit({ project: "1" }, [MONTHLY, YEARLY], true);
-  assert.deepEqual(result.json, { path: "Superwall.storekit", products: 2 });
+  assert.deepEqual(result.json, { path: "Superwall.storekit", products: 2, skipped: [] });
   assert.ok(fs.existsSync(path.join(dir, "Superwall.storekit")));
 
   const { calls } = await storekit({ project: "1" }, []);
   assert.deepEqual(said(calls, "success"), ["Wrote `Superwall.storekit` with 0 products"]);
+});
+
+const MIXED = [
+  MONTHLY,
+  { id: "a1", identifier: "play.pro:monthly", platform: "android", store: "play_store", price: USD(399) },
+  { id: "s1", identifier: "live:price_1:none", platform: "stripe", price: USD(399) },
+  { id: "n1", identifier: "unpriced", store: "app_store", price: null },
+  { price: USD(100) },
+];
+
+test("products storekit warns about each product it left out, by reason", async () => {
+  const out = path.join(scratch(), "Mixed.storekit");
+  const { calls } = await storekit({ out, project: "1" }, MIXED);
+  assert.deepEqual(said(calls, "success"), [`Wrote \`${out}\` with 1 product`]);
+  assert.deepEqual(said(calls, "warn"), [
+    "Left out 2 products not sold on the App Store: `play.pro:monthly`, `live:price_1:none`",
+    "Left out 1 product with no price in Superwall: `unpriced`",
+    "Left out 1 product with no store identifier",
+  ]);
+
+  const clean = await storekit({ out, project: "1" }, [MONTHLY, YEARLY]);
+  assert.deepEqual(said(clean.calls, "warn"), []);
+});
+
+test("products storekit --json lists what it left out under skipped", async () => {
+  const out = path.join(scratch(), "Mixed.storekit");
+  const { result, calls } = await storekit({ out, project: "1" }, MIXED, true);
+  assert.deepEqual(result.json, {
+    path: out,
+    products: 1,
+    skipped: [
+      { identifier: "play.pro:monthly", reason: "other_store" },
+      { identifier: "live:price_1:none", reason: "other_store" },
+      { identifier: "unpriced", reason: "no_price" },
+      { identifier: "", reason: "no_identifier" },
+    ],
+  });
+  assert.deepEqual(said(calls, "warn"), []);
+});
+
+test("skipped products with an id but no identifier are named by that id", () => {
+  assert.deepEqual(describeSkipped([]), []);
+  assert.deepEqual(describeSkipped([{ identifier: "x1", reason: "no_identifier" }, { identifier: "", reason: "no_identifier" }]), [
+    "Left out 2 products with no store identifier: `x1`",
+  ]);
 });
