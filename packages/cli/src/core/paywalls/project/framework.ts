@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
   AppScheme,
@@ -135,12 +135,28 @@ export interface Framework {
   }>;
 }
 
+export const IGNORE_WORKSPACE_INSTALL = "pnpm install --ignore-workspace";
+
+export function pnpmWorkspaceAbove(dir: string): boolean {
+  let current = dirname(resolve(dir));
+  while (!existsSync(join(current, "pnpm-workspace.yaml"))) {
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+  return true;
+}
+
 export class FrameworkNotFoundError extends Error {
   constructor(dir: string) {
+    const project = existsSync(join(dir, "superwall", "package.json")) ? join(dir, "superwall") : dir;
     super(
       `No superwall framework found from ${dir}.\n` +
         "Install it in the project (`npm i superwall` / `bun add superwall`) " +
-        "and make sure you run this inside a project with a superwall/ directory.",
+        "and make sure you run this inside a project with a superwall/ directory." +
+        (pnpmWorkspaceAbove(project)
+          ? `\nA pnpm workspace above ${project} skips a project it does not list: run \`${IGNORE_WORKSPACE_INSTALL}\` there.`
+          : ""),
     );
   }
 }

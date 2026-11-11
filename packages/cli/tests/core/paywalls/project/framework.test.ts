@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import {
   FrameworkNotFoundError,
+  pnpmWorkspaceAbove,
   frameworkVersion,
   resolveFramework,
   resolveFrameworkDir,
@@ -51,6 +52,37 @@ test("a project without superwall says how to install it", () => {
   assert.throws(() => resolveFrameworkDir(dir), FrameworkNotFoundError);
   assert.throws(() => resolveFrameworkDir(dir), /npm i superwall/);
   assert.equal(frameworkVersion(dir), "unknown");
+});
+
+test("a pnpm workspace is found above a directory, never in the directory itself", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "superwall-framework-")));
+  dirs.push(root);
+  const project = path.join(root, "superwall");
+  fs.mkdirSync(project);
+
+  assert.equal(pnpmWorkspaceAbove(project), false);
+  fs.writeFileSync(path.join(project, "pnpm-workspace.yaml"), "packages: []\n");
+  assert.equal(pnpmWorkspaceAbove(project), false);
+  fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  assert.equal(pnpmWorkspaceAbove(project), true);
+  assert.equal(pnpmWorkspaceAbove(path.join(project, "paywalls", "pro")), true);
+});
+
+test("under a pnpm workspace, a missing framework names the install that ignores the workspace", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "superwall-framework-")));
+  dirs.push(root);
+  const project = path.join(root, "superwall");
+  fs.mkdirSync(project);
+  fs.writeFileSync(path.join(project, "package.json"), "{}");
+  const hint = (dir: string): string =>
+    `\nA pnpm workspace above ${dir} skips a project it does not list: run \`pnpm install --ignore-workspace\` there.`;
+
+  assert.equal(new FrameworkNotFoundError(root).message.includes("ignore-workspace"), false);
+  assert.equal(new FrameworkNotFoundError(project).message.includes("ignore-workspace"), false);
+  fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  assert.ok(new FrameworkNotFoundError(root).message.endsWith(hint(project)));
+  assert.ok(new FrameworkNotFoundError(project).message.endsWith(hint(project)));
+  assert.throws(() => resolveFrameworkDir(root), /pnpm install --ignore-workspace/);
 });
 
 test("a version the CLI cannot read never crashes a push", () => {
