@@ -12,6 +12,7 @@ import {
   devCommand,
   initGit,
   installDependencies,
+  selectWorkspaceInstallNote,
   uniqueSurfaceId,
 } from "@/core/paywalls/project/setup";
 import { restoreBin, useBin } from "../../../helpers/bin";
@@ -176,6 +177,21 @@ test("with nothing installed the manager falls back to npm", async () => {
   onlyTools(path.join(scratch("log"), "ran.log"), {});
 
   assert.equal(await detectPackageManager(root), "npm");
+});
+
+test("only pnpm under a workspace above the project gets the ignore-workspace note", () => {
+  const root = scratch("note");
+  const target = path.join(root, "superwall");
+  fs.mkdirSync(target);
+
+  assert.equal(selectWorkspaceInstallNote("pnpm", target), undefined);
+  fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  assert.equal(
+    selectWorkspaceInstallNote("pnpm", target),
+    "Not listed in the pnpm workspace? Use `pnpm install --ignore-workspace` instead",
+  );
+  assert.equal(selectWorkspaceInstallNote("bun", target), undefined);
+  assert.equal(selectWorkspaceInstallNote("npm", target), undefined);
 });
 
 test("npm runs scripts with run; every other manager runs them directly", () => {

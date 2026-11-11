@@ -232,6 +232,43 @@ test("skipping the install puts it in the next step", async () => {
   assert.deepEqual(nextSteps(calls)[0], "cd superwall && bun install && bun dev");
 });
 
+function devChildren(calls: RendererCall[]): string[] {
+  const list = calls.find((call) => call.method === "list")?.value as {
+    items: Array<{ children?: Array<{ label: string }> }>;
+  };
+  return (list.items[0]?.children ?? []).map((item) => item.label);
+}
+
+test("skipping the install under a pnpm workspace notes the install that ignores it", async () => {
+  const root = appRoot("no-install-pnpm");
+  fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "");
+  useBin({ pnpm: `echo "\${0##*/} $* @ $(pwd -P)" >> "${log}"` });
+  const plain = await create({ dir: root, install: false });
+  assert.deepEqual(devChildren(plain.calls), ["Open the studio"]);
+  fs.rmSync(path.join(root, "superwall"), { recursive: true });
+
+  fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  const { calls } = await create({ dir: root, install: false });
+
+  assert.equal(ran().some((line) => line.startsWith("pnpm install")), false);
+  assert.deepEqual(nextSteps(calls)[0], "cd superwall && pnpm install && pnpm dev");
+  assert.deepEqual(devChildren(calls), [
+    "Open the studio",
+    "Not listed in the pnpm workspace? Use `pnpm install --ignore-workspace` instead",
+  ]);
+});
+
+test("a retried install that still leaves nothing does not repeat the note", async () => {
+  const root = appRoot("excluded-note");
+  fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "");
+  fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  useBin({ pnpm: `echo "\${0##*/} $* @ $(pwd -P)" >> "${log}"` });
+  const { calls } = await create({ dir: root });
+
+  assert.deepEqual(nextSteps(calls)[0], "cd superwall && pnpm install --ignore-workspace && pnpm dev");
+  assert.deepEqual(devChildren(calls), ["Open the studio"]);
+});
+
 test("an app that already uses the SDK is told so and not sent to integrate", async () => {
   const root = appRoot("integrated");
   fs.writeFileSync(

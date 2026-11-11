@@ -16,6 +16,7 @@ import {
 import { requirePlatform } from "@/core/paywalls/binding/apps";
 import { isSuperwallProject } from "@/core/paywalls/migration";
 import { writeApp } from "@/core/paywalls/project/lock";
+import { IGNORE_WORKSPACE_INSTALL, pnpmWorkspaceAbove } from "@/core/paywalls/project/framework";
 import { projectPackageName } from "@/core/paywalls/project/scaffold";
 import { requireApi } from "@/core/paywalls/project/session";
 import { gitAvailable } from "@/core/paywalls/source/git";
@@ -82,6 +83,11 @@ export async function detectPackageManager(root: string): Promise<string> {
 
 export function devCommand(manager: string): string {
   return manager === "npm" ? "npm run dev" : `${manager} dev`;
+}
+
+export function selectWorkspaceInstallNote(manager: string, target: string): string | undefined {
+  if (manager !== "pnpm" || !pnpmWorkspaceAbove(target)) return undefined;
+  return `Not listed in the pnpm workspace? Use \`${IGNORE_WORKSPACE_INSTALL}\` instead`;
 }
 
 export interface InstallResult {
