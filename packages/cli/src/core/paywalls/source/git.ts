@@ -159,14 +159,13 @@ export function materializeSourceTree(
     if (classifyPath(file.path, scope) === "other") continue;
     if (file.content.byteLength > LARGE_FILE_BYTES) large.push(file.path);
     if (file.path === LOCK_FILE && scope.kind !== "artifact") {
+      const repoLock = theirs.get(LOCK_FILE)?.toString("utf8");
       write(
         file.path,
-        mergeLockText(
-          theirs.get(LOCK_FILE)?.toString("utf8"),
-          file.content.toString("utf8"),
-          scope,
-          { replaceUnreadable: options.overwrite },
-        ),
+        mergeLockText(repoLock, file.content.toString("utf8"), scope, {
+          replaceUnreadable: options.overwrite,
+          base: keepShared ? undefined : repoLock,
+        }),
       );
     } else {
       write(file.path, file.content);
@@ -384,6 +383,7 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
           dir,
           own,
           scope,
+          base,
         });
         await confirmIncoming(parent ?? own, upstream);
       }
@@ -495,7 +495,15 @@ async function mergeUpstream(
     dir,
     own,
     scope,
-  }: { run: Run; committing: NodeJS.ProcessEnv; dir: string; own: string; scope: SourceScope },
+    base,
+  }: {
+    run: Run;
+    committing: NodeJS.ProcessEnv;
+    dir: string;
+    own: string;
+    scope: SourceScope;
+    base: string | undefined;
+  },
 ): Promise<void> {
   let failure: unknown;
   await run(["merge", "--quiet", "--no-ff", "--no-commit", upstream], { env: committing }).catch(
@@ -527,7 +535,11 @@ async function mergeUpstream(
   if (scope.kind !== "artifact") {
     const theirsLock = await show(upstream, LOCK_FILE);
     const mineLock = await show(own, LOCK_FILE);
-    const lock = mineLock === undefined ? theirsLock : mergeLockText(theirsLock, mineLock, scope);
+    const baseLock = base === undefined ? undefined : await show(base, LOCK_FILE);
+    const lock =
+      mineLock === undefined
+        ? theirsLock
+        : mergeLockText(theirsLock, mineLock, scope, { base: baseLock });
     await settle(run, dir, LOCK_FILE, lock);
   }
   for (const file of derived) {

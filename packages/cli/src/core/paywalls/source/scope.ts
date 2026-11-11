@@ -5,6 +5,7 @@ import {
   originKey,
   parseLock,
   type LockFile,
+  type SurfaceBindings,
   type SurfaceKind,
 } from "@/core/paywalls/project/lock";
 
@@ -92,7 +93,7 @@ export function mergeLockText(
   theirs: string | undefined,
   mine: string,
   scope: SurfaceScope | ProjectScope,
-  options: { replaceUnreadable?: boolean } = {},
+  options: { replaceUnreadable?: boolean; base?: string } = {},
 ): string {
   const own = readable(mine);
   if (!("lock" in own)) return mine;
@@ -102,10 +103,63 @@ export function mergeLockText(
     if (!options.replaceUnreadable) throw new SourceLockUnreadableError(read.reason);
     return formatLock(scoped(own.lock, scope));
   }
-  return mergeLocks(read.lock, own.lock, scope);
+  const base = options.base === undefined ? undefined : readable(options.base);
+  return mergeLocks(read.lock, own.lock, scope, base && "lock" in base ? base.lock : undefined);
 }
 
-function mergeLocks(other: LockFile, own: LockFile, scope: SurfaceScope | ProjectScope): string {
+const SECTIONS = ["paywalls", "funnels"] as const;
+
+const sameBindings = (a: SurfaceBindings, b: SurfaceBindings): boolean => {
+  const platforms = Object.keys(a);
+  return (
+    platforms.length === Object.keys(b).length &&
+    platforms.every(
+      (platform) =>
+        a[platform]?.paywallId === b[platform]?.paywallId &&
+        a[platform]?.snapshot === b[platform]?.snapshot &&
+        a[platform]?.sourcePending === b[platform]?.sourcePending,
+    )
+  );
+};
+
+function dropRemoved(merged: LockFile, own: LockFile, base: LockFile): void {
+  for (const key of SECTIONS) {
+    const bound = new Set(
+      Object.values(own[key]).flatMap((bindings) =>
+        Object.values(bindings).map((binding) => binding.paywallId),
+      ),
+    );
+    for (const [id, synced] of Object.entries(base[key])) {
+      const theirs = merged[key][id];
+      if (id in own[key] || theirs === undefined || !sameBindings(theirs, synced)) continue;
+      if (Object.values(synced).some((binding) => bound.has(binding.paywallId))) continue;
+      delete merged[key][id];
+    }
+  }
+}
+
+function dropFormerNames(
+  section: Record<string, SurfaceBindings>,
+  surfaceId: string,
+  entry: SurfaceBindings,
+): void {
+  for (const [id, bindings] of Object.entries(section)) {
+    if (id === surfaceId) continue;
+    const kept = Object.entries(bindings).filter(
+      ([platform, binding]) => entry[platform]?.paywallId !== binding.paywallId,
+    );
+    if (kept.length === Object.keys(bindings).length) continue;
+    if (kept.length > 0) section[id] = Object.fromEntries(kept);
+    else delete section[id];
+  }
+}
+
+function mergeLocks(
+  other: LockFile,
+  own: LockFile,
+  scope: SurfaceScope | ProjectScope,
+  base?: LockFile,
+): string {
   const section = (lock: LockFile) => (scope.kind === "paywall" ? lock.paywalls : lock.funnels);
   const conflicting = new Set(
     Object.entries(own.apps)
@@ -123,6 +177,7 @@ function mergeLocks(other: LockFile, own: LockFile, scope: SurfaceScope | Projec
     paywalls: { ...other.paywalls },
     funnels: { ...other.funnels },
   };
+  if (base) dropRemoved(merged, own, base);
   if (scope.kind === "project") {
     if (other.origins) merged.origins = other.origins;
     return formatLock(merged);
@@ -130,12 +185,13 @@ function mergeLocks(other: LockFile, own: LockFile, scope: SurfaceScope | Projec
   const target = section(merged);
   const theirEntry = section(other)[scope.id] ?? {};
   const mineEntry = section(own)[scope.id] ?? {};
-  const entry = Object.fromEntries([
+  const entry: SurfaceBindings = Object.fromEntries([
     ...Object.entries(theirEntry).filter(([platform]) => conflicting.has(platform)),
     ...Object.entries(mineEntry).filter(([platform]) => !conflicting.has(platform)),
   ]);
   if (Object.keys(entry).length > 0) target[scope.id] = entry;
   else delete target[scope.id];
+  dropFormerNames(target, scope.id, entry);
 
   const key = originKey(scope.kind, scope.id);
   const origins = { ...other.origins };
