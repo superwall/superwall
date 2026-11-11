@@ -332,15 +332,6 @@ export const TELEPORT_SCREEN_CSS = `
   position: absolute;
   inset: 0;
   color: #fff;
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity 360ms cubic-bezier(0.23, 1, 0.32, 1) 80ms,
-    transform 360ms cubic-bezier(0.23, 1, 0.32, 1) 80ms;
-}
-.sw-teleport-dim-hint[data-state="open"] {
-  opacity: 1;
-  transform: none;
 }
 .sw-teleport-dim .sw-teleport-dim-arrow {
   color: #fff;
@@ -366,7 +357,6 @@ export const TELEPORT_SCREEN_CSS = `
 }
 @media (prefers-reduced-motion: reduce) {
   .sw-teleport-dim { transition: none; }
-  .sw-teleport-dim-hint { transform: none; transition: none; }
   .sw-teleport-content { transform: none; }
   .sw-teleport-arc { animation: none; }
   .sw-teleport-orbit { animation-duration: 3s; }

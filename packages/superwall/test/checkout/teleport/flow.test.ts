@@ -1589,7 +1589,6 @@ describe("the web half of a teleport", () => {
     const hints = dim?.querySelectorAll<HTMLElement>(".sw-teleport-dim-hint");
     expect(hints).toHaveLength(1);
     const hint = hints?.[0];
-    expect(hint?.dataset.state).toBe("open");
     expect(hint?.dir).toBe("ltr");
     expect(hint?.querySelector("svg.sw-teleport-dim-arrow")).not.toBeNull();
     expect(hint?.textContent).toBe("Tap to go back to the app");

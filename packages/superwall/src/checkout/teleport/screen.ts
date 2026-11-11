@@ -422,7 +422,6 @@ export const createReturnDim = (): ReturnDim => {
       if (anchor === undefined) return;
       const hint = element("div", "sw-teleport-dim-hint");
       hint.dir = dir;
-      hint.dataset.state = "closed";
       const layout = hintLayout(anchor, window.innerWidth);
       hint.dataset.side = anchor.side;
       const text = element("p", "sw-teleport-dim-caption", caption);
@@ -432,8 +431,6 @@ export const createReturnDim = (): ReturnDim => {
       text.style.textAlign = layout.captionAlign;
       hint.append(hintArrow(arrowPaths(layout)), text);
       root.append(hint);
-      void hint.offsetWidth;
-      hint.dataset.state = "open";
     },
     remove: () => {
       if (removed) return;
