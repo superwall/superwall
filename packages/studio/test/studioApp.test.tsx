@@ -457,6 +457,51 @@ describe("a product Superwall has no record of", () => {
   });
 });
 
+const openProducts = (name: string) => {
+  fireEvent.click(screen.getByRole("button", { name }));
+  return within(screen.getByRole("dialog", { name: "Products" }));
+};
+
+describe("the Products popup", () => {
+  it("checks while the catalogue is on its way, then shows what each slot sells", async () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    let answer: ((value: unknown) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      ),
+    );
+    render(<StudioApp source={shippable} />);
+
+    const panel = openProducts("Products, 1");
+    expect(panel.getByText("Checking…")).toBeDefined();
+
+    await act(async () => {
+      answer?.({
+        json: async () => ({
+          products: { pro_5999_year: { price: "$59.99", period: "year", periodCount: 1 } },
+        }),
+      });
+    });
+
+    expect(panel.queryByText("Checking…")).toBeNull();
+    expect(panel.getByText("$59.99 / year")).toBeDefined();
+  });
+
+  it("says there is no catalogue when the studio has no Superwall connection", () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+
+    const panel = openProducts("Products, 1");
+    expect(panel.queryByText("Checking…")).toBeNull();
+    expect(panel.getByText("No product catalog to check these against.")).toBeDefined();
+  });
+});
+
 describe("device mode", () => {
   it("opens cards on the standalone preview, the paywall itself on the phone", () => {
     window.history.replaceState({}, "", "/device");
