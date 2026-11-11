@@ -224,6 +224,7 @@ const bootWebHalf = () => {
     returnUrl: "myapp://superwall/return",
     session: { query: { goal: "sleep" } },
   });
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
 };
 
 describe("the web half of a teleport", () => {
