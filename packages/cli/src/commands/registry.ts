@@ -171,7 +171,7 @@ export const GROUPS: readonly Group[] = [
       {
         name: "api",
         summary: "The Superwall API reference",
-        details: "Search the reference for any endpoint, its parameters and body. get, post, patch and delete send any request to it.",
+        details: "Search the reference for any endpoint, its parameters and body. get, post, put, patch and delete send any request to it.",
       },
     ],
     commands: [apiDocs, get, post, put, patch, del],

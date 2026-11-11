@@ -229,7 +229,7 @@ test("the MCP retains generic API and schema tools with fallback guidance", () =
   for (const name of ["get", "post", "put", "patch", "delete", "api_docs", "asc_get", "asc_post", "asc_patch", "asc_delete", "asc_docs", "asa_get", "asa_post", "asa_put", "asa_delete", "asa_docs"]) {
     assert.ok(tools.some((candidate) => candidate.name === name), name);
   }
-  assert.match(instructions(), /api_docs finds it, then get, post, patch or delete calls it/);
+  assert.match(instructions(), /api_docs finds it, then get, post, put, patch or delete calls it/);
 });
 
 test("POST lookups are reads while report jobs persist state", () => {
