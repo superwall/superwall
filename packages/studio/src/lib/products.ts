@@ -157,3 +157,34 @@ export const productVariables = (product: DashboardProduct): Record<string, unkn
 
   return variables;
 };
+
+export interface ProductSummary {
+  price?: string;
+  trial?: string;
+}
+
+const text = (value: unknown): string | undefined =>
+  typeof value === "string" && value !== "" ? value : undefined;
+
+const count = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+export const productSummary = (variables: Record<string, unknown>): ProductSummary => {
+  const price = text(variables.price);
+  if (!price) return {};
+
+  const period = text(variables.period);
+  const trialDays = count(variables.trialPeriodDays);
+  const trialPrice = text(variables.trialPeriodPrice);
+  const trial =
+    trialDays === undefined || trialDays <= 0
+      ? undefined
+      : count(variables.rawTrialPeriodPrice) === 0 || !trialPrice
+        ? `${trialDays}-day free trial`
+        : `${trialDays}-day trial for ${trialPrice}`;
+
+  return {
+    price: period ? `${price} / ${period}` : price,
+    ...(trial ? { trial } : {}),
+  };
+};

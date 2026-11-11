@@ -51,6 +51,14 @@ declare module "*.mp3" {
   const src: string;
   export default src;
 }
+declare module "*.m4a" {
+  const src: string;
+  export default src;
+}
+declare module "*.aac" {
+  const src: string;
+  export default src;
+}
 declare module "*.wav" {
   const src: string;
   export default src;
@@ -112,10 +120,6 @@ declare module "*?inline" {
   export default source;
 }
 
-declare module "*.aac" {
-  const src: string;
-  export default src;
-}
 declare module "*.m4v" {
   const src: string;
   export default src;
