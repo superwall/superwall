@@ -119,8 +119,18 @@ export function deriveApiIndex(spec: Schema): ApiDocsIndex {
   return { version: String(spec.info?.version ?? "?"), fetchedAt: Date.now(), operations };
 }
 
-export async function downloadApiIndex(): Promise<ApiDocsIndex> {
-  const res = await fetch(specUrl());
+const DOWNLOAD_TIMEOUT_MS = 10_000;
+
+export async function downloadApiIndex(timeoutMs = DOWNLOAD_TIMEOUT_MS): Promise<ApiDocsIndex> {
+  let res: Response;
+  try {
+    res = await fetch(specUrl(), { signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    if (!(error instanceof Error) || error.name !== "TimeoutError") throw error;
+    throw new Error(`The Superwall API reference at ${specUrl()} didn't answer within ${timeoutMs / 1000}s.`, {
+      cause: error,
+    });
+  }
   if (!res.ok) throw new Error(`Couldn't fetch the Superwall API reference (HTTP ${res.status}).`);
   return deriveApiIndex((await res.json()) as Schema);
 }

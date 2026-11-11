@@ -4,6 +4,7 @@ export type Route = {
   body?: unknown;
   text?: string;
   fail?: boolean;
+  stall?: boolean;
 };
 
 export type FetchLog = { url: string; method: string; body?: string }[];
@@ -24,6 +25,7 @@ export function useFetch(routes: Route[]): FetchLog {
     );
     if (!route) return new Response("not stubbed", { status: 404 });
     if (route.fail) throw new Error(`offline: ${url}`);
+    if (route.stall) return stalled(init?.signal);
     const payload = route.text ?? JSON.stringify(route.body ?? {});
     return new Response(payload, {
       status: route.status ?? 200,
@@ -31,6 +33,16 @@ export function useFetch(routes: Route[]): FetchLog {
     });
   }) as typeof fetch;
   return log;
+}
+
+function stalled(signal: AbortSignal | null | undefined): Promise<Response> {
+  return new Promise((_, reject) => {
+    const hold = setTimeout(() => reject(new Error("the request carried no deadline")), 5_000);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(hold);
+      reject(signal.reason);
+    });
+  });
 }
 
 export function restoreFetch(): void {
