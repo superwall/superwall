@@ -77,6 +77,11 @@ you in, pick an app, or create one on the spot. `--yes` accepts the defaults;
 specific Superwall app (the dashboard's **Copy Prompt** passes it) instead of
 detecting or asking.
 
+In a folder that is not inside a git repository yet, `create` also runs
+`git init` and commits everything in that folder — your app included — as
+"New superwall project". `--no-git` skips that step, so nothing is initialized,
+staged or committed; a folder already under git is never touched either way.
+
 ### A project is a directory
 
 ```

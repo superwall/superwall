@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import { command } from "@/commands/paywalls/create";
-import { runCommand } from "../../helpers/command";
+import { helpLine, runCommand, runLine } from "../../helpers/command";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
 import { restoreFetch, useFetch } from "../../helpers/fetch";
 import { clearHomes, useHome } from "../../helpers/home";
@@ -44,6 +44,24 @@ test("create scaffolds superwall/ inside the app root, named after the app", asy
   );
   assert.match(labels[0] ?? "", /^cd superwall && /);
   assert.ok(labels.some((label) => label === "superwall integrate"));
+});
+
+test("create --no-git leaves an app outside git without a repository", async () => {
+  const root = path.join(scratch("create-no-git"), "my-app");
+  fs.mkdirSync(root);
+  const calls: RendererCall[] = [];
+  await runLine(`create ${root} --no-git --no-install --no-connect`, { renderer: recordingRenderer(calls) });
+
+  assert.ok(fs.existsSync(path.join(root, "superwall", "paywalls", "pro", "config.ts")));
+  assert.equal(fs.existsSync(path.join(root, ".git")), false);
+  assert.equal(
+    calls.some((call) => call.method === "step" && call.value === "Initialized a git repository"),
+    false,
+  );
+});
+
+test("the help lists --no-git", async () => {
+  assert.match(await helpLine("create --help"), /--no-git/);
 });
 
 test("an app that already has a superwall/ project gets a paywall added, not a second project", async () => {

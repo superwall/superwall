@@ -226,10 +226,10 @@ test("publish and manual grants describe their live effects", () => {
 });
 
 test("the MCP retains generic API and schema tools with fallback guidance", () => {
-  for (const name of ["get", "post", "patch", "delete", "api_docs", "asc_get", "asc_post", "asc_patch", "asc_delete", "asc_docs", "asa_get", "asa_post", "asa_put", "asa_delete", "asa_docs"]) {
+  for (const name of ["get", "post", "put", "patch", "delete", "api_docs", "asc_get", "asc_post", "asc_patch", "asc_delete", "asc_docs", "asa_get", "asa_post", "asa_put", "asa_delete", "asa_docs"]) {
     assert.ok(tools.some((candidate) => candidate.name === name), name);
   }
-  assert.match(instructions(), /api_docs finds it, then get, post, patch or delete calls it/);
+  assert.match(instructions(), /api_docs finds it, then get, post, put, patch or delete calls it/);
 });
 
 test("POST lookups are reads while report jobs persist state", () => {
@@ -243,10 +243,11 @@ test("POST lookups are reads while report jobs persist state", () => {
 });
 
 test("generic execution covers destructive branches and arbitrary webhook destinations", () => {
-  for (const name of ["patch", "asc_post", "asc_patch", "asa_post", "asa_put", "asa_keywords_delete"]) {
+  for (const name of ["put", "patch", "asc_post", "asc_patch", "asa_post", "asa_put", "asa_keywords_delete"]) {
     assert.equal(tool(name).annotations.destructiveHint, true, name);
   }
   assert.equal(tool("post").annotations.openWorldHint, true);
+  assert.equal(tool("put").annotations.openWorldHint, true);
   assert.equal(tool("patch").annotations.openWorldHint, true);
 });
 

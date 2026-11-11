@@ -1104,3 +1104,69 @@ describe("SurfaceEditor promoting and rolling back", () => {
     });
   });
 });
+
+describe("SurfaceEditor's Products popup", () => {
+  const twoSlots: StudioSurface = {
+    kind: "paywall",
+    id: "plus-upgrade",
+    routes: ["index"],
+    locales: [],
+    products: { annual: "pro_year", monthly: "pro_month" },
+  };
+  const priced = {
+    price: "$59.99",
+    rawPrice: 59.99,
+    period: "year",
+    periodly: "yearly",
+    periodCount: 1,
+    currencyCode: "USD",
+    currencySymbol: "$",
+  };
+  const editor = (
+    surface: StudioSurface,
+    samples: React.ComponentProps<typeof SurfaceEditor>["samples"],
+    samplesPending = false,
+  ) =>
+    renderEditor(
+      <SurfaceEditor
+        source={{ title: "chatgpt", surfaces: [surface], previewUrl: () => "/preview" }}
+        surface={surface}
+        samples={samples}
+        samplesPending={samplesPending}
+      />,
+    );
+
+  it("counts the slots on the button and lists them in a popup, not the side panel", () => {
+    editor(twoSlots, { products: { pro_year: priced, pro_month: { ...priced, period: "month" } } });
+
+    const button = screen.getByRole("button", { name: "Products, 2" });
+    fireEvent.click(button);
+
+    const popup = within(screen.getByRole("dialog", { name: "Products" }));
+    expect(popup.getAllByRole("region").map((slot) => slot.getAttribute("aria-label"))).toEqual([
+      "annual",
+      "monthly",
+    ]);
+    expect(popup.getByText("$59.99 / year")).toBeDefined();
+    expect(screen.getByRole("complementary", { hidden: true }).getAttribute("aria-hidden")).toBe(
+      "true",
+    );
+  });
+
+  it("flags a missing product on the button", () => {
+    editor(twoSlots, { products: { pro_year: priced } });
+
+    fireEvent.click(screen.getByRole("button", { name: "View anyway" }));
+    fireEvent.click(screen.getByRole("button", { name: "Products, 1 missing" }));
+    expect(
+      within(screen.getByRole("dialog", { name: "Products" })).getByText("Not in Superwall"),
+    ).toBeDefined();
+  });
+
+  it("shows slots as checking only while the samples load", () => {
+    editor(twoSlots, {}, true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Products, 2" }));
+    expect(screen.getAllByText("Checking…")).toHaveLength(2);
+  });
+});
