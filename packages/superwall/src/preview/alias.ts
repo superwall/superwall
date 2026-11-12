@@ -64,6 +64,7 @@ export const aliasColonPaths = (
   entries.sort((a, b) => b.real.length - a.real.length);
 
   const toAlias = (file: string): string => {
+    if (file.startsWith("\0") || !path.isAbsolute(file)) return file;
     const resolved = path.resolve(file);
     const candidates = [resolved];
     const dir = colonAncestor(resolved);
@@ -83,18 +84,39 @@ export const aliasColonPaths = (
   return { entries, toAlias };
 };
 
-export const colonAliasPlugin = (aliases: ColonAliases): Plugin => ({
-  name: "superwall:colon-alias",
-  enforce: "pre",
-  async resolveId(source, importer, options) {
-    if (aliases.entries.length === 0) return null;
-    const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
-    if (!resolved || resolved.external) return resolved;
-    const [file, query] = splitQuery(resolved.id);
-    const aliased = aliases.toAlias(file);
-    return aliased === file ? resolved : { ...resolved, id: aliased + query };
-  },
-});
+export const colonAliasPlugin = (
+  aliases: ColonAliases,
+  viteClientFiles: readonly string[] = [],
+): Plugin => {
+  const clientFiles = new Map<string, string>();
+  for (const real of viteClientFiles) {
+    const aliased = aliases.toAlias(real);
+    if (aliased !== real) clientFiles.set(aliased, real);
+  }
+  let clientInject: Plugin | undefined;
+  return {
+    name: "superwall:colon-alias",
+    enforce: "pre",
+    configResolved(config) {
+      clientInject = config.plugins.find((plugin) => plugin.name === "vite:client-inject");
+    },
+    async resolveId(source, importer, options) {
+      if (aliases.entries.length === 0) return null;
+      const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
+      if (!resolved || resolved.external) return resolved;
+      const [file, query] = splitQuery(resolved.id);
+      const aliased = aliases.toAlias(file);
+      return aliased === file ? resolved : { ...resolved, id: aliased + query };
+    },
+    async transform(code, id) {
+      const real = clientFiles.get(splitQuery(id)[0]);
+      const inject = clientInject?.transform;
+      if (real === undefined || inject === undefined) return null;
+      const handler = typeof inject === "function" ? inject : inject.handler;
+      return handler.call(this, code, real);
+    },
+  };
+};
 
 const splitQuery = (id: string): [string, string] => {
   const index = id.indexOf("?");

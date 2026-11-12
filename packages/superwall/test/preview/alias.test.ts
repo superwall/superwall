@@ -2,6 +2,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { Plugin } from "vite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { aliasColonPaths, colonAliasPlugin, colonAncestor } from "../../src/preview/alias";
 
@@ -168,9 +169,64 @@ describe("colonAliasPlugin", () => {
     expect(await resolveWith(aliases, null)).toBeNull();
   });
 
+  it("leaves virtual and relative ids alone when run from inside the colon folder", async () => {
+    const proj = folder("a:b", "proj");
+    const aliases = aliasColonPaths([proj], base);
+    const cwd = process.cwd();
+    process.chdir(proj);
+    try {
+      const virtual = { id: "\0virtual:superwall/project" };
+      const relative = { id: "paywalls/x.ts" };
+
+      expect(await resolveWith(aliases, virtual)).toBe(virtual);
+      expect(await resolveWith(aliases, relative)).toBe(relative);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
   it("does nothing when no path has a colon", async () => {
     const aliases = aliasColonPaths([folder("plain")], base);
 
     expect(await resolveWith(aliases, { id: "/anything" })).toBeNull();
+  });
+});
+
+describe("colonAliasPlugin with Vite's client inside the colon folder", () => {
+  type Hook = (this: object, code: string, id: string) => Promise<unknown>;
+  const setup = (inject: Plugin["transform"] | undefined) => {
+    const client = path.join(folder("a:b", "vite", "dist", "client"), "client.mjs");
+    const aliases = aliasColonPaths([path.dirname(client)], base);
+    const plugin = colonAliasPlugin(aliases, [client]);
+    const plugins = inject === undefined ? [] : [{ name: "vite:client-inject", transform: inject }];
+    (plugin.configResolved as (config: object) => void)({ plugins });
+    return { client, aliased: aliases.toAlias(client), transform: plugin.transform as Hook };
+  };
+
+  it("runs Vite's client injection on the linked client file under its real path", async () => {
+    const seen: string[] = [];
+    const { client, aliased, transform } = setup(function (code, id) {
+      seen.push(id);
+      return code.replace("__DEFINES__", "{}");
+    });
+
+    expect(await transform.call({}, "const d = __DEFINES__", `${aliased}?v=1`)).toBe(
+      "const d = {}",
+    );
+    expect(seen).toEqual([client]);
+  });
+
+  it("accepts Vite's object-form transform hook", async () => {
+    const { aliased, transform } = setup({ handler: (code: string) => code.toUpperCase() });
+
+    expect(await transform.call({}, "x", aliased)).toBe("X");
+  });
+
+  it("leaves every other module and a missing injection plugin alone", async () => {
+    const { aliased, transform } = setup(() => "never");
+    expect(await transform.call({}, "x", path.join(scratch, "other.ts"))).toBeNull();
+
+    const bare = setup(undefined);
+    expect(await bare.transform.call({}, "x", aliased)).toBeNull();
   });
 });

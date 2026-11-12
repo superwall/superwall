@@ -48,6 +48,12 @@ const RESOLVED_VIRTUAL_PROJECT_ID = "\0" + VIRTUAL_PROJECT_ID;
 
 const previewMount = fileURLToPath(new URL("./mount.tsx", import.meta.url));
 const frameworkDir = fileURLToPath(new URL("../../", import.meta.url));
+const viteClientDir = path.join(
+  path.dirname(fs.realpathSync(createRequire(import.meta.url).resolve("vite/package.json"))),
+  "dist",
+  "client",
+);
+const viteClientFiles = ["client.mjs", "env.mjs"].map((file) => path.join(viteClientDir, file));
 
 const studioDistDir = (): string | undefined => {
   try {
@@ -438,9 +444,10 @@ export const startPreviewServer = async (
   const requested = (typeof projectRoots === "string" ? [projectRoots] : [...projectRoots]).map(
     (root) => path.resolve(root),
   );
-  const aliases = aliasColonPaths([...requested, frameworkDir]);
+  const aliases = aliasColonPaths([...requested, frameworkDir, viteClientDir]);
   const roots = requested.map(aliases.toAlias);
   const framework = aliases.toAlias(frameworkDir);
+  const viteClient = aliases.toAlias(viteClientDir);
   const mount = aliases.toAlias(previewMount);
   const projects = readProjects(roots);
   const first = projects[0];
@@ -463,7 +470,7 @@ export const startPreviewServer = async (
     assetsInclude: EXTRA_ASSET_TYPES.map((extension) => `**/*.${extension}`),
     esbuild: { jsx: "automatic", jsxImportSource: "react" },
     plugins: [
-      colonAliasPlugin(aliases),
+      colonAliasPlugin(aliases, viteClientFiles),
       react(),
       previewPlugin(
         projects.map((one) => one.project.root),
@@ -500,6 +507,7 @@ export const startPreviewServer = async (
         allow: [
           ...projects.map((one) => one.project.root),
           framework,
+          ...(viteClient === viteClientDir ? [] : [viteClient]),
           searchForWorkspaceRoot(first.project.superwallDir),
         ],
       },
