@@ -166,12 +166,24 @@ skill.
   does a shared file the pusher lacks. `superwall.lock` merges per entry (an
   unreadable one in the repo refuses, unless `--overwrite-source`) and
   `superwall.d.ts` takes the pusher's, so a conflict in only those two
-  resolves itself. Only the
+  resolves itself. The lock committed is read from disk at push time
+  (`withCurrentLock`), never from the tree collected before the push, and
+  the pushed surface's entry is settled (its new snapshot, no
+  `sourcePending`), so the repo never trails a push. The merge also drops
+  any other id of the same kind bound to the pushed entry's paywall (the
+  name before a rename) and any id that was in the lock at the sync point,
+  is unchanged in the repo and is gone locally. Only the
   pusher's own paths can refuse, naming those files and pointing at
   `superwall pull`; `--overwrite-source` replaces only them. `superwall pull`
   merges the source repo into the project (files, bindings, sync point),
   changes nothing on a conflict unless `--theirs`, and keeps a local
-  `sourcePending`; `pull --app` clones it into an empty folder. Git runs with
+  `sourcePending`; `pull --app` clones it into an empty folder. Its lock
+  merge is three-way against the lock at the sync point (`baseLock`): a
+  binding the repo left as it was synced keeps the local one, deleted
+  included, and one the repo changed wins. Without a readable sync-point
+  lock it falls back to the two-way merge. Either way a binding from the
+  repo is skipped when its paywall is already bound locally under another
+  id, so one paywall is never bound under two names. Git runs with
   hooks, signing and autocrlf off and the caller's `GIT_DIR`-style variables
   dropped, so the user's setup never changes what is committed. `--source`
   also pushes every reached app whose paywalls built the same, through any
