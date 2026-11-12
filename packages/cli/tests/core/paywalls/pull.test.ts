@@ -846,3 +846,35 @@ test("a teammate's rebinding to a paywall you bound under another name keeps you
     b: { ios: { paywallId: "2", snapshot: "b" } },
   });
 });
+
+test("a pulled rebind never binds one paywall to two surfaces, whichever surface comes first", () => {
+  const apps = { ios: "15790" };
+  const base = lock({
+    apps,
+    paywalls: { a: { ios: { paywallId: "2" } }, b: { ios: { paywallId: "1" } } },
+  });
+  const remote = lock({
+    apps,
+    paywalls: { a: { ios: { paywallId: "3" } }, b: { ios: { paywallId: "2" } } },
+  });
+  for (const order of [
+    ["a", "b", "c"],
+    ["c", "b", "a"],
+  ]) {
+    const all: Record<string, { ios: { paywallId: string } }> = {
+      a: { ios: { paywallId: "2" } },
+      b: { ios: { paywallId: "1" } },
+      c: { ios: { paywallId: "3" } },
+    };
+    const local = lock({
+      apps,
+      paywalls: Object.fromEntries(order.map((id) => [id, all[id] ?? {}])),
+    });
+    const merged = mergePulledLock(local, formatLock(remote), undefined, formatLock(base));
+    const bound = Object.values(merged.paywalls).map((bindings) => bindings.ios?.paywallId);
+    assert.equal(new Set(bound).size, bound.length, `order ${order.join()}: ${bound.join()}`);
+    assert.deepEqual(merged.paywalls.c, { ios: { paywallId: "3" } });
+    assert.deepEqual(merged.paywalls.a, { ios: { paywallId: "2" } });
+    assert.deepEqual(merged.paywalls.b, { ios: { paywallId: "1" } });
+  }
+});

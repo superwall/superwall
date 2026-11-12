@@ -119,27 +119,27 @@ const mergeSection = (
       })),
     };
   });
-  const bound = new Map<string, Set<string>>();
-  const bind = (platform: string, paywallId: string) =>
-    bound.set(platform, (bound.get(platform) ?? new Set<string>()).add(paywallId));
-  for (const { picks } of chosen) {
-    for (const { platform, own, binding } of picks) {
-      if (binding && binding === own) bind(platform, binding.paywallId);
+  const picks = chosen.flatMap(({ picks }) => picks);
+  const key = (platform: string, binding: SurfaceBinding) =>
+    JSON.stringify([platform, binding.paywallId]);
+  for (let changed = true; changed; ) {
+    changed = false;
+    const users = new Map<string, number>();
+    for (const { platform, binding } of picks) {
+      if (binding) users.set(key(platform, binding), (users.get(key(platform, binding)) ?? 0) + 1);
+    }
+    for (const pick of picks) {
+      if (!pick.binding || pick.binding === pick.own) continue;
+      if ((users.get(key(pick.platform, pick.binding)) ?? 0) < 2) continue;
+      pick.binding = pick.own;
+      changed = true;
     }
   }
   const merged: Record<string, SurfaceBindings> = {};
   for (const { id, picks } of chosen) {
     const bindings: SurfaceBindings = {};
-    for (const { platform, own, binding } of picks) {
-      if (!binding) continue;
-      if (binding !== own) {
-        if (bound.get(platform)?.has(binding.paywallId)) {
-          if (own) bindings[platform] = own;
-          continue;
-        }
-        bind(platform, binding.paywallId);
-      }
-      bindings[platform] = binding;
+    for (const { platform, binding } of picks) {
+      if (binding) bindings[platform] = binding;
     }
     const emptyHere = id in local && Object.keys(local[id] ?? {}).length === 0;
     if (Object.keys(bindings).length > 0 || emptyHere) merged[id] = bindings;
