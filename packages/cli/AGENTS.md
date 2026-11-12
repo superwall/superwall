@@ -465,6 +465,28 @@ as the viewer. The platform itself lives in a private repo.
 - **A cancel waits for cleanup.** `ctx.onCancel` runs before lifecycle exits on Ctrl-C at
   a TTY, up to 3 seconds, because that listener used to exit first and skip `stop()`.
 
+## Staff access key (`src/core/staff/`, `native/staff-key/`)
+
+Superwall staff reach customer orgs they don't belong to with per-org grants bound to a key
+the CLI holds. That key is a P-256 key in the Mac's Secure Enclave, behind a small Swift
+helper; `superwall staff` commands come later and build on it.
+
+- **macOS only, from one list:** `STAFF_ACCESS_PLATFORMS` in `src/core/staff/key.ts`. Every
+  call refuses elsewhere with `unsupported_platform` before running anything. No fallback
+  to a key in a file.
+- **The helper signs only DPoP proofs it builds itself** (random `jti`, `htu` in the api's
+  origin + path form, `iat` within 120 s). Never add an op that signs caller-supplied bytes
+  or returns key material.
+- **The protocol is versioned** (`STAFF_KEY_PROTOCOL`, the README's table). Additive fields
+  stay within a version; anything else bumps it in the helper and the wrapper together.
+- **Proofs must pass the api's checks.** `tests/helpers/dpop.ts` ports paywall-next's
+  `verifyDpopProof` (`packages/api/src/v2/authn/staffGrant/StaffGrant.ts`); change both
+  when the api's rules change (header, claims, the 15 s window).
+- `key.test.ts` runs the wrapper against a fake helper everywhere;
+  `key.secure-enclave.test.ts` runs the real one on a Mac once `bun run build:staff-key`
+  (or `swift build`) has built it. Release signing and notarization need Brian: see
+  `native/staff-key/README.md`.
+
 ## One registry, two hosts (CLI and MCP)
 
 The registry is the only definition of a command. The terminal and the MCP
