@@ -12,7 +12,7 @@ export type ColonAliases = {
 };
 
 const isInside = (dir: string, file: string): boolean =>
-  file === dir || file.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep);
+  file === dir || file.startsWith(dir + path.sep);
 
 export const colonAncestor = (file: string): string | undefined => {
   const parts = path.resolve(file).split(path.sep);
@@ -22,7 +22,16 @@ export const colonAncestor = (file: string): string | undefined => {
   return undefined;
 };
 
-const aliasBase = (): string => path.join(fs.realpathSync(os.tmpdir()), "superwall-dev");
+const aliasBase = (): string =>
+  path.join(fs.realpathSync(os.tmpdir()), `superwall-dev-${os.userInfo().uid}`);
+
+const claimPrivate = (base: string): void => {
+  fs.mkdirSync(base, { recursive: true, mode: 0o700 });
+  const stat = fs.lstatSync(base);
+  if (!stat.isDirectory() || stat.uid !== os.userInfo().uid || (stat.mode & 0o077) !== 0) {
+    throw new Error(`${base} must be a folder only you can write to`);
+  }
+};
 
 const linkFor = (dir: string, base: string): ColonAlias => {
   let real: string;
@@ -36,6 +45,7 @@ const linkFor = (dir: string, base: string): ColonAlias => {
   const hash = createHash("sha256").update(real).digest("hex").slice(0, 12);
   const alias = path.join(base, hash, path.basename(real).replaceAll(":", "-"));
   try {
+    claimPrivate(base);
     const current = fs.lstatSync(alias, { throwIfNoEntry: false });
     if (current?.isSymbolicLink() && fs.readlinkSync(alias) === real) return { real, alias };
     if (current) fs.rmSync(alias, { recursive: false, force: true });

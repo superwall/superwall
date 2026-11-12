@@ -127,6 +127,31 @@ describe("aliasColonPaths", () => {
     );
   });
 
+  it("refuses a link folder that others can write to", () => {
+    const proj = folder("a:b", "proj");
+    fs.mkdirSync(base, { mode: 0o777 });
+    fs.chmodSync(base, 0o777);
+
+    expect(() => aliasColonPaths([proj], base)).toThrow(
+      `${base} must be a folder only you can write to`,
+    );
+  });
+
+  it("refuses a link folder that is itself a symlink", () => {
+    const proj = folder("a:b", "proj");
+    fs.symlinkSync(folder("decoy"), base, "dir");
+
+    expect(() => aliasColonPaths([proj], base)).toThrow(
+      `${base} must be a folder only you can write to`,
+    );
+  });
+
+  it("creates the link folder so only its owner can write to it", () => {
+    aliasColonPaths([folder("a:b", "proj")], base);
+
+    expect(fs.statSync(base).mode & 0o077).toBe(0);
+  });
+
   it("stops with an error naming the folder when the colon folder does not exist", () => {
     const missing = path.join(scratch, "gone:here", "proj");
 
