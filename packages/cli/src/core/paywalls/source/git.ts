@@ -114,7 +114,7 @@ export function materializeSourceTree(
   dir: string,
   files: readonly SourceFile[],
   scope: SourceScope,
-  options: { onRemote?: boolean; overwrite?: boolean } = {},
+  options: { onRemote?: boolean; overwrite?: boolean; application?: string } = {},
 ): void {
   const theirs = new Map<string, Buffer>();
   for (const derived of derivedFilesOf(scope)) {
@@ -165,6 +165,7 @@ export function materializeSourceTree(
         mergeLockText(repoLock, file.content.toString("utf8"), scope, {
           replaceUnreadable: options.overwrite,
           base: keepShared ? undefined : repoLock,
+          application: options.application,
         }),
       );
     } else {
@@ -311,6 +312,8 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
       input.message.kind === "project"
         ? { kind: "project" }
         : { kind: input.message.kind, id: input.message.surface };
+    const application =
+      input.message.kind === "artifact" ? undefined : input.message.applicationId;
     const head = await revParse("HEAD");
     const base = input.base && head && !input.overwrite ? await revParse(input.base) : undefined;
     if (base && base !== head) await run(["checkout", "--quiet", "--detach", base]);
@@ -327,6 +330,7 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     materializeSourceTree(dir, input.files, scope, {
       onRemote: onRemote && scope.kind !== "artifact",
       overwrite: input.overwrite,
+      application,
     });
 
     await run(["add", "-A"]);
@@ -384,6 +388,7 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
           own,
           scope,
           base,
+          application,
         });
         await confirmIncoming(parent ?? own, upstream);
       }
@@ -496,6 +501,7 @@ async function mergeUpstream(
     own,
     scope,
     base,
+    application,
   }: {
     run: Run;
     committing: NodeJS.ProcessEnv;
@@ -503,6 +509,7 @@ async function mergeUpstream(
     own: string;
     scope: SourceScope;
     base: string | undefined;
+    application: string | undefined;
   },
 ): Promise<void> {
   let failure: unknown;
@@ -539,7 +546,7 @@ async function mergeUpstream(
     const lock =
       mineLock === undefined
         ? theirsLock
-        : mergeLockText(theirsLock, mineLock, scope, { base: baseLock });
+        : mergeLockText(theirsLock, mineLock, scope, { base: baseLock, application });
     await settle(run, dir, LOCK_FILE, lock);
   }
   for (const file of derived) {

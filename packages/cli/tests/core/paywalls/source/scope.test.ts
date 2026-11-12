@@ -305,6 +305,7 @@ test("a binding removed here since the sync point leaves the repo's lock", () =>
   const result = JSON.parse(
     mergeLockText(formatLock(theirs), formatLock(mineAfterRemoving), scope, {
       base: formatLock(synced),
+      application: "42",
     }),
   );
 
@@ -326,6 +327,7 @@ test("a binding the repo gave another platform since the sync point is kept", ()
   const result = JSON.parse(
     mergeLockText(formatLock(theirs), formatLock(mineAfterRemoving), scope, {
       base: formatLock(synced),
+      application: "42",
     }),
   );
 
@@ -338,7 +340,7 @@ test("a binding the repo gave another platform since the sync point is kept", ()
 test("without a readable sync point nothing is removed from the repo's lock", () => {
   for (const base of [undefined, "{"]) {
     const result = JSON.parse(
-      mergeLockText(formatLock(synced), formatLock(mineAfterRemoving), scope, { base }),
+      mergeLockText(formatLock(synced), formatLock(mineAfterRemoving), scope, { base, application: "42" }),
     );
 
     assert.deepEqual(Object.keys(result.paywalls).sort(), ["a", "edited", "gone", "renamed"]);
@@ -350,10 +352,52 @@ test("a project push carries removed bindings too", () => {
   const result = JSON.parse(
     mergeLockText(formatLock(synced), formatLock(mineAfterRemoving), { kind: "project" }, {
       base: formatLock(synced),
+      application: "42",
     }),
   );
 
   assert.deepEqual(Object.keys(result.paywalls).sort(), ["a", "renamed"]);
   assert.deepEqual(result.paywalls.a, synced.paywalls.a);
   assert.deepEqual(Object.keys(result.funnels), ["kept"]);
+});
+
+test("a binding on a platform pull never brought in stays in the repo's lock", () => {
+  const both = lock({
+    apps: { ios: "42", android: "43" },
+    paywalls: {
+      a: { ios: { paywallId: "1", snapshot: "old" } },
+      droid: { android: { paywallId: "8", snapshot: "s" } },
+      gone: { ios: { paywallId: "2", snapshot: "s" } },
+    },
+  });
+  const cases: { name: string; mine: Record<string, string> }[] = [
+    { name: "a platform left out with --platform", mine: { ios: "42" } },
+    { name: "a platform bound to another app here", mine: { ios: "42", android: "99" } },
+  ];
+  for (const { name, mine } of cases) {
+    const result = JSON.parse(
+      mergeLockText(
+        formatLock(both),
+        formatLock(lock({ apps: mine, paywalls: { a: pushed } })),
+        scope,
+        { base: formatLock(both), application: "42" },
+      ),
+    );
+
+    assert.deepEqual(
+      result.paywalls,
+      { a: pushed, droid: { android: { paywallId: "8", snapshot: "s" } } },
+      name,
+    );
+  }
+});
+
+test("without the repo's app nothing is removed from the repo's lock", () => {
+  const result = JSON.parse(
+    mergeLockText(formatLock(synced), formatLock(mineAfterRemoving), scope, {
+      base: formatLock(synced),
+    }),
+  );
+
+  assert.deepEqual(Object.keys(result.funnels).sort(), ["gone", "kept"]);
 });

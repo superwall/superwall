@@ -93,7 +93,7 @@ export function mergeLockText(
   theirs: string | undefined,
   mine: string,
   scope: SurfaceScope | ProjectScope,
-  options: { replaceUnreadable?: boolean; base?: string } = {},
+  options: { replaceUnreadable?: boolean; base?: string; application?: string } = {},
 ): string {
   const own = readable(mine);
   if (!("lock" in own)) return mine;
@@ -104,7 +104,13 @@ export function mergeLockText(
     return formatLock(scoped(own.lock, scope));
   }
   const base = options.base === undefined ? undefined : readable(options.base);
-  return mergeLocks(read.lock, own.lock, scope, base && "lock" in base ? base.lock : undefined);
+  return mergeLocks(
+    read.lock,
+    own.lock,
+    scope,
+    base && "lock" in base ? base.lock : undefined,
+    options.application,
+  );
 }
 
 const SECTIONS = ["paywalls", "funnels"] as const;
@@ -122,7 +128,9 @@ const sameBindings = (a: SurfaceBindings, b: SurfaceBindings): boolean => {
   );
 };
 
-function dropRemoved(merged: LockFile, own: LockFile, base: LockFile): void {
+function dropRemoved(merged: LockFile, own: LockFile, base: LockFile, application: string): void {
+  const pulled = (platform: string) =>
+    own.apps[platform] === application && base.apps[platform] === application;
   for (const key of SECTIONS) {
     const bound = new Set(
       Object.values(own[key]).flatMap((bindings) =>
@@ -132,6 +140,7 @@ function dropRemoved(merged: LockFile, own: LockFile, base: LockFile): void {
     for (const [id, synced] of Object.entries(base[key])) {
       const theirs = merged[key][id];
       if (id in own[key] || theirs === undefined || !sameBindings(theirs, synced)) continue;
+      if (!Object.keys(synced).every(pulled)) continue;
       if (Object.values(synced).some((binding) => bound.has(binding.paywallId))) continue;
       delete merged[key][id];
     }
@@ -159,6 +168,7 @@ function mergeLocks(
   own: LockFile,
   scope: SurfaceScope | ProjectScope,
   base?: LockFile,
+  application?: string,
 ): string {
   const section = (lock: LockFile) => (scope.kind === "paywall" ? lock.paywalls : lock.funnels);
   const conflicting = new Set(
@@ -177,7 +187,7 @@ function mergeLocks(
     paywalls: { ...other.paywalls },
     funnels: { ...other.funnels },
   };
-  if (base) dropRemoved(merged, own, base);
+  if (base && application !== undefined) dropRemoved(merged, own, base, application);
   if (scope.kind === "project") {
     if (other.origins) merged.origins = other.origins;
     return formatLock(merged);
