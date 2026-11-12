@@ -112,7 +112,7 @@ test("the StoreKit export says which products it left out", async () => {
   assert.deepEqual(said(calls, "warn"), [
     "Left out 1 product not sold on the App Store: `play.pro:monthly`.",
     "Left out 1 product with no price in Superwall: `unpriced`.",
-    "Give each a price, in minor units, with `superwall patch /v2/products/<id> -d price[amount]:=399 -d price[currency]=USD`, then export again.",
+    "Price `unpriced` in minor units (399 is 3.99) with `superwall products update p3 --price '{\"amount\":<amount>,\"currency\":\"USD\"}'`, then export again.",
   ]);
   const written = JSON.parse(fs.readFileSync(path.join(dir, "Superwall.storekit"), "utf8")) as {
     products: unknown[];

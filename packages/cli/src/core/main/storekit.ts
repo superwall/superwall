@@ -11,6 +11,7 @@ import { textOf } from "./input";
 type StoreKitSkipReason = "no_identifier" | "other_store" | "no_price";
 
 export interface StoreKitSkipped {
+  id: string;
   identifier: string;
   reason: StoreKitSkipReason;
 }
@@ -76,9 +77,6 @@ const SKIP_REASONS: Array<[StoreKitSkipReason, string]> = [
   ["no_identifier", "with no store identifier"],
 ];
 
-const PRICE_HINT =
-  "Give each a price, in minor units, with `superwall patch /v2/products/<id> -d price[amount]:=399 -d price[currency]=USD`, then export again";
-
 export function describeSkipped(skipped: StoreKitSkipped[]): string[] {
   const lines: string[] = [];
   for (const [reason, label] of SKIP_REASONS) {
@@ -86,7 +84,13 @@ export function describeSkipped(skipped: StoreKitSkipped[]): string[] {
     if (names.length === 0) continue;
     const listed = names.filter(Boolean).map((name) => `\`${name}\``).join(", ");
     lines.push(`Left out ${names.length} product${names.length === 1 ? "" : "s"} ${label}${listed ? `: ${listed}` : ""}`);
-    if (reason === "no_price") lines.push(PRICE_HINT);
+    if (reason !== "no_price") continue;
+    for (const product of skipped.filter((entry) => entry.reason === reason)) {
+      lines.push(
+        `Price \`${product.identifier}\` in minor units (399 is 3.99) with ` +
+          `\`superwall products update ${product.id} --price '{"amount":<amount>,"currency":"USD"}'\`, then export again`,
+      );
+    }
   }
   return lines;
 }
@@ -98,16 +102,16 @@ export function generateStoreKit(products: Row[], options: StoreKitOptions = {})
   for (const product of products) {
     const identifier = textOf(product.identifier) ?? textOf(product.product_identifier) ?? textOf(product.name);
     if (!identifier) {
-      skipped.push({ identifier: String(product.id ?? ""), reason: "no_identifier" });
+      skipped.push({ id: String(product.id ?? ""), identifier: String(product.id ?? ""), reason: "no_identifier" });
       continue;
     }
     if (!isAppStore(product)) {
-      skipped.push({ identifier, reason: "other_store" });
+      skipped.push({ id: String(product.id ?? ""), identifier, reason: "other_store" });
       continue;
     }
     const amount = amountOf(product.price);
     if (amount === undefined) {
-      skipped.push({ identifier, reason: "no_price" });
+      skipped.push({ id: String(product.id ?? ""), identifier, reason: "no_price" });
       continue;
     }
     const internalID = String(1000 + mapped.length);

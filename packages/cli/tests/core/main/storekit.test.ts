@@ -217,14 +217,14 @@ test("products of another store, with no price or with no identifier are left ou
   assert.deepEqual(file.subscriptionGroups[0]?.subscriptions.map((s) => s.productID), ["com.floatbrowse.pro.monthly"]);
   assert.deepEqual(file.products, []);
   assert.deepEqual(skipped, [
-    { identifier: "play.pro:monthly", reason: "other_store" },
-    { identifier: "live:price_1:none", reason: "other_store" },
-    { identifier: "custom.pro", reason: "other_store" },
-    { identifier: "unpriced", reason: "no_price" },
-    { identifier: "badprice", reason: "no_price" },
-    { identifier: "negative", reason: "no_price" },
-    { identifier: "x1", reason: "no_identifier" },
-    { identifier: "", reason: "no_identifier" },
+    { id: "a1", identifier: "play.pro:monthly", reason: "other_store" },
+    { id: "s1", identifier: "live:price_1:none", reason: "other_store" },
+    { id: "c1", identifier: "custom.pro", reason: "other_store" },
+    { id: "n1", identifier: "unpriced", reason: "no_price" },
+    { id: "n2", identifier: "badprice", reason: "no_price" },
+    { id: "n3", identifier: "negative", reason: "no_price" },
+    { id: "x1", identifier: "x1", reason: "no_identifier" },
+    { id: "", identifier: "", reason: "no_identifier" },
   ]);
 });
 
@@ -267,7 +267,7 @@ test("products storekit warns about each product it left out, by reason", async 
   assert.deepEqual(said(calls, "warn"), [
     "Left out 2 products not sold on the App Store: `play.pro:monthly`, `live:price_1:none`",
     "Left out 1 product with no price in Superwall: `unpriced`",
-    "Give each a price, in minor units, with `superwall patch /v2/products/<id> -d price[amount]:=399 -d price[currency]=USD`, then export again",
+    "Price `unpriced` in minor units (399 is 3.99) with `superwall products update n1 --price '{\"amount\":<amount>,\"currency\":\"USD\"}'`, then export again",
     "Left out 1 product with no store identifier",
   ]);
 
@@ -282,10 +282,10 @@ test("products storekit --json lists what it left out under skipped", async () =
     path: out,
     products: 1,
     skipped: [
-      { identifier: "play.pro:monthly", reason: "other_store" },
-      { identifier: "live:price_1:none", reason: "other_store" },
-      { identifier: "unpriced", reason: "no_price" },
-      { identifier: "", reason: "no_identifier" },
+      { id: "a1", identifier: "play.pro:monthly", reason: "other_store" },
+      { id: "s1", identifier: "live:price_1:none", reason: "other_store" },
+      { id: "n1", identifier: "unpriced", reason: "no_price" },
+      { id: "", identifier: "", reason: "no_identifier" },
     ],
   });
   assert.deepEqual(said(calls, "warn"), []);
@@ -308,7 +308,7 @@ test("a price is written in its currency's minor units", () => {
 
 test("skipped products with an id but no identifier are named by that id", () => {
   assert.deepEqual(describeSkipped([]), []);
-  assert.deepEqual(describeSkipped([{ identifier: "x1", reason: "no_identifier" }, { identifier: "", reason: "no_identifier" }]), [
+  assert.deepEqual(describeSkipped([{ id: "x1", identifier: "x1", reason: "no_identifier" }, { id: "", identifier: "", reason: "no_identifier" }]), [
     "Left out 2 products with no store identifier: `x1`",
   ]);
 });
