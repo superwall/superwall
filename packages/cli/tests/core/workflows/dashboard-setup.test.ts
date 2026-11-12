@@ -79,16 +79,47 @@ test("existing products can be written out as a StoreKit file for Xcode", async 
   process.chdir(dir);
   const { calls } = await products(
     { select: ["export"] },
-    { existing: [{ id: "p1", identifier: "pro_monthly" }, { id: "p2", identifier: "pro_yearly" }], teams: [{ team_id: "T1" }] },
+    { existing: [{ id: "p1", identifier: "pro_monthly", price: { amount: 999, currency: "USD" } }, { id: "p2", identifier: "pro_yearly", price: { amount: 4999, currency: "USD" } }], teams: [{ team_id: "T1" }] },
   );
   assert.deepEqual(said(calls, "success"), ["2 products already in Superwall.", "Wrote `Superwall.storekit` with 2 products."]);
   assert.equal(optionsOf(calls)[0]?.hint, "Connected");
   assert.deepEqual(optionsOf(calls).map((option) => option.value), ["asc", "storekit", "export", SKIP]);
-  const written = JSON.parse(fs.readFileSync(path.join(dir, "Superwall.storekit"), "utf8")) as { products: { productID: string }[] };
+  const written = JSON.parse(fs.readFileSync(path.join(dir, "Superwall.storekit"), "utf8")) as { products: { productID: string }[]; settings: unknown };
   assert.deepEqual(written.products.map((product) => product.productID), ["pro_monthly", "pro_yearly"]);
+  assert.deepEqual(written.settings, { _developerTeamID: "T1" });
+  assert.deepEqual(said(calls, "warn"), []);
 
-  const single = await products({ select: ["export"] }, { existing: [{ identifier: "pro" }] });
+  const single = await products({ select: ["export"] }, { existing: [{ identifier: "pro", price: { amount: 999, currency: "USD" } }] });
   assert.deepEqual(said(single.calls, "success"), ["1 product already in Superwall.", "Wrote `Superwall.storekit` with 1 product."]);
+  assert.deepEqual((JSON.parse(fs.readFileSync(path.join(dir, "Superwall.storekit"), "utf8")) as { settings: unknown }).settings, {});
+});
+
+test("the StoreKit export says which products it left out", async () => {
+  const dir = scratch();
+  process.chdir(dir);
+  const price = { amount: 399, currency: "USD" };
+  const { calls } = await products(
+    { select: ["export"] },
+    {
+      existing: [
+        { id: "p1", identifier: "pro_monthly", store: "app_store", price, subscription: { period: "month", trial_period_days: 7 } },
+        { id: "p2", identifier: "play.pro:monthly", platform: "android", store: "play_store", price },
+        { id: "p3", identifier: "unpriced", store: "app_store", price: null },
+      ],
+    },
+  );
+  assert.deepEqual(said(calls, "success"), ["3 products already in Superwall.", "Wrote `Superwall.storekit` with 1 product."]);
+  assert.deepEqual(said(calls, "warn"), [
+    "Left out 1 product not sold on the App Store: `play.pro:monthly`.",
+    "Left out 1 product with no price in Superwall: `unpriced`.",
+    "Price `unpriced` in minor units (399 is 3.99) with `superwall products update p3 --price '{\"amount\":<amount>,\"currency\":\"USD\"}'`, then export again.",
+  ]);
+  const written = JSON.parse(fs.readFileSync(path.join(dir, "Superwall.storekit"), "utf8")) as {
+    products: unknown[];
+    subscriptionGroups: { subscriptions: { productID: string; recurringSubscriptionPeriod: string }[] }[];
+  };
+  assert.deepEqual(written.products, []);
+  assert.deepEqual(written.subscriptionGroups[0]?.subscriptions.map((s) => [s.productID, s.recurringSubscriptionPeriod]), [["pro_monthly", "P1M"]]);
 });
 
 const STORE_PRODUCTS: Record<string, Reply> = {
