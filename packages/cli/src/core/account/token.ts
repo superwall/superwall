@@ -42,8 +42,10 @@ async function refreshAccessToken(
   let d: { access_token?: string; refresh_token?: string; expires_in?: number };
   try {
     d = (await res.json()) as typeof d;
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof SyntaxError) return null;
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    throw new LoginUnreachableError(session.tokenEndpoint, error, timedOut ? timeoutMs : undefined);
   }
   if (!d.access_token) return null;
   const updated = {

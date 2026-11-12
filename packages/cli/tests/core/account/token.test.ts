@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { LoginUnreachableError, NotLoggedInError, getOAuthAccessToken, resolveAuthToken } from "@/core/account/token";
+import {
+  LoginUnreachableError,
+  NotLoggedInError,
+  getOAuthAccessToken,
+  resolveAuthToken,
+} from "@/core/account/token";
 import { readSession, type Session } from "@/core/account/storage";
 import { restoreFetch, useFetch } from "../../helpers/fetch";
 import { clearHomes, useHome } from "../../helpers/home";
@@ -81,6 +86,7 @@ test("a refresh that fails, answers without a token, or can't connect gives no t
     { match: TOKEN_ENDPOINT, text: "<html>bad gateway</html>" },
     { match: TOKEN_ENDPOINT, fail: true },
     { match: TOKEN_ENDPOINT, stall: true },
+    { match: TOKEN_ENDPOINT, stallBody: true },
   ]) {
     useHome(oauth());
     useFetch([route]);
@@ -167,6 +173,20 @@ test("a refresh that never answers gives up at its deadline", async () => {
   assert.ok(Date.now() - started < 2_000);
 });
 
+test("a refresh whose answer stalls after its headers is the same timeout, not a logout", async () => {
+  useHome();
+  const log = useFetch([{ match: TOKEN_ENDPOINT, stallBody: true }]);
+  const started = Date.now();
+
+  await assert.rejects(resolveAuthToken(oauth(), { timeoutMs: 20 }), (error: unknown) => {
+    assert.ok(error instanceof LoginUnreachableError);
+    assert.equal(error.timedOut, true);
+    return true;
+  });
+  assert.equal(log.length, 1);
+  assert.ok(Date.now() - started < 2_000);
+});
+
 test("an unreachable refresh still falls back to the session's API key", async () => {
   useHome();
   const session = oauth({ apiKey: "sk_1" });
@@ -175,6 +195,9 @@ test("an unreachable refresh still falls back to the session's API key", async (
     { match: TOKEN_ENDPOINT, stall: true },
   ]) {
     useFetch([route]);
-    assert.deepEqual(await resolveAuthToken(session, { timeoutMs: 20 }), { token: "sk_1", session });
+    assert.deepEqual(await resolveAuthToken(session, { timeoutMs: 20 }), {
+      token: "sk_1",
+      session,
+    });
   }
 });
