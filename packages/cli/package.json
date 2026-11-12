@@ -48,6 +48,7 @@
   "scripts": {
     "build": "tsdown && tsx scripts/vendor-skills.ts && bun scripts/build-tools.ts",
     "watch": "tsdown --watch",
+    "build:staff-key": "sh scripts/build-staff-key.sh",
     "regen:asc": "tsx scripts/regen-asc-index.ts",
     "skills:vendor": "tsx scripts/vendor-skills.ts",
     "test:parity": "for area in main api-and-asc apple-search-ads; do tsx --tsconfig tsconfig.json scripts/mcp-parity.ts scripts/mcp-parity/$area.json /tmp/mcp-parity-$area.json || exit 1; done",

@@ -26,6 +26,8 @@ function resolvePackageRoot(): string {
   return (root = dir);
 }
 
-export function packagedDir(name: "skills" | "prompts"): string {
-  return join(resolvePackageRoot(), name === "skills" ? "dist/skills" : name) + "/";
+const PACKAGED_DIRS = { skills: "dist/skills", prompts: "prompts", native: "dist/native" } as const;
+
+export function packagedDir(name: keyof typeof PACKAGED_DIRS): string {
+  return join(resolvePackageRoot(), PACKAGED_DIRS[name]) + "/";
 }
