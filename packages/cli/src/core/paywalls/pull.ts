@@ -148,9 +148,16 @@ function sharedPlatforms(
   remote: LockFile,
   platforms: readonly string[] | undefined,
 ): Set<string> {
+  const pulled =
+    platforms === undefined
+      ? undefined
+      : new Set(
+          platforms.map((platform) => local.apps[platform]).filter((app) => app !== undefined),
+        );
   const shared = new Set<string>();
   for (const [platform, applicationId] of Object.entries(remote.apps)) {
-    if (platforms !== undefined && !platforms.includes(platform)) continue;
+    const named = platforms === undefined || platforms.includes(platform);
+    if (!named && !pulled?.has(local.apps[platform] ?? "")) continue;
     const mine = local.apps[platform];
     if (mine !== undefined && mine !== applicationId) continue;
     shared.add(platform);

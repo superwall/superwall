@@ -25,6 +25,7 @@ import {
 import { readSourceBase, writeSourceBase } from "@/core/paywalls/source/base";
 import { PullConflictError, pullSourceTree, pushSourceTree } from "@/core/paywalls/source/git";
 import { withCurrentLock } from "@/core/paywalls/source/source-push";
+import { mergeLockText } from "@/core/paywalls/source/scope";
 import { collectSourceFiles, type SourceFile } from "@/core/paywalls/source/source";
 import { silentRenderer, useRenderer } from "@/ui";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
@@ -675,6 +676,36 @@ test("a lock at the sync point that can't be read, or of a platform the pull lef
   assert.deepEqual(scoped.paywalls, {
     a: { ios: { paywallId: "1", snapshot: "s" }, android: { paywallId: "2" } },
   });
+});
+
+test("--platform pulls every binding of the app it names, so the next push never removes one it skipped", () => {
+  const repo = lock({
+    apps: { ios: "42", web: "42" },
+    paywalls: {
+      a: { ios: { paywallId: "1", snapshot: "s" } },
+      x: { web: { paywallId: "2", snapshot: "s" } },
+    },
+  });
+  const local = lock({
+    apps: { ios: "42", web: "42" },
+    paywalls: { a: { ios: { paywallId: "1", snapshot: "s" } } },
+  });
+
+  const pulled = mergePulledLock(local, formatLock(repo), ["ios"]);
+  assert.deepEqual(pulled.paywalls.x, { web: { paywallId: "2", snapshot: "s" } });
+
+  const committed = JSON.parse(
+    mergeLockText(
+      formatLock(repo),
+      formatLock({
+        ...pulled,
+        paywalls: { ...pulled.paywalls, a: { ios: { paywallId: "1", snapshot: "t" } } },
+      }),
+      { kind: "paywall", id: "a" },
+      { base: formatLock(repo), application: "42" },
+    ),
+  );
+  assert.deepEqual(committed.paywalls.x, { web: { paywallId: "2", snapshot: "s" } });
 });
 
 test("pushes then pulls leave superwall.lock as pushed: a renamed binding stays renamed and no snapshot goes back", async () => {

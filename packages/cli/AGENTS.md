@@ -174,8 +174,10 @@ skill.
   name before a rename) and any id that was in the lock at the sync point,
   is unchanged in the repo and is gone locally, but only when every
   platform of it is bound to the repo's own app both here and at the sync
-  point: a pull leaves other platforms' bindings out (`--platform`, or
-  another app here), so their absence is not a removal. Only the
+  point: a pull leaves out the bindings of platforms bound to another app
+  here, so their absence is not a removal. `pull --platform` picks which
+  apps to pull, but merges every platform bound to a picked app, since the
+  sync point is per app. Only the
   pusher's own paths can refuse, naming those files and pointing at
   `superwall pull`; `--overwrite-source` replaces only them. `superwall pull`
   merges the source repo into the project (files, bindings, sync point),
