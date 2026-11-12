@@ -8,6 +8,7 @@ import { command as screenshots } from "@/commands/app-store-connect/store/scree
 import { ascRoutes, link, one } from "../../../helpers/asc-proxy";
 import { restoreFetch, useFetch } from "../../../helpers/fetch";
 import { runCommand } from "../../../helpers/command";
+import { pngBytes } from "../../../helpers/images";
 
 afterEach(() => {
   restoreFetch();
@@ -15,13 +16,14 @@ afterEach(() => {
 });
 
 const file = join(mkdtempSync(join(tmpdir(), "asc-shot-")), "paywall.png");
-writeFileSync(file, "0123456789");
-const checksum = createHash("md5").update("0123456789").digest("hex");
+const bytes = pngBytes(1290, 2796);
+writeFileSync(file, bytes);
+const checksum = createHash("md5").update(bytes).digest("hex");
 
 const reserved = one("subscriptionAppStoreReviewScreenshots", "NEW", {
   uploadOperations: [
-    { method: "PUT", url: "https://upload.apple.example/part1", offset: 0, length: 6, requestHeaders: [{ name: "Content-Type", value: "image/png" }] },
-    { url: "https://upload.apple.example/part2", offset: 6, length: 4 },
+    { method: "PUT", url: "https://upload.apple.example/part1", offset: 0, length: 20, requestHeaders: [{ name: "Content-Type", value: "image/png" }] },
+    { url: "https://upload.apple.example/part2", offset: 20, length: 9 },
     "not an operation",
   ],
 });
@@ -43,9 +45,9 @@ test("upload replaces the screenshot: delete the old, reserve, upload each part,
   assert.deepEqual(
     uploads.map((upload) => [upload.method, upload.url, upload.body]),
     [
-      ["PUT", "https://upload.apple.example/part1", "0,1,2,3,4,5"],
-      ["PUT", "https://upload.apple.example/part2", "6,7,8,9"],
-    ].map(([method, url, body]) => [method, url, String(new Uint8Array(String(body).split(",").map((digit) => 48 + Number(digit))))]),
+      ["PUT", "https://upload.apple.example/part1", String(bytes.slice(0, 20))],
+      ["PUT", "https://upload.apple.example/part2", String(bytes.slice(20, 29))],
+    ],
   );
   assert.deepEqual(writes(), [
     { method: "DELETE", path: "/v1/subscriptionAppStoreReviewScreenshots/OLD" },
@@ -55,7 +57,7 @@ test("upload replaces the screenshot: delete the old, reserve, upload each part,
       body: {
         data: {
           type: "subscriptionAppStoreReviewScreenshots",
-          attributes: { fileName: "paywall.png", fileSize: 10 },
+          attributes: { fileName: "paywall.png", fileSize: 29 },
           relationships: { subscription: link("subscriptions", "601") },
         },
       },
@@ -67,7 +69,7 @@ test("upload replaces the screenshot: delete the old, reserve, upload each part,
     },
   ]);
   assert.equal(polls, 2);
-  assert.deepEqual(result.json, { id: "NEW", fileName: "paywall.png", fileSize: 10, state: "COMPLETE", replaced: "OLD" });
+  assert.deepEqual(result.json, { id: "NEW", fileName: "paywall.png", fileSize: 29, state: "COMPLETE", replaced: "OLD" });
 });
 
 test("an in-app purchase's first screenshot, and Apple failing to process it", async () => {
@@ -129,4 +131,15 @@ test("a dry run reads the file and plans the upload without sending it", async (
       "GET /v1/subscriptionAppStoreReviewScreenshots/${screenshot}",
     ],
   );
+});
+
+test("a file that isn't a real PNG or JPEG is refused before anything is sent to Apple", async () => {
+  const fake = join(mkdtempSync(join(tmpdir(), "asc-shot-")), "paywall.png");
+  writeFileSync(fake, "0123456789");
+  const { api, writes } = ascRoutes({});
+  const fetches = useFetch([]);
+  const result = await runCommand(screenshots, { api, words: ["upload", fake], flags: { subscription: "601" } });
+  assert.deepEqual(result.said("error"), ["paywall.png isn't a PNG or JPEG image. Export it again as PNG or JPEG."]);
+  assert.deepEqual(writes(), []);
+  assert.deepEqual(fetches, []);
 });
