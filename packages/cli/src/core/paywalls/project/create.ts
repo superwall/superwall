@@ -28,6 +28,7 @@ import {
   devCommand,
   initGit,
   installDependencies,
+  selectWorkspaceInstallNote,
   uniqueSurfaceId,
 } from "@/core/paywalls/project/setup";
 import { writeTemplate, starterConfig, writeSurfaceFiles } from "@/core/paywalls/project/template";
@@ -48,6 +49,7 @@ interface CreateOptions {
   yes: boolean;
   install: boolean;
   connect: boolean;
+  git: boolean;
 }
 
 interface Rebuild {
@@ -259,9 +261,11 @@ export async function runCreate(
   }
 
   const manager = await detectPackageManager(root);
-  const installed = options.install && (await installDependencies(ui, target, manager));
+  const install = options.install
+    ? await installDependencies(ui, target, manager)
+    : { installed: false, command: `${manager} install` };
 
-  await initGit(ui, root);
+  if (options.git) await initGit(ui, root);
 
   const rebuild = await offerRebuild(ctx, options, migration, deps);
 
@@ -274,15 +278,20 @@ export async function runCreate(
         },
       ];
 
-  const dev = installed
+  const dev = install.installed
     ? `cd superwall && ${devCommand(manager)}`
-    : `cd superwall && ${manager} install && ${devCommand(manager)}`;
+    : `cd superwall && ${install.command} && ${devCommand(manager)}`;
+  const note =
+    install.installed || install.command !== `${manager} install`
+      ? undefined
+      : selectWorkspaceInstallNote(manager, target);
+  const devSteps = [{ label: "Open the studio" }, ...(note === undefined ? [] : [{ label: note }])];
 
   ui.step("Next steps");
   ui.list({
     items:
       from === undefined
-        ? [{ label: dev, children: [{ label: "Open the studio" }] }, ...integrate]
+        ? [{ label: dev, children: devSteps }, ...integrate]
         : [
             ...migrationNextSteps(rebuild.studio !== undefined, "superwall", from, rebuild.choice).map((label) => ({
               label,

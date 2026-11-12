@@ -164,6 +164,7 @@ export const TELEPORT_SCREEN_CSS = `
   font-weight: 600;
   line-height: 1.25;
   text-wrap: balance;
+  white-space: pre-line;
 }
 .sw-teleport-body {
   margin: 0;
@@ -171,6 +172,7 @@ export const TELEPORT_SCREEN_CSS = `
   font: -apple-system-body;
   line-height: 1.35;
   text-wrap: balance;
+  white-space: pre-line;
   color: var(--sw-teleport-muted);
 }
 .sw-teleport-actions {
@@ -311,7 +313,50 @@ export const TELEPORT_SCREEN_CSS = `
   from { opacity: 1; stroke-dasharray: 0 1; stroke-dashoffset: -0.5; }
   to { opacity: 1; stroke-dasharray: 1 0; stroke-dashoffset: 0; }
 }
+.sw-teleport-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.sw-teleport-dim[data-state="open"] {
+  opacity: 1;
+}
+.sw-teleport-dim[data-state="closing"] {
+  pointer-events: none;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sw-teleport-dim-hint {
+  position: absolute;
+  inset: 0;
+  color: #fff;
+}
+.sw-teleport-dim .sw-teleport-dim-arrow {
+  color: #fff;
+}
+.sw-teleport-dim-arrow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.sw-teleport-dim .sw-teleport-dim-caption {
+  position: absolute;
+  margin: 0;
+  color: #fff;
+  transform: translateY(-50%);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Helvetica Neue", sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-wrap: balance;
+  white-space: pre-line;
+}
 @media (prefers-reduced-motion: reduce) {
+  .sw-teleport-dim { transition: none; }
   .sw-teleport-content { transform: none; }
   .sw-teleport-arc { animation: none; }
   .sw-teleport-orbit { animation-duration: 3s; }

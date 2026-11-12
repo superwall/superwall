@@ -169,6 +169,35 @@
       "ok": false
     }
   ],
+  "put": [
+    {
+      "input": {
+        "path": "/v2/campaigns/0/audiences/0/weights",
+        "d": [
+          "weights:=[]"
+        ]
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "/v2/products/does-not-exist",
+        "d": [
+          "name=parity"
+        ]
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "path": "v2/campaigns/0/audiences/0/weights",
+        "d": [
+          "weights:=[]"
+        ]
+      },
+      "ok": false
+    }
+  ],
   "patch": [
     {
       "input": {

@@ -4,7 +4,7 @@ import { parseParams } from "@/core/api/params";
 import { findOperations, resolveApiIndex } from "@/core/api/reference";
 import { apiCall } from "@/ui/spinner";
 
-type ApiVerb = "get" | "post" | "patch" | "delete";
+type ApiVerb = "get" | "post" | "put" | "patch" | "delete";
 
 export async function runApiRequest(
   ctx: CommandContext,
@@ -23,6 +23,8 @@ export async function runApiRequest(
         return api.del(withQuery(path, params));
       case "post":
         return api.post(path, params);
+      case "put":
+        return api.put(path, params);
       case "patch":
         return api.patch(path, params);
     }
