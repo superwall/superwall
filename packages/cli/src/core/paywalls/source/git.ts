@@ -581,6 +581,7 @@ export type PullResult =
       head: string;
       changes: PulledChange[];
       lock: string | undefined;
+      baseLock: string | undefined;
       types: string | undefined;
     };
 
@@ -684,6 +685,12 @@ export async function pullSourceTree(input: PullInput): Promise<PullResult> {
       head,
       changes,
       lock: await shown(LOCK_FILE),
+      baseLock: base
+        ? await run(["show", `${base}:${LOCK_FILE}`]).then(
+            (text) => text,
+            () => undefined,
+          )
+        : undefined,
       types: await shown(TYPES_FILE),
     };
   } finally {
