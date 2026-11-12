@@ -116,4 +116,4 @@ async function linkCommit(input: SourcePushInput, access: SourceAccess, commitSh
 }
 
 const isTransient = (error: unknown): boolean =>
-  error instanceof ApiUnreachableError || (error instanceof ApiError && error.status >= 500);
+  (error instanceof ApiUnreachableError && !error.timedOut) || (error instanceof ApiError && error.status >= 500);
