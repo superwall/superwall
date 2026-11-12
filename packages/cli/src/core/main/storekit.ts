@@ -76,6 +76,9 @@ const SKIP_REASONS: Array<[StoreKitSkipReason, string]> = [
   ["no_identifier", "with no store identifier"],
 ];
 
+const PRICE_HINT =
+  "Give each a price, in minor units, with `superwall patch /v2/products/<id> -d price[amount]:=399 -d price[currency]=USD`, then export again";
+
 export function describeSkipped(skipped: StoreKitSkipped[]): string[] {
   const lines: string[] = [];
   for (const [reason, label] of SKIP_REASONS) {
@@ -83,6 +86,7 @@ export function describeSkipped(skipped: StoreKitSkipped[]): string[] {
     if (names.length === 0) continue;
     const listed = names.filter(Boolean).map((name) => `\`${name}\``).join(", ");
     lines.push(`Left out ${names.length} product${names.length === 1 ? "" : "s"} ${label}${listed ? `: ${listed}` : ""}`);
+    if (reason === "no_price") lines.push(PRICE_HINT);
   }
   return lines;
 }
@@ -115,7 +119,7 @@ export function generateStoreKit(products: Row[], options: StoreKitOptions = {})
       internalID,
       amount,
       base: {
-        displayPrice: displayPrice(amount),
+        displayPrice: displayPrice(amount, currencyOf(product.price)),
         familyShareable: false,
         internalID,
         localizations: [{ description: name, displayName: name, locale: "en_US" }],
@@ -175,8 +179,21 @@ function amountOf(price: unknown): number | undefined {
   return typeof amount === "number" && Number.isFinite(amount) && amount >= 0 ? amount : undefined;
 }
 
-function displayPrice(amount: number): string {
-  return (amount / 100).toFixed(2);
+function currencyOf(price: unknown): string {
+  return textOf(field(price, "currency")) ?? "USD";
+}
+
+function displayPrice(amount: number, currency: string): string {
+  const digits = minorDigits(currency);
+  return (amount / 10 ** digits).toFixed(digits);
+}
+
+function minorDigits(currency: string): number {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    return 2;
+  }
 }
 
 function positiveInteger(value: unknown): number | undefined {
@@ -200,7 +217,7 @@ function introductoryOffer(product: Row, subscription: Record<string, unknown>, 
     return { internalID: offerID, numberOfPeriods: 1, paymentMode: "free", subscriptionPeriod };
   }
   return {
-    displayPrice: displayPrice(trialAmount),
+    displayPrice: displayPrice(trialAmount, textOf(field(product.trial_price, "currency")) ?? currencyOf(product.price)),
     internalID: offerID,
     numberOfPeriods: 1,
     paymentMode: "payUpFront",

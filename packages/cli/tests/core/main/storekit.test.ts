@@ -267,6 +267,7 @@ test("products storekit warns about each product it left out, by reason", async 
   assert.deepEqual(said(calls, "warn"), [
     "Left out 2 products not sold on the App Store: `play.pro:monthly`, `live:price_1:none`",
     "Left out 1 product with no price in Superwall: `unpriced`",
+    "Give each a price, in minor units, with `superwall patch /v2/products/<id> -d price[amount]:=399 -d price[currency]=USD`, then export again",
     "Left out 1 product with no store identifier",
   ]);
 
@@ -288,6 +289,21 @@ test("products storekit --json lists what it left out under skipped", async () =
     ],
   });
   assert.deepEqual(said(calls, "warn"), []);
+});
+
+test("a price is written in its currency's minor units", () => {
+  const price = (amount: number, currency?: string) =>
+    (written([{ identifier: "p", price: currency ? { amount, currency } : { amount } }]).file.products[0] as { displayPrice: string }).displayPrice;
+  assert.equal(price(999, "USD"), "9.99");
+  assert.equal(price(999, "EUR"), "9.99");
+  assert.equal(price(500, "JPY"), "500");
+  assert.equal(price(12345, "KWD"), "12.345");
+  assert.equal(price(999), "9.99");
+  assert.equal(price(999, "NOT-A-CODE"), "9.99");
+  const trial = written([
+    { identifier: "t", price: { amount: 1000, currency: "JPY" }, trial_price: { amount: 100 }, subscription: { period: "month", trial_period_days: 7 } },
+  ]).file.subscriptionGroups[0]?.subscriptions[0]?.introductoryOffer as { displayPrice: string };
+  assert.equal(trial.displayPrice, "100");
 });
 
 test("skipped products with an id but no identifier are named by that id", () => {
