@@ -15,10 +15,16 @@ export type TeleportSuccessCopy = {
   poweredBy: string;
 };
 
+export type TeleportReturningCopy = {
+  closed: string;
+  purchased: string;
+};
+
 type LocaleCopy = {
   dir?: "rtl";
   waiting: TeleportCopy;
   success: TeleportSuccessCopy;
+  returning: TeleportReturningCopy;
 };
 
 const COPY = {
@@ -39,6 +45,10 @@ const COPY = {
       action: "Return to App",
       poweredBy: "Powered by Superwall",
     },
+    returning: {
+      closed: "Tap to go back to the app",
+      purchased: "You're all set.\nTap to go back to the app",
+    },
   },
   es: {
     waiting: {
@@ -55,6 +65,10 @@ const COPY = {
       bodyPaidElsewhere: "Ya lo compraste en otro pago, así que no se te cobró de nuevo.",
       action: "Volver a la app",
       poweredBy: "Impulsado por Superwall",
+    },
+    returning: {
+      closed: "Toca para volver a la app",
+      purchased: "Todo listo.\nToca para volver a la app",
     },
   },
   fr: {
@@ -74,6 +88,10 @@ const COPY = {
       action: "Retour à l'app",
       poweredBy: "Propulsé par Superwall",
     },
+    returning: {
+      closed: "Touchez pour revenir à l'app",
+      purchased: "C'est fait.\nTouchez pour revenir à l'app",
+    },
   },
   de: {
     waiting: {
@@ -91,6 +109,10 @@ const COPY = {
         "Du hast das bereits in einem anderen Checkout gekauft, daher wurde dir nichts erneut berechnet.",
       action: "Zurück zur App",
       poweredBy: "Powered by Superwall",
+    },
+    returning: {
+      closed: "Tippe, um zur App zurückzukehren",
+      purchased: "Fertig.\nTippe, um zur App zurückzukehren",
     },
   },
   it: {
@@ -110,6 +132,10 @@ const COPY = {
       action: "Torna all'app",
       poweredBy: "Con tecnologia Superwall",
     },
+    returning: {
+      closed: "Tocca per tornare all'app",
+      purchased: "Tutto pronto.\nTocca per tornare all'app",
+    },
   },
   pt: {
     waiting: {
@@ -127,6 +153,10 @@ const COPY = {
         "Você já comprou isso em outro pagamento, então não foi cobrado novamente.",
       action: "Voltar para o app",
       poweredBy: "Com tecnologia Superwall",
+    },
+    returning: {
+      closed: "Toque para voltar ao app",
+      purchased: "Tudo pronto.\nToque para voltar ao app",
     },
   },
   nl: {
@@ -146,6 +176,10 @@ const COPY = {
       action: "Terug naar de app",
       poweredBy: "Mogelijk gemaakt door Superwall",
     },
+    returning: {
+      closed: "Tik om terug te gaan naar de app",
+      purchased: "Helemaal klaar.\nTik om terug te gaan naar de app",
+    },
   },
   sv: {
     waiting: {
@@ -162,6 +196,10 @@ const COPY = {
       bodyPaidElsewhere: "Du har redan köpt detta i ett annat köp, så du debiterades inte igen.",
       action: "Tillbaka till appen",
       poweredBy: "Drivs av Superwall",
+    },
+    returning: {
+      closed: "Tryck för att gå tillbaka till appen",
+      purchased: "Klart.\nTryck för att gå tillbaka till appen",
     },
   },
   da: {
@@ -181,6 +219,10 @@ const COPY = {
       action: "Tilbage til appen",
       poweredBy: "Drevet af Superwall",
     },
+    returning: {
+      closed: "Tryk for at gå tilbage til appen",
+      purchased: "Det er klaret.\nTryk for at gå tilbage til appen",
+    },
   },
   nb: {
     waiting: {
@@ -199,6 +241,10 @@ const COPY = {
       action: "Tilbake til appen",
       poweredBy: "Drevet av Superwall",
     },
+    returning: {
+      closed: "Trykk for å gå tilbake til appen",
+      purchased: "Alt klart.\nTrykk for å gå tilbake til appen",
+    },
   },
   fi: {
     waiting: {
@@ -216,6 +262,10 @@ const COPY = {
       action: "Palaa sovellukseen",
       poweredBy: "Palvelun tarjoaa Superwall",
     },
+    returning: {
+      closed: "Napauta palataksesi sovellukseen",
+      purchased: "Valmista.\nNapauta palataksesi sovellukseen",
+    },
   },
   pl: {
     waiting: {
@@ -232,6 +282,10 @@ const COPY = {
       bodyPaidElsewhere: "Kupiono to już w innej płatności, więc nie pobrano opłaty ponownie.",
       action: "Wróć do aplikacji",
       poweredBy: "Obsługiwane przez Superwall",
+    },
+    returning: {
+      closed: "Stuknij, aby wrócić do aplikacji",
+      purchased: "Gotowe.\nStuknij, aby wrócić do aplikacji",
     },
   },
   cs: {
@@ -251,6 +305,10 @@ const COPY = {
       action: "Zpět do aplikace",
       poweredBy: "Využívá Superwall",
     },
+    returning: {
+      closed: "Klepnutím se vrátíte do aplikace",
+      purchased: "Hotovo.\nKlepnutím se vrátíte do aplikace",
+    },
   },
   sk: {
     waiting: {
@@ -267,6 +325,10 @@ const COPY = {
       bodyPaidElsewhere: "Toto ste už kúpili v inej platbe, takže vám nebolo nič znova účtované.",
       action: "Späť do aplikácie",
       poweredBy: "Využíva Superwall",
+    },
+    returning: {
+      closed: "Klepnutím sa vrátite do aplikácie",
+      purchased: "Hotovo.\nKlepnutím sa vrátite do aplikácie",
     },
   },
   hu: {
@@ -286,6 +348,10 @@ const COPY = {
       action: "Vissza az alkalmazásba",
       poweredBy: "Üzemelteti: Superwall",
     },
+    returning: {
+      closed: "Koppintson a visszatéréshez az alkalmazásba",
+      purchased: "Minden kész.\nKoppintson a visszatéréshez az alkalmazásba",
+    },
   },
   ro: {
     waiting: {
@@ -303,6 +369,10 @@ const COPY = {
         "Ai cumpărat deja acest lucru într-o altă plată, așa că nu ai fost taxat din nou.",
       action: "Înapoi la aplicație",
       poweredBy: "Oferit de Superwall",
+    },
+    returning: {
+      closed: "Atinge pentru a reveni în aplicație",
+      purchased: "Gata.\nAtinge pentru a reveni în aplicație",
     },
   },
   hr: {
@@ -322,6 +392,10 @@ const COPY = {
       action: "Natrag u aplikaciju",
       poweredBy: "Pokreće Superwall",
     },
+    returning: {
+      closed: "Dodirnite za povratak u aplikaciju",
+      purchased: "Sve je spremno.\nDodirnite za povratak u aplikaciju",
+    },
   },
   el: {
     waiting: {
@@ -338,6 +412,10 @@ const COPY = {
       bodyPaidElsewhere: "Το έχετε ήδη αγοράσει σε άλλη πληρωμή, οπότε δεν χρεωθήκατε ξανά.",
       action: "Επιστροφή στην εφαρμογή",
       poweredBy: "Με την υποστήριξη του Superwall",
+    },
+    returning: {
+      closed: "Πατήστε για επιστροφή στην εφαρμογή",
+      purchased: "Όλα έτοιμα.\nΠατήστε για επιστροφή στην εφαρμογή",
     },
   },
   tr: {
@@ -357,6 +435,10 @@ const COPY = {
       action: "Uygulamaya Dön",
       poweredBy: "Superwall tarafından desteklenmektedir",
     },
+    returning: {
+      closed: "Uygulamaya dönmek için dokunun",
+      purchased: "Her şey hazır.\nUygulamaya dönmek için dokunun",
+    },
   },
   ru: {
     waiting: {
@@ -373,6 +455,10 @@ const COPY = {
       bodyPaidElsewhere: "Вы уже купили это в другом платеже, поэтому повторно деньги не списаны.",
       action: "Вернуться в приложение",
       poweredBy: "Работает на Superwall",
+    },
+    returning: {
+      closed: "Нажмите, чтобы вернуться в приложение",
+      purchased: "Готово.\nНажмите, чтобы вернуться в приложение",
     },
   },
   uk: {
@@ -391,6 +477,10 @@ const COPY = {
       action: "Повернутися в застосунок",
       poweredBy: "Працює на Superwall",
     },
+    returning: {
+      closed: "Торкніться, щоб повернутися в застосунок",
+      purchased: "Готово.\nТоркніться, щоб повернутися в застосунок",
+    },
   },
   ja: {
     waiting: {
@@ -407,6 +497,10 @@ const COPY = {
       bodyPaidElsewhere: "別の決済ですでに購入済みのため、再度請求されることはありません。",
       action: "アプリに戻る",
       poweredBy: "Powered by Superwall",
+    },
+    returning: {
+      closed: "タップしてアプリに戻る",
+      purchased: "完了しました。\nタップしてアプリに戻る",
     },
   },
   ko: {
@@ -425,6 +519,10 @@ const COPY = {
       action: "앱으로 돌아가기",
       poweredBy: "Superwall 제공",
     },
+    returning: {
+      closed: "탭하여 앱으로 돌아가기",
+      purchased: "모두 완료되었습니다.\n탭하여 앱으로 돌아가기",
+    },
   },
   "zh-Hans": {
     waiting: {
@@ -442,6 +540,10 @@ const COPY = {
       action: "返回应用",
       poweredBy: "由 Superwall 提供支持",
     },
+    returning: {
+      closed: "轻点以返回应用",
+      purchased: "一切就绪。\n轻点以返回应用",
+    },
   },
   "zh-Hant": {
     waiting: {
@@ -458,6 +560,10 @@ const COPY = {
       bodyPaidElsewhere: "你已在另一筆付款中購買，因此不會再次扣款。",
       action: "返回 App",
       poweredBy: "由 Superwall 提供支援",
+    },
+    returning: {
+      closed: "點一下以返回 App",
+      purchased: "一切就緒。\n點一下以返回 App",
     },
   },
   ar: {
@@ -477,6 +583,10 @@ const COPY = {
       action: "العودة إلى التطبيق",
       poweredBy: "مدعوم من Superwall",
     },
+    returning: {
+      closed: "اضغط للعودة إلى التطبيق",
+      purchased: "تم كل شيء.\nاضغط للعودة إلى التطبيق",
+    },
   },
   he: {
     dir: "rtl",
@@ -494,6 +604,10 @@ const COPY = {
       bodyPaidElsewhere: "כבר רכשת את זה בתשלום אחר, ולכן לא חויבת שוב.",
       action: "חזרה לאפליקציה",
       poweredBy: "מופעל על ידי Superwall",
+    },
+    returning: {
+      closed: "הקישו כדי לחזור לאפליקציה",
+      purchased: "הכול מוכן.\nהקישו כדי לחזור לאפליקציה",
     },
   },
   hi: {
@@ -513,6 +627,10 @@ const COPY = {
       action: "ऐप पर वापस जाएँ",
       poweredBy: "Superwall द्वारा संचालित",
     },
+    returning: {
+      closed: "ऐप पर लौटने के लिए टैप करें",
+      purchased: "सब तैयार है।\nऐप पर लौटने के लिए टैप करें",
+    },
   },
   id: {
     waiting: {
@@ -529,6 +647,10 @@ const COPY = {
       bodyPaidElsewhere: "Anda sudah membelinya di pembayaran lain, jadi Anda tidak ditagih lagi.",
       action: "Kembali ke Aplikasi",
       poweredBy: "Didukung oleh Superwall",
+    },
+    returning: {
+      closed: "Ketuk untuk kembali ke aplikasi",
+      purchased: "Semua beres.\nKetuk untuk kembali ke aplikasi",
     },
   },
   ms: {
@@ -547,6 +669,10 @@ const COPY = {
       action: "Kembali ke Aplikasi",
       poweredBy: "Dikuasakan oleh Superwall",
     },
+    returning: {
+      closed: "Ketik untuk kembali ke aplikasi",
+      purchased: "Semua selesai.\nKetik untuk kembali ke aplikasi",
+    },
   },
   th: {
     waiting: {
@@ -563,6 +689,10 @@ const COPY = {
       bodyPaidElsewhere: "คุณซื้อรายการนี้ไปแล้วในการชำระเงินอื่น จึงไม่ถูกเรียกเก็บเงินซ้ำ",
       action: "กลับไปที่แอป",
       poweredBy: "ขับเคลื่อนโดย Superwall",
+    },
+    returning: {
+      closed: "แตะเพื่อกลับไปที่แอป",
+      purchased: "เรียบร้อยแล้ว\nแตะเพื่อกลับไปที่แอป",
     },
   },
   vi: {
@@ -581,6 +711,10 @@ const COPY = {
         "Bạn đã mua mục này trong một lần thanh toán khác, nên không bị tính phí lại.",
       action: "Quay lại ứng dụng",
       poweredBy: "Được cung cấp bởi Superwall",
+    },
+    returning: {
+      closed: "Chạm để quay lại ứng dụng",
+      purchased: "Đã xong.\nChạm để quay lại ứng dụng",
     },
   },
 } satisfies Record<string, LocaleCopy>;

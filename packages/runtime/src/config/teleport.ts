@@ -41,8 +41,9 @@ export type SuperwallTeleportOptions<
   /**
    * What the web page does once the purchase completes: `"confirmation"`
    * shows "You're all set" with a Return to App button, `"direct"` opens the
-   * app at once. Either way the app is opened through its universal link,
-   * falling back to its URL scheme when the link doesn't open it.
+   * app at once, and shows that screen only when the app didn't open. Either
+   * way the app is opened through its universal link, falling back to its
+   * URL scheme when the link doesn't open it.
    * Default: `"confirmation"`.
    */
   completion?: "confirmation" | "direct";

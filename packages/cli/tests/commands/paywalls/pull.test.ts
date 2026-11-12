@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { afterEach, test } from "node:test";
 import { command } from "@/commands/paywalls/pull";
 import { formatLock, readLock, type LockFile } from "@/core/paywalls/project/lock";
+import { restoreBin, useBin } from "../../helpers/bin";
 import { helpLine, runCommand, runLine } from "../../helpers/command";
 import { restoreFetch, useFetch, type Route } from "../../helpers/fetch";
 import { writeFakeFrameworkProject } from "../../helpers/framework";
@@ -15,6 +16,7 @@ const dirs: string[] = [];
 const headless = { headless: "true" };
 
 afterEach(() => {
+  restoreBin();
   restoreFetch();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   if (apiKey === undefined) delete process.env.SUPERWALL_API_KEY;
@@ -261,6 +263,32 @@ test("pull --app sets up superwall/ from the app's source, with its bindings and
   assert.ok(log.some((entry) => entry.url.includes("/v2/paywalls/208540/source-access")));
   assert.match(result.said("info").join(), /ios app 42 pulled 2 files/);
   assert.match(result.said("outro").join(), /install/);
+});
+
+test("pull --app under a pnpm workspace notes the install that ignores the workspace", async () => {
+  process.env.SUPERWALL_API_KEY = "sk_live_x";
+  const { remote } = remoteWith({
+    "package.json": JSON.stringify({ name: "acme-paywalls", dependencies: { superwall: "*" } }),
+    "pnpm-lock.yaml": "",
+    "paywalls/pro/config.ts": "jom\n",
+  });
+  const root = temp("superwall-pull-clone-");
+  fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  useBin({ pnpm: "exit 0" });
+  useFetch([
+    projects(),
+    { match: "/v2/paywalls?application_id=42", body: { data: [{ id: 208540, metadata: headless }] } },
+    sourceAccess(remote),
+  ]);
+
+  const result = await runLine(`pull ${root} --app 42`);
+
+  assert.deepEqual(result.said("error"), []);
+  assert.match(
+    result.said("info").join("\n"),
+    /Not listed in the pnpm workspace\? Use `pnpm install --ignore-workspace` instead/,
+  );
+  assert.match(result.said("outro").join(), /pnpm install && pnpm dev/);
 });
 
 test("pull --app binds the app even when its source repo has no superwall.lock", async () => {

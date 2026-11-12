@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import {
   deriveApiIndex,
+  downloadApiIndex,
   findOperations,
   listMatchingOperations,
   resolveApiIndex,
@@ -320,4 +321,32 @@ test("the reference downloads from the API host and says when it can't", async (
   useHome();
   useFetch([{ match: "/openapi.json", status: 503 }]);
   await assert.rejects(resolveApiIndex(), { message: "Couldn't fetch the Superwall API reference (HTTP 503)." });
+});
+
+test("a reference download that never answers gives up, and the cached copy answers", async () => {
+  useHome();
+  const host = process.env.SUPERWALL_API_HOST;
+  process.env.SUPERWALL_API_HOST = "https://api.example.com";
+  try {
+    useFetch([{ match: "/openapi.json", stall: true }]);
+    await assert.rejects(downloadApiIndex(20), {
+      message: "The Superwall API reference at https://api.example.com/openapi.json didn't answer within 0.02s.",
+    });
+    await assert.rejects(resolveApiIndex({ fetchIndex: () => downloadApiIndex(20) }), /didn't answer within 0\.02s/);
+
+    useFetch([{ match: "/openapi.json", body: spec }]);
+    assert.equal((await resolveApiIndex()).version, "2.0.0");
+    useFetch([{ match: "/openapi.json", stall: true }]);
+    const cached = await resolveApiIndex({ refresh: true, fetchIndex: () => downloadApiIndex(20) });
+    assert.equal(cached.version, "2.0.0");
+  } finally {
+    if (host === undefined) delete process.env.SUPERWALL_API_HOST;
+    else process.env.SUPERWALL_API_HOST = host;
+  }
+});
+
+test("a reference download that can't connect keeps its own failure", async () => {
+  useHome();
+  useFetch([{ match: "/openapi.json", fail: true }]);
+  await assert.rejects(downloadApiIndex(), /offline:/);
 });

@@ -85,6 +85,8 @@ const MIME: Record<string, string> = {
   ".wasm": "application/octet-stream",
 };
 
+export const ASSET_EXTENSIONS = [...new Set([...Object.keys(MIME), ...ALWAYS_HOSTED])];
+
 export const mimeFor = (fileName: string): string =>
   MIME[path.extname(fileName).toLowerCase()] ?? "application/octet-stream";
 

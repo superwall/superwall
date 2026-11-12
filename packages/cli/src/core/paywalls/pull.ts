@@ -9,7 +9,11 @@ import { PLATFORMS, requirePlatform } from "@/core/paywalls/binding/apps";
 import { parsePlatformFlags } from "@/core/paywalls/binding/targets";
 import { requireProject, resolveProjectDir } from "@/core/paywalls/pipeline/selection";
 import { resolveFramework } from "@/core/paywalls/project/framework";
-import { detectPackageManager, devCommand } from "@/core/paywalls/project/setup";
+import {
+  detectPackageManager,
+  devCommand,
+  selectWorkspaceInstallNote,
+} from "@/core/paywalls/project/setup";
 import {
   NewerLockError,
   originKey,
@@ -488,6 +492,8 @@ async function runClone(
       ...describeChanges(written),
     ].join("\n"),
   );
+  const note = selectWorkspaceInstallNote(manager, superwallDir);
+  if (note !== undefined) ui.info(note);
   ui.outro(`Next: cd ${where} && ${manager} install && ${devCommand(manager)}`);
 }
 

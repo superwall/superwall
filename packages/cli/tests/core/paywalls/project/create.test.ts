@@ -32,7 +32,7 @@ beforeEach(() => {
   log = path.join(scratch("log"), "ran.log");
   const record = `echo "\${0##*/} $* @ $(pwd -P)" >> "${log}"`;
   process.env.PATH = useBin({
-    bun: record,
+    bun: `${record}\ncase "$1" in install) /bin/mkdir -p node_modules/superwall && echo '{"name":"superwall"}' > node_modules/superwall/package.json ;; esac`,
     git: `${record}\ncase "$1" in rev-parse) exit 128 ;; esac`,
     tar: `exec "${tar}" "$@"`,
   });
@@ -110,7 +110,7 @@ async function create(
   const ui = setup.answers === undefined ? recordingRenderer(calls) : answeringRenderer(setup.answers, calls);
   await runCreate(
     context(ui, setup.interactive ?? false),
-    { yes: false, install: true, connect: false, ...options },
+    { yes: false, install: true, connect: false, git: true, ...options },
     studioRuntime(studio, setup.choice, setup.open),
   );
   return { calls, studio };
@@ -207,12 +207,79 @@ test("the minimal template lands in superwall/, installed, committed, with the d
   assert.deepEqual(studio, []);
 });
 
+test("--no-git scaffolds without running a single git command", async () => {
+  const root = appRoot("no-git");
+  const { calls } = await create({ dir: root, git: false });
+
+  assert.ok(fs.existsSync(path.join(root, "superwall", "paywalls", "pro", "config.ts")));
+  assert.deepEqual(
+    ran().filter((line) => line.startsWith("git ")),
+    [],
+  );
+  assert.deepEqual(said(calls, "step"), ["Created superwall/ from the minimal template", "Next steps"]);
+  assert.deepEqual(nextSteps(calls), ["cd superwall && bun dev", "superwall integrate"]);
+});
+
+test("an install that leaves superwall/ without the framework keeps the working command in the next step", async () => {
+  const root = appRoot("excluded");
+  fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "");
+  const record = `echo "\${0##*/} $* @ $(pwd -P)" >> "${log}"`;
+  useBin({ pnpm: record });
+  const { calls } = await create({ dir: root });
+
+  assert.deepEqual(
+    ran().filter((line) => line.startsWith("pnpm install")),
+    [
+      `pnpm install @ ${path.join(root, "superwall")}`,
+      `pnpm install --ignore-workspace @ ${path.join(root, "superwall")}`,
+    ],
+  );
+  assert.deepEqual(nextSteps(calls)[0], "cd superwall && pnpm install --ignore-workspace && pnpm dev");
+});
+
 test("skipping the install puts it in the next step", async () => {
   const root = appRoot("no-install");
   const { calls } = await create({ dir: root, install: false });
 
   assert.equal(ran().some((line) => line.startsWith("bun install")), false);
   assert.deepEqual(nextSteps(calls)[0], "cd superwall && bun install && bun dev");
+});
+
+function devChildren(calls: RendererCall[]): string[] {
+  const list = calls.find((call) => call.method === "list")?.value as {
+    items: Array<{ children?: Array<{ label: string }> }>;
+  };
+  return (list.items[0]?.children ?? []).map((item) => item.label);
+}
+
+test("skipping the install under a pnpm workspace notes the install that ignores it", async () => {
+  const root = appRoot("no-install-pnpm");
+  fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "");
+  useBin({ pnpm: `echo "\${0##*/} $* @ $(pwd -P)" >> "${log}"` });
+  const plain = await create({ dir: root, install: false });
+  assert.deepEqual(devChildren(plain.calls), ["Open the studio"]);
+  fs.rmSync(path.join(root, "superwall"), { recursive: true });
+
+  fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  const { calls } = await create({ dir: root, install: false });
+
+  assert.equal(ran().some((line) => line.startsWith("pnpm install")), false);
+  assert.deepEqual(nextSteps(calls)[0], "cd superwall && pnpm install && pnpm dev");
+  assert.deepEqual(devChildren(calls), [
+    "Open the studio",
+    "Not listed in the pnpm workspace? Use `pnpm install --ignore-workspace` instead",
+  ]);
+});
+
+test("a retried install that still leaves nothing does not repeat the note", async () => {
+  const root = appRoot("excluded-note");
+  fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "");
+  fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  useBin({ pnpm: `echo "\${0##*/} $* @ $(pwd -P)" >> "${log}"` });
+  const { calls } = await create({ dir: root });
+
+  assert.deepEqual(nextSteps(calls)[0], "cd superwall && pnpm install --ignore-workspace && pnpm dev");
+  assert.deepEqual(devChildren(calls), ["Open the studio"]);
 });
 
 test("an app that already uses the SDK is told so and not sent to integrate", async () => {

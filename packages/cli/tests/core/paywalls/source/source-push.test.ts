@@ -36,7 +36,7 @@ interface Fake {
   bare: string;
 }
 
-async function fakeApi(options: { conflicts?: number; status?: number } = {}): Promise<Fake> {
+async function fakeApi(options: { conflicts?: number; status?: number; stall?: boolean } = {}): Promise<Fake> {
   const bare = temp("superwall-bare-");
   execFileSync("git", ["init", "--bare", "--initial-branch", "main", bare]);
 
@@ -75,6 +75,7 @@ async function fakeApi(options: { conflicts?: number; status?: number } = {}): P
       if (url.endsWith("/source-commit")) {
         fake.calls.push("link");
         fake.bodies.link = JSON.parse(raw || "{}");
+        if (options.stall) return;
         if (fake.conflicts > 0) {
           fake.conflicts -= 1;
           return send(options.status ?? 409, { error: "head moved" });
@@ -89,12 +90,15 @@ async function fakeApi(options: { conflicts?: number; status?: number } = {}): P
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
-  fake.api = createSuperwallApi({
-    authMethod: "api_key",
-    apiKey: "sk_test",
-    host: `http://127.0.0.1:${port}`,
-    createdAt: new Date().toISOString(),
-  });
+  fake.api = createSuperwallApi(
+    {
+      authMethod: "api_key",
+      apiKey: "sk_test",
+      host: `http://127.0.0.1:${port}`,
+      createdAt: new Date().toISOString(),
+    },
+    options.stall ? { timeoutMs: 300 } : {},
+  );
   return fake;
 }
 
@@ -166,6 +170,13 @@ test("a transient link failure retries only the link, never the push", async () 
 
   assert.deepEqual(fake.calls, ["access", "link", "link"]);
   assert.equal(result.status, "committed");
+});
+
+test("a link the API never answers is sent once, since it may have landed", async () => {
+  const fake = await fakeApi({ stall: true });
+
+  await assert.rejects(pushSource(input(fake)), /didn't answer within 0\.3s/);
+  assert.deepEqual(fake.calls, ["access", "link"]);
 });
 
 test("an error that a retry cannot fix is not retried at all", async () => {
