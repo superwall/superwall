@@ -95,6 +95,11 @@ you in, pick an app, or create one on the spot. `--yes` accepts the defaults;
 specific Superwall app (the dashboard's **Copy Prompt** passes it) instead of
 detecting or asking.
 
+In a folder that is not inside a git repository yet, `create` also runs
+`git init` and commits everything in that folder — your app included — as
+"New superwall project". `--no-git` skips that step, so nothing is initialized,
+staged or committed; a folder already under git is never touched either way.
+
 ### A project is a directory
 
 ```
@@ -369,6 +374,7 @@ fails names the reference entry to read:
 ```bash
 superwall get /v2/products
 superwall post /v2/products -d name="Pro Monthly" -d price:=9.99
+superwall put /v2/campaigns/123/audiences/456/weights -d 'weights:=[{"variant_id":"789","percentage":100}]'
 superwall delete /v2/products/prod_123
 ```
 
@@ -664,7 +670,7 @@ packages/cli/
 │   │   ├── paywalls/           create, dev, build, push, promote, publish, pull
 │   │   ├── main/               bootstrap, apps, products, entitlements, campaigns, paywalls, users, webhooks, events, annotations
 │   │   ├── analytics/          query
-│   │   ├── api/                docs, get, post, patch, delete
+│   │   ├── api/                docs, get, post, put, patch, delete
 │   │   ├── app-store-connect/  setup/, keys/, notification-url/, store/ (apps, products, …), api/ (get, post, …, docs)
 │   │   ├── apple-search-ads/   asa (the catalog), keys, api/ (get, post, put, delete, docs)
 │   │   ├── account/            login, logout, whoami

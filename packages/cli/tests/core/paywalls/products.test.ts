@@ -108,8 +108,8 @@ test("the catalogue is keyed by store identifier and skips products without one"
 test("the catalogue records each identifier's stores in the version vocabulary", async () => {
   const { api } = routedApi({
     "GET /v2/products?project_id=9": [
-      { identifier: "pro_year", platform: "ios", store: "app_store" },
-      { identifier: "pro_year", platform: "android", store: "play_store" },
+      { identifier: "pro_year", name: "Pro Yearly", platform: "ios", store: "app_store" },
+      { identifier: "pro_year", name: "Pro (Play)", platform: "android", store: "play_store" },
       { identifier: "stripe_elite1w", platform: "ios", store: "custom" },
       { identifier: "stripe_elite1w", platform: "custom", store: null },
       { identifier: "prod_web", platform: "stripe", store: null },
@@ -117,8 +117,9 @@ test("the catalogue records each identifier's stores in the version vocabulary",
     ],
   });
 
-  const { stores, variables } = await listProjectCatalogue(api, "9");
+  const { stores, variables, names } = await listProjectCatalogue(api, "9");
 
+  assert.deepEqual(names, { pro_year: "Pro Yearly" });
   assert.deepEqual(stores, {
     pro_year: ["app-store", "play-store"],
     stripe_elite1w: ["custom"],
@@ -159,7 +160,7 @@ test("an app's catalogue is its project's, and an app without a project has an e
   assert.deepEqual((await listApplicationCatalogue(api, "42")).stores, {
     stripe_elite1w: ["custom"],
   });
-  assert.deepEqual(await listApplicationCatalogue(api, "43"), { variables: {}, stores: {} });
+  assert.deepEqual(await listApplicationCatalogue(api, "43"), { variables: {}, stores: {}, names: {} });
 });
 
 test("an app's project is found by the app id, and an app that can't be found has none", async () => {

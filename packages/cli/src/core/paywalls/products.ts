@@ -5,11 +5,12 @@ import { findApplication } from "@/core/api/lookup";
 
 export { productVariables };
 
-type CatalogueRow = DashboardProduct & { platform?: unknown; store?: unknown };
+type CatalogueRow = DashboardProduct & { platform?: unknown; store?: unknown; name?: unknown };
 
 export interface ProjectCatalogue {
   variables: Record<string, Record<string, unknown>>;
   stores: ProductStores;
+  names: Record<string, string>;
 }
 
 function storeOf(row: CatalogueRow): VersionStore | undefined {
@@ -29,15 +30,40 @@ export async function listProjectCatalogue(
   );
   const variables = new Map<string, Record<string, unknown>>();
   const stores = new Map<string, VersionStore[]>();
+  const names = new Map<string, string>();
   for (const row of rows) {
     if (!row.identifier) continue;
     variables.set(row.identifier, productVariables(row));
+    if (typeof row.name === "string" && row.name !== "" && !names.has(row.identifier))
+      names.set(row.identifier, row.name);
     const store = storeOf(row);
     if (store === undefined) continue;
     const known = stores.get(row.identifier) ?? [];
     if (!known.includes(store)) stores.set(row.identifier, [...known, store]);
   }
-  return { variables: Object.fromEntries(variables), stores: Object.fromEntries(stores) };
+  return {
+    variables: Object.fromEntries(variables),
+    stores: Object.fromEntries(stores),
+    names: Object.fromEntries(names),
+  };
+}
+
+export function productListings(
+  catalogue: ProjectCatalogue,
+): Record<string, { name?: string; stores?: readonly VersionStore[] }> {
+  return Object.fromEntries(
+    Object.keys(catalogue.variables).map((identifier) => [
+      identifier,
+      {
+        ...(Object.hasOwn(catalogue.names, identifier)
+          ? { name: catalogue.names[identifier] }
+          : {}),
+        ...(Object.hasOwn(catalogue.stores, identifier)
+          ? { stores: catalogue.stores[identifier] }
+          : {}),
+      },
+    ]),
+  );
 }
 
 export async function listProjectProducts(
@@ -52,7 +78,7 @@ export async function listApplicationCatalogue(
   applicationId: string,
 ): Promise<ProjectCatalogue> {
   const projectId = await projectForApplication(api, applicationId);
-  if (projectId === undefined) return { variables: {}, stores: {} };
+  if (projectId === undefined) return { variables: {}, stores: {}, names: {} };
   return listProjectCatalogue(api, projectId);
 }
 

@@ -24,10 +24,18 @@ export type StudioStatus = {
   unreachable?: string;
 };
 
+export type ProductStore = "app-store" | "play-store" | "stripe" | "custom";
+
+export type ProductListing = {
+  name?: string;
+  stores?: readonly ProductStore[];
+};
+
 export type Samples = {
   device?: Record<string, unknown>;
   user?: Record<string, unknown>;
   products?: Record<string, Record<string, unknown>>;
+  catalog?: Record<string, ProductListing>;
   live?: { device: boolean; user: boolean };
   unreachable?: string;
 };
