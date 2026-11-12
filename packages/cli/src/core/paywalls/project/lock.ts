@@ -182,8 +182,28 @@ export function formatLock(lock: LockFile): string {
   return `${JSON.stringify(annotated, null, 2)}\n`;
 }
 
-export function formatSharedLock(superwallDir: string): string {
+export interface SettledSurface {
+  kind: SurfaceKind;
+  id: string;
+  paywallId: string;
+}
+
+const settled = ({ sourcePending: _, ...binding }: SurfaceBinding): SurfaceBinding => binding;
+
+export function formatSharedLock(superwallDir: string, landing?: SettledSurface): string {
   const { sources: _, ...lock } = readLock(superwallDir);
+  if (landing) {
+    const section = landing.kind === "paywall" ? lock.paywalls : lock.funnels;
+    const bindings = section[landing.id];
+    if (bindings) {
+      section[landing.id] = Object.fromEntries(
+        Object.entries(bindings).map(([platform, binding]) => [
+          platform,
+          binding.paywallId === landing.paywallId ? settled(binding) : binding,
+        ]),
+      );
+    }
+  }
   return formatLock(lock);
 }
 

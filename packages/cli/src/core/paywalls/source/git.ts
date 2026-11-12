@@ -114,7 +114,7 @@ export function materializeSourceTree(
   dir: string,
   files: readonly SourceFile[],
   scope: SourceScope,
-  options: { onRemote?: boolean; overwrite?: boolean } = {},
+  options: { onRemote?: boolean; overwrite?: boolean; application?: string } = {},
 ): void {
   const theirs = new Map<string, Buffer>();
   for (const derived of derivedFilesOf(scope)) {
@@ -159,14 +159,14 @@ export function materializeSourceTree(
     if (classifyPath(file.path, scope) === "other") continue;
     if (file.content.byteLength > LARGE_FILE_BYTES) large.push(file.path);
     if (file.path === LOCK_FILE && scope.kind !== "artifact") {
+      const repoLock = theirs.get(LOCK_FILE)?.toString("utf8");
       write(
         file.path,
-        mergeLockText(
-          theirs.get(LOCK_FILE)?.toString("utf8"),
-          file.content.toString("utf8"),
-          scope,
-          { replaceUnreadable: options.overwrite },
-        ),
+        mergeLockText(repoLock, file.content.toString("utf8"), scope, {
+          replaceUnreadable: options.overwrite,
+          base: keepShared ? undefined : repoLock,
+          application: options.application,
+        }),
       );
     } else {
       write(file.path, file.content);
@@ -312,6 +312,8 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
       input.message.kind === "project"
         ? { kind: "project" }
         : { kind: input.message.kind, id: input.message.surface };
+    const application =
+      input.message.kind === "artifact" ? undefined : input.message.applicationId;
     const head = await revParse("HEAD");
     const base = input.base && head && !input.overwrite ? await revParse(input.base) : undefined;
     if (base && base !== head) await run(["checkout", "--quiet", "--detach", base]);
@@ -328,6 +330,7 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
     materializeSourceTree(dir, input.files, scope, {
       onRemote: onRemote && scope.kind !== "artifact",
       overwrite: input.overwrite,
+      application,
     });
 
     await run(["add", "-A"]);
@@ -384,6 +387,8 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
           dir,
           own,
           scope,
+          base,
+          application,
         });
         await confirmIncoming(parent ?? own, upstream);
       }
@@ -495,7 +500,17 @@ async function mergeUpstream(
     dir,
     own,
     scope,
-  }: { run: Run; committing: NodeJS.ProcessEnv; dir: string; own: string; scope: SourceScope },
+    base,
+    application,
+  }: {
+    run: Run;
+    committing: NodeJS.ProcessEnv;
+    dir: string;
+    own: string;
+    scope: SourceScope;
+    base: string | undefined;
+    application: string | undefined;
+  },
 ): Promise<void> {
   let failure: unknown;
   await run(["merge", "--quiet", "--no-ff", "--no-commit", upstream], { env: committing }).catch(
@@ -527,7 +542,11 @@ async function mergeUpstream(
   if (scope.kind !== "artifact") {
     const theirsLock = await show(upstream, LOCK_FILE);
     const mineLock = await show(own, LOCK_FILE);
-    const lock = mineLock === undefined ? theirsLock : mergeLockText(theirsLock, mineLock, scope);
+    const baseLock = base === undefined ? undefined : await show(base, LOCK_FILE);
+    const lock =
+      mineLock === undefined
+        ? theirsLock
+        : mergeLockText(theirsLock, mineLock, scope, { base: baseLock, application });
     await settle(run, dir, LOCK_FILE, lock);
   }
   for (const file of derived) {
@@ -569,6 +588,7 @@ export type PullResult =
       head: string;
       changes: PulledChange[];
       lock: string | undefined;
+      baseLock: string | undefined;
       types: string | undefined;
     };
 
@@ -672,6 +692,12 @@ export async function pullSourceTree(input: PullInput): Promise<PullResult> {
       head,
       changes,
       lock: await shown(LOCK_FILE),
+      baseLock: base
+        ? await run(["show", `${base}:${LOCK_FILE}`]).then(
+            (text) => text,
+            () => undefined,
+          )
+        : undefined,
       types: await shown(TYPES_FILE),
     };
   } finally {

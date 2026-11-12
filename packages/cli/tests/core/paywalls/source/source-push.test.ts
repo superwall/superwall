@@ -8,7 +8,7 @@ import { afterEach, test } from "node:test";
 import { createSuperwallApi } from "@/core/api/client";
 import type { SuperwallApi } from "@/core/api/client";
 import type { SourceFile } from "@/core/paywalls/source/source";
-import { readLock } from "@/core/paywalls/project/lock";
+import { formatLock, readLock, writeLock, type LockFile } from "@/core/paywalls/project/lock";
 import { readSourceBase } from "@/core/paywalls/source/base";
 import { SourceConflictError } from "@/core/paywalls/source/git";
 import { assertGit, pushProjectSource, pushSource } from "@/core/paywalls/source/source-push";
@@ -140,8 +140,10 @@ test("the default path is a direct git push, then a link", async () => {
 
 test("a 409 is retried once, minting a fresh token first", async () => {
   const fake = await fakeApi({ conflicts: 1 });
+  const superwallDir = temp("superwall-project-");
+  writeLock(superwallDir, { version: 1, apps: { ios: "42" }, paywalls: {}, funnels: {} });
 
-  const result = await pushSource(input(fake));
+  const result = await pushSource(input(fake, { superwallDir }));
 
   assert.deepEqual(fake.calls, ["access", "link", "access", "link"]);
   assert.equal(result.status, "unchanged");
@@ -293,7 +295,12 @@ test("a fresh checkout reads the base from the committed lock, so a teammate's p
     input(fake, { superwallDir: ci, surface: "b", files: [shared, file("paywalls/b/app/index.tsx", "b\n")] }),
   );
 
-  assert.deepEqual(tracked(fake.bare), ["config.ts", "paywalls/a/app/index.tsx", "paywalls/b/app/index.tsx"]);
+  assert.deepEqual(tracked(fake.bare), [
+    "config.ts",
+    "paywalls/a/app/index.tsx",
+    "paywalls/b/app/index.tsx",
+    "superwall.lock",
+  ]);
 });
 
 test("the old .superwall/source.json is still read, then moved into the lock", async () => {
@@ -386,6 +393,7 @@ test("two projects publishing different paywalls both survive", async () => {
     "config.ts",
     "paywalls/a/app/index.tsx",
     "paywalls/b/app/index.tsx",
+    "superwall.lock",
   ]);
 });
 
@@ -410,6 +418,7 @@ test("pushing again after being rebased over a teammate keeps the teammate's pay
     "config.ts",
     "paywalls/a/app/index.tsx",
     "paywalls/b/app/index.tsx",
+    "superwall.lock",
   ]);
   assert.equal(blob(fake.bare, "paywalls/a/app/index.tsx"), "a2\n");
 });
@@ -433,7 +442,12 @@ test("a deletion removes the shared files this project deleted, never another pa
   );
   await pushSource(input(fake, { superwallDir: bob, files: [shared] }));
 
-  assert.deepEqual(tracked(fake.bare), ["config.ts", "paywalls/new/app/index.tsx", "paywalls/old/app/index.tsx"]);
+  assert.deepEqual(tracked(fake.bare), [
+    "config.ts",
+    "paywalls/new/app/index.tsx",
+    "paywalls/old/app/index.tsx",
+    "superwall.lock",
+  ]);
 });
 
 test("the same file changed two ways is refused, naming it, and nothing lands", async () => {
@@ -476,6 +490,7 @@ test("a 409 retry lands on top of the other publish instead of reverting it", as
     "config.ts",
     "paywalls/a/app/index.tsx",
     "paywalls/b/app/index.tsx",
+    "superwall.lock",
   ]);
 });
 
@@ -510,4 +525,166 @@ test("a project source push with nothing new records no base", async () => {
   await push();
   const again = await pushProjectSource({ api: fake.api, superwallDir, paywallId: "1", applicationId: "42", files, framework: "0.4.2", overwrite: true });
   assert.equal(again.status, "unchanged");
+});
+
+const repoLock = (bare: string): LockFile => JSON.parse(blob(bare, "superwall.lock"));
+
+const bound = (paywalls: LockFile["paywalls"]): LockFile => ({
+  version: 1,
+  apps: { ios: "42" },
+  paywalls,
+  funnels: {},
+});
+
+const rebind = (superwallDir: string, paywalls: LockFile["paywalls"]): void =>
+  writeLock(superwallDir, { ...readLock(superwallDir), paywalls });
+
+const surface = (id: string) => file(`paywalls/${id}/app/index.tsx`, `${id}\n`);
+
+test("the commit carries the lock as the push leaves it, not as it was collected", async () => {
+  const fake = await fakeApi();
+  const superwallDir = temp("superwall-project-");
+  const collected = file("superwall.lock", formatLock(bound({})));
+  writeLock(
+    superwallDir,
+    bound({
+      a: {
+        ios: { paywallId: "208540", snapshot: "s2", sourcePending: 7 },
+        android: { paywallId: "9", snapshot: "s1", sourcePending: 3 },
+      },
+    }),
+  );
+
+  await pushSource(input(fake, { superwallDir, surface: "a", files: [collected, surface("a")] }));
+
+  const landed = repoLock(fake.bare);
+  assert.deepEqual(landed.paywalls, {
+    a: {
+      ios: { paywallId: "208540", snapshot: "s2" },
+      android: { paywallId: "9", snapshot: "s1", sourcePending: 3 },
+    },
+  });
+  assert.equal(landed.sources, undefined);
+  assert.equal(readLock(superwallDir).paywalls.a?.ios?.sourcePending, 7);
+});
+
+test("a funnel's landing entry is settled the same way", async () => {
+  const fake = await fakeApi();
+  const superwallDir = temp("superwall-project-");
+  writeLock(superwallDir, {
+    ...bound({}),
+    funnels: { f: { ios: { paywallId: "208540", snapshot: "s", sourcePending: 7 } } },
+  });
+
+  await pushSource(
+    input(fake, {
+      superwallDir,
+      surface: "f",
+      kind: "funnel",
+      files: [file("funnels/f/app/index.tsx", "f\n")],
+    }),
+  );
+
+  assert.deepEqual(repoLock(fake.bare).funnels, { f: { ios: { paywallId: "208540", snapshot: "s" } } });
+});
+
+test("a 409 rerun commits the lock as it is by then", async () => {
+  const fake = await fakeApi({ conflicts: 1 });
+  const superwallDir = temp("superwall-project-");
+  writeLock(superwallDir, bound({ a: { ios: { paywallId: "208540", snapshot: "s", sourcePending: 7 } } }));
+
+  await pushSource(input(fake, { superwallDir, surface: "a", files: [surface("a")] }));
+
+  assert.deepEqual(fake.calls, ["access", "link", "access", "link"]);
+  assert.deepEqual(repoLock(fake.bare).paywalls, { a: { ios: { paywallId: "208540", snapshot: "s" } } });
+});
+
+test("pushing a renamed paywall takes its old name out of the repo's lock", async () => {
+  const fake = await fakeApi();
+  const superwallDir = temp("superwall-project-");
+  writeLock(superwallDir, bound({ onboarding: { ios: { paywallId: "290451", snapshot: "s1" } } }));
+  await pushSource(
+    input(fake, { superwallDir, paywallId: "290451", surface: "onboarding", files: [surface("onboarding")] }),
+  );
+
+  rebind(superwallDir, {
+    "fivepointfive-onboarding": { ios: { paywallId: "290451", snapshot: "s1" } },
+    astari: { ios: { paywallId: "291235", snapshot: "a1", sourcePending: 1 } },
+  });
+  await pushSource(
+    input(fake, {
+      superwallDir,
+      paywallId: "291235",
+      surface: "astari",
+      files: [surface("fivepointfive-onboarding"), surface("astari")],
+    }),
+  );
+
+  assert.deepEqual(repoLock(fake.bare).paywalls, {
+    onboarding: { ios: { paywallId: "290451", snapshot: "s1" } },
+    astari: { ios: { paywallId: "291235", snapshot: "a1" } },
+  });
+
+  rebind(superwallDir, {
+    ...readLock(superwallDir).paywalls,
+    "fivepointfive-onboarding": { ios: { paywallId: "290451", snapshot: "s4", sourcePending: 4 } },
+  });
+  await pushSource(
+    input(fake, {
+      superwallDir,
+      paywallId: "290451",
+      surface: "fivepointfive-onboarding",
+      files: [surface("fivepointfive-onboarding"), surface("astari")],
+    }),
+  );
+
+  assert.deepEqual(repoLock(fake.bare).paywalls, {
+    astari: { ios: { paywallId: "291235", snapshot: "a1" } },
+    "fivepointfive-onboarding": { ios: { paywallId: "290451", snapshot: "s4" } },
+  });
+});
+
+test("a binding removed here leaves the repo's lock, one a teammate changed stays", async () => {
+  const fake = await fakeApi();
+  const alice = temp("superwall-alice-");
+  const bob = temp("superwall-bob-");
+  const all = [surface("a"), surface("b"), surface("c")];
+  writeLock(
+    alice,
+    bound({
+      a: { ios: { paywallId: "1", snapshot: "a1" } },
+      b: { ios: { paywallId: "2", snapshot: "b1" } },
+      c: { ios: { paywallId: "3", snapshot: "c1" } },
+    }),
+  );
+  await pushSource(input(fake, { superwallDir: alice, paywallId: "1", surface: "a", files: all }));
+  fs.copyFileSync(path.join(alice, "superwall.lock"), path.join(bob, "superwall.lock"));
+
+  rebind(bob, { ...readLock(bob).paywalls, b: { ios: { paywallId: "2", snapshot: "b2" } } });
+  await pushSource(input(fake, { superwallDir: bob, paywallId: "2", surface: "b", files: all }));
+
+  rebind(alice, { a: { ios: { paywallId: "1", snapshot: "a2" } } });
+  await pushSource(input(fake, { superwallDir: alice, paywallId: "1", surface: "a", files: [surface("a")] }));
+
+  assert.deepEqual(repoLock(fake.bare).paywalls, {
+    a: { ios: { paywallId: "1", snapshot: "a2" } },
+    b: { ios: { paywallId: "2", snapshot: "b2" } },
+  });
+});
+
+test("a project source push commits the lock as it is on disk", async () => {
+  const fake = await fakeApi();
+  const superwallDir = temp("superwall-project-");
+  writeLock(superwallDir, { ...bound({}), apps: { ios: "42", android: "43" } });
+
+  await pushProjectSource({
+    api: fake.api,
+    superwallDir,
+    paywallId: "208540",
+    applicationId: "42",
+    files: [file("config.ts", "x\n"), file("superwall.lock", formatLock(bound({})))],
+    framework: "0.4.2",
+  });
+
+  assert.deepEqual(repoLock(fake.bare).apps, { ios: "42", android: "43" });
 });

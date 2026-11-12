@@ -9,11 +9,24 @@ import {
   appsToPull,
   boundPaywall,
   mergePulledLock,
+  pullInto,
   PullPathError,
 } from "@/core/paywalls/pull";
-import { formatLock, NewerLockError, type LockFile } from "@/core/paywalls/project/lock";
-import { PullConflictError, pullSourceTree } from "@/core/paywalls/source/git";
-import type { SourceFile } from "@/core/paywalls/source/source";
+import {
+  formatLock,
+  NewerLockError,
+  parseLock,
+  readLock,
+  writeBinding,
+  writeLock,
+  writeSnapshot,
+  type LockFile,
+} from "@/core/paywalls/project/lock";
+import { readSourceBase, writeSourceBase } from "@/core/paywalls/source/base";
+import { PullConflictError, pullSourceTree, pushSourceTree } from "@/core/paywalls/source/git";
+import { withCurrentLock } from "@/core/paywalls/source/source-push";
+import { mergeLockText } from "@/core/paywalls/source/scope";
+import { collectSourceFiles, type SourceFile } from "@/core/paywalls/source/source";
 import { silentRenderer, useRenderer } from "@/ui";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
 
@@ -505,4 +518,363 @@ test("a symlink in the source repo is refused rather than followed", async () =>
     pullSourceTree({ access: access(repo.remote), files: [] }),
     /hosts as a symlink/,
   );
+});
+
+test("a pull returns the lock at the sync point, and none without one", async () => {
+  const repo = bareRepo();
+  const syncedLock = formatLock(
+    lock({ paywalls: { a: { ios: { paywallId: "1", snapshot: "s1" } } } }),
+  );
+  const base = commit(repo, { "superwall.lock": syncedLock, "paywalls/a/index.tsx": "a\n" });
+  commit(repo, {
+    "superwall.lock": formatLock(
+      lock({ paywalls: { a: { ios: { paywallId: "1", snapshot: "s2" } } } }),
+    ),
+  });
+
+  const synced = await pullSourceTree({ access: access(repo.remote), files: [], base });
+  assert.ok(synced.status === "pulled");
+  assert.equal(synced.baseLock, syncedLock);
+
+  const unsynced = await pullSourceTree({ access: access(repo.remote), files: [] });
+  assert.ok(unsynced.status === "pulled");
+  assert.equal(unsynced.baseLock, undefined);
+});
+
+test("a sync point whose commit has no lock gives no base lock", async () => {
+  const repo = bareRepo();
+  const base = commit(repo, { "paywalls/a/index.tsx": "a\n" });
+  commit(repo, { "superwall.lock": formatLock(lock()) });
+
+  const pulled = await pullSourceTree({ access: access(repo.remote), files: [], base });
+  assert.ok(pulled.status === "pulled");
+  assert.equal(pulled.baseLock, undefined);
+});
+
+test("from a sync point, a binding you removed stays removed and your newer snapshot stays, while a teammate's changes still arrive", () => {
+  const base = lock({
+    paywalls: {
+      removed: { ios: { paywallId: "1", snapshot: "r" } },
+      "removed-then-changed": { ios: { paywallId: "2", snapshot: "old" } },
+      newer: { ios: { paywallId: "3", snapshot: "v1" } },
+      teammate: { ios: { paywallId: "4", snapshot: "v1" } },
+      "both-changed": { ios: { paywallId: "5", snapshot: "v1" } },
+      "removed-by-teammate": { ios: { paywallId: "6", snapshot: "v1" } },
+      "removed-there-changed-here": { ios: { paywallId: "7", snapshot: "v1" } },
+    },
+    funnels: { gone: { ios: { paywallId: "20" } } },
+    origins: { "paywall/removed": { paywallId: "1", url: "u1" } },
+  });
+  const local = lock({
+    paywalls: {
+      newer: { ios: { paywallId: "3", snapshot: "v2" } },
+      teammate: { ios: { paywallId: "4", snapshot: "v1" } },
+      "both-changed": { ios: { paywallId: "5", snapshot: "mine" } },
+      "removed-by-teammate": { ios: { paywallId: "6", snapshot: "v1" } },
+      "removed-there-changed-here": { ios: { paywallId: "7", snapshot: "v2" } },
+      pending: { ios: { paywallId: "8", snapshot: "p", sourcePending: 3 } },
+    },
+  });
+  const remote = lock({
+    paywalls: {
+      removed: { ios: { paywallId: "1", snapshot: "r" } },
+      "removed-then-changed": { ios: { paywallId: "2", snapshot: "new" } },
+      newer: { ios: { paywallId: "3", snapshot: "v1" } },
+      teammate: { ios: { paywallId: "4", snapshot: "v2" } },
+      "both-changed": { ios: { paywallId: "5", snapshot: "theirs" } },
+      pending: { ios: { paywallId: "8", snapshot: "landed" } },
+      added: { ios: { paywallId: "9", snapshot: "a" } },
+    },
+    funnels: { gone: { ios: { paywallId: "20" } } },
+    origins: {
+      "paywall/removed": { paywallId: "1", url: "u1" },
+      "paywall/added": { paywallId: "9", url: "u9" },
+    },
+  });
+
+  const merged = mergePulledLock(local, formatLock(remote), undefined, formatLock(base));
+
+  assert.deepEqual(merged.paywalls, {
+    newer: { ios: { paywallId: "3", snapshot: "v2" } },
+    teammate: { ios: { paywallId: "4", snapshot: "v2" } },
+    "both-changed": { ios: { paywallId: "5", snapshot: "theirs" } },
+    "removed-there-changed-here": { ios: { paywallId: "7", snapshot: "v2" } },
+    pending: { ios: { paywallId: "8", snapshot: "p", sourcePending: 3 } },
+    "removed-then-changed": { ios: { paywallId: "2", snapshot: "new" } },
+    added: { ios: { paywallId: "9", snapshot: "a" } },
+  });
+  assert.deepEqual(merged.funnels, {});
+  assert.deepEqual(merged.origins, { "paywall/added": { paywallId: "9", url: "u9" } });
+});
+
+test("a teammate's rename arrives as the new name alone", () => {
+  const base = lock({ paywalls: { old: { ios: { paywallId: "1", snapshot: "s" } } } });
+  const remote = lock({ paywalls: { renamed: { ios: { paywallId: "1", snapshot: "s2" } } } });
+
+  const merged = mergePulledLock(base, formatLock(remote), undefined, formatLock(base));
+
+  assert.deepEqual(merged.paywalls, { renamed: { ios: { paywallId: "1", snapshot: "s2" } } });
+});
+
+test("a pull never binds one paywall under a second name, with or without a sync point", () => {
+  const local = lock({
+    paywalls: {
+      renamed: { ios: { paywallId: "1", snapshot: "new" } },
+      empty: {},
+    },
+  });
+  const remote = formatLock(
+    lock({
+      apps: { ios: "42", android: "7" },
+      paywalls: {
+        old: {
+          ios: { paywallId: "1", snapshot: "stale" },
+          android: { paywallId: "1", snapshot: "a" },
+        },
+        other: { ios: { paywallId: "2", snapshot: "o" } },
+      },
+      funnels: { flow: { ios: { paywallId: "1" } } },
+    }),
+  );
+  const expected = {
+    renamed: { ios: { paywallId: "1", snapshot: "new" } },
+    empty: {},
+    old: { android: { paywallId: "1", snapshot: "a" } },
+    other: { ios: { paywallId: "2", snapshot: "o" } },
+  };
+
+  const unsynced = mergePulledLock(local, remote);
+  assert.deepEqual(unsynced.paywalls, expected);
+  assert.deepEqual(unsynced.funnels, { flow: { ios: { paywallId: "1" } } });
+
+  const synced = mergePulledLock(local, remote, undefined, formatLock(lock()));
+  assert.deepEqual(synced.paywalls, expected);
+});
+
+test("a lock at the sync point that can't be read, or of a platform the pull left out, never removes a binding", () => {
+  const local = lock({
+    apps: { ios: "42", android: "7" },
+    paywalls: { a: { ios: { paywallId: "1", snapshot: "s" }, android: { paywallId: "2" } } },
+  });
+  const remote = formatLock(
+    lock({
+      apps: { ios: "42", android: "7" },
+      paywalls: {
+        a: { ios: { paywallId: "1", snapshot: "s" }, android: { paywallId: "2" } },
+        b: { ios: { paywallId: "3" } },
+      },
+    }),
+  );
+
+  const unreadable = mergePulledLock(local, remote, undefined, "{ not json");
+  assert.deepEqual(unreadable.paywalls, {
+    a: { ios: { paywallId: "1", snapshot: "s" }, android: { paywallId: "2" } },
+    b: { ios: { paywallId: "3" } },
+  });
+
+  const scoped = mergePulledLock(local, remote, ["ios"], remote);
+  assert.deepEqual(scoped.paywalls, {
+    a: { ios: { paywallId: "1", snapshot: "s" }, android: { paywallId: "2" } },
+  });
+});
+
+test("--platform pulls every binding of the app it names, so the next push never removes one it skipped", () => {
+  const repo = lock({
+    apps: { ios: "42", web: "42" },
+    paywalls: {
+      a: { ios: { paywallId: "1", snapshot: "s" } },
+      x: { web: { paywallId: "2", snapshot: "s" } },
+    },
+  });
+  const local = lock({
+    apps: { ios: "42", web: "42" },
+    paywalls: { a: { ios: { paywallId: "1", snapshot: "s" } } },
+  });
+
+  const pulled = mergePulledLock(local, formatLock(repo), ["ios"]);
+  assert.deepEqual(pulled.paywalls.x, { web: { paywallId: "2", snapshot: "s" } });
+
+  const committed = JSON.parse(
+    mergeLockText(
+      formatLock(repo),
+      formatLock({
+        ...pulled,
+        paywalls: { ...pulled.paywalls, a: { ios: { paywallId: "1", snapshot: "t" } } },
+      }),
+      { kind: "paywall", id: "a" },
+      { base: formatLock(repo), application: "42" },
+    ),
+  );
+  assert.deepEqual(committed.paywalls.x, { web: { paywallId: "2", snapshot: "s" } });
+});
+
+test("pushes then pulls leave superwall.lock as pushed: a renamed binding stays renamed and no snapshot goes back", async () => {
+  const repo = bareRepo();
+  const source = access(repo.remote);
+  const dir = temp("superwall-pull-project-");
+  writeLock(dir, lock({ apps: { ios: "15790" } }));
+  fs.writeFileSync(path.join(dir, "package.json"), '{ "name": "project" }\n');
+  const surface = (id: string, body: string) => {
+    fs.mkdirSync(path.join(dir, "paywalls", id), { recursive: true });
+    fs.writeFileSync(path.join(dir, "paywalls", id, "index.tsx"), body);
+  };
+  let version = 0;
+  const push = async (id: string, paywallId: string, snapshot: string) => {
+    const collected = await collectSourceFiles(dir);
+    assert.ok(collected.ok);
+    if (!readLock(dir).paywalls[id]?.ios) writeBinding(dir, "paywall", id, "ios", { paywallId });
+    writeSnapshot(dir, "paywall", id, "ios", { snapshot, sourcePending: ++version });
+    const pushed = await pushSourceTree({
+      access: source,
+      base: readSourceBase(dir, source.repo),
+      files: withCurrentLock(dir, collected.files, { kind: "paywall", id, paywallId }),
+      message: {
+        kind: "paywall",
+        surface: id,
+        version,
+        paywallId,
+        applicationId: "15790",
+        framework: "0.4.2",
+      },
+    });
+    if (pushed.syncedTo) writeSourceBase(dir, source.repo, pushed.syncedTo);
+    writeSnapshot(dir, "paywall", id, "ios", { snapshot });
+  };
+  const remoteLock = () =>
+    parseLock(
+      execFileSync("git", ["--git-dir", repo.dir, "show", "main:superwall.lock"], {
+        encoding: "utf8",
+      }),
+      "remote",
+    ).paywalls;
+  const localLock = () => readLock(dir).paywalls;
+
+  surface("onboarding", "onboarding v1\n");
+  await push("onboarding", "290451", "3be7760");
+
+  fs.renameSync(
+    path.join(dir, "paywalls", "onboarding"),
+    path.join(dir, "paywalls", "fivepointfive-onboarding"),
+  );
+  const renamed = readLock(dir);
+  renamed.paywalls = { "fivepointfive-onboarding": renamed.paywalls.onboarding ?? {} };
+  writeLock(dir, renamed);
+  surface("astari-paywall", "astari v1\n");
+  await push("astari-paywall", "291235", "78793b3");
+  const oldName = { onboarding: { ios: { paywallId: "290451", snapshot: "3be7760" } } };
+  assert.deepEqual(remoteLock(), {
+    ...oldName,
+    "astari-paywall": { ios: { paywallId: "291235", snapshot: "78793b3" } },
+  });
+
+  surface("astari-paywall", "astari v2\n");
+  await push("astari-paywall", "291235", "1672c40");
+  const afterSecondPush = {
+    "fivepointfive-onboarding": { ios: { paywallId: "290451", snapshot: "3be7760" } },
+    "astari-paywall": { ios: { paywallId: "291235", snapshot: "1672c40" } },
+  };
+  assert.deepEqual(remoteLock(), {
+    ...oldName,
+    "astari-paywall": afterSecondPush["astari-paywall"],
+  });
+
+  assert.deepEqual((await pullInto(dir, source, false))?.written, []);
+  assert.deepEqual(localLock(), afterSecondPush);
+
+  surface("fivepointfive-onboarding", "onboarding v4\n");
+  await push("fivepointfive-onboarding", "290451", "db1ab33");
+  const afterFourthPush = {
+    "fivepointfive-onboarding": { ios: { paywallId: "290451", snapshot: "db1ab33" } },
+    "astari-paywall": { ios: { paywallId: "291235", snapshot: "1672c40" } },
+  };
+  assert.deepEqual(remoteLock(), afterFourthPush);
+
+  await pullInto(dir, source, false);
+  assert.deepEqual(localLock(), afterFourthPush);
+});
+
+test("a stale old name already in the source repo stays out of the project, with or without a sync point", async () => {
+  const repo = bareRepo();
+  const source = access(repo.remote);
+  const stale = lock({
+    apps: { ios: "15790" },
+    paywalls: {
+      onboarding: { ios: { paywallId: "290451", snapshot: "3be7760" } },
+      "astari-paywall": { ios: { paywallId: "291235", snapshot: "78793b3" } },
+    },
+  });
+  const base = commit(repo, {
+    "superwall.lock": formatLock(stale),
+    "package.json": '{ "name": "project" }\n',
+  });
+  const dir = temp("superwall-pull-project-");
+  fs.writeFileSync(path.join(dir, "package.json"), '{ "name": "project" }\n');
+  const mine = {
+    "fivepointfive-onboarding": { ios: { paywallId: "290451", snapshot: "db1ab33" } },
+    "astari-paywall": { ios: { paywallId: "291235", snapshot: "1672c40" } },
+  };
+
+  writeLock(
+    dir,
+    lock({ apps: { ios: "15790" }, paywalls: mine, sources: { [source.repo]: base } }),
+  );
+  await pullInto(dir, source, false);
+  assert.deepEqual(readLock(dir).paywalls, mine);
+
+  writeLock(dir, lock({ apps: { ios: "15790" }, paywalls: mine }));
+  await pullInto(dir, source, false);
+  assert.deepEqual(readLock(dir).paywalls, {
+    "fivepointfive-onboarding": mine["fivepointfive-onboarding"],
+    "astari-paywall": { ios: { paywallId: "291235", snapshot: "78793b3" } },
+  });
+});
+
+test("a teammate's rebinding to a paywall you bound under another name keeps your binding", () => {
+  const base = lock({ paywalls: { a: { ios: { paywallId: "1", snapshot: "s" } } } });
+  const local = lock({
+    paywalls: {
+      a: { ios: { paywallId: "1", snapshot: "s" } },
+      b: { ios: { paywallId: "2", snapshot: "b" } },
+    },
+  });
+  const remote = lock({ paywalls: { a: { ios: { paywallId: "2", snapshot: "t" } } } });
+
+  const merged = mergePulledLock(local, formatLock(remote), undefined, formatLock(base));
+
+  assert.deepEqual(merged.paywalls, {
+    a: { ios: { paywallId: "1", snapshot: "s" } },
+    b: { ios: { paywallId: "2", snapshot: "b" } },
+  });
+});
+
+test("a pulled rebind never binds one paywall to two surfaces, whichever surface comes first", () => {
+  const apps = { ios: "15790" };
+  const base = lock({
+    apps,
+    paywalls: { a: { ios: { paywallId: "2" } }, b: { ios: { paywallId: "1" } } },
+  });
+  const remote = lock({
+    apps,
+    paywalls: { a: { ios: { paywallId: "3" } }, b: { ios: { paywallId: "2" } } },
+  });
+  for (const order of [
+    ["a", "b", "c"],
+    ["c", "b", "a"],
+  ]) {
+    const all: Record<string, { ios: { paywallId: string } }> = {
+      a: { ios: { paywallId: "2" } },
+      b: { ios: { paywallId: "1" } },
+      c: { ios: { paywallId: "3" } },
+    };
+    const local = lock({
+      apps,
+      paywalls: Object.fromEntries(order.map((id) => [id, all[id] ?? {}])),
+    });
+    const merged = mergePulledLock(local, formatLock(remote), undefined, formatLock(base));
+    const bound = Object.values(merged.paywalls).map((bindings) => bindings.ios?.paywallId);
+    assert.equal(new Set(bound).size, bound.length, `order ${order.join()}: ${bound.join()}`);
+    assert.deepEqual(merged.paywalls.c, { ios: { paywallId: "3" } });
+    assert.deepEqual(merged.paywalls.a, { ios: { paywallId: "2" } });
+    assert.deepEqual(merged.paywalls.b, { ios: { paywallId: "1" } });
+  }
 });

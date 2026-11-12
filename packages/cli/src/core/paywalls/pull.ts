@@ -16,10 +16,12 @@ import {
 } from "@/core/paywalls/project/setup";
 import {
   NewerLockError,
+  originKey,
   parseLock,
   readLock,
   writeLock,
   type LockFile,
+  type SurfaceBinding,
   type SurfaceBindings,
 } from "@/core/paywalls/project/lock";
 import { requireApi } from "@/core/paywalls/project/session";
@@ -75,24 +77,72 @@ export function boundPaywall(lock: LockFile, platforms: readonly string[]): stri
   return undefined;
 }
 
+const sameBinding = (a: SurfaceBinding | undefined, b: SurfaceBinding | undefined): boolean =>
+  a?.paywallId === b?.paywallId && a?.snapshot === b?.snapshot;
+
+function chooseBinding(
+  own: SurfaceBinding | undefined,
+  other: SurfaceBinding | undefined,
+  synced: SurfaceBinding | undefined,
+  threeWay: boolean,
+): SurfaceBinding | undefined {
+  if (own?.sourcePending !== undefined) return own;
+  if (threeWay) {
+    if (sameBinding(other, synced)) return own;
+    if (sameBinding(own, synced)) return other;
+  }
+  if (!other) return own;
+  return own && own.paywallId !== other.paywallId ? own : other;
+}
+
 const mergeSection = (
   local: Record<string, SurfaceBindings>,
   remote: Record<string, SurfaceBindings>,
+  base: Record<string, SurfaceBindings> | undefined,
 ): Record<string, SurfaceBindings> => {
-  const merged: Record<string, SurfaceBindings> = {};
-  for (const id of new Set([...Object.keys(remote), ...Object.keys(local)])) {
+  const ids = [...Object.keys(local), ...Object.keys(remote).filter((id) => !(id in local))];
+  const chosen = ids.map((id) => {
     const mine = local[id] ?? {};
     const theirs = remote[id] ?? {};
-    const bindings: SurfaceBindings = {};
-    for (const platform of new Set([...Object.keys(theirs), ...Object.keys(mine)])) {
-      const own = mine[platform];
-      const other = theirs[platform];
-      const keep =
-        !other || (own && (own.sourcePending !== undefined || own.paywallId !== other.paywallId));
-      const chosen = keep ? own : other;
-      if (chosen) bindings[platform] = chosen;
+    const platforms = [...new Set([...Object.keys(theirs), ...Object.keys(mine)])];
+    return {
+      id,
+      picks: platforms.map((platform) => ({
+        platform,
+        own: mine[platform],
+        binding: chooseBinding(
+          mine[platform],
+          theirs[platform],
+          base?.[id]?.[platform],
+          base !== undefined,
+        ),
+      })),
+    };
+  });
+  const picks = chosen.flatMap(({ picks }) => picks);
+  const key = (platform: string, binding: SurfaceBinding) =>
+    JSON.stringify([platform, binding.paywallId]);
+  for (let changed = true; changed; ) {
+    changed = false;
+    const users = new Map<string, number>();
+    for (const { platform, binding } of picks) {
+      if (binding) users.set(key(platform, binding), (users.get(key(platform, binding)) ?? 0) + 1);
     }
-    merged[id] = bindings;
+    for (const pick of picks) {
+      if (!pick.binding || pick.binding === pick.own) continue;
+      if ((users.get(key(pick.platform, pick.binding)) ?? 0) < 2) continue;
+      pick.binding = pick.own;
+      changed = true;
+    }
+  }
+  const merged: Record<string, SurfaceBindings> = {};
+  for (const { id, picks } of chosen) {
+    const bindings: SurfaceBindings = {};
+    for (const { platform, binding } of picks) {
+      if (binding) bindings[platform] = binding;
+    }
+    const emptyHere = id in local && Object.keys(local[id] ?? {}).length === 0;
+    if (Object.keys(bindings).length > 0 || emptyHere) merged[id] = bindings;
   }
   return merged;
 };
@@ -102,9 +152,16 @@ function sharedPlatforms(
   remote: LockFile,
   platforms: readonly string[] | undefined,
 ): Set<string> {
+  const pulled =
+    platforms === undefined
+      ? undefined
+      : new Set(
+          platforms.map((platform) => local.apps[platform]).filter((app) => app !== undefined),
+        );
   const shared = new Set<string>();
   for (const [platform, applicationId] of Object.entries(remote.apps)) {
-    if (platforms !== undefined && !platforms.includes(platform)) continue;
+    const named = platforms === undefined || platforms.includes(platform);
+    if (!named && !pulled?.has(local.apps[platform] ?? "")) continue;
     const mine = local.apps[platform];
     if (mine !== undefined && mine !== applicationId) continue;
     shared.add(platform);
@@ -124,10 +181,20 @@ const onlyPlatforms = (
   return kept;
 };
 
+function syncedLock(text: string | undefined): LockFile | undefined {
+  if (text === undefined) return undefined;
+  try {
+    return parseLock(text, "The superwall.lock at the last sync");
+  } catch {
+    return undefined;
+  }
+}
+
 export function mergePulledLock(
   local: LockFile,
   remoteText: string | undefined,
   platforms?: readonly string[],
+  baseText?: string,
 ): LockFile {
   if (remoteText === undefined) return local;
   let remote: LockFile;
@@ -144,13 +211,29 @@ export function mergePulledLock(
   const apps = Object.fromEntries(
     Object.entries(remote.apps).filter(([platform]) => allowed.has(platform)),
   );
+  const base = syncedLock(baseText);
   const merged: LockFile = {
     version: 1,
     apps: { ...apps, ...local.apps },
-    paywalls: mergeSection(local.paywalls, onlyPlatforms(remote.paywalls, allowed)),
-    funnels: mergeSection(local.funnels, onlyPlatforms(remote.funnels, allowed)),
+    paywalls: mergeSection(
+      local.paywalls,
+      onlyPlatforms(remote.paywalls, allowed),
+      base && onlyPlatforms(base.paywalls, allowed),
+    ),
+    funnels: mergeSection(
+      local.funnels,
+      onlyPlatforms(remote.funnels, allowed),
+      base && onlyPlatforms(base.funnels, allowed),
+    ),
   };
-  const origins = { ...remote.origins, ...local.origins };
+  const kept = new Set([
+    ...Object.keys(merged.paywalls).map((id) => originKey("paywall", id)),
+    ...Object.keys(merged.funnels).map((id) => originKey("funnel", id)),
+  ]);
+  const theirOrigins = Object.fromEntries(
+    Object.entries(remote.origins ?? {}).filter(([key]) => kept.has(key)),
+  );
+  const origins = { ...theirOrigins, ...local.origins };
   if (Object.keys(origins).length > 0) merged.origins = origins;
   if (local.sources) merged.sources = local.sources;
   return merged;
@@ -328,7 +411,7 @@ export async function pullInto(
     theirs,
   });
   if (pulled.status === "empty") return undefined;
-  const lock = mergePulledLock(readLock(superwallDir), pulled.lock, platforms);
+  const lock = mergePulledLock(readLock(superwallDir), pulled.lock, platforms, pulled.baseLock);
   const applied = applyPulledChanges(
     superwallDir,
     pulled.changes,

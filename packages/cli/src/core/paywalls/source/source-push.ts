@@ -1,9 +1,13 @@
 import { setTimeout } from "node:timers/promises";
 import { ApiError, ApiUnreachableError, type SuperwallApi } from "@/core/api/client";
 import { linkSourceCommit, mintSourceAccess } from "@/core/api/resources";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { formatSharedLock, type SettledSurface } from "@/core/paywalls/project/lock";
 import { readSourceBase, writeSourceBase } from "./base";
 import { gitAvailable, pushSourceTree, type DirectPushResult, type SourceAccess } from "./git";
 import type { CommitMessageInput } from "./commit";
+import { LOCK_FILE } from "./scope";
 import type { SourceFile } from "./source";
 
 export interface SourcePushInput {
@@ -33,16 +37,31 @@ export async function assertGit(hasGit: () => Promise<boolean> = gitAvailable): 
   if (!(await hasGit())) throw new GitRequiredError();
 }
 
+export function withCurrentLock(
+  superwallDir: string,
+  files: readonly SourceFile[],
+  landing?: SettledSurface,
+): SourceFile[] {
+  const others = files.filter((file) => file.path !== LOCK_FILE);
+  if (!fs.existsSync(path.join(superwallDir, LOCK_FILE))) return others;
+  const lock = { path: LOCK_FILE, content: Buffer.from(formatSharedLock(superwallDir, landing)) };
+  return [...others, lock].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
 async function syncSource(
   input: Pick<SourcePushInput, "api" | "superwallDir" | "paywallId" | "files" | "overwrite">,
   message: CommitMessageInput,
 ): Promise<{ access: SourceAccess; pushed: DirectPushResult }> {
   const access = await mintSourceAccess(input.api, input.paywallId);
+  const landing =
+    message.kind === "paywall" || message.kind === "funnel"
+      ? { kind: message.kind, id: message.surface, paywallId: input.paywallId }
+      : undefined;
   const pushed = await pushSourceTree({
     access,
     base: readSourceBase(input.superwallDir, access.repo),
     overwrite: input.overwrite,
-    files: input.files,
+    files: withCurrentLock(input.superwallDir, input.files, landing),
     message,
   });
   if (pushed.syncedTo) writeSourceBase(input.superwallDir, access.repo, pushed.syncedTo);
