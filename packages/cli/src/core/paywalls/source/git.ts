@@ -63,6 +63,11 @@ const ISOLATION = [
   "core.autocrlf=false",
 ];
 
+const englishEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => ({
+  ...Object.fromEntries(Object.entries(env).filter(([key]) => key !== "LANGUAGE")),
+  LC_ALL: "C",
+});
+
 async function git(
   args: string[],
   options: { cwd?: string; env?: NodeJS.ProcessEnv; secrets?: string[] } = {},
@@ -70,7 +75,7 @@ async function git(
   try {
     const { stdout } = await run("git", [...ISOLATION, ...args], {
       cwd: options.cwd,
-      env: options.env,
+      env: englishEnv(options.env),
       maxBuffer: 64 * 1024 * 1024,
       timeout: GIT_TIMEOUT_MS,
     });
