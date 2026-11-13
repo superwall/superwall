@@ -7,6 +7,7 @@ import pc from "picocolors";
 import type { CommandContext } from "@/program/command";
 import type { SkillsUpdate } from "@/core/support/skills";
 import { spawnStream } from "@/core/workflows/agent/drivers/spawn";
+import { selectProjectInstall, type ProjectInstall } from "@/core/support/project-install";
 import {
   readAutoUpdate,
   readSkillsSync,
@@ -175,11 +176,23 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
   const { ui } = ctx;
 
   if (RUNNING_VIA_NPX()) {
-    ui.info(
-      "You're running via npx, which always fetches the latest published version - nothing to upgrade.",
-    );
+    const project = selectProjectInstall();
+    const latest = project ? (pinned ?? (await selectLatestVersion())) : null;
+    const outdated = project ? isOutdated(project, latest) : false;
+    if (project && outdated !== false) {
+      ui.warn(renderProjectPin(project, latest));
+    } else if (project) {
+      ui.info(`This project's superwall \`${project.version}\` is the latest - nothing to upgrade.`);
+    } else {
+      ui.info(
+        "You're running via npx, which always fetches the latest published version - nothing to upgrade.",
+      );
+    }
     const skills = await updateAgentSkills(ctx, updateSkillsInProcess);
-    if (ctx.json) return ctx.output.data({ upgraded: false, via: "npx", skills });
+    if (ctx.json) {
+      const data = { upgraded: false, via: "npx", skills, ...projectData(project, outdated) };
+      return ctx.output.data(data);
+    }
     return;
   }
 
@@ -218,6 +231,49 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
   writeUpdateCheck({ latest, checkedAt: new Date().toISOString() });
   spin.stop(`Upgraded \`${VERSION}\` → \`${latest}\``);
   const skills = await updateAgentSkills(ctx, () => updateSkillsWithInstalledCli(latest));
-  if (ctx.json) return ctx.output.data({ upgraded: true, from: VERSION, to: latest, skills });
+  const project = selectProjectInstall();
+  const outdated = project ? isOutdated(project, latest) : false;
+  if (ctx.json) {
+    return ctx.output.data({
+      upgraded: true,
+      from: VERSION,
+      to: latest,
+      skills,
+      ...projectData(project, outdated),
+    });
+  }
+  if (project && outdated) {
+    ui.warn(renderProjectPin(project, latest));
+    return;
+  }
   ui.outro("You're on the latest version.");
+}
+
+function isOutdated(project: ProjectInstall, latest: string | null): boolean | null {
+  if (latest === null) return null;
+  return project.version === undefined || isNewerVersion(latest, project.version);
+}
+
+function renderProjectPin(project: ProjectInstall, latest: string | null): string {
+  const pinned =
+    project.version === undefined
+      ? "a superwall of unknown version"
+      : `superwall \`${project.version}\``;
+  const runs = `This project runs its own ${pinned} from ${project.manifest}`;
+  const compared =
+    latest === null
+      ? ", and the npm registry couldn't be reached to compare it with the latest."
+      : `, not \`${latest}\`.`;
+  return `${runs}${compared} Update it: ${project.update}`;
+}
+
+function projectData(
+  project: ProjectInstall | undefined,
+  outdated: boolean | null,
+): {
+  project?: { version: string | null; manifest: string; outdated: boolean | null; update: string };
+} {
+  if (!project) return {};
+  const { version, manifest, update } = project;
+  return { project: { version: version ?? null, manifest, outdated, update } };
 }

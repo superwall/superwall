@@ -30,6 +30,8 @@ const saved = {
   target: process.env.SW_AUTO_UPDATE,
 };
 const scratch: string[] = [];
+const startDir = process.cwd();
+const startEntry = process.argv[1];
 const platform = Object.getOwnPropertyDescriptor(process, "platform");
 const comspec = process.env.ComSpec;
 
@@ -39,6 +41,8 @@ function restoreEnv(key: string, value: string | undefined): void {
 }
 
 afterEach(() => {
+  process.chdir(startDir);
+  if (startEntry !== undefined) process.argv[1] = startEntry;
   if (platform) Object.defineProperty(process, "platform", platform);
   restoreEnv("ComSpec", comspec);
   for (const dir of scratch.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
@@ -559,4 +563,121 @@ test("an automatic update to a version that isn't newer does nothing", async () 
 
   assert.equal(fs.existsSync(path.join(install.bin, "args")), false);
   assert.deepEqual(result.json, { upgraded: false, version: VERSION, skills: "current" });
+});
+
+const PIN_MANIFEST = path.join("superwall", "package.json");
+
+function inPinnedProject(version: string, lockfile = "package-lock.json"): void {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sw-upgrade-project-"));
+  scratch.push(dir);
+  const files: Record<string, string> = {
+    [PIN_MANIFEST]: JSON.stringify({ name: "paywalls", dependencies: { superwall: version } }),
+    [path.join("superwall", "node_modules", "superwall", "package.json")]: JSON.stringify({ name: "superwall", version }),
+    [path.join("superwall", lockfile)]: "",
+  };
+  for (const [file, content] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    fs.writeFileSync(path.join(dir, file), content);
+  }
+  process.chdir(dir);
+}
+
+function viaNpxWithCurrentSkills(): void {
+  process.argv[1] = "/Users/dev/.npm/_npx/abc/node_modules/.bin/superwall";
+  writeSkillsSync({ cliVersion: VERSION, syncedAt: new Date().toISOString(), ref: "next", sourceSha: "abc" });
+}
+
+test("an upgrade in a project that pins an older superwall says the pin still runs and how to update it", async () => {
+  useHome();
+  inPinnedProject("2.0.0", "bun.lock");
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  fakeGlobalInstall();
+
+  const result = await runCommand(upgrade);
+
+  assert.equal(result.said("warn").at(-1), [
+    `This project runs its own superwall \`2.0.0\` from ${PIN_MANIFEST}, not \`99.0.0\`.`,
+    "Update it: cd superwall && bun add superwall@latest",
+  ].join(" "));
+  assert.deepEqual(result.said("outro"), []);
+
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  const asJson = await runCommand(upgrade, { json: true });
+  assert.deepEqual((asJson.json as { project: unknown }).project, {
+    version: "2.0.0",
+    manifest: PIN_MANIFEST,
+    outdated: true,
+    update: "cd superwall && bun add superwall@latest",
+  });
+});
+
+test("an upgrade in a project already pinning the new release ends on the latest version", async () => {
+  useHome();
+  inPinnedProject("99.0.0");
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  fakeGlobalInstall();
+
+  const result = await runCommand(upgrade);
+
+  assert.deepEqual(result.said("warn"), []);
+  assert.deepEqual(result.said("outro"), ["You're on the latest version."]);
+});
+
+test("under npx, an older project pin is named with its update command instead of nothing to upgrade", async () => {
+  useHome();
+  inPinnedProject("2.0.0");
+  viaNpxWithCurrentSkills();
+  useFetch([
+    { match: REGISTRY, body: { version: "99.0.0" } },
+    { match: GITHUB_HEAD, body: { sha: "abc" } },
+  ]);
+
+  const result = await runCommand(upgrade, { json: false });
+
+  assert.deepEqual(result.said("info"), []);
+  assert.deepEqual(result.said("warn"), [
+    `This project runs its own superwall \`2.0.0\` from ${PIN_MANIFEST}, not \`99.0.0\`. Update it: cd superwall && npm i superwall@latest`,
+  ]);
+
+  useFetch([
+    { match: REGISTRY, body: { version: "99.0.0" } },
+    { match: GITHUB_HEAD, body: { sha: "abc" } },
+  ]);
+  const asJson = await runCommand(upgrade, { json: true });
+  assert.deepEqual(asJson.json, {
+    upgraded: false,
+    via: "npx",
+    skills: "current",
+    project: { version: "2.0.0", manifest: PIN_MANIFEST, outdated: true, update: "cd superwall && npm i superwall@latest" },
+  });
+});
+
+test("under npx, a project pin on the latest release has nothing to upgrade", async () => {
+  useHome();
+  inPinnedProject("2.0.0");
+  viaNpxWithCurrentSkills();
+  useFetch([
+    { match: REGISTRY, body: { version: "2.0.0" } },
+    { match: GITHUB_HEAD, body: { sha: "abc" } },
+  ]);
+
+  const result = await runCommand(upgrade, { json: true });
+
+  assert.deepEqual(result.said("info"), ["This project's superwall `2.0.0` is the latest - nothing to upgrade."]);
+  assert.equal((result.json as { project: { outdated: boolean } }).project.outdated, false);
+});
+
+test("under npx, an unreachable registry leaves a project pin unknown, never current", async () => {
+  useHome();
+  inPinnedProject("2.0.0");
+  viaNpxWithCurrentSkills();
+  useFetch([
+    { match: REGISTRY, fail: true },
+    { match: GITHUB_HEAD, body: { sha: "abc" } },
+  ]);
+
+  const result = await runCommand(upgrade, { json: true });
+
+  assert.match(result.said("warn").join(), /npm registry couldn't be reached.*Update it: cd superwall && npm i superwall@latest/);
+  assert.equal((result.json as { project: { outdated: boolean | null } }).project.outdated, null);
 });

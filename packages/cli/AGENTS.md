@@ -597,6 +597,13 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   exits the parent also requires the sync stamp it wrote (only written when both
   succeed) to name the new version and postdate the spawn. A skills failure is
   a warning with the retry command, never a failed upgrade: the CLI did upgrade.
+- **A project's own superwall runs.** The launcher hands every run to the
+  `superwall` the cwd's project resolves (`superwall/` or the cwd), because
+  its paywalls import that framework. When that copy is older than the
+  launcher it prints one stderr line naming it and its update command, so
+  `--json` stays clean; the older CLI's own output can't change.
+  `selectProjectInstall` finds the same copy for `upgrade` (which never edits
+  the project's `package.json`: a major bump can break paywalls) and `doctor`.
 - **Telemetry is anonymous by design**: a random persisted id, enum/boolean/
   number properties only, no person profiles, and a fetch timeout shorter than
   the exit flush so an unreachable endpoint can't hold the process open.
