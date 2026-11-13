@@ -198,7 +198,10 @@ skill.
   repo is skipped when its paywall is already bound locally under another
   id, so one paywall is never bound under two names. Git runs with
   hooks, signing and autocrlf off and the caller's `GIT_DIR`-style variables
-  dropped, so the user's setup never changes what is committed. `--source`
+  dropped, so the user's setup never changes what is committed. It also runs
+  in the C locale (`LC_ALL=C`, no `LANGUAGE`): the clone fallback and the
+  push-rejected check read git's English stderr, so a localized git would
+  otherwise fail a first push into an empty repo. `--source`
   also pushes every reached app whose paywalls built the same, through any
   of its bound paywalls, as a `publish project source` commit that no version
   links (`pushProjectSource`): the source repo is per app, so a shared change
