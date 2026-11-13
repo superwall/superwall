@@ -8,6 +8,25 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const BIN = fileURLToPath(new URL("../bin/superwall.js", import.meta.url));
 const BROKEN = JSON.stringify({ extends: "missing-pkg/tsconfig" });
+const SELF_VERSION: string = JSON.parse(
+  fs.readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
+).version;
+const LOCAL_BIN =
+  'process.stdout.write(JSON.stringify({ ran: "local", args: process.argv.slice(2) }));\n';
+
+const pinned = (version: string | undefined, extra: Record<string, string> = {}) => ({
+  "superwall/package.json": JSON.stringify({
+    name: "myapp-superwall",
+    dependencies: { superwall: version ?? "*" },
+  }),
+  "superwall/node_modules/superwall/package.json": JSON.stringify({
+    name: "superwall",
+    type: "module",
+    version,
+  }),
+  "superwall/node_modules/superwall/bin/superwall.js": LOCAL_BIN,
+  ...extra,
+});
 
 const dirs: string[] = [];
 
@@ -93,5 +112,125 @@ describe("superwall bin", () => {
     const result = run(dir, ["--help"]);
     expect(result.status).toBe(0);
     expect(result.stderr).not.toContain("Couldn't read");
+  });
+
+  describe("in a project that pins its own superwall", () => {
+    it("names the older pinned version on stderr with the update command, then runs it", () => {
+      const result = run(scaffold(pinned("2.0.0")), ["pull", "--json"]);
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe(
+        `Running superwall 2.0.0 pinned by ${path.join("superwall", "package.json")}, not ${SELF_VERSION}. Update it: cd superwall && npm i superwall@latest\n`,
+      );
+      expect(JSON.parse(result.stdout)).toEqual({ ran: "local", args: ["pull", "--json"] });
+    });
+
+    it.each([
+      ["pnpm-lock.yaml", "pnpm add"],
+      ["bun.lock", "bun add"],
+      ["yarn.lock", "yarn add"],
+    ])("uses the package manager of the project's %s", (lockfile, command) => {
+      const result = run(scaffold(pinned("2.0.0", { [`superwall/${lockfile}`]: "" })), [
+        "--version",
+      ]);
+      expect(result.stderr).toContain(`Update it: cd superwall && ${command} superwall@latest`);
+    });
+
+    it("finds the lockfile at the repo root when the project has none", () => {
+      const result = run(scaffold(pinned("2.0.0", { "pnpm-lock.yaml": "" })), ["--version"]);
+      expect(result.stderr).toContain("Update it: cd superwall && pnpm add superwall@latest");
+    });
+
+    it("leaves out the cd when the cwd is the project", () => {
+      const dir = scaffold(pinned("2.0.0"));
+      const result = run(path.join(dir, "superwall"), ["--version"]);
+      expect(result.stderr).toBe(
+        `Running superwall 2.0.0 pinned by package.json, not ${SELF_VERSION}. Update it: npm i superwall@latest\n`,
+      );
+    });
+
+    it("names the project, not pnpm's store folder, when pnpm installed the pin", () => {
+      const store = "superwall/node_modules/.pnpm/superwall@2.0.0/node_modules/superwall";
+      const dir = scaffold({
+        "superwall/package.json": JSON.stringify({
+          name: "myapp-superwall",
+          dependencies: { superwall: "2.0.0" },
+        }),
+        "superwall/pnpm-lock.yaml": "",
+        [`${store}/package.json`]: JSON.stringify({
+          name: "superwall",
+          type: "module",
+          version: "2.0.0",
+        }),
+        [`${store}/bin/superwall.js`]: LOCAL_BIN,
+      });
+      fs.symlinkSync(
+        path.join(dir, store),
+        path.join(dir, "superwall", "node_modules", "superwall"),
+      );
+      const result = run(dir, ["--version"]);
+      expect(result.stderr).toBe(
+        `Running superwall 2.0.0 pinned by ${path.join("superwall", "package.json")}, not ${SELF_VERSION}. Update it: cd superwall && pnpm add superwall@latest\n`,
+      );
+    });
+
+    it("names the workspace that pins it when the copy is hoisted to the repo root", () => {
+      const dir = scaffold({
+        "package.json": JSON.stringify({ name: "myapp", workspaces: ["superwall"] }),
+        "package-lock.json": "",
+        "superwall/package.json": JSON.stringify({
+          name: "myapp-superwall",
+          dependencies: { superwall: "2.0.0" },
+        }),
+        "node_modules/superwall/package.json": JSON.stringify({
+          name: "superwall",
+          type: "module",
+          version: "2.0.0",
+        }),
+        "node_modules/superwall/bin/superwall.js": LOCAL_BIN,
+      });
+      const result = run(dir, ["--version"]);
+      expect(result.stderr).toBe(
+        `Running superwall 2.0.0 pinned by ${path.join("superwall", "package.json")}, not ${SELF_VERSION}. Update it: cd superwall && npm i superwall@latest\n`,
+      );
+      expect(JSON.parse(result.stdout).ran).toBe("local");
+    });
+
+    it("names the root when only the root declares the hoisted pin", () => {
+      const dir = scaffold({
+        "package.json": JSON.stringify({ name: "myapp", dependencies: { superwall: "2.0.0" } }),
+        "bun.lock": "",
+        "superwall/package.json": JSON.stringify({ name: "myapp-superwall" }),
+        "node_modules/superwall/package.json": JSON.stringify({
+          name: "superwall",
+          type: "module",
+          version: "2.0.0",
+        }),
+        "node_modules/superwall/bin/superwall.js": LOCAL_BIN,
+      });
+      const result = run(dir, ["--version"]);
+      expect(result.stderr).toBe(
+        `Running superwall 2.0.0 pinned by package.json, not ${SELF_VERSION}. Update it: bun add superwall@latest\n`,
+      );
+    });
+
+    it("says so when the pinned copy has no readable version", () => {
+      const result = run(scaffold(pinned(undefined)), ["--version"]);
+      expect(result.stderr).toContain("Running superwall of unknown version pinned by");
+      expect(JSON.parse(result.stdout).ran).toBe("local");
+    });
+
+    it("names a prerelease of the same version as older", () => {
+      const result = run(scaffold(pinned(`${SELF_VERSION}-beta.1`)), ["--version"]);
+      expect(result.stderr).toContain(`Running superwall ${SELF_VERSION}-beta.1 pinned by`);
+    });
+
+    it.each([SELF_VERSION, "99.0.0", "99.0.0-beta.1"])(
+      "prints nothing when the pinned copy is %s",
+      (version) => {
+        const result = run(scaffold(pinned(version)), ["--version"]);
+        expect(result.stderr).toBe("");
+        expect(JSON.parse(result.stdout).ran).toBe("local");
+      },
+    );
   });
 });
