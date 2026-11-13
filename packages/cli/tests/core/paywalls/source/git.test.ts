@@ -121,6 +121,63 @@ test("pushes a fresh tree into an empty repo and reports it committed", async ()
   assert.deepEqual(treeFiles(repo.dir), ["config.ts", "paywalls/a/app/index.tsx"]);
 });
 
+function spanishGit(): string {
+  const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+  const bin = temp("superwall-es-git-");
+  const shim = path.join(bin, "git");
+  fs.writeFileSync(
+    shim,
+    [
+      "#!/bin/sh",
+      `if [ "$LC_ALL" = "C" ]; then exec "${real}" "$@"; fi`,
+      `err=$(mktemp)`,
+      `"${real}" "$@" 2>"$err"`,
+      "status=$?",
+      `sed 's/Remote branch \\(.*\\) not found in upstream \\(.*\\)/Rama remota \\1 no encontrada en upstream \\2/' "$err" >&2`,
+      `rm -f "$err"`,
+      "exit $status",
+      "",
+    ].join("\n"),
+  );
+  fs.chmodSync(shim, 0o755);
+  return bin;
+}
+
+test("pushes into an empty repo when the machine's git answers in Spanish", async () => {
+  const repo = bareRepo();
+  const bin = spanishGit();
+  const saved = { PATH: process.env.PATH, LC_ALL: process.env.LC_ALL };
+  process.env.PATH = `${bin}${path.delimiter}${saved.PATH ?? ""}`;
+  process.env.LC_ALL = "es_ES.UTF-8";
+  try {
+    assert.throws(
+      () =>
+        execFileSync(
+          "git",
+          ["clone", "--quiet", "--branch", "main", repo.remote, path.join(bin, "probe")],
+          {
+            stdio: "pipe",
+          },
+        ),
+      (error: unknown) =>
+        /Rama remota main no encontrada/.test(String(Reflect.get(error as object, "stderr"))),
+    );
+
+    const result = await pushSourceTree({
+      access: access(repo.remote),
+      files: [file("config.ts", "export default {};\n")],
+      message: messageFor("a"),
+    });
+
+    assert.equal(result.status, "committed");
+    assert.deepEqual(treeFiles(repo.dir), ["config.ts"]);
+  } finally {
+    process.env.PATH = saved.PATH;
+    if (saved.LC_ALL === undefined) delete process.env.LC_ALL;
+    else process.env.LC_ALL = saved.LC_ALL;
+  }
+});
+
 test("the commit carries the platform's message and the Superwall identity", async () => {
   const repo = bareRepo();
 
