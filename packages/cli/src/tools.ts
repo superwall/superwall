@@ -159,7 +159,7 @@ function schemaOfFlag(spec: FlagSpec): JsonSchema {
   return spec.choices ? { ...base, enum: spec.choices } : base;
 }
 
-const OUTSIDE_SUPERWALL = new Set(["asc", "asa", "post", "patch", "events retry", "webhooks create", "webhooks update"]);
+const OUTSIDE_SUPERWALL = new Set(["asc", "asa", "post", "put", "patch", "events retry", "webhooks create", "webhooks update"]);
 
 function annotationsOf(words: readonly string[], effect: Exclude<ToolEffect, false>): ToolAnnotations {
   return {
@@ -318,7 +318,7 @@ export function instructions(): string {
     "- bootstrap shows everything the user can reach in one call. Wherever a tool takes app, pass the app's id, name or dashboard link.",
     "- Analytics: query runs ClickHouse SQL over every event, transaction and user; use it for any question about revenue, conversion, retention or behaviour. apps_statistics, campaigns_counts and campaigns_audiences_readout return the dashboard's own figures.",
     "- App Store Connect: asc_ tools. Apple Search Ads: asa_ tools. Both reach Apple through Superwall with the keys already connected to the app; the user needs no Apple credentials of their own.",
-    "- An endpoint with no tool of its own: api_docs finds it, then get, post, patch or delete calls it.",
+    "- An endpoint with no tool of its own: api_docs finds it, then get, post, put, patch or delete calls it.",
     "- Destructive tools can delete, archive, replace existing configuration or publish changes to live users. Confirm with the user before calling one.",
     "- feedback reports to the Superwall team. When you confirm a Superwall bug, a wrong or missing doc, or a capability the user needed that Superwall lacks, call it yourself without asking: Superwall's terms cover it. Put what the customer is trying to do, and why, in use_case; Superwall merges duplicates, so don't search first. Then tell the user in one line what you sent.",
   ].join("\n");

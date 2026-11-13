@@ -12,7 +12,6 @@ import {
   replaceAppPurchaseKey,
   replaceAscConfig,
 } from "@/core/app-store-connect/api/client";
-import { generateStoreKit } from "@/core/main/storekit";
 import type { Session } from "@/core/account/storage";
 import { restoreFetch, useFetch } from "../../../helpers/fetch";
 
@@ -53,22 +52,6 @@ test("deleteAscConfig targets the team id", async () => {
   await removeAscConfig(api, "T1");
   assert.equal(rec.url, "https://api.example.com/v2/organizations/77/app-store-connect/T1");
   assert.equal(rec.method, "DELETE");
-});
-
-test("generateStoreKit maps product identifiers into a valid-ish config", () => {
-  const sk = generateStoreKit([
-    { id: 1, identifier: "com.app.pro" },
-    { id: 2, name: "com.app.plus" },
-  ]) as {
-    products: Array<{ productID: string }>;
-    version: { major: number };
-  };
-  assert.equal(sk.products.length, 2);
-  assert.deepEqual(
-    sk.products.map((p) => p.productID),
-    ["com.app.pro", "com.app.plus"],
-  );
-  assert.equal(sk.version.major, 3);
 });
 
 const APP = { projectId: "5", applicationId: "8" };

@@ -1,7 +1,9 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  ASSET_EXTENSIONS,
   alwaysHosted,
   assetFileName,
   collectAssets,
@@ -34,6 +36,34 @@ describe("asset classification", () => {
     expect(alwaysHosted("/x/clip.MP4")).toBe(true);
     expect(alwaysHosted("/x/type.woff2")).toBe(true);
     expect(alwaysHosted("/x/icon.png")).toBe(false);
+  });
+});
+
+describe("asset import declarations", () => {
+  const declarations = readFileSync(path.resolve(__dirname, "../../src/assets.d.ts"), "utf8");
+  const declared = new Set(
+    [...declarations.matchAll(/declare module "\*(\.[a-z0-9]+)"/g)].map((match) => match[1]),
+  );
+  const undeclared = new Set([".wasm"]);
+
+  it("declares a module for every extension the build hosts", () => {
+    const missing = ASSET_EXTENSIONS.filter(
+      (extension) => !declared.has(extension) && !undeclared.has(extension),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("covers the always-hosted extensions as well as the MIME map", () => {
+    expect(ASSET_EXTENSIONS).toContain(".m4a");
+    expect(ASSET_EXTENSIONS.filter((extension) => alwaysHosted(`x${extension}`))).toContain(
+      ".wasm",
+    );
+    expect(new Set(ASSET_EXTENSIONS).size).toBe(ASSET_EXTENSIONS.length);
+  });
+
+  it("declares bare .wasm only through ?url", () => {
+    expect(declared.has(".wasm")).toBe(false);
+    expect(declarations).toContain('declare module "*.wasm?url"');
   });
 });
 

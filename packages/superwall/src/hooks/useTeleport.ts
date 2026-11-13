@@ -59,6 +59,14 @@ export type TeleportCompleted = {
 /** Where a teleport stands, discriminated by `status`. */
 export type TeleportStatus = TeleportIdle | TeleportWaiting | TeleportArrived | TeleportCompleted;
 
+/**
+ * How a return to the app went: `"opened"` the app came up, `"cancelled"`
+ * the shopper tapped Cancel on iOS's "Open in App?" prompt and is still on
+ * the page, `"no_app"` nothing could open it (no app link, or no installed
+ * app for its URL scheme).
+ */
+export type TeleportReturnResult = "opened" | "cancelled" | "no_app";
+
 /** What a paywall can do with a teleport. Each one is a no-op where it doesn't apply. */
 export type TeleportActions = {
   /**
@@ -73,12 +81,26 @@ export type TeleportActions = {
   open: () => void;
   /** In the app, while `waiting`: gives up on the web checkout; the `purchase()` resolves `abandoned`. */
   cancel: () => void;
-  /** On the web: returns to the app, as going back from the first web route does. */
-  returnToApp: () => void;
+  /**
+   * On the web: returns to the app, as going back from the first web route
+   * does, and resolves how that went. While iOS asks "Open in App?", the page
+   * dims with an arrow at Open. In the app it resolves `"opened"` at once.
+   */
+  returnToApp: () => Promise<TeleportReturnResult>;
+};
+
+/** What a teleport is doing right now, beside its status. */
+export type TeleportActivity = {
+  /**
+   * On the web: true while a return to the app is under way, from the moment
+   * the page hands the shopper to the app until `returnToApp()` resolves.
+   * Always `false` in the app.
+   */
+  returning: boolean;
 };
 
 /** The result of `useTeleport()`: the status, and the actions. */
-export type UseTeleportResult = TeleportStatus & TeleportActions;
+export type UseTeleportResult = TeleportStatus & TeleportActions & TeleportActivity;
 
 /** Callbacks for what happens to a teleport, each optional. */
 export type UseTeleportOptions = {
@@ -104,6 +126,8 @@ const isProductReference = (
   products: Products,
   reference: string | undefined,
 ): reference is ProductReference => reference !== undefined && products[reference] !== undefined;
+
+const notReturning = () => false;
 
 const statusOf = (
   internal: ReturnType<ReturnType<typeof teleportFor>["getStatus"]>,
@@ -142,6 +166,8 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
     teleporter.getStatus,
     teleporter.getStatus,
   );
+  const isReturning = teleporter.kind === "page" ? teleporter.returning : notReturning;
+  const returning = React.useSyncExternalStore(teleporter.subscribe, isReturning, isReturning);
   const fallbackReference = teleporter.kind === "app" ? teleporter.fallback() : undefined;
   const callbacks = React.useRef(options);
   callbacks.current = options;
@@ -161,6 +187,7 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
   return React.useMemo(
     () => ({
       ...statusOf(status, fallbackReference, productsByReference),
+      returning,
       prefetch: (route?: RouteName) => {
         if (teleporter.kind === "app") teleporter.prefetch(route, flowQuery(store));
       },
@@ -170,11 +197,12 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
       cancel: () => {
         if (teleporter.kind === "app") teleporter.cancel();
       },
-      returnToApp: () => {
-        if (teleporter.kind === "page") teleporter.returnToApp("closed");
-        else teleporter.returnToApp();
+      returnToApp: async (): Promise<TeleportReturnResult> => {
+        if (teleporter.kind === "page") return teleporter.returnToApp("closed");
+        teleporter.returnToApp();
+        return "opened";
       },
     }),
-    [status, fallbackReference, productsByReference, teleporter, store],
+    [status, returning, fallbackReference, productsByReference, teleporter, store],
   );
 };

@@ -302,7 +302,7 @@
     },
     "packages/cli": {
       "name": "@superwall/cli",
-      "version": "2.5.1",
+      "version": "2.5.2",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "0.3.201",
         "@superwall/studio": "workspace:*",
@@ -330,7 +330,7 @@
     },
     "packages/host": {
       "name": "@superwall/host",
-      "version": "2.5.1",
+      "version": "2.5.2",
       "dependencies": {
         "@superwall/protocol": "workspace:*",
       },
@@ -343,7 +343,7 @@
     },
     "packages/protocol": {
       "name": "@superwall/protocol",
-      "version": "2.5.1",
+      "version": "2.5.2",
       "dependencies": {
         "zod": "3.25.76",
       },
@@ -356,7 +356,7 @@
     },
     "packages/runtime": {
       "name": "@superwall/runtime",
-      "version": "2.5.1",
+      "version": "2.5.2",
       "dependencies": {
         "@superwall/protocol": "workspace:*",
       },
@@ -371,7 +371,7 @@
     },
     "packages/studio": {
       "name": "@superwall/studio",
-      "version": "2.5.1",
+      "version": "2.5.2",
       "dependencies": {
         "@superwall/host": "workspace:*",
         "qrcode.react": "^4.2.0",
@@ -399,7 +399,7 @@
     },
     "packages/superwall": {
       "name": "superwall",
-      "version": "2.5.1",
+      "version": "2.5.2",
       "bin": {
         "superwall": "./bin/superwall.js",
         "sw": "./bin/superwall.js",

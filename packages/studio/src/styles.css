@@ -236,6 +236,11 @@
     stroke-linejoin: round;
   }
 
+  .sw-icon--brand {
+    stroke: none;
+    fill: currentColor;
+  }
+
   .sw-spinner {
     flex: none;
     width: 14px;

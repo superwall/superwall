@@ -135,9 +135,17 @@ skill.
   is a connection that never opened. `ApiUnreachableError` names the socket's code
   (`fetchFailureOf` digs it out of Node's `cause`, an AggregateError, or Bun's
   error) and says "Lost the connection" for a drop, keeping the network hint for
-  DNS and connect failures. `api get|post|…` adds no reference hint to a typed 404
-  (`resource_missing`): the path is right and only the thing is gone. The API reference is cached
-  for a day and a stale copy still answers offline. A browser login reaches
+  DNS and connect failures. Every request has a deadline (`REQUEST_TIMEOUT_MS`,
+  60s; `TEXT_TIMEOUT_MS`, 5 minutes, for the `query` SQL call), so a stalled API
+  ends in an `ApiUnreachableError` with `timedOut` set instead of a silent wait. A
+  timeout is never sent again, a GET or an `idempotent` write included, so the wait
+  stays one deadline long; for a write the message says the change may or may not
+  have been applied. The OAuth refresh has its own deadline (15s): a refresh that
+  stalls or can't connect is a `LoginUnreachableError`, never "not logged in",
+  unless the session also holds an API key to fall back on. `api get|post|…` adds
+  no reference hint to a typed 404 (`resource_missing`): the path is right and
+  only the thing is gone. The API reference is cached for a day and a stale copy
+  still answers offline; its download gives up after 10s. A browser login reaches
   every organization and stores no organization name; an API key belongs to one
   and stores its name. `feedback` posts to `/v2/feedback`, which merges a
   report into an existing request or opens one. It also sends the telemetry
@@ -166,12 +174,29 @@ skill.
   does a shared file the pusher lacks. `superwall.lock` merges per entry (an
   unreadable one in the repo refuses, unless `--overwrite-source`) and
   `superwall.d.ts` takes the pusher's, so a conflict in only those two
-  resolves itself. Only the
+  resolves itself. The lock committed is read from disk at push time
+  (`withCurrentLock`), never from the tree collected before the push, and
+  the pushed surface's entry is settled (its new snapshot, no
+  `sourcePending`), so the repo never trails a push. The merge also drops
+  any other id of the same kind bound to the pushed entry's paywall (the
+  name before a rename) and any id that was in the lock at the sync point,
+  is unchanged in the repo and is gone locally, but only when every
+  platform of it is bound to the repo's own app both here and at the sync
+  point: a pull leaves out the bindings of platforms bound to another app
+  here, so their absence is not a removal. `pull --platform` picks which
+  apps to pull, but merges every platform bound to a picked app, since the
+  sync point is per app. Only the
   pusher's own paths can refuse, naming those files and pointing at
   `superwall pull`; `--overwrite-source` replaces only them. `superwall pull`
   merges the source repo into the project (files, bindings, sync point),
   changes nothing on a conflict unless `--theirs`, and keeps a local
-  `sourcePending`; `pull --app` clones it into an empty folder. Git runs with
+  `sourcePending`; `pull --app` clones it into an empty folder. Its lock
+  merge is three-way against the lock at the sync point (`baseLock`): a
+  binding the repo left as it was synced keeps the local one, deleted
+  included, and one the repo changed wins. Without a readable sync-point
+  lock it falls back to the two-way merge. Either way a binding from the
+  repo is skipped when its paywall is already bound locally under another
+  id, so one paywall is never bound under two names. Git runs with
   hooks, signing and autocrlf off and the caller's `GIT_DIR`-style variables
   dropped, so the user's setup never changes what is committed. `--source`
   also pushes every reached app whose paywalls built the same, through any

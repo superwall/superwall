@@ -19,12 +19,18 @@ export const command = defineCommand({
     yes: { ...yes, describe: "Accept defaults and skip the optional prompts" },
     install: { type: "boolean", default: true, describe: "Install dependencies after scaffolding (--no-install to skip)" },
     connect: { type: "boolean", default: true, describe: "Connect a Superwall app when possible (--no-connect to skip)" },
+    git: {
+      type: "boolean",
+      default: true,
+      describe: "Create a git repository and commit the scaffold when the app is outside git (--no-git to skip)",
+    },
   },
   examples: [
     ["create", "Set up superwall/ in the current app"],
     ["create --example with-rive", "Start from an example"],
     ["create --from 65920", "Rebuild dashboard paywall 65920 as code"],
     ["create --app <app>", "Connect a specific Superwall app"],
+    ["create --no-git", "Scaffold without creating a git repository or commit"],
   ],
   auth: "none",
   json: false,

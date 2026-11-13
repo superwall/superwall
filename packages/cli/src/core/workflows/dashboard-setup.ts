@@ -10,7 +10,7 @@ import {
 } from "@/core/app-store-connect/store/products";
 import type { SuperwallApi } from "@/core/api/client";
 import { createProduct, listResource, rowName, type Row, type Scope } from "@/core/api/resources";
-import { generateStoreKit } from "@/core/main/storekit";
+import { describeSkipped, generateStoreKit } from "@/core/main/storekit";
 import { field, listField } from "@/core/json";
 import { DASHBOARD_URL } from "@/environment";
 import { expandHome } from "@/hosts/paths";
@@ -84,7 +84,7 @@ export async function runProductsStage(ctx: StageCtx): Promise<void> {
     let result: Flow = "done";
     if (how === "asc") result = await ascFlow(ctx, products, teamId);
     else if (how === "storekit") result = await importFromStoreKit(ctx, products, storeKitFiles);
-    else if (how === "export") writeStoreKit(products);
+    else if (how === "export") writeStoreKit(products, teamId);
 
     if (result === "back") continue;
     return;
@@ -398,8 +398,10 @@ function renderCheck(ok: boolean, text: string): void {
   else ui.warn(text);
 }
 
-function writeStoreKit(products: Row[]): void {
+function writeStoreKit(products: Row[], teamId: string | undefined): void {
   const out = "Superwall.storekit";
-  writeFileSync(out, `${formatJson(generateStoreKit(products))}\n`);
-  ui.success(`Wrote \`${out}\` with ${formatCount(products.length, "product")}.`);
+  const { file, written, skipped } = generateStoreKit(products, { teamId: teamId || undefined });
+  writeFileSync(out, `${formatJson(file)}\n`);
+  ui.success(`Wrote \`${out}\` with ${formatCount(written, "product")}.`);
+  for (const line of describeSkipped(skipped)) ui.warn(`${line}.`);
 }
