@@ -88,10 +88,52 @@ describe("entrySource", () => {
       config: { teleport: { route: "checkout" } },
     });
     expect(source).toContain(
-      'import { SuperwallCheckout, TeleportScreen } from "superwall/checkout";',
+      'import { SuperwallCheckout, TeleportScreen, markTeleportScriptStart } from "superwall/checkout";',
     );
     expect(source).toContain("<SuperwallCheckout />");
     expect(source).toContain("<TeleportScreen />");
+    expect(source).toContain("markTeleportScriptStart();");
+    expect(source.indexOf("markTeleportScriptStart();")).toBeLessThan(source.indexOf("mountApp("));
+  });
+
+  it("mounts a teleporting paywall through mountApp, so a pre-rendered page is hydrated", () => {
+    const source = entrySource({
+      entryDir,
+      project,
+      surface: surface(),
+      config: { teleport: { route: "checkout" } },
+    });
+    expect(source).toContain('import { mergeMessages, mountApp } from "superwall/internal";');
+    expect(source).toContain('mountApp(document.getElementById("root"), (');
+    expect(source).toContain("</React.StrictMode>), config);");
+    expect(source).not.toContain("createRoot");
+  });
+
+  it("keeps createRoot for a paywall that does not teleport", () => {
+    const source = entrySource({ entryDir, project, surface: surface(), config: {} });
+    expect(source).toContain('import { createRoot } from "react-dom/client";');
+    expect(source).toContain('createRoot(document.getElementById("root")).render(');
+    expect(source).not.toContain("mountApp");
+  });
+
+  it("renders the same tree to a string for the pre-render, without mounting or timing it", () => {
+    const options = {
+      entryDir,
+      project,
+      surface: surface(),
+      config: { teleport: { route: "checkout" } },
+    };
+    const source = entrySource({ ...options, target: "prerender" });
+    expect(source).toContain('import { renderToString } from "react-dom/server";');
+    expect(source).toContain(
+      'import { SuperwallCheckout, TeleportScreen } from "superwall/checkout";',
+    );
+    expect(source).toContain("globalThis.__SW_PRERENDER__ = () => renderToString(");
+    expect(source).not.toContain("createRoot");
+    expect(source).not.toContain("markTeleportScriptStart");
+    const tree = (text: string) =>
+      text.slice(text.indexOf("  <React.StrictMode>"), text.indexOf("</React.StrictMode>"));
+    expect(tree(source)).toBe(tree(entrySource(options)));
   });
 
   it("prefixes ./ for a file that sits beside the entry", () => {

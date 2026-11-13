@@ -4,7 +4,9 @@ import {
   injectPlatformLayer,
   PLATFORM_STYLESHEET_URL,
   renderDocument,
+  TELEPORT_BOOT_META,
   VIEWPORT_FIT_GUARD,
+  withModuleScriptsLast,
 } from "../../src/document";
 import { injectWebviewSimulation } from "../../src/preview/webview";
 
@@ -45,6 +47,43 @@ describe("renderDocument", () => {
     expect(html).toContain('<div id="root">');
     // Any <style> here would silently diverge preview from production.
     expect(html).not.toContain("<style");
+  });
+});
+
+describe("TELEPORT_BOOT_META", () => {
+  it("tells the teleport worker this paywall boots from the variables it injects", () => {
+    const html = doc();
+    expect(html).toContain(`<meta name="${TELEPORT_BOOT_META}" content="1" />`);
+    expect(html.indexOf(TELEPORT_BOOT_META)).toBeLessThan(html.indexOf("</head>"));
+  });
+});
+
+describe("withModuleScriptsLast", () => {
+  const built = [
+    "<!doctype html><html><head>",
+    '<script type="module" crossorigin>const a = "<body>"; boot(a);</script>',
+    "<style>main{color:red}</style><script>guard()</script></head>",
+    '<body><div id="root"></div><script type="module">second()</script></body></html>',
+  ].join("");
+
+  it("moves the module scripts after #root, in order, so the page above them paints first", () => {
+    const html = withModuleScriptsLast(built);
+    expect(html).toBe(
+      [
+        "<!doctype html><html><head>",
+        "<style>main{color:red}</style><script>guard()</script></head>",
+        '<body><div id="root"></div>',
+        '<script type="module" crossorigin>const a = "<body>"; boot(a);</script>',
+        '<script type="module">second()</script></body></html>',
+      ].join(""),
+    );
+    expect(html.indexOf('<div id="root">')).toBeLessThan(html.indexOf('<script type="module"'));
+  });
+
+  it("leaves a document without module scripts or a body as it was", () => {
+    expect(withModuleScriptsLast("<html><body></body></html>")).toBe("<html><body></body></html>");
+    const headless = '<script type="module">boot()</script><div id="root"></div>';
+    expect(withModuleScriptsLast(headless)).toBe(headless);
   });
 });
 

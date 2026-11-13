@@ -1,5 +1,6 @@
 import type {
   TIncomingMessage,
+  TIncomingMessageTemplateVariables,
   TIncomingMessageTransactionAbandon,
   TIncomingMessageTransactionComplete,
   TOutgoingMessage,
@@ -21,6 +22,7 @@ import {
   type SuperwallProductInput,
 } from "../products";
 import { snapshotPatchFor } from "./incoming";
+import { recordFromVariables } from "./variables";
 import * as outgoing from "./outgoing";
 import { createPurchaseTracker } from "./purchases";
 import { createRestoreTracker } from "./restores";
@@ -120,6 +122,33 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
     for (const listener of listeners) listener();
   };
 
+  const mergeDeliveredProducts = (delivered: TIncomingMessageTemplateVariables["variables"]) => {
+    const variables = productVariablesFromTemplateVariables(delivered);
+    for (const [reference, values] of variables) {
+      const baked = inline[reference];
+      if (baked) variables.set(reference, { ...baked, ...values });
+    }
+    if (variables.size > 0) raw = mergeProductVariables(raw, variables);
+  };
+
+  if (options.variables !== undefined) mergeDeliveredProducts(options.variables);
+
+  if (options.variables !== undefined || options.introductoryOffer !== undefined) {
+    commit({
+      ...(options.variables === undefined
+        ? {}
+        : {
+            variables: options.variables,
+            device: recordFromVariables(options.variables, "device"),
+            user: recordFromVariables(options.variables, "user"),
+            params: recordFromVariables(options.variables, "params"),
+          }),
+      ...(options.introductoryOffer === undefined
+        ? {}
+        : { introductoryOffer: options.introductoryOffer }),
+    });
+  }
+
   const post = (message: TOutgoingMessage) => {
     transport.postMessage(message);
   };
@@ -196,15 +225,9 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
       case "products":
         raw = mergeIncomingProducts(raw, message.products);
         break;
-      case "template_variables": {
-        const variables = productVariablesFromTemplateVariables(message.variables);
-        for (const [reference, delivered] of variables) {
-          const baked = inline[reference];
-          if (baked) variables.set(reference, { ...baked, ...delivered });
-        }
-        if (variables.size > 0) raw = mergeProductVariables(raw, variables);
+      case "template_variables":
+        mergeDeliveredProducts(message.variables);
         break;
-      }
       case "freeTrial_start": {
         const reminder = trialReminderFor(snapshot.config, message, {
           products: raw,

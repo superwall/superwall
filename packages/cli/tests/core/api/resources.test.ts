@@ -464,3 +464,17 @@ test("pushPaywallVersion spreads background and checkout destination from the se
   assert.ok(!("dark_background_color_hex" in (calls[1] ?? {})));
   assert.ok(!("web_checkout_destination" in (calls[1] ?? {})));
 });
+
+test("pushPaywallVersion sends teleport pages as key and html only, and none when there are none", async () => {
+  const recs = mockFetch(() => ({ version: 7, snapshot_id: "a", url: "u" }));
+
+  await pushPaywallVersion(api, "208540", { html: "<html>", teleportPages: [] });
+  assert.deepEqual(recs[0]?.body, { html: "<html>" });
+
+  const page = Object.assign({ key: "de/annual/1", html: "<main>Jetzt</main>" }, { extra: 1 });
+  await pushPaywallVersion(api, "208540", { html: "<html>", teleportPages: [page] });
+  assert.deepEqual(recs[1]?.body, {
+    html: "<html>",
+    teleport_pages: [{ key: "de/annual/1", html: "<main>Jetzt</main>" }],
+  });
+});

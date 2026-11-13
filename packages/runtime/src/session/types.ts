@@ -177,6 +177,8 @@ export type SuperwallSessionStartOptions = {
 export type SuperwallSessionOptions = {
   config?: SuperwallConfig;
   inlineProducts?: Readonly<Record<string, SuperwallProductVariables>>;
+  variables?: Readonly<Record<string, unknown>>;
+  introductoryOffer?: SuperwallIntroductoryOfferState;
   transport?: ITransport;
   transportKind?: TransportKind;
   onDecodeError?: (error: unknown) => void;

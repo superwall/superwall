@@ -77,6 +77,14 @@ export interface BuiltSnapshot {
   assets?: BuiltSnapshotAsset[];
   assetBytes?: number;
   externalSources?: string[];
+  teleportRoute?: string;
+  teleportPages?: BuiltTeleportPage[];
+  warnings?: string[];
+}
+
+export interface BuiltTeleportPage {
+  key: string;
+  html: string;
 }
 
 export interface BuildOptions {

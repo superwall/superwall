@@ -15,7 +15,10 @@ export type EntrySourceOptions = {
   config: SuperwallConfig;
   products?: Record<string, string>;
   inlineProducts?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  target?: "client" | "prerender";
 };
+
+export const PRERENDER_GLOBAL = "__SW_PRERENDER__";
 
 export const entrySource = ({
   entryDir,
@@ -24,21 +27,31 @@ export const entrySource = ({
   config,
   products,
   inlineProducts,
+  target = "client",
 }: EntrySourceOptions): string => {
+  const prerender = target === "prerender";
   const imp = (file: string) => JSON.stringify(relativeImport(entryDir, file));
   const teleport = config.teleport !== undefined;
   const checkout = checkoutNeedsPaymentUi(config.checkout) || teleport;
   const lines: string[] = [
     `import * as React from "react";`,
-    `import { createRoot } from "react-dom/client";`,
+    ...(prerender
+      ? [`import { renderToString } from "react-dom/server";`]
+      : teleport
+        ? []
+        : [`import { createRoot } from "react-dom/client";`]),
     `import { SuperwallProvider } from "superwall";`,
-    `import { mergeMessages } from "superwall/internal";`,
+    teleport && !prerender
+      ? `import { mergeMessages, mountApp } from "superwall/internal";`
+      : `import { mergeMessages } from "superwall/internal";`,
     `import { PaywallRouter } from "superwall/navigation";`,
     ...(checkout
       ? [
-          teleport
-            ? `import { SuperwallCheckout, TeleportScreen } from "superwall/checkout";`
-            : `import { SuperwallCheckout } from "superwall/checkout";`,
+          `import { ${[
+            "SuperwallCheckout",
+            ...(teleport ? ["TeleportScreen"] : []),
+            ...(teleport && !prerender ? ["markTeleportScriptStart"] : []),
+          ].join(", ")} } from "superwall/checkout";`,
         ]
       : []),
   ];
@@ -86,7 +99,12 @@ export const entrySource = ({
       .map((route, index) => `${JSON.stringify(route.name)}: Route${index}`)
       .join(", ")}};`,
     ``,
-    `createRoot(document.getElementById("root")).render(`,
+    ...(teleport && !prerender ? [`markTeleportScriptStart();`] : []),
+    prerender
+      ? `globalThis.${PRERENDER_GLOBAL} = () => renderToString(`
+      : teleport
+        ? `mountApp(document.getElementById("root"), (`
+        : `createRoot(document.getElementById("root")).render(`,
     `  <React.StrictMode>`,
     inlineProducts === undefined || Object.keys(inlineProducts).length === 0
       ? `    <SuperwallProvider config={config}>`
@@ -95,8 +113,8 @@ export const entrySource = ({
     ...(checkout ? [`      <SuperwallCheckout />`] : []),
     ...(teleport ? [`      <TeleportScreen />`] : []),
     `    </SuperwallProvider>`,
-    `  </React.StrictMode>,`,
-    `);`,
+    teleport && !prerender ? `  </React.StrictMode>), config);` : `  </React.StrictMode>,`,
+    ...(teleport && !prerender ? [] : [`);`]),
   );
 
   return lines.join("\n");

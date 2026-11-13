@@ -14,6 +14,7 @@ import {
   type SuperwallSession,
   type ResolvedBackground,
 } from "@superwall/runtime";
+import { readTeleportBoot } from "../checkout/teleport/boot";
 import { documentAttributes, HOST_ATTRIBUTE_NAMES, hostAttributes } from "../document";
 import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
 import "./insets.css";
@@ -58,7 +59,17 @@ export const SuperwallProvider = ({
 
   if (ownedSession.current === null || ownedTransport.current !== transport) {
     ownedTransport.current = transport;
-    ownedSession.current = createSuperwallSession({ config, transport, inlineProducts });
+    const boot = readTeleportBoot();
+    ownedSession.current = createSuperwallSession({
+      config,
+      transport,
+      inlineProducts,
+      variables: boot?.variables,
+      introductoryOffer:
+        boot?.hasIntroductoryOffer === undefined
+          ? undefined
+          : { eligible: boot.hasIntroductoryOffer },
+    });
   }
 
   const value = ownedSession.current;
