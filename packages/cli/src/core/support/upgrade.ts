@@ -23,15 +23,38 @@ const REGISTRY_URL = "https://registry.npmjs.org/superwall/latest";
 const pending: Array<Promise<unknown>> = [];
 
 export function isNewerVersion(latest: string, current: string): boolean {
-  const l = latest.split(".").map((n) => parseInt(n, 10));
-  const c = current.split(".").map((n) => parseInt(n, 10));
+  const [latestCore = "", latestPre] = splitPrerelease(latest);
+  const [currentCore = "", currentPre] = splitPrerelease(current);
+  const l = latestCore.split(".").map((n) => parseInt(n, 10));
+  const c = currentCore.split(".").map((n) => parseInt(n, 10));
   for (let i = 0; i < 3; i++) {
     const a = l[i] ?? 0;
     const b = c[i] ?? 0;
     if (Number.isNaN(a) || Number.isNaN(b)) return false;
     if (a !== b) return a > b;
   }
-  return false;
+  if (currentPre === undefined) return false;
+  if (latestPre === undefined) return true;
+  return comparePrerelease(latestPre.split("."), currentPre.split(".")) > 0;
+}
+
+function splitPrerelease(version: string): [string, string | undefined] {
+  const dash = version.indexOf("-");
+  return dash === -1 ? [version, undefined] : [version.slice(0, dash), version.slice(dash + 1)];
+}
+
+function comparePrerelease(a: readonly string[], b: readonly string[]): number {
+  const numeric = /^\d+$/;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const x = a[i] ?? "";
+    const y = b[i] ?? "";
+    if (x === y) continue;
+    if (numeric.test(x) && numeric.test(y)) return Number(x) - Number(y);
+    if (numeric.test(x)) return -1;
+    if (numeric.test(y)) return 1;
+    return x < y ? -1 : 1;
+  }
+  return a.length - b.length;
 }
 
 async function selectLatestVersion(): Promise<string | null> {

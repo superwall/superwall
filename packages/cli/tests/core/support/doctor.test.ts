@@ -188,6 +188,16 @@ test("a current project pin passes, naming the package.json it comes from", asyn
   });
 });
 
+test("a prerelease pin fails once its release is the latest", async () => {
+  useHome();
+  writeUpdateCheck({ latest: "2.5.2", checkedAt: new Date().toISOString() });
+  assert.deepEqual(await cliCheck(pinnedSuperwall("2.5.2-beta.1")), {
+    ok: false,
+    label: "CLI",
+    value: `2.5.2-beta.1 from ${path.join("superwall", "package.json")}, 2.5.2 available - run \`cd superwall && npm i superwall@latest\``,
+  });
+});
+
 test("a project pin whose version can't be read fails rather than passing", async () => {
   useHome();
   assert.deepEqual(await cliCheck(pinnedSuperwall(undefined)), {

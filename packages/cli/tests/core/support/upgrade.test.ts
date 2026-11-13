@@ -171,6 +171,19 @@ test("version comparison handles major, minor, patch, and garbage", () => {
   assert.equal(isNewerVersion("1.2", "1.2.1"), false);
 });
 
+test("a release is newer than its own prereleases, and prereleases compare by identifier", () => {
+  assert.equal(isNewerVersion("2.5.2", "2.5.2-beta.1"), true);
+  assert.equal(isNewerVersion("2.5.2-beta.1", "2.5.2"), false);
+  assert.equal(isNewerVersion("2.5.2-beta.2", "2.5.2-beta.1"), true);
+  assert.equal(isNewerVersion("2.5.2-beta.10", "2.5.2-beta.9"), true);
+  assert.equal(isNewerVersion("2.5.2-beta.1", "2.5.2-beta.1"), false);
+  assert.equal(isNewerVersion("2.5.2-beta", "2.5.2-beta.1"), false);
+  assert.equal(isNewerVersion("2.5.2-beta.1", "2.5.2-alpha.3"), true);
+  assert.equal(isNewerVersion("2.5.2-1", "2.5.2-beta"), false);
+  assert.equal(isNewerVersion("2.5.1", "2.5.2-beta.1"), false);
+  assert.equal(isNewerVersion("2.6.0-beta.1", "2.5.2"), true);
+});
+
 test("flushing with no check in flight returns at once", async () => {
   const start = Date.now();
   await flushUpdateCheck(2000);
