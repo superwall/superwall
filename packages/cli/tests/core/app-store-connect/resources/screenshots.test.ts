@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterEach, mock, test } from "node:test";
 import { command as screenshots } from "@/commands/app-store-connect/store/screenshots";
 import { ApiError } from "@/core/api/client";
+import { timing } from "@/core/timing";
 import { ascRoutes, link, one } from "../../../helpers/asc-proxy";
 import { restoreFetch, useFetch } from "../../../helpers/fetch";
 import { runCommand } from "../../../helpers/command";
@@ -156,10 +157,8 @@ const shot = (state: string) => ({ data: one("subscriptionAppStoreReviewScreensh
 
 function recordPauses(): number[] {
   const pauses: number[] = [];
-  mock.method(globalThis, "setTimeout", (done: () => void, ms: number) => {
+  mock.method(timing, "sleep", async (ms: number) => {
     pauses.push(ms);
-    done();
-    return 0;
   });
   return pauses;
 }

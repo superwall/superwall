@@ -1,4 +1,5 @@
 import { isRecord } from "@/core/json";
+import { timing } from "@/core/timing";
 import { attribute, linkTo, type AscResource } from "./json-api";
 import { argOf, type AscInput, type AscOutput } from "./operation";
 import type { PricedKind } from "./pricing";
@@ -75,13 +76,9 @@ async function resolveDeliveryState(session: AscSession, path: string): Promise<
       const errors = resource.attributes.assetDeliveryState;
       throw new Error(`Apple couldn't process the screenshot: ${JSON.stringify(isRecord(errors) ? errors.errors : errors)}`);
     }
-    await new Promise((done) => setTimeout(done, POLL_INTERVAL_MS));
+    await timing.sleep(POLL_INTERVAL_MS);
   }
   return "PROCESSING";
-}
-
-function pause(ms: number): Promise<void> {
-  return new Promise((done) => setTimeout(done, ms));
 }
 
 type Reservation = { state: string | undefined } | "gone" | "unknown";
@@ -116,7 +113,7 @@ async function commitUpload(session: AscSession, path: string, body: unknown): P
       const reservation = await readReservation(session, path);
       if (accepted(reservation)) return undefined;
       if (reservation === "gone" || attempt >= COMMIT_ATTEMPTS) return { failure: error as Error, reservation, attempts: attempt };
-      await pause(COMMIT_PAUSE_MS * attempt);
+      await timing.sleep(COMMIT_PAUSE_MS * attempt);
     }
   }
 }
