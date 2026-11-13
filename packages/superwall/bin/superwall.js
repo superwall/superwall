@@ -28,15 +28,39 @@ const installOwner = (packageJson) => {
   return index === -1 ? path.dirname(packageJson) : packageJson.slice(0, index);
 };
 
+const dependsOnSuperwall = (dir) => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+    return ["dependencies", "devDependencies", "peerDependencies"].some(
+      (field) => pkg?.[field]?.superwall !== undefined,
+    );
+  } catch {
+    return false;
+  }
+};
+
+const dirsBetween = (from, to) => {
+  const dirs = [];
+  for (let dir = from; ; dir = path.dirname(dir)) {
+    dirs.push(dir);
+    if (dir === to || dir === path.dirname(dir)) return dirs;
+  }
+};
+
+const pinOwner = (anchorDir, owner) =>
+  dirsBetween(anchorDir, owner).find(dependsOnSuperwall) ?? owner;
+
 const resolveLocal = () => {
   for (const anchor of anchors()) {
     try {
       const localPackageJson = createRequire(anchor).resolve("superwall/package.json");
       const localDir = fs.realpathSync(path.dirname(localPackageJson));
       if (localDir === selfDir) return undefined;
+      const owner = installOwner(localPackageJson);
       return {
         bin: path.join(localDir, "bin", "superwall.js"),
-        projectDir: installOwner(localPackageJson),
+        projectDir: pinOwner(path.dirname(anchor), owner),
+        installDir: owner,
         version: readVersion(localDir),
       };
     } catch {
@@ -87,8 +111,8 @@ const LOCKFILES = [
   ["package-lock.json", "npm i"],
 ];
 
-const installCommand = (projectDir) => {
-  for (const dir of [projectDir, process.cwd()]) {
+const installCommand = (local) => {
+  for (const dir of [...dirsBetween(local.projectDir, local.installDir), process.cwd()]) {
     const found = LOCKFILES.find(([file]) => fs.existsSync(path.join(dir, file)));
     if (found) return found[1];
   }
@@ -100,20 +124,9 @@ const olderLocalNotice = (local) => {
   if (!isOlder(local.version, selfVersion)) return undefined;
   const tag = parseVersion(selfVersion)?.pre.length ? "next" : "latest";
   const relative = path.relative(process.cwd(), local.projectDir);
-  const update = `${relative ? `cd ${relative} && ` : ""}${installCommand(local.projectDir)} superwall@${tag}`;
+  const update = `${relative ? `cd ${relative} && ` : ""}${installCommand(local)} superwall@${tag}`;
   const where = path.join(relative, "package.json");
   return `Running superwall ${local.version ?? "of unknown version"} pinned by ${where}, not ${selfVersion}. Update it: ${update}\n`;
-};
-
-const dependsOnSuperwall = (dir) => {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
-    return ["dependencies", "devDependencies", "peerDependencies"].some(
-      (field) => pkg?.[field]?.superwall !== undefined,
-    );
-  } catch {
-    return false;
-  }
 };
 
 const projectTsconfig = () => {

@@ -196,3 +196,35 @@ test("a project pin whose version can't be read fails rather than passing", asyn
     value: `unknown version from ${path.join("superwall", "package.json")} - run \`cd superwall && npm i superwall@latest\``,
   });
 });
+
+test("a pin hoisted to the repo root names the workspace that declares it, with the root's package manager", async () => {
+  useHome();
+  writeUpdateCheck({ latest: "999.0.0", checkedAt: new Date().toISOString() });
+  const installDir = project({
+    "package.json": JSON.stringify({ name: "app", workspaces: ["superwall"] }),
+    "bun.lock": "",
+    "superwall/package.json": JSON.stringify({ name: "paywalls", dependencies: { superwall: "2.0.0" } }),
+    "node_modules/superwall/package.json": JSON.stringify({ name: "superwall", version: "2.0.0" }),
+  });
+  assert.deepEqual(await cliCheck(installDir), {
+    ok: false,
+    label: "CLI",
+    value: `2.0.0 from ${path.join("superwall", "package.json")}, 999.0.0 available - run \`cd superwall && bun add superwall@latest\``,
+  });
+});
+
+test("a hoisted pin only the root declares names the root's package.json", async () => {
+  useHome();
+  writeUpdateCheck({ latest: "999.0.0", checkedAt: new Date().toISOString() });
+  const installDir = project({
+    "package.json": JSON.stringify({ name: "app", devDependencies: { superwall: "2.0.0" } }),
+    "package-lock.json": "",
+    "superwall/package.json": JSON.stringify({ name: "paywalls" }),
+    "node_modules/superwall/package.json": JSON.stringify({ name: "superwall", version: "2.0.0" }),
+  });
+  assert.deepEqual(await cliCheck(installDir), {
+    ok: false,
+    label: "CLI",
+    value: "2.0.0 from package.json, 999.0.0 available - run `npm i superwall@latest`",
+  });
+});

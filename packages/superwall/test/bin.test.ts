@@ -173,6 +173,46 @@ describe("superwall bin", () => {
       );
     });
 
+    it("names the workspace that pins it when the copy is hoisted to the repo root", () => {
+      const dir = scaffold({
+        "package.json": JSON.stringify({ name: "myapp", workspaces: ["superwall"] }),
+        "package-lock.json": "",
+        "superwall/package.json": JSON.stringify({
+          name: "myapp-superwall",
+          dependencies: { superwall: "2.0.0" },
+        }),
+        "node_modules/superwall/package.json": JSON.stringify({
+          name: "superwall",
+          type: "module",
+          version: "2.0.0",
+        }),
+        "node_modules/superwall/bin/superwall.js": LOCAL_BIN,
+      });
+      const result = run(dir, ["--version"]);
+      expect(result.stderr).toBe(
+        `Running superwall 2.0.0 pinned by ${path.join("superwall", "package.json")}, not ${SELF_VERSION}. Update it: cd superwall && npm i superwall@latest\n`,
+      );
+      expect(JSON.parse(result.stdout).ran).toBe("local");
+    });
+
+    it("names the root when only the root declares the hoisted pin", () => {
+      const dir = scaffold({
+        "package.json": JSON.stringify({ name: "myapp", dependencies: { superwall: "2.0.0" } }),
+        "bun.lock": "",
+        "superwall/package.json": JSON.stringify({ name: "myapp-superwall" }),
+        "node_modules/superwall/package.json": JSON.stringify({
+          name: "superwall",
+          type: "module",
+          version: "2.0.0",
+        }),
+        "node_modules/superwall/bin/superwall.js": LOCAL_BIN,
+      });
+      const result = run(dir, ["--version"]);
+      expect(result.stderr).toBe(
+        `Running superwall 2.0.0 pinned by package.json, not ${SELF_VERSION}. Update it: bun add superwall@latest\n`,
+      );
+    });
+
     it("says so when the pinned copy has no readable version", () => {
       const result = run(scaffold(pinned(undefined)), ["--version"]);
       expect(result.stderr).toContain("Running superwall of unknown version pinned by");
