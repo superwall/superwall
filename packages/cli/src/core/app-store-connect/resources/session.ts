@@ -42,6 +42,19 @@ function describeAppleError(error: ApiError): string | undefined {
   return `App Store Connect refused ${error.request.replace(/^(\w+) \/v2\/organizations\/[^/]+\/app-store-connect\/proxy\/[^/]+/, "$1 ")} (${error.status}):\n${lines.join("\n")}`;
 }
 
+export class AscRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+export function statusOf(error: unknown): number | undefined {
+  return error instanceof ApiError || error instanceof AscRequestError ? error.status : undefined;
+}
+
 export class AscSession {
   readonly planned: PlannedRequest[] = [];
   readonly created: AscResource[] = [];
@@ -62,7 +75,7 @@ export class AscSession {
       const described = describeAppleError(error);
       const made = this.created.map((resource) => `${resource.type} ${resource.id}`).join(", ");
       if (!described && !made) throw error;
-      throw new Error([described ?? error.message, ...(made ? [`Already created: ${made}.`] : [])].join("\n"));
+      throw new AscRequestError([described ?? error.message, ...(made ? [`Already created: ${made}.`] : [])].join("\n"), error.status);
     }
   }
 
@@ -100,7 +113,7 @@ export class AscSession {
       const document = await this.get(path);
       return document?.one ?? undefined;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) return undefined;
+      if (statusOf(error) === 404) return undefined;
       throw error;
     }
   }

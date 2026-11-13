@@ -316,6 +316,11 @@ fails the build when one isn't.
   `asc submit` is a plain command over the same session. A flag may be a
   `list` (repeatable, an array in the MCP schema) and an argument may have
   `choices` (`asc release phased <action>`).
+  `asc screenshots upload` refuses a file whose bytes aren't the PNG or JPEG
+  its extension says before any request; a 5xx on the commit PATCH re-reads
+  the reservation (carries on if Apple took it), retries up to 3 times, then
+  deletes the AWAITING_UPLOAD reservation. An `AscSession` error keeps
+  Apple's HTTP status (`statusOf`).
 - **Releases** (`asc versions`, `asc builds`, `asc metadata`, `asc release`,
   in `src/commands/app-store-connect/release/`) are the same kind of catalog.
   A `<version>` is an App Store version id, or its version string with
