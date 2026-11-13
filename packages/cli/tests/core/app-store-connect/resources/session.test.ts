@@ -47,3 +47,10 @@ test("every page of a list is read", async () => {
   const result = await runCommand(groups, { api, words: ["list", "555"], json: true });
   assert.deepEqual(result.json, [{ id: "201" }, { id: "202" }]);
 });
+
+test("an Apple error the session explains keeps Apple's HTTP status", async () => {
+  const { AscRequestError, statusOf } = await import("@/core/app-store-connect/resources/session");
+  assert.equal(statusOf(new AscRequestError("refused", 502)), 502);
+  assert.equal(statusOf(new ApiError("GET x", 404, "")), 404);
+  assert.equal(statusOf(new Error("plain")), undefined);
+});
