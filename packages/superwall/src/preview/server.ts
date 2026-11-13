@@ -37,6 +37,7 @@ import {
   type PreviewProject,
   type ScreenshotSource,
 } from "./projects";
+import { aliasColonPaths, colonAliasPlugin } from "./alias";
 import { injectWebviewSimulation } from "./webview";
 
 export { buildStudioProject } from "./project";
@@ -47,6 +48,12 @@ const RESOLVED_VIRTUAL_PROJECT_ID = "\0" + VIRTUAL_PROJECT_ID;
 
 const previewMount = fileURLToPath(new URL("./mount.tsx", import.meta.url));
 const frameworkDir = fileURLToPath(new URL("../../", import.meta.url));
+const viteClientDir = path.join(
+  path.dirname(fs.realpathSync(createRequire(import.meta.url).resolve("vite/package.json"))),
+  "dist",
+  "client",
+);
+const viteClientFiles = ["client.mjs", "env.mjs"].map((file) => path.join(viteClientDir, file));
 
 const studioDistDir = (): string | undefined => {
   try {
@@ -72,12 +79,13 @@ const STATIC_TYPES: Record<string, string> = {
 const previewDocument = async (
   surface: DiscoveredSurface,
   platformStylesheet: string,
+  mount: string,
 ): Promise<string> => {
   const { config } = await loadSurfaceConfig(surface);
   const document = renderDocument({
     title: `${surface.id} — superwall`,
     config,
-    entry: `/@fs/${previewMount}`,
+    entry: `/@fs/${mount}`,
   });
   return injectWebviewSimulation(injectPlatformLayer(document, platformStylesheet));
 };
@@ -162,6 +170,7 @@ const previewPlugin = (
   roots: readonly string[],
   viteRoot: string,
   platformStylesheet: string,
+  mount: string,
   studio: StudioActions | undefined,
   appScheme: Promise<AppScheme | undefined>,
 ): Plugin => ({
@@ -376,7 +385,7 @@ const previewPlugin = (
             res.end(`No ${preview[2]} named "${preview[3]}"`);
             return;
           }
-          previewDocument(surface, platformStylesheet)
+          previewDocument(surface, platformStylesheet, mount)
             .then((document) => server.transformIndexHtml(url, document))
             .then((html) => {
               res.setHeader("Content-Type", "text/html");
@@ -432,9 +441,14 @@ export const startPreviewServer = async (
   projectRoots: string | readonly string[],
   options: PreviewServerOptions,
 ): Promise<ViteDevServer> => {
-  const roots = (typeof projectRoots === "string" ? [projectRoots] : [...projectRoots]).map(
+  const requested = (typeof projectRoots === "string" ? [projectRoots] : [...projectRoots]).map(
     (root) => path.resolve(root),
   );
+  const aliases = aliasColonPaths([...requested, frameworkDir, viteClientDir]);
+  const roots = requested.map(aliases.toAlias);
+  const framework = aliases.toAlias(frameworkDir);
+  const viteClient = aliases.toAlias(viteClientDir);
+  const mount = aliases.toAlias(previewMount);
   const projects = readProjects(roots);
   const first = projects[0];
   if (!first) throw new Error("startPreviewServer needs at least one project directory.");
@@ -456,11 +470,13 @@ export const startPreviewServer = async (
     assetsInclude: EXTRA_ASSET_TYPES.map((extension) => `**/*.${extension}`),
     esbuild: { jsx: "automatic", jsxImportSource: "react" },
     plugins: [
+      colonAliasPlugin(aliases, viteClientFiles),
       react(),
       previewPlugin(
         projects.map((one) => one.project.root),
         viteRoot,
         options.platformStylesheet ?? PLATFORM_STYLESHEET_URL,
+        mount,
         options.studio,
         appScheme,
       ),
@@ -490,7 +506,8 @@ export const startPreviewServer = async (
       fs: {
         allow: [
           ...projects.map((one) => one.project.root),
-          frameworkDir,
+          framework,
+          ...(viteClient === viteClientDir ? [] : [viteClient]),
           searchForWorkspaceRoot(first.project.superwallDir),
         ],
       },
