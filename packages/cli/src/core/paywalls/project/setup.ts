@@ -66,12 +66,16 @@ async function available(manager: string): Promise<boolean> {
   }
 }
 
+export function selectLockfileManagers(root: string): string[] {
+  return LOCKFILES.filter(([file]) => fs.existsSync(path.join(root, file))).map(
+    ([, manager]) => manager,
+  );
+}
+
 export async function detectPackageManager(root: string): Promise<string> {
   const agent = process.env.npm_config_user_agent ?? "";
   const candidates = [
-    ...LOCKFILES.filter(([file]) => fs.existsSync(path.join(root, file))).map(
-      ([, manager]) => manager,
-    ),
+    ...selectLockfileManagers(root),
     ...["bun", "pnpm", "yarn", "npm"].filter((manager) => agent.startsWith(manager)),
     "bun",
   ];
