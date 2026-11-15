@@ -2,7 +2,7 @@ import type { CommandContext } from "@/program/command";
 import { currentHost, type LocalApp, type LockRef } from "@/program/host";
 import { chooseOrgOfApps } from "@/core/account/org";
 import type { SuperwallApi } from "@/core/api/client";
-import { appNotFound, findApplication, findProject } from "@/core/api/lookup";
+import { appNotFound, findApplication, findCustomStore, findProject } from "@/core/api/lookup";
 import { listOrgGroups, orgIdOf, organizationOf } from "@/core/api/orgs";
 import {
   findPaywall,
@@ -77,16 +77,22 @@ async function resolveLockAppId(api: SuperwallApi, lock: LockRef | undefined): P
   return paywall?.applicationId;
 }
 
+export interface PickScopeOptions {
+  /** `--app` may also name a custom store (products live in one); it comes back as platform `custom`. */
+  customStores?: boolean;
+}
+
 export async function pickScope(
   context: CommandContext,
   api: SuperwallApi,
   appScoped: boolean,
+  options: PickScopeOptions = {},
 ): Promise<PickedScope> {
   const projects = await apiCall(context, "Loading projects", () => listProjects(api));
 
   const appFlag = context.target.app;
   let bound: { project: Project; app: Application } | undefined;
-  if (appFlag) bound = await namedApp(context, api, projects, appFlag);
+  if (appFlag) bound = await namedApp(context, api, projects, appFlag, options);
   else bound = await lockBoundScope(context, api, projects);
   if (bound) {
     return {
@@ -185,19 +191,27 @@ async function namedApp(
   api: SuperwallApi,
   projects: Project[],
   appFlag: string,
+  options: PickScopeOptions = {},
 ): Promise<{ project: Project; app: Application }> {
-  let found;
   if (context.target.project) {
     const project = await pickProject(context, api, projects);
     const app = project.applications?.find(
       (candidate) => String(candidate.id) === appFlag || candidate.name === appFlag,
     );
-    if (!app) throw new Error(`No app ${appFlag} in ${project.name ?? project.id}.`);
-    found = { project, app };
-  } else {
-    found = await findApplication(api, appFlag, projects);
-    if (!found) throw appNotFound(appFlag);
+    if (app) return remembered({ project, app });
+    const store = options.customStores ? await findCustomStore(api, appFlag, [project]) : undefined;
+    if (store) return store;
+    throw new Error(`No app ${appFlag} in ${project.name ?? project.id}.`);
   }
+  const found = await findApplication(api, appFlag, projects);
+  if (found) return remembered(found);
+  const store = options.customStores ? await findCustomStore(api, appFlag, projects) : undefined;
+  if (store) return store;
+  throw appNotFound(appFlag);
+}
+
+/** A custom store is never remembered as the project's app: app-scoped commands can't use one. */
+function remembered(found: { project: Project; app: Application }): { project: Project; app: Application } {
   writeDefaultApp(String(found.project.id), String(found.app.id));
   return found;
 }
