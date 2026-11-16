@@ -100,6 +100,7 @@ function formatAsaFlags(op: AsaOperation, variants: AsaOperation[]): [string, st
   if (op.body === "geo") add("--entity <Country|AdminArea|Locality>", "What kind of place the ids are");
   if (op.paged) add("--limit <n> --offset <n> --all", "Paging; --all walks every page");
   rows.push([cmd("--app <app>"), "The Superwall app whose Apple Search Ads account to use"]);
+  rows.push([cmd("--ad-account-id <id>"), "The Apple Ads ad account, if the key reaches several (default: Apple's default account)"]);
   return rows;
 }
 
@@ -110,7 +111,7 @@ export function renderAsaHelp(words: readonly string[]): string {
     return renderAsaPage({
       path: "asa",
       usage: "<resource> <operation>",
-      summary: "The Apple Search Ads API through Superwall's proxy: no key or token handling",
+      summary: "The Apple Ads Platform API (v1) through Superwall's proxy: no key or token handling",
       children: [
         ...groups.map((name) => ({
           path: `asa ${name}`,

@@ -7,7 +7,7 @@ const page = (...words: string[]) => stripVTControlCharacters(renderAsaHelp(word
 
 test("the root page lists resources, keys, raw requests and the reference, also for an unknown resource", () => {
   const root = page();
-  assert.match(root, /^superwall asa <resource> <operation>\nThe Apple Search Ads API through Superwall's proxy/);
+  assert.match(root, /^superwall asa <resource> <operation>\nThe Apple Ads Platform API \(v1\) through Superwall's proxy/);
   for (const title of ["Resources", "Keys", "Any request", "Reference", "Examples"]) {
     assert.match(root, new RegExp(`\\n${title}\\n`));
   }
@@ -40,6 +40,7 @@ test("an operation page shows its typed flags, body options and the common flags
   assert.match(create, /\n {2}--search-match +Enable Search Match\n/);
   assert.match(create, /\n {2}-d key=value +Another body field/);
   assert.match(create, /\n {2}--body <json\|@file\|@-> +The whole request body\n/);
+  assert.match(create, /\n {2}--app <app> +The Superwall app whose Apple Search Ads account to use\n {2}--ad-account-id <id> +The Apple Ads ad account, if the key reaches several/);
   assert.match(create, /\nCommon\n {2}--json +Machine-readable output\n {2}--no-interactive +No prompts/);
   assert.match(create, /\nDetails\n {2}Creates a bid-bearing ad group\./);
   assert.match(create, /\n {2}Apple's schema for it: superwall asa docs adgroups create\n$/);

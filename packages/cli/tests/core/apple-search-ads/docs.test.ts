@@ -56,17 +56,19 @@ test("search finds operations by summary, path, or name", () => {
 });
 
 test("renderAppleDoc turns Apple's page JSON into markdown", () => {
-  const md = renderAppleDoc(fixture("asa-doc-get-all-campaigns.json"));
-  assert.match(md, /^# Get all Campaigns/);
-  assert.match(md, /`GET https:\/\/api\.searchads\.apple\.com\/api\/v5\/campaigns`/);
-  assert.match(md, /## Query Parameters/);
-  assert.match(md, /- `limit` — int32, default 20: The number of items to return per request/);
-  assert.match(md, /## Responses/);
-  assert.match(md, /- 200 OK `CampaignListResponse`/);
+  const md = renderAppleDoc(fixture("asa-doc-query-campaigns.json"));
+  assert.match(md, /^# Query Campaigns\nQuery campaigns using filters, sorting, and pagination\./);
+  assert.match(md, /`POST https:\/\/api\.ads\.apple\.com\/v1\/campaigns\/query`/);
+  assert.match(md, /## Header Parameters\n- `X-AP-Context` \(required\) — string/);
+  assert.match(md, /## HTTP Body\n`QueryRequest`/);
+  assert.match(md, /- 200 OK `CampaignQueryResponse`/);
+  assert.match(md, /- 400 Bad Request `ErrorResponse`/);
+  assert.match(md, /`status` \| string \(enum\) \| `EQUALS`, `IN` \| Yes \|/);
   const object = renderAppleDoc(fixture("asa-doc-campaign.json"));
+  assert.match(object, /^# Campaign\n/);
   assert.match(object, /## Properties/);
-  assert.match(object, /- `adamId` \(required\) — int64: Your unique App Store app identifier/);
-  assert.match(object, /one of SEARCH, DISPLAY/);
+  assert.match(object, /- `adAccountId` — int64: The ad account this campaign belongs to\. Read-only\./);
+  assert.match(object, /- `status` — Campaign\.Status: Captures the advertiser’s intent/);
   assert.equal(renderAppleDoc(null), "");
   assert.equal(renderAppleDoc({ primaryContentSections: [{ kind: "unknown" }, "x"] }), "");
 });
@@ -75,23 +77,26 @@ test("renderAsaOperationDocs stitches the usage, Apple's page, and the body obje
   const fetched: string[] = [];
   const md = await renderAsaOperationDocs("campaigns", "list", async (url) => {
     fetched.push(url);
-    if (url.endsWith("/post-campaigns-query.json")) return fixture("asa-doc-get-all-campaigns.json");
+    if (url.endsWith("/post-campaigns-query.json")) return fixture("asa-doc-query-campaigns.json");
+    if (url.endsWith("/queryrequest.json")) return { metadata: { title: "QueryRequest" } };
     throw new Error("unexpected");
   });
-  assert.deepEqual(fetched, [`${APPLE_DOC_DATA_BASE}/post-campaigns-query.json`]);
+  assert.deepEqual(fetched, [`${APPLE_DOC_DATA_BASE}/post-campaigns-query.json`, `${APPLE_DOC_DATA_BASE}/queryrequest.json`]);
   assert.match(md, /## superwall asa campaigns list/);
-  assert.match(md, /# Get all Campaigns/);
+  assert.match(md, /# Query Campaigns/);
+  assert.match(md, /`POST \/campaigns\/query`\n\n {2}--query <json\|@file\|@->/);
+  assert.match(md, /\n# QueryRequest$/);
 });
 
 test("renderAsaOperationDocs follows the request body type and reports fetch failures", async () => {
   const withBody = {
     metadata: { title: "Create a Campaign" },
     primaryContentSections: [
-      { kind: "restEndpoint", tokens: [{ text: "POST " }, { text: "https://x/v5/campaigns" }] },
+      { kind: "restEndpoint", tokens: [{ text: "POST " }, { text: "https://api.ads.apple.com/v1/campaigns" }] },
       {
         kind: "restBody",
         title: "HTTP Body",
-        bodyContentType: [{ kind: "typeIdentifier", identifier: "doc://x/documentation/apple_ads/Campaign", text: "Campaign" }],
+        bodyContentType: [{ kind: "typeIdentifier", identifier: "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/CampaignCreate", text: "CampaignCreate" }],
         content: [{ type: "paragraph", inlineContent: [{ type: "text", text: "The campaign." }] }],
         parameters: [],
       },
@@ -100,17 +105,17 @@ test("renderAsaOperationDocs follows the request body type and reports fetch fai
   };
   const md = await renderAsaOperationDocs("campaigns", "create", async (url) => {
     if (url.endsWith("/post-campaigns.json")) return withBody;
-    if (url.endsWith("/campaign.json")) return fixture("asa-doc-campaign.json");
+    if (url.endsWith("/campaigncreate.json")) return fixture("asa-doc-campaign.json");
     throw new Error("unexpected");
   });
-  assert.match(md, /## HTTP Body\n`Campaign` — The campaign\./);
+  assert.match(md, /## HTTP Body\n`CampaignCreate` — The campaign\./);
   assert.match(md, /## Properties/);
 
   const failing = await renderAsaOperationDocs("campaigns", "create", async (url) => {
     if (url.endsWith("/post-campaigns.json")) return withBody;
     throw new Error("offline");
   });
-  assert.match(failing, /Couldn't fetch the `Campaign` object page \(offline\)/);
+  assert.match(failing, /Couldn't fetch the `CampaignCreate` object page \(offline\) — see https:\/\/developer\.apple\.com\/documentation\/apple-ads-platform-api\/campaigncreate/);
 
   const allFailing = await renderAsaOperationDocs("campaigns", "create", async () => {
     throw new Error("HTTP 503");

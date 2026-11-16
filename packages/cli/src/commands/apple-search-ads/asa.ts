@@ -7,7 +7,7 @@ import { listAsaTools } from "@/core/apple-search-ads/tools";
 
 export const command = defineCatalog({
   name: "asa",
-  summary: "The Apple Search Ads API through Superwall's proxy: no key or token handling",
+  summary: "The Apple Ads Platform API (v1) through Superwall's proxy: no key or token handling",
   flags: {
     app: { ...app, describe: "Superwall app id or name (if several have Apple Search Ads connected)" },
     adAccountId: { type: "string", value: "id", describe: "Apple Ads ad account id (X-AP-Context), if the API user reaches several" },

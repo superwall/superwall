@@ -11,14 +11,77 @@
       "input": {
         "app": "1128",
         "limit": 2,
-        "offset": 1,
-        "fields": "id,name,status"
+        "offset": 1
       },
       "ok": true
     },
     {
       "input": {
+        "app": "1128",
+        "field": "status",
+        "op": "EQUALS",
+        "values": "ENABLED",
+        "order_by": "name:desc",
+        "limit": 3
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "ad_account_id": "999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
         "app": "does-not-exist"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": {
+          "filters": [
+            {
+              "field": "status",
+              "operator": "EQUALS",
+              "values": [
+                "PAUSED"
+              ]
+            }
+          ],
+          "pagination": {
+            "offset": 0,
+            "pageSize": 2
+          }
+        }
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "field": "name",
+        "op": "CONTAINS",
+        "values": "BRAND",
+        "order_by": "name:desc",
+        "limit": 3
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "field": "status"
       },
       "ok": false
     }
@@ -34,64 +97,7 @@
     {
       "input": {
         "app": "1128",
-        "id": "1906433850",
-        "fields": "id,name,status"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
         "id": "999999999999"
-      },
-      "ok": false
-    }
-  ],
-  "asa_campaigns_find": [
-    {
-      "input": {
-        "app": "1128",
-        "selector": {
-          "conditions": [
-            {
-              "field": "status",
-              "operator": "EQUALS",
-              "values": [
-                "PAUSED"
-              ]
-            }
-          ],
-          "pagination": {
-            "offset": 0,
-            "limit": 2
-          }
-        }
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
-        "field": "name",
-        "op": "CONTAINS",
-        "values": "BRAND",
-        "order_by": "name:desc",
-        "fields": "id,name",
-        "limit": 3
-      },
-      "ok": false
-    },
-    {
-      "input": {
-        "app": "1128",
-        "selector": "not json"
-      },
-      "ok": false
-    },
-    {
-      "input": {
-        "app": "1128",
-        "field": "status"
       },
       "ok": false
     }
@@ -162,6 +168,15 @@
       "ok": false
     }
   ],
+  "asa_campaigns_limited_reasons": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
   "asa_adgroups_list": [
     {
       "input": {
@@ -174,6 +189,19 @@
       "input": {
         "app": "1128",
         "campaign": "999999999999"
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "[1]"
       },
       "ok": false
     }
@@ -182,49 +210,14 @@
     {
       "input": {
         "app": "1128",
-        "id": "1906750349",
-        "campaign": "1906433850"
+        "id": "1906750349"
       },
       "ok": true
     },
     {
       "input": {
         "app": "1128",
-        "id": "1906750349",
-        "campaign": "1906433850",
-        "fields": "id,name"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
-        "id": "999999999999",
-        "campaign": "1906433850"
-      },
-      "ok": false
-    }
-  ],
-  "asa_adgroups_find": [
-    {
-      "input": {
-        "app": "1128",
-        "campaign": "1906433850"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
-        "limit": 2,
-        "fields": "id,name"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
-        "selector": "[1]"
+        "id": "999999999999"
       },
       "ok": false
     }
@@ -252,7 +245,6 @@
       "input": {
         "app": "1128",
         "id": "999999999999",
-        "campaign": "999999999999",
         "status": "PAUSED"
       },
       "ok": false
@@ -261,7 +253,6 @@
       "input": {
         "app": "1128",
         "id": "999999999999",
-        "campaign": "1906433850",
         "search_match": true,
         "body": "[1]"
       },
@@ -272,15 +263,13 @@
     {
       "input": {
         "app": "1128",
-        "id": "999999999999",
-        "campaign": "999999999999"
+        "id": "999999999999"
       },
       "ok": false
     },
     {
       "input": {
-        "app": "1128",
-        "campaign": "999999999999"
+        "app": "1128"
       },
       "ok": false
     }
@@ -299,31 +288,8 @@
         "app": "1128",
         "campaign": "1906433850",
         "adgroup": "999999999999"
-      },
-      "ok": false
-    }
-  ],
-  "asa_keywords_get": [
-    {
-      "input": {
-        "app": "1128",
-        "id": "1906791114",
-        "campaign": "1906433850",
-        "adgroup": "1906750349"
-      },
-      "ok": true
+      }
     },
-    {
-      "input": {
-        "app": "1128",
-        "id": "999999999999",
-        "campaign": "1906433850",
-        "adgroup": "1906750349"
-      },
-      "ok": false
-    }
-  ],
-  "asa_keywords_find": [
     {
       "input": {
         "app": "1128",
@@ -335,6 +301,21 @@
       "input": {
         "app": "1128",
         "campaign": "999999999999"
+      }
+    }
+  ],
+  "asa_keywords_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "1906791114"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
       },
       "ok": false
     }
@@ -343,7 +324,6 @@
     {
       "input": {
         "app": "1128",
-        "campaign": "999999999999",
         "adgroup": "999999999999",
         "text": "parity refused",
         "match_type": "EXACT"
@@ -353,7 +333,6 @@
     {
       "input": {
         "app": "1128",
-        "campaign": "1906433850",
         "adgroup": "1906750349"
       },
       "ok": false
@@ -363,9 +342,7 @@
     {
       "input": {
         "app": "1128",
-        "id": "999999999999",
-        "campaign": "999999999999",
-        "adgroup": "999999999999",
+        "ids": "999999999999",
         "status": "PAUSED"
       },
       "ok": false
@@ -373,9 +350,20 @@
     {
       "input": {
         "app": "1128",
-        "id": "1906791114",
-        "campaign": "1906433850",
-        "adgroup": "1906750349",
+        "ids": "999999999999,999999999998"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "status": "PAUSED"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
         "body": "not json"
       },
       "ok": false
@@ -385,26 +373,20 @@
     {
       "input": {
         "app": "1128",
-        "ids": "999999999999",
-        "campaign": "999999999999",
-        "adgroup": "999999999999"
+        "ids": "999999999999"
       },
       "ok": false
     },
     {
       "input": {
         "app": "1128",
-        "ids": "999999999998,999999999999",
-        "campaign": "999999999999",
-        "adgroup": "999999999999"
+        "ids": "999999999998,999999999999"
       },
       "ok": false
     },
     {
       "input": {
-        "app": "1128",
-        "campaign": "1906433850",
-        "adgroup": "1906750349"
+        "app": "1128"
       },
       "ok": false
     }
@@ -430,51 +412,29 @@
       "input": {
         "app": "1128",
         "campaign": "999999999999"
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "campaign": "1906437168",
+        "limit": 2
       },
-      "ok": false
+      "ok": true
     }
   ],
   "asa_negative_keywords_get": [
     {
       "input": {
         "app": "1128",
-        "id": "1906800848",
-        "campaign": "1906437168",
-        "adgroup": "1906763410"
+        "id": "1906800848"
       },
       "ok": true
     },
     {
       "input": {
         "app": "1128",
-        "id": "999999999999",
-        "campaign": "1906437168"
-      },
-      "ok": false
-    }
-  ],
-  "asa_negative_keywords_find": [
-    {
-      "input": {
-        "app": "1128",
-        "campaign": "1906437168"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
-        "campaign": "1906437168",
-        "adgroup_level": true,
-        "limit": 2,
-        "fields": "id,text"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
-        "campaign": "999999999999"
+        "id": "999999999999"
       },
       "ok": false
     }
@@ -501,9 +461,6 @@
     {
       "input": {
         "app": "1128",
-        "id": "999999999999",
-        "campaign": "999999999999",
-        "adgroup": "999999999999",
         "status": "PAUSED"
       },
       "ok": false
@@ -511,8 +468,6 @@
     {
       "input": {
         "app": "1128",
-        "id": "1906800848",
-        "campaign": "1906437168",
         "body": 7
       },
       "ok": false
@@ -522,24 +477,13 @@
     {
       "input": {
         "app": "1128",
-        "ids": "999999999999",
-        "campaign": "999999999999"
+        "ids": "999999999999"
       },
       "ok": false
     },
     {
       "input": {
-        "app": "1128",
-        "ids": "999999999999",
-        "campaign": "999999999999",
-        "adgroup": "999999999999"
-      },
-      "ok": false
-    },
-    {
-      "input": {
-        "app": "1128",
-        "campaign": "1906437168"
+        "app": "1128"
       },
       "ok": false
     }
@@ -558,22 +502,8 @@
         "app": "1128",
         "campaign": "999999999999",
         "adgroup": "999999999999"
-      },
-      "ok": false
-    }
-  ],
-  "asa_ads_get": [
-    {
-      "input": {
-        "app": "1128",
-        "id": "999999999999",
-        "campaign": "1906433850",
-        "adgroup": "1906750349"
-      },
-      "ok": false
-    }
-  ],
-  "asa_ads_find": [
+      }
+    },
     {
       "input": {
         "app": "1128",
@@ -591,7 +521,16 @@
     {
       "input": {
         "app": "1128",
-        "selector": "not json"
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ads_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
       },
       "ok": false
     }
@@ -600,7 +539,6 @@
     {
       "input": {
         "app": "1128",
-        "campaign": "999999999999",
         "adgroup": "999999999999",
         "name": "parity-refused",
         "creative_id": "999999999999"
@@ -610,7 +548,6 @@
     {
       "input": {
         "app": "1128",
-        "campaign": "1906433850",
         "adgroup": "1906750349",
         "creative_id": "not-a-number"
       },
@@ -622,8 +559,6 @@
       "input": {
         "app": "1128",
         "id": "999999999999",
-        "campaign": "999999999999",
-        "adgroup": "999999999999",
         "status": "PAUSED"
       },
       "ok": false
@@ -631,8 +566,6 @@
     {
       "input": {
         "app": "1128",
-        "campaign": "1906433850",
-        "adgroup": "1906750349",
         "status": "PAUSED"
       },
       "ok": false
@@ -642,17 +575,13 @@
     {
       "input": {
         "app": "1128",
-        "id": "999999999999",
-        "campaign": "999999999999",
-        "adgroup": "999999999999"
+        "id": "999999999999"
       },
       "ok": false
     },
     {
       "input": {
-        "app": "1128",
-        "campaign": "999999999999",
-        "adgroup": "999999999999"
+        "app": "1128"
       },
       "ok": false
     }
@@ -671,26 +600,7 @@
         "limit": "many"
       },
       "ok": false
-    }
-  ],
-  "asa_creatives_get": [
-    {
-      "input": {
-        "app": "1128",
-        "id": "999999999999"
-      },
-      "ok": false
     },
-    {
-      "input": {
-        "app": "1128",
-        "id": "999999999999",
-        "include_deleted_assets": true
-      },
-      "ok": false
-    }
-  ],
-  "asa_creatives_find": [
     {
       "input": {
         "app": "1128"
@@ -700,7 +610,16 @@
     {
       "input": {
         "app": "1128",
-        "selector": []
+        "query": []
+      },
+      "ok": false
+    }
+  ],
+  "asa_creatives_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
       },
       "ok": false
     }
@@ -722,97 +641,17 @@
       "ok": false
     }
   ],
-  "asa_product_pages_list": [
+  "asa_creatives_update": [
     {
       "input": {
         "app": "1128",
-        "adam_id": "1659137743"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
-        "adam_id": "1659137743",
-        "name": "nothing",
-        "states": "VISIBLE"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
-        "adam_id": "999999999999"
+        "id": "999999999999",
+        "body": "not json"
       },
       "ok": false
     }
   ],
-  "asa_product_pages_get": [
-    {
-      "input": {
-        "app": "1128",
-        "id": "does-not-exist",
-        "adam_id": "1659137743"
-      },
-      "ok": false
-    }
-  ],
-  "asa_product_pages_locales": [
-    {
-      "input": {
-        "app": "1128",
-        "id": "does-not-exist",
-        "adam_id": "1659137743",
-        "expand": true
-      },
-      "ok": false
-    }
-  ],
-  "asa_product_pages_countries": [
-    {
-      "input": {
-        "app": "1128",
-        "countries": "US,GB"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "does-not-exist"
-      },
-      "ok": false
-    }
-  ],
-  "asa_product_pages_device_sizes": [
-    {
-      "input": {
-        "app": "1128"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "does-not-exist"
-      },
-      "ok": false
-    }
-  ],
-  "asa_ad_rejections_find": [
-    {
-      "input": {
-        "app": "1128"
-      },
-      "ok": true
-    },
-    {
-      "input": {
-        "app": "1128",
-        "selector": "not json"
-      },
-      "ok": false
-    }
-  ],
-  "asa_ad_rejections_get": [
+  "asa_creatives_delete": [
     {
       "input": {
         "app": "1128",
@@ -821,7 +660,7 @@
       "ok": false
     }
   ],
-  "asa_ad_rejections_assets": [
+  "asa_assets_list": [
     {
       "input": {
         "app": "1128",
@@ -834,8 +673,82 @@
       "input": {
         "app": "1128",
         "adam_id": "999999999999"
+      }
+    }
+  ],
+  "asa_assets_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_assets_delete": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_product_pages_list": [
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "1659137743"
       },
       "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "adam_id": "999999999999"
+      }
+    }
+  ],
+  "asa_product_pages_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "does-not-exist"
+      },
+      "ok": false
+    }
+  ],
+  "asa_product_pages_locales": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "does-not-exist"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ad_rejections_list": [
+    {
+      "input": {
+        "app": "1128"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ad_rejections_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
     }
   ],
   "asa_reports_campaigns": [
@@ -911,17 +824,13 @@
         "adgroup": "1906750349",
         "start": "2025-07-10",
         "end": "2025-07-12",
-        "selector": {
-          "orderBy": [
+        "query": {
+          "sorting": [
             {
               "field": "impressions",
-              "sortOrder": "DESCENDING"
+              "order": "DESC"
             }
-          ],
-          "pagination": {
-            "offset": 0,
-            "limit": 5
-          }
+          ]
         }
       },
       "ok": true
@@ -973,7 +882,7 @@
         "campaign": "1906433850",
         "start": "2025-07-10",
         "end": "2025-07-12",
-        "selector": "not json"
+        "query": "not json"
       },
       "ok": false
     }
@@ -998,44 +907,143 @@
       "ok": false
     }
   ],
-  "asa_impression_share_list": [
+  "asa_brand_reports_campaigns": [
     {
       "input": {
         "app": "1128",
-        "limit": 1,
-        "offset": 100000
-      },
-      "ok": true
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "limit": 2
+      }
     },
     {
       "input": {
         "app": "1128",
-        "limit": "many"
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "query": "not json"
       },
       "ok": false
     }
   ],
-  "asa_impression_share_get": [
+  "asa_brand_reports_adgroups": [
     {
       "input": {
         "app": "1128",
-        "id": "999999999999"
-      },
-      "ok": false
-    }
-  ],
-  "asa_impression_share_create": [
-    {
-      "input": {
-        "app": "1128",
-        "body": "[1]"
-      },
-      "ok": false
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "campaign": "999999999999",
+        "limit": 2
+      }
     },
     {
       "input": {
         "app": "1128",
-        "body": "not json"
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "campaign": "999999999999",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_brand_reports_keywords": [
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "campaign": "999999999999",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "campaign": "999999999999",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_brand_reports_searchterms": [
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "campaign": "999999999999",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "campaign": "999999999999",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_brand_reports_ads": [
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "campaign": "999999999999",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "campaign": "999999999999",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_insights_impression_share": [
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_insights_search_term_popularity": [
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "start": "2025-07-10",
+        "end": "2025-07-12",
+        "query": "not json"
       },
       "ok": false
     }
@@ -1076,8 +1084,7 @@
       "input": {
         "app": "1128",
         "adam_id": "999999999999"
-      },
-      "ok": false
+      }
     }
   ],
   "asa_apps_get": [
@@ -1108,6 +1115,20 @@
       "input": {
         "app": "1128",
         "adam_id": "999999999999"
+      }
+    }
+  ],
+  "asa_apps_languages": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
       },
       "ok": false
     }
@@ -1199,6 +1220,272 @@
       "ok": false
     }
   ],
+  "asa_budget_orders_delete": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_recommendations_target_cpas": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_recommendations_apply_target_cpas": [
+    {
+      "input": {
+        "app": "1128",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_recommendations_dismiss_target_cpas": [
+    {
+      "input": {
+        "app": "1128",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_recommendations_daily_budgets": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_recommendations_apply_daily_budgets": [
+    {
+      "input": {
+        "app": "1128",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_recommendations_dismiss_daily_budgets": [
+    {
+      "input": {
+        "app": "1128",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_suggestions_keywords": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_suggestions_phrases": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_suggestions_categories": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_suggestions_target_cpa": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_change_history_list": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_change_history_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_brands_list": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_brands_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_brands_categories": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_brands_category": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_brands_rejections": [
+    {
+      "input": {
+        "app": "1128",
+        "limit": 2
+      }
+    },
+    {
+      "input": {
+        "app": "1128",
+        "query": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ad_accounts_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ad_accounts_create": [
+    {
+      "input": {
+        "app": "1128",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ad_accounts_update": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999",
+        "body": "not json"
+      },
+      "ok": false
+    }
+  ],
+  "asa_ad_accounts_resources": [
+    {
+      "input": {
+        "app": "1128"
+      }
+    }
+  ],
+  "asa_orgs_get": [
+    {
+      "input": {
+        "app": "1128",
+        "id": "999999999999"
+      },
+      "ok": false
+    }
+  ],
   "asa_acls_list": [
     {
       "input": {
@@ -1223,7 +1510,7 @@
     {
       "input": {
         "app": "1128",
-        "org_id": "1385480"
+        "ad_account_id": "1385480"
       },
       "ok": true
     },
@@ -1257,11 +1544,21 @@
     {
       "input": {
         "app": "1128",
-        "path": "/campaigns",
-        "d": [
-          "limit=2",
-          "fields=id,name"
-        ]
+        "path": "/acls"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
+        "path": "/campaigns/999999999999"
+      },
+      "ok": false
+    },
+    {
+      "input": {
+        "app": "1128",
+        "path": "/api/v5/me"
       },
       "ok": true
     },
@@ -1284,6 +1581,14 @@
     {
       "input": {
         "app": "1128",
+        "path": "/campaigns/query",
+        "body": "{\"pagination\":{\"offset\":0,\"pageSize\":2}}"
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "1128",
         "path": "/does-not-exist",
         "body": "{}"
       },
@@ -1300,7 +1605,7 @@
     {
       "input": {
         "app": "1128",
-        "path": "/campaigns",
+        "path": "/campaigns/query",
         "body": "not json"
       },
       "ok": false
