@@ -141,7 +141,8 @@ export function resolveLine(tokens: readonly string[], groups: readonly Group[])
 }
 
 function resolveCommand(command: AnyCommand, rest: string[], globals: Globals): Resolution {
-  const parsed = parseTokens(rest, onChannel(command.flags), !globals.help);
+  const strict = command.kind === "command" || command.strictFlags;
+  const parsed = parseTokens(rest, onChannel(command.flags), strict && !globals.help);
   if (globals.help) return { kind: "help", command, words: parsed.positionals };
   const input = {
     args: assignArgs(command, parsed.positionals),

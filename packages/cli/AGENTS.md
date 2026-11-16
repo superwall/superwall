@@ -303,7 +303,9 @@ fails the build when one isn't.
 - **Catalogs.** A family driven by a catalog (`apps …`, `products …`, `asa
   campaigns …`) is one `defineCatalog` file with the same description fields
   plus `operations()` and `help(words)`; its flags are parsed loosely because
-  they come from the live API.
+  they come from the live API. A catalog whose flags are all declared up front
+  sets `strictFlags: true` (`asa`), so a removed or mistyped flag is refused
+  rather than dropped.
 - **App Store Connect resources** (`asc subscription-groups`, `asc
   subscriptions`, `asc iaps`, `asc localizations`, `asc prices`, `asc offers`,
   `asc availability`, `asc screenshots`) are catalogs written with
