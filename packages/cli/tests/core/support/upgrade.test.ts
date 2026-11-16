@@ -287,6 +287,11 @@ test("a check cached from the latest tag is never compared with a prerelease, no
 test("the tag is next for a prerelease and latest otherwise", () => {
   assert.equal(resolveUpdateTag("2.6.0-beta.2"), "next");
   assert.equal(resolveUpdateTag("2.5.2"), "latest");
+  assert.equal(resolveUpdateTag("1.0.0+build-foo"), "latest");
+  assert.equal(resolveUpdateTag("1.0.0-beta.1+build-foo"), "next");
+  assert.equal(isNewerVersion("1.0.1", "1.0.0+build-foo"), true);
+  assert.equal(isNewerVersion("1.0.0", "1.0.0+build-foo"), false);
+  assert.equal(isNewerVersion("1.0.0-beta.2+sha-1", "1.0.0-beta.1+sha-9"), true);
 });
 
 test("a prerelease asks the registry for the next tag and keeps the latest check beside it", async () => {

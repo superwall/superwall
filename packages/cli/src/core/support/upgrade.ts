@@ -40,7 +40,9 @@ export function isNewerVersion(latest: string, current: string): boolean {
   return comparePrerelease(latestPre.split("."), currentPre.split(".")) > 0;
 }
 
-function splitPrerelease(version: string): [string, string | undefined] {
+function splitPrerelease(full: string): [string, string | undefined] {
+  const plus = full.indexOf("+");
+  const version = plus === -1 ? full : full.slice(0, plus);
   const dash = version.indexOf("-");
   return dash === -1 ? [version, undefined] : [version.slice(0, dash), version.slice(dash + 1)];
 }
