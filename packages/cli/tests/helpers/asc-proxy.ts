@@ -1,4 +1,4 @@
-import type { SuperwallApi } from "@/core/api/client";
+import { ApiError, type SuperwallApi } from "@/core/api/client";
 
 const ASC = "/v2/organizations/7/app-store-connect";
 
@@ -75,3 +75,13 @@ export function page(data: unknown[], extra: { included?: unknown[]; next?: stri
 }
 
 export const link = (type: string, id: string) => ({ data: { type, id } });
+
+export function appleError(request: string, status: number, code: string, detail: string) {
+  const [method, path] = request.split(" ");
+  const body = JSON.stringify({ errors: [{ id: "e1", status: String(status), code, title: "Apple refused the request", detail }] });
+  return new ApiError(`${method} /v2/organizations/7/app-store-connect/proxy/T1${path}`, status, body);
+}
+
+export function appleNotFound(request: string, type: string, id: string) {
+  return appleError(request, 404, "NOT_FOUND", `There is no resource of type '${type}' with id '${id}'`);
+}
