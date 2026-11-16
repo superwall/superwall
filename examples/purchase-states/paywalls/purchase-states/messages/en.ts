@@ -17,6 +17,18 @@ export default {
     restored: "Restored.",
     nothingToRestore: "Nothing to restore, or the store didn't answer.",
   },
+  failure: {
+    card_declined: "Your card was declined. Try another card.",
+    insufficient_funds: "Your card doesn't have enough funds. Try another card.",
+    expired_card: "Your card has expired. Try another card.",
+    incorrect_card_details: "Check your card details and try again.",
+    authentication_failed: "Your bank couldn't confirm the payment. Try again.",
+    card_not_supported: "This card isn't supported. Try another card.",
+    limit_exceeded: "Your card's limit was reached. Try another card.",
+    fraud_suspected: "Your bank declined this payment. Try another card.",
+    processing_error: "The payment couldn't be processed. Try again.",
+    unknown: "The payment didn't go through. Try again.",
+  },
   note: {
     and: " and ",
     resolve:

@@ -13,7 +13,11 @@ type Entry = { name: string; detail?: string };
 export default function Index() {
   const { restore } = useActions();
   const { getProduct } = useProducts();
-  const { purchase } = usePurchase();
+  const { purchase } = usePurchase({
+    onFailure: (failure) => {
+      add({ name: `payment_failed → ${failure.reason}`, detail: t(`failure.${failure.reason}`) });
+    },
+  });
   const { t } = useTranslation();
   const haptics = useHaptics();
 
@@ -84,7 +88,12 @@ export default function Index() {
             add({ name: `purchase() → ${result.status}`, detail: t("log.resolved") });
             if (result.status === "completed")
               haptics.success(); // the SDK dismisses (postPurchase)
-            else if (result.status === "failed") setNotice(t("paywall.failed")); // iOS only; say so, keep the button
+            else if (result.status === "failed")
+              setNotice(
+                "failure" in result && result.failure
+                  ? t(`failure.${result.failure.reason}`)
+                  : t("paywall.failed"),
+              ); // say why when the web checkout knows; keep the button
             // abandoned: the user closed the store sheet — nothing changes, nothing is said
           }}
         >

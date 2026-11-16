@@ -206,9 +206,10 @@ The stack, bottom to top — each layer depends only on the one below it:
     | ------------- | ------------------------------------------------------------------------- |
     | `index.tsx`   | `SuperwallCheckout` and the module's public exports                       |
     | `types.ts`    | the domain: modes, session directives, discounts, post-purchase behaviour |
+    | `failure.ts`  | `CheckoutFailure`: why a payment failed, as superwall's own reasons       |
     | `flow.ts`     | the orchestration, below                                                  |
     | `products.ts` | the Stripe and custom store product-identifier vocabulary                 |
-    | `events.ts`   | the in-page bus between the flow and the sheet (public `checkoutEvents`)  |
+    | `events.ts`   | the in-page buses: flow ↔ sheet (`checkoutEvents`) and purchase callbacks |
     | `loading.ts`  | the loading-overlay flag                                                  |
     - `flow.ts` is the only orchestrator: it holds one `session` source and one
       `applePay` per paywall (`sessionsFor`, `applePayFor`, keyed by the runtime
@@ -220,6 +221,22 @@ The stack, bottom to top — each layer depends only on the one below it:
       paywall hook calls into it and never drives checkout itself.
       `PaywallSession` is the narrowed runtime session; a _checkout_ session is
       always spelled out (`EmbeddedCheckoutSession`, `CheckoutSessionResult`).
+    - A failed Stripe payment settles `failed` with a `CheckoutFailure`
+      (`failure.ts`): superwall's `reason` (`card_declined`,
+      `insufficient_funds`, …, `unknown`) plus the store's raw `code`,
+      `declineCode` and `message`. Stripe's codes are mapped there and nowhere
+      else, so a new store or payment method adds a mapping, never a reason a
+      paywall has to learn. Apple Pay reads it from Stripe.js and the confirm
+      body; the embedded sheet and hosted checkout tell the page nothing, so
+      it is read from `checkout/status`'s `failure` and a teleport's from
+      `checkout/teleport/status`. A reason nobody reported is `unknown`,
+      never a guess, and a status lookup that fails is logged and settles
+      `unknown`, never "no failure". `flow.ts` holds the last failure per
+      paywall (`usePurchase().failure`) and emits each purchase step on
+      `purchaseEventsFor(paywall)`, which feeds the `usePurchase` callbacks
+      (`onStart`, `onSubmit`, `onComplete`, `onAbandon`, `onFailure`) — ours, never
+      Stripe's event names. A teleport page's `returnToApp()` after a failed
+      payment adds `reason=failed` to the return link.
     - `session/` is where a checkout session comes from: `index.ts`
       (`createCheckoutSessions` — asks the backend, dedupes in-flight requests,
       applies a promotion code to what it creates), `cache.ts` (its own cache,
