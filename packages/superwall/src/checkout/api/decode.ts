@@ -1,3 +1,4 @@
+import { stripeFailure, type CheckoutFailure } from "../failure";
 import { decodeCheckoutSessionId } from "../session/id";
 import type {
   AppliedDiscount,
@@ -204,11 +205,35 @@ const CHECKOUT_STATUSES = ["pending", "completed", "abandoned"] as const;
 export const readCheckoutStatus = (body: unknown): CheckoutStatus => {
   const status = CHECKOUT_STATUSES.find((candidate) => candidate === field(body, "status"));
   const redemptionUrl = field(body, "redemptionUrl");
+  const failure = readCheckoutFailure(field(body, "failure"));
   return {
     status: status ?? "pending",
     ...(typeof redemptionUrl === "string" && redemptionUrl !== "" ? { redemptionUrl } : {}),
+    ...(failure ? { failure } : {}),
   };
 };
+
+const nonEmptyString = (value: unknown): string | undefined =>
+  typeof value === "string" && value !== "" ? value : undefined;
+
+export const readCheckoutFailure = (value: unknown): CheckoutFailure | undefined => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  return stripeFailure({
+    code: nonEmptyString(field(value, "code")),
+    declineCode: nonEmptyString(field(value, "declineCode")),
+    message: nonEmptyString(field(value, "message")),
+  });
+};
+
+export const errorFailureOf = (body: unknown): CheckoutFailure | undefined =>
+  readCheckoutFailure(field(body, "failure"));
+
+export const readStripeError = (error: unknown): CheckoutFailure =>
+  stripeFailure({
+    code: nonEmptyString(field(error, "code")),
+    declineCode: nonEmptyString(field(error, "decline_code")),
+    message: nonEmptyString(field(error, "message")),
+  });
 
 export const errorMessageOf = (body: unknown, fallback: string): string => {
   const nested = field(field(body, "error"), "message");
