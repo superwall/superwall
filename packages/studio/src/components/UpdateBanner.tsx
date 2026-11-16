@@ -58,7 +58,7 @@ const CopyPrompt = ({ update, warning }: { update: StudioUpdate; warning: boolea
   return (
     <button
       type="button"
-      className={`inline-flex flex-none cursor-pointer items-center gap-1.5 rounded-xs border px-1.5 py-px font-mono text-xs ${
+      className={`inline-flex flex-none cursor-pointer items-center gap-1.5 rounded-xs border px-1.5 py-px text-xs ${
         warning
           ? "border-warning/30 bg-warning/10 text-warning-foreground hover:bg-warning/18"
           : "border-border bg-muted text-foreground hover:bg-muted/70"
