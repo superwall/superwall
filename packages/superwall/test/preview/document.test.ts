@@ -1,6 +1,8 @@
+import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 import {
   hostAttributes,
+  colorSchemeScript,
   injectPlatformLayer,
   PLATFORM_STYLESHEET_URL,
   renderDocument,
@@ -176,5 +178,88 @@ describe("preview parity", () => {
     // Pinch-zoom is disabled in previews only; the served document keeps its viewport.
     expect(preview).toContain("maximum-scale=1");
     expect(served).not.toContain("maximum-scale");
+  });
+});
+
+describe("colorSchemeScript", () => {
+  const firstPaint = ({
+    background,
+    prefersDark,
+    interfaceStyle,
+  }: {
+    background?: unknown;
+    prefersDark: boolean;
+    interfaceStyle?: string;
+  }) => {
+    const html = renderDocument({
+      title: "t",
+      config: background === undefined ? {} : ({ background } as never),
+      entry: "./entry.jsx",
+    })
+      .replace(
+        "<head>",
+        `<head><script>${
+          interfaceStyle === undefined
+            ? ""
+            : `window.__SW_TELEPORT__ = { variables: { deviceProperties: { interfaceStyle: ${JSON.stringify(interfaceStyle)} } } };`
+        }window.matchMedia = (query) => ({ matches: ${prefersDark} && query === "(prefers-color-scheme: dark)" });</script>`,
+      )
+      .replace(
+        '<script type="module" src="./entry.jsx"></script>',
+        `<script>window.atEntry = { classes: document.documentElement.className, scheme: document.documentElement.style.colorScheme, background: document.documentElement.style.backgroundColor };</script>`,
+      );
+    const dom = new JSDOM(html, { runScripts: "dangerously" });
+    return (dom.window as unknown as { atEntry: Record<string, string> }).atEntry;
+  };
+
+  it("sets dark, its colour scheme and the dark background before the entry runs", () => {
+    expect(
+      firstPaint({ background: { light: "#ffffff", dark: "#0d0f12" }, prefersDark: true }),
+    ).toEqual({ classes: "dark", scheme: "dark", background: "rgb(13, 15, 18)" });
+  });
+
+  it("takes the scheme the teleport worker reports over the OS preference", () => {
+    expect(
+      firstPaint({
+        background: { light: "#ffffff", dark: "#0d0f12" },
+        prefersDark: true,
+        interfaceStyle: "LIGHT",
+      }),
+    ).toEqual({ classes: "light", scheme: "light", background: "rgb(255, 255, 255)" });
+    expect(
+      firstPaint({
+        background: { light: "#ffffff", dark: "#0d0f12" },
+        prefersDark: false,
+        interfaceStyle: "Dark",
+      }),
+    ).toEqual({ classes: "dark", scheme: "dark", background: "rgb(13, 15, 18)" });
+  });
+
+  it("keeps the light background in dark mode when the paywall has no dark one", () => {
+    expect(firstPaint({ background: "#fafafa", prefersDark: true })).toEqual({
+      classes: "dark",
+      scheme: "dark",
+      background: "rgb(250, 250, 250)",
+    });
+  });
+
+  it("sets only the scheme for a paywall without a background, and light without matchMedia", () => {
+    expect(firstPaint({ prefersDark: true })).toEqual({
+      classes: "dark",
+      scheme: "dark",
+      background: "",
+    });
+    const dom = new JSDOM(doc().replace('<script type="module" src="./entry.jsx"></script>', ""), {
+      runScripts: "dangerously",
+    });
+    expect(dom.window.document.documentElement.className).toBe("light");
+  });
+
+  it("is inline, so it never holds up #root", () => {
+    const html = doc();
+    const at = html.indexOf(colorSchemeScript(undefined));
+    expect(at).toBeGreaterThan(0);
+    expect(at).toBeLessThan(html.indexOf("</head>"));
+    expect(html).not.toMatch(/<script src=/);
   });
 });

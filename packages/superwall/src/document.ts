@@ -1,5 +1,6 @@
 import {
   backgroundOf,
+  type ResolvedBackground,
   type SuperwallConfig,
   type SuperwallDeviceVariables,
 } from "@superwall/runtime";
@@ -70,6 +71,12 @@ export const withModuleScriptsLast = (html: string): string => {
 
 export const VIEWPORT_FIT_GUARD = `new MutationObserver((records) => records.forEach((record) => record.addedNodes.forEach((node) => { if (node.nodeName === "META" && node.name === "viewport" && !/viewport-fit/.test(node.content)) node.content += ", viewport-fit=cover"; }))).observe(document.head, { childList: true });`;
 
+export const colorSchemeScript = (background: ResolvedBackground | undefined): string => {
+  const dark = background === undefined ? "" : JSON.stringify(background.dark ?? background.light);
+  const paint = dark === "" ? "" : `if (dark) root.style.backgroundColor = ${dark};`;
+  return `(() => { try { const root = document.documentElement; const reported = String(window.__SW_TELEPORT__?.variables?.deviceProperties?.interfaceStyle ?? "").toLowerCase(); const dark = reported === "dark" || (reported !== "light" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches); root.classList.add(dark ? "dark" : "light"); root.style.colorScheme = dark ? "dark" : "light"; ${paint} } catch {} })();`;
+};
+
 export type DocumentOptions = {
   title: string;
   config: SuperwallConfig;
@@ -91,6 +98,7 @@ export const renderDocument = ({ title, config, entry }: DocumentOptions): strin
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="${TELEPORT_BOOT_META}" content="1" />
     <script>${VIEWPORT_FIT_GUARD}</script>
+    <script>${colorSchemeScript(background)}</script>
     <title>${title}</title>
   </head>
   <body>
