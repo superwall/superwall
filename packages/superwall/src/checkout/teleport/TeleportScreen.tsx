@@ -2,6 +2,7 @@ import * as React from "react";
 import { useSuperwallSession } from "../../provider/context";
 import { followTeleportPage } from "../flow";
 import { teleportFor } from "./flow";
+import { watchTeleportPageTiming } from "./timing";
 
 /**
  * Superwall's own teleport screens and the wiring behind them: the screen
@@ -12,6 +13,7 @@ import { teleportFor } from "./flow";
  */
 export const TeleportScreen = () => {
   const session = useSuperwallSession();
+  React.useEffect(() => watchTeleportPageTiming(), []);
   React.useEffect(() => teleportFor(session).attach(session), [session]);
   React.useEffect(() => followTeleportPage(session), [session]);
   return null;

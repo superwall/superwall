@@ -25,6 +25,7 @@ export const SuperwallCheckout = () => (
 );
 
 export { TeleportScreen } from "./teleport/TeleportScreen";
+export { markTeleportScriptStart } from "./teleport/timing";
 export { checkoutEvents } from "./events";
 export type { CheckoutEventPayload, CheckoutEventType } from "./events";
 export type { ApplePayOutcome } from "./applePay";

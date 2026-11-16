@@ -432,6 +432,7 @@ export function pushPaywallVersion(
     products?: VersionProduct[];
     settings?: PaywallSettings;
     locales?: string[];
+    teleportPages?: VersionTeleportPage[];
   },
 ): Promise<PushedVersion> {
   return api.post<PushedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/versions`, {
@@ -440,8 +441,16 @@ export function pushPaywallVersion(
     ...(opts.assets && opts.assets.length > 0 ? { assets: opts.assets } : {}),
     ...(opts.products && opts.products.length > 0 ? { products: opts.products } : {}),
     ...(opts.locales && opts.locales.length > 0 ? { locales: opts.locales } : {}),
+    ...(opts.teleportPages && opts.teleportPages.length > 0
+      ? { teleport_pages: opts.teleportPages.map(({ key, html }) => ({ key, html })) }
+      : {}),
     ...(opts.settings ?? {}),
   });
+}
+
+export interface VersionTeleportPage {
+  key: string;
+  html: string;
 }
 
 export interface VersionAsset {

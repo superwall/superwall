@@ -26,6 +26,7 @@ export interface BuildOutcome {
   file: string;
   bytes: number;
   snapshotId: string;
+  teleportPages: string[];
 }
 
 export interface BuildContext {
@@ -49,6 +50,14 @@ export function parseBuildPlatforms(values: readonly string[]): Array<string | u
     }
   }
   return platforms.length === 0 ? [undefined] : platforms;
+}
+
+export function unbuiltTeleportPages(surface: Pick<FrameworkSurface, "kind" | "id">, route: string): string {
+  return `${surface.kind}/${surface.id} teleports from "${route}", but its teleport pages are pre-rendered per platform: run \`superwall build --id ${surface.id} --platform ios\` to build them.`;
+}
+
+export function teleportPageFile(file: string, key: string): string {
+  return path.join(path.dirname(file), "teleport", `${key}.html`);
 }
 
 export function outputFile(
@@ -98,6 +107,13 @@ export async function runBuildPipeline(context: BuildContext, options: BuildInpu
       const file = outputFile(out, surface, platform);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, built.html);
+      const pages = built.teleportPages ?? [];
+      fs.rmSync(path.join(path.dirname(file), "teleport"), { recursive: true, force: true });
+      for (const page of pages) {
+        const pageFile = teleportPageFile(file, page.key);
+        fs.mkdirSync(path.dirname(pageFile), { recursive: true });
+        fs.writeFileSync(pageFile, page.html);
+      }
       outcomes.push({
         kind: surface.kind,
         id: surface.id,
@@ -105,11 +121,18 @@ export async function runBuildPipeline(context: BuildContext, options: BuildInpu
         file,
         bytes: built.bytes,
         snapshotId: built.snapshotId,
+        teleportPages: pages.map((page) => page.key),
       });
+      const teleport =
+        pages.length === 0 ? "" : ` · ${pages.length} teleport ${pages.length === 1 ? "page" : "pages"}`;
       context.output.render({
         kind: "step",
-        text: `${surface.kind}/${surface.id}${platform ? ` ${platform}` : ""} ${pc.dim(`${kb(built.bytes)} · ${built.snapshotId.slice(0, 8)}`)} → ${path.relative(process.cwd(), file)}`,
+        text: `${surface.kind}/${surface.id}${platform ? ` ${platform}` : ""} ${pc.dim(`${kb(built.bytes)} · ${built.snapshotId.slice(0, 8)}${teleport}`)} → ${path.relative(process.cwd(), file)}`,
       });
+      for (const warning of built.warnings ?? []) ui.warn(warning);
+      if (platform === undefined && built.teleportRoute !== undefined) {
+        ui.info(unbuiltTeleportPages(surface, built.teleportRoute));
+      }
     }
   }
   context.output.render({
