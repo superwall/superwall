@@ -69,6 +69,10 @@ headless) to install and configure the SDK. Then it walks you through the
 rest: products, campaigns, placements, paywalls, and verifying it all on a
 real device.
 
+With neither Claude Code nor Codex installed, it can run the bundled Superwall
+Agent instead, which needs one more package:
+`npm install @anthropic-ai/claude-agent-sdk@0.3.201`.
+
 Prefer to drive the agent yourself? Add `--skill` to `integrate`, `migrate`,
 or `review` and the CLI prints the full playbook for your project's framework
 instead of running it — paste it into any agent.

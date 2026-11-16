@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import type { Options, SDKMessage, SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { resolveHostedAnthropicBaseUrl, selectHostedStatus } from "@/core/workflows/agent/hosted";
 import { getOAuthAccessToken } from "@/core/account/token";
+import { field } from "@/core/json";
 import { VERSION } from "@/environment";
 import { toolsForCapabilities } from "./capabilities";
 import { emitAssistantEvents } from "./events";
@@ -69,9 +70,29 @@ type RunQuery = (params: { prompt: string; options: Options }) => AsyncIterable<
 type LoadQuery = () => Promise<RunQuery | null>;
 type ImportModule = (specifier: string) => Promise<unknown>;
 
+const MISSING_MODULE_CODES = new Set(["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND"]);
+
+function isRunQuery(value: unknown): value is RunQuery {
+  return typeof value === "function";
+}
+
 function queryOf(module: unknown): RunQuery | null {
-  const query = (module as { query?: unknown } | null)?.query;
-  return typeof query === "function" ? (query as RunQuery) : null;
+  const query = field(module, "query");
+  return isRunQuery(query) ? query : null;
+}
+
+function isMissingModule(error: unknown): boolean {
+  const code = field(error, "code");
+  return typeof code === "string" && MISSING_MODULE_CODES.has(code);
+}
+
+async function importIfInstalled(importModule: ImportModule, specifier: () => string): Promise<RunQuery | null | undefined> {
+  try {
+    return queryOf(await importModule(specifier()));
+  } catch (error) {
+    if (isMissingModule(error)) return undefined;
+    throw error;
+  }
 }
 
 export function createSdkLoader(
@@ -79,17 +100,12 @@ export function createSdkLoader(
   importModule: ImportModule = (specifier) => import(specifier),
 ): LoadQuery {
   let loaded: Promise<RunQuery | null> | undefined;
+  const fromProject = () => pathToFileURL(createRequire(join(cwd(), "package.json")).resolve(AGENT_SDK_PACKAGE)).href;
   return () => {
     loaded ??= (async () => {
-      try {
-        return queryOf(await importModule(AGENT_SDK_PACKAGE));
-      } catch {}
-      try {
-        const resolved = createRequire(join(cwd(), "package.json")).resolve(AGENT_SDK_PACKAGE);
-        return queryOf(await importModule(pathToFileURL(resolved).href));
-      } catch {
-        return null;
-      }
+      const beside = await importIfInstalled(importModule, () => AGENT_SDK_PACKAGE);
+      if (beside !== undefined) return beside;
+      return (await importIfInstalled(importModule, fromProject)) ?? null;
     })();
     return loaded;
   };

@@ -257,6 +257,30 @@ test("running the bundled agent without its SDK says how to install it", async (
   assert.match(AGENT_SDK_INSTALL_MESSAGE, /npm install @anthropic-ai\/claude-agent-sdk@\d+\.\d+\.\d+/);
 });
 
+function notFound(code = "ERR_MODULE_NOT_FOUND"): Error {
+  return Object.assign(new Error("Cannot find package"), { code });
+}
+
+test("the loader treats a CommonJS not-found as missing too", async () => {
+  const load = createSdkLoader(
+    () => os.tmpdir(),
+    async () => {
+      throw notFound("MODULE_NOT_FOUND");
+    },
+  );
+  assert.equal(await load(), null);
+});
+
+test("an SDK that is installed but fails to load is not reported as missing", async () => {
+  const load = createSdkLoader(
+    () => "/nowhere",
+    async () => {
+      throw new Error("bad native binary");
+    },
+  );
+  await assert.rejects(load(), /bad native binary/);
+});
+
 test("the loader takes the SDK beside the CLI first and loads it once", async () => {
   const query = () => (async function* () {})();
   const asked: string[] = [];
@@ -285,7 +309,7 @@ test("the loader falls back to the SDK installed in the project", async () => {
       () => project,
       async (specifier) => {
         asked.push(specifier);
-        if (specifier === AGENT_SDK_PACKAGE) throw new Error("Cannot find package");
+        if (specifier === AGENT_SDK_PACKAGE) throw notFound();
         return { query: () => undefined };
       },
     );
@@ -302,7 +326,7 @@ test("the loader answers null when no SDK can be found or it has no query", asyn
   const missing = createSdkLoader(
     () => os.tmpdir(),
     async () => {
-      throw new Error("Cannot find package");
+      throw notFound();
     },
   );
   assert.equal(await missing(), null);
