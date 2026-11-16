@@ -6,6 +6,7 @@ import { frameworkVersion, resolveFramework } from "@/core/paywalls/project/fram
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import { allowLocalNetworking } from "@/core/paywalls/project/scheme";
 import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
+import { refreshUpdateCheck, renderUpdateNotice, resolveUpdate } from "@/core/support/upgrade";
 import { VERSION } from "@/environment";
 import { ui } from "@/ui";
 import { LAYOUT_HINT } from "../pipeline/output";
@@ -23,6 +24,14 @@ interface StudioInput {
 export interface StudioDeps {
   openBrowser?: (url: string) => Promise<boolean>;
   allowLocalNetworking?: (plist: string) => Promise<void>;
+}
+
+function printDevUpdate(dir: string): void {
+  refreshUpdateCheck();
+  const update = resolveUpdate(dir);
+  if (!update) return;
+  if (update.kind === "major") ui.warn(renderUpdateNotice(update));
+  else ui.info(renderUpdateNotice(update));
 }
 
 export async function runStudio(input: StudioInput, deps: StudioDeps = {}): Promise<void> {
@@ -68,6 +77,7 @@ export async function runStudio(input: StudioInput, deps: StudioDeps = {}): Prom
   const actualPort = Number(new URL(url).port);
 
   ui.intro(`Superwall ${pc.dim(`v${VERSION}`)}`);
+  printDevUpdate(dir);
 
   if (actualPort !== requestedPort) {
     ui.warn(`Port ${requestedPort} was in use — moved to ${actualPort}.`);

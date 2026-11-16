@@ -73,10 +73,10 @@ test("skills sync and the update check round-trip", () => {
   const sync = { cliVersion: "1.2.3", syncedAt: "2026-01-01T00:00:00.000Z", ref: "main" };
 
   writeSkillsSync(sync);
-  writeUpdateCheck({ latest: "2.0.0", checkedAt: "2026-01-02T00:00:00.000Z" });
+  writeUpdateCheck({ latest: "2.0.0", tag: "latest", checkedAt: "2026-01-02T00:00:00.000Z" });
 
   assert.deepEqual(readSkillsSync(), sync);
-  assert.deepEqual(readUpdateCheck(), { latest: "2.0.0", checkedAt: "2026-01-02T00:00:00.000Z" });
+  assert.deepEqual(readUpdateCheck(), { latest: "2.0.0", tag: "latest", checkedAt: "2026-01-02T00:00:00.000Z" });
 });
 
 test("the anonymous id is created once and survives the telemetry notice", () => {

@@ -63,20 +63,20 @@ export function startAutoUpdate(
 }
 
 export function finishTerminal(
-  stdout: Writable,
+  stderr: Writable,
   mode: OutputMode,
   command: string,
   update: boolean,
   start: (version: string) => boolean = startAutoUpdate,
 ): void {
   refreshUpdateCheck();
-  if (command === "upgrade") return;
+  if (command === "upgrade" || command === "dev") return;
   const version = update ? selectAutoUpdate() : null;
   if (version && start(version)) {
-    if (mode !== "json") printAutoUpdate(stdout, version);
+    if (mode !== "json") printAutoUpdate(stderr, version);
     return;
   }
-  if (mode !== "json") maybeNotifyUpdate(stdout);
+  maybeNotifyUpdate(stderr);
 }
 
 export const terminalHost: Host = {
@@ -94,7 +94,7 @@ export const terminalHost: Host = {
   starting: (ui, mode) => {
     if (mode === "rich") maybeShowTelemetryNotice(ui);
   },
-  finishing: (stdout, mode, command, update) => finishTerminal(stdout, mode, command, update),
+  finishing: (_stdout, mode, command, update) => finishTerminal(process.stderr, mode, command, update),
   fail: () => {
     process.exitCode = 1;
   },

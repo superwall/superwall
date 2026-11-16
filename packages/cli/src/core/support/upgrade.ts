@@ -18,7 +18,8 @@ import {
 import { AUTO_UPDATE, RUNNING_VIA_NPX, VERSION } from "@/environment";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const REGISTRY_URL = "https://registry.npmjs.org/superwall/latest";
+const REGISTRY_URL = "https://registry.npmjs.org/superwall/";
+const RELEASE_NOTES_URL = "https://github.com/superwall/superwall/releases/tag/v";
 
 const pending: Array<Promise<unknown>> = [];
 
@@ -57,9 +58,15 @@ function comparePrerelease(a: readonly string[], b: readonly string[]): number {
   return a.length - b.length;
 }
 
-async function selectLatestVersion(): Promise<string | null> {
+export type UpdateTag = "latest" | "next";
+
+export function resolveUpdateTag(version: string = VERSION): UpdateTag {
+  return splitPrerelease(version)[1] === undefined ? "latest" : "next";
+}
+
+async function selectLatestVersion(current: string = VERSION): Promise<string | null> {
   try {
-    const res = await fetch(REGISTRY_URL, {
+    const res = await fetch(`${REGISTRY_URL}${resolveUpdateTag(current)}`, {
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(5000),
     });
@@ -75,20 +82,30 @@ function majorOf(version: string): number {
   return parseInt(version.split(".")[0] ?? "", 10);
 }
 
-function selectAvailableUpdate(): string | null {
-  const latest = readUpdateCheck()?.latest;
-  if (!latest || !isNewerVersion(latest, VERSION)) return null;
+export function selectCachedLatest(current: string = VERSION): string | undefined {
+  const cached = readUpdateCheck();
+  if ((cached?.tag ?? "latest") !== resolveUpdateTag(current)) return undefined;
+  return cached?.latest;
+}
+
+function selectAvailableUpdate(current: string = VERSION): string | null {
+  const latest = selectCachedLatest(current);
+  if (!latest || !isNewerVersion(latest, current)) return null;
   return latest;
 }
 
-export function refreshUpdateCheck(): void {
+function recordLatest(latest: string, current: string = VERSION): void {
+  writeUpdateCheck({ latest, tag: resolveUpdateTag(current), checkedAt: new Date().toISOString() });
+}
+
+export function refreshUpdateCheck(current: string = VERSION): void {
   if (process.env.NODE_TEST_CONTEXT) return;
   const cached = readUpdateCheck();
   const age = cached?.checkedAt ? Date.now() - Date.parse(cached.checkedAt) : Infinity;
-  if (age < CHECK_INTERVAL_MS) return;
+  if (age < CHECK_INTERVAL_MS && (cached?.tag ?? "latest") === resolveUpdateTag(current)) return;
   pending.push(
-    selectLatestVersion().then((version) => {
-      if (version) writeUpdateCheck({ latest: version, checkedAt: new Date().toISOString() });
+    selectLatestVersion(current).then((version) => {
+      if (version) recordLatest(version, current);
     }),
   );
 }
@@ -101,12 +118,54 @@ export async function flushUpdateCheck(capMs = 2000): Promise<void> {
   ]);
 }
 
+export type UpdateKind = "patch" | "minor" | "major";
+
+export type AvailableUpdate = {
+  current: string;
+  latest: string;
+  kind: UpdateKind;
+  command: string;
+  notes: string;
+};
+
+function resolveUpdateKind(latest: string, current: string): UpdateKind {
+  const [l = 0, lm = 0] = splitPrerelease(latest)[0].split(".").map((n) => parseInt(n, 10));
+  const [c = 0, cm = 0] = splitPrerelease(current)[0].split(".").map((n) => parseInt(n, 10));
+  if (l !== c) return "major";
+  return lm !== cm ? "minor" : "patch";
+}
+
+export function resolveUpdate(
+  dir: string = process.cwd(),
+  current: string = VERSION,
+): AvailableUpdate | undefined {
+  const latest = selectAvailableUpdate(current);
+  if (!latest) return undefined;
+  const project = selectProjectInstall(dir, resolveUpdateTag(current));
+  return {
+    current,
+    latest,
+    kind: resolveUpdateKind(latest, current),
+    command: project ? project.update : "superwall upgrade",
+    notes: `${RELEASE_NOTES_URL}${latest}`,
+  };
+}
+
+export function renderUpdateNotice(update: AvailableUpdate): string {
+  const { current, latest, command, notes } = update;
+  if (update.kind !== "major") {
+    return `${pc.yellow("Update available")} ${current} → ${latest} · run ${pc.bold(command)}`;
+  }
+  return [
+    pc.yellow(pc.bold(`Major update available ${current} → ${latest}`)),
+    `  A major release may contain breaking changes. Read ${pc.cyan(notes)}`,
+    `  Update: ${pc.bold(command)}`,
+  ].join("\n");
+}
+
 export function maybeNotifyUpdate(stream: Pick<NodeJS.WriteStream, "write">): void {
-  const latest = selectAvailableUpdate();
-  if (!latest) return;
-  stream.write(
-    `${pc.dim(`Update available ${VERSION} → ${latest} · run \`superwall upgrade\``)}\n`,
-  );
+  const update = resolveUpdate();
+  if (update) stream.write(`${renderUpdateNotice(update)}\n`);
 }
 
 export function selectAutoUpdate(): string | null {
@@ -199,7 +258,7 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
   const { ui } = ctx;
 
   if (RUNNING_VIA_NPX()) {
-    const project = selectProjectInstall();
+    const project = selectProjectInstall(process.cwd(), resolveUpdateTag());
     const latest = project ? (pinned ?? (await selectLatestVersion())) : null;
     const outdated = project ? isOutdated(project, latest) : false;
     if (project && outdated !== false) {
@@ -248,13 +307,13 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
     spin.stop("Upgrade failed");
     const detail = errors.slice(-3).join(" ").trim();
     throw new Error(
-      `npm couldn't upgrade the package${detail ? ` (${detail.slice(0, 200)})` : ""}. Try: npm install --global superwall@latest`,
+      `npm couldn't upgrade the package${detail ? ` (${detail.slice(0, 200)})` : ""}. Try: npm install --global superwall@${resolveUpdateTag()}`,
     );
   }
-  writeUpdateCheck({ latest, checkedAt: new Date().toISOString() });
+  recordLatest(latest);
   spin.stop(`Upgraded \`${VERSION}\` → \`${latest}\``);
   const skills = await updateAgentSkills(ctx, () => updateSkillsWithInstalledCli(latest));
-  const project = selectProjectInstall();
+  const project = selectProjectInstall(process.cwd(), resolveUpdateTag());
   const outdated = project ? isOutdated(project, latest) : false;
   if (ctx.json) {
     return ctx.output.data({
