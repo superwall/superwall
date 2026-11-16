@@ -84,8 +84,9 @@ function majorOf(version: string): number {
 }
 
 export function selectCachedLatest(current: string = VERSION): string | undefined {
-  const cached = readUpdateCheck();
-  if ((cached?.tag ?? "latest") !== resolveUpdateTag(current)) return undefined;
+  const tag = resolveUpdateTag(current);
+  const cached = readUpdateCheck(tag);
+  if ((cached?.tag ?? "latest") !== tag) return undefined;
   return cached?.latest;
 }
 
@@ -101,9 +102,10 @@ function recordLatest(latest: string, current: string = VERSION): void {
 
 export function refreshUpdateCheck(current: string = VERSION): void {
   if (process.env.NODE_TEST_CONTEXT) return;
-  const cached = readUpdateCheck();
+  const tag = resolveUpdateTag(current);
+  const cached = readUpdateCheck(tag);
   const age = cached?.checkedAt ? Date.now() - Date.parse(cached.checkedAt) : Infinity;
-  if (age < CHECK_INTERVAL_MS && (cached?.tag ?? "latest") === resolveUpdateTag(current)) return;
+  if (age < CHECK_INTERVAL_MS && (cached?.tag ?? "latest") === tag) return;
   pending.push(
     selectLatestVersion(current).then((version) => {
       if (version) recordLatest(version, current);

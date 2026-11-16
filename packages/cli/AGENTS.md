@@ -617,8 +617,9 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   with the daily update cache and returns the kind (patch, minor, major), the
   command (`selectProjectInstall`'s bump when the project pins `superwall`,
   else `superwall upgrade`) and the release notes link. A stable version reads
-  npm's `latest` tag and a prerelease reads `next`; the cache records its tag,
-  so switching channels refetches. `maybeNotifyUpdate` prints it on stderr
+  npm's `latest` tag and a prerelease reads `next`; each tag has its own daily
+  cache entry (`updateCheck`, `updateCheckNext`), so a stable CLI and a
+  beta-pinned project never refetch each other's. `maybeNotifyUpdate` prints it on stderr
   after every command, also under `--json` (agents run with it, stdout stays
   clean), and `dev` prints it after its intro since it never ends. The studio
   gets the same object as `update` in `/__studio/project.json` and shows

@@ -100,10 +100,10 @@ function globalInstall(): { bin: string; entry: string } {
   return { bin, entry };
 }
 
-function readCheck(home: string): unknown {
+function readCheck(home: string, key = "updateCheck"): unknown {
   const file = path.join(home, "config.json");
   if (!fs.existsSync(file)) return undefined;
-  return (JSON.parse(fs.readFileSync(file, "utf8")) as { updateCheck?: unknown }).updateCheck;
+  return (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>)[key];
 }
 
 const SYNC_SKILLS = `"${process.execPath}" -e 'const fs = require("fs"), file = process.env.SUPERWALL_HOME + "/config.json"; const config = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {}; config.skillsSync = { cliVersion: process.env.SYNCED_VERSION || "99.0.0", syncedAt: new Date(Date.now() + Number(process.env.SYNCED_OFFSET || 0)).toISOString(), ref: "next" }; fs.writeFileSync(file, JSON.stringify(config))'`;
@@ -262,7 +262,7 @@ test("the update is classified by the first number that moved", () => {
 
 test("a prerelease follows the next tag and is told to install superwall@next", () => {
   const home = useHome();
-  writeConfig(home, { updateCheck: { latest: "2.6.0-beta.3", tag: "next", checkedAt: now() } });
+  writeConfig(home, { updateCheckNext: { latest: "2.6.0-beta.3", tag: "next", checkedAt: now() } });
   inPinnedProject("2.6.0-beta.2");
   assert.deepEqual(resolveUpdate(process.cwd(), "2.6.0-beta.2"), {
     current: "2.6.0-beta.2",
@@ -279,8 +279,9 @@ test("a check cached from the latest tag is never compared with a prerelease, no
   writeCheck(home, { latest: "2.6.0", checkedAt: now() });
   assert.equal(resolveUpdate(process.cwd(), "2.6.0-beta.2"), undefined);
   assert.equal(selectCachedLatest("2.6.0-beta.2"), undefined);
-  writeConfig(home, { updateCheck: { latest: "99.0.0-beta.1", tag: "next", checkedAt: now() } });
+  writeConfig(home, { updateCheckNext: { latest: "99.0.0-beta.1", tag: "next", checkedAt: now() } });
   assert.equal(selectCachedLatest(VERSION), undefined);
+  assert.equal(selectCachedLatest("2.6.0-beta.2"), "99.0.0-beta.1");
 });
 
 test("the tag is next for a prerelease and latest otherwise", () => {
@@ -288,9 +289,10 @@ test("the tag is next for a prerelease and latest otherwise", () => {
   assert.equal(resolveUpdateTag("2.5.2"), "latest");
 });
 
-test("a prerelease asks the registry for the next tag, and a fresh check of the other tag is refetched", async () => {
+test("a prerelease asks the registry for the next tag and keeps the latest check beside it", async () => {
   const home = useHome();
-  writeCheck(home, { latest: "2.5.2", checkedAt: now() });
+  const checkedAt = now();
+  writeCheck(home, { latest: "2.5.2", checkedAt });
   delete process.env.NODE_TEST_CONTEXT;
   const log = useFetch([{ match: "registry.npmjs.org/superwall/next", body: { version: "2.6.0-beta.3" } }]);
 
@@ -299,11 +301,33 @@ test("a prerelease asks the registry for the next tag, and a fresh check of the 
 
   assert.equal(log.length, 1);
   assert.equal(log[0]!.url, "https://registry.npmjs.org/superwall/next");
-  assert.deepEqual({ ...(readCheck(home) as object), checkedAt: undefined }, {
+  assert.deepEqual(readCheck(home), { latest: "2.5.2", checkedAt });
+  assert.deepEqual({ ...(readCheck(home, "updateCheckNext") as object), checkedAt: undefined }, {
     latest: "2.6.0-beta.3",
     tag: "next",
     checkedAt: undefined,
   });
+});
+
+test("alternating a stable CLI and a beta pin asks the registry once per tag, not once per command", async () => {
+  useHome();
+  delete process.env.NODE_TEST_CONTEXT;
+  const log = useFetch([
+    { match: "registry.npmjs.org/superwall/next", body: { version: "2.6.0-beta.3" } },
+    { match: REGISTRY, body: { version: "2.5.3" } },
+  ]);
+
+  for (const current of ["2.5.2", "2.6.0-beta.2", "2.5.2", "2.6.0-beta.2"]) {
+    refreshUpdateCheck(current);
+    await flushUpdateCheck(1000);
+  }
+
+  assert.deepEqual(
+    log.map((call) => call.url),
+    ["https://registry.npmjs.org/superwall/latest", "https://registry.npmjs.org/superwall/next"],
+  );
+  assert.equal(selectCachedLatest("2.5.2"), "2.5.3");
+  assert.equal(selectCachedLatest("2.6.0-beta.2"), "2.6.0-beta.3");
 });
 
 test("an unreachable registry prints nothing and keeps no check", async () => {
