@@ -634,3 +634,64 @@ describe("usePurchase with hosted checkout", () => {
     expect(outcome).toMatchObject({ status: "completed" });
   });
 });
+
+describe("usePurchase when a web payment fails", () => {
+  const declined = {
+    status: "failed" as const,
+    failure: {
+      reason: "insufficient_funds" as const,
+      store: "stripe" as const,
+      code: "card_declined",
+      declineCode: "insufficient_funds",
+    },
+  };
+
+  it("resolves with why it failed, and holds it until the next purchase starts", async () => {
+    const { result } = await renderCheckout("applePay");
+    const wallet = vi
+      .spyOn(applePayFor(result.current.session), "purchase")
+      .mockResolvedValue(declined);
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.purchase.purchase("primary");
+    });
+
+    expect(outcome).toMatchObject({ ...declined, product: { reference: "primary" } });
+    expect(result.current.purchase.failure).toMatchObject({
+      status: "failed",
+      reason: "insufficient_funds",
+      store: "stripe",
+      code: "card_declined",
+      declineCode: "insufficient_funds",
+      product: { reference: "primary" },
+    });
+
+    let pay: ((outcome: { status: "completed" }) => void) | undefined;
+    wallet.mockReturnValue(new Promise((resolve) => (pay = resolve)));
+    let next: Promise<unknown> | undefined;
+    act(() => {
+      next = result.current.purchase.purchase("primary");
+    });
+    expect(result.current.purchase.failure).toBeUndefined();
+    await act(async () => {
+      pay?.({ status: "completed" });
+      await next;
+    });
+    expect(result.current.purchase.failure).toBeUndefined();
+  });
+
+  it("drops a web failure when a store purchase starts", async () => {
+    const { result } = await renderCheckout("applePay");
+    vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue(declined);
+    await act(async () => {
+      await result.current.purchase.purchase("primary");
+    });
+    expect(result.current.purchase.failure).toMatchObject({ reason: "insufficient_funds" });
+
+    act(() => {
+      void result.current.purchase.purchase("secondary");
+    });
+    expect(result.current.purchase.failure).not.toMatchObject({ reason: "insufficient_funds" });
+  });
+});

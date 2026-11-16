@@ -11,11 +11,17 @@ import { useSuperwallSession } from "../provider/context";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
 import type { ProductReference } from "./index";
 import {
+  clearWebFailure,
+  lastWebFailure,
   prefetchSession,
   purchaseCustomStoreOnWeb,
   purchaseOnWeb,
   sessionsFor,
+  subscribeWebFailure,
 } from "../checkout/flow";
+import type { CheckoutFailure } from "../checkout/failure";
+
+export type { CheckoutFailure, CheckoutFailureReason } from "../checkout/failure";
 import { isCustomStoreProductIdentifier } from "../checkout/products";
 import { hostOf } from "../host";
 import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
@@ -27,10 +33,24 @@ import { flowQuery } from "../checkout/teleport/teleporter";
 import { QueryStoreContext } from "../navigation/query";
 import type { CheckoutMode, PurchaseOutcome } from "../checkout/types";
 
+/**
+ * How a web checkout purchase ended. A `failed` Stripe purchase carries
+ * `failure`: why the payment failed, `reason: "unknown"` when nobody
+ * reported why. A custom store checkout reports no reason.
+ */
 export type WebCheckoutResult<TProduct extends SuperwallProduct = SuperwallProduct> = {
   status: PurchaseOutcome;
   product: TProduct;
+  failure?: CheckoutFailure;
 };
+
+/**
+ * The last web checkout purchase that failed: the product, and why the
+ * payment failed in `reason`, with the store's own `code`, `declineCode` and
+ * `message` when it gave them.
+ */
+export type WebCheckoutFailure<TProduct extends SuperwallProduct = SuperwallProduct> =
+  CheckoutFailure & { status: "failed"; product: TProduct };
 
 export type PurchaseResult<TVariables extends SuperwallProductVariables> =
   | SuperwallPurchaseResult<SuperwallProduct<TVariables>>
@@ -44,7 +64,9 @@ export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
   isPurchasing: boolean;
   pendingProduct?: SuperwallProduct<TVariables>;
   transaction?: SuperwallTransaction<SuperwallProduct<TVariables>>;
-  failure?: SuperwallPurchaseFailure<SuperwallProduct<TVariables>>;
+  failure?:
+    | SuperwallPurchaseFailure<SuperwallProduct<TVariables>>
+    | WebCheckoutFailure<SuperwallProduct<TVariables>>;
   prefetch: (
     input?: ProductReference | SuperwallProduct<TVariables>,
     options?: Pick<SuperwallPurchaseOptions, "checkout" | "prepaidCards">,
@@ -113,12 +135,12 @@ export const usePurchase = <
         }
         const rule =
           prepaidCards ?? (teleporter.kind === "page" ? prepaidCardsFromFragment() : undefined);
-        const status = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
+        const outcome = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
           postPurchase,
           stripeMetadata,
           ...(rule === undefined ? {} : { prepaidCards: rule }),
         });
-        return { status, product };
+        return { ...outcome, product };
       }
       if (
         product &&
@@ -134,12 +156,28 @@ export const usePurchase = <
         );
         return { status: "failed", product };
       }
+      clearWebFailure(session);
       if (teleporter.kind === "page" || !teleporter.inFlight()) {
         return session.purchase(input, options);
       }
       return teleporter.handOff(reference, () => session.purchase(input, options));
     },
     [session, webMode, queryStore],
+  );
+
+  const webFailure = React.useSyncExternalStore(
+    React.useCallback((listener: () => void) => subscribeWebFailure(session, listener), [session]),
+    () => lastWebFailure(session),
+  );
+  const webFailureProduct = webFailure
+    ? snapshot.productsByReference[webFailure.referenceName]
+    : undefined;
+  const failure = React.useMemo(
+    () =>
+      webFailure && webFailureProduct
+        ? { ...webFailure.failure, status: "failed" as const, product: webFailureProduct }
+        : snapshot.lastPurchaseFailure,
+    [webFailure, webFailureProduct, snapshot.lastPurchaseFailure],
   );
 
   const first = snapshot.products[0]?.reference;
@@ -169,14 +207,8 @@ export const usePurchase = <
       isPurchasing: snapshot.pendingPurchase !== undefined,
       pendingProduct: snapshot.pendingPurchase?.product,
       transaction: snapshot.lastTransaction,
-      failure: snapshot.lastPurchaseFailure,
+      failure,
     }),
-    [
-      purchase,
-      prefetch,
-      snapshot.pendingPurchase,
-      snapshot.lastTransaction,
-      snapshot.lastPurchaseFailure,
-    ],
+    [purchase, prefetch, snapshot.pendingPurchase, snapshot.lastTransaction, failure],
   );
 };

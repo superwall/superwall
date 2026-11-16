@@ -376,7 +376,7 @@ describe("createApplePay", () => {
     await controller.prepare(quote());
     const outcome = controller.purchase("primary", context);
     await authorize();
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
     off();
     expect(posted("stripe_checkout_fail")).toHaveLength(1);
     expect(posted("stripe_checkout_complete")).toHaveLength(0);
@@ -426,7 +426,9 @@ describe("createApplePay preparation failures", () => {
     const { controller, authorize } = makeController();
     await controller.prepare(quote());
     const first = controller.purchase("primary", context);
-    await expect(controller.purchase("primary", context)).resolves.toEqual({ status: "failed" });
+    await expect(controller.purchase("primary", context)).resolves.toMatchObject({
+      status: "failed",
+    });
     await authorize();
     await expect(first).resolves.toEqual({ status: "completed" });
   });
@@ -477,7 +479,7 @@ describe("createApplePay client-side confirmation", () => {
     await refused.controller.prepare(withSecret("PaymentIntent"));
     const first = refused.controller.purchase("primary", context);
     await refused.authorize();
-    await expect(first).resolves.toEqual({ status: "failed" });
+    await expect(first).resolves.toMatchObject({ status: "failed" });
 
     const stripe = makeController({
       confirmCardPayment: { paymentIntent: { id: "pi_1", status: "requires_action" } },
@@ -488,7 +490,7 @@ describe("createApplePay client-side confirmation", () => {
     await stripe.controller.prepare(withSecret("PaymentIntent"));
     const second = stripe.controller.purchase("primary", context);
     await stripe.authorize();
-    await expect(second).resolves.toEqual({ status: "failed" });
+    await expect(second).resolves.toMatchObject({ status: "failed" });
   });
 
   it("keeps a completed payment when the follow-up confirm fails", async () => {
@@ -519,7 +521,7 @@ describe("createApplePay client-side confirmation", () => {
     await refused.controller.prepare(withSecret("SetupIntent"));
     const second = refused.controller.purchase("primary", context);
     await refused.authorize();
-    await expect(second).resolves.toEqual({ status: "failed" });
+    await expect(second).resolves.toMatchObject({ status: "failed" });
   });
 
   it("fails a SetupIntent that authenticates into nothing", async () => {
@@ -532,7 +534,7 @@ describe("createApplePay client-side confirmation", () => {
     await controller.prepare(withSecret("SetupIntent"));
     const outcome = controller.purchase("primary", context);
     await authorize();
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
   });
 });
 
@@ -587,7 +589,7 @@ describe("createApplePay deferred authentication", () => {
     await controller.prepare(quote());
     const outcome = controller.purchase("primary", context);
     await authorize();
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
   });
 
   it("fails when authenticating a deferred SetupIntent is refused", async () => {
@@ -602,7 +604,7 @@ describe("createApplePay deferred authentication", () => {
     await controller.prepare(quote());
     const outcome = controller.purchase("primary", context);
     await authorize();
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
   });
 
   it("fails when authenticating a deferred PaymentIntent is refused", async () => {
@@ -613,7 +615,7 @@ describe("createApplePay deferred authentication", () => {
     await controller.prepare(quote());
     const outcome = controller.purchase("primary", context);
     await authorize();
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
   });
 
   it("does nothing more when the backend asks for action without a secret", async () => {
@@ -642,7 +644,7 @@ describe("createApplePay deferred authentication", () => {
         throw new Error("sheet already gone");
       },
     });
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
     expect(posted("stripe_checkout_fail")).toHaveLength(1);
   });
 });
@@ -741,7 +743,7 @@ describe("failures the wallet reports verbatim", () => {
     await setup.controller.prepare(quote({ intentType: "SetupIntent", checkoutSessionId: secret }));
     const first = setup.controller.purchase("primary", context);
     await setup.authorize();
-    await expect(first).resolves.toEqual({ status: "failed" });
+    await expect(first).resolves.toMatchObject({ status: "failed" });
 
     const silent = makeController({
       confirmCardSetup: { setupIntent: { id: "seti_1", status: "requires_action" } },
@@ -754,7 +756,7 @@ describe("failures the wallet reports verbatim", () => {
     );
     const quiet = silent.controller.purchase("primary", context);
     await silent.authorize();
-    await expect(quiet).resolves.toEqual({ status: "failed" });
+    await expect(quiet).resolves.toMatchObject({ status: "failed" });
 
     const payment = makeController({ confirmCardPayment: { error: {} } });
     await payment.controller.prepare(
@@ -762,7 +764,7 @@ describe("failures the wallet reports verbatim", () => {
     );
     const second = payment.controller.purchase("primary", context);
     await payment.authorize();
-    await expect(second).resolves.toEqual({ status: "failed" });
+    await expect(second).resolves.toMatchObject({ status: "failed" });
   });
 
   it("reports a rejection that is not an Error as an Apple Pay failure", async () => {
@@ -774,7 +776,7 @@ describe("failures the wallet reports verbatim", () => {
     await controller.prepare(quote());
     const outcome = controller.purchase("primary", context);
     await authorize();
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
     off();
 
     expect(failure.mock.calls[0]![0].error.message).toBe("Apple Pay failed");
@@ -826,5 +828,180 @@ describe("watching a product's wallet availability", () => {
     stop();
     await controller.prepare(quote());
     expect(seen).toEqual([]);
+  });
+});
+
+describe("why the wallet's payment failed", () => {
+  const decline = {
+    error: {
+      type: "card_error",
+      code: "card_declined",
+      decline_code: "insufficient_funds",
+      message: "Your card has insufficient funds.",
+    },
+  };
+  const exact = {
+    reason: "insufficient_funds",
+    store: "stripe",
+    code: "card_declined",
+    declineCode: "insufficient_funds",
+    message: "Your card has insufficient funds.",
+  };
+  const secret = buildCheckoutSessionId({
+    stripeCheckoutSessionId: "secret_1",
+    environment: "test",
+  });
+  const needsAction = (kind: "paymentIntent" | "setupIntent") => ({
+    [kind]: { id: kind === "paymentIntent" ? "pi_1" : "seti_1", status: "requires_action" },
+  });
+
+  const steps: Array<{
+    step: string;
+    setup: () => { made: ReturnType<typeof makeController>; quoted: ElementsCheckoutSession };
+  }> = [
+    {
+      step: "confirming a PaymentIntent the quote carries",
+      setup: () => ({
+        made: makeController({ confirmCardPayment: decline }),
+        quoted: quote({ intentType: "PaymentIntent", checkoutSessionId: secret }),
+      }),
+    },
+    {
+      step: "authenticating a PaymentIntent the quote carries",
+      setup: () => {
+        const made = makeController();
+        made.stripe.confirmCardPayment
+          .mockResolvedValueOnce(needsAction("paymentIntent"))
+          .mockResolvedValueOnce(decline);
+        return { made, quoted: quote({ intentType: "PaymentIntent", checkoutSessionId: secret }) };
+      },
+    },
+    {
+      step: "confirming a SetupIntent the quote carries",
+      setup: () => ({
+        made: makeController({ confirmCardSetup: decline }),
+        quoted: quote({ intentType: "SetupIntent", checkoutSessionId: secret }),
+      }),
+    },
+    {
+      step: "authenticating a SetupIntent the quote carries",
+      setup: () => {
+        const made = makeController();
+        made.stripe.confirmCardSetup
+          .mockResolvedValueOnce(needsAction("setupIntent"))
+          .mockResolvedValueOnce(decline);
+        return { made, quoted: quote({ intentType: "SetupIntent", checkoutSessionId: secret }) };
+      },
+    },
+    {
+      step: "authenticating a deferred PaymentIntent",
+      setup: () => ({
+        made: makeController({
+          confirmResponse: { requiresAction: true, clientSecret: "pi_secret" },
+          confirmCardPayment: decline,
+        }),
+        quoted: quote(),
+      }),
+    },
+    {
+      step: "authenticating a deferred SetupIntent",
+      setup: () => ({
+        made: makeController({
+          confirmResponse: {
+            requiresAction: true,
+            clientSecret: "seti_secret",
+            intentType: "SetupIntent",
+          },
+          confirmCardSetup: decline,
+        }),
+        quoted: quote(),
+      }),
+    },
+    {
+      step: "the backend's confirm",
+      setup: () => ({
+        made: makeController({
+          confirmStatus: 402,
+          confirmResponse: {
+            title: "Your card has insufficient funds.",
+            failure: {
+              code: "card_declined",
+              declineCode: "insufficient_funds",
+              message: "Your card has insufficient funds.",
+            },
+          },
+        }),
+        quoted: quote(),
+      }),
+    },
+  ];
+
+  it.each(steps)("settles with Stripe's exact reason when $step declines", async ({ setup }) => {
+    const { made, quoted } = setup();
+    const heard = vi.fn();
+    const off = checkoutEvents.subscribe("PAYMENT_ERROR", heard);
+    await made.controller.prepare(quoted);
+    const outcome = made.controller.purchase("primary", context);
+    await made.authorize();
+
+    await expect(outcome).resolves.toEqual({ status: "failed", failure: exact });
+    off();
+    expect(heard.mock.calls[0]![0].failure).toEqual(exact);
+    expect(heard.mock.calls[0]![0].error.message).toBe("Your card has insufficient funds.");
+    expect(made.posted("stripe_checkout_fail")).toHaveLength(1);
+  });
+
+  it("says unknown when the backend refuses without naming a failure", async () => {
+    const { controller, authorize } = makeController({
+      confirmResponse: { title: "Promotion Code No Longer Applies" },
+      confirmStatus: 409,
+    });
+    await controller.prepare(quote());
+    const outcome = controller.purchase("primary", context);
+    await authorize();
+    await expect(outcome).resolves.toEqual({
+      status: "failed",
+      failure: { reason: "unknown", store: "stripe" },
+    });
+  });
+
+  it("says unknown, with no message of its own, when the confirm call never answers", async () => {
+    const { controller, fetchWithRetry, authorize } = makeController();
+    fetchWithRetry.mockRejectedValue(new Error("offline"));
+    await controller.prepare(quote());
+    const outcome = controller.purchase("primary", context);
+    await authorize();
+    await expect(outcome).resolves.toEqual({
+      status: "failed",
+      failure: { reason: "unknown", store: "stripe" },
+    });
+  });
+
+  it("keeps Stripe's code when it maps to no reason superwall knows", async () => {
+    const { controller, authorize } = makeController({
+      confirmCardPayment: { error: { code: "something_new", message: "Try another card." } },
+    });
+    await controller.prepare(quote({ intentType: "PaymentIntent", checkoutSessionId: secret }));
+    const outcome = controller.purchase("primary", context);
+    await authorize();
+    await expect(outcome).resolves.toEqual({
+      status: "failed",
+      failure: {
+        reason: "unknown",
+        store: "stripe",
+        code: "something_new",
+        message: "Try another card.",
+      },
+    });
+  });
+
+  it("names no reason when a second purchase is refused while the sheet is up", async () => {
+    const { controller } = makeController();
+    await controller.prepare(quote());
+    void controller.purchase("primary", context);
+    await expect(controller.purchase("primary", context)).resolves.toEqual({
+      status: "failed",
+      failure: { reason: "unknown", store: "stripe" },
+    });
   });
 });

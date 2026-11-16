@@ -120,3 +120,18 @@ export const stripeFailure = (fields: {
   ...(fields.declineCode ? { declineCode: fields.declineCode } : {}),
   ...(fields.message ? { message: fields.message } : {}),
 });
+
+export const unknownFailure = (): CheckoutFailure => ({ reason: "unknown", store: "stripe" });
+
+export class CheckoutFailureError extends Error {
+  readonly failure: CheckoutFailure;
+
+  constructor(failure: CheckoutFailure, fallback: string) {
+    super(failure.message ?? fallback);
+    this.name = "CheckoutFailureError";
+    this.failure = failure;
+  }
+}
+
+export const failureOfError = (error: unknown): CheckoutFailure =>
+  error instanceof CheckoutFailureError ? error.failure : unknownFailure();

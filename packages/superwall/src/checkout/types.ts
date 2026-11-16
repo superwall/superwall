@@ -119,6 +119,10 @@ export type DiscountValidationResult =
 
 export type PurchaseOutcome = "completed" | "abandoned" | "failed";
 
+export type WebPurchaseOutcome =
+  | { status: "completed" | "abandoned" }
+  | { status: "failed"; failure: CheckoutFailure };
+
 export type CheckoutStatus = {
   status: "pending" | "completed" | "abandoned";
   redemptionUrl?: string;

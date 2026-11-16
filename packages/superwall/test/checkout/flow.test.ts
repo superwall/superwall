@@ -7,6 +7,9 @@ import { isLoading } from "../../src/checkout/loading";
 import {
   applePayFor,
   autoPrefetchTargets,
+  clearWebFailure,
+  lastWebFailure,
+  subscribeWebFailure,
   sessionsFor,
   contextFor,
   openEmbeddedSheet,
@@ -369,14 +372,111 @@ describe("openEmbeddedSheet", () => {
   });
 
   it("reports a failed payment to the host", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ status: "pending" }))),
+    );
     const { session, postMessage } = fakeSession();
     const outcome = openEmbeddedSheet(embedded, { paywall: session, referenceName: "primary" });
 
     checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
     checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
 
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
     expect(postMessage.mock.calls.at(-1)?.[0].event_name).toBe("stripe_checkout_fail");
+    vi.unstubAllGlobals();
+  });
+
+  describe("why a sheet payment failed", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+
+    const failSheet = () => {
+      const { session } = fakeSession();
+      const outcome = openEmbeddedSheet(embedded, { paywall: session, referenceName: "primary" });
+      checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+      checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+      return outcome;
+    };
+
+    it("reads the reason the backend reports on the checkout's status", async () => {
+      const fetchMock = vi.fn(
+        async (_url: string) =>
+          new Response(
+            JSON.stringify({
+              status: "pending",
+              failure: {
+                code: "card_declined",
+                declineCode: "insufficient_funds",
+                message: "Your card has insufficient funds.",
+              },
+            }),
+          ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(failSheet()).resolves.toEqual({
+        status: "failed",
+        failure: {
+          reason: "insufficient_funds",
+          store: "stripe",
+          code: "card_declined",
+          declineCode: "insufficient_funds",
+          message: "Your card has insufficient funds.",
+        },
+      });
+      expect(String(fetchMock.mock.calls[0]?.[0])).toContain("checkout/status");
+    });
+
+    it("says unknown when the backend reports no reason", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify({ status: "pending" }))),
+      );
+      await expect(failSheet()).resolves.toEqual({
+        status: "failed",
+        failure: { reason: "unknown", store: "stripe" },
+      });
+    });
+
+    it("logs a lookup that fails and says unknown, never that nothing failed", async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          throw new Error("offline");
+        }),
+      );
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const outcome = failSheet();
+      await vi.runAllTimersAsync();
+      vi.useRealTimers();
+
+      await expect(outcome).resolves.toEqual({
+        status: "failed",
+        failure: { reason: "unknown", store: "stripe" },
+      });
+      expect(warn).toHaveBeenCalledWith(
+        "Looking up why the checkout failed did not work:",
+        expect.any(Error),
+      );
+    });
+
+    it("says unknown without asking when no paywall hosts the sheet", async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const outcome = openEmbeddedSheet(embedded);
+      checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+      checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+
+      await expect(outcome).resolves.toEqual({
+        status: "failed",
+        failure: { reason: "unknown", store: "stripe" },
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   it("gives up waiting for Stripe after 10 seconds, not before", async () => {
@@ -387,7 +487,7 @@ describe("openEmbeddedSheet", () => {
     await vi.advanceTimersByTimeAsync(9_999);
     expect(settled).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
-    expect(settled).toHaveBeenCalledWith({ status: "failed" });
+    expect(settled).toHaveBeenCalledWith(expect.objectContaining({ status: "failed" }));
     vi.useRealTimers();
   });
 
@@ -396,7 +496,7 @@ describe("openEmbeddedSheet", () => {
     const outcome = openEmbeddedSheet(embedded);
     checkoutEvents.dispatch("SHEET_CLOSE", undefined);
     vi.advanceTimersByTime(10_000);
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
     vi.useRealTimers();
   });
 
@@ -434,7 +534,7 @@ describe("Stripe checkout diagnostics for a tap", () => {
     await vi.advanceTimersByTimeAsync(2_000);
     checkoutDiagnostics.record(late.clientSecret, "stripe_js_loaded");
     await vi.advanceTimersByTimeAsync(8_000);
-    await expect(outcome).resolves.toBe("failed");
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
     await vi.advanceTimersByTimeAsync(1_500);
     checkoutDiagnostics.record(late.clientSecret, "embedded_mounted");
     checkoutDiagnostics.record(late.clientSecret, "checkout_rendered");
@@ -490,7 +590,9 @@ describe("purchaseOnWeb", () => {
     vi.spyOn(applePayFor(session), "purchase").mockResolvedValue({ status: "abandoned" });
     const begin = vi.spyOn(sessionsFor(session), "begin");
 
-    await expect(purchaseOnWeb(session, "primary", "applePay")).resolves.toBe("abandoned");
+    await expect(purchaseOnWeb(session, "primary", "applePay")).resolves.toEqual({
+      status: "abandoned",
+    });
     expect(begin).not.toHaveBeenCalled();
   });
 
@@ -508,14 +610,16 @@ describe("purchaseOnWeb", () => {
     checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
     checkoutEvents.dispatch("SHEET_CLOSE", undefined);
 
-    await expect(outcome).resolves.toBe("abandoned");
+    await expect(outcome).resolves.toEqual({ status: "abandoned" });
     expect(begin).not.toHaveBeenCalled();
   });
 
   it("sends a shopper to hosted checkout for a redirect directive", async () => {
     const { session } = fakeSession();
     vi.spyOn(sessionsFor(session), "begin").mockResolvedValue(redirect);
-    await expect(purchaseOnWeb(session, "primary", "sheet")).resolves.toBe("abandoned");
+    await expect(purchaseOnWeb(session, "primary", "sheet")).resolves.toEqual({
+      status: "abandoned",
+    });
     expect(window.location.hash).toBe("#hosted");
   });
 
@@ -523,12 +627,64 @@ describe("purchaseOnWeb", () => {
     const { session } = fakeSession();
     const controller = sessionsFor(session);
     vi.spyOn(controller, "begin").mockResolvedValue(JSON.parse('{ "directive": "unknown" }'));
-    await expect(purchaseOnWeb(session, "primary", "sheet")).resolves.toBe("failed");
+    await expect(purchaseOnWeb(session, "primary", "sheet")).resolves.toMatchObject({
+      status: "failed",
+    });
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(controller, "begin").mockRejectedValue(new Error("offline"));
-    await expect(purchaseOnWeb(session, "primary", "sheet")).resolves.toBe("failed");
+    await expect(purchaseOnWeb(session, "primary", "sheet")).resolves.toMatchObject({
+      status: "failed",
+    });
     expect(error).toHaveBeenCalledWith("Error beginning web checkout:", expect.any(Error));
+  });
+
+  it("holds the last failure per paywall, and clears it when the next purchase starts", async () => {
+    const { session } = fakeSession({ checkout: "applePay" });
+    const { session: other } = fakeSession({ checkout: "applePay" });
+    const declined = {
+      status: "failed" as const,
+      failure: {
+        reason: "card_declined" as const,
+        store: "stripe" as const,
+        code: "card_declined",
+      },
+    };
+    const wallet = vi.spyOn(applePayFor(session), "purchase").mockResolvedValue(declined);
+    const heard = vi.fn();
+    const unsubscribe = subscribeWebFailure(session, heard);
+
+    await expect(purchaseOnWeb(session, "primary", "applePay")).resolves.toEqual(declined);
+    expect(lastWebFailure(session)).toEqual({
+      referenceName: "primary",
+      failure: declined.failure,
+    });
+    expect(lastWebFailure(other)).toBeUndefined();
+    expect(heard).toHaveBeenCalledTimes(1);
+
+    let resolveNext: ((outcome: { status: "completed" }) => void) | undefined;
+    wallet.mockReturnValue(new Promise((resolve) => (resolveNext = resolve)));
+    const next = purchaseOnWeb(session, "secondary", "applePay");
+    expect(lastWebFailure(session)).toBeUndefined();
+    expect(heard).toHaveBeenCalledTimes(2);
+    resolveNext?.({ status: "completed" });
+    await expect(next).resolves.toEqual({ status: "completed" });
+    expect(lastWebFailure(session)).toBeUndefined();
+
+    clearWebFailure(session);
+    expect(heard).toHaveBeenCalledTimes(2);
+    unsubscribe();
+  });
+
+  it("fails with an unknown reason when it cannot begin a checkout", async () => {
+    const { session } = fakeSession();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(sessionsFor(session), "begin").mockRejectedValue(new Error("offline"));
+    await expect(purchaseOnWeb(session, "primary", "sheet")).resolves.toEqual({
+      status: "failed",
+      failure: { reason: "unknown", store: "stripe" },
+    });
+    expect(lastWebFailure(session)?.failure.reason).toBe("unknown");
   });
 
   it("asks the wallet with an empty context id when nothing was warmed", async () => {
@@ -834,7 +990,7 @@ describe("post-purchase and metadata on a completed checkout", () => {
     await flushMicrotasks();
     checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
     checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
-    await expect(outcome).resolves.toBe("completed");
+    await expect(outcome).resolves.toEqual({ status: "completed" });
     await flushMicrotasks();
 
     expect(attach).toHaveBeenCalledWith("ctx_1", { quiz_session: "sess_1" });
@@ -856,7 +1012,7 @@ describe("post-purchase and metadata on a completed checkout", () => {
     await flushMicrotasks();
     checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
     checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
-    await expect(outcome).resolves.toBe("completed");
+    await expect(outcome).resolves.toEqual({ status: "completed" });
     await flushMicrotasks();
 
     expect(error).toHaveBeenCalledWith("Attaching checkout metadata failed:", expect.any(Error));
@@ -870,7 +1026,9 @@ describe("an SDK that cannot host payment", () => {
     const { session } = fakeSession({ sdkVersionPadded: "004.009.000", checkout: "sheet" });
     const begin = vi.spyOn(sessionsFor(session), "begin").mockResolvedValue(redirect);
 
-    await expect(purchaseOnWeb(session, "primary", "sheet")).resolves.toBe("abandoned");
+    await expect(purchaseOnWeb(session, "primary", "sheet")).resolves.toEqual({
+      status: "abandoned",
+    });
 
     expect(begin).toHaveBeenCalledWith({
       referenceName: "primary",
@@ -939,7 +1097,7 @@ describe("a hosted checkout the shopper leaves the paywall for", () => {
     expect(postMessage.mock.calls[2]?.[0]).toMatchObject({ url: "#hosted" });
 
     await vi.advanceTimersByTimeAsync(4000);
-    await expect(outcome).resolves.toBe("completed");
+    await expect(outcome).resolves.toEqual({ status: "completed" });
 
     expect(
       JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)),
@@ -962,7 +1120,7 @@ describe("a hosted checkout the shopper leaves the paywall for", () => {
     const outcome = openHostedCheckout(session, redirect);
     await vi.advanceTimersByTimeAsync(2000);
 
-    await expect(outcome).resolves.toBe("abandoned");
+    await expect(outcome).resolves.toEqual({ status: "abandoned" });
     expect(postMessage.mock.calls.map(([message]) => message.event_name)).not.toContain(
       "stripe_checkout_complete",
     );
@@ -978,9 +1136,64 @@ describe("a hosted checkout the shopper leaves the paywall for", () => {
     const outcome = openHostedCheckout(session, redirect);
     await vi.advanceTimersByTimeAsync(120_000);
 
-    await expect(outcome).resolves.toBe("abandoned");
+    await expect(outcome).resolves.toEqual({ status: "abandoned" });
     expect(fetchMock).toHaveBeenCalledTimes(60);
     expect(warn).toHaveBeenCalledWith("Gave up watching a hosted checkout after two minutes.");
+  });
+
+  it("fails with the last reason the backend reported once the shopper walks away", async () => {
+    nativeHost();
+    vi.useFakeTimers();
+    statuses(
+      { status: "pending", failure: { code: "expired_card", message: "Your card has expired." } },
+      { status: "pending" },
+      { status: "abandoned" },
+    );
+    const { session } = fakeSession();
+
+    const outcome = openHostedCheckout(session, redirect);
+    await vi.advanceTimersByTimeAsync(6000);
+
+    await expect(outcome).resolves.toEqual({
+      status: "failed",
+      failure: {
+        reason: "expired_card",
+        store: "stripe",
+        code: "expired_card",
+        message: "Your card has expired.",
+      },
+    });
+  });
+
+  it("fails with the reported reason when it gives up watching", async () => {
+    nativeHost();
+    vi.useFakeTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    statuses({ status: "pending", failure: { code: "card_declined", declineCode: "fraudulent" } });
+    const { session } = fakeSession();
+
+    const outcome = openHostedCheckout(session, redirect);
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    await expect(outcome).resolves.toMatchObject({
+      status: "failed",
+      failure: { reason: "fraud_suspected", declineCode: "fraudulent" },
+    });
+  });
+
+  it("completes even after a failed attempt the shopper retried", async () => {
+    nativeHost();
+    vi.useFakeTimers();
+    statuses(
+      { status: "pending", failure: { code: "card_declined" } },
+      { status: "completed", redemptionUrl: "myapp://redeem/abc" },
+    );
+    const { session } = fakeSession({ sdkVersionPadded: "004.014.000" });
+
+    const outcome = openHostedCheckout(session, redirect);
+    await vi.advanceTimersByTimeAsync(4000);
+
+    await expect(outcome).resolves.toEqual({ status: "completed" });
   });
 
   it("keeps watching through a status call that fails", async () => {
@@ -1000,12 +1213,12 @@ describe("a hosted checkout the shopper leaves the paywall for", () => {
     const outcome = openHostedCheckout(session, redirect);
     await vi.advanceTimersByTimeAsync(20_000);
 
-    await expect(outcome).resolves.toBe("completed");
+    await expect(outcome).resolves.toEqual({ status: "completed" });
   });
 
   it("navigates the page itself when no SDK is hosting the paywall", async () => {
     const { session, postMessage } = fakeSession();
-    await expect(openHostedCheckout(session, redirect)).resolves.toBe("abandoned");
+    await expect(openHostedCheckout(session, redirect)).resolves.toEqual({ status: "abandoned" });
     expect(window.location.hash).toBe("#hosted");
     expect(
       postMessage.mock.calls

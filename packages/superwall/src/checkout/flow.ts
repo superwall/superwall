@@ -22,6 +22,7 @@ import {
   saveCustomStoreReturnRecord,
 } from "./customStore";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
+import { unknownFailure, type CheckoutFailure } from "./failure";
 import { introductoryOfferFromFragment, readTeleportBoot } from "./teleport/boot";
 import { teleportFor } from "./teleport/flow";
 import type {
@@ -36,6 +37,7 @@ import type {
   SessionScope,
   WebappCompletion,
   WebPurchaseOptions,
+  WebPurchaseOutcome,
 } from "./types";
 
 export type CompletedCheckout = {
@@ -334,8 +336,11 @@ export const reportCompletedCheckout = async (
 const watchHostedCheckout = async (
   paywall: PaywallSession,
   redirect: RedirectCheckoutSession,
-): Promise<PurchaseOutcome> => {
+): Promise<WebPurchaseOutcome> => {
   const sessions = sessionsFor(paywall);
+  let failure: CheckoutFailure | undefined;
+  const unpaid = (): WebPurchaseOutcome =>
+    failure ? { status: "failed", failure } : { status: "abandoned" };
 
   for (let attempt = 0; attempt < STATUS_POLL_LIMIT; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, STATUS_POLL_INTERVAL));
@@ -345,25 +350,26 @@ const watchHostedCheckout = async (
 
     if (status.status === "completed") {
       await reportCompletedCheckout(paywall, redirect, status.redemptionUrl);
-      return "completed";
+      return { status: "completed" };
     }
-    if (status.status === "abandoned") return "abandoned";
+    if ("failure" in status && status.failure) failure = status.failure;
+    if (status.status === "abandoned") return unpaid();
   }
 
   console.warn("Gave up watching a hosted checkout after two minutes.");
-  return "abandoned";
+  return unpaid();
 };
 
 export const openHostedCheckout = async (
   paywall: PaywallSession,
   redirect: RedirectCheckoutSession,
-): Promise<PurchaseOutcome> => {
+): Promise<WebPurchaseOutcome> => {
   const host = hostFor(paywall);
   host.initiated(contextFor(paywall, redirect.referenceName, redirect.checkoutContextId));
 
   if (!detectSuperwallHost()) {
     window.location.assign(redirect.checkoutUrl);
-    return "abandoned";
+    return { status: "abandoned" };
   }
 
   host.openHostedPage(redirect.checkoutUrl);
@@ -386,10 +392,23 @@ export const purchaseWithApplePay = (
   );
 };
 
+const sheetFailure = async (
+  paywall: PaywallSession,
+  embedded: EmbeddedCheckoutSession,
+): Promise<CheckoutFailure> => {
+  try {
+    const status = await sessionsFor(paywall).status(embedded.checkoutContextId);
+    return status.failure ?? unknownFailure();
+  } catch (error) {
+    console.warn("Looking up why the checkout failed did not work:", error);
+    return unknownFailure();
+  }
+};
+
 export const openEmbeddedSheet = (
   embedded: EmbeddedCheckoutSession,
   host?: { paywall: PaywallSession; referenceName: string; tappedAt?: number },
-): Promise<{ status: PurchaseOutcome }> =>
+): Promise<WebPurchaseOutcome> =>
   new Promise((resolve) => {
     const events = host ? hostFor(host.paywall) : null;
     const context = host
@@ -407,7 +426,7 @@ export const openEmbeddedSheet = (
 
     const readyTimeout = setTimeout(() => {
       diagnostics?.timedOut();
-      finish("failed");
+      finish({ status: "failed", failure: unknownFailure() });
     }, SHEET_READY_TIMEOUT);
 
     const isOurs = (candidate: { directive: string; clientSecret?: string }) =>
@@ -428,25 +447,32 @@ export const openEmbeddedSheet = (
       }),
       checkoutEvents.subscribe("PAYMENT_SUCCESS", ({ session: paid }) => {
         if (!isOurs(paid)) return;
-        finish("completed");
+        finish({ status: "completed" });
       }),
       checkoutEvents.subscribe("PAYMENT_ERROR", ({ session: errored }) => {
         if (!isOurs(errored)) return;
         if (context) events?.failed(context);
-        finish("failed");
+        finish(
+          host
+            ? sheetFailure(host.paywall, embedded).then((failure) => ({
+                status: "failed",
+                failure,
+              }))
+            : { status: "failed", failure: unknownFailure() },
+        );
       }),
       checkoutEvents.subscribe("SHEET_CLOSE", () => {
         if (!opened) return;
         if (context) events?.abandoned(context);
-        finish("abandoned");
+        finish({ status: "abandoned" });
       }),
     ];
 
-    const finish = (status: PurchaseOutcome) => {
+    const finish = (outcome: WebPurchaseOutcome | Promise<WebPurchaseOutcome>) => {
       clearTimeout(readyTimeout);
       stopLoading();
       unsubscribers.forEach((unsubscribe) => unsubscribe());
-      resolve({ status });
+      resolve(outcome);
     };
 
     startLoading();
@@ -458,7 +484,19 @@ export const purchaseOnWeb = async (
   referenceName: string,
   requested: CheckoutMode,
   options: WebPurchaseOptions = {},
-): Promise<PurchaseOutcome> => {
+): Promise<WebPurchaseOutcome> => {
+  clearWebFailure(paywall);
+  const outcome = await runWebPurchase(paywall, referenceName, requested, options);
+  if (outcome.status === "failed") recordWebFailure(paywall, referenceName, outcome.failure);
+  return outcome;
+};
+
+const runWebPurchase = async (
+  paywall: PaywallSession,
+  referenceName: string,
+  requested: CheckoutMode,
+  options: WebPurchaseOptions,
+): Promise<WebPurchaseOutcome> => {
   const tappedAt = Date.now();
   const sessions = sessionsFor(paywall);
   const mode = checkoutModeFor(paywall.getSnapshot(), requested);
@@ -466,7 +504,7 @@ export const purchaseOnWeb = async (
   try {
     if (mode === "applePay") {
       const outcome = await purchaseWithApplePay(paywall, referenceName);
-      if (outcome.status !== "unavailable") return outcome.status;
+      if (outcome.status !== "unavailable") return outcome;
     }
 
     const warmed =
@@ -484,14 +522,49 @@ export const purchaseOnWeb = async (
           });
 
     if (result.directive === "embedded") {
-      return (await openEmbeddedSheet(result, { paywall, referenceName, tappedAt })).status;
+      return await openEmbeddedSheet(result, { paywall, referenceName, tappedAt });
     }
-    if (result.directive === "redirect") return openHostedCheckout(paywall, result);
-    return "failed";
+    if (result.directive === "redirect") return await openHostedCheckout(paywall, result);
+    return { status: "failed", failure: unknownFailure() };
   } catch (error) {
     console.error("Error beginning web checkout:", error);
-    return "failed";
+    return { status: "failed", failure: unknownFailure() };
   }
+};
+
+export type WebFailure = { referenceName: string; failure: CheckoutFailure };
+
+const webFailures = new WeakMap<object, WebFailure>();
+const webFailureListeners = new WeakMap<object, Set<() => void>>();
+
+const notifyWebFailure = (paywall: PaywallSession) => {
+  for (const listener of webFailureListeners.get(paywall) ?? []) listener();
+};
+
+const recordWebFailure = (
+  paywall: PaywallSession,
+  referenceName: string,
+  failure: CheckoutFailure,
+) => {
+  webFailures.set(paywall, { referenceName, failure });
+  notifyWebFailure(paywall);
+};
+
+export const clearWebFailure = (paywall: PaywallSession) => {
+  if (!webFailures.delete(paywall)) return;
+  notifyWebFailure(paywall);
+};
+
+export const lastWebFailure = (paywall: PaywallSession): WebFailure | undefined =>
+  webFailures.get(paywall);
+
+export const subscribeWebFailure = (paywall: PaywallSession, listener: () => void) => {
+  const listeners = webFailureListeners.get(paywall) ?? new Set<() => void>();
+  webFailureListeners.set(paywall, listeners);
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 };
 
 const CUSTOM_STORE_NAVIGATION_DELAY = 250;

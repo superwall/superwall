@@ -8,7 +8,19 @@ import type {
 } from "@stripe/stripe-js";
 import { buildApplePayConfig, buildApplePayLineItems } from "./request";
 import { fetchWithRetry as defaultFetchWithRetry } from "../api/fetch";
-import { errorMessageOf, field, intentTypeOf } from "../api/decode";
+import {
+  errorFailureOf,
+  errorMessageOf,
+  field,
+  intentTypeOf,
+  readStripeError,
+} from "../api/decode";
+import {
+  CheckoutFailureError,
+  failureOfError,
+  unknownFailure,
+  type CheckoutFailure,
+} from "../failure";
 import { subscriptionsApiUrl } from "../api/url";
 import { checkoutEvents } from "../events";
 import type { HostEvents, HostContext } from "../host";
@@ -69,7 +81,8 @@ export const applePayErrorOf = (error: unknown): ApplePayError =>
 type Unavailable = { status: "unavailable"; reason: ApplePayWalletReason; error?: ApplePayError };
 
 export type ApplePayOutcome =
-  | { status: "completed" | "abandoned" | "failed" }
+  | { status: "completed" | "abandoned" }
+  | { status: "failed"; failure: CheckoutFailure }
   | Unavailable
   | { status: "unavailable"; reason: "cleared" };
 
@@ -133,6 +146,9 @@ type Pending = { context: HostContext; resolve: (outcome: ApplePayOutcome) => vo
 type WalletState = { status: "ready"; prepared: Prepared } | { status: "preparing" } | Unavailable;
 
 type Complete = (status: "success" | "fail") => void;
+
+const stripeDecline = (error: unknown, fallback: string): CheckoutFailureError =>
+  new CheckoutFailureError(readStripeError(error), fallback);
 
 const recordConfirmation = (ready: Prepared, response: ConfirmResponse) => {
   if (!response.subscriptionId || ready.session.checkoutSessionId) return;
@@ -218,7 +234,8 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
     );
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(errorMessageOf(body, `Checkout confirmation failed (${response.status})`));
+      const message = errorMessageOf(body, `Checkout confirmation failed (${response.status})`);
+      throw new CheckoutFailureError(errorFailureOf(body) ?? unknownFailure(), message);
     }
     return readConfirmResponse(body);
   };
@@ -241,7 +258,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
 
     if (response.intentType === "SetupIntent") {
       const result = await ready.stripe.confirmCardSetup(response.clientSecret);
-      if (result.error) throw new Error(result.error.message || "Setup authentication failed");
+      if (result.error) throw stripeDecline(result.error, "Setup authentication failed");
       const setupIntentId = result.setupIntent?.id || response.setupIntentId;
       if (!setupIntentId) throw new Error("No SetupIntent returned");
       recordConfirmation(ready, await confirm(ready, { setupIntentId, email }));
@@ -251,7 +268,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
     const result = await ready.stripe.confirmCardPayment(response.clientSecret, {
       payment_method: event.paymentMethod.id,
     });
-    if (result.error) throw new Error(result.error.message || "Payment authentication failed");
+    if (result.error) throw stripeDecline(result.error, "Payment authentication failed");
   };
 
   const confirmSetupIntent = async (
@@ -265,11 +282,11 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
       { payment_method: event.paymentMethod.id },
       { handleActions: false },
     );
-    if (first.error) throw new Error(first.error.message || "Setup failed");
+    if (first.error) throw stripeDecline(first.error, "Setup failed");
     let setupIntent: SetupIntent | undefined = first.setupIntent;
     if (setupIntent?.status === "requires_action") {
       const next = await ready.stripe.confirmCardSetup(clientSecret);
-      if (next.error) throw new Error(next.error.message || "Setup authentication failed");
+      if (next.error) throw stripeDecline(next.error, "Setup authentication failed");
       setupIntent = next.setupIntent;
     }
     if (!setupIntent) throw new Error("No SetupIntent returned");
@@ -288,12 +305,12 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
       { payment_method: event.paymentMethod.id },
       { handleActions: false },
     );
-    if (first.error) throw new Error(first.error.message || "Payment failed");
+    if (first.error) throw stripeDecline(first.error, "Payment failed");
     complete("success");
     let paymentIntent: PaymentIntent | undefined = first.paymentIntent;
     if (paymentIntent?.status === "requires_action") {
       const next = await ready.stripe.confirmCardPayment(clientSecret);
-      if (next.error) throw new Error(next.error.message || "Payment authentication failed");
+      if (next.error) throw stripeDecline(next.error, "Payment authentication failed");
       paymentIntent = next.paymentIntent;
     }
     try {
@@ -332,10 +349,15 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
       ready.settle?.({ status: "completed" });
     } catch (error) {
       complete("fail");
-      const failure = error instanceof Error ? error : new Error("Apple Pay failed");
-      checkoutEvents.dispatch("PAYMENT_ERROR", { error: failure, session: ready.session });
+      const failure = failureOfError(error);
+      const reported = error instanceof Error ? error : new Error("Apple Pay failed");
+      checkoutEvents.dispatch("PAYMENT_ERROR", {
+        error: reported,
+        session: ready.session,
+        failure,
+      });
       if (ready.context) options.host.failed(ready.context);
-      ready.settle?.({ status: "failed" });
+      ready.settle?.({ status: "failed", failure });
     }
   };
 
@@ -346,7 +368,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
   };
 
   const show = (ready: Prepared, context: HostContext): Promise<ApplePayOutcome> => {
-    if (ready.inProgress) return Promise.resolve({ status: "failed" });
+    if (ready.inProgress) return Promise.resolve({ status: "failed", failure: unknownFailure() });
 
     ready.context = context;
     ready.authorized = false;

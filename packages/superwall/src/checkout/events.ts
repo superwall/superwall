@@ -1,3 +1,4 @@
+import type { CheckoutFailure } from "./failure";
 import type { EmbeddedCheckoutSession, PaymentSession } from "./types";
 
 export type CheckoutEventType =
@@ -19,7 +20,7 @@ export type CheckoutEventPayload = {
   EMBEDDED_READY: { clientSecret: string };
   CHECKOUT_SUBMITTED: { session: PaymentSession };
   PAYMENT_SUCCESS: { session: PaymentSession };
-  PAYMENT_ERROR: { error: Error; session: PaymentSession };
+  PAYMENT_ERROR: { error: Error; session: PaymentSession; failure?: CheckoutFailure };
   SESSION_INVALIDATED: { reason?: string };
 };
 
