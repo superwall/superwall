@@ -244,6 +244,12 @@ landed stays pending, so `promote` still won't ship it. With no project,
 `superwall pull --app <id> [dir]` creates `superwall/` from the app's source,
 so you can work on an app's paywalls without its codebase or GitHub.
 
+`pull` needs superwall 2.3.0 or later. Inside a project, the `superwall` your
+project depends on is the one that runs, whichever copy you start (global,
+`npx superwall@…`). When that copy is older, the CLI says so on stderr with the
+command that updates it, such as `cd superwall && npm i superwall@latest`;
+`superwall upgrade` and `superwall doctor` name it too.
+
 A change to the shared design system (`DESIGN.md`, `design/`, `components/`)
 reaches every paywall that imports it. `publish --existing --source` ships it:
 `--existing` rebuilds only the paywalls already on Superwall and never creates

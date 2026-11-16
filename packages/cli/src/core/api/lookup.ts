@@ -96,6 +96,37 @@ export async function findApplication(
   return found;
 }
 
+/**
+ * A custom store is a CUSTOM application that `/v2/projects` leaves out of `applications`, so
+ * `findApplication` never sees one. This finds it by id, name or dashboard link among the
+ * projects' custom stores, as an application of platform `custom`.
+ */
+export async function findCustomStore(
+  api: SuperwallApi,
+  ref: string,
+  projects: readonly Project[],
+): Promise<FoundApplication | undefined> {
+  const id = parseDashboardUrl(ref)?.applicationId ?? ref;
+  const perProject = await Promise.all(
+    projects.map((project) =>
+      api
+        .list<{ id: string | number; name?: string }>(
+          `/v2/projects/${encodeURIComponent(String(project.id))}/custom-stores`,
+        )
+        .catch((error: unknown) => {
+          if (notFound(error)) return [];
+          throw error;
+        }),
+    ),
+  );
+  for (const [index, stores] of perProject.entries()) {
+    const project = projects[index];
+    const store = stores.find((candidate) => String(candidate.id) === id || candidate.name === ref);
+    if (project && store) return { project, app: { id: String(store.id), name: store.name, platform: "custom" } };
+  }
+  return undefined;
+}
+
 export function appNotFound(ref: string): Error {
   return new Error(
     `No app ${ref} that this account can open. ` +

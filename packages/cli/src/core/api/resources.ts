@@ -107,8 +107,11 @@ export function createEntitlement(
 
 export type SubscriptionPeriod = "day" | "week" | "month" | "year";
 
+export type ProductStore = "app_store" | "play_store" | "custom";
+
 export interface ProductCreateOpts {
   applicationId?: string;
+  store?: ProductStore;
   name?: string;
   price?: { amount: number; currency: string };
   subscription?: {
@@ -128,6 +131,7 @@ export function createProduct(
   return api.post<Row>("/v2/products", {
     project_id: scope.projectId,
     ...(opts.applicationId ? { application_id: opts.applicationId } : {}),
+    ...(opts.store ? { store: opts.store } : {}),
     identifier,
     ...(opts.name ? { name: opts.name } : {}),
     ...(opts.price ? { price: opts.price } : {}),
