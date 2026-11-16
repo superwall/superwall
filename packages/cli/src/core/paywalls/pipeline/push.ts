@@ -366,6 +366,7 @@ async function pushVersion(
     stores: ProductStores;
     wasLive?: number;
     promoting: boolean;
+    frameworkVersion: string;
   },
   lines: string[],
   note: (message: string) => void,
@@ -406,6 +407,7 @@ async function pushVersion(
       products,
       settings: build.settings,
       locales: build.locales,
+      frameworkVersion: input.frameworkVersion,
     }),
   );
   lines.push(
@@ -505,7 +507,7 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
       if (unsourced === undefined) {
         version = await pushVersion(
           context,
-          { target, bind, build, stores, wasLive, promoting: options.promote },
+          { target, bind, build, stores, wasLive, promoting: options.promote, frameworkVersion: installed },
           lines,
           note,
         );

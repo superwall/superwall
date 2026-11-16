@@ -301,6 +301,24 @@ test("pushPaywallVersion omits an empty asset list rather than sending []", asyn
   });
 });
 
+test("pushPaywallVersion sends the framework version only when it is usable", async () => {
+  const recs = mockFetch(() => ({ version: 7, snapshot_id: "a", url: "u" }));
+
+  await pushPaywallVersion(api, "208540", { html: "<html>", frameworkVersion: "2.6.0-beta.2" });
+  assert.deepEqual(recs[0]?.body, { html: "<html>", framework_version: "2.6.0-beta.2" });
+
+  for (const frameworkVersion of ["unknown", "", "  ", "9".repeat(65)]) {
+    await pushPaywallVersion(api, "208540", { html: "<html>", frameworkVersion });
+  }
+  await pushPaywallVersion(api, "208540", { html: "<html>", frameworkVersion: "9".repeat(64) });
+
+  assert.deepEqual(
+    recs.slice(1, 5).map((rec) => rec.body),
+    [{ html: "<html>" }, { html: "<html>" }, { html: "<html>" }, { html: "<html>" }],
+  );
+  assert.deepEqual(recs[5]?.body, { html: "<html>", framework_version: "9".repeat(64) });
+});
+
 test("pushPaywallAssets drops malformed rows and refuses a response with no list", async () => {
   mockFetch(() => ({
     assets: [
