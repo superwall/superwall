@@ -379,6 +379,13 @@ async function pushVersion(
       : `Built ${pc.dim(`${kb(build.bytes)} · ${build.snapshotId.slice(0, 8)}`)}`,
   );
 
+  const teleportPages = build.teleportPages ?? [];
+  if (teleportPages.length > 0) {
+    const bytes = teleportPages.reduce((total, page) => total + Buffer.byteLength(page.html), 0);
+    lines.push(`Teleport pages ${pc.dim(`${teleportPages.length} pre-rendered (${kb(bytes)})`)}`);
+  }
+  for (const warning of build.warnings ?? []) lines.push(pc.yellow(warning));
+
   note("Syncing assets");
   const synced = await timed(() => syncAssets({ api: context.api, paywallId: bind.paywallId, assets }));
   if (assets.length > 0) {
@@ -408,6 +415,7 @@ async function pushVersion(
       settings: build.settings,
       locales: build.locales,
       frameworkVersion: input.frameworkVersion,
+      teleportPages,
     }),
   );
   lines.push(

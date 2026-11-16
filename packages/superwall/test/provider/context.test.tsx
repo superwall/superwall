@@ -3,7 +3,7 @@ import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHostTransport, recordingDelegate } from "@superwall/host";
 import type { ITransport, TOutgoingMessage } from "@superwall/runtime";
-import { useUser } from "../../src/hooks";
+import { useSuperwallSnapshot, useTranslation, useUser } from "../../src/hooks";
 import { PaywallRouter, type Entry, type RouteMap } from "../../src/navigation/index";
 import {
   HOST_STATE_TIMEOUT_MS,
@@ -290,5 +290,78 @@ describe("useHostStateArrived", () => {
     act(() => vi.advanceTimersByTime(1));
     expect(result.current).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("a teleport page's first render", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window, "__SW_TELEPORT__");
+    cleanup();
+  });
+
+  it("already has the shopper's user, device and locale the worker injected", () => {
+    Reflect.set(window, "__SW_TELEPORT__", {
+      id: "v1:tp",
+      route: "checkout",
+      variables: {
+        deviceProperties: { deviceLocale: "de_DE" },
+        user: { aliasId: "a1" },
+        products: [],
+        params: {},
+      },
+    });
+    const first: unknown[] = [];
+    const Probe = () => {
+      const { t, locale } = useTranslation();
+      first.push([useUser().aliasId, locale, t("title")]);
+      return null;
+    };
+    render(
+      <SuperwallProvider
+        config={{
+          localization: {
+            defaultLocale: "en",
+            messages: { en: { title: "Go Pro" }, de: { title: "Hol dir Pro" } },
+          },
+        }}
+        transport={recording()}
+      >
+        <Probe />
+      </SuperwallProvider>,
+    );
+    expect(first[0]).toEqual(["a1", "de", "Hol dir Pro"]);
+  });
+
+  it("already shows the trial the shopper was offered in the app", () => {
+    Reflect.set(window, "__SW_TELEPORT__", {
+      id: "v1:tp",
+      route: "checkout",
+      hasIntroductoryOffer: true,
+    });
+    const first: unknown[] = [];
+    const Probe = () => {
+      first.push(useSuperwallSnapshot().introductoryOffer.eligible);
+      return null;
+    };
+    render(
+      <SuperwallProvider transport={recording()}>
+        <Probe />
+      </SuperwallProvider>,
+    );
+    expect(first[0]).toBe(true);
+  });
+
+  it("starts empty on a page that is no teleport", () => {
+    const first: unknown[] = [];
+    const Probe = () => {
+      first.push(useUser().aliasId);
+      return null;
+    };
+    render(
+      <SuperwallProvider transport={recording()}>
+        <Probe />
+      </SuperwallProvider>,
+    );
+    expect(first[0]).toBeUndefined();
   });
 });

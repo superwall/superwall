@@ -433,6 +433,7 @@ export function pushPaywallVersion(
     settings?: PaywallSettings;
     locales?: string[];
     frameworkVersion?: string;
+    teleportPages?: VersionTeleportPage[];
   },
 ): Promise<PushedVersion> {
   const frameworkVersion = selectFrameworkVersion(opts.frameworkVersion);
@@ -443,6 +444,9 @@ export function pushPaywallVersion(
     ...(opts.products && opts.products.length > 0 ? { products: opts.products } : {}),
     ...(opts.locales && opts.locales.length > 0 ? { locales: opts.locales } : {}),
     ...(frameworkVersion ? { framework_version: frameworkVersion } : {}),
+    ...(opts.teleportPages && opts.teleportPages.length > 0
+      ? { teleport_pages: opts.teleportPages.map(({ key, html }) => ({ key, html })) }
+      : {}),
     ...(opts.settings ?? {}),
   });
 }
@@ -453,6 +457,11 @@ function selectFrameworkVersion(version: string | undefined): string | undefined
   const trimmed = version?.trim();
   if (!trimmed || trimmed === "unknown" || trimmed.length > FRAMEWORK_VERSION_MAX_LENGTH) return undefined;
   return trimmed;
+}
+
+export interface VersionTeleportPage {
+  key: string;
+  html: string;
 }
 
 export interface VersionAsset {

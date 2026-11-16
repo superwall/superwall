@@ -1,6 +1,10 @@
-import { query, type Options, type SDKMessage, type SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
+import { createRequire } from "node:module";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import type { Options, SDKMessage, SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { resolveHostedAnthropicBaseUrl, selectHostedStatus } from "@/core/workflows/agent/hosted";
 import { getOAuthAccessToken } from "@/core/account/token";
+import { field } from "@/core/json";
 import { VERSION } from "@/environment";
 import { toolsForCapabilities } from "./capabilities";
 import { emitAssistantEvents } from "./events";
@@ -8,6 +12,10 @@ import { isUsageLimitText } from "./limits";
 import type { AgentDriver, AgentResult, AgentRunOptions, DriverInfo } from "./types";
 
 const SDK_MODEL_ALIAS = "claude-sonnet-5";
+
+export const AGENT_SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
+export const AGENT_SDK_VERSION = "0.3.201";
+export const AGENT_SDK_INSTALL_MESSAGE = `The bundled Superwall Agent needs ${AGENT_SDK_PACKAGE}. Install it with \`npm install ${AGENT_SDK_PACKAGE}@${AGENT_SDK_VERSION}\`, or use Claude Code or Codex.`;
 
 function resultText(message: SDKResultMessage): string | undefined {
   if ("result" in message && typeof message.result === "string") return message.result;
@@ -59,13 +67,57 @@ async function resolveRunAuth(): Promise<{ ok: true; token: string } | { ok: fal
 }
 
 type RunQuery = (params: { prompt: string; options: Options }) => AsyncIterable<SDKMessage>;
+type LoadQuery = () => Promise<RunQuery | null>;
+type ImportModule = (specifier: string) => Promise<unknown>;
 
-export function createSuperwallDriver(runQuery: RunQuery): AgentDriver {
+const MISSING_MODULE_CODES = new Set(["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND"]);
+
+function isRunQuery(value: unknown): value is RunQuery {
+  return typeof value === "function";
+}
+
+function queryOf(module: unknown): RunQuery | null {
+  const query = field(module, "query");
+  return isRunQuery(query) ? query : null;
+}
+
+function isMissingModule(error: unknown): boolean {
+  const code = field(error, "code");
+  return typeof code === "string" && MISSING_MODULE_CODES.has(code);
+}
+
+async function importIfInstalled(importModule: ImportModule, specifier: () => string): Promise<RunQuery | null | undefined> {
+  try {
+    return queryOf(await importModule(specifier()));
+  } catch (error) {
+    if (isMissingModule(error)) return undefined;
+    throw error;
+  }
+}
+
+export function createSdkLoader(
+  cwd: () => string = () => process.cwd(),
+  importModule: ImportModule = (specifier) => import(specifier),
+): LoadQuery {
+  let loaded: Promise<RunQuery | null> | undefined;
+  const fromProject = () => pathToFileURL(createRequire(join(cwd(), "package.json")).resolve(AGENT_SDK_PACKAGE)).href;
+  return () => {
+    loaded ??= (async () => {
+      const beside = await importIfInstalled(importModule, () => AGENT_SDK_PACKAGE);
+      if (beside !== undefined) return beside;
+      return (await importIfInstalled(importModule, fromProject)) ?? null;
+    })();
+    return loaded;
+  };
+}
+
+export function createSuperwallDriver(loadQuery: LoadQuery): AgentDriver {
   return {
     id: "superwall",
     displayName: "Superwall Agent",
 
     async detect(): Promise<DriverInfo | null> {
+      if (!(await loadQuery())) return null;
       return {
         id: "superwall",
         displayName: "Superwall Agent",
@@ -74,6 +126,12 @@ export function createSuperwallDriver(runQuery: RunQuery): AgentDriver {
     },
 
     async run(opts: AgentRunOptions): Promise<AgentResult> {
+      const runQuery = await loadQuery();
+      if (!runQuery) {
+        opts.onEvent?.({ type: "error", message: AGENT_SDK_INSTALL_MESSAGE });
+        return { ok: false, finalText: AGENT_SDK_INSTALL_MESSAGE };
+      }
+
       const auth = await resolveRunAuth();
       if (!auth.ok) {
         opts.onEvent?.({ type: "error", message: auth.message });
@@ -143,4 +201,4 @@ export function createSuperwallDriver(runQuery: RunQuery): AgentDriver {
   };
 }
 
-export const superwallDriver = createSuperwallDriver(query);
+export const superwallDriver = createSuperwallDriver(createSdkLoader());
