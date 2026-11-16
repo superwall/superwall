@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UpdateBanner } from "../../src/components/UpdateBanner";
+import { UpdateBanner, updatePrompt } from "../../src/components/UpdateBanner";
 import type { StudioUpdate } from "../../src/lib/contract";
 
 const update = (overrides: Partial<StudioUpdate> = {}): StudioUpdate => ({
@@ -37,7 +37,7 @@ describe("the studio's update banner", () => {
       expect(banner.textContent).toContain("Update available");
       expect(banner.textContent).toContain("superwall 2.5.2 → 2.5.3");
       expect(banner.textContent).not.toContain("breaking");
-      expect(screen.getByRole("button", { name: "Copy superwall upgrade" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Copy prompt" })).toBeTruthy();
       expect(screen.queryByRole("link")).toBeNull();
     },
   );
@@ -51,20 +51,50 @@ describe("the studio's update banner", () => {
     expect(screen.getByRole("link", { name: /Release notes/ }).getAttribute("href")).toBe(
       MAJOR.notes,
     );
-    expect(
-      screen.getByRole("button", { name: "Copy cd superwall && pnpm add superwall@latest" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy prompt" }).className).toContain(
+      "sw-btn--warning",
+    );
+    expect(screen.getByRole("button", { name: "Dismiss" }).className).toContain("sw-btn--warning");
   });
 
-  it("copies the command", async () => {
+  it("dismisses with a square button the size of the top bar's buttons", () => {
+    render(<UpdateBanner update={update()} />);
+
+    const dismiss = screen.getByRole("button", { name: "Dismiss" }).className;
+    expect(dismiss).toContain("sw-btn--sm");
+    expect(dismiss).toContain("sw-btn--icon");
+  });
+
+  it("prompts an agent to review breaking changes before a major upgrade", () => {
+    const prompt = updatePrompt(MAJOR);
+
+    expect(prompt).toContain("from 2.5.2 to 3.0.0");
+    expect(prompt).toContain("may contain breaking changes");
+    expect(prompt).toContain(MAJOR.notes);
+    expect(prompt).toContain("https://github.com/superwall/superwall/releases)");
+    expect(prompt).toContain("Before you change anything, tell me what will break");
+    expect(prompt).toContain("`cd superwall && pnpm add superwall@latest`");
+    expect(prompt).toContain("`superwall build`");
+  });
+
+  it("prompts a short upgrade for a patch or minor", () => {
+    const prompt = updatePrompt(update());
+
+    expect(prompt).toContain("from 2.5.2 to 2.5.3");
+    expect(prompt).not.toContain("breaking");
+    expect(prompt).toContain(update().notes);
+    expect(prompt).toContain("`superwall upgrade`");
+  });
+
+  it("copies the upgrade prompt", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     render(<UpdateBanner update={MAJOR} />);
 
-    fireEvent.click(screen.getByRole("button", { name: `Copy ${MAJOR.command}` }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
 
-    expect(writeText).toHaveBeenCalledWith(MAJOR.command);
-    expect(await screen.findByRole("button", { name: `Copied ${MAJOR.command}` })).toBeTruthy();
+    expect(writeText).toHaveBeenCalledWith(updatePrompt(MAJOR));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
   });
 
   it("stays hidden for that version once dismissed, and comes back for a newer one", () => {

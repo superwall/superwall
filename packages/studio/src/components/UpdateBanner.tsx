@@ -27,7 +27,27 @@ const storeDismissed = (version: string) => {
   }
 };
 
-const CopyCommand = ({ command, warning }: { command: string; warning: boolean }) => {
+const RELEASES_URL = "https://github.com/superwall/superwall/releases";
+
+export const updatePrompt = (update: StudioUpdate): string =>
+  update.kind === "major"
+    ? [
+        `Upgrade this project's superwall from ${update.current} to ${update.latest}. It is a major release, so it may contain breaking changes.`,
+        "",
+        `1. Read the release notes of ${update.latest} (${update.notes}) and of every release between ${update.current} and ${update.latest} (${RELEASES_URL}).`,
+        "2. List each breaking change that touches this project: search its paywalls, components and config for every API that was changed or removed. Before you change anything, tell me what will break and ask me about any change that needs a decision.",
+        `3. Run \`${update.command}\`.`,
+        "4. Make the changes the breaking changes require, then run `superwall build` and check in `superwall dev` that every paywall still builds and looks the same.",
+      ].join("\n")
+    : [
+        `Upgrade this project's superwall from ${update.current} to ${update.latest}.`,
+        "",
+        `1. Read the release notes (${update.notes}) and tell me if anything in them touches this project.`,
+        `2. Run \`${update.command}\`.`,
+        "3. Run `superwall build` and check that every paywall still builds.",
+      ].join("\n");
+
+const CopyPrompt = ({ update, warning }: { update: StudioUpdate; warning: boolean }) => {
   const [copied, setCopied] = React.useState(false);
   React.useEffect(() => {
     if (!copied) return;
@@ -38,25 +58,17 @@ const CopyCommand = ({ command, warning }: { command: string; warning: boolean }
   return (
     <button
       type="button"
-      className={`inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-xs border px-1.5 py-px font-mono text-xs ${
-        warning
-          ? "border-warning/30 bg-warning/10 text-warning-foreground"
-          : "border-border bg-muted text-foreground"
-      }`}
-      aria-label={copied ? `Copied ${command}` : `Copy ${command}`}
+      className={`sw-btn sw-btn--sm ${warning ? "sw-btn--warning" : ""}`}
+      title={update.command}
       onClick={() => {
-        navigator.clipboard?.writeText(command).then(
+        navigator.clipboard?.writeText(updatePrompt(update)).then(
           () => setCopied(true),
           () => setCopied(false),
         );
       }}
     >
-      <span className="truncate">{command}</span>
-      {copied ? (
-        <CheckIcon className={`size-3 shrink-0 ${warning ? "" : "text-success"}`} />
-      ) : (
-        <CopyIcon className="size-3 shrink-0" />
-      )}
+      {copied ? <CheckIcon /> : <CopyIcon />}
+      {copied ? "Copied" : "Copy prompt"}
     </button>
   );
 };
@@ -69,7 +81,7 @@ export const UpdateBanner = ({ update }: { update: StudioUpdate | undefined }) =
   return (
     <div
       role="status"
-      className={`relative z-10 flex flex-none flex-wrap items-center gap-x-2 gap-y-1 border-b border-border px-4 py-2 text-sm ${
+      className={`relative z-10 flex flex-none flex-wrap items-center gap-x-2 gap-y-1 border-b border-border py-1.5 ps-4 pe-2.5 text-sm ${
         major ? "bg-warning/8 text-warning-foreground" : "text-fg-secondary"
       }`}
     >
@@ -96,24 +108,20 @@ export const UpdateBanner = ({ update }: { update: StudioUpdate | undefined }) =
           <ExternalIcon />
         </a>
       )}
-      <span
-        className={`flex min-w-0 items-center gap-1.5 ${major ? "text-warning-foreground/80" : ""}`}
-      >
-        Run <CopyCommand command={update.command} warning={major} />
+      <span className="ml-auto flex flex-none items-center gap-2">
+        <CopyPrompt update={update} warning={major} />
+        <button
+          type="button"
+          aria-label="Dismiss"
+          className={`sw-btn sw-btn--sm sw-btn--icon ${major ? "sw-btn--warning" : "sw-btn--ghost"}`}
+          onClick={() => {
+            storeDismissed(update.latest);
+            setDismissed(update.latest);
+          }}
+        >
+          <XIcon />
+        </button>
       </span>
-      <button
-        type="button"
-        aria-label="Dismiss"
-        className={`sw-btn sw-btn--xs sw-btn--icon sw-btn--ghost ml-auto ${
-          major ? "text-warning-foreground" : ""
-        }`}
-        onClick={() => {
-          storeDismissed(update.latest);
-          setDismissed(update.latest);
-        }}
-      >
-        <XIcon />
-      </button>
     </div>
   );
 };

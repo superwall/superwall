@@ -10,7 +10,7 @@ export { StudioShell } from "./components/chrome/StudioShell";
 export { DownloadScreenshot } from "./components/DownloadScreenshot";
 export { PreviewOnDevice } from "./components/PreviewOnDevice";
 export { Tooltip } from "./components/Tooltip";
-export { UpdateBanner } from "./components/UpdateBanner";
+export { UpdateBanner, updatePrompt } from "./components/UpdateBanner";
 export { TopBar } from "./components/chrome/TopBar";
 export { VariablesPanel } from "./components/panels/VariablesPanel";
 export { Segmented, Select, Switch } from "./components/controls";

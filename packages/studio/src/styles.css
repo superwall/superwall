@@ -339,6 +339,20 @@
     background-color: color-mix(in oklch, var(--primary) 90%, transparent);
   }
 
+  .sw-btn--warning {
+    border-color: color-mix(in oklch, var(--warning) 30%, transparent);
+    background-color: color-mix(in oklch, var(--warning) 10%, transparent);
+    color: var(--warning-foreground);
+  }
+
+  .sw-btn--warning:is(:hover, [aria-pressed="true"], [aria-expanded="true"]):not(
+      :disabled,
+      [aria-disabled="true"]
+    ) {
+    border-color: color-mix(in oklch, var(--warning) 45%, transparent);
+    background-color: color-mix(in oklch, var(--warning) 18%, transparent);
+  }
+
   .sw-btn--ghost {
     border-color: transparent;
     color: var(--fg-secondary);

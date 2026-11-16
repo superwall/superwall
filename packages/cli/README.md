@@ -49,7 +49,9 @@ breaking changes and a link to its release notes. A beta compares against the
 newest beta (`superwall@next`). The check reads a once-a-day cache, so it never
 slows a command, and stdout stays clean under `--json`. The studio
 `superwall dev` opens shows the same update as a banner you can dismiss for
-that version.
+that version. Its Copy prompt button copies instructions for your coding agent:
+read the release notes (for a major, list what will break first), run the
+update command, then rebuild your paywalls.
 
 ## Set up your app
 

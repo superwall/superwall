@@ -622,7 +622,9 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   after every command, also under `--json` (agents run with it, stdout stays
   clean), and `dev` prints it after its intro since it never ends. The studio
   gets the same object as `update` in `/__studio/project.json` and shows
-  `UpdateBanner`. Nothing auto-updates a project's pin or stops a command: a
+  `UpdateBanner`, whose Copy prompt hands an agent `updatePrompt()`: review the
+  release notes (and the breaking changes for a major) before running the
+  command, because agents do the upgrade. Nothing auto-updates a project's pin or stops a command: a
   major can break paywalls, so we only prompt. No cache or an unreachable
   registry prints nothing.
 - **Telemetry is anonymous by design**: a random persisted id, enum/boolean/
