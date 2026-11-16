@@ -381,6 +381,7 @@ describe("openEmbeddedSheet", () => {
 
     checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
     checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+    checkoutEvents.dispatch("SHEET_CLOSE", undefined);
 
     await expect(outcome).resolves.toMatchObject({ status: "failed" });
     expect(postMessage.mock.calls.at(-1)?.[0].event_name).toBe("stripe_checkout_fail");
@@ -398,6 +399,7 @@ describe("openEmbeddedSheet", () => {
       const outcome = openEmbeddedSheet(embedded, { paywall: session, referenceName: "primary" });
       checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
       checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+      checkoutEvents.dispatch("SHEET_CLOSE", undefined);
       return outcome;
     };
 
@@ -470,6 +472,7 @@ describe("openEmbeddedSheet", () => {
       const outcome = openEmbeddedSheet(embedded);
       checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
       checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+      checkoutEvents.dispatch("SHEET_CLOSE", undefined);
 
       await expect(outcome).resolves.toEqual({
         status: "failed",
@@ -477,6 +480,62 @@ describe("openEmbeddedSheet", () => {
       });
       expect(fetchMock).not.toHaveBeenCalled();
     });
+  });
+
+  it("keeps a declined sheet open for a retry, and settles completed when it is paid", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ status: "pending" }))),
+    );
+    const { session, postMessage } = fakeSession();
+    const failures = vi.fn();
+    const settled = vi.fn();
+    const outcome = openEmbeddedSheet(
+      embedded,
+      { paywall: session, referenceName: "primary" },
+      failures,
+    );
+    void outcome.then(settled);
+
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+    checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+    await vi.waitFor(() =>
+      expect(failures).toHaveBeenCalledWith({ reason: "unknown", store: "stripe" }),
+    );
+    expect(settled).not.toHaveBeenCalled();
+
+    checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
+    await expect(outcome).resolves.toEqual({ status: "completed" });
+    expect(failures).toHaveBeenCalledTimes(1);
+    expect(postMessage.mock.calls.map(([message]) => message.event_name)).not.toContain(
+      "stripe_checkout_abandon",
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("never calls back a failure whose lookup ends after the retry was paid", async () => {
+    let answer: ((response: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>((resolve) => (answer = resolve))),
+    );
+    const { session } = fakeSession();
+    const failures = vi.fn();
+    const outcome = openEmbeddedSheet(
+      embedded,
+      { paywall: session, referenceName: "primary" },
+      failures,
+    );
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+    checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+    checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
+    await expect(outcome).resolves.toEqual({ status: "completed" });
+
+    await vi.waitFor(() => expect(answer).toBeDefined());
+    answer?.(new Response(JSON.stringify({ status: "completed" })));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(failures).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it("gives up waiting for Stripe after 10 seconds, not before", async () => {

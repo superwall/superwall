@@ -140,6 +140,7 @@ export const usePurchase = <
       const product = session.getSnapshot().productsByReference[reference];
       const teleporter = teleportFor(session);
       const { postPurchase, stripeMetadata, prepaidCards } = options ?? {};
+      clearWebFailure(session);
       if (
         product &&
         sessionsFor(session).isStripeProduct(reference) &&
@@ -192,7 +193,6 @@ export const usePurchase = <
         );
         return { status: "failed", product };
       }
-      clearWebFailure(session);
       if (teleporter.kind === "page" || !teleporter.inFlight()) {
         return session.purchase(input, options);
       }

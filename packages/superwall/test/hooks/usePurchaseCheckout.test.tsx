@@ -694,6 +694,42 @@ describe("usePurchase when a web payment fails", () => {
     });
     expect(result.current.purchase.failure).not.toMatchObject({ reason: "insufficient_funds" });
   });
+
+  it("drops a web failure when a custom store purchase starts", async () => {
+    type Holder = typeof window & { webPaywallCtrl?: { props?: { clientSurface?: unknown } } };
+    (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-direct" } };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+    try {
+      const rendered = renderWithProvider(
+        () => ({ session: useSuperwallSession(), purchase: usePurchase() }),
+        {
+          config: { ...testConfig, checkout: "applePay" },
+          host: {
+            products: [...products, { reference: "custom", productId: "custom|gold" }],
+            device: { platform: "Android", publicApiKey: "pk_test" },
+          },
+        },
+      );
+      await flush();
+      const { result } = rendered;
+      vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue(declined);
+      await act(async () => {
+        await result.current.purchase.purchase("primary");
+      });
+      expect(result.current.purchase.failure).toMatchObject({ reason: "insufficient_funds" });
+
+      act(() => {
+        void result.current.purchase.purchase("custom");
+      });
+      expect(result.current.purchase.failure).toBeUndefined();
+    } finally {
+      delete (window as Holder).webPaywallCtrl;
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("usePurchase callbacks", () => {
@@ -749,6 +785,81 @@ describe("usePurchase callbacks", () => {
       ["submit", "primary"],
       ["complete", "primary"],
     ]);
+  });
+
+  const declineInSheet = async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              status: "pending",
+              failure: { code: "card_declined", declineCode: "insufficient_funds" },
+            }),
+          ),
+      ),
+    );
+    const rendered = await renderWithCallbacks("sheet");
+    vi.spyOn(rendered.sessions, "begin").mockResolvedValue(embedded);
+    let settled = false;
+    let outcome: Promise<unknown> | undefined;
+    act(() => {
+      outcome = rendered.result.current.buyer.purchase("primary").finally(() => {
+        settled = true;
+      });
+    });
+    await flush();
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+    checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+    await act(async () => {
+      await flush();
+    });
+    return { ...rendered, outcome: () => outcome, settled: () => settled };
+  };
+
+  it("failure while a declined sheet stays open, then complete when the retry is paid", async () => {
+    const { result, calls, outcome, settled } = await declineInSheet();
+    try {
+      expect(settled()).toBe(false);
+      expect(calls).toEqual([
+        ["start", "primary"],
+        [
+          "failure",
+          expect.objectContaining({
+            reason: "insufficient_funds",
+            product: expect.objectContaining({ reference: "primary" }),
+          }),
+        ],
+      ]);
+      expect(result.current.buyer.failure).toMatchObject({ reason: "insufficient_funds" });
+
+      checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
+      await act(async () => {
+        await expect(outcome()).resolves.toMatchObject({ status: "completed" });
+      });
+      expect(calls.at(-1)).toEqual(["complete", "primary"]);
+      expect(calls.filter(([name]) => name === "failure")).toHaveLength(1);
+      expect(result.current.buyer.failure).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("settles failed with why once a declined sheet is closed, calling back only once", async () => {
+    const { calls, outcome } = await declineInSheet();
+    try {
+      checkoutEvents.dispatch("SHEET_CLOSE", undefined);
+      await act(async () => {
+        await expect(outcome()).resolves.toMatchObject({
+          status: "failed",
+          failure: { reason: "insufficient_funds" },
+        });
+      });
+      expect(calls.map(([name]) => name)).toEqual(["start", "failure"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("failure with the product and why, when Apple Pay is declined", async () => {

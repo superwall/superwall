@@ -42,7 +42,11 @@ const { purchase } = usePurchase({
 ```
 
 A store product bought through the SDK reports no reason, so the notice falls
-back to the generic copy.
+back to the generic copy. `annual` here is a store product: to see a reason,
+make it a Stripe test price (`test:price_…`, as `examples/apple-pay` sells).
+Stripe's sheet stays open after a decline so the shopper can try another
+card: `onFailure` fires at the decline, and `purchase()` resolves only once
+the sheet is paid (`completed`) or closed (`failed`, with that failure).
 
 **Events fire for anything the SDK reports**, whoever started it:
 

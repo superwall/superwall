@@ -408,6 +408,7 @@ const sheetFailure = async (
 export const openEmbeddedSheet = (
   embedded: EmbeddedCheckoutSession,
   host?: { paywall: PaywallSession; referenceName: string; tappedAt?: number },
+  onFailure?: (failure: CheckoutFailure) => void,
 ): Promise<WebPurchaseOutcome> =>
   new Promise((resolve) => {
     const events = host ? hostFor(host.paywall) : null;
@@ -415,6 +416,8 @@ export const openEmbeddedSheet = (
       ? contextFor(host.paywall, host.referenceName, embedded.checkoutContextId)
       : null;
     let opened = false;
+    let settled = false;
+    let failed: Promise<CheckoutFailure> | null = null;
     const diagnostics =
       context && events
         ? checkoutDiagnostics.track(
@@ -452,23 +455,27 @@ export const openEmbeddedSheet = (
       checkoutEvents.subscribe("PAYMENT_ERROR", ({ session: errored }) => {
         if (!isOurs(errored)) return;
         if (context) events?.failed(context);
-        finish(
-          host
-            ? sheetFailure(host.paywall, embedded).then((failure) => ({
-                status: "failed",
-                failure,
-              }))
-            : { status: "failed", failure: unknownFailure() },
-        );
+        const lookup = host
+          ? sheetFailure(host.paywall, embedded)
+          : Promise.resolve(unknownFailure());
+        failed = lookup;
+        void lookup.then((failure) => {
+          if (!settled && failed === lookup) onFailure?.(failure);
+        });
       }),
       checkoutEvents.subscribe("SHEET_CLOSE", () => {
         if (!opened) return;
+        if (failed) {
+          finish(failed.then((failure) => ({ status: "failed", failure })));
+          return;
+        }
         if (context) events?.abandoned(context);
         finish({ status: "abandoned" });
       }),
     ];
 
     const finish = (outcome: WebPurchaseOutcome | Promise<WebPurchaseOutcome>) => {
+      settled = true;
       clearTimeout(readyTimeout);
       stopLoading();
       unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -491,14 +498,25 @@ export const purchaseOnWeb = async (
   const stopWatching = checkoutEvents.subscribe("CHECKOUT_SUBMITTED", ({ session }) => {
     if (session.referenceName === referenceName) events.emit("submit", { referenceName });
   });
-  const outcome = await runWebPurchase(paywall, referenceName, requested, options).finally(
-    stopWatching,
-  );
+  let reported: CheckoutFailure | undefined;
+  const reportFailure = (failure: CheckoutFailure) => {
+    reported = failure;
+    recordWebFailure(paywall, referenceName, failure);
+    events.emit("failure", { referenceName, failure });
+  };
+  const outcome = await runWebPurchase(
+    paywall,
+    referenceName,
+    requested,
+    options,
+    reportFailure,
+  ).finally(stopWatching);
   if (outcome.status === "failed") {
-    recordWebFailure(paywall, referenceName, outcome.failure);
-    events.emit("failure", { referenceName, failure: outcome.failure });
-  } else if (outcome.status === "completed") events.emit("complete", { referenceName });
-  else events.emit("abandon", { referenceName });
+    if (outcome.failure !== reported) reportFailure(outcome.failure);
+  } else if (outcome.status === "completed") {
+    clearWebFailure(paywall);
+    events.emit("complete", { referenceName });
+  } else events.emit("abandon", { referenceName });
   return outcome;
 };
 
@@ -507,6 +525,7 @@ const runWebPurchase = async (
   referenceName: string,
   requested: CheckoutMode,
   options: WebPurchaseOptions,
+  onFailure: (failure: CheckoutFailure) => void,
 ): Promise<WebPurchaseOutcome> => {
   const tappedAt = Date.now();
   const sessions = sessionsFor(paywall);
@@ -533,7 +552,7 @@ const runWebPurchase = async (
           });
 
     if (result.directive === "embedded") {
-      return await openEmbeddedSheet(result, { paywall, referenceName, tappedAt });
+      return await openEmbeddedSheet(result, { paywall, referenceName, tappedAt }, onFailure);
     }
     if (result.directive === "redirect") return await openHostedCheckout(paywall, result);
     return { status: "failed", failure: unknownFailure() };

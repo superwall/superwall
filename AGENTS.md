@@ -231,7 +231,10 @@ The stack, bottom to top — each layer depends only on the one below it:
       it is read from `checkout/status`'s `failure` and a teleport's from
       `checkout/teleport/status`. A reason nobody reported is `unknown`,
       never a guess, and a status lookup that fails is logged and settles
-      `unknown`, never "no failure". `flow.ts` holds the last failure per
+      `unknown`, never "no failure". Stripe's sheet stays open after a decline
+      for another card, so `openEmbeddedSheet` reports each decline as it
+      happens and settles only when the sheet is paid (`completed`, which
+      clears the failure) or closed (`failed`). `flow.ts` holds the last failure per
       paywall (`usePurchase().failure`) and emits each purchase step on
       `purchaseEventsFor(paywall)`, which feeds the `usePurchase` callbacks
       (`onStart`, `onSubmit`, `onComplete`, `onAbandon`, `onFailure`) — ours, never
