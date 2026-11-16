@@ -11,6 +11,7 @@ import type {
   StudioActionProgress,
   StudioActionResult,
   StudioStatus,
+  StudioUpdate,
 } from "@superwall/studio/contract";
 import { loadSurfaceConfig } from "../config/load";
 import type { DiscoveredSurface } from "../discover";
@@ -113,6 +114,7 @@ export type StudioActions = ScreenshotSource & {
     options?: { version?: number },
   ): Promise<StudioActionResult>;
   status(surface: DiscoveredSurface): Promise<StudioStatus>;
+  update?(): StudioUpdate | undefined;
 };
 
 const ACTION_NAMES: readonly StudioActionName[] = ["push", "promote", "publish"];
@@ -206,9 +208,11 @@ const previewPlugin = (
           Promise.all([buildStudioProjects(readProjects(roots)), appScheme])
             .then(([payload, scheme]) => {
               const network = server.resolvedUrls?.network[0];
+              const update = studio?.update?.();
               json(res, {
                 ...payload,
                 capabilities: { actions: Boolean(studio) },
+                ...(update === undefined ? {} : { update }),
                 ...(scheme?.scheme === undefined ? {} : { scheme: scheme.scheme }),
                 ...(network === undefined ? {} : { networkOrigin: new URL(network).origin }),
               });

@@ -24,12 +24,17 @@ import {
   type StudioScreenshot,
 } from "@/core/paywalls/project/framework";
 import { readLock } from "@/core/paywalls/project/lock";
-import { appScheme, detectAppTransportSecurity, schemeSearchRoots } from "@/core/paywalls/project/scheme";
+import {
+  appScheme,
+  detectAppTransportSecurity,
+  schemeSearchRoots,
+} from "@/core/paywalls/project/scheme";
 import { requireApi } from "@/core/paywalls/project/session";
 import { collectProjectDeclarations } from "@/core/paywalls/project/types";
 import { warnNotPortable } from "@/core/paywalls/source/portability";
 import { collectSourceFiles } from "@/core/paywalls/source/source";
 import { pushSource } from "@/core/paywalls/source/source-push";
+import { resolveUpdate } from "@/core/support/upgrade";
 import { VERSION } from "@/environment";
 
 type Sample = { properties?: Record<string, unknown>; live?: boolean };
@@ -55,7 +60,9 @@ const resolveScreenshots = (session: PreviewImages): StudioScreenshot[] => {
   const reviewed =
     reviewUrl === undefined
       ? undefined
-      : ([...regular].reverse().find((page) => page.page_index === session.apple_review_image?.page_index) ??
+      : ([...regular]
+          .reverse()
+          .find((page) => page.page_index === session.apple_review_image?.page_index) ??
         regular.at(-1));
   const hosts = new Map<number | undefined, { label: string; overlays: number }>();
   const shots: StudioScreenshot[] = [];
@@ -64,7 +71,10 @@ const resolveScreenshots = (session: PreviewImages): StudioScreenshot[] => {
   for (const page of pages) {
     const url = page.app_store_image?.url ?? (page === reviewed ? reviewUrl : page.url);
     if (page.kind === "overlay") {
-      const host = hosts.get(page.page_index) ?? { label: `Page ${(page.page_index ?? 0) + 1}`, overlays: 0 };
+      const host = hosts.get(page.page_index) ?? {
+        label: `Page ${(page.page_index ?? 0) + 1}`,
+        overlays: 0,
+      };
       host.overlays += 1;
       hosts.set(page.page_index, host);
       const label = page.page_name?.trim() || `${host.label} · Overlay ${host.overlays}`;
@@ -90,11 +100,14 @@ const firstApp = (apps: Record<string, string>): string | undefined =>
 export function createStudioActions(
   framework: Framework,
   project: FrameworkProject,
+  dir: string = project.root,
 ): StudioActions {
   let api: SuperwallApi | undefined;
   const ensureApi = async () => (api ??= await requireApi(false));
 
-  const readPreviewImages = async (surface: FrameworkSurface): Promise<PreviewImages | undefined> => {
+  const readPreviewImages = async (
+    surface: FrameworkSurface,
+  ): Promise<PreviewImages | undefined> => {
     const lock = readLock(project.superwallDir);
     const bindings = (surface.kind === "paywall" ? lock.paywalls : lock.funnels)[surface.id];
     const bound = bindings === undefined ? undefined : Object.values(bindings)[0];
@@ -340,6 +353,10 @@ export function createStudioActions(
       } catch (error) {
         return { unreachable: reason(error) };
       }
+    },
+
+    update() {
+      return resolveUpdate(dir);
     },
   };
 }

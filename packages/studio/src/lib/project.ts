@@ -1,3 +1,4 @@
+import type { StudioUpdate } from "./contract";
 import { parsePresentation } from "./presentation";
 import type {
   StudioAppIdentity,
@@ -17,6 +18,7 @@ export type StudioProjectPayload = {
   samples: SampleDefaults;
   diagnostics: string[];
   capabilities: { actions: boolean };
+  update?: StudioUpdate;
 };
 
 const isStringRecord = (value: unknown): value is Record<string, string> =>
@@ -92,6 +94,24 @@ const parseOrigin = (value: unknown): StudioOrigin | undefined => {
   return undefined;
 };
 
+const UPDATE_KINDS: ReadonlySet<string> = new Set(["patch", "minor", "major"]);
+
+const parseUpdate = (value: unknown): StudioUpdate | undefined => {
+  if (!isRecord(value)) return undefined;
+  const { current, latest, kind, command, notes } = value;
+  if (
+    typeof current !== "string" ||
+    typeof latest !== "string" ||
+    typeof command !== "string" ||
+    typeof notes !== "string" ||
+    typeof kind !== "string" ||
+    !UPDATE_KINDS.has(kind)
+  ) {
+    return undefined;
+  }
+  return { current, latest, kind: kind as StudioUpdate["kind"], command, notes };
+};
+
 export const parseProjectPayload = (data: unknown): StudioProjectPayload => {
   if (!isRecord(data)) {
     throw new Error("project payload is not an object");
@@ -104,6 +124,7 @@ export const parseProjectPayload = (data: unknown): StudioProjectPayload => {
   const group = (key: string): Record<string, unknown> =>
     isRecord(samples[key]) ? (samples[key] as Record<string, unknown>) : {};
   const app = parseApp(data.app);
+  const update = parseUpdate(data.update);
   return {
     title: typeof data.title === "string" ? data.title : "superwall",
     ...(app === undefined ? {} : { app }),
@@ -117,5 +138,6 @@ export const parseProjectPayload = (data: unknown): StudioProjectPayload => {
       params: group("params"),
     },
     capabilities: { actions: capabilities.actions === true },
+    ...(update === undefined ? {} : { update }),
   };
 };

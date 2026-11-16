@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import pc from "picocolors";
+import type { StudioUpdate, StudioUpdateKind } from "@superwall/studio/contract";
 import type { CommandContext } from "@/program/command";
 import type { SkillsUpdate } from "@/core/support/skills";
 import { spawnStream } from "@/core/workflows/agent/drivers/spawn";
@@ -118,19 +119,17 @@ export async function flushUpdateCheck(capMs = 2000): Promise<void> {
   ]);
 }
 
-export type UpdateKind = "patch" | "minor" | "major";
+export type UpdateKind = StudioUpdateKind;
 
-export type AvailableUpdate = {
-  current: string;
-  latest: string;
-  kind: UpdateKind;
-  command: string;
-  notes: string;
-};
+export type AvailableUpdate = StudioUpdate;
 
 function resolveUpdateKind(latest: string, current: string): UpdateKind {
-  const [l = 0, lm = 0] = splitPrerelease(latest)[0].split(".").map((n) => parseInt(n, 10));
-  const [c = 0, cm = 0] = splitPrerelease(current)[0].split(".").map((n) => parseInt(n, 10));
+  const [l = 0, lm = 0] = splitPrerelease(latest)[0]
+    .split(".")
+    .map((n) => parseInt(n, 10));
+  const [c = 0, cm = 0] = splitPrerelease(current)[0]
+    .split(".")
+    .map((n) => parseInt(n, 10));
   if (l !== c) return "major";
   return lm !== cm ? "minor" : "patch";
 }
@@ -264,7 +263,9 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
     if (project && outdated !== false) {
       ui.warn(renderProjectPin(project, latest));
     } else if (project) {
-      ui.info(`This project's superwall \`${project.version}\` is the latest - nothing to upgrade.`);
+      ui.info(
+        `This project's superwall \`${project.version}\` is the latest - nothing to upgrade.`,
+      );
     } else {
       ui.info(
         "You're running via npx, which always fetches the latest published version - nothing to upgrade.",

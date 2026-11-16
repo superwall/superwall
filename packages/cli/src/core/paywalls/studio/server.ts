@@ -62,7 +62,7 @@ export async function runStudio(input: StudioInput, deps: StudioDeps = {}): Prom
 
   const requestedPort = input.port;
   const runtimeUrl = process.env.SUPERWALL_RUNTIME_URL?.replace(/\/+$/, "");
-  const studio = createStudioActions(framework, project);
+  const studio = createStudioActions(framework, project, dir);
 
   const server = await framework.startPreviewServer(
     projects.map((one) => one.root),
@@ -120,7 +120,9 @@ export async function runStudio(input: StudioInput, deps: StudioDeps = {}): Prom
   const scheme = await studio.appScheme?.().catch(() => undefined);
   const plist = scheme?.blocksLocalNetworking;
   if (plist !== undefined) {
-    ui.warn("This app can't load paywalls from the dev server: App Transport Security blocks plain http.");
+    ui.warn(
+      "This app can't load paywalls from the dev server: App Transport Security blocks plain http.",
+    );
     const allowed = input.interactive
       ? await ui.confirm({
           message: `Allow local previewing in ${path.basename(plist)}? Development builds only.`,

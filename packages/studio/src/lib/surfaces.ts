@@ -5,6 +5,7 @@ import type {
   StudioActionResult,
   StudioScreenshot,
   StudioStatus,
+  StudioUpdate,
 } from "./contract";
 import type { StudioPresentation } from "./presentation";
 import type { SampleDefaults } from "./variables";
@@ -109,6 +110,7 @@ export type StudioSource = {
   previewLink?: (surface: StudioSurface) => Promise<string>;
   screenshots?: (surface: StudioSurface) => Promise<StudioScreenshot[] | undefined>;
   compareHint?: string;
+  update?: StudioUpdate;
 };
 
 export const hasActions = (source: StudioSource): boolean => source.actions !== undefined;

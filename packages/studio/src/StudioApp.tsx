@@ -1,5 +1,6 @@
 import * as React from "react";
 import { StudioShell } from "./components/chrome/StudioShell";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { SurfaceEditor } from "./screens/SurfaceEditor";
 import { SurfaceList } from "./screens/SurfaceList";
 import { surfacePath } from "./lib/preview";
@@ -69,6 +70,7 @@ export const StudioApp = ({
   return (
     <StudioHostProvider mode={mode} home={home}>
       <StudioShell>
+        <UpdateBanner update={source.update} />
         {active ? (
           <SurfaceEditor
             source={source}

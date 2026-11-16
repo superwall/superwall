@@ -50,3 +50,13 @@ export type StudioScreenshot = {
   label: string;
   url: string;
 };
+
+export type StudioUpdateKind = "patch" | "minor" | "major";
+
+export type StudioUpdate = {
+  current: string;
+  latest: string;
+  kind: StudioUpdateKind;
+  command: string;
+  notes: string;
+};

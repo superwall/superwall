@@ -126,3 +126,46 @@ describe("the dev server in a folder whose path contains a colon", () => {
     expect(await changed).toBe(served);
   }, 60_000);
 });
+
+describe("the studio's project.json", () => {
+  const UPDATE = {
+    current: "2.5.2",
+    latest: "3.0.0",
+    kind: "major",
+    command: "cd superwall && pnpm add superwall@latest",
+    notes: "https://github.com/superwall/superwall/releases/tag/v3.0.0",
+  } as const;
+  const studio = (update?: () => typeof UPDATE | undefined) => ({
+    run: async () => ({ ok: false as const, error: "unused" }),
+    status: async () => ({}),
+    ...(update === undefined ? {} : { update }),
+  });
+
+  const projectJson = async (options: Parameters<typeof startPreviewServer>[1]) => {
+    const server = await startPreviewServer(FIXTURE, options);
+    try {
+      const address = server.httpServer?.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const response = await fetch(`http://127.0.0.1:${port}/__studio/project.json`);
+      return (await response.json()) as Record<string, unknown>;
+    } finally {
+      await server.close();
+    }
+  };
+
+  it("carries the update the CLI resolved", async () => {
+    const payload = await projectJson({ port: 0, host: "127.0.0.1", studio: studio(() => UPDATE) });
+
+    expect(payload.update).toEqual(UPDATE);
+  }, 60_000);
+
+  it("leaves update out when the CLI has none or doesn't offer one", async () => {
+    const none = await projectJson({ port: 0, host: "127.0.0.1", studio: studio(() => undefined) });
+    const older = await projectJson({ port: 0, host: "127.0.0.1", studio: studio() });
+    const bare = await projectJson({ port: 0, host: "127.0.0.1" });
+
+    expect(none).not.toHaveProperty("update");
+    expect(older).not.toHaveProperty("update");
+    expect(bare).not.toHaveProperty("update");
+  }, 60_000);
+});
