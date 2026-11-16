@@ -27,7 +27,7 @@ const storeDismissed = (version: string) => {
   }
 };
 
-const CopyCommand = ({ command }: { command: string }) => {
+const CopyCommand = ({ command, warning }: { command: string; warning: boolean }) => {
   const [copied, setCopied] = React.useState(false);
   React.useEffect(() => {
     if (!copied) return;
@@ -38,7 +38,11 @@ const CopyCommand = ({ command }: { command: string }) => {
   return (
     <button
       type="button"
-      className="inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-xs border border-border bg-muted px-1.5 py-px font-mono text-xs text-foreground"
+      className={`inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-xs border px-1.5 py-px font-mono text-xs ${
+        warning
+          ? "border-warning/30 bg-warning/10 text-warning-foreground"
+          : "border-border bg-muted text-foreground"
+      }`}
       aria-label={copied ? `Copied ${command}` : `Copy ${command}`}
       onClick={() => {
         navigator.clipboard?.writeText(command).then(
@@ -49,7 +53,7 @@ const CopyCommand = ({ command }: { command: string }) => {
     >
       <span className="truncate">{command}</span>
       {copied ? (
-        <CheckIcon className="size-3 shrink-0 text-success" />
+        <CheckIcon className={`size-3 shrink-0 ${warning ? "" : "text-success"}`} />
       ) : (
         <CopyIcon className="size-3 shrink-0" />
       )}
@@ -65,20 +69,20 @@ export const UpdateBanner = ({ update }: { update: StudioUpdate | undefined }) =
   return (
     <div
       role="status"
-      className={`flex flex-none flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-4 py-2 text-sm ${
-        major ? "border-warning/40 bg-warning/12" : "border-border bg-muted/60"
+      className={`relative z-10 flex flex-none flex-wrap items-center gap-x-2 gap-y-1 border-b border-border px-4 py-2 text-sm ${
+        major ? "bg-warning/8 text-warning-foreground" : "text-fg-secondary"
       }`}
     >
-      <span
-        className={`flex flex-none [&>svg]:size-4 ${major ? "text-warning-foreground" : "text-fg-tertiary"}`}
-      >
+      <span className={`flex flex-none [&>svg]:size-4 ${major ? "" : "text-fg-tertiary"}`}>
         {major ? <AlertTriangleIcon /> : <InfoCircleIcon />}
       </span>
       <span className="min-w-0">
-        <span className="font-medium">{major ? "Major update available" : "Update available"}</span>{" "}
-        <span className="text-fg-secondary">
-          superwall {update.current} → {update.latest}
-          {major ? " · it may contain breaking changes." : ""}
+        <span className={major ? "" : "text-foreground"}>
+          {major ? "Major update available" : "Update available"}
+        </span>{" "}
+        <span className={major ? "text-warning-foreground/80" : ""}>
+          · superwall {update.current} → {update.latest}
+          {major ? ", it may contain breaking changes" : ""}
         </span>
       </span>
       {major && (
@@ -86,19 +90,23 @@ export const UpdateBanner = ({ update }: { update: StudioUpdate | undefined }) =
           href={update.notes}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-foreground underline underline-offset-2 [&>svg]:size-3"
+          className="inline-flex items-center gap-1 underline underline-offset-2 [&>svg]:size-3"
         >
           Release notes
           <ExternalIcon />
         </a>
       )}
-      <span className="flex min-w-0 items-center gap-1.5 text-fg-secondary">
-        Run <CopyCommand command={update.command} />
+      <span
+        className={`flex min-w-0 items-center gap-1.5 ${major ? "text-warning-foreground/80" : ""}`}
+      >
+        Run <CopyCommand command={update.command} warning={major} />
       </span>
       <button
         type="button"
         aria-label="Dismiss"
-        className="sw-btn sw-btn--xs sw-btn--icon sw-btn--ghost ml-auto"
+        className={`sw-btn sw-btn--xs sw-btn--icon sw-btn--ghost ml-auto ${
+          major ? "text-warning-foreground" : ""
+        }`}
         onClick={() => {
           storeDismissed(update.latest);
           setDismissed(update.latest);

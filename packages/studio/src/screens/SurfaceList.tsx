@@ -5,6 +5,7 @@ import { InlineCode } from "../components/InlineCode";
 import { OpenInApp } from "../components/OpenInApp";
 import { SurfaceCard } from "../components/SurfaceCard";
 import { TopBar } from "../components/chrome/TopBar";
+import { UpdateBanner } from "../components/UpdateBanner";
 import { type StudioSource, type StudioStatus, type StudioSurface } from "../lib/surfaces";
 import { hostStateFor, studioDefaults } from "../lib/host";
 import { surfacePath } from "../lib/preview";
@@ -90,6 +91,7 @@ export const SurfaceList = ({
           device ? <OpenInApp origin={window.location.origin} scheme={source.scheme} /> : undefined
         }
       />
+      <UpdateBanner update={source.update} />
 
       <div className="flex-1 overflow-y-auto" ref={scroller}>
         <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 p-3 sm:p-6 lg:p-10">
