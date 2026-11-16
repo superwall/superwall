@@ -97,6 +97,11 @@ const reason = (error: unknown): string => (error instanceof Error ? error.messa
 const firstApp = (apps: Record<string, string>): string | undefined =>
   apps.ios ?? Object.values(apps)[0];
 
+export function selectServedVersion(dir: string): string {
+  const served = frameworkVersion(dir);
+  return served === "unknown" ? VERSION : served;
+}
+
 export function createStudioActions(
   framework: Framework,
   project: FrameworkProject,
@@ -356,7 +361,7 @@ export function createStudioActions(
     },
 
     update() {
-      return resolveUpdate(dir);
+      return resolveUpdate(dir, selectServedVersion(project.root));
     },
   };
 }

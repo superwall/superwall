@@ -11,7 +11,7 @@ import { VERSION } from "@/environment";
 import { ui } from "@/ui";
 import { LAYOUT_HINT } from "../pipeline/output";
 import { requireProject, resolveProjectDirs } from "../pipeline/selection";
-import { createStudioActions } from "./actions";
+import { createStudioActions, selectServedVersion } from "./actions";
 
 interface StudioInput {
   dirs: readonly string[];
@@ -27,8 +27,9 @@ export interface StudioDeps {
 }
 
 function printDevUpdate(dir: string): void {
-  refreshUpdateCheck();
-  const update = resolveUpdate(dir);
+  const served = selectServedVersion(dir);
+  refreshUpdateCheck(served);
+  const update = resolveUpdate(dir, served);
   if (!update) return;
   if (update.kind === "major") ui.warn(renderUpdateNotice(update));
   else ui.info(renderUpdateNotice(update));

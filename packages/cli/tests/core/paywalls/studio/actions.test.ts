@@ -1055,6 +1055,37 @@ test("a screenshot request that fails for any other reason is not swallowed", as
   );
 });
 
+test("update compares the project's own superwall, not the CLI that serves it", () => {
+  const home = useHome();
+  const dir = scaffold().root;
+  for (const [file, content] of Object.entries({
+    [path.join("superwall", "package.json")]: JSON.stringify({ dependencies: { superwall: "2.0.0" } }),
+    [path.join("superwall", "node_modules", "superwall", "package.json")]: JSON.stringify({
+      name: "superwall",
+      version: "2.0.0",
+    }),
+  })) {
+    fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    fs.writeFileSync(path.join(dir, file), content);
+  }
+  const project = {
+    ...scaffold(),
+    root: path.join(dir, "superwall"),
+    superwallDir: path.join(dir, "superwall"),
+  };
+  fs.writeFileSync(
+    path.join(home, "config.json"),
+    JSON.stringify({ updateCheck: { latest: VERSION, tag: "latest", checkedAt: new Date().toISOString() } }),
+  );
+  assert.deepEqual(createStudioActions(framework, project, dir).update?.(), {
+    current: "2.0.0",
+    latest: VERSION,
+    kind: "minor",
+    command: "cd superwall && npm i superwall@latest",
+    notes: `https://github.com/superwall/superwall/releases/tag/v${VERSION}`,
+  });
+});
+
 test("update hands the studio the cached release and the project's own update command", () => {
   const home = useHome();
   const dir = scaffold().root;
