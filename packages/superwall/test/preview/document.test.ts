@@ -208,7 +208,10 @@ describe("colorSchemeScript", () => {
         '<script type="module" src="./entry.jsx"></script>',
         `<script>window.atEntry = { classes: document.documentElement.className, scheme: document.documentElement.style.colorScheme, background: document.documentElement.style.backgroundColor };</script>`,
       );
-    const dom = new JSDOM(html, { runScripts: "dangerously" });
+    const dom = new JSDOM(html, {
+      runScripts: "dangerously",
+      url: "https://example.superwall.app/",
+    });
     return (dom.window as unknown as { atEntry: Record<string, string> }).atEntry;
   };
 
@@ -251,6 +254,7 @@ describe("colorSchemeScript", () => {
     });
     const dom = new JSDOM(doc().replace('<script type="module" src="./entry.jsx"></script>', ""), {
       runScripts: "dangerously",
+      url: "https://example.superwall.app/",
     });
     expect(dom.window.document.documentElement.className).toBe("light");
   });
