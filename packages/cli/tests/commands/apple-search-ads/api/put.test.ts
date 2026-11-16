@@ -15,15 +15,15 @@ test("asa put refuses a path without a leading slash", async () => {
 });
 
 test("asa put through the parser sends nested -d fields as the body", async () => {
-  const { api, requests } = fakeAsaApi(() => ({ data: { id: 9, status: "PAUSED" } }));
+  const { api, requests } = fakeAsaApi(() => ({ result: { id: 9, status: "PAUSED" } }));
   const result = await runLine("asa put /campaigns/9 -d campaign[status]=PAUSED --json", { api });
   assert.deepEqual(requests.at(-1), {
     method: "PUT",
-    path: "/v2/organizations/org-1/apple-search-ads/proxy/5/api/v5/campaigns/9",
+    path: "/v2/organizations/org-1/apple-search-ads/proxy/5/v1/campaigns/9",
     body: { campaign: { status: "PAUSED" } },
     headers: undefined,
   });
-  assert.deepEqual(result.json, { data: { id: 9, status: "PAUSED" } });
+  assert.deepEqual(result.json, { result: { id: 9, status: "PAUSED" } });
 });
 
 test("an asa put Apple answers with nothing prints ok", async () => {

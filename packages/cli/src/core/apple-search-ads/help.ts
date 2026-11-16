@@ -63,10 +63,10 @@ function formatAsaUsage(op: AsaOperation): string {
   if (op.positional === "ids") parts.push("<id[,id…]>");
   if (op.positional === "query") parts.push("<query>");
   if (op.positional === "adam-id") parts.push("<adam-id>");
-  for (const placeholder of placeholdersOf(op.path)) {
-    if (placeholder === "campaign") parts.push("--campaign <id>");
-    if (placeholder === "adgroup") parts.push("--adgroup <id>");
-    if (placeholder === "adamId" && op.positional !== "adam-id") parts.push("--adam-id <id>");
+  if (placeholdersOf(op.path).includes("adamId") && op.positional !== "adam-id") parts.push("--adam-id <id>");
+  for (const filter of op.filters ?? []) {
+    if (filter.flag === "id" || (filter.flag === "adam-id" && op.positional === "adam-id")) continue;
+    parts.push(filter.required ? `--${filter.flag} <id>` : `[--${filter.flag} <id>]`);
   }
   return parts.join(" ");
 }
@@ -77,20 +77,30 @@ function formatAsaFlags(op: AsaOperation, variants: AsaOperation[]): [string, st
     return [`${cmd(`--${flag.flag}`)}${pc.dim(value)}`, flag.describe];
   });
   const add = (flag: string, text: string) => rows.push([cmd(flag), text]);
-  if (op.body === "object" || op.body === "array") {
+  const bulk = variants.find((variant) => variant.body === "bulk");
+  if (op.body === "object" || bulk?.flags) {
     add("-d key=value", "Another body field; key:=json for numbers and objects");
-    add("--body <json|@file|@->", "The whole request body");
+    add("--body <json|@file|@->", bulk ? "The whole request body; an array goes to the bulk endpoint" : "The whole request body");
+  } else if (bulk) {
+    add("--body <json|@file|@->", "Bulk items instead of ids, as Apple documents them");
   }
-  if (op.body === "selector" || op.body === "report") add("--selector <json|@file|@->", "An Apple selector");
-  if (op.body === "selector") {
-    add("--field --op --values", "One condition, e.g. --field status --op EQUALS --values ENABLED");
+  if (op.body === "array") add("--body <json|@file|@->", "The request body: an array, as Apple documents it");
+  if (op.body === "query" || op.body === "report") {
+    add("--query <json|@file|@->", "An Apple query request: filters, sorting, pagination");
+    add("--field --op --values", "One filter, e.g. --field status --op EQUALS --values ENABLED");
     add("--order-by <field[:asc|desc]>", "Sort");
   }
-  if (op.body === "report") add("--time-zone <UTC|ORTZ>", "Report time zone (default UTC)");
-  if (op.body === "selector" || op.query?.includes("fields")) add("--fields <a,b>", "Only these fields");
+  if (op.body === "report") {
+    add("--start --end <YYYY-MM-DD>", "Report range");
+    add("--granularity <HOURLY|DAILY|WEEKLY|MONTHLY>", "Rows per period (default DAILY)");
+    add("--group-by <a,b>", "Group rows by dimension");
+    add("--fields <a,b>", "Only these fields");
+    if (op.zoned) add("--time-zone <UTC|ORTZ>", "Report time zone (default UTC)");
+  }
+  if (op.body === "geo") add("--entity <Country|AdminArea|Locality>", "What kind of place the ids are");
   if (op.paged) add("--limit <n> --offset <n> --all", "Paging; --all walks every page");
-  if (variants.some((variant) => variant.level === "adgroup")) add("--adgroup-level", "Ad group negatives instead of the campaign's");
   rows.push([cmd("--app <app>"), "The Superwall app whose Apple Search Ads account to use"]);
+  rows.push([cmd("--ad-account-id <id>"), "The Apple Ads ad account (default: the only one the key reaches)"]);
   return rows;
 }
 
@@ -101,7 +111,7 @@ export function renderAsaHelp(words: readonly string[]): string {
     return renderAsaPage({
       path: "asa",
       usage: "<resource> <operation>",
-      summary: "The Apple Search Ads API through Superwall's proxy: no key or token handling",
+      summary: "The Apple Ads Platform API (v1) through Superwall's proxy: no key or token handling",
       children: [
         ...groups.map((name) => ({
           path: `asa ${name}`,

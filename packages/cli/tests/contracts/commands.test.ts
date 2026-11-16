@@ -167,7 +167,7 @@ test("a topic with sections puts each of its commands in exactly one", () => {
 
 const ORDER: Record<string, string[]> = {
   defineCommand: ["name", "summary", "summaryOn", "details", "args", "flags", "examples", "auth", "json", "prompts", "mcp", "channel", "run"],
-  defineCatalog: ["name", "summary", "summaryOn", "details", "flags", "operations", "help", "tools", "examples", "auth", "json", "prompts", "mcp", "channel", "run"],
+  defineCatalog: ["name", "summary", "summaryOn", "details", "strictFlags", "flags", "operations", "help", "tools", "examples", "auth", "json", "prompts", "mcp", "channel", "run"],
   defineResource: ["name", "summary", "appArg", "operations", "nested", "related", "examples"],
   defineAscResource: ["name", "summary", "details", "operations", "examples"],
 };

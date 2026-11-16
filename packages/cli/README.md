@@ -586,23 +586,25 @@ and name the replacement.
 
 ## Apple Search Ads
 
-The **entire** Apple Ads Campaign Management API (v5), proxied by Superwall —
-no client secret, OAuth token, or org id to manage locally. It uses the
-credentials you connect in the dashboard (app → Integrations → Apple Search
-Ads → Advanced); the CLI finds the connected app on its own, or takes
-`--app <id>`.
+The **entire** Apple Ads Platform API (v1), proxied by Superwall — no client
+secret, OAuth token, or account id to manage locally. It uses the credentials
+you connect in the dashboard (app → Integrations → Apple Search Ads →
+Advanced); the CLI finds the connected app on its own, or takes `--app <id>`.
+Without `--ad-account-id`, requests go to the only ad account the key reaches; when it reaches several, pass `--ad-account-id`.
 
 ```bash
 superwall asa campaigns list
-superwall asa campaigns find --field status --op EQUALS --values ENABLED --all
+superwall asa campaigns list --field status --op EQUALS --values ENABLED --all
+superwall asa keywords list --adgroup 456 --order-by text:asc --limit 50
 superwall asa keywords create --campaign 123 --adgroup 456 \
   --text "grammar checker" --match-type EXACT --bid 1.25
 superwall asa reports campaigns --start 2025-01-01 --end 2025-01-31 --group-by countryOrRegion
 ```
 
-Every resource follows the same shape — `asa <resource> <action> [id]`, scoped
-with `--campaign` / `--adgroup` / `--adam-id` — and the catalog is the
-documentation:
+Every resource follows the same shape — `asa <resource> <action> [id]` — and
+lists are Apple queries: `--campaign` / `--adgroup` / `--adam-id` narrow them,
+`--field --op --values` and `--order-by` add a filter and a sort, and `--query`
+takes Apple's whole query request. The catalog is the documentation:
 
 ```bash
 superwall asa docs                          # every endpoint, grouped
@@ -610,10 +612,13 @@ superwall asa docs keywords                 # one resource: usage, flags, Apple 
 superwall asa docs campaigns create         # Apple's own page: fields, enums, examples
 ```
 
-Writes take typed flags (money flags pick up the account's currency),
-`-d key=value` for any other field, or `--body` for the whole payload. Anything
-not covered is `asa get|post|put|delete /path`, sent straight to Apple with
-your access token and org context attached.
+Writes take typed flags (money flags pick up the ad account's currency),
+`-d key=value` for any other field, or `--body` for the whole payload; several
+keyword ids or an array body go to Apple's bulk endpoints. Anything not covered
+is `asa get|post|put|delete /path`, sent straight to Apple with your access
+token and ad account context attached. A path without a version gets `/v1`;
+one that starts with `/v1` or `/api/` is sent as written. Asset upload
+(`POST /v1/assets/upload`) takes form data and isn't supported.
 
 ## For agents and scripts
 

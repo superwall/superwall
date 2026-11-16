@@ -28,32 +28,37 @@ test("extra words are refused before anything is sent", async () => {
   assert.deepEqual(requests, []);
 });
 
-test("a raw path is a GET with -d as query parameters and the org context", async () => {
-  const { api, requests } = fakeAsaApi(() => ({ data: [] }));
-  await runCommand(asa, { words: ["/campaigns"], flags: { d: ["limit=2"], orgId: "40" }, api, json: true });
+test("a raw path is a GET with -d as query parameters and the ad account context", async () => {
+  const { api, requests } = fakeAsaApi(() => ({ result: [] }));
+  await runCommand(asa, { words: ["/campaigns"], flags: { d: ["limit=2"], adAccountId: "40" }, api, json: true });
   assert.deepEqual(requests.at(-1), {
     method: "GET",
-    path: "/v2/organizations/org-1/apple-search-ads/proxy/5/api/v5/campaigns?limit=2",
+    path: "/v2/organizations/org-1/apple-search-ads/proxy/5/v1/campaigns?limit=2",
     body: undefined,
-    headers: { "x-ap-context": "orgId=40" },
+    headers: { "x-ap-context": "adAccountId=40" },
   });
 });
 
 test("me defaults to get, and money flags take the --currency given", async () => {
-  const me = fakeAsaApi(() => ({ data: { userId: 1 } }));
+  const me = fakeAsaApi(() => ({ result: { userId: 1 } }));
   const shown = await runCommand(asa, { words: ["me"], api: me.api, json: true });
-  assert.deepEqual(shown.json, { data: { userId: 1 } });
-  assert.equal(me.requests.at(-1)?.path, "/v2/organizations/org-1/apple-search-ads/proxy/5/api/v5/me");
+  assert.deepEqual(shown.json, { result: { userId: 1 } });
+  assert.equal(me.requests.at(-1)?.path, "/v2/organizations/org-1/apple-search-ads/proxy/5/v1/me");
 
-  const create = fakeAsaApi(() => ({ data: { id: 1 } }));
+  const create = fakeAsaApi(() => ({ result: { id: 1 } }));
   await runCommand(asa, {
     words: ["campaigns", "create"],
-    flags: { name: "Launch", budget: "100", currency: "eur" },
+    flags: { name: "Launch", dailyBudget: "100", currency: "eur", adAccountId: "42" },
     api: create.api,
     json: true,
   });
   const posted = create.requests.find((request) => request.method === "POST");
-  assert.deepEqual(posted?.body, { name: "Launch", budgetAmount: { amount: "100", currency: "EUR" } });
+  assert.deepEqual(posted?.body, {
+    promotedObjectType: "APPSTORE_APP",
+    name: "Launch",
+    dailyBudget: { value: { amount: "100", currency: "EUR" } },
+    adAccountId: 42,
+  });
   assert.ok(!create.requests.some((request) => request.path.endsWith("/acls")));
 });
 

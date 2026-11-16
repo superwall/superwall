@@ -303,7 +303,9 @@ fails the build when one isn't.
 - **Catalogs.** A family driven by a catalog (`apps …`, `products …`, `asa
   campaigns …`) is one `defineCatalog` file with the same description fields
   plus `operations()` and `help(words)`; its flags are parsed loosely because
-  they come from the live API.
+  they come from the live API. A catalog whose flags are all declared up front
+  sets `strictFlags: true` (`asa`), so a removed or mistyped flag is refused
+  rather than dropped.
 - **App Store Connect resources** (`asc subscription-groups`, `asc
   subscriptions`, `asc iaps`, `asc localizations`, `asc prices`, `asc offers`,
   `asc availability`, `asc screenshots`) are catalogs written with
@@ -522,7 +524,7 @@ server at mcp.superwall.com run the same commands; `@superwall/cli/tools`
   read-only only if all branches are reads, and otherwise a write. Account for
   overwrites, live traffic, spend and irreversible sends. Internal provisioning or
   authorization maintenance can make a tool a write without making it destructive.
-  POST selector lookups can still be reads. Test specific effect boundaries rather
+  POST query lookups can still be reads. Test specific effect boundaries rather
   than snapshotting the catalog; explain behavior evidence and remaining
   qualifications in the pull request.
 - **A tool is the command**: its name is the command words joined by `_`,

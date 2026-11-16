@@ -124,6 +124,7 @@ export interface CatalogTool {
 
 interface CatalogSpec<Auth extends AuthPolicy> extends Description<Auth> {
   flags?: Readonly<Record<string, FlagSpec>>;
+  strictFlags?: boolean;
   operations: () => readonly string[];
   help: (words: readonly string[]) => Promise<string>;
   tools: () => Promise<CatalogTool[]>;
@@ -166,6 +167,7 @@ export interface Command extends Common {
 export interface Catalog extends Common {
   kind: "catalog";
   flags: Readonly<Record<string, FlagSpec>>;
+  strictFlags: boolean;
   operations: () => readonly string[];
   tools: () => Promise<CatalogTool[]>;
   help: (words: readonly string[]) => Promise<string>;
@@ -295,6 +297,7 @@ export function defineCatalog<Auth extends AuthPolicy>(spec: CatalogSpec<Auth>):
     mcp: spec.mcp,
     channel: spec.channel,
     flags: spec.flags ?? {},
+    strictFlags: spec.strictFlags ?? false,
     operations: spec.operations,
     help: spec.help,
     tools: spec.tools,

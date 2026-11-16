@@ -12,7 +12,7 @@ import {
 } from "./catalog";
 
 export const APPLE_DOC_DATA_BASE =
-  "https://developer.apple.com/tutorials/data/documentation/apple_ads";
+  "https://developer.apple.com/tutorials/data/documentation/apple-ads-platform-api";
 
 type DocFetcher = (url: string) => Promise<unknown>;
 
@@ -29,10 +29,10 @@ function usageOf(op: AsaOperation): string {
   if (op.positional === "ids") parts.push("<id[,id...]>");
   if (op.positional === "query") parts.push("<query>");
   if (op.positional === "adam-id") parts.push("<adam-id>");
-  for (const p of placeholdersOf(op.path)) {
-    if (p === "campaign") parts.push("--campaign <id>");
-    if (p === "adgroup") parts.push("--adgroup <id>");
-    if (p === "adamId" && op.positional !== "adam-id") parts.push("--adam-id <id>");
+  if (placeholdersOf(op.path).includes("adamId") && op.positional !== "adam-id") parts.push("--adam-id <id>");
+  for (const filter of op.filters ?? []) {
+    if (filter.flag === "id" || (filter.flag === "adam-id" && op.positional === "adam-id")) continue;
+    parts.push(filter.required ? `--${filter.flag} <id>` : `[--${filter.flag} <id>]`);
   }
   return parts.join(" ");
 }
@@ -52,41 +52,41 @@ function flagLines(op: AsaOperation): string[] {
               : " <value>";
     lines.push(`  --${f.flag}${value}  ${f.describe} → \`${f.key}\``);
   }
-  if (op.body === "object" || op.body === "array") {
+  if (op.body === "object" || op.body === "bulk") {
     lines.push("  -d key=value / key:=json  Extra body fields (nesting via key[sub])");
-    lines.push("  --body <json|@file|@->  Full request body, sent as-is (merged under flags)");
+    lines.push("  --body <json|@file|@->  Full request body (bulk: an array of items), merged under flags");
   }
-  if (op.body === "selector") {
-    lines.push("  --selector <json|@file|@->  Full Apple selector");
-    lines.push("  --field <f> --op <OP> --values <a,b>  One-condition shorthand");
+  if (op.body === "array") lines.push("  --body <json|@file|@->  The request body: an array, as Apple documents it");
+  if (op.body === "query" || op.body === "report") {
+    lines.push("  --query <json|@file|@->  Full Apple query request: filters, sorting, pagination");
+    lines.push("  --field <f> --op <OP> --values <a,b>  One-filter shorthand");
     lines.push("  --order-by <field[:asc|desc]>  Sort");
-    lines.push("  --fields <a,b>  Partial fetch");
-    lines.push("  --limit <n> --offset <n> --all  Paging (--all walks every page)");
   }
   if (op.body === "report") {
-    lines.push("  --selector <json|@file|@->  Filter/sort rows (Apple selector)");
-    lines.push("  --time-zone <UTC|ORTZ>  Report time zone (default UTC)");
+    lines.push("  --start <YYYY-MM-DD> --end <YYYY-MM-DD>  Report range");
+    lines.push("  --granularity <HOURLY|DAILY|WEEKLY|MONTHLY>  Rows per period (default DAILY)");
+    lines.push("  --group-by <a,b>  Group rows by dimension");
+    lines.push("  --fields <a,b>  Only these fields");
+    if (op.zoned) lines.push("  --time-zone <UTC|ORTZ>  Report time zone (default UTC)");
   }
-  if (op.body === "ids") lines.push("  ids  Comma-separated ids in the positional");
-  if (op.body === "geo") lines.push("  --entity <Country|AdminArea|Locality>  Entity type for each id");
-  if (op.query?.includes("all") && op.body !== "selector")
-    lines.push("  --limit <n> --offset <n> --all  Paging (--all walks every page)");
-  if (op.query?.includes("fields") && op.body !== "selector") lines.push("  --fields <a,b>  Partial fetch");
-  if (op.query?.includes("owned")) lines.push("  --owned  Only apps this org owns");
+  if (op.body === "geo") {
+    lines.push("  --entity <Country|AdminArea|Locality>  Entity type for each id");
+    lines.push("  --supply-source <APPSTORE|MAPS>  Supply source (default APPSTORE)");
+  }
+  if (op.paged) lines.push("  --limit <n> --offset <n> --all  Paging (--all walks every page)");
+  if (op.query?.includes("owned")) lines.push("  --owned  Only apps this account owns");
+  if (op.query?.includes("store-fronts")) lines.push("  --store-fronts <a,b>  Restrict to storefronts");
   if (op.query?.includes("country")) lines.push("  --country <CC>  Restrict to a country code");
-  if (op.query?.includes("entity") && op.body !== "geo") lines.push("  --entity <Country|AdminArea|Locality>");
-  if (op.level === "adgroup") lines.push("  --adgroup-level  Search ad group negatives instead of campaign negatives");
-  if (op.query?.includes("name")) lines.push("  --name <text>  Filter by name");
-  if (op.query?.includes("states")) lines.push("  --states <a,b>  Filter by state");
-  if (op.query?.includes("countries")) lines.push("  --countries <a,b>  Restrict to country codes");
-  if (op.query?.includes("device-classes")) lines.push("  --device-classes <a,b> --language-codes <a,b> --expand");
-  if (op.query?.includes("include-deleted-assets")) lines.push("  --include-deleted-assets");
+  if (op.query?.includes("entity")) lines.push("  --entity <Country|AdminArea|Locality>");
+  if (op.query?.includes("supply-source")) lines.push("  --supply-source <APPSTORE|MAPS>  Supply source (default APPSTORE)");
+  if (op.query?.includes("eligible")) lines.push("  --eligible  Only places that can be targeted");
+  if (op.query?.includes("resource-type")) lines.push("  --resource-type <type>  e.g. CONTENT_PROVIDER");
   return lines;
 }
 
 export function renderAsaCatalog(): string {
   const lines = ["# Apple Search Ads — `superwall asa`", ""];
-  lines.push("Every Apple Ads Campaign Management API v5 endpoint, through Superwall's proxy.");
+  lines.push("Every Apple Ads Platform API v1 endpoint, through Superwall's proxy.");
   lines.push("`superwall asa docs <group>` lists a group, `superwall asa docs <group> <action>` fetches Apple's page.");
   lines.push("");
   for (const group of asaGroups()) {
@@ -249,7 +249,7 @@ function parameterLines(items: unknown, refs: Node): string[] {
   return out;
 }
 
-export function renderAppleDoc(doc: unknown): string {
+export function renderAppleDoc(doc: unknown, body?: string): string {
   if (!isNode(doc)) return "";
   const refs = isNode(doc.references) ? doc.references : {};
   const metadata = isNode(doc.metadata) ? doc.metadata : {};
@@ -276,6 +276,7 @@ export function renderAppleDoc(doc: unknown): string {
         const typeLine = `${type ? `\`${type}\`` : ""}${desc ? ` — ${desc}` : ""}`.trim();
         if (typeLine) lines.push(typeLine);
         lines.push(...parameterLines(section.parameters, refs));
+        if (body) lines.push("", body);
         break;
       }
       case "restResponses": {
@@ -320,6 +321,16 @@ function bodyTypeIdentifier(doc: unknown): string | undefined {
   return undefined;
 }
 
+async function bodyDocs(doc: unknown, fetchDoc: DocFetcher): Promise<string | undefined> {
+  const bodyType = bodyTypeIdentifier(doc);
+  if (!bodyType) return undefined;
+  try {
+    return renderAppleDoc(await fetchDoc(`${APPLE_DOC_DATA_BASE}/${bodyType.toLowerCase()}.json`));
+  } catch (error) {
+    return `Couldn't fetch the \`${bodyType}\` object page (${describe(error)}) — see ${APPLE_DOCS_BASE}/${bodyType.toLowerCase()}.`;
+  }
+}
+
 export async function renderAsaOperationDocs(
   group: string,
   action: string,
@@ -338,19 +349,7 @@ export async function renderAsaOperationDocs(
     const url = `${APPLE_DOC_DATA_BASE}/${v.doc}.json`;
     try {
       const doc = await fetchDoc(url);
-      lines.push("", renderAppleDoc(doc));
-      const bodyType = bodyTypeIdentifier(doc);
-      if (bodyType) {
-        try {
-          const bodyDoc = await fetchDoc(`${APPLE_DOC_DATA_BASE}/${bodyType.toLowerCase()}.json`);
-          lines.push("", renderAppleDoc(bodyDoc));
-        } catch (error) {
-          lines.push(
-            "",
-            `Couldn't fetch the \`${bodyType}\` object page (${describe(error)}) — see ${APPLE_DOCS_BASE}/${bodyType.toLowerCase()}.`,
-          );
-        }
-      }
+      lines.push("", renderAppleDoc(doc, await bodyDocs(doc, fetchDoc)));
     } catch (error) {
       lines.push("", `Couldn't fetch Apple's page (${describe(error)}) — read it at ${appleDocUrl(v)}.`);
     }
