@@ -188,13 +188,25 @@ test("a current project pin passes, naming the package.json it comes from", asyn
   });
 });
 
-test("a prerelease pin fails once its release is the latest", async () => {
+test("a prerelease pin is checked against the next channel, whatever CLI runs doctor", async () => {
   useHome();
   writeUpdateCheck({ latest: "2.5.2", tag: "latest", checkedAt: new Date().toISOString() });
-  assert.deepEqual(await cliCheck(pinnedSuperwall("2.5.2-beta.1")), {
+  writeUpdateCheck({ latest: "2.6.0-beta.3", tag: "next", checkedAt: new Date().toISOString() });
+  assert.deepEqual(await cliCheck(pinnedSuperwall("2.6.0-beta.2")), {
     ok: false,
     label: "CLI",
-    value: `2.5.2-beta.1 from ${path.join("superwall", "package.json")}, 2.5.2 available - run \`cd superwall && npm i superwall@latest\``,
+    value: `2.6.0-beta.2 from ${path.join("superwall", "package.json")}, 2.6.0-beta.3 available - run \`cd superwall && npm i superwall@next\``,
+  });
+});
+
+test("a stable pin is checked against latest, never the next channel", async () => {
+  useHome();
+  writeUpdateCheck({ latest: "2.0.0", tag: "latest", checkedAt: new Date().toISOString() });
+  writeUpdateCheck({ latest: "2.6.0-beta.3", tag: "next", checkedAt: new Date().toISOString() });
+  assert.deepEqual(await cliCheck(pinnedSuperwall("2.0.0")), {
+    ok: true,
+    label: "CLI",
+    value: `2.0.0 from ${path.join("superwall", "package.json")}`,
   });
 });
 

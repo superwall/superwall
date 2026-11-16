@@ -83,14 +83,16 @@ export async function runDoctor(
 }
 
 function resolveCliCheck(installDir: string): Check {
-  const project = selectProjectInstall(installDir, resolveUpdateTag());
+  const found = selectProjectInstall(installDir);
+  const tag = resolveUpdateTag(found?.version ?? VERSION);
+  const project = found && tag !== "latest" ? selectProjectInstall(installDir, tag) : found;
   const version = project ? project.version : VERSION;
   const source = project ? ` from ${project.manifest}` : "";
   const update = project ? project.update : "superwall upgrade";
   if (version === undefined) {
     return [false, "CLI", `unknown version${source} - run \`${update}\``];
   }
-  const latest = selectCachedLatest();
+  const latest = selectCachedLatest(version);
   if (latest === undefined || !isNewerVersion(latest, version)) {
     return [true, "CLI", `${version}${source}`];
   }
