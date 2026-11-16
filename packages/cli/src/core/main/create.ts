@@ -16,6 +16,7 @@ import {
   rowName,
   type Application,
   type ProductCreateOpts,
+  type ProductStore,
   type ResourceName,
   type Row,
   type SubscriptionPeriod,
@@ -52,6 +53,7 @@ export async function create(
     context,
     api,
     isAppScoped(resource) || (resource === "products" && context.target.app !== undefined),
+    { customStores: resource === "products" },
   );
   const grants =
     resource === "products" ? await resolveProductEntitlements(context, api, scope, entitlementValues(flags.fields)) : undefined;
@@ -221,8 +223,13 @@ function createOne(
       return createEntitlement(api, scope, value, scope.boundApplicationId);
     case "products": {
       const applicationId = grants?.app ? String(grants.app.id) : scope.applicationId;
+      const options = productOptions(fields);
+      // A custom store named by --app is only used with `store: custom`; without it the API
+      // refuses the store's id as an application that doesn't support products.
+      const store = options.store ?? (scope.appPlatform === "custom" ? "custom" : undefined);
       return createProduct(api, scope, value, {
-        ...productOptions(fields),
+        ...options,
+        ...(store ? { store } : {}),
         ...(applicationId ? { applicationId } : {}),
         ...(grants?.ids.length ? { entitlements: grants.ids } : {}),
       });
@@ -235,14 +242,44 @@ function createOne(
   }
 }
 
+/**
+ * The API takes a price as a whole number of the currency's smallest unit; `--price` is in major
+ * units, so 9.99 USD is 999 and 1200 JPY (no minor unit) is 1200.
+ */
+export function minorUnits(price: string, currency: string): number {
+  const major = Number(price);
+  if (price.trim() === "" || !Number.isFinite(major) || major < 0) {
+    throw new Error(`--price is an amount in ${currency}, such as 9.99, not "${price}".`);
+  }
+  let digits: number;
+  try {
+    digits = new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    throw new Error(`--currency is an ISO 4217 code, such as USD, not "${currency}".`);
+  }
+  const amount = major * 10 ** digits;
+  const whole = Math.round(amount);
+  if (Math.abs(amount - whole) > 1e-6) {
+    throw new Error(`--price ${price} has more decimals than ${currency} allows (${digits}).`);
+  }
+  return whole;
+}
+
+const PRODUCT_STORES: readonly ProductStore[] = ["app_store", "play_store", "custom"];
+
 function productOptions(fields: Record<string, unknown>): ProductCreateOpts {
   const options: ProductCreateOpts = {};
   if (fields.name) options.name = String(fields.name);
+  if (fields.store !== undefined) {
+    const store = String(fields.store);
+    if (!PRODUCT_STORES.includes(store as ProductStore)) {
+      throw new Error(`--store is one of ${PRODUCT_STORES.join(", ")}, not "${store}".`);
+    }
+    options.store = store as ProductStore;
+  }
   if (fields.price !== undefined) {
-    options.price = {
-      amount: Math.round(Number(fields.price) * 100),
-      currency: String(fields.currency ?? "USD").toUpperCase(),
-    };
+    const currency = String(fields.currency ?? "USD").toUpperCase();
+    options.price = { amount: minorUnits(String(fields.price), currency), currency };
   }
   if (fields.period) {
     options.subscription = {

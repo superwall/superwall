@@ -75,7 +75,7 @@ function parseTokens(
       if (error) throw error;
       const unknown = /^Unknown arguments?: (.*)$/.exec(message);
       if (!unknown?.[1]) throw new UsageError(message);
-      const names = unknown[1].split(", ").map((name) => (name.length === 1 ? `-${name}` : `--${name}`));
+      const names = unknown[1].split(", ").map((name) => (name.length === 1 ? `-${name}` : `--${kebab(name)}`));
       throw new UsageError(`Unknown flag: ${names.join(", ")}.`);
     })
     .parseSync();
@@ -141,7 +141,8 @@ export function resolveLine(tokens: readonly string[], groups: readonly Group[])
 }
 
 function resolveCommand(command: AnyCommand, rest: string[], globals: Globals): Resolution {
-  const parsed = parseTokens(rest, onChannel(command.flags), command.kind === "command" && !globals.help);
+  const strict = command.kind === "command" || command.strictFlags;
+  const parsed = parseTokens(rest, onChannel(command.flags), strict && !globals.help);
   if (globals.help) return { kind: "help", command, words: parsed.positionals };
   const input = {
     args: assignArgs(command, parsed.positionals),

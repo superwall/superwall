@@ -17,6 +17,19 @@ const spec = {
     "/v2/campaigns/{id}/audiences/{audience_id}/variants": {
       post: { tags: ["Campaigns V2"], summary: "Create Variant", responses: {} },
     },
+    "/v2/campaigns/{id}/audiences/order": {
+      put: {
+        tags: ["Campaigns V2"],
+        summary: "Reorder Audiences",
+        requestBody: {
+          content: { "application/json": { schema: { type: "object", properties: { audience_ids: { type: "array", items: { type: "string" } } } } } },
+        },
+        responses: {},
+      },
+    },
+    "/v2/raw-only": {
+      get: { tags: ["Other"], summary: "Raw Only", responses: {} },
+    },
     "/v2/paywalls": {
       get: { tags: ["Paywalls V2"], summary: "List Paywalls", responses: {} },
       post: { tags: ["Paywalls V2"], summary: "Create Paywall", responses: {} },
@@ -56,4 +69,25 @@ test("api docs prints the reference as text, and --refresh fetches it again thro
   assert.match(page, /List Paywalls/);
   assert.match(page, /Create Paywall/);
   assert.doesNotMatch(page, /Create Variant/);
+});
+
+test("api docs names the resource command for an endpoint, with the raw verb after", async () => {
+  useHome();
+  useFetch([{ match: "/openapi.json", body: spec }]);
+  const page = (await runLine("api docs /v2/campaigns/100804/audiences/order put")).said("report").join("\n");
+  assert.match(page, /Call it: superwall campaigns audiences reorder <campaign> -d field=value …/);
+  assert.match(page, /Or: superwall put \/v2\/campaigns\/\{id\}\/audiences\/order -d field=value …/);
+  const raw = (await runLine("api docs /v2/raw-only")).said("report").join("\n");
+  assert.match(raw, /Call it: superwall get \/v2\/raw-only/);
+  assert.doesNotMatch(raw, /\nOr: /);
+});
+
+test("api docs --json gives each endpoint a resource command covers its command", async () => {
+  useHome();
+  useFetch([{ match: "/openapi.json", body: spec }]);
+  const result = await runCommand(apiDocs, { args: { query: ["/v2/campaigns/100804/audiences/order"] }, json: true });
+  const [op] = (result.json as { operations: { command?: string }[] }).operations;
+  assert.equal(op?.command, "superwall campaigns audiences reorder <campaign>");
+  const raw = await runCommand(apiDocs, { args: { query: ["/v2/raw-only"] }, json: true });
+  assert.deepEqual((raw.json as { operations: { command?: string }[] }).operations.map((entry) => entry.command), [undefined]);
 });

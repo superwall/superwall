@@ -219,3 +219,39 @@ export const errorMessageOf = (body: unknown, fallback: string): string => {
   }
   return fallback;
 };
+
+export type CustomStoreSession = {
+  checkoutContextId: string;
+  checkoutUrl: string;
+  customTransactionId: string;
+};
+
+const isHttpsUrl = (value: string): boolean => {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+export const readCustomStoreSession = (body: unknown): CustomStoreSession | undefined => {
+  const checkoutContextId = field(body, "checkoutContextId");
+  const checkoutUrl = field(body, "checkoutUrl");
+  const customTransactionId = field(body, "customTransactionId");
+  if (
+    typeof checkoutContextId !== "string" ||
+    checkoutContextId === "" ||
+    typeof checkoutUrl !== "string" ||
+    !isHttpsUrl(checkoutUrl) ||
+    typeof customTransactionId !== "string" ||
+    customTransactionId === ""
+  ) {
+    return undefined;
+  }
+  return { checkoutContextId, checkoutUrl, customTransactionId };
+};
+
+export const errorTagOf = (body: unknown): string | undefined => {
+  const tag = field(body, "_tag");
+  return typeof tag === "string" ? tag : undefined;
+};

@@ -8,6 +8,7 @@ import {
   readAppliedDiscount,
   readCheckoutSession,
   readCheckoutStatus,
+  readCustomStoreSession,
   readDiscountValidation,
   readDiscountedPrice,
   readSubscriptionDetails,
@@ -384,5 +385,17 @@ describe("readCheckoutStatus", () => {
     expect(readCheckoutStatus({ status: "completed", redemptionUrl: 7 })).toEqual({
       status: "completed",
     });
+  });
+});
+
+describe("readCustomStoreSession", () => {
+  it("refuses a checkout URL that is not a URL at all", () => {
+    expect(
+      readCustomStoreSession({
+        checkoutContextId: "ctx",
+        checkoutUrl: "not a url",
+        customTransactionId: "txn",
+      }),
+    ).toBeUndefined();
   });
 });

@@ -11,7 +11,10 @@ import {
   printAutoUpdate,
   recordAutoUpdate,
   refreshUpdateCheck,
+  resolveUpdate,
+  resolveUpdateTag,
   selectAutoUpdate,
+  selectCachedLatest,
 } from "@/core/support/upgrade";
 import { command as upgrade } from "@/commands/support/upgrade";
 import { readSkillsSync, writeSkillsSync } from "@/core/state/config";
@@ -30,6 +33,8 @@ const saved = {
   target: process.env.SW_AUTO_UPDATE,
 };
 const scratch: string[] = [];
+const startDir = process.cwd();
+const startEntry = process.argv[1];
 const platform = Object.getOwnPropertyDescriptor(process, "platform");
 const comspec = process.env.ComSpec;
 
@@ -39,6 +44,8 @@ function restoreEnv(key: string, value: string | undefined): void {
 }
 
 afterEach(() => {
+  process.chdir(startDir);
+  if (startEntry !== undefined) process.argv[1] = startEntry;
   if (platform) Object.defineProperty(process, "platform", platform);
   restoreEnv("ComSpec", comspec);
   for (const dir of scratch.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
@@ -93,10 +100,10 @@ function globalInstall(): { bin: string; entry: string } {
   return { bin, entry };
 }
 
-function readCheck(home: string): unknown {
+function readCheck(home: string, key = "updateCheck"): unknown {
   const file = path.join(home, "config.json");
   if (!fs.existsSync(file)) return undefined;
-  return (JSON.parse(fs.readFileSync(file, "utf8")) as { updateCheck?: unknown }).updateCheck;
+  return (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>)[key];
 }
 
 const SYNC_SKILLS = `"${process.execPath}" -e 'const fs = require("fs"), file = process.env.SUPERWALL_HOME + "/config.json"; const config = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {}; config.skillsSync = { cliVersion: process.env.SYNCED_VERSION || "99.0.0", syncedAt: new Date(Date.now() + Number(process.env.SYNCED_OFFSET || 0)).toISOString(), ref: "next" }; fs.writeFileSync(file, JSON.stringify(config))'`;
@@ -167,36 +174,177 @@ test("version comparison handles major, minor, patch, and garbage", () => {
   assert.equal(isNewerVersion("1.2", "1.2.1"), false);
 });
 
+test("a release is newer than its own prereleases, and prereleases compare by identifier", () => {
+  assert.equal(isNewerVersion("2.5.2", "2.5.2-beta.1"), true);
+  assert.equal(isNewerVersion("2.5.2-beta.1", "2.5.2"), false);
+  assert.equal(isNewerVersion("2.5.2-beta.2", "2.5.2-beta.1"), true);
+  assert.equal(isNewerVersion("2.5.2-beta.10", "2.5.2-beta.9"), true);
+  assert.equal(isNewerVersion("2.5.2-beta.1", "2.5.2-beta.1"), false);
+  assert.equal(isNewerVersion("2.5.2-beta", "2.5.2-beta.1"), false);
+  assert.equal(isNewerVersion("2.5.2-beta.1", "2.5.2-alpha.3"), true);
+  assert.equal(isNewerVersion("2.5.2-1", "2.5.2-beta"), false);
+  assert.equal(isNewerVersion("2.5.1", "2.5.2-beta.1"), false);
+  assert.equal(isNewerVersion("2.6.0-beta.1", "2.5.2"), true);
+});
+
 test("flushing with no check in flight returns at once", async () => {
   const start = Date.now();
   await flushUpdateCheck(2000);
   assert.ok(Date.now() - start < 100);
 });
 
-test("a newer cached release prints one dim upgrade hint", () => {
+const now = () => new Date().toISOString();
+
+function noticeFor(latest: string): string {
   const home = useHome();
-  writeCheck(home, { latest: "99.0.0", checkedAt: new Date().toISOString() });
+  writeCheck(home, { latest, checkedAt: now() });
   const stream = recordStream();
-
   maybeNotifyUpdate(stream);
+  return stream.written.join("");
+}
 
-  assert.equal(stream.written.length, 1);
-  assert.match(stream.written[0]!, new RegExp(`Update available ${VERSION} → 99\\.0\\.0`));
-  assert.match(stream.written[0]!, /superwall upgrade/);
+test("a patch or minor release is one line with the upgrade command", () => {
+  assert.equal(noticeFor(PATCH_BUMP), `Update available ${VERSION} → ${PATCH_BUMP} · run superwall upgrade\n`);
+  assert.equal(noticeFor(MINOR_BUMP), `Update available ${VERSION} → ${MINOR_BUMP} · run superwall upgrade\n`);
 });
 
-test("no hint without a cached check or when the cache isn't newer", () => {
+test("a major release is a block that warns of breaking changes and links its release notes", () => {
+  assert.equal(
+    noticeFor(MAJOR_BUMP),
+    [
+      `Major update available ${VERSION} → ${MAJOR_BUMP}`,
+      `  A major release may contain breaking changes. Read https://github.com/superwall/superwall/releases/tag/v${MAJOR_BUMP}`,
+      "  Update: superwall upgrade",
+      "",
+    ].join("\n"),
+  );
+});
+
+test("nothing is printed without a cached check, or when the cache isn't newer", () => {
   useHome();
   const empty = recordStream();
   maybeNotifyUpdate(empty);
-
-  const home = useHome();
-  writeCheck(home, { latest: VERSION, checkedAt: new Date().toISOString() });
-  const current = recordStream();
-  maybeNotifyUpdate(current);
-
   assert.deepEqual(empty.written, []);
-  assert.deepEqual(current.written, []);
+  assert.equal(noticeFor(VERSION), "");
+});
+
+test("a project that pins superwall is told to bump its own copy", () => {
+  inPinnedProject(VERSION, "pnpm-lock.yaml");
+  assert.equal(
+    noticeFor(MINOR_BUMP),
+    `Update available ${VERSION} → ${MINOR_BUMP} · run cd superwall && pnpm add superwall@latest\n`,
+  );
+});
+
+test("a project whose superwall is a symlink to a local checkout still gets the project command", () => {
+  const linked = fs.mkdtempSync(path.join(os.tmpdir(), "sw-upgrade-linked-"));
+  scratch.push(linked);
+  fs.writeFileSync(path.join(linked, "package.json"), JSON.stringify({ name: "superwall", version: VERSION }));
+  inPinnedProject(VERSION);
+  const copy = path.join(process.cwd(), "superwall", "node_modules", "superwall");
+  fs.rmSync(copy, { recursive: true });
+  fs.symlinkSync(linked, copy);
+  assert.equal(
+    noticeFor(PATCH_BUMP),
+    `Update available ${VERSION} → ${PATCH_BUMP} · run cd superwall && npm i superwall@latest\n`,
+  );
+});
+
+test("the update is classified by the first number that moved", () => {
+  const home = useHome();
+  writeCheck(home, { latest: "3.0.0", checkedAt: now() });
+  assert.equal(resolveUpdate(process.cwd(), "2.9.9")?.kind, "major");
+  writeCheck(home, { latest: "2.6.0", checkedAt: now() });
+  assert.equal(resolveUpdate(process.cwd(), "2.5.9")?.kind, "minor");
+  writeCheck(home, { latest: "2.5.3", checkedAt: now() });
+  assert.equal(resolveUpdate(process.cwd(), "2.5.2")?.kind, "patch");
+});
+
+test("a prerelease follows the next tag and is told to install superwall@next", () => {
+  const home = useHome();
+  writeConfig(home, { updateCheckNext: { latest: "2.6.0-beta.3", tag: "next", checkedAt: now() } });
+  inPinnedProject("2.6.0-beta.2");
+  assert.deepEqual(resolveUpdate(process.cwd(), "2.6.0-beta.2"), {
+    current: "2.6.0-beta.2",
+    latest: "2.6.0-beta.3",
+    kind: "patch",
+    command: "cd superwall && npm i superwall@next",
+    notes: "https://github.com/superwall/superwall/releases/tag/v2.6.0-beta.3",
+  });
+  assert.equal(resolveUpdate(process.cwd(), VERSION), undefined);
+});
+
+test("a check cached from the latest tag is never compared with a prerelease, nor the other way", () => {
+  const home = useHome();
+  writeCheck(home, { latest: "2.6.0", checkedAt: now() });
+  assert.equal(resolveUpdate(process.cwd(), "2.6.0-beta.2"), undefined);
+  assert.equal(selectCachedLatest("2.6.0-beta.2"), undefined);
+  writeConfig(home, { updateCheckNext: { latest: "99.0.0-beta.1", tag: "next", checkedAt: now() } });
+  assert.equal(selectCachedLatest(VERSION), undefined);
+  assert.equal(selectCachedLatest("2.6.0-beta.2"), "99.0.0-beta.1");
+});
+
+test("the tag is next for a prerelease and latest otherwise", () => {
+  assert.equal(resolveUpdateTag("2.6.0-beta.2"), "next");
+  assert.equal(resolveUpdateTag("2.5.2"), "latest");
+  assert.equal(resolveUpdateTag("1.0.0+build-foo"), "latest");
+  assert.equal(resolveUpdateTag("1.0.0-beta.1+build-foo"), "next");
+  assert.equal(isNewerVersion("1.0.1", "1.0.0+build-foo"), true);
+  assert.equal(isNewerVersion("1.0.0", "1.0.0+build-foo"), false);
+  assert.equal(isNewerVersion("1.0.0-beta.2+sha-1", "1.0.0-beta.1+sha-9"), true);
+});
+
+test("a prerelease asks the registry for the next tag and keeps the latest check beside it", async () => {
+  const home = useHome();
+  const checkedAt = now();
+  writeCheck(home, { latest: "2.5.2", checkedAt });
+  delete process.env.NODE_TEST_CONTEXT;
+  const log = useFetch([{ match: "registry.npmjs.org/superwall/next", body: { version: "2.6.0-beta.3" } }]);
+
+  refreshUpdateCheck("2.6.0-beta.2");
+  await flushUpdateCheck(1000);
+
+  assert.equal(log.length, 1);
+  assert.equal(log[0]!.url, "https://registry.npmjs.org/superwall/next");
+  assert.deepEqual(readCheck(home), { latest: "2.5.2", checkedAt });
+  assert.deepEqual({ ...(readCheck(home, "updateCheckNext") as object), checkedAt: undefined }, {
+    latest: "2.6.0-beta.3",
+    tag: "next",
+    checkedAt: undefined,
+  });
+});
+
+test("alternating a stable CLI and a beta pin asks the registry once per tag, not once per command", async () => {
+  useHome();
+  delete process.env.NODE_TEST_CONTEXT;
+  const log = useFetch([
+    { match: "registry.npmjs.org/superwall/next", body: { version: "2.6.0-beta.3" } },
+    { match: REGISTRY, body: { version: "2.5.3" } },
+  ]);
+
+  for (const current of ["2.5.2", "2.6.0-beta.2", "2.5.2", "2.6.0-beta.2"]) {
+    refreshUpdateCheck(current);
+    await flushUpdateCheck(1000);
+  }
+
+  assert.deepEqual(
+    log.map((call) => call.url),
+    ["https://registry.npmjs.org/superwall/latest", "https://registry.npmjs.org/superwall/next"],
+  );
+  assert.equal(selectCachedLatest("2.5.2"), "2.5.3");
+  assert.equal(selectCachedLatest("2.6.0-beta.2"), "2.6.0-beta.3");
+});
+
+test("an unreachable registry prints nothing and keeps no check", async () => {
+  const home = useHome();
+  delete process.env.NODE_TEST_CONTEXT;
+  useFetch([{ match: REGISTRY, status: 503, body: {} }]);
+  refreshUpdateCheck();
+  await flushUpdateCheck(1000);
+  const stream = recordStream();
+  maybeNotifyUpdate(stream);
+  assert.deepEqual(stream.written, []);
+  assert.equal(readCheck(home), undefined);
 });
 
 test("test runs never check the registry", async () => {
@@ -221,8 +369,9 @@ test("a stale check asks the registry and records the latest version", async () 
 
   assert.equal(log.length, 1);
   assert.equal(log[0]!.url, "https://registry.npmjs.org/superwall/latest");
-  const check = readCheck(home) as { latest: string; checkedAt: string };
+  const check = readCheck(home) as { latest: string; tag: string; checkedAt: string };
   assert.equal(check.latest, "99.0.0");
+  assert.equal(check.tag, "latest");
   assert.ok(Date.now() - Date.parse(check.checkedAt) < 60_000);
 });
 
@@ -559,4 +708,121 @@ test("an automatic update to a version that isn't newer does nothing", async () 
 
   assert.equal(fs.existsSync(path.join(install.bin, "args")), false);
   assert.deepEqual(result.json, { upgraded: false, version: VERSION, skills: "current" });
+});
+
+const PIN_MANIFEST = path.join("superwall", "package.json");
+
+function inPinnedProject(version: string, lockfile = "package-lock.json"): void {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sw-upgrade-project-"));
+  scratch.push(dir);
+  const files: Record<string, string> = {
+    [PIN_MANIFEST]: JSON.stringify({ name: "paywalls", dependencies: { superwall: version } }),
+    [path.join("superwall", "node_modules", "superwall", "package.json")]: JSON.stringify({ name: "superwall", version }),
+    [path.join("superwall", lockfile)]: "",
+  };
+  for (const [file, content] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    fs.writeFileSync(path.join(dir, file), content);
+  }
+  process.chdir(dir);
+}
+
+function viaNpxWithCurrentSkills(): void {
+  process.argv[1] = "/Users/dev/.npm/_npx/abc/node_modules/.bin/superwall";
+  writeSkillsSync({ cliVersion: VERSION, syncedAt: new Date().toISOString(), ref: "next", sourceSha: "abc" });
+}
+
+test("an upgrade in a project that pins an older superwall says the pin still runs and how to update it", async () => {
+  useHome();
+  inPinnedProject("2.0.0", "bun.lock");
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  fakeGlobalInstall();
+
+  const result = await runCommand(upgrade);
+
+  assert.equal(result.said("warn").at(-1), [
+    `This project runs its own superwall \`2.0.0\` from ${PIN_MANIFEST}, not \`99.0.0\`.`,
+    "Update it: cd superwall && bun add superwall@latest",
+  ].join(" "));
+  assert.deepEqual(result.said("outro"), []);
+
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  const asJson = await runCommand(upgrade, { json: true });
+  assert.deepEqual((asJson.json as { project: unknown }).project, {
+    version: "2.0.0",
+    manifest: PIN_MANIFEST,
+    outdated: true,
+    update: "cd superwall && bun add superwall@latest",
+  });
+});
+
+test("an upgrade in a project already pinning the new release ends on the latest version", async () => {
+  useHome();
+  inPinnedProject("99.0.0");
+  useFetch([{ match: REGISTRY, body: { version: "99.0.0" } }]);
+  fakeGlobalInstall();
+
+  const result = await runCommand(upgrade);
+
+  assert.deepEqual(result.said("warn"), []);
+  assert.deepEqual(result.said("outro"), ["You're on the latest version."]);
+});
+
+test("under npx, an older project pin is named with its update command instead of nothing to upgrade", async () => {
+  useHome();
+  inPinnedProject("2.0.0");
+  viaNpxWithCurrentSkills();
+  useFetch([
+    { match: REGISTRY, body: { version: "99.0.0" } },
+    { match: GITHUB_HEAD, body: { sha: "abc" } },
+  ]);
+
+  const result = await runCommand(upgrade, { json: false });
+
+  assert.deepEqual(result.said("info"), []);
+  assert.deepEqual(result.said("warn"), [
+    `This project runs its own superwall \`2.0.0\` from ${PIN_MANIFEST}, not \`99.0.0\`. Update it: cd superwall && npm i superwall@latest`,
+  ]);
+
+  useFetch([
+    { match: REGISTRY, body: { version: "99.0.0" } },
+    { match: GITHUB_HEAD, body: { sha: "abc" } },
+  ]);
+  const asJson = await runCommand(upgrade, { json: true });
+  assert.deepEqual(asJson.json, {
+    upgraded: false,
+    via: "npx",
+    skills: "current",
+    project: { version: "2.0.0", manifest: PIN_MANIFEST, outdated: true, update: "cd superwall && npm i superwall@latest" },
+  });
+});
+
+test("under npx, a project pin on the latest release has nothing to upgrade", async () => {
+  useHome();
+  inPinnedProject("2.0.0");
+  viaNpxWithCurrentSkills();
+  useFetch([
+    { match: REGISTRY, body: { version: "2.0.0" } },
+    { match: GITHUB_HEAD, body: { sha: "abc" } },
+  ]);
+
+  const result = await runCommand(upgrade, { json: true });
+
+  assert.deepEqual(result.said("info"), ["This project's superwall `2.0.0` is the latest - nothing to upgrade."]);
+  assert.equal((result.json as { project: { outdated: boolean } }).project.outdated, false);
+});
+
+test("under npx, an unreachable registry leaves a project pin unknown, never current", async () => {
+  useHome();
+  inPinnedProject("2.0.0");
+  viaNpxWithCurrentSkills();
+  useFetch([
+    { match: REGISTRY, fail: true },
+    { match: GITHUB_HEAD, body: { sha: "abc" } },
+  ]);
+
+  const result = await runCommand(upgrade, { json: true });
+
+  assert.match(result.said("warn").join(), /npm registry couldn't be reached.*Update it: cd superwall && npm i superwall@latest/);
+  assert.equal((result.json as { project: { outdated: boolean | null } }).project.outdated, null);
 });

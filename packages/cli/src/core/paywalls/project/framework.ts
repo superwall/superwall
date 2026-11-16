@@ -10,6 +10,7 @@ import type {
   StudioActionResult,
   StudioScreenshot,
   StudioStatus,
+  StudioUpdate,
 } from "@superwall/studio/contract";
 
 interface FrameworkRoute {
@@ -119,6 +120,7 @@ export interface StudioActions {
     options?: { version?: number },
   ): Promise<StudioActionResult>;
   status(surface: FrameworkSurface): Promise<StudioStatus>;
+  update?(): StudioUpdate | undefined;
 }
 
 export interface Framework {
@@ -157,7 +159,9 @@ export function pnpmWorkspaceAbove(dir: string): boolean {
 
 export class FrameworkNotFoundError extends Error {
   constructor(dir: string) {
-    const project = existsSync(join(dir, "superwall", "package.json")) ? join(dir, "superwall") : dir;
+    const project = existsSync(join(dir, "superwall", "package.json"))
+      ? join(dir, "superwall")
+      : dir;
     super(
       `No superwall framework found from ${dir}.\n` +
         "Install it in the project (`npm i superwall` / `bun add superwall`) " +
@@ -169,7 +173,10 @@ export class FrameworkNotFoundError extends Error {
   }
 }
 
-async function importSubpath(packageDir: string, subpath: string): Promise<Record<string, unknown>> {
+async function importSubpath(
+  packageDir: string,
+  subpath: string,
+): Promise<Record<string, unknown>> {
   const require = createRequire(join(packageDir, "package.json"));
   return import(pathToFileURL(require.resolve(subpath)).href);
 }

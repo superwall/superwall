@@ -29,12 +29,12 @@ const clientSurface = (): unknown =>
 export const hostOf = (): SuperwallHost => {
   const transport = detectRuntimeTransportKind();
   if (transport === TransportKind.EditorIframe) return "studio";
+  if (clientSurface() === "web-sdk") return "web-sdk";
+  if (readTeleportBoot() !== undefined) return "web-teleport";
+  if (webController() !== undefined || clientSurface() === "web-direct") return "web-paywall";
   if (window.webkit?.messageHandlers?.paywallMessageHandler) return "ios-sdk";
   if (transport === TransportKind.Android || (typeof SWAndroid !== "undefined" && SWAndroid)) {
     return "android-sdk";
   }
-  if (clientSurface() === "web-sdk") return "web-sdk";
-  if (readTeleportBoot() !== undefined) return "web-teleport";
-  if (webController() !== undefined || clientSurface() === "web-direct") return "web-paywall";
   return "browser";
 };

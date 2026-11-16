@@ -107,6 +107,19 @@ export const hostEvents = (post: (message: HostMessage) => void) => ({
     if (!WEB_HOSTS.has(hostOf())) return;
     post(diagnostic);
   },
+  customStarted: (
+    productIdentifier: string,
+    checkoutContextId: string,
+    customTransactionId: string,
+  ) =>
+    post({
+      event_name: "custom_checkout_start",
+      checkout_context_id: checkoutContextId,
+      product_identifier: productIdentifier,
+      custom_transaction_id: customTransactionId,
+    }),
+  customFailed: (productIdentifier: string, message: string) =>
+    post({ event_name: "custom_checkout_fail", product_identifier: productIdentifier, message }),
   openHostedPage: (url: string) => post({ event_name: "open_url_external", url }),
   redeem: (link: string) => post({ event_name: "open_deep_link", link }),
   redemption: (code: string, result: DiscountValidationResult) =>

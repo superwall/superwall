@@ -242,7 +242,7 @@ function renderFields(fields: DocField[], indent = "  "): string[] {
   });
 }
 
-function renderOperation(op: DocOperation): string {
+function renderOperation(op: DocOperation, commandFor?: (op: DocOperation) => string | undefined): string {
   const out = [
     `${op.method} ${op.path}`,
     `${op.summary} · ${op.group}${op.scope ? ` · needs ${op.scope}` : ""}`,
@@ -255,14 +255,14 @@ function renderOperation(op: DocOperation): string {
   if (op.body)
     out.push("", "Body (JSON):", ...(op.body.length ? renderFields(op.body) : ["  (empty)"]));
   if (op.returns.length) out.push("", `Returns: ${op.returns.join(", ")}`);
-  out.push(
-    "",
-    `Call it: superwall ${op.method.toLowerCase()} ${op.path}${op.body?.length ? " -d field=value …" : ""}`,
-  );
+  const fields = op.body?.length ? " -d field=value …" : "";
+  const raw = `superwall ${op.method.toLowerCase()} ${op.path}${fields}`;
+  const command = commandFor?.(op);
+  out.push("", ...(command ? [`Call it: ${command}${fields}`, `Or: ${raw}`] : [`Call it: ${raw}`]));
   return out.join("\n");
 }
 
-export function renderApiDocs(index: ApiDocsIndex, query = "", method?: string): string {
+export function renderApiDocs(index: ApiDocsIndex, query = "", method?: string, commandFor?: (op: DocOperation) => string | undefined): string {
   const header = `Superwall API ${index.version} — ${index.operations.length} endpoints`;
   const q = query.trim();
   if (!q) {
@@ -281,19 +281,19 @@ export function renderApiDocs(index: ApiDocsIndex, query = "", method?: string):
   }
   const [first = "", ...rest] = q.split(/\s+/);
   if (/^(get|post|put|patch|delete)$/i.test(first) && rest[0]?.startsWith("/")) {
-    return renderApiDocs(index, rest.join(" "), first);
+    return renderApiDocs(index, rest.join(" "), first, commandFor);
   }
   if (q.startsWith("/")) {
     const ops = findOperations(index, q, method);
     if (ops.length === 0)
       return `${header}\n\nNo endpoint matches ${q}. Search instead: superwall api docs <words>.`;
-    return ops.map(renderOperation).join("\n\n────────\n\n");
+    return ops.map((op) => renderOperation(op, commandFor)).join("\n\n────────\n\n");
   }
   const hits = searchOperations(index, q);
   if (hits.length === 0)
     return `${header}\n\nNothing matches "${q}". Run \`superwall api docs\` for every group.`;
   const [only] = hits;
-  if (hits.length === 1 && only) return renderOperation(only);
+  if (hits.length === 1 && only) return renderOperation(only, commandFor);
   const shown = hits.slice(0, SEARCH_HITS);
   return [
     `${hits.length} endpoints match "${q}":`,

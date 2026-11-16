@@ -182,6 +182,23 @@ describe("OutgoingMessageSchema", () => {
       product_identifier: "p",
     });
     accepts({
+      event_name: "custom_checkout_start",
+      checkout_context_id: "ctx",
+      product_identifier: "custom|pro",
+      custom_transaction_id: "txn",
+    });
+    rejects({
+      event_name: "custom_checkout_start",
+      checkout_context_id: "ctx",
+      product_identifier: "p",
+    });
+    accepts({
+      event_name: "custom_checkout_fail",
+      product_identifier: "custom|pro",
+      message: "no",
+    });
+    rejects({ event_name: "custom_checkout_fail", product_identifier: "custom|pro" });
+    accepts({
       event_name: "stripe_checkout_complete",
       sw_checkout_id: null,
       checkout_context_id: "ctx",

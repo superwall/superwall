@@ -1,5 +1,6 @@
 import { defineCommand } from "@/program/command";
 import { renderApiDocs, resolveApiIndex, METHOD, listMatchingOperations } from "@/core/api/reference";
+import { resolveCommandLookup, withCommand } from "@/core/api/commands";
 import { apiCall } from "@/ui/spinner";
 
 export const command = defineCommand({
@@ -25,9 +26,10 @@ export const command = defineCommand({
     const method = found?.toUpperCase();
 
     const index = await apiCall(ctx, "Loading the API reference", () => resolveApiIndex({ refresh: flags.refresh }));
+    const lookup = await resolveCommandLookup();
     if (ctx.json) {
-      return ctx.output.data({ version: index.version, operations: listMatchingOperations(index, query, method) });
+      return ctx.output.data({ version: index.version, operations: listMatchingOperations(index, query, method).map((op) => withCommand(op, lookup)) });
     }
-    ctx.output.text(renderApiDocs(index, query, method));
+    ctx.output.text(renderApiDocs(index, query, method, lookup));
   },
 });

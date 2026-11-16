@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import pc from "picocolors";
+import type { StudioUpdate, StudioUpdateKind } from "@superwall/studio/contract";
 import type { CommandContext } from "@/program/command";
 import type { SkillsUpdate } from "@/core/support/skills";
 import { spawnStream } from "@/core/workflows/agent/drivers/spawn";
+import { selectProjectInstall, type ProjectInstall } from "@/core/support/project-install";
 import {
   readAutoUpdate,
   readSkillsSync,
@@ -17,25 +19,57 @@ import {
 import { AUTO_UPDATE, RUNNING_VIA_NPX, VERSION } from "@/environment";
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const REGISTRY_URL = "https://registry.npmjs.org/superwall/latest";
+const REGISTRY_URL = "https://registry.npmjs.org/superwall/";
+const RELEASE_NOTES_URL = "https://github.com/superwall/superwall/releases/tag/v";
 
 const pending: Array<Promise<unknown>> = [];
 
 export function isNewerVersion(latest: string, current: string): boolean {
-  const l = latest.split(".").map((n) => parseInt(n, 10));
-  const c = current.split(".").map((n) => parseInt(n, 10));
+  const [latestCore = "", latestPre] = splitPrerelease(latest);
+  const [currentCore = "", currentPre] = splitPrerelease(current);
+  const l = latestCore.split(".").map((n) => parseInt(n, 10));
+  const c = currentCore.split(".").map((n) => parseInt(n, 10));
   for (let i = 0; i < 3; i++) {
     const a = l[i] ?? 0;
     const b = c[i] ?? 0;
     if (Number.isNaN(a) || Number.isNaN(b)) return false;
     if (a !== b) return a > b;
   }
-  return false;
+  if (currentPre === undefined) return false;
+  if (latestPre === undefined) return true;
+  return comparePrerelease(latestPre.split("."), currentPre.split(".")) > 0;
 }
 
-async function selectLatestVersion(): Promise<string | null> {
+function splitPrerelease(full: string): [string, string | undefined] {
+  const plus = full.indexOf("+");
+  const version = plus === -1 ? full : full.slice(0, plus);
+  const dash = version.indexOf("-");
+  return dash === -1 ? [version, undefined] : [version.slice(0, dash), version.slice(dash + 1)];
+}
+
+function comparePrerelease(a: readonly string[], b: readonly string[]): number {
+  const numeric = /^\d+$/;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const x = a[i] ?? "";
+    const y = b[i] ?? "";
+    if (x === y) continue;
+    if (numeric.test(x) && numeric.test(y)) return Number(x) - Number(y);
+    if (numeric.test(x)) return -1;
+    if (numeric.test(y)) return 1;
+    return x < y ? -1 : 1;
+  }
+  return a.length - b.length;
+}
+
+export type UpdateTag = "latest" | "next";
+
+export function resolveUpdateTag(version: string = VERSION): UpdateTag {
+  return splitPrerelease(version)[1] === undefined ? "latest" : "next";
+}
+
+async function selectLatestVersion(current: string = VERSION): Promise<string | null> {
   try {
-    const res = await fetch(REGISTRY_URL, {
+    const res = await fetch(`${REGISTRY_URL}${resolveUpdateTag(current)}`, {
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(5000),
     });
@@ -51,20 +85,32 @@ function majorOf(version: string): number {
   return parseInt(version.split(".")[0] ?? "", 10);
 }
 
-function selectAvailableUpdate(): string | null {
-  const latest = readUpdateCheck()?.latest;
-  if (!latest || !isNewerVersion(latest, VERSION)) return null;
+export function selectCachedLatest(current: string = VERSION): string | undefined {
+  const tag = resolveUpdateTag(current);
+  const cached = readUpdateCheck(tag);
+  if ((cached?.tag ?? "latest") !== tag) return undefined;
+  return cached?.latest;
+}
+
+function selectAvailableUpdate(current: string = VERSION): string | null {
+  const latest = selectCachedLatest(current);
+  if (!latest || !isNewerVersion(latest, current)) return null;
   return latest;
 }
 
-export function refreshUpdateCheck(): void {
+function recordLatest(latest: string, current: string = VERSION): void {
+  writeUpdateCheck({ latest, tag: resolveUpdateTag(current), checkedAt: new Date().toISOString() });
+}
+
+export function refreshUpdateCheck(current: string = VERSION): void {
   if (process.env.NODE_TEST_CONTEXT) return;
-  const cached = readUpdateCheck();
+  const tag = resolveUpdateTag(current);
+  const cached = readUpdateCheck(tag);
   const age = cached?.checkedAt ? Date.now() - Date.parse(cached.checkedAt) : Infinity;
-  if (age < CHECK_INTERVAL_MS) return;
+  if (age < CHECK_INTERVAL_MS && (cached?.tag ?? "latest") === tag) return;
   pending.push(
-    selectLatestVersion().then((version) => {
-      if (version) writeUpdateCheck({ latest: version, checkedAt: new Date().toISOString() });
+    selectLatestVersion(current).then((version) => {
+      if (version) recordLatest(version, current);
     }),
   );
 }
@@ -77,12 +123,52 @@ export async function flushUpdateCheck(capMs = 2000): Promise<void> {
   ]);
 }
 
+export type UpdateKind = StudioUpdateKind;
+
+export type AvailableUpdate = StudioUpdate;
+
+function resolveUpdateKind(latest: string, current: string): UpdateKind {
+  const [l = 0, lm = 0] = splitPrerelease(latest)[0]
+    .split(".")
+    .map((n) => parseInt(n, 10));
+  const [c = 0, cm = 0] = splitPrerelease(current)[0]
+    .split(".")
+    .map((n) => parseInt(n, 10));
+  if (l !== c) return "major";
+  return lm !== cm ? "minor" : "patch";
+}
+
+export function resolveUpdate(
+  dir: string = process.cwd(),
+  current: string = VERSION,
+): AvailableUpdate | undefined {
+  const latest = selectAvailableUpdate(current);
+  if (!latest) return undefined;
+  const project = selectProjectInstall(dir, resolveUpdateTag(current));
+  return {
+    current,
+    latest,
+    kind: resolveUpdateKind(latest, current),
+    command: project ? project.update : "superwall upgrade",
+    notes: `${RELEASE_NOTES_URL}${latest}`,
+  };
+}
+
+export function renderUpdateNotice(update: AvailableUpdate): string {
+  const { current, latest, command, notes } = update;
+  if (update.kind !== "major") {
+    return `${pc.yellow("Update available")} ${current} → ${latest} · run ${pc.bold(command)}`;
+  }
+  return [
+    pc.yellow(pc.bold(`Major update available ${current} → ${latest}`)),
+    `  A major release may contain breaking changes. Read ${pc.cyan(notes)}`,
+    `  Update: ${pc.bold(command)}`,
+  ].join("\n");
+}
+
 export function maybeNotifyUpdate(stream: Pick<NodeJS.WriteStream, "write">): void {
-  const latest = selectAvailableUpdate();
-  if (!latest) return;
-  stream.write(
-    `${pc.dim(`Update available ${VERSION} → ${latest} · run \`superwall upgrade\``)}\n`,
-  );
+  const update = resolveUpdate();
+  if (update) stream.write(`${renderUpdateNotice(update)}\n`);
 }
 
 export function selectAutoUpdate(): string | null {
@@ -175,11 +261,25 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
   const { ui } = ctx;
 
   if (RUNNING_VIA_NPX()) {
-    ui.info(
-      "You're running via npx, which always fetches the latest published version - nothing to upgrade.",
-    );
+    const project = selectProjectInstall(process.cwd(), resolveUpdateTag());
+    const latest = project ? (pinned ?? (await selectLatestVersion())) : null;
+    const outdated = project ? isOutdated(project, latest) : false;
+    if (project && outdated !== false) {
+      ui.warn(renderProjectPin(project, latest));
+    } else if (project) {
+      ui.info(
+        `This project's superwall \`${project.version}\` is the latest - nothing to upgrade.`,
+      );
+    } else {
+      ui.info(
+        "You're running via npx, which always fetches the latest published version - nothing to upgrade.",
+      );
+    }
     const skills = await updateAgentSkills(ctx, updateSkillsInProcess);
-    if (ctx.json) return ctx.output.data({ upgraded: false, via: "npx", skills });
+    if (ctx.json) {
+      const data = { upgraded: false, via: "npx", skills, ...projectData(project, outdated) };
+      return ctx.output.data(data);
+    }
     return;
   }
 
@@ -212,12 +312,55 @@ export async function runUpgrade(ctx: CommandContext<"none">, pinned?: string): 
     spin.stop("Upgrade failed");
     const detail = errors.slice(-3).join(" ").trim();
     throw new Error(
-      `npm couldn't upgrade the package${detail ? ` (${detail.slice(0, 200)})` : ""}. Try: npm install --global superwall@latest`,
+      `npm couldn't upgrade the package${detail ? ` (${detail.slice(0, 200)})` : ""}. Try: npm install --global superwall@${resolveUpdateTag()}`,
     );
   }
-  writeUpdateCheck({ latest, checkedAt: new Date().toISOString() });
+  recordLatest(latest);
   spin.stop(`Upgraded \`${VERSION}\` → \`${latest}\``);
   const skills = await updateAgentSkills(ctx, () => updateSkillsWithInstalledCli(latest));
-  if (ctx.json) return ctx.output.data({ upgraded: true, from: VERSION, to: latest, skills });
+  const project = selectProjectInstall(process.cwd(), resolveUpdateTag());
+  const outdated = project ? isOutdated(project, latest) : false;
+  if (ctx.json) {
+    return ctx.output.data({
+      upgraded: true,
+      from: VERSION,
+      to: latest,
+      skills,
+      ...projectData(project, outdated),
+    });
+  }
+  if (project && outdated) {
+    ui.warn(renderProjectPin(project, latest));
+    return;
+  }
   ui.outro("You're on the latest version.");
+}
+
+function isOutdated(project: ProjectInstall, latest: string | null): boolean | null {
+  if (latest === null) return null;
+  return project.version === undefined || isNewerVersion(latest, project.version);
+}
+
+function renderProjectPin(project: ProjectInstall, latest: string | null): string {
+  const pinned =
+    project.version === undefined
+      ? "a superwall of unknown version"
+      : `superwall \`${project.version}\``;
+  const runs = `This project runs its own ${pinned} from ${project.manifest}`;
+  const compared =
+    latest === null
+      ? ", and the npm registry couldn't be reached to compare it with the latest."
+      : `, not \`${latest}\`.`;
+  return `${runs}${compared} Update it: ${project.update}`;
+}
+
+function projectData(
+  project: ProjectInstall | undefined,
+  outdated: boolean | null,
+): {
+  project?: { version: string | null; manifest: string; outdated: boolean | null; update: string };
+} {
+  if (!project) return {};
+  const { version, manifest, update } = project;
+  return { project: { version: version ?? null, manifest, outdated, update } };
 }

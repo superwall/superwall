@@ -40,8 +40,18 @@ create its first app too. `BROWSER=none` stops the CLI from opening a browser
 itself.
 There are no organizations to pick: `superwall apps list` shows every app you
 can open, grouped by organization, and commands take `--app <id|dashboard link>`.
-Upgrade any time with `superwall upgrade` - the CLI also tells you when a new
-version is out.
+Upgrade any time with `superwall upgrade`. When a newer release is out, the CLI
+says so on stderr after each command (and when `superwall dev` starts), with
+the exact command to run: `superwall upgrade`, or the project's own bump such as
+`cd superwall && pnpm add superwall@latest` when the project pins `superwall`.
+A patch or minor gets one line; a major gets a warning that it may contain
+breaking changes and a link to its release notes. A beta compares against the
+newest beta (`superwall@next`). The check reads a once-a-day cache, so it never
+slows a command, and stdout stays clean under `--json`. The studio
+`superwall dev` opens shows the same update as a banner you can dismiss for
+that version. Its Copy prompt button copies instructions for your coding agent:
+read the release notes (for a major, list what will break first), run the
+update command, then rebuild your paywalls.
 
 ## Set up your app
 
@@ -58,6 +68,10 @@ Superwall account, and runs your own coding agent (Claude Code or Codex,
 headless) to install and configure the SDK. Then it walks you through the
 rest: products, campaigns, placements, paywalls, and verifying it all on a
 real device.
+
+With neither Claude Code nor Codex installed, it can run the bundled Superwall
+Agent instead, which needs one more package:
+`npm install @anthropic-ai/claude-agent-sdk@0.3.201`.
 
 Prefer to drive the agent yourself? Add `--skill` to `integrate`, `migrate`,
 or `review` and the CLI prints the full playbook for your project's framework
@@ -243,6 +257,12 @@ stay. If you both changed a file it names the files and changes nothing;
 landed stays pending, so `promote` still won't ship it. With no project,
 `superwall pull --app <id> [dir]` creates `superwall/` from the app's source,
 so you can work on an app's paywalls without its codebase or GitHub.
+
+`pull` needs superwall 2.3.0 or later. Inside a project, the `superwall` your
+project depends on is the one that runs, whichever copy you start (global,
+`npx superwall@…`). When that copy is older, the CLI says so on stderr with the
+command that updates it, such as `cd superwall && npm i superwall@latest`;
+`superwall upgrade` and `superwall doctor` name it too.
 
 A change to the shared design system (`DESIGN.md`, `design/`, `components/`)
 reaches every paywall that imports it. `publish --existing --source` ships it:
@@ -580,23 +600,25 @@ and name the replacement.
 
 ## Apple Search Ads
 
-The **entire** Apple Ads Campaign Management API (v5), proxied by Superwall —
-no client secret, OAuth token, or org id to manage locally. It uses the
-credentials you connect in the dashboard (app → Integrations → Apple Search
-Ads → Advanced); the CLI finds the connected app on its own, or takes
-`--app <id>`.
+The **entire** Apple Ads Platform API (v1), proxied by Superwall — no client
+secret, OAuth token, or account id to manage locally. It uses the credentials
+you connect in the dashboard (app → Integrations → Apple Search Ads →
+Advanced); the CLI finds the connected app on its own, or takes `--app <id>`.
+Without `--ad-account-id`, requests go to the only ad account the key reaches; when it reaches several, pass `--ad-account-id`.
 
 ```bash
 superwall asa campaigns list
-superwall asa campaigns find --field status --op EQUALS --values ENABLED --all
+superwall asa campaigns list --field status --op EQUALS --values ENABLED --all
+superwall asa keywords list --adgroup 456 --order-by text:asc --limit 50
 superwall asa keywords create --campaign 123 --adgroup 456 \
   --text "grammar checker" --match-type EXACT --bid 1.25
 superwall asa reports campaigns --start 2025-01-01 --end 2025-01-31 --group-by countryOrRegion
 ```
 
-Every resource follows the same shape — `asa <resource> <action> [id]`, scoped
-with `--campaign` / `--adgroup` / `--adam-id` — and the catalog is the
-documentation:
+Every resource follows the same shape — `asa <resource> <action> [id]` — and
+lists are Apple queries: `--campaign` / `--adgroup` / `--adam-id` narrow them,
+`--field --op --values` and `--order-by` add a filter and a sort, and `--query`
+takes Apple's whole query request. The catalog is the documentation:
 
 ```bash
 superwall asa docs                          # every endpoint, grouped
@@ -604,10 +626,13 @@ superwall asa docs keywords                 # one resource: usage, flags, Apple 
 superwall asa docs campaigns create         # Apple's own page: fields, enums, examples
 ```
 
-Writes take typed flags (money flags pick up the account's currency),
-`-d key=value` for any other field, or `--body` for the whole payload. Anything
-not covered is `asa get|post|put|delete /path`, sent straight to Apple with
-your access token and org context attached.
+Writes take typed flags (money flags pick up the ad account's currency),
+`-d key=value` for any other field, or `--body` for the whole payload; several
+keyword ids or an array body go to Apple's bulk endpoints. Anything not covered
+is `asa get|post|put|delete /path`, sent straight to Apple with your access
+token and ad account context attached. A path without a version gets `/v1`;
+one that starts with `/v1` or `/api/` is sent as written. Asset upload
+(`POST /v1/assets/upload`) takes form data and isn't supported.
 
 ## For agents and scripts
 

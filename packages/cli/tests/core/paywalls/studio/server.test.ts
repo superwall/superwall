@@ -5,9 +5,11 @@ import { afterEach, test } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import type { FrameworkProject, FrameworkSurface } from "@/core/paywalls/project/framework";
 import { runStudio } from "@/core/paywalls/studio/server";
+import { writeUpdateCheck } from "@/core/state/config";
 import { useRenderer } from "@/ui";
 import { selectRenderer } from "@/ui/select";
 import { writeFakeFrameworkProject } from "../../../helpers/framework";
+import { clearHomes, useHome } from "../../../helpers/home";
 import { recordingRenderer, type RendererCall } from "../../../helpers/renderer";
 
 const FAKE = {
@@ -342,4 +344,33 @@ test("a single directory that isn't a project is refused by name", async () => {
     new RegExp(`Not a superwall project: ${root}`),
   );
   assert.deepEqual(state.started, []);
+});
+
+test("a newer release than the project's own superwall is announced right after the intro, louder for a major", async () => {
+  const state = studio({ local: ["http://localhost:6100/"], network: [] });
+  const root = project(state, { surfaces: [surfaceOf("paywall", "pro")] });
+
+  useHome();
+  writeUpdateCheck({ latest: "9.10.0", tag: "latest", checkedAt: new Date().toISOString() });
+  const minor = recording();
+  await runStudio({ dirs: [root], port: 6100, host: "0.0.0.0", interactive: false });
+  assert.equal(minor[0]?.method, "intro");
+  assert.equal(minor[1]?.method, "info");
+  assert.match(said(minor, "info")[0] ?? "", /^Update available 9\.9\.9 → 9\.10\.0 · run /);
+
+  writeUpdateCheck({ latest: "10.0.0", tag: "latest", checkedAt: new Date().toISOString() });
+  const major = recording();
+  await runStudio({ dirs: [root], port: 6100, host: "0.0.0.0", interactive: false });
+  assert.match(said(major, "warn")[0] ?? "", /^Major update available 9\.9\.9 → 10\.0\.0\n  A major release may contain breaking changes/);
+  clearHomes();
+});
+
+test("no update in the cache adds nothing after the intro", async () => {
+  const state = studio({ local: ["http://localhost:6100/"], network: [] });
+  const root = project(state, { surfaces: [surfaceOf("paywall", "pro")] });
+  useHome();
+  const calls = recording();
+  await runStudio({ dirs: [root], port: 6100, host: "0.0.0.0", interactive: false });
+  assert.deepEqual(said(calls, "info"), []);
+  clearHomes();
 });

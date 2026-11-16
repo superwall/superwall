@@ -303,7 +303,9 @@ fails the build when one isn't.
 - **Catalogs.** A family driven by a catalog (`apps …`, `products …`, `asa
   campaigns …`) is one `defineCatalog` file with the same description fields
   plus `operations()` and `help(words)`; its flags are parsed loosely because
-  they come from the live API.
+  they come from the live API. A catalog whose flags are all declared up front
+  sets `strictFlags: true` (`asa`), so a removed or mistyped flag is refused
+  rather than dropped.
 - **App Store Connect resources** (`asc subscription-groups`, `asc
   subscriptions`, `asc iaps`, `asc localizations`, `asc prices`, `asc offers`,
   `asc availability`, `asc screenshots`) are catalogs written with
@@ -522,7 +524,7 @@ server at mcp.superwall.com run the same commands; `@superwall/cli/tools`
   read-only only if all branches are reads, and otherwise a write. Account for
   overwrites, live traffic, spend and irreversible sends. Internal provisioning or
   authorization maintenance can make a tool a write without making it destructive.
-  POST selector lookups can still be reads. Test specific effect boundaries rather
+  POST query lookups can still be reads. Test specific effect boundaries rather
   than snapshotting the catalog; explain behavior evidence and remaining
   qualifications in the pull request.
 - **A tool is the command**: its name is the command words joined by `_`,
@@ -605,6 +607,29 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   exits the parent also requires the sync stamp it wrote (only written when both
   succeed) to name the new version and postdate the spawn. A skills failure is
   a warning with the retry command, never a failed upgrade: the CLI did upgrade.
+- **A project's own superwall runs.** The launcher hands every run to the
+  `superwall` the cwd's project resolves (`superwall/` or the cwd), because
+  its paywalls import that framework. When that copy is older than the
+  launcher it prints one stderr line naming it and its update command, so
+  `--json` stays clean; the older CLI's own output can't change.
+  `selectProjectInstall` finds the same copy for `upgrade` (which never edits
+  the project's `package.json`: a major bump can break paywalls) and `doctor`.
+- **Outdated versions are loud, never blocking.** `resolveUpdate()` compares
+  `VERSION` (inside a project, the pinned copy the launcher handed off to)
+  with the daily update cache and returns the kind (patch, minor, major), the
+  command (`selectProjectInstall`'s bump when the project pins `superwall`,
+  else `superwall upgrade`) and the release notes link. A stable version reads
+  npm's `latest` tag and a prerelease reads `next`; each tag has its own daily
+  cache entry (`updateCheck`, `updateCheckNext`), so a stable CLI and a
+  beta-pinned project never refetch each other's. `maybeNotifyUpdate` prints it on stderr
+  after every command, also under `--json` (agents run with it, stdout stays
+  clean), and `dev` prints it after its intro since it never ends. The studio
+  gets the same object as `update` in `/__studio/project.json` and shows
+  `UpdateBanner`, whose Copy prompt hands an agent `updatePrompt()`: review the
+  release notes (and the breaking changes for a major) before running the
+  command, because agents do the upgrade. Nothing auto-updates a project's pin or stops a command: a
+  major can break paywalls, so we only prompt. No cache or an unreachable
+  registry prints nothing.
 - **Telemetry is anonymous by design**: a random persisted id, enum/boolean/
   number properties only, no person profiles, and a fetch timeout shorter than
   the exit flush so an unreachable endpoint can't hold the process open.

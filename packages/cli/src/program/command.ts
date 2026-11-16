@@ -108,6 +108,11 @@ export interface JsonSchema {
   additionalProperties?: boolean | JsonSchema;
 }
 
+export interface Endpoint {
+  method: string;
+  path: string;
+}
+
 export interface CatalogTool {
   words: string[];
   summary: string;
@@ -119,9 +124,11 @@ export interface CatalogTool {
 
 interface CatalogSpec<Auth extends AuthPolicy> extends Description<Auth> {
   flags?: Readonly<Record<string, FlagSpec>>;
+  strictFlags?: boolean;
   operations: () => readonly string[];
   help: (words: readonly string[]) => Promise<string>;
   tools: () => Promise<CatalogTool[]>;
+  commandFor?: (endpoint: Endpoint) => string | undefined;
   run: (ctx: CommandContext<Auth>, input: { words: string[]; flags: Record<string, unknown> }) => void | Promise<void>;
 }
 
@@ -160,9 +167,11 @@ export interface Command extends Common {
 export interface Catalog extends Common {
   kind: "catalog";
   flags: Readonly<Record<string, FlagSpec>>;
+  strictFlags: boolean;
   operations: () => readonly string[];
   tools: () => Promise<CatalogTool[]>;
   help: (words: readonly string[]) => Promise<string>;
+  commandFor?: (endpoint: Endpoint) => string | undefined;
 }
 
 export type AnyCommand = Command | Catalog;
@@ -288,9 +297,11 @@ export function defineCatalog<Auth extends AuthPolicy>(spec: CatalogSpec<Auth>):
     mcp: spec.mcp,
     channel: spec.channel,
     flags: spec.flags ?? {},
+    strictFlags: spec.strictFlags ?? false,
     operations: spec.operations,
     help: spec.help,
     tools: spec.tools,
+    commandFor: spec.commandFor,
     execute: (input, runtime = {}) => {
       return runLifecycle<Auth>(spec, input, runtime, (ctx) => {
         return spec.run(ctx, { words: input.words ?? [], flags: input.flags ?? {} });

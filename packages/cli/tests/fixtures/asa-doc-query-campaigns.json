@@ -1,0 +1,617 @@
+{
+  "metadata": {
+    "title": "Query Campaigns"
+  },
+  "abstract": [
+    {
+      "text": "Query campaigns using filters, sorting, and pagination.",
+      "type": "text"
+    }
+  ],
+  "primaryContentSections": [
+    {
+      "kind": "restEndpoint",
+      "title": "URL",
+      "tokens": [
+        {
+          "kind": "method",
+          "text": "POST"
+        },
+        {
+          "kind": "text",
+          "text": " "
+        },
+        {
+          "kind": "baseURL",
+          "text": "https://api.ads.apple.com/v1/"
+        },
+        {
+          "kind": "path",
+          "text": "campaigns/query"
+        }
+      ]
+    },
+    {
+      "items": [
+        {
+          "attributes": [],
+          "content": [],
+          "name": "X-AP-Context",
+          "required": true,
+          "type": [
+            {
+              "kind": "text",
+              "text": "string"
+            }
+          ]
+        }
+      ],
+      "kind": "restParameters",
+      "source": "header",
+      "title": "Header Parameters"
+    },
+    {
+      "bodyContentType": [
+        {
+          "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QueryRequest",
+          "kind": "typeIdentifier",
+          "preciseIdentifier": "data:apple-ads-platform-api:QueryRequest",
+          "text": "QueryRequest"
+        }
+      ],
+      "content": [],
+      "kind": "restBody",
+      "mimeType": "application/json",
+      "parameters": [],
+      "title": "HTTP Body"
+    },
+    {
+      "items": [
+        {
+          "content": [],
+          "mimeType": "application/json",
+          "reason": "OK",
+          "status": 200,
+          "type": [
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/CampaignQueryResponse",
+              "kind": "typeIdentifier",
+              "preciseIdentifier": "data:apple-ads-platform-api:CampaignQueryResponse",
+              "text": "CampaignQueryResponse"
+            }
+          ]
+        },
+        {
+          "content": [],
+          "mimeType": "application/json",
+          "reason": "Bad Request",
+          "status": 400,
+          "type": [
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/ErrorResponse",
+              "kind": "typeIdentifier",
+              "preciseIdentifier": "data:apple-ads-platform-api:ErrorResponse",
+              "text": "ErrorResponse"
+            }
+          ]
+        },
+        {
+          "content": [],
+          "mimeType": "application/json",
+          "reason": "Unauthorized",
+          "status": 401,
+          "type": [
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/ErrorResponse",
+              "kind": "typeIdentifier",
+              "preciseIdentifier": "data:apple-ads-platform-api:ErrorResponse",
+              "text": "ErrorResponse"
+            }
+          ]
+        },
+        {
+          "content": [],
+          "mimeType": "application/json",
+          "reason": "Forbidden",
+          "status": 403,
+          "type": [
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/ErrorResponse",
+              "kind": "typeIdentifier",
+              "preciseIdentifier": "data:apple-ads-platform-api:ErrorResponse",
+              "text": "ErrorResponse"
+            }
+          ]
+        },
+        {
+          "content": [],
+          "mimeType": "application/json",
+          "reason": "Not Found",
+          "status": 404,
+          "type": [
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/ErrorResponse",
+              "kind": "typeIdentifier",
+              "preciseIdentifier": "data:apple-ads-platform-api:ErrorResponse",
+              "text": "ErrorResponse"
+            }
+          ]
+        },
+        {
+          "content": [],
+          "mimeType": "application/json",
+          "reason": "Too Many Requests",
+          "status": 429,
+          "type": [
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/ErrorResponse",
+              "kind": "typeIdentifier",
+              "preciseIdentifier": "data:apple-ads-platform-api:ErrorResponse",
+              "text": "ErrorResponse"
+            }
+          ]
+        },
+        {
+          "content": [],
+          "mimeType": "application/json",
+          "reason": "Internal Server Error",
+          "status": 500,
+          "type": [
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/ErrorResponse",
+              "kind": "typeIdentifier",
+              "preciseIdentifier": "data:apple-ads-platform-api:ErrorResponse",
+              "text": "ErrorResponse"
+            }
+          ]
+        }
+      ],
+      "kind": "restResponses",
+      "title": "Response Codes"
+    },
+    {
+      "content": [
+        {
+          "anchor": "Discussion",
+          "level": 2,
+          "text": "Discussion",
+          "type": "heading"
+        },
+        {
+          "inlineContent": [
+            {
+              "text": "This endpoint queries campaigns using a standard ",
+              "type": "text"
+            },
+            {
+              "code": "QueryRequest",
+              "type": "codeVoice"
+            },
+            {
+              "text": " body. An empty request body returns all campaigns for the ad account with default pagination.",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "inlineContent": [
+            {
+              "text": "See ",
+              "type": "text"
+            },
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QueryFilterOperator",
+              "isActive": true,
+              "type": "reference"
+            },
+            {
+              "text": " for the full set of supported comparison operators.",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "anchor": "Filterable-Fields",
+          "level": 3,
+          "text": "Filterable Fields",
+          "type": "heading"
+        },
+        {
+          "alignments": [
+            "unset",
+            "center",
+            "center",
+            "center",
+            "unset"
+          ],
+          "header": "row",
+          "rows": [
+            [
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Field",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Type",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Operators",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Sortable",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Description",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "code": "id",
+                      "type": "codeVoice"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "integer",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "code": "EQUALS",
+                      "type": "codeVoice"
+                    },
+                    {
+                      "text": ", ",
+                      "type": "text"
+                    },
+                    {
+                      "code": "IN",
+                      "type": "codeVoice"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Yes",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "System-assigned unique identifier for the campaign.",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "code": "name",
+                      "type": "codeVoice"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "string",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "code": "EQUALS",
+                      "type": "codeVoice"
+                    },
+                    {
+                      "text": ", ",
+                      "type": "text"
+                    },
+                    {
+                      "code": "IN",
+                      "type": "codeVoice"
+                    },
+                    {
+                      "text": ", ",
+                      "type": "text"
+                    },
+                    {
+                      "code": "LIKE",
+                      "type": "codeVoice"
+                    },
+                    {
+                      "text": ", ",
+                      "type": "text"
+                    },
+                    {
+                      "code": "STARTS_WITH",
+                      "type": "codeVoice"
+                    },
+                    {
+                      "text": ", ",
+                      "type": "text"
+                    },
+                    {
+                      "code": "ENDS_WITH",
+                      "type": "codeVoice"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Yes",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Campaign name.",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "code": "status",
+                      "type": "codeVoice"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "string (enum)",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "code": "EQUALS",
+                      "type": "codeVoice"
+                    },
+                    {
+                      "text": ", ",
+                      "type": "text"
+                    },
+                    {
+                      "code": "IN",
+                      "type": "codeVoice"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Yes",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ],
+              [
+                {
+                  "inlineContent": [
+                    {
+                      "text": "Captures the advertiser\u2019s intent for the campaign to serve. See ",
+                      "type": "text"
+                    },
+                    {
+                      "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/CampaignStatus",
+                      "isActive": true,
+                      "type": "reference"
+                    },
+                    {
+                      "text": ".",
+                      "type": "text"
+                    }
+                  ],
+                  "type": "paragraph"
+                }
+              ]
+            ]
+          ],
+          "type": "table"
+        },
+        {
+          "inlineContent": [
+            {
+              "text": "The request body is a ",
+              "type": "text"
+            },
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QueryRequest",
+              "isActive": true,
+              "type": "reference"
+            },
+            {
+              "text": " composed of ",
+              "type": "text"
+            },
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QueryFilter",
+              "isActive": true,
+              "type": "reference"
+            },
+            {
+              "text": " conditions and ",
+              "type": "text"
+            },
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QuerySort",
+              "isActive": true,
+              "type": "reference"
+            },
+            {
+              "text": " directives (",
+              "type": "text"
+            },
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QuerySortOrder",
+              "isActive": true,
+              "type": "reference"
+            },
+            {
+              "text": "), controlled by ",
+              "type": "text"
+            },
+            {
+              "identifier": "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QueryPagination",
+              "isActive": true,
+              "type": "reference"
+            },
+            {
+              "text": ". This endpoint caps ",
+              "type": "text"
+            },
+            {
+              "code": "pageSize",
+              "type": "codeVoice"
+            },
+            {
+              "text": " at 1000.",
+              "type": "text"
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "kind": "content"
+    }
+  ],
+  "references": {
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API": {
+      "title": "Apple Ads Platform API"
+    },
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/CampaignQueryResponse": {
+      "title": "CampaignQueryResponse"
+    },
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/CampaignStatus": {
+      "title": "CampaignStatus"
+    },
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/ErrorResponse": {
+      "title": "ErrorResponse"
+    },
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QueryFilter": {
+      "title": "QueryFilter"
+    },
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QueryFilterOperator": {
+      "title": "QueryFilterOperator"
+    },
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QueryPagination": {
+      "title": "QueryPagination"
+    },
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QueryRequest": {
+      "title": "QueryRequest"
+    },
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QuerySort": {
+      "title": "QuerySort"
+    },
+    "doc://com.apple.apple-ads-platform-api/documentation/Apple-Ads-Platform-API/QuerySortOrder": {
+      "title": "QuerySortOrder"
+    }
+  }
+}

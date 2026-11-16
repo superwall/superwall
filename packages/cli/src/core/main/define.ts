@@ -1,6 +1,6 @@
 import { app, data, dryRun, project, yes } from "@/program/flags";
 import { defineCatalog, type Catalog, type Example, type FlagSpec } from "@/program/command";
-import type { Resource } from "./catalog";
+import { resourceCommandFor, type Resource } from "./catalog";
 import { dispatch } from "./dispatch";
 import { renderResourceHelp } from "./help";
 import { readResourceFlags } from "./input";
@@ -38,6 +38,7 @@ export function defineResource(resource: Resource & { examples: readonly Example
     ],
     help: async (words) => renderResourceHelp(resource, words),
     tools: () => listResourceTools(resource, FLAGS),
+    commandFor: (endpoint) => resourceCommandFor(resource, endpoint),
     run: (ctx, { words, flags }) => dispatch(ctx, resource, words, readResourceFlags(flags)),
   });
 }

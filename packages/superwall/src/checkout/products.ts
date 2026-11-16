@@ -1,5 +1,8 @@
 export const isStripeProductIdentifier = (identifier: string | undefined): boolean =>
   typeof identifier === "string" && /^(stripe\|)?(test|live):price_[^:]+/.test(identifier);
 
+export const isCustomStoreProductIdentifier = (identifier: string | undefined): boolean =>
+  typeof identifier === "string" && /^custom\|.+/.test(identifier);
+
 export const bareProductIdentifier = (identifier: string): string =>
-  identifier.replace(/^stripe\|/, "");
+  identifier.replace(/^(stripe|custom)\|/, "");

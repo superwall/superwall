@@ -129,3 +129,30 @@ test("list, update and delete", async () => {
     ],
   );
 });
+
+test("a paid offer priced in a territory outside --available-territories goes only to the territories asked for, written or planned", async () => {
+  const BGR_POINTS = "GET /v1/subscriptions/601/pricePoints?filter[territory]=BGR&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds";
+  const { api, writes } = ascRoutes({
+    ...subscriptionView("601"),
+    [BGR_POINTS]: page([one("subscriptionPricePoints", "P-BGR", { customerPrice: "1.99" })]),
+    [EQUALIZATIONS("P-BGR")]: page([
+      one("subscriptionPricePoints", "P-USA", {}, { territory: link("territories", "USA") }),
+      one("subscriptionPricePoints", "P-CAN", {}, { territory: link("territories", "CAN") }),
+    ]),
+    "PATCH /v1/subscriptions/601": { data: one("subscriptions", "601") },
+  });
+  const flags = { subscription: "601", offerMode: "PAY_AS_YOU_GO", duration: "ONE_MONTH", price: "1.99", territory: "BGR", availableTerritories: "USA,CAN" };
+  const territoriesOf = (body: unknown) => {
+    const { data, included } = body as { data: { relationships: { introductoryOffers: { data: { id: string }[] } } }; included: { relationships: { territory: { data: { id: string } } } }[] };
+    return { ids: data.relationships.introductoryOffers.data.map((entry) => entry.id), territories: included.map((entry) => entry.relationships.territory.data.id) };
+  };
+
+  const plan = await runCommand(offers, { api, words: ["create"], flags: { ...flags, dryRun: true }, json: true });
+  const { requests } = plan.json as { requests: { method: string; body?: unknown }[] };
+  assert.deepEqual(territoriesOf(requests.at(-1)?.body), { ids: ["${offer-USA}", "${offer-CAN}"], territories: ["USA", "CAN"] });
+  assert.deepEqual(writes(), []);
+
+  const result = await runCommand(offers, { api, words: ["create"], flags });
+  assert.deepEqual(territoriesOf(writes()[0]?.body), { ids: ["${offer-USA}", "${offer-CAN}"], territories: ["USA", "CAN"] });
+  assert.deepEqual(result.said("success"), ["Created a PAY_AS_YOU_GO introductory offer in 2 territories"]);
+});

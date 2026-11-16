@@ -3,6 +3,7 @@ import { afterEach, test } from "node:test";
 import { defineCatalog, defineCommand, UsageError } from "@/program/command";
 import { resolveLine } from "@/program/parse";
 import type { Group } from "@/commands/registry";
+import { command as asa } from "@/commands/apple-search-ads/asa";
 
 const original = process.env.SUPERWALL_CHANNEL;
 
@@ -67,6 +68,7 @@ const groups: Group[] = [
     commands: [keysCreate, ascDocs],
   },
   { id: "account", title: "Your account", commands: [apps] },
+  { id: "apple-search-ads", title: "Apple Search Ads", commands: [asa] },
 ];
 
 test("the longest matching command wins, and its arguments and flags are typed by the spec", () => {
@@ -140,6 +142,12 @@ test("a catalog takes any flag and passes its words through", () => {
   assert.deepEqual(resolution.input.words, ["update", "5861"]);
   assert.equal(resolution.input.flags?.eventName, "x");
   assert.equal(resolution.input.flags?.yes, true);
+});
+
+test("a catalog with strict flags refuses a flag it doesn't declare", () => {
+  assert.throws(() => resolveLine(["asa", "campaigns", "list", "--org-id", "1"], groups), /Unknown flag: --org-id/);
+  const resolution = resolveLine(["asa", "campaigns", "list", "--ad-account-id", "1"], groups);
+  assert.equal(resolution.kind === "run" && resolution.input.flags?.adAccountId, "1");
 });
 
 test("words that match nothing are left for the caller to report", () => {

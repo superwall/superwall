@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import type { Session } from "@/core/account/storage";
 import { writeOnboardedApp } from "@/core/state/config";
+import { AGENT_SDK_INSTALL_MESSAGE } from "@/core/workflows/agent/drivers/superwall";
 import { runIntegrate, runReview } from "@/core/workflows/integrate";
 import type { CommandContext } from "@/program/command";
 import { prompted, said, type Answers } from "../../helpers/answers";
@@ -93,6 +94,15 @@ test("integrate --driver refuses an agent that isn't installed", async () => {
   const { calls, failed } = await integrate(expoApp(), { driver: "codex" });
   assert.equal(failed, true);
   assert.deepEqual(said(calls, "error"), ['Driver "codex" not available. Detected: claude.']);
+});
+
+test("integrate --driver superwall without the agent SDK says how to install it", async () => {
+  useHome();
+  useFetch([]);
+  useAgents({ claude: [] });
+  const { calls, failed } = await integrate(expoApp(), { driver: "superwall" });
+  assert.equal(failed, true);
+  assert.deepEqual(said(calls, "error"), [AGENT_SDK_INSTALL_MESSAGE]);
 });
 
 test("headless integrate without a login applies the SDK but fails the run as incomplete", async () => {

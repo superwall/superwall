@@ -4,7 +4,7 @@ import { command as groups } from "@/commands/app-store-connect/store/subscripti
 import { ApiError } from "@/core/api/client";
 import { answeringRenderer, said } from "../../../helpers/answers";
 import type { RendererCall } from "../../../helpers/renderer";
-import { ascRoutes, one, page } from "../../../helpers/asc-proxy";
+import { appleError, appleNotFound, ascRoutes, one, page } from "../../../helpers/asc-proxy";
 import { runCommand } from "../../../helpers/command";
 
 afterEach(() => {
@@ -53,4 +53,22 @@ test("an Apple error the session explains keeps Apple's HTTP status", async () =
   assert.equal(statusOf(new AscRequestError("refused", 502)), 502);
   assert.equal(statusOf(new ApiError("GET x", 404, "")), 404);
   assert.equal(statusOf(new Error("plain")), undefined);
+});
+
+test("select reads Apple's explained 404 as nothing there, and rethrows any other status", async () => {
+  const { AscRequestError, AscSession } = await import("@/core/app-store-connect/resources/session");
+  const missing = "GET /v2/inAppPurchases/701/inAppPurchaseAvailability";
+  const failing = "GET /v2/inAppPurchases/702/inAppPurchaseAvailability";
+  const { api } = ascRoutes({
+    [missing]: appleNotFound(missing, "inAppPurchaseAvailabilities", "701"),
+    [failing]: appleError(failing, 500, "UNEXPECTED_ERROR", "An unexpected error occurred on the server side."),
+  });
+  const session = new AscSession({ outputMode: "plain" } as never, api.forOrg!("7") as never, "T1", false);
+  assert.equal(await session.select("/v2/inAppPurchases/701/inAppPurchaseAvailability"), undefined);
+  await assert.rejects(session.select("/v2/inAppPurchases/702/inAppPurchaseAvailability"), (error: unknown) => {
+    assert.ok(error instanceof AscRequestError);
+    assert.equal(error.status, 500);
+    assert.match(error.message, /An unexpected error occurred on the server side\./);
+    return true;
+  });
 });

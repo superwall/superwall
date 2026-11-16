@@ -31,7 +31,41 @@ test("withAppleErrors points missing or bad credentials at the dashboard", async
   }
 });
 
-test("withAppleErrors lists each of Apple's field errors", async () => {
+test("withAppleErrors lists each detail of a v1 ErrorResponse with its field", async () => {
+  const body = JSON.stringify({
+    error: {
+      code: "INVALID_ARGUMENT",
+      message: "The request could not be processed because of missing or invalid fields.",
+      details: [
+        { code: "MISSING_REQUIRED_FIELD", message: "The field 'name' is required.", info: { field: "name" } },
+        { code: "", message: "name is taken", info: { field: "" } },
+        { code: "INVALID_VALUE", info: "not an object" },
+        "not an object",
+      ],
+    },
+  });
+  await assert.rejects(withAppleErrors("POST /campaigns", rejectWith(appleError(body))), {
+    message: [
+      "Apple Search Ads rejected POST /campaigns (400):",
+      "  • name: The field 'name' is required. (MISSING_REQUIRED_FIELD)",
+      "  • name is taken",
+      "  • The request could not be processed because of missing or invalid fields. (INVALID_VALUE)",
+    ].join("\n"),
+  });
+});
+
+test("withAppleErrors names a v1 error without details by its message and code", async () => {
+  const withMessage = JSON.stringify({ error: { code: "NOT_FOUND", message: "Campaign 9 doesn't exist." } });
+  await assert.rejects(withAppleErrors("GET /campaigns/9", rejectWith(appleError(withMessage))), {
+    message: "Apple Search Ads rejected GET /campaigns/9 (400):\n  • Campaign 9 doesn't exist. (NOT_FOUND)",
+  });
+  const bare = JSON.stringify({ error: { code: "UNAUTHORIZED", details: [] } });
+  await assert.rejects(withAppleErrors("GET /me", rejectWith(appleError(bare))), {
+    message: "Apple Search Ads rejected GET /me (400):\n  • UNAUTHORIZED (UNAUTHORIZED)",
+  });
+});
+
+test("withAppleErrors still lists v5 field errors from a raw /api/v5 path", async () => {
   const body = JSON.stringify({
     error: {
       errors: [
@@ -43,9 +77,9 @@ test("withAppleErrors lists each of Apple's field errors", async () => {
       ],
     },
   });
-  await assert.rejects(withAppleErrors("POST /campaigns", rejectWith(appleError(body))), {
+  await assert.rejects(withAppleErrors("POST /api/v5/campaigns", rejectWith(appleError(body))), {
     message: [
-      "Apple Search Ads rejected POST /campaigns (400):",
+      "Apple Search Ads rejected POST /api/v5/campaigns (400):",
       "  • budgetAmount: must be positive (INVALID_BUDGET)",
       "  • name is taken",
       "  • 7",
@@ -55,7 +89,7 @@ test("withAppleErrors lists each of Apple's field errors", async () => {
 });
 
 test("withAppleErrors passes through errors it can't describe", async () => {
-  const bodies = [undefined, "oops", "[1]", JSON.stringify({ error: { errors: [] } }), JSON.stringify({ error: "other" })];
+  const bodies = [undefined, "oops", "[1]", JSON.stringify({ error: { errors: [] } }), JSON.stringify({ error: { message: "no code" } }), JSON.stringify({ error: "other" })];
   for (const body of bodies) {
     const failure = appleError(body);
     await assert.rejects(withAppleErrors("POST /campaigns", rejectWith(failure)), (thrown) => thrown === failure);
@@ -74,7 +108,7 @@ test("asa get finds an app outside the listed accounts through its paywalls", as
     return { data: [] };
   });
   await runCommand(asaGet, { api, args: { path: "/campaigns" }, flags: { app: "77", d: ["limit=3"] }, json: true });
-  assert.equal(requests.at(-1)?.path, "/v2/organizations/org-3/apple-search-ads/proxy/77/api/v5/campaigns?limit=3");
+  assert.equal(requests.at(-1)?.path, "/v2/organizations/org-3/apple-search-ads/proxy/77/v1/campaigns?limit=3");
 });
 
 test("asa get refuses an app whose account can't be told", async () => {
@@ -89,20 +123,20 @@ test("asa get refuses an app whose account can't be told", async () => {
   assert.ok(!fake.requests.some((request) => request.path.includes("/proxy/")));
 });
 
-test("asa put sends a non-object --body as given, with the org context header", async () => {
+test("asa put sends a non-object --body as given, with the ad account context header", async () => {
   useHome();
   const { api, requests } = fakeAsaApi();
   await runCommand(asaPut, {
     api,
     args: { path: "/campaigns/1/adgroups/2/targetingkeywords/bulk" },
-    flags: { body: '[{"id":9,"status":"PAUSED"}]', d: ["ignored=1"], orgId: "40669820" },
+    flags: { body: '[{"id":9,"status":"PAUSED"}]', d: ["ignored=1"], adAccountId: "40669820" },
     json: true,
   });
   assert.deepEqual(requests.at(-1), {
     method: "PUT",
-    path: "/v2/organizations/org-1/apple-search-ads/proxy/5/api/v5/campaigns/1/adgroups/2/targetingkeywords/bulk",
+    path: "/v2/organizations/org-1/apple-search-ads/proxy/5/v1/campaigns/1/adgroups/2/targetingkeywords/bulk",
     body: [{ id: 9, status: "PAUSED" }],
-    headers: { "x-ap-context": "orgId=40669820" },
+    headers: { "x-ap-context": "adAccountId=40669820" },
   });
 });
 
