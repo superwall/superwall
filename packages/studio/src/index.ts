@@ -10,6 +10,7 @@ export { StudioShell } from "./components/chrome/StudioShell";
 export { DownloadScreenshot } from "./components/DownloadScreenshot";
 export { PreviewOnDevice } from "./components/PreviewOnDevice";
 export { Tooltip } from "./components/Tooltip";
+export { UpdateBanner, updatePrompt } from "./components/UpdateBanner";
 export { TopBar } from "./components/chrome/TopBar";
 export { VariablesPanel } from "./components/panels/VariablesPanel";
 export { Segmented, Select, Switch } from "./components/controls";
@@ -79,4 +80,5 @@ export type {
   StudioSurfaceKind,
   StudioVersion,
 } from "./lib/surfaces";
+export type { StudioUpdate, StudioUpdateKind } from "./lib/contract";
 export type { SampleDefaults, VariableOverrides } from "./lib/variables";

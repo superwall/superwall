@@ -159,7 +159,7 @@ async function cliCheck(installDir: string): Promise<unknown> {
 
 test("a newer release in the update cache fails the CLI row and points at superwall upgrade", async () => {
   useHome();
-  writeUpdateCheck({ latest: "999.0.0", checkedAt: new Date().toISOString() });
+  writeUpdateCheck({ latest: "999.0.0", tag: "latest", checkedAt: new Date().toISOString() });
   assert.deepEqual(await cliCheck(project()), {
     ok: false,
     label: "CLI",
@@ -169,7 +169,7 @@ test("a newer release in the update cache fails the CLI row and points at superw
 
 test("an older superwall pinned by the project is the version doctor reports, with its own update command", async () => {
   useHome();
-  writeUpdateCheck({ latest: "999.0.0", checkedAt: new Date().toISOString() });
+  writeUpdateCheck({ latest: "999.0.0", tag: "latest", checkedAt: new Date().toISOString() });
   const installDir = pinnedSuperwall("2.0.0", { "superwall/pnpm-lock.yaml": "" });
   assert.deepEqual(await cliCheck(installDir), {
     ok: false,
@@ -180,7 +180,7 @@ test("an older superwall pinned by the project is the version doctor reports, wi
 
 test("a current project pin passes, naming the package.json it comes from", async () => {
   useHome();
-  writeUpdateCheck({ latest: "2.0.0", checkedAt: new Date().toISOString() });
+  writeUpdateCheck({ latest: "2.0.0", tag: "latest", checkedAt: new Date().toISOString() });
   assert.deepEqual(await cliCheck(pinnedSuperwall("2.0.0")), {
     ok: true,
     label: "CLI",
@@ -188,13 +188,25 @@ test("a current project pin passes, naming the package.json it comes from", asyn
   });
 });
 
-test("a prerelease pin fails once its release is the latest", async () => {
+test("a prerelease pin is checked against the next channel, whatever CLI runs doctor", async () => {
   useHome();
-  writeUpdateCheck({ latest: "2.5.2", checkedAt: new Date().toISOString() });
-  assert.deepEqual(await cliCheck(pinnedSuperwall("2.5.2-beta.1")), {
+  writeUpdateCheck({ latest: "2.5.2", tag: "latest", checkedAt: new Date().toISOString() });
+  writeUpdateCheck({ latest: "2.6.0-beta.3", tag: "next", checkedAt: new Date().toISOString() });
+  assert.deepEqual(await cliCheck(pinnedSuperwall("2.6.0-beta.2")), {
     ok: false,
     label: "CLI",
-    value: `2.5.2-beta.1 from ${path.join("superwall", "package.json")}, 2.5.2 available - run \`cd superwall && npm i superwall@latest\``,
+    value: `2.6.0-beta.2 from ${path.join("superwall", "package.json")}, 2.6.0-beta.3 available - run \`cd superwall && npm i superwall@next\``,
+  });
+});
+
+test("a stable pin is checked against latest, never the next channel", async () => {
+  useHome();
+  writeUpdateCheck({ latest: "2.0.0", tag: "latest", checkedAt: new Date().toISOString() });
+  writeUpdateCheck({ latest: "2.6.0-beta.3", tag: "next", checkedAt: new Date().toISOString() });
+  assert.deepEqual(await cliCheck(pinnedSuperwall("2.0.0")), {
+    ok: true,
+    label: "CLI",
+    value: `2.0.0 from ${path.join("superwall", "package.json")}`,
   });
 });
 
@@ -209,7 +221,7 @@ test("a project pin whose version can't be read fails rather than passing", asyn
 
 test("a pin hoisted to the repo root names the workspace that declares it, with the root's package manager", async () => {
   useHome();
-  writeUpdateCheck({ latest: "999.0.0", checkedAt: new Date().toISOString() });
+  writeUpdateCheck({ latest: "999.0.0", tag: "latest", checkedAt: new Date().toISOString() });
   const installDir = project({
     "package.json": JSON.stringify({ name: "app", workspaces: ["superwall"] }),
     "bun.lock": "",
@@ -225,7 +237,7 @@ test("a pin hoisted to the repo root names the workspace that declares it, with 
 
 test("a hoisted pin only the root declares names the root's package.json", async () => {
   useHome();
-  writeUpdateCheck({ latest: "999.0.0", checkedAt: new Date().toISOString() });
+  writeUpdateCheck({ latest: "999.0.0", tag: "latest", checkedAt: new Date().toISOString() });
   const installDir = project({
     "package.json": JSON.stringify({ name: "app", devDependencies: { superwall: "2.0.0" } }),
     "package-lock.json": "",

@@ -29,7 +29,8 @@ interface Config {
     org?: { id: string; name: string };
     apps?: Record<string, OnboardedApp>;
   };
-  updateCheck?: { latest?: string; checkedAt?: string };
+  updateCheck?: UpdateCheck;
+  updateCheckNext?: UpdateCheck;
   autoUpdate?: AutoUpdate;
 }
 
@@ -110,13 +111,17 @@ export function writeOnboardedApp(appPath: string, app: OnboardedApp): void {
   write(config);
 }
 
-export function readUpdateCheck(): { latest?: string; checkedAt?: string } | undefined {
-  return read().updateCheck;
+export type UpdateCheck = { latest?: string; tag?: string; checkedAt?: string };
+
+export function readUpdateCheck(tag: string = "latest"): UpdateCheck | undefined {
+  const config = read();
+  return tag === "next" ? config.updateCheckNext : config.updateCheck;
 }
 
-export function writeUpdateCheck(check: { latest: string; checkedAt: string }): void {
+export function writeUpdateCheck(check: { latest: string; tag: string; checkedAt: string }): void {
   const config = read();
-  config.updateCheck = check;
+  if (check.tag === "next") config.updateCheckNext = check;
+  else config.updateCheck = check;
   write(config);
 }
 

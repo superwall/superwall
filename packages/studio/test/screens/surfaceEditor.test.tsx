@@ -88,6 +88,28 @@ describe("SurfaceEditor hosting a published paywall", () => {
     expect(screen.getByText("Plus Upgrade / v12 · Live · plus-upgrade")).toBeTruthy();
   });
 
+  it("shows an update below the top bar, so the bar never moves", () => {
+    renderEditor(
+      <SurfaceEditor
+        source={{
+          ...source,
+          update: {
+            current: "2.5.2",
+            latest: "3.0.0",
+            kind: "major",
+            command: "superwall upgrade",
+            notes: "https://github.com/superwall/superwall/releases/tag/v3.0.0",
+          },
+        }}
+        surface={live}
+        samples={{}}
+      />,
+    );
+    const title = screen.getByText("Plus Upgrade / v12 · Live · plus-upgrade");
+    const banner = screen.getByText("Major update available");
+    expect(title.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("answers the paywall's ping with the version's products and identity", () => {
     renderEditor(
       <SurfaceEditor

@@ -198,3 +198,28 @@ describe("parseProjectPayload", () => {
     expect(parseProjectPayload({}).surfaces).toEqual([]);
   });
 });
+
+describe("parseProjectPayload's update", () => {
+  const UPDATE = {
+    current: "2.5.2",
+    latest: "3.0.0",
+    kind: "major",
+    command: "superwall upgrade",
+    notes: "https://github.com/superwall/superwall/releases/tag/v3.0.0",
+  };
+
+  it("keeps a well-formed update", () => {
+    expect(parseProjectPayload({ title: "t", update: UPDATE }).update).toEqual(UPDATE);
+  });
+
+  it("drops a missing or malformed update", () => {
+    expect(parseProjectPayload({ title: "t" })).not.toHaveProperty("update");
+    expect(
+      parseProjectPayload({ title: "t", update: { ...UPDATE, kind: "huge" } }),
+    ).not.toHaveProperty("update");
+    expect(
+      parseProjectPayload({ title: "t", update: { ...UPDATE, command: 1 } }),
+    ).not.toHaveProperty("update");
+    expect(parseProjectPayload({ title: "t", update: "3.0.0" })).not.toHaveProperty("update");
+  });
+});

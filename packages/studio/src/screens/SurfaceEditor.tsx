@@ -31,6 +31,7 @@ import { Tooltip } from "../components/Tooltip";
 import { SidePanel } from "../components/panels/SidePanel";
 import { Toolbar, ToolbarDivider, ToolbarGroup } from "../components/chrome/Toolbar";
 import { TopBar } from "../components/chrome/TopBar";
+import { UpdateBanner } from "../components/UpdateBanner";
 import {
   VariablesPanel,
   type VariableGroups,
@@ -580,6 +581,7 @@ export const SurfaceEditor = ({
           </>
         }
       />
+      <UpdateBanner update={source.update} />
       {unverified && (
         <div
           role="status"

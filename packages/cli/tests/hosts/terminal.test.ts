@@ -5,7 +5,7 @@ import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
-import { finishTerminal, startAutoUpdate } from "@/hosts/terminal";
+import { finishTerminal, startAutoUpdate, terminalHost } from "@/hosts/terminal";
 import { VERSION } from "@/environment";
 import { clearHomes, useHome } from "../helpers/home";
 
@@ -157,7 +157,7 @@ test("--json starts the update and prints nothing", () => {
 
 test("--no-update, a major release or a failed start falls back to the notice", () => {
   const home = useHome();
-  const notice = new RegExp(`Update available ${VERSION} → `);
+  const notice = new RegExp(`[Uu]pdate available ${VERSION} → `);
 
   cached(home, MINOR_BUMP);
   const optedOut = recordStream();
@@ -177,9 +177,38 @@ test("--no-update, a major release or a failed start falls back to the notice", 
   finishTerminal(failed, "rich", "apps list", true, () => false);
   assert.match(failed.written.join(), notice);
 
-  const quiet = recordStream();
-  finishTerminal(quiet, "json", "apps list", false, untouched.start);
-  assert.deepEqual(quiet.written, []);
+  const json = recordStream();
+  finishTerminal(json, "json", "apps list", false, untouched.start);
+  assert.match(json.written.join(), notice);
+});
+
+test("dev prints its notice when it starts, so its exit neither repeats it nor starts an update", () => {
+  cached(useHome(), MINOR_BUMP);
+  const stream = recordStream();
+  const updates = starter();
+
+  finishTerminal(stream, "rich", "dev", true, updates.start);
+
+  assert.deepEqual(updates.started, []);
+  assert.deepEqual(stream.written, []);
+});
+
+test("the terminal host writes its update notice to stderr, never stdout", () => {
+  cached(useHome(), MAJOR_BUMP);
+  const out: string[] = [];
+  const err: string[] = [];
+  const stdoutWrite = process.stdout.write;
+  const stderrWrite = process.stderr.write;
+  process.stdout.write = ((chunk: string) => out.push(chunk) > 0) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string) => err.push(chunk) > 0) as typeof process.stderr.write;
+  try {
+    terminalHost.finishing(process.stdout, "json", "apps list", false);
+  } finally {
+    process.stdout.write = stdoutWrite;
+    process.stderr.write = stderrWrite;
+  }
+  assert.deepEqual(out, []);
+  assert.match(err.join(""), new RegExp(`Major update available ${VERSION} → ${MAJOR_BUMP}`));
 });
 
 test("upgrade itself neither starts an update nor prints the notice", () => {

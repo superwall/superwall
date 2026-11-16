@@ -6,11 +6,12 @@ import { frameworkVersion, resolveFramework } from "@/core/paywalls/project/fram
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import { allowLocalNetworking } from "@/core/paywalls/project/scheme";
 import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
+import { refreshUpdateCheck, renderUpdateNotice, resolveUpdate } from "@/core/support/upgrade";
 import { VERSION } from "@/environment";
 import { ui } from "@/ui";
 import { LAYOUT_HINT } from "../pipeline/output";
 import { requireProject, resolveProjectDirs } from "../pipeline/selection";
-import { createStudioActions } from "./actions";
+import { createStudioActions, selectServedVersion } from "./actions";
 
 interface StudioInput {
   dirs: readonly string[];
@@ -23,6 +24,15 @@ interface StudioInput {
 export interface StudioDeps {
   openBrowser?: (url: string) => Promise<boolean>;
   allowLocalNetworking?: (plist: string) => Promise<void>;
+}
+
+function printDevUpdate(dir: string): void {
+  const served = selectServedVersion(dir);
+  refreshUpdateCheck(served);
+  const update = resolveUpdate(dir, served);
+  if (!update) return;
+  if (update.kind === "major") ui.warn(renderUpdateNotice(update));
+  else ui.info(renderUpdateNotice(update));
 }
 
 export async function runStudio(input: StudioInput, deps: StudioDeps = {}): Promise<void> {
@@ -53,7 +63,7 @@ export async function runStudio(input: StudioInput, deps: StudioDeps = {}): Prom
 
   const requestedPort = input.port;
   const runtimeUrl = process.env.SUPERWALL_RUNTIME_URL?.replace(/\/+$/, "");
-  const studio = createStudioActions(framework, project);
+  const studio = createStudioActions(framework, project, dir);
 
   const server = await framework.startPreviewServer(
     projects.map((one) => one.root),
@@ -68,6 +78,7 @@ export async function runStudio(input: StudioInput, deps: StudioDeps = {}): Prom
   const actualPort = Number(new URL(url).port);
 
   ui.intro(`Superwall ${pc.dim(`v${VERSION}`)}`);
+  printDevUpdate(dir);
 
   if (actualPort !== requestedPort) {
     ui.warn(`Port ${requestedPort} was in use — moved to ${actualPort}.`);
@@ -110,7 +121,9 @@ export async function runStudio(input: StudioInput, deps: StudioDeps = {}): Prom
   const scheme = await studio.appScheme?.().catch(() => undefined);
   const plist = scheme?.blocksLocalNetworking;
   if (plist !== undefined) {
-    ui.warn("This app can't load paywalls from the dev server: App Transport Security blocks plain http.");
+    ui.warn(
+      "This app can't load paywalls from the dev server: App Transport Security blocks plain http.",
+    );
     const allowed = input.interactive
       ? await ui.confirm({
           message: `Allow local previewing in ${path.basename(plist)}? Development builds only.`,

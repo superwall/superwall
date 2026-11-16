@@ -3,9 +3,8 @@ import { detectDrivers } from "@/core/workflows/agent/drivers/index";
 import { readSession } from "@/core/account/storage";
 import { detectExisting } from "@/core/codebase/existing";
 import { scanProject } from "@/core/codebase/scan";
-import { readUpdateCheck } from "@/core/state/config";
 import { selectProjectInstall } from "@/core/support/project-install";
-import { isNewerVersion } from "@/core/support/upgrade";
+import { isNewerVersion, resolveUpdateTag, selectCachedLatest } from "@/core/support/upgrade";
 import { VERSION, apiKeyFromEnv } from "@/environment";
 import { ui } from "@/ui";
 import { THEME, fg } from "@/ui/theme";
@@ -84,14 +83,16 @@ export async function runDoctor(
 }
 
 function resolveCliCheck(installDir: string): Check {
-  const project = selectProjectInstall(installDir);
+  const found = selectProjectInstall(installDir);
+  const tag = resolveUpdateTag(found?.version ?? VERSION);
+  const project = found && tag !== "latest" ? selectProjectInstall(installDir, tag) : found;
   const version = project ? project.version : VERSION;
   const source = project ? ` from ${project.manifest}` : "";
   const update = project ? project.update : "superwall upgrade";
   if (version === undefined) {
     return [false, "CLI", `unknown version${source} - run \`${update}\``];
   }
-  const latest = readUpdateCheck()?.latest;
+  const latest = selectCachedLatest(version);
   if (latest === undefined || !isNewerVersion(latest, version)) {
     return [true, "CLI", `${version}${source}`];
   }
