@@ -10,7 +10,14 @@ import type {
 import { useSuperwallSession } from "../provider/context";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
 import type { ProductReference } from "./index";
-import { prefetchSession, purchaseOnWeb, sessionsFor } from "../checkout/flow";
+import {
+  prefetchSession,
+  purchaseCustomStoreOnWeb,
+  purchaseOnWeb,
+  sessionsFor,
+} from "../checkout/flow";
+import { isCustomStoreProductIdentifier } from "../checkout/products";
+import { hostOf } from "../host";
 import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
 import { useIdentityRefresh } from "../checkout/hooks/useIdentityRefresh";
 import { checkoutModeFor } from "../checkout/host/sdk";
@@ -55,7 +62,8 @@ const referenceOf = (input: string | { reference: string }): string =>
  * app, it opens Superwall's hosted checkout in the browser. A `purchase()` or
  * `prefetch()` call can pass its own `checkout` mode, under the same iOS
  * rule, and its own `prepaidCards`. Web checkout only runs when a host
- * supplied a public API key.
+ * supplied a public API key. On a hosted web paywall a custom store product
+ * opens its store's checkout in the same tab.
  */
 export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
@@ -110,6 +118,14 @@ export const usePurchase = <
           stripeMetadata,
           ...(rule === undefined ? {} : { prepaidCards: rule }),
         });
+        return { status, product };
+      }
+      if (
+        product &&
+        isCustomStoreProductIdentifier(product.productId) &&
+        (hostOf() === "web-paywall" || hostOf() === "web-sdk")
+      ) {
+        const status = await purchaseCustomStoreOnWeb(session, reference, { postPurchase });
         return { status, product };
       }
       if (teleporter.kind === "page" && product) {

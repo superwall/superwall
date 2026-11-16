@@ -8,6 +8,7 @@ export type SubscriptionsApiPath =
   | "checkout/session/custom-metadata"
   | "checkout/discount"
   | "checkout/status"
+  | "checkout/custom-store/session"
   | "checkout/teleport"
   | "checkout/teleport/status"
   | "checkout/teleport/session"

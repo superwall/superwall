@@ -116,6 +116,52 @@ export const attributionOf = (
   };
 };
 
+export const productContextOf = (product: SuperwallProduct, productIdentifier: string) => {
+  const variables = product.variables;
+  return {
+    identifier: productIdentifier,
+    currencyCode: variables.currencyCode || "USD",
+    currencySymbol: variables.currencySymbol || "$",
+    dailyPrice: variables.dailyPrice || "",
+    weeklyPrice: variables.weeklyPrice || "",
+    monthlyPrice: variables.monthlyPrice || "",
+    yearlyPrice: variables.yearlyPrice || "",
+    languageCode: variables.languageCode || "",
+    locale: variables.locale || "",
+    localizedPeriod: variables.localizedPeriod || "",
+    period: variables.period || "",
+    periodAlt: variables.periodAlt || "",
+    periodDays: asNumber(variables.periodDays),
+    periodWeeks: asNumber(variables.periodWeeks),
+    periodMonths: asNumber(variables.periodMonths),
+    periodYears: asNumber(variables.periodYears),
+    periodly: variables.periodly || "",
+    price: variables.price || "",
+    rawPrice: asNumber(variables.rawPrice),
+    rawTrialPeriodPrice: asNumber(variables.rawTrialPeriodPrice),
+    trialPeriodDailyPrice: variables.trialPeriodDailyPrice || "",
+    trialPeriodWeeklyPrice: variables.trialPeriodWeeklyPrice || "",
+    trialPeriodMonthlyPrice: variables.trialPeriodMonthlyPrice || "",
+    trialPeriodYearlyPrice: variables.trialPeriodYearlyPrice || "",
+    trialPeriodPrice: variables.trialPeriodPrice || "",
+    trialPeriodDays: asNumber(variables.trialPeriodDays),
+    trialPeriodWeeks: asNumber(variables.trialPeriodWeeks),
+    trialPeriodMonths: asNumber(variables.trialPeriodMonths),
+    trialPeriodYears: asNumber(variables.trialPeriodYears),
+    trialPeriodEndDate: variables.trialPeriodEndDate || "",
+    trialPeriodText: variables.trialPeriodText || "",
+  };
+};
+
+export const checkoutContextOf = (
+  snapshot: SuperwallRuntimeSnapshot,
+  product: SuperwallProduct,
+  productIdentifier: string,
+) => ({
+  ...attributionOf(snapshot),
+  product: productContextOf(product, productIdentifier),
+});
+
 export const sessionBody = ({
   snapshot,
   product,
@@ -126,7 +172,6 @@ export const sessionBody = ({
   prepaidCards = checkoutPrepaidCardsOf(snapshot.config?.checkout),
 }: SessionBodyOptions) => {
   const { user } = snapshot;
-  const variables = product.variables;
   const managedPayments = checkoutManagedPaymentsOf(snapshot.config?.checkout);
 
   return {
@@ -145,39 +190,7 @@ export const sessionBody = ({
       ...attributionOf(snapshot),
       ...(managedPayments === undefined ? {} : { paywallManagedPaymentsOverride: managedPayments }),
       ...(prepaidCards === "block" ? { blockPrepaidCards: true } : {}),
-      product: {
-        identifier: productIdentifier,
-        currencyCode: variables.currencyCode || "USD",
-        currencySymbol: variables.currencySymbol || "$",
-        dailyPrice: variables.dailyPrice || "",
-        weeklyPrice: variables.weeklyPrice || "",
-        monthlyPrice: variables.monthlyPrice || "",
-        yearlyPrice: variables.yearlyPrice || "",
-        languageCode: variables.languageCode || "",
-        locale: variables.locale || "",
-        localizedPeriod: variables.localizedPeriod || "",
-        period: variables.period || "",
-        periodAlt: variables.periodAlt || "",
-        periodDays: asNumber(variables.periodDays),
-        periodWeeks: asNumber(variables.periodWeeks),
-        periodMonths: asNumber(variables.periodMonths),
-        periodYears: asNumber(variables.periodYears),
-        periodly: variables.periodly || "",
-        price: variables.price || "",
-        rawPrice: asNumber(variables.rawPrice),
-        rawTrialPeriodPrice: asNumber(variables.rawTrialPeriodPrice),
-        trialPeriodDailyPrice: variables.trialPeriodDailyPrice || "",
-        trialPeriodWeeklyPrice: variables.trialPeriodWeeklyPrice || "",
-        trialPeriodMonthlyPrice: variables.trialPeriodMonthlyPrice || "",
-        trialPeriodYearlyPrice: variables.trialPeriodYearlyPrice || "",
-        trialPeriodPrice: variables.trialPeriodPrice || "",
-        trialPeriodDays: asNumber(variables.trialPeriodDays),
-        trialPeriodWeeks: asNumber(variables.trialPeriodWeeks),
-        trialPeriodMonths: asNumber(variables.trialPeriodMonths),
-        trialPeriodYears: asNumber(variables.trialPeriodYears),
-        trialPeriodEndDate: variables.trialPeriodEndDate || "",
-        trialPeriodText: variables.trialPeriodText || "",
-      },
+      product: productContextOf(product, productIdentifier),
     },
     ...(typeof user.stripe_customer_id === "string" && user.stripe_customer_id.length > 0
       ? { stripeCustomerId: user.stripe_customer_id }

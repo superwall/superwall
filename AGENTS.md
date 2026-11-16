@@ -207,13 +207,13 @@ The stack, bottom to top — each layer depends only on the one below it:
     | `index.tsx`   | `SuperwallCheckout` and the module's public exports                       |
     | `types.ts`    | the domain: modes, session directives, discounts, post-purchase behaviour |
     | `flow.ts`     | the orchestration, below                                                  |
-    | `products.ts` | the Stripe product-identifier vocabulary                                  |
+    | `products.ts` | the Stripe and custom store product-identifier vocabulary                 |
     | `events.ts`   | the in-page bus between the flow and the sheet (public `checkoutEvents`)  |
     | `loading.ts`  | the loading-overlay flag                                                  |
     - `flow.ts` is the only orchestrator: it holds one `session` source and one
       `applePay` per paywall (`sessionsFor`, `applePayFor`, keyed by the runtime
       session in a `WeakMap`) and owns every sequence a purchase can take —
-      `prefetchSession`, `purchaseOnWeb`, `purchaseWithApplePay`,
+      `prefetchSession`, `purchaseOnWeb`, `purchaseCustomStoreOnWeb`, `purchaseWithApplePay`,
       `openEmbeddedSheet`, `openHostedCheckout`/`watchHostedCheckout`,
       `reportCompletedCheckout`/`watchCompletedCheckouts`,
       `redeemDiscount`, `clearDiscount`, `invalidateSessions`, `reprefetch`. A
@@ -231,8 +231,21 @@ The stack, bottom to top — each layer depends only on the one below it:
       throws at once, as paywall.js does), `body.ts` (the v4 session body and
       identity), `decode.ts` (**a trust boundary**: every response is read
       field by field, never cast).
+    - `customStore/` is a custom store product's checkout on a hosted web
+      paywall, ported from paywall.js: `index.ts` asks
+      `checkout/custom-store/session` with `surface: "web"` (never retried or
+      prefetched — every request creates a checkout at the customer's vendor),
+      keeps the return page's record in `sessionStorage` under
+      `sw:custom-store-checkout:<checkoutContextId>` (storage may be off; the
+      checkout still opens) and holds one checkout per paywall in flight.
+      `flow.purchaseCustomStoreOnWeb` posts `custom_checkout_start` and sends
+      the tab to the store's checkout, since in-app browsers block popups;
+      the backend publishes the purchase, so nothing here reports one. Every
+      failure resolves `failed` with `custom_checkout_fail`, and the Web SDK
+      refuses custom store products as paywall.js does. Inside an app a
+      custom store product still goes to the SDK's `purchase`.
     - `host/` is the native SDK side: `index.ts` builds what the SDK hears
-      (`initiate_web_checkout`, `stripe_checkout_*`, `discount_redemption_result`,
+      (`initiate_web_checkout`, `stripe_checkout_*`, `custom_checkout_*`, `discount_redemption_result`,
       the redemption `open_deep_link`) — that is how the SDK tracks, dismisses
       and grants access for a web purchase, so keep both sheets reporting
       identically — and `sdk.ts` holds the version gates paywall.js also
