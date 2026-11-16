@@ -131,6 +131,23 @@ test("create runs every step in order: subscription, its first version, localiza
   assert.deepEqual(view.introductoryOffers, [{ id: "O1", territory: "USA", offerMode: "FREE_TRIAL", duration: "ONE_WEEK", numberOfPeriods: 1 }]);
 });
 
+test("create priced in a territory outside --available-territories prices and gives a trial only where it is sold", async () => {
+  const { api, writes } = ascRoutes({
+    ...CREATE_ROUTES,
+    "GET /v1/subscriptions/S1/pricePoints?filter[territory]=GBR&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds": page([
+      one("subscriptionPricePoints", "P-GBR", { customerPrice: "9.99" }),
+    ]),
+    [EQUALIZATIONS("P-GBR")]: page([
+      one("subscriptionPricePoints", "P-USA", {}, { territory: link("territories", "USA") }),
+      one("subscriptionPricePoints", "P-CAN", {}, { territory: link("territories", "CAN") }),
+    ]),
+  });
+  await runCommand(subscriptions, { api, words: ["create"], flags: { ...CREATE_FLAGS, territory: "GBR", availableTerritories: "USA,CAN" }, json: true });
+  const patch = writes().at(-1);
+  assert.equal(patch?.path, "/v1/subscriptions/S1");
+  assert.deepEqual((patch?.body as { included: unknown[] }).included, [price("USA", "P-USA"), price("CAN", "P-CAN"), trial("USA"), trial("CAN")]);
+});
+
 test("create says what is still missing in its heading", async () => {
   const { api } = ascRoutes(CREATE_ROUTES);
   const human = await runCommand(subscriptions, { api, words: ["create"], flags: CREATE_FLAGS });
