@@ -6,6 +6,24 @@ afterEach(() => {
 });
 
 describe("postCustomStoreSession", () => {
+  it("times the request out on a browser without AbortSignal.timeout", async () => {
+    vi.useFakeTimers();
+    const timeout = AbortSignal.timeout;
+    Reflect.set(AbortSignal, "timeout", undefined);
+    const fetchMock = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = postCustomStoreSession("pk_1", {});
+    await vi.advanceTimersByTimeAsync(20_000);
+    Reflect.set(AbortSignal, "timeout", timeout);
+    vi.useRealTimers();
+    expect(await pending).toEqual({ kind: "timeout" });
+  });
+
   it("posts the body once with the public key and reads the answer", async () => {
     const fetchMock = vi.fn(
       async () => new Response(JSON.stringify({ checkoutUrl: "https://x" }), { status: 200 }),

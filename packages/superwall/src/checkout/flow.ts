@@ -545,7 +545,7 @@ export const purchaseCustomStoreOnWeb = async (
     resolution: resolutionOf(options.postPurchase ?? snapshot.config?.postPurchase) ?? {
       type: "default",
     },
-    ...(Object.keys(session.buyer).length > 0 ? { buyer: session.buyer } : {}),
+    buyer: session.buyer,
     createdAt: Date.now(),
   });
   host.customStarted(productIdentifier, session.checkoutContextId, session.customTransactionId);

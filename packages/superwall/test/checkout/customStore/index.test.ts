@@ -60,6 +60,11 @@ describe("customStoreSessionBody", () => {
     const body = customStoreSessionBody(snapshotOf({ user: {}, params: {} }), product);
     expect(body.context.identity.appUserId).toMatch(/^\$SuperwallAlias:/);
   });
+
+  it("sends an empty identifier for a product without one", () => {
+    const { productId: _, ...bare } = product;
+    expect(customStoreSessionBody(snapshotOf(), bare).productIdentifier).toBe("");
+  });
 });
 
 describe("requestCustomStoreSession", () => {
@@ -91,6 +96,13 @@ describe("requestCustomStoreSession", () => {
       product,
     );
     expect(result.buyer).toEqual({ appUserId: "user_1" });
+  });
+
+  it("sends an empty bearer when the host gave no public API key", async () => {
+    const fetchMock = answer(session);
+    await requestCustomStoreSession(snapshotOf({ device: {} }), product);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.headers).toMatchObject({ Authorization: "Bearer " });
   });
 
   it("names the missing buyer when the backend needs an app user id", async () => {
@@ -166,6 +178,7 @@ describe("saveCustomStoreReturnRecord", () => {
     productIdentifier: "custom|pro_monthly",
     customTransactionId: "txn_1",
     resolution: { type: "default" },
+    buyer: { appUserId: "user_1" },
     createdAt: 1,
   };
 

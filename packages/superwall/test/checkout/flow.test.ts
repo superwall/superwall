@@ -1191,6 +1191,47 @@ describe("purchaseCustomStoreOnWeb", () => {
     ]);
   });
 
+  it("records the price in USD when the product names no currency", async () => {
+    onHostedPage();
+    answer(customSession);
+    const { paywall } = customPaywall();
+    const snapshot = paywall.getSnapshot();
+    const product = { ...snapshot.productsByReference.primary, variables: { rawPrice: "9.99" } };
+    paywall.getSnapshot = () => ({
+      ...snapshot,
+      productsByReference: { primary: product },
+    });
+
+    await purchaseCustomStoreOnWeb(paywall, "primary");
+    expect(
+      JSON.parse(window.sessionStorage.getItem(`${RETURN_KEY_PREFIX}ctx_custom`) ?? "").price,
+    ).toEqual({ value: 9.99, currency: "USD" });
+  });
+
+  it("fails with a plain message when the request throws something other than an Error", async () => {
+    const assign = onHostedPage();
+    answer(customSession);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { paywall, postMessage } = customPaywall();
+    const snapshot = paywall.getSnapshot();
+    paywall.getSnapshot = () => ({
+      ...snapshot,
+      get user(): never {
+        throw "boom";
+      },
+    });
+
+    await expect(purchaseCustomStoreOnWeb(paywall, "primary")).resolves.toBe("failed");
+    expect(assign).not.toHaveBeenCalled();
+    expect(sent(postMessage)).toEqual([
+      {
+        event_name: "custom_checkout_fail",
+        product_identifier: "custom|pro_monthly",
+        message: "Custom store checkout failed",
+      },
+    ]);
+  });
+
   it("fails without a public API key or a product", async () => {
     onHostedPage();
     const fetchMock = answer(customSession);

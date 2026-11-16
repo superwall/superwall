@@ -26,7 +26,7 @@ export class CustomStoreCheckoutError extends Error {
 }
 
 export type CustomStoreBuyer = {
-  appUserId?: string;
+  appUserId: string;
   email?: string;
   placementParams?: Record<string, string>;
 };
@@ -42,7 +42,7 @@ export type CustomStoreReturnRecord = {
   customTransactionId: string;
   price?: { value: number; currency: string };
   resolution: PostCheckoutResolution;
-  buyer?: CustomStoreBuyer;
+  buyer: CustomStoreBuyer;
   createdAt: number;
 };
 
@@ -57,7 +57,7 @@ const buyerOf = (context: CheckoutContext): CustomStoreBuyer => {
     ]),
   );
   return {
-    ...(appUserId ? { appUserId } : {}),
+    appUserId,
     ...(email ? { email } : {}),
     ...(Object.keys(placementParams).length > 0 ? { placementParams } : {}),
   };
