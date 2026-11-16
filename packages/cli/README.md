@@ -40,8 +40,16 @@ create its first app too. `BROWSER=none` stops the CLI from opening a browser
 itself.
 There are no organizations to pick: `superwall apps list` shows every app you
 can open, grouped by organization, and commands take `--app <id|dashboard link>`.
-Upgrade any time with `superwall upgrade` - the CLI also tells you when a new
-version is out.
+Upgrade any time with `superwall upgrade`. When a newer release is out, the CLI
+says so on stderr after each command (and when `superwall dev` starts), with
+the exact command to run: `superwall upgrade`, or the project's own bump such as
+`cd superwall && pnpm add superwall@latest` when the project pins `superwall`.
+A patch or minor gets one line; a major gets a warning that it may contain
+breaking changes and a link to its release notes. A beta compares against the
+newest beta (`superwall@next`). The check reads a once-a-day cache, so it never
+slows a command, and stdout stays clean under `--json`. The studio
+`superwall dev` opens shows the same update as a banner you can dismiss for
+that version.
 
 ## Set up your app
 

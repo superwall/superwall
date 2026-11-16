@@ -612,6 +612,19 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   `--json` stays clean; the older CLI's own output can't change.
   `selectProjectInstall` finds the same copy for `upgrade` (which never edits
   the project's `package.json`: a major bump can break paywalls) and `doctor`.
+- **Outdated versions are loud, never blocking.** `resolveUpdate()` compares
+  `VERSION` (inside a project, the pinned copy the launcher handed off to)
+  with the daily update cache and returns the kind (patch, minor, major), the
+  command (`selectProjectInstall`'s bump when the project pins `superwall`,
+  else `superwall upgrade`) and the release notes link. A stable version reads
+  npm's `latest` tag and a prerelease reads `next`; the cache records its tag,
+  so switching channels refetches. `maybeNotifyUpdate` prints it on stderr
+  after every command, also under `--json` (agents run with it, stdout stays
+  clean), and `dev` prints it after its intro since it never ends. The studio
+  gets the same object as `update` in `/__studio/project.json` and shows
+  `UpdateBanner`. Nothing auto-updates a project's pin or stops a command: a
+  major can break paywalls, so we only prompt. No cache or an unreachable
+  registry prints nothing.
 - **Telemetry is anonymous by design**: a random persisted id, enum/boolean/
   number properties only, no person profiles, and a fetch timeout shorter than
   the exit flush so an unreachable endpoint can't hold the process open.
