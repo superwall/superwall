@@ -133,13 +133,16 @@ test("--help on a command asks for its page, and a catalog gets its words", () =
   assert.equal(catalog.kind === "help" && catalog.words.join(" "), "get");
 });
 
-test("a catalog takes any flag and passes its words through", () => {
-  const resolution = resolveLine(["apps", "update", "5861", "--event-name", "x", "-y"], groups);
+test("a catalog passes its words and declared flags through", () => {
+  const resolution = resolveLine(["apps", "update", "5861", "-y"], groups);
   assert.equal(resolution.kind, "run");
   if (resolution.kind !== "run") return;
   assert.deepEqual(resolution.input.words, ["update", "5861"]);
-  assert.equal(resolution.input.flags?.eventName, "x");
   assert.equal(resolution.input.flags?.yes, true);
+});
+
+test("a catalog refuses a flag it doesn't declare", () => {
+  assert.throws(() => resolveLine(["apps", "update", "5861", "--event-name", "x"], groups), /Unknown flag: --event-name/);
 });
 
 test("words that match nothing are left for the caller to report", () => {

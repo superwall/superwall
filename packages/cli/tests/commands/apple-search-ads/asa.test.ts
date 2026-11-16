@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { command as asa } from "@/commands/apple-search-ads/asa";
 import { ApiError } from "@/core/api/client";
+import { listGroups } from "@/commands/registry";
+import { resolveLine } from "@/program/parse";
 import { fakeAsaApi } from "../../helpers/asa";
 import { runCommand } from "../../helpers/command";
 
@@ -139,4 +141,14 @@ test("help lists the resources, a resource's operations, and one operation's fla
   const operation = strip(await asa.help(["campaigns", "create"]));
   assert.match(operation, /--daily-budget <amount>/);
   assert.match(operation, /superwall asa docs campaigns create/);
+});
+
+test("flags removed with v5 are refused instead of dropped", () => {
+  const groups = listGroups();
+  assert.throws(() => resolveLine(["asa", "campaigns", "list", "--org-id", "1"], groups), /Unknown flag: --org-id/);
+  assert.throws(() => resolveLine(["asa", "reports", "campaigns", "--selector", "{}"], groups), /Unknown flag: --selector/);
+  assert.throws(() => resolveLine(["asa", "/me", "--org-id", "1"], groups), /Unknown flag: --org-id/);
+  const kept = resolveLine(["asa", "campaigns", "list", "--ad-account-id", "1", "--query", "{}", "-d", "a=b"], groups);
+  assert.equal(kept.kind, "run");
+  assert.equal(resolveLine(["asa", "campaigns", "list", "--org-id", "1", "--help"], groups).kind, "help");
 });

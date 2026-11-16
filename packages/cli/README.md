@@ -590,7 +590,7 @@ The **entire** Apple Ads Platform API (v1), proxied by Superwall — no client
 secret, OAuth token, or account id to manage locally. It uses the credentials
 you connect in the dashboard (app → Integrations → Apple Search Ads →
 Advanced); the CLI finds the connected app on its own, or takes `--app <id>`.
-Requests go to Apple's default ad account unless you pass `--ad-account-id`.
+Without `--ad-account-id`, requests go to the only ad account the key reaches; when it reaches several, pass `--ad-account-id`.
 
 ```bash
 superwall asa campaigns list

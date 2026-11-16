@@ -249,7 +249,7 @@ function parameterLines(items: unknown, refs: Node): string[] {
   return out;
 }
 
-export function renderAppleDoc(doc: unknown): string {
+export function renderAppleDoc(doc: unknown, body?: string): string {
   if (!isNode(doc)) return "";
   const refs = isNode(doc.references) ? doc.references : {};
   const metadata = isNode(doc.metadata) ? doc.metadata : {};
@@ -276,6 +276,7 @@ export function renderAppleDoc(doc: unknown): string {
         const typeLine = `${type ? `\`${type}\`` : ""}${desc ? ` — ${desc}` : ""}`.trim();
         if (typeLine) lines.push(typeLine);
         lines.push(...parameterLines(section.parameters, refs));
+        if (body) lines.push("", body);
         break;
       }
       case "restResponses": {
@@ -320,6 +321,16 @@ function bodyTypeIdentifier(doc: unknown): string | undefined {
   return undefined;
 }
 
+async function bodyDocs(doc: unknown, fetchDoc: DocFetcher): Promise<string | undefined> {
+  const bodyType = bodyTypeIdentifier(doc);
+  if (!bodyType) return undefined;
+  try {
+    return renderAppleDoc(await fetchDoc(`${APPLE_DOC_DATA_BASE}/${bodyType.toLowerCase()}.json`));
+  } catch (error) {
+    return `Couldn't fetch the \`${bodyType}\` object page (${describe(error)}) — see ${APPLE_DOCS_BASE}/${bodyType.toLowerCase()}.`;
+  }
+}
+
 export async function renderAsaOperationDocs(
   group: string,
   action: string,
@@ -338,19 +349,7 @@ export async function renderAsaOperationDocs(
     const url = `${APPLE_DOC_DATA_BASE}/${v.doc}.json`;
     try {
       const doc = await fetchDoc(url);
-      lines.push("", renderAppleDoc(doc));
-      const bodyType = bodyTypeIdentifier(doc);
-      if (bodyType) {
-        try {
-          const bodyDoc = await fetchDoc(`${APPLE_DOC_DATA_BASE}/${bodyType.toLowerCase()}.json`);
-          lines.push("", renderAppleDoc(bodyDoc));
-        } catch (error) {
-          lines.push(
-            "",
-            `Couldn't fetch the \`${bodyType}\` object page (${describe(error)}) — see ${APPLE_DOCS_BASE}/${bodyType.toLowerCase()}.`,
-          );
-        }
-      }
+      lines.push("", renderAppleDoc(doc, await bodyDocs(doc, fetchDoc)));
     } catch (error) {
       lines.push("", `Couldn't fetch Apple's page (${describe(error)}) — read it at ${appleDocUrl(v)}.`);
     }

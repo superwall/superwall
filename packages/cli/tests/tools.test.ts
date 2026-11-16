@@ -47,7 +47,7 @@ test("every data command and catalog operation is a tool; work that needs the ma
 test("every tool has a title a person can read", () => {
   assert.equal(tool("products_create").title, "Products create");
   assert.equal(tool("asc_keys_list").title, "ASC keys list");
-  assert.equal(tool("asa_negative_keywords_find").title, "ASA negative keywords find");
+  assert.equal(tool("asa_negative_keywords_list").title, "ASA negative keywords list");
   assert.equal(tool("post").title, "POST");
 });
 
@@ -166,7 +166,7 @@ test("inputs come from the command: arguments, flags, and the API's own fields",
   assert.deepEqual(tool("query").inputSchema.required, ["sql"], "a tool has no stdin, so the SQL is required");
   assert.equal(tool("query").inputSchema.properties.file, undefined, "nor a file to read it from");
   assert.deepEqual(tool("apps_create").inputSchema.required, ["name", "platform"]);
-  assert.deepEqual(tool("asa_adgroups_list").inputSchema.required, ["campaign"]);
+  assert.deepEqual(tool("asa_reports_adgroups").inputSchema.required, ["campaign", "start", "end"]);
   assert.deepEqual(tool("asa_campaigns_get").inputSchema.required, ["id"]);
   assert.deepEqual(tool("asa_reports_campaigns").inputSchema.required, ["start", "end"]);
 });
@@ -232,14 +232,14 @@ test("the MCP retains generic API and schema tools with fallback guidance", () =
   assert.match(instructions(), /api_docs finds it, then get, post, put, patch or delete calls it/);
 });
 
-test("POST lookups are reads while report jobs persist state", () => {
-  for (const name of ["asa_ad_rejections_assets", "asa_apps_eligibility", "asa_geo_get", "asa_reports_campaigns"]) {
+test("POST lookups are reads while writes that spend nothing are not destructive", () => {
+  for (const name of ["asa_assets_list", "asa_apps_eligibility", "asa_geo_get", "asa_reports_campaigns", "asa_insights_impression_share"]) {
     assert.equal(tool(name).annotations.readOnlyHint, true, name);
     assert.equal(tool(name).annotations.destructiveHint, false, name);
     assert.equal(tool(name).annotations.idempotentHint, true, name);
   }
-  assert.equal(tool("asa_impression_share_create").annotations.readOnlyHint, false);
-  assert.equal(tool("asa_impression_share_create").annotations.destructiveHint, false);
+  assert.equal(tool("asa_creatives_create").annotations.readOnlyHint, false);
+  assert.equal(tool("asa_creatives_create").annotations.destructiveHint, false);
 });
 
 test("generic execution covers destructive branches and arbitrary webhook destinations", () => {

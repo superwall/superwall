@@ -85,7 +85,7 @@ test("renderAsaOperationDocs stitches the usage, Apple's page, and the body obje
   assert.match(md, /## superwall asa campaigns list/);
   assert.match(md, /# Query Campaigns/);
   assert.match(md, /`POST \/campaigns\/query`\n\n {2}--query <json\|@file\|@->/);
-  assert.match(md, /\n# QueryRequest$/);
+  assert.match(md, /## HTTP Body\n`QueryRequest`[^\n]*\n\n# QueryRequest\n/);
 });
 
 test("renderAsaOperationDocs follows the request body type and reports fetch failures", async () => {
@@ -100,6 +100,8 @@ test("renderAsaOperationDocs follows the request body type and reports fetch fai
         content: [{ type: "paragraph", inlineContent: [{ type: "text", text: "The campaign." }] }],
         parameters: [],
       },
+      { kind: "restResponses", items: [{ status: 200, reason: "OK", type: [{ text: "CampaignResponse" }] }] },
+      { kind: "content", content: [{ type: "paragraph", inlineContent: [{ type: "text", text: "Payload examples." }] }] },
     ],
     references: {},
   };
@@ -109,13 +111,13 @@ test("renderAsaOperationDocs follows the request body type and reports fetch fai
     throw new Error("unexpected");
   });
   assert.match(md, /## HTTP Body\n`CampaignCreate` — The campaign\./);
-  assert.match(md, /## Properties/);
+  assert.match(md, /## HTTP Body\n`CampaignCreate` — The campaign\.\n\n# [^\n]+\n[\s\S]*## Properties[\s\S]*## Responses\n- 200 OK `CampaignResponse`[\s\S]*Payload examples\./);
 
   const failing = await renderAsaOperationDocs("campaigns", "create", async (url) => {
     if (url.endsWith("/post-campaigns.json")) return withBody;
     throw new Error("offline");
   });
-  assert.match(failing, /Couldn't fetch the `CampaignCreate` object page \(offline\) — see https:\/\/developer\.apple\.com\/documentation\/apple-ads-platform-api\/campaigncreate/);
+  assert.match(failing, /## HTTP Body\n`CampaignCreate` — The campaign\.\n\nCouldn't fetch the `CampaignCreate` object page \(offline\) — see https:\/\/developer\.apple\.com\/documentation\/apple-ads-platform-api\/campaigncreate/);
 
   const allFailing = await renderAsaOperationDocs("campaigns", "create", async () => {
     throw new Error("HTTP 503");

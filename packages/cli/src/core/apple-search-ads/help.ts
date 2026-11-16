@@ -100,7 +100,7 @@ function formatAsaFlags(op: AsaOperation, variants: AsaOperation[]): [string, st
   if (op.body === "geo") add("--entity <Country|AdminArea|Locality>", "What kind of place the ids are");
   if (op.paged) add("--limit <n> --offset <n> --all", "Paging; --all walks every page");
   rows.push([cmd("--app <app>"), "The Superwall app whose Apple Search Ads account to use"]);
-  rows.push([cmd("--ad-account-id <id>"), "The Apple Ads ad account, if the key reaches several (default: Apple's default account)"]);
+  rows.push([cmd("--ad-account-id <id>"), "The Apple Ads ad account (default: the only one the key reaches)"]);
   return rows;
 }
 
