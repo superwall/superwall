@@ -42,9 +42,7 @@ export const PLATFORM_STYLESHEET_URL = "https://api.superwall.com/runtime/live.c
 export const ROUTE_ASSETS_ID = "sw-route-assets";
 
 export const TELEPORT_BOOT_META = "sw-teleport-boot";
-
 export const TELEPORT_PAGES_META = "sw-teleport-pages";
-
 export const PRERENDER_ATTRIBUTE = "data-sw-prerender";
 
 export const withTeleportPages = (html: string, locales: readonly string[]): string => {
