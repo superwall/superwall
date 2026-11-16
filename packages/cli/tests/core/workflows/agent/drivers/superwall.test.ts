@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import type { Options, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { createSuperwallDriver, superwallDriver } from "@/core/workflows/agent/drivers/superwall";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import {
+  AGENT_SDK_INSTALL_MESSAGE,
+  AGENT_SDK_PACKAGE,
+  createSdkLoader,
+  createSuperwallDriver,
+  superwallDriver,
+} from "@/core/workflows/agent/drivers/superwall";
 import type { AgentEvent, AgentRunOptions } from "@/core/workflows/agent/drivers/index";
 import { VERSION } from "@/environment";
 import { restoreFetch, useFetch } from "../../../../helpers/fetch";
@@ -25,13 +34,15 @@ function hostedStatus(fields: { exhausted: boolean } | null): void {
 }
 
 function driverYielding(messages: unknown[], calls: Call[] = [], during?: () => void) {
-  return createSuperwallDriver(async function* (params) {
-    calls.push(params);
-    for (const message of messages) {
-      during?.();
-      yield message as SDKMessage;
-    }
-  });
+  return createSuperwallDriver(async () =>
+    async function* (params) {
+      calls.push(params);
+      for (const message of messages) {
+        during?.();
+        yield message as SDKMessage;
+      }
+    },
+  );
 }
 
 function runWith(driver: ReturnType<typeof createSuperwallDriver>, extra: Partial<AgentRunOptions> = {}) {
@@ -51,7 +62,7 @@ afterEach(() => {
   clearHomes();
 });
 
-test("the bundled agent is always available", async () => {
+test("the bundled agent is available when its SDK is installed", async () => {
   assert.deepEqual(await superwallDriver.detect(), {
     id: "superwall",
     displayName: "Superwall Agent",
@@ -181,10 +192,12 @@ test("a crash is reported as an error, and a limit in it is a usage limit", asyn
   useHome(signedIn);
   hostedStatus({ exhausted: false });
   const crashing = (thrown: unknown) =>
-    createSuperwallDriver(async function* () {
-      yield* [];
-      throw thrown;
-    });
+    createSuperwallDriver(async () =>
+      async function* () {
+        yield* [];
+        throw thrown;
+      },
+    );
 
   const crashed = runWith(crashing(new Error("process exited")));
   assert.deepEqual(await crashed.result, { ok: false, finalText: "process exited", failureReason: undefined });
@@ -228,4 +241,75 @@ test("aborting mid-run aborts the agent, and aborting after it ended does not", 
   await runWith(driverYielding([], afterCalls), { signal: after.signal }).result;
   after.abort("late");
   assert.equal(afterCalls[0]?.options.abortController?.signal.aborted, false);
+});
+
+test("without the agent SDK the bundled agent is not detected", async () => {
+  const driver = createSuperwallDriver(async () => null);
+  assert.equal(await driver.detect(), null);
+});
+
+test("running the bundled agent without its SDK says how to install it", async () => {
+  useHome(signedIn);
+  const { result, events } = runWith(createSuperwallDriver(async () => null));
+
+  assert.deepEqual(await result, { ok: false, finalText: AGENT_SDK_INSTALL_MESSAGE });
+  assert.deepEqual(events, [{ type: "error", message: AGENT_SDK_INSTALL_MESSAGE }]);
+  assert.match(AGENT_SDK_INSTALL_MESSAGE, /npm install @anthropic-ai\/claude-agent-sdk@\d+\.\d+\.\d+/);
+});
+
+test("the loader takes the SDK beside the CLI first and loads it once", async () => {
+  const query = () => (async function* () {})();
+  const asked: string[] = [];
+  const load = createSdkLoader(
+    () => "/nowhere",
+    async (specifier) => {
+      asked.push(specifier);
+      return { query };
+    },
+  );
+
+  assert.equal(await load(), query);
+  assert.equal(await load(), query);
+  assert.deepEqual(asked, [AGENT_SDK_PACKAGE]);
+});
+
+test("the loader falls back to the SDK installed in the project", async () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "sw-agent-sdk-"));
+  const sdkDir = path.join(project, "node_modules", ...AGENT_SDK_PACKAGE.split("/"));
+  fs.mkdirSync(sdkDir, { recursive: true });
+  fs.writeFileSync(path.join(sdkDir, "package.json"), JSON.stringify({ name: AGENT_SDK_PACKAGE, main: "index.js" }));
+  fs.writeFileSync(path.join(sdkDir, "index.js"), "exports.query = function query() {};");
+  const asked: string[] = [];
+  try {
+    const load = createSdkLoader(
+      () => project,
+      async (specifier) => {
+        asked.push(specifier);
+        if (specifier === AGENT_SDK_PACKAGE) throw new Error("Cannot find package");
+        return { query: () => undefined };
+      },
+    );
+
+    assert.equal(typeof (await load()), "function");
+    assert.equal(asked.length, 2);
+    assert.ok(asked[1]!.startsWith("file://") && asked[1]!.endsWith("index.js"));
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test("the loader answers null when no SDK can be found or it has no query", async () => {
+  const missing = createSdkLoader(
+    () => os.tmpdir(),
+    async () => {
+      throw new Error("Cannot find package");
+    },
+  );
+  assert.equal(await missing(), null);
+
+  const empty = createSdkLoader(
+    () => "/nowhere",
+    async () => ({}),
+  );
+  assert.equal(await empty(), null);
 });

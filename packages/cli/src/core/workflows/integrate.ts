@@ -2,6 +2,7 @@ import { resolveAccount } from "@/core/account";
 import { resolveAppBinding, resolveScopeFromKey, platformForIntegration } from "@/core/account/bind";
 import { actionById, type ActionContext } from "@/core/workflows/agent/actions";
 import { detectDrivers } from "@/core/workflows/agent/drivers/index";
+import { AGENT_SDK_INSTALL_MESSAGE, superwallDriver } from "@/core/workflows/agent/drivers/superwall";
 import { runFallback } from "@/core/workflows/agent/fallback";
 import { ensureSkillsCurrent } from "@/core/support/skills";
 import { superwallApi } from "@/core/api/client";
@@ -39,12 +40,15 @@ export async function runIntegrate(
 
   const drivers = await withSpinner("Checking your setup", () => detectDrivers());
   const [first] = drivers;
+  const wanted = ctx.driver;
+  if (wanted === superwallDriver.id && !drivers.some((d) => d.driver.id === wanted)) {
+    throw new Error(AGENT_SDK_INSTALL_MESSAGE);
+  }
   if (!first) {
     ui.warn("No coding agent found.");
     await runFallback(installDir);
     return;
   }
-  const wanted = ctx.driver;
   const picked = wanted ? drivers.find((d) => d.driver.id === wanted) : first;
   if (!picked) {
     throw new Error(
