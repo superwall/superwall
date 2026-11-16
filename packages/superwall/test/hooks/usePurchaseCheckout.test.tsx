@@ -695,3 +695,113 @@ describe("usePurchase when a web payment fails", () => {
     expect(result.current.purchase.failure).not.toMatchObject({ reason: "insufficient_funds" });
   });
 });
+
+describe("usePurchase callbacks", () => {
+  const renderWithCallbacks = async (checkout: SuperwallCheckoutConfig) => {
+    const calls: unknown[][] = [];
+    const record =
+      (name: string) =>
+      (value: unknown): void => {
+        calls.push([name, value]);
+      };
+    const rendered = renderWithProvider(
+      () => ({
+        session: useSuperwallSession(),
+        buyer: usePurchase(),
+        watcher: usePurchase({
+          onStart: (product) => record("start")(product.reference),
+          onSubmit: (product) => record("submit")(product.reference),
+          onComplete: (product) => record("complete")(product.reference),
+          onAbandon: (product) => record("abandon")(product.reference),
+          onFailure: record("failure"),
+        }),
+      }),
+      {
+        config: { ...testConfig, checkout },
+        host: { products, device: { platform: "Android", publicApiKey: "pk_test" } },
+      },
+    );
+    await flush();
+    return { ...rendered, sessions: sessionsFor(rendered.result.current.session), calls };
+  };
+
+  it("start, submit and complete for the sheet, on a hook that did not start the purchase", async () => {
+    const { result, sessions, calls } = await renderWithCallbacks("sheet");
+    vi.spyOn(sessions, "begin").mockResolvedValue(embedded);
+
+    let outcome: Promise<unknown> | undefined;
+    act(() => {
+      outcome = result.current.buyer.purchase("primary");
+    });
+    await flush();
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+    checkoutEvents.dispatch("CHECKOUT_SUBMITTED", {
+      session: { ...embedded, referenceName: "other" },
+    });
+    checkoutEvents.dispatch("CHECKOUT_SUBMITTED", { session: embedded });
+    checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
+    await act(async () => {
+      await outcome;
+    });
+
+    expect(calls).toEqual([
+      ["start", "primary"],
+      ["submit", "primary"],
+      ["complete", "primary"],
+    ]);
+  });
+
+  it("failure with the product and why, when Apple Pay is declined", async () => {
+    const { result, calls } = await renderWithCallbacks("applePay");
+    vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue({
+      status: "failed",
+      failure: { reason: "expired_card", store: "stripe", code: "expired_card" },
+    });
+
+    await act(async () => {
+      await result.current.buyer.purchase("primary");
+    });
+
+    expect(calls).toEqual([
+      ["start", "primary"],
+      [
+        "failure",
+        {
+          status: "failed",
+          reason: "expired_card",
+          store: "stripe",
+          code: "expired_card",
+          product: expect.objectContaining({ reference: "primary" }),
+        },
+      ],
+    ]);
+  });
+
+  it("abandon when the hosted checkout ends unpaid, and nothing for a store product", async () => {
+    const { result, sessions, calls } = await renderWithCallbacks("sheet");
+    vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
+
+    await act(async () => {
+      await result.current.buyer.purchase("primary");
+      await result.current.buyer.purchase("secondary");
+    });
+
+    expect(calls).toEqual([
+      ["start", "primary"],
+      ["abandon", "primary"],
+    ]);
+  });
+
+  it("stops calling back once the hook unmounts", async () => {
+    const { result, sessions, calls, unmount } = await renderWithCallbacks("sheet");
+    vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
+    const { purchase } = result.current.buyer;
+    unmount();
+
+    await act(async () => {
+      await purchase("primary");
+    });
+
+    expect(calls).toEqual([]);
+  });
+});

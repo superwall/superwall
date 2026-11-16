@@ -49,3 +49,49 @@ export const checkoutEvents = {
     });
   },
 };
+
+export type PurchaseEventPayload = {
+  start: { referenceName: string };
+  submit: { referenceName: string };
+  complete: { referenceName: string };
+  abandon: { referenceName: string };
+  failure: { referenceName: string; failure: CheckoutFailure };
+};
+
+export type PurchaseEvent = keyof PurchaseEventPayload;
+
+type PurchaseListener<T extends PurchaseEvent> = (payload: PurchaseEventPayload[T]) => void;
+
+type PurchaseBus = {
+  on<T extends PurchaseEvent>(event: T, listener: PurchaseListener<T>): () => void;
+  emit<T extends PurchaseEvent>(event: T, payload: PurchaseEventPayload[T]): void;
+};
+
+const purchaseBuses = new WeakMap<object, PurchaseBus>();
+
+export const purchaseEventsFor = (paywall: object): PurchaseBus => {
+  const existing = purchaseBuses.get(paywall);
+  if (existing) return existing;
+  const handlers: { [T in PurchaseEvent]?: Set<PurchaseListener<T>> } = {};
+  const bus: PurchaseBus = {
+    on: (event, listener) => {
+      const set = handlers[event] ?? new Set();
+      if (!handlers[event]) Object.assign(handlers, { [event]: set });
+      set.add(listener);
+      return () => {
+        set.delete(listener);
+      };
+    },
+    emit: (event, payload) => {
+      handlers[event]?.forEach((listener) => {
+        try {
+          listener(payload);
+        } catch (error) {
+          console.error(`[checkout] purchase ${event} listener failed:`, error);
+        }
+      });
+    },
+  };
+  purchaseBuses.set(paywall, bus);
+  return bus;
+};

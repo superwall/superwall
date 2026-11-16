@@ -192,7 +192,8 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     teleportCopyFor(asString(paywall.getSnapshot().device.deviceLocale) || undefined);
   const hintFor = (reason: ReturnReason = "closed"): ReturnHint => {
     const copy = copyFor();
-    return { caption: copy.returning[reason], dir: copy.dir ?? "ltr" };
+    const caption = copy.returning[reason === "purchased" ? "purchased" : "closed"];
+    return { caption, dir: copy.dir ?? "ltr" };
   };
 
   const track = (attempt: Promise<ReturnResult> | undefined): Promise<ReturnResult> => {

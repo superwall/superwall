@@ -3,12 +3,18 @@ import type {
   SuperwallPrepaidCards,
   SuperwallSession,
 } from "@superwall/runtime";
+import type { CheckoutFailure } from "../failure";
 import type { PurchaseOutcome } from "../types";
 import { NAV_QUERY_KEY } from "./boot";
 
 export type TeleportStatus =
   | { status: "idle" }
-  | { status: "waiting"; productReference?: string; returned: boolean }
+  | {
+      status: "waiting";
+      productReference?: string;
+      returned: boolean;
+      failure?: CheckoutFailure;
+    }
   | { status: "arrived"; productReference?: string }
   | { status: "completed"; productReference?: string; paidElsewhere: boolean };
 
@@ -27,7 +33,7 @@ export type TeleportRequest = {
   prepaidCards?: SuperwallPrepaidCards;
 };
 
-export type ReturnReason = "purchased" | "closed";
+export type ReturnReason = "purchased" | "closed" | "failed";
 
 export type ReturnResult = "opened" | "cancelled" | "no_app";
 

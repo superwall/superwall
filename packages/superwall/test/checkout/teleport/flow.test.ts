@@ -14,6 +14,7 @@ import {
 } from "../../../src/checkout/teleport/page";
 import { flowQuery, type AttachedSession } from "../../../src/checkout/teleport/teleporter";
 import { warmTeleportPage } from "../../../src/checkout/teleport/api";
+import { purchaseEventsFor } from "../../../src/checkout/events";
 import { appTeleport, teleportPage } from "./halves";
 
 type Fixture = {
@@ -566,6 +567,120 @@ describe("a teleport from the app", () => {
     expect(cancelled).not.toHaveBeenCalled();
     expect(teleporter.getStatus()).toEqual({ status: "idle" });
     await expect(handleReturn()).resolves.toBe(false);
+    unsubscribe();
+  });
+
+  it("shows the page's failed payment while waiting, reports each new one once, and keeps waiting", async () => {
+    const declined = { code: "card_declined", declineCode: "insufficient_funds" };
+    api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": [
+        { status: "claimed", checkoutContextId: "ctx_2", failure: declined },
+        { status: "claimed", checkoutContextId: "ctx_2", failure: declined },
+        { status: "claimed", checkoutContextId: "ctx_2" },
+        { status: "claimed", checkoutContextId: "ctx_2" },
+        { status: "claimed", checkoutContextId: "ctx_2", failure: declined },
+      ],
+      "checkout/status": [
+        { status: "pending" },
+        { status: "pending" },
+        { status: "pending" },
+        { status: "pending", failure: { code: "expired_card" } },
+        { status: "pending" },
+      ],
+    });
+    const { session } = fakeSession();
+    const failed = vi.fn();
+    purchaseEventsFor(session).on("failure", failed);
+    const teleporter = appTeleport(session);
+    const outcome = teleporter.begin({ productReference: "card", query: {} });
+    let done = false;
+    void outcome.then(() => (done = true));
+    await settle();
+    await settle(2_000);
+
+    const insufficientFunds = {
+      reason: "insufficient_funds",
+      store: "stripe",
+      code: "card_declined",
+      declineCode: "insufficient_funds",
+    };
+    expect(teleporter.getStatus()).toEqual({
+      status: "waiting",
+      returned: false,
+      productReference: "card",
+      failure: insufficientFunds,
+    });
+    expect(failed).toHaveBeenCalledWith({ referenceName: "card", failure: insufficientFunds });
+
+    await settle(2_000);
+    expect(failed).toHaveBeenCalledOnce();
+
+    await settle(2_000);
+    expect(teleporter.getStatus()).not.toHaveProperty("failure");
+
+    await settle(2_000);
+    expect(teleporter.getStatus()).toMatchObject({
+      failure: { reason: "expired_card", code: "expired_card" },
+    });
+    await settle(2_000);
+    expect(failed).toHaveBeenCalledTimes(3);
+    expect(done).toBe(false);
+  });
+
+  it("keeps the failure it read while the status cannot be read", async () => {
+    api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": [
+        { status: "pending", failure: { code: "card_declined" } },
+        new Error("offline"),
+      ],
+    });
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { session } = fakeSession();
+    const teleporter = appTeleport(session);
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    await settle(2_000);
+    await settle(2_000);
+    expect(teleporter.getStatus()).toMatchObject({ failure: { reason: "card_declined" } });
+  });
+
+  it("names the product a teleported push bought when the page's payment fails", async () => {
+    api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": {
+        status: "claimed",
+        checkoutContextId: "ctx_2",
+        checkoutProductIdentifier: "live:price_1:14days-free",
+        failure: { code: "card_declined" },
+      },
+      "checkout/status": { status: "pending" },
+    });
+    const { session } = fakeSession();
+    const failed = vi.fn();
+    purchaseEventsFor(session).on("failure", failed);
+    void appTeleport(session).begin({ route: "checkout", query: {} });
+    await settle();
+    await settle(2_000);
+    expect(failed).toHaveBeenCalledWith(expect.objectContaining({ referenceName: "card" }));
+  });
+
+  it("covers a failed payment's return with no loader, as a closed one", async () => {
+    api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
+    const { session } = fakeSession();
+    const teleporter = appTeleport(session);
+    attach(session);
+    await settle();
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle(1_500);
+    const loading: boolean[] = [];
+    const unsubscribe = subscribeLoading((value) => loading.push(value));
+    const back = handleReturn("failed");
+    await settle(250);
+    await expect(back).resolves.toBe(true);
+    expect(loading).toEqual([]);
+    expect(teleporter.getStatus()).toMatchObject({ status: "waiting", returned: true });
     unsubscribe();
   });
 
@@ -1646,6 +1761,16 @@ describe("the web half of a teleport", () => {
     window.dispatchEvent(new Event("focus"));
     expect(dim?.dataset.state).toBe("closing");
     expect(hint?.parentElement).toBe(dim);
+  });
+
+  it("returns after a failed payment with reason=failed, captioned as a back", () => {
+    boot({ appLinkUrl: undefined });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    void teleportPage(fakeSession().session).returnToApp("failed");
+    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=failed");
+    window.dispatchEvent(new Event("blur"));
+    const hint = document.querySelector<HTMLElement>(".sw-teleport-dim-hint");
+    expect(hint?.textContent).toBe("Tap to go back to the app");
   });
 
   it("captions a return with no reason as a back, in the device's language and direction", () => {

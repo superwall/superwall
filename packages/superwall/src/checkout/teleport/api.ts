@@ -1,4 +1,5 @@
-import { field, readCheckoutStatus } from "../api/decode";
+import { field, readCheckoutFailure, readCheckoutStatus } from "../api/decode";
+import type { CheckoutFailure } from "../failure";
 import type { CheckoutStatus } from "../types";
 import { fetchWithRetry } from "../api/fetch";
 import { subscriptionsApiUrl } from "../api/url";
@@ -10,6 +11,7 @@ export type ServerTeleport = {
   status: "pending" | "claimed" | "completed" | "expired";
   checkoutContextId?: string;
   checkoutProductIdentifier?: string;
+  failure?: CheckoutFailure;
 };
 
 export type NewTeleport = {
@@ -85,17 +87,19 @@ export const readTeleportStatus = async (
   const status = STATUSES.find((candidate) => candidate === field(body, "status")) ?? "pending";
   const checkoutContextId = text(body, "checkoutContextId");
   const checkoutProductIdentifier = text(body, "checkoutProductIdentifier");
+  const failure = readCheckoutFailure(field(body, "failure"));
   return {
     status,
     ...(checkoutContextId === undefined ? {} : { checkoutContextId }),
     ...(checkoutProductIdentifier === undefined ? {} : { checkoutProductIdentifier }),
+    ...(failure === undefined ? {} : { failure }),
   };
 };
 
 export const readCheckoutOf = async (
   publicApiKey: string,
   checkoutContextId: string,
-): Promise<CheckoutStatus["status"]> => {
+): Promise<CheckoutStatus> => {
   const response = await fetchWithRetry(
     subscriptionsApiUrl("checkout/status"),
     {
@@ -105,7 +109,7 @@ export const readCheckoutOf = async (
     },
     { retries: 0 },
   );
-  return readCheckoutStatus(await response.json()).status;
+  return readCheckoutStatus(await response.json());
 };
 
 export const readTeleportQuery = async (

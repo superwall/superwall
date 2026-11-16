@@ -9,7 +9,7 @@ import { asString, field } from "./api/decode";
 import { checkoutDiagnostics } from "./diagnostics";
 import { fetchWithRetry } from "./api/fetch";
 import { subscriptionsApiUrl } from "./api/url";
-import { checkoutEvents } from "./events";
+import { checkoutEvents, purchaseEventsFor } from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
 import { checkoutModeFor, sdkRedeemsCheckout } from "./host/sdk";
 import { presentingPlacement } from "./host/init";
@@ -486,8 +486,19 @@ export const purchaseOnWeb = async (
   options: WebPurchaseOptions = {},
 ): Promise<WebPurchaseOutcome> => {
   clearWebFailure(paywall);
-  const outcome = await runWebPurchase(paywall, referenceName, requested, options);
-  if (outcome.status === "failed") recordWebFailure(paywall, referenceName, outcome.failure);
+  const events = purchaseEventsFor(paywall);
+  events.emit("start", { referenceName });
+  const stopWatching = checkoutEvents.subscribe("CHECKOUT_SUBMITTED", ({ session }) => {
+    if (session.referenceName === referenceName) events.emit("submit", { referenceName });
+  });
+  const outcome = await runWebPurchase(paywall, referenceName, requested, options).finally(
+    stopWatching,
+  );
+  if (outcome.status === "failed") {
+    recordWebFailure(paywall, referenceName, outcome.failure);
+    events.emit("failure", { referenceName, failure: outcome.failure });
+  } else if (outcome.status === "completed") events.emit("complete", { referenceName });
+  else events.emit("abandon", { referenceName });
   return outcome;
 };
 

@@ -10,6 +10,8 @@ import { platformOf } from "../../device";
 import { attributionOf } from "../api/body";
 import { attachCheckoutMetadata } from "../api/metadata";
 import { asString } from "../api/decode";
+import { purchaseEventsFor } from "../events";
+import type { CheckoutFailure } from "../failure";
 import { hostOf } from "../../host";
 import { startLoading, stopLoading } from "../loading";
 import { isStripeProductIdentifier } from "../products";
@@ -77,6 +79,7 @@ type OpenTeleport = CreatedTeleport & {
   stripeMetadata?: Readonly<Record<string, string>>;
   prepaidCards?: SuperwallPrepaidCards;
   paid?: boolean;
+  failure?: CheckoutFailure;
   outcome: Promise<TeleportOutcome>;
   settle: (outcome: TeleportOutcome) => void;
 };
@@ -109,6 +112,15 @@ const changedQuery = (
   now: Record<string, string>,
 ): Record<string, string> =>
   Object.fromEntries(Object.entries(now).filter(([key, value]) => saved[key] !== value));
+
+const sameFailure = (a: CheckoutFailure | undefined, b: CheckoutFailure | undefined) =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.reason === b.reason &&
+    a.code === b.code &&
+    a.declineCode === b.declineCode &&
+    a.message === b.message);
 
 let opens = 0;
 
@@ -195,6 +207,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       ...(record.productReference === undefined
         ? {}
         : { productReference: record.productReference }),
+      ...(record.failure === undefined ? {} : { failure: record.failure }),
     };
   };
 
@@ -409,6 +422,22 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     record.settle({ reference, result: buy(reference) });
   };
 
+  const reportFailure = (record: OpenTeleport, failure: CheckoutFailure | undefined) => {
+    if (sameFailure(record.failure, failure)) return;
+    record.failure = failure;
+    publish();
+    if (failure === undefined) return;
+    const referenceName =
+      record.productReference ??
+      paywall
+        .getSnapshot()
+        .products.find((product) => product.productId === record.checkoutProductIdentifier)
+        ?.reference;
+    if (referenceName !== undefined) {
+      purchaseEventsFor(paywall).emit("failure", { referenceName, failure });
+    }
+  };
+
   const poll = async (record: OpenTeleport) => {
     if (polling === record) return;
     const key = publicApiKey();
@@ -427,15 +456,18 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         redeem(record, teleport.checkoutContextId, teleport.checkoutProductIdentifier);
         return;
       }
+      let failure = teleport.failure;
       if (record.checkoutContextId) {
         const checkout = await readCheckoutOf(key, record.checkoutContextId);
         if (!isWaiting(record)) return;
-        if (checkout === "completed") {
+        if (checkout.status === "completed") {
           stop();
           redeem(record, record.checkoutContextId);
           return;
         }
+        failure ??= checkout.failure;
       }
+      reportFailure(record, failure);
       if (teleport.status === "expired") {
         settleAbandoned(record);
         return;
@@ -482,7 +514,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       }
       if (isParked(record) && checkoutContextId) {
         const checkout = await readCheckoutOf(key, checkoutContextId);
-        if (isParked(record) && checkout === "completed") {
+        if (isParked(record) && checkout.status === "completed") {
           stopParked();
           redeem(record, checkoutContextId, teleport.checkoutProductIdentifier);
           return "paid";
@@ -859,7 +891,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       if (phase.kind === "waiting") {
         const record = phase.record;
         record.returnedAt ??= Date.now();
-        if (reason !== "closed" && publicApiKey() !== "") {
+        if (reason !== "closed" && reason !== "failed" && publicApiKey() !== "") {
           returnLoading = true;
           startLoading();
         }

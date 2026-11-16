@@ -1,5 +1,7 @@
 import * as React from "react";
 import type { SuperwallProduct } from "@superwall/runtime";
+import type { CheckoutFailure } from "../checkout/failure";
+import { lastWebFailure } from "../checkout/flow";
 import { isStripeProductIdentifier } from "../checkout/products";
 import { teleportFor } from "../checkout/teleport/flow";
 import { flowQuery } from "../checkout/teleport/teleporter";
@@ -36,6 +38,11 @@ export type TeleportWaiting = {
   productReference?: StripeProductReference;
   /** The store product `teleport.fallbacks` offers instead, once the store has priced it. Buy it with `purchase()`. */
   fallbackReference?: ProductReference;
+  /**
+   * Why the last payment in the browser failed, once the backend reports it.
+   * Absent while no payment failed; the shopper can still try again there.
+   */
+  failure?: CheckoutFailure;
 };
 
 /** On the web: the paywall opened in the browser from a teleport, not paid yet. */
@@ -83,7 +90,9 @@ export type TeleportActions = {
   cancel: () => void;
   /**
    * On the web: returns to the app, as going back from the first web route
-   * does, and resolves how that went. While iOS asks "Open in App?", the page
+   * does, and resolves how that went. After a failed payment the return
+   * link carries `reason=failed`, so it can be called from
+   * `usePurchase({ onFailure })`. While iOS asks "Open in App?", the page
    * dims with an arrow at Open. In the app it resolves `"opened"` at once.
    */
   returnToApp: () => Promise<TeleportReturnResult>;
@@ -147,6 +156,7 @@ const statusOf = (
     returned: internal.returned,
     ...product,
     ...(isProductReference(products, fallback) ? { fallbackReference: fallback } : {}),
+    ...(internal.failure === undefined ? {} : { failure: internal.failure }),
   };
 };
 
@@ -198,7 +208,9 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
         if (teleporter.kind === "app") teleporter.cancel();
       },
       returnToApp: async (): Promise<TeleportReturnResult> => {
-        if (teleporter.kind === "page") return teleporter.returnToApp("closed");
+        if (teleporter.kind === "page") {
+          return teleporter.returnToApp(lastWebFailure(session) ? "failed" : "closed");
+        }
         teleporter.returnToApp();
         return "opened";
       },
