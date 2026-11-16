@@ -51,10 +51,13 @@ describe("the studio's update banner", () => {
     expect(screen.getByRole("link", { name: /Release notes/ }).getAttribute("href")).toBe(
       MAJOR.notes,
     );
-    expect(screen.getByRole("button", { name: "Copy prompt" }).className).toContain(
-      "sw-btn--warning",
-    );
-    expect(screen.getByRole("button", { name: "Dismiss" }).className).toContain("sw-btn--warning");
+    const copy = screen.getByRole("button", { name: "Copy prompt" });
+    expect(copy.className).toContain("text-warning-foreground");
+    expect(copy.className).not.toContain("sw-btn");
+    expect(copy.getAttribute("title")).toBe(MAJOR.command);
+    const dismiss = screen.getByRole("button", { name: "Dismiss" }).className;
+    expect(dismiss).toContain("sw-btn--ghost");
+    expect(dismiss).toContain("[&>.sw-icon]:text-warning-foreground");
   });
 
   it("dismisses with a square button the size of the top bar's buttons", () => {
@@ -63,6 +66,7 @@ describe("the studio's update banner", () => {
     const dismiss = screen.getByRole("button", { name: "Dismiss" }).className;
     expect(dismiss).toContain("sw-btn--sm");
     expect(dismiss).toContain("sw-btn--icon");
+    expect(dismiss).toContain("sw-btn--ghost");
   });
 
   it("prompts an agent to review breaking changes before a major upgrade", () => {

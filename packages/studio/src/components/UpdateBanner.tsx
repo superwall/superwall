@@ -58,7 +58,11 @@ const CopyPrompt = ({ update, warning }: { update: StudioUpdate; warning: boolea
   return (
     <button
       type="button"
-      className={`sw-btn sw-btn--sm ${warning ? "sw-btn--warning" : ""}`}
+      className={`inline-flex flex-none cursor-pointer items-center gap-1.5 rounded-xs border px-1.5 py-px font-mono text-xs ${
+        warning
+          ? "border-warning/30 bg-warning/10 text-warning-foreground hover:bg-warning/18"
+          : "border-border bg-muted text-foreground hover:bg-muted/70"
+      }`}
       title={update.command}
       onClick={() => {
         navigator.clipboard?.writeText(updatePrompt(update)).then(
@@ -67,8 +71,12 @@ const CopyPrompt = ({ update, warning }: { update: StudioUpdate; warning: boolea
         );
       }}
     >
-      {copied ? <CheckIcon /> : <CopyIcon />}
       {copied ? "Copied" : "Copy prompt"}
+      {copied ? (
+        <CheckIcon className={`size-3 shrink-0 ${warning ? "" : "text-success"}`} />
+      ) : (
+        <CopyIcon className="size-3 shrink-0" />
+      )}
     </button>
   );
 };
@@ -113,7 +121,9 @@ export const UpdateBanner = ({ update }: { update: StudioUpdate | undefined }) =
         <button
           type="button"
           aria-label="Dismiss"
-          className={`sw-btn sw-btn--sm sw-btn--icon ${major ? "sw-btn--warning" : "sw-btn--ghost"}`}
+          className={`sw-btn sw-btn--sm sw-btn--icon sw-btn--ghost ${
+            major ? "[&>.sw-icon]:text-warning-foreground [&>.sw-icon]:[filter:none]" : ""
+          }`}
           onClick={() => {
             storeDismissed(update.latest);
             setDismissed(update.latest);
