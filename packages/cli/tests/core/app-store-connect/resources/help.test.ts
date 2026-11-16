@@ -23,3 +23,11 @@ test("handlers that confirm still advertise how to skip their prompt", async () 
     assert.match(help, /-y, --yes\s+Go ahead without asking/, operation);
   }
 });
+
+test("offers create help says overlapping offers are rejected, not overwritten", async () => {
+  const help = await helpLine("asc offers create --help");
+  assert.doesNotMatch(help, /overwrite/);
+  assert.match(help, /rejects an offer whose dates overlap/);
+  assert.match(help, /asc offers update/);
+  assert.match(help, /asc offers delete/);
+});

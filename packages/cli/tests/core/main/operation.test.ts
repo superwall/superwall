@@ -14,6 +14,7 @@ import { command as products } from "@/commands/main/products";
 import { command as users } from "@/commands/main/users";
 import { command as webhooks } from "@/commands/main/webhooks";
 import { defineResource } from "@/core/main/define";
+import { minorUnits } from "@/core/main/create";
 import { answeringRenderer as answering, said } from "../../helpers/answers";
 import { runCommand } from "../../helpers/command";
 import { recordingRenderer, type RendererCall } from "../../helpers/renderer";
@@ -438,6 +439,74 @@ test("products create --app creates the product under that app", async () => {
       body: { project_id: "1", application_id: "11", identifier: "test:price_1:7days-free" },
     },
   ]);
+});
+
+test("products create --app finds a custom store, which /v2/projects leaves out", async () => {
+  const posts: Array<{ path: string; body: unknown }> = [];
+  const api = {
+    list: async (path: string) =>
+      path.startsWith("/v2/projects/1/custom-stores")
+        ? [{ id: 60195, name: "Paddle", object: "custom_store" }]
+        : [{ id: 1, name: "Lab", applications: [{ id: 10, name: "Lab", platform: "ios" }] }],
+    get: async () => ({ data: [] }),
+    post: async (path: string, body: unknown) => {
+      posts.push({ path, body });
+      return { id: "p1", identifier: "pro_monthly" };
+    },
+  } as unknown as SuperwallApi;
+
+  await runCommand(products, {
+    words: ["create"],
+    flags: { identifier: "pro_monthly", app: "60195", price: "9.99", period: "month" },
+    json: true,
+    api,
+  });
+
+  assert.deepEqual(posts, [
+    {
+      path: "/v2/products",
+      body: {
+        project_id: "1",
+        application_id: "60195",
+        store: "custom",
+        identifier: "pro_monthly",
+        price: { amount: 999, currency: "USD" },
+        subscription: { period: "month", period_count: 1 },
+      },
+    },
+  ]);
+});
+
+test("products create --store custom without --app leaves the store to the project's default", async () => {
+  const posts: Array<{ path: string; body: unknown }> = [];
+  const api = {
+    list: async () => [{ id: 1, name: "Lab", applications: [{ id: 10, name: "Lab", platform: "ios" }] }],
+    post: async (path: string, body: unknown) => {
+      posts.push({ path, body });
+      return { id: "p1", identifier: "pro_monthly" };
+    },
+  } as unknown as SuperwallApi;
+
+  await runCommand(products, {
+    words: ["create"],
+    flags: { identifier: "pro_monthly", project: "1", store: "custom" },
+    json: true,
+    api,
+  });
+
+  assert.deepEqual(posts, [
+    { path: "/v2/products", body: { project_id: "1", store: "custom", identifier: "pro_monthly" } },
+  ]);
+});
+
+test("--price is converted with the currency's minor unit", () => {
+  assert.equal(minorUnits("9.99", "USD"), 999);
+  assert.equal(minorUnits("0.29", "USD"), 29);
+  assert.equal(minorUnits("1200", "JPY"), 1200);
+  assert.equal(minorUnits("1.234", "KWD"), 1234);
+  assert.throws(() => minorUnits("9.999", "USD"), /more decimals than USD allows/);
+  assert.throws(() => minorUnits("abc", "USD"), /--price is an amount in USD/);
+  assert.throws(() => minorUnits("9.99", "DOLLARS"), /--currency is an ISO 4217 code/);
 });
 
 test("products create --app rejects an app outside the project", async () => {

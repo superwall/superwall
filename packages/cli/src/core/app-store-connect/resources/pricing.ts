@@ -79,7 +79,7 @@ export async function resolveTerritoryPoints(
   const equalized = await listEqualizations(session, base.point);
   const points = new Map<string, string>();
   const skipped: string[] = [];
-  for (const territory of new Set([base.territory, ...territories])) {
+  for (const territory of new Set(territories)) {
     const point = territory === base.territory ? base.point : (equalized ? equalized.get(territory) : placeholder(`price-point-${territory}`));
     if (point) points.set(territory, point);
     else skipped.push(territory);

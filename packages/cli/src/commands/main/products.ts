@@ -16,7 +16,11 @@ export const command = defineResource({
       flags: [
         ["--identifier <id>", "The store product ID"],
         ["--name <name>", "Display name"],
-        ["--price <amount>", "Price in major units, e.g. 9.99"],
+        [
+          "--store <store>",
+          "app_store | play_store | custom; custom without --app uses the project's default custom store",
+        ],
+        ["--price <amount>", "Price in the currency's main unit, e.g. 9.99 (sent to the API as 999 cents)"],
         ["--currency <code>", "ISO currency, default USD"],
         ["--period <p>", "day | week | month | year"],
         ["--period-count <n>", "Periods per cycle, default 1"],
@@ -53,5 +57,6 @@ export const command = defineResource({
     ["products list --app <app>", "Products of an app's project"],
     ["products create --identifier <id> --price 9.99 --period month", "A monthly subscription"],
     ["products create --identifier <id> --price 9.99 --period month --entitlement pro", "One that grants pro"],
+    ["products create --identifier <id> --app <custom store> --price 9.99 --period month", "One in a custom store"],
   ],
 });

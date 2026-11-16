@@ -124,3 +124,27 @@ test("a price point lookup with no prices at all says so plainly", async () => {
   const result = await runCommand(prices, { api, words: ["set"], flags: { subscription: "601", price: "3" } });
   assert.deepEqual(result.said("error"), ["Apple has no USA price point at 3."]);
 });
+
+test("set priced in a territory the subscription isn't sold in prices only the territories it is sold in", async () => {
+  const { api, writes } = ascRoutes({
+    ...subscriptionView("601"),
+    "GET /v1/subscriptions/601/pricePoints?filter[territory]=GBR&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds": page([
+      one("subscriptionPricePoints", "P-GBR", { customerPrice: "3.99" }),
+    ]),
+    [EQUALIZATIONS("P-GBR")]: page([
+      one("subscriptionPricePoints", "P-USA", {}, { territory: link("territories", "USA") }),
+      one("subscriptionPricePoints", "P-CAN", {}, { territory: link("territories", "CAN") }),
+    ]),
+    "PATCH /v1/subscriptions/601": { data: one("subscriptions", "601") },
+  });
+  const result = await runCommand(prices, { api, words: ["set"], flags: { subscription: "601", price: "3.99", territory: "GBR" } });
+  const body = writes()[0]?.body as { included: { relationships: { territory: { data: { id: string } }; subscriptionPricePoint: unknown } }[] };
+  assert.deepEqual(
+    body.included.map((entry) => [entry.relationships.territory.data.id, entry.relationships.subscriptionPricePoint]),
+    [
+      ["USA", link("subscriptionPricePoints", "P-USA")],
+      ["CAN", link("subscriptionPricePoints", "P-CAN")],
+    ],
+  );
+  assert.deepEqual(result.said("success"), ["Priced at 3.99 in GBR, equalized across 2 territories"]);
+});

@@ -350,3 +350,15 @@ test("a reference download that can't connect keeps its own failure", async () =
   useFetch([{ match: "/openapi.json", fail: true }]);
   await assert.rejects(downloadApiIndex(), /offline:/);
 });
+
+test("an endpoint a resource command covers names it first and the raw verb after", () => {
+  const commandFor = (op: { method: string; path: string }) => (op.method === "POST" ? "superwall campaigns variants create <campaign> <audience>" : undefined);
+  const one = renderApiDocs(index(), "post /v2/campaigns/1/audiences/2/variants", undefined, commandFor);
+  assert.match(
+    one,
+    /\n\nCall it: superwall campaigns variants create <campaign> <audience> -d field=value …\nOr: superwall post \/v2\/campaigns\/\{id\}\/audiences\/\{audience_id\}\/variants -d field=value …$/,
+  );
+  assert.match(renderApiDocs(index(), "create variant", undefined, commandFor), /\nCall it: superwall campaigns variants create/);
+  assert.match(renderApiDocs(index(), "/v2/paywalls", "get", commandFor), /\n\nCall it: superwall get \/v2\/paywalls$/);
+  assert.doesNotMatch(renderApiDocs(index(), "/v2/paywalls", "get", commandFor), /\nOr: /);
+});
