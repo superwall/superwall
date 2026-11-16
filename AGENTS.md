@@ -229,7 +229,9 @@ The stack, bottom to top — each layer depends only on the one below it:
     - `api/` is the only place that touches the subscriptions API: `url.ts`
       (environment), `fetch.ts` (retry — a 4xx is the backend's verdict and
       throws at once, as paywall.js does), `body.ts` (the v4 session body and
-      identity), `decode.ts` (**a trust boundary**: every response is read
+      identity), `customStore.ts` (the custom store session request: one
+      attempt with a timeout, never retried, since each one opens a checkout
+      at the store), `decode.ts` (**a trust boundary**: every response is read
       field by field, never cast).
     - `customStore/` is a custom store product's checkout on a hosted web
       paywall, ported from paywall.js: `index.ts` asks

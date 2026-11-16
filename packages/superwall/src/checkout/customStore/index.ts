@@ -1,13 +1,12 @@
 import type { SuperwallProduct, SuperwallRuntimeSnapshot } from "@superwall/runtime";
 import { checkoutContextOf } from "../api/body";
+import { postCustomStoreSession } from "../api/customStore";
 import {
   errorMessageOf,
   errorTagOf,
-  field,
   readCustomStoreSession,
   type CustomStoreSession,
 } from "../api/decode";
-import { subscriptionsApiUrl } from "../api/url";
 import { bareProductIdentifier } from "../products";
 import type { PostCheckoutResolution } from "../types";
 
@@ -15,8 +14,6 @@ export const CUSTOM_STORE_REQUIRES_APP_USER_ID =
   "@open-revenue/subscriptions/errors/CustomStoreCheckoutRequiresAppUserId";
 
 export const RETURN_KEY_PREFIX = "sw:custom-store-checkout:";
-
-const SESSION_TIMEOUT_MS = 20_000;
 
 export class CustomStoreCheckoutError extends Error {
   readonly tag: string | undefined;
@@ -66,24 +63,6 @@ const buyerOf = (context: CheckoutContext): CustomStoreBuyer => {
   };
 };
 
-const timeoutSignal = (ms: number): AbortSignal => {
-  if (typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
-  const controller = new AbortController();
-  setTimeout(
-    () => controller.abort(new DOMException("The operation timed out.", "TimeoutError")),
-    ms,
-  );
-  return controller.signal;
-};
-
-const readJson = async (response: Response): Promise<unknown> => {
-  try {
-    return await response.json();
-  } catch {
-    return undefined;
-  }
-};
-
 export const customStoreSessionBody = (
   snapshot: SuperwallRuntimeSnapshot,
   product: SuperwallProduct,
@@ -98,24 +77,16 @@ export const requestCustomStoreSession = async (
   product: SuperwallProduct,
 ): Promise<WebCustomStoreSession> => {
   const body = customStoreSessionBody(snapshot, product);
-  const response = await fetch(subscriptionsApiUrl("checkout/custom-store/session"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${String(snapshot.device.publicApiKey ?? "")}`,
-    },
-    body: JSON.stringify(body),
-    signal: timeoutSignal(SESSION_TIMEOUT_MS),
-  }).catch((error: unknown) => {
-    if (field(error, "name") === "TimeoutError") {
-      throw new CustomStoreCheckoutError("The store's checkout took too long to start");
-    }
+  const answer = await postCustomStoreSession(String(snapshot.device.publicApiKey ?? ""), body);
+  if (answer.kind === "timeout") {
+    throw new CustomStoreCheckoutError("The store's checkout took too long to start");
+  }
+  if (answer.kind === "unsent") {
     throw new CustomStoreCheckoutError("The checkout request could not be sent");
-  });
-  const answer = await readJson(response);
+  }
 
-  if (!response.ok) {
-    const tag = errorTagOf(answer);
+  if (!answer.ok) {
+    const tag = errorTagOf(answer.body);
     if (tag === CUSTOM_STORE_REQUIRES_APP_USER_ID) {
       throw new CustomStoreCheckoutError(
         "Custom store checkout refused this buyer's app_user_id: pass a real user id or none at all",
@@ -123,12 +94,12 @@ export const requestCustomStoreSession = async (
       );
     }
     throw new CustomStoreCheckoutError(
-      errorMessageOf(answer, `The checkout request answered ${response.status}`),
+      errorMessageOf(answer.body, `The checkout request answered ${answer.status}`),
       tag,
     );
   }
 
-  const session = readCustomStoreSession(answer);
+  const session = readCustomStoreSession(answer.body);
   if (!session) {
     throw new CustomStoreCheckoutError("Custom store checkout returned an invalid session");
   }
