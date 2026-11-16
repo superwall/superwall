@@ -108,6 +108,11 @@ export interface JsonSchema {
   additionalProperties?: boolean | JsonSchema;
 }
 
+export interface Endpoint {
+  method: string;
+  path: string;
+}
+
 export interface CatalogTool {
   words: string[];
   summary: string;
@@ -122,6 +127,7 @@ interface CatalogSpec<Auth extends AuthPolicy> extends Description<Auth> {
   operations: () => readonly string[];
   help: (words: readonly string[]) => Promise<string>;
   tools: () => Promise<CatalogTool[]>;
+  commandFor?: (endpoint: Endpoint) => string | undefined;
   run: (ctx: CommandContext<Auth>, input: { words: string[]; flags: Record<string, unknown> }) => void | Promise<void>;
 }
 
@@ -163,6 +169,7 @@ export interface Catalog extends Common {
   operations: () => readonly string[];
   tools: () => Promise<CatalogTool[]>;
   help: (words: readonly string[]) => Promise<string>;
+  commandFor?: (endpoint: Endpoint) => string | undefined;
 }
 
 export type AnyCommand = Command | Catalog;
@@ -291,6 +298,7 @@ export function defineCatalog<Auth extends AuthPolicy>(spec: CatalogSpec<Auth>):
     operations: spec.operations,
     help: spec.help,
     tools: spec.tools,
+    commandFor: spec.commandFor,
     execute: (input, runtime = {}) => {
       return runLifecycle<Auth>(spec, input, runtime, (ctx) => {
         return spec.run(ctx, { words: input.words ?? [], flags: input.flags ?? {} });
