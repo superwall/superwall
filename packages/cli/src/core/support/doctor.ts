@@ -3,7 +3,10 @@ import { detectDrivers } from "@/core/workflows/agent/drivers/index";
 import { readSession } from "@/core/account/storage";
 import { detectExisting } from "@/core/codebase/existing";
 import { scanProject } from "@/core/codebase/scan";
-import { apiKeyFromEnv } from "@/environment";
+import { readUpdateCheck } from "@/core/state/config";
+import { selectProjectInstall } from "@/core/support/project-install";
+import { isNewerVersion } from "@/core/support/upgrade";
+import { VERSION, apiKeyFromEnv } from "@/environment";
 import { ui } from "@/ui";
 import { THEME, fg } from "@/ui/theme";
 
@@ -33,6 +36,7 @@ export async function runDoctor(
       ]
     : [];
   const rows: Check[] = [
+    resolveCliCheck(ctx.installDir),
     [
       drivers.length > 0,
       "Coding agent",
@@ -77,4 +81,19 @@ export async function runDoctor(
   ui.outro(
     failed === 0 ? "All checks passed." : `${failed} of ${rows.length} checks need attention.`,
   );
+}
+
+function resolveCliCheck(installDir: string): Check {
+  const project = selectProjectInstall(installDir);
+  const version = project ? project.version : VERSION;
+  const source = project ? ` from ${project.manifest}` : "";
+  const update = project ? project.update : "superwall upgrade";
+  if (version === undefined) {
+    return [false, "CLI", `unknown version${source} - run \`${update}\``];
+  }
+  const latest = readUpdateCheck()?.latest;
+  if (latest === undefined || !isNewerVersion(latest, version)) {
+    return [true, "CLI", `${version}${source}`];
+  }
+  return [false, "CLI", `${version}${source}, ${latest} available - run \`${update}\``];
 }
