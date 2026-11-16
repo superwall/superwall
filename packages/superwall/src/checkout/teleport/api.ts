@@ -4,6 +4,7 @@ import type { CheckoutStatus } from "../types";
 import { fetchWithRetry } from "../api/fetch";
 import { subscriptionsApiUrl } from "../api/url";
 import { SESSION_QUERY_FIELD, sessionQueryOf, TAPPED_PRODUCT_QUERY_KEY } from "./boot";
+import type { PageReturn, TeleportData } from "./teleporter";
 
 export type CreatedTeleport = { teleportId: string; url: string };
 
@@ -122,6 +123,61 @@ export const readTeleportQuery = async (
     body: JSON.stringify({ teleportId }),
   });
   return sessionQueryOf(field(await response.json(), "session"));
+};
+
+export const RETURN_SESSION_FIELD = "returned";
+export const RETURN_DATA_MAX_BYTES = 16 * 1024;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.getPrototypeOf(value) === Object.prototype;
+
+export const readPageReturn = (session: unknown): PageReturn | undefined => {
+  const returned = field(session, RETURN_SESSION_FIELD);
+  if (!isPlainObject(returned)) return undefined;
+  const failure = readCheckoutFailure(returned.failure);
+  const data = isPlainObject(returned.data) ? (returned.data as TeleportData) : undefined;
+  return {
+    ...(failure === undefined ? {} : { failure }),
+    ...(data === undefined ? {} : { data }),
+  };
+};
+
+export const readTeleportReturn = async (
+  publicApiKey: string,
+  teleportId: string,
+): Promise<PageReturn | undefined> => {
+  const response = await fetchWithRetry(
+    subscriptionsApiUrl("checkout/teleport/session/read"),
+    {
+      method: "POST",
+      headers: headers(publicApiKey),
+      body: JSON.stringify({ teleportId }),
+    },
+    { retries: 0 },
+  );
+  return readPageReturn(field(await response.json(), "session"));
+};
+
+export const saveTeleportReturn = async (
+  publicApiKey: string,
+  teleportId: string,
+  query: Record<string, string>,
+  returned: PageReturn,
+): Promise<boolean> => {
+  const response = await fetch(subscriptionsApiUrl("checkout/teleport/session"), {
+    method: "POST",
+    headers: headers(publicApiKey),
+    keepalive: true,
+    body: JSON.stringify({
+      teleportId,
+      session: { [SESSION_QUERY_FIELD]: query, [RETURN_SESSION_FIELD]: returned },
+    }),
+  });
+  if (!response.ok) return false;
+  return field(await response.json(), "saved") === true;
 };
 
 export const saveTeleportQuery = async (

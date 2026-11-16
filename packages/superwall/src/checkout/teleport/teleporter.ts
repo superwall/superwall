@@ -14,11 +14,24 @@ export type TeleportStatus =
       productReference?: string;
       returned: boolean;
       failure?: CheckoutFailure;
+      data?: TeleportData;
     }
   | { status: "arrived"; productReference?: string }
   | { status: "completed"; productReference?: string; paidElsewhere: boolean };
 
-export type TeleportEvent = "open" | "return" | "cancel" | "complete";
+export type TeleportDataValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TeleportDataValue[]
+  | { [key: string]: TeleportDataValue };
+
+export type TeleportData = { [key: string]: TeleportDataValue };
+
+export type PageReturn = { failure?: CheckoutFailure; data?: TeleportData };
+
+export type TeleportEvent = "open" | "return" | "cancel" | "complete" | "data";
 
 export type HandedOff = { reference: string; result: Promise<{ status: PurchaseOutcome }> };
 
@@ -73,7 +86,10 @@ export type TeleportPage = TeleportBase & {
   watchPresentation(): () => void;
   completePurchase(checkoutContextId: string): Promise<void>;
   followFragment(): void;
-  returnToApp(reason?: ReturnReason): Promise<ReturnResult>;
+  returnToApp(
+    reason?: ReturnReason,
+    left?: { query: Record<string, string>; returned: PageReturn },
+  ): Promise<ReturnResult>;
   returning(): boolean;
 };
 

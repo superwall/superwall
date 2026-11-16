@@ -56,7 +56,7 @@ export type WebCheckoutFailure<TProduct extends SuperwallProduct = SuperwallProd
 /**
  * A purchase that failed. A web checkout failure carries one of the
  * `CheckoutFailureReason`s; a store purchase made by the native SDK carries
- * `reason: "sdk"` (the SDK sends no detail) or `"superseded"` (another
+ * `reason: "unknown"` (the SDK sends no detail) or `"superseded"` (another
  * purchase replaced it).
  */
 export type PurchaseFailure<TProduct extends SuperwallProduct = SuperwallProduct> =

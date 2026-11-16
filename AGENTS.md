@@ -240,10 +240,17 @@ The stack, bottom to top — each layer depends only on the one below it:
       (`onStart`, `onSubmit`, `onComplete`, `onAbandon`, `onFailure`) — ours, never
       Stripe's event names. `usePurchase` also emits them for a store purchase
       made by the native SDK (no `onSubmit`, and `onFailure`'s reason is
-      `sdk` or `superseded`: no SDK sends why); custom store products emit
+      `unknown` or `superseded`: no SDK sends why); custom store products emit
       none. The same callbacks passed to one `purchase()` call fire only
       while that call is in flight. A teleport page's `returnToApp()` after a failed
-      payment adds `reason=failed` to the return link.
+      payment adds `reason=failed` to the return link, and leaves the app the
+      failure and any `returnToApp({ data })` in the teleport's session
+      (`returned`, beside `query`, via `checkout/teleport/session` with
+      `keepalive`, never awaited before the navigation, so iOS still opens the
+      app). Once the shopper is back, the app reads it on each check until it
+      finds it: the page's failure wins over the backend's, and `data` shows
+      as `useTeleport().data` and `onReturnData`. A teleport that has
+      completed refuses the write, so nothing is left after a purchase.
     - `session/` is where a checkout session comes from: `index.ts`
       (`createCheckoutSessions` — asks the backend, dedupes in-flight requests,
       applies a promotion code to what it creates), `cache.ts` (its own cache,

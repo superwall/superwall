@@ -20,6 +20,7 @@ import {
   createTeleport,
   moveTeleportIntroductoryOffer,
   readCheckoutOf,
+  readTeleportReturn,
   readTeleportStatus,
   saveTeleportQuery,
   teleportStatusUrls,
@@ -40,6 +41,7 @@ import {
   createStatusStore,
   withTimeout,
   type AttachedSession,
+  type PageReturn,
   type TeleportOutcome,
   type AppTeleport,
   type TeleportRequest,
@@ -80,6 +82,7 @@ type OpenTeleport = CreatedTeleport & {
   prepaidCards?: SuperwallPrepaidCards;
   paid?: boolean;
   failure?: CheckoutFailure;
+  pageReturn?: PageReturn;
   outcome: Promise<TeleportOutcome>;
   settle: (outcome: TeleportOutcome) => void;
 };
@@ -208,7 +211,23 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         ? {}
         : { productReference: record.productReference }),
       ...(record.failure === undefined ? {} : { failure: record.failure }),
+      ...(record.pageReturn?.data === undefined ? {} : { data: record.pageReturn.data }),
     };
+  };
+
+  const readPageReturn = async (key: string, record: OpenTeleport) => {
+    if (record.returnedAt === undefined || record.pageReturn !== undefined) return;
+    try {
+      const returned = await readTeleportReturn(key, record.teleportId);
+      if (returned === undefined || !isWaiting(record)) return;
+      record.pageReturn = returned;
+      if (returned.data !== undefined) {
+        publish();
+        emit("data");
+      }
+    } catch (error) {
+      console.warn("Reading what the teleport page left for the app failed; retrying:", error);
+    }
   };
 
   const publish = () => store.setStatus(statusOfPhase());
@@ -456,7 +475,9 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         redeem(record, teleport.checkoutContextId, teleport.checkoutProductIdentifier);
         return;
       }
-      let failure = teleport.failure;
+      await readPageReturn(key, record);
+      if (!isWaiting(record)) return;
+      let failure = record.pageReturn?.failure ?? teleport.failure;
       if (record.checkoutContextId) {
         const checkout = await readCheckoutOf(key, record.checkoutContextId);
         if (!isWaiting(record)) return;

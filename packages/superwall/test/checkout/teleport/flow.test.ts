@@ -101,7 +101,7 @@ type Reply = unknown | ((body: unknown) => unknown);
 
 const api = (routes: Record<string, Reply[] | Reply>) => {
   const queues = new Map(
-    Object.entries(routes).map(([path, reply]) => [
+    Object.entries({ "checkout/teleport/session/read": {}, ...routes }).map(([path, reply]) => [
       path,
       Array.isArray(reply) ? [...reply] : [reply],
     ]),
@@ -682,6 +682,93 @@ describe("a teleport from the app", () => {
     expect(loading).toEqual([]);
     expect(teleporter.getStatus()).toMatchObject({ status: "waiting", returned: true });
     unsubscribe();
+  });
+
+  it("reads the failure and data the page left once the shopper is back, the page's failure first", async () => {
+    const left = {
+      query: { plan: "annual" },
+      returned: {
+        failure: {
+          reason: "insufficient_funds",
+          store: "stripe",
+          declineCode: "insufficient_funds",
+        },
+        data: { offer: "apple_pay", attempts: 2 },
+      },
+    };
+    const calls = api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": {
+        status: "claimed",
+        checkoutContextId: "ctx_2",
+        failure: { code: "card_declined" },
+      },
+      "checkout/status": { status: "pending" },
+      "checkout/teleport/session/read": [new Error("offline"), { session: left }],
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { session } = fakeSession();
+    const failed = vi.fn();
+    purchaseEventsFor(session).on("failure", failed);
+    const teleporter = appTeleport(session);
+    attach(session);
+    const data = vi.fn();
+    teleporter.on("data", data);
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    await settle(2_000);
+    expect(teleporter.getStatus()).toMatchObject({ failure: { reason: "card_declined" } });
+    expect(calls.filter((call) => call.path === "checkout/teleport/session/read")).toHaveLength(0);
+
+    void handleReturn("failed");
+    await settle(250);
+    expect(warn).toHaveBeenCalledWith(
+      "Reading what the teleport page left for the app failed; retrying:",
+      expect.any(Error),
+    );
+    expect(teleporter.getStatus()).not.toHaveProperty("data");
+
+    await settle(2_000);
+    expect(teleporter.getStatus()).toMatchObject({
+      status: "waiting",
+      returned: true,
+      failure: left.returned.failure,
+      data: { offer: "apple_pay", attempts: 2 },
+    });
+    expect(data).toHaveBeenCalledOnce();
+    expect(failed).toHaveBeenLastCalledWith({
+      referenceName: "card",
+      failure: left.returned.failure,
+    });
+
+    await settle(2_000);
+    expect(calls.filter((call) => call.path === "checkout/teleport/session/read")).toHaveLength(2);
+    expect(data).toHaveBeenCalledOnce();
+  });
+
+  it("shows no data when the page left only its flow", async () => {
+    api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": { status: "pending" },
+      "checkout/teleport/session/read": [
+        { session: { query: { plan: "annual" } } },
+        { session: { query: {}, returned: { data: ["not", "an", "object"] } } },
+      ],
+    });
+    const { session } = fakeSession();
+    const teleporter = appTeleport(session);
+    attach(session);
+    const data = vi.fn();
+    teleporter.on("data", data);
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle(1_500);
+    void handleReturn("closed");
+    await settle(250);
+    await settle(2_000);
+    expect(teleporter.getStatus()).toMatchObject({ status: "waiting", returned: true });
+    expect(teleporter.getStatus()).not.toHaveProperty("data");
+    expect(teleporter.getStatus()).not.toHaveProperty("failure");
+    expect(data).not.toHaveBeenCalled();
   });
 
   it("keeps checking after a return while the status cannot be read", async () => {

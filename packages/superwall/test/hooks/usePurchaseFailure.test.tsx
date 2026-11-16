@@ -13,9 +13,9 @@ describe("usePurchase when the SDK reports a failure", () => {
       outcome = await result.current.purchase("primary");
     });
 
-    expect(outcome).toMatchObject({ status: "failed", reason: "sdk" });
+    expect(outcome).toMatchObject({ status: "failed", reason: "unknown" });
     expect(result.current.isPurchasing).toBe(false);
-    expect(result.current.failure?.reason).toBe("sdk");
+    expect(result.current.failure?.reason).toBe("unknown");
     expect(result.current.transaction).toBeUndefined();
   });
 
@@ -55,7 +55,7 @@ describe("purchase callbacks for a store purchase made by the SDK", () => {
   it.each([
     ["completed", ["complete", "primary"]],
     ["abandoned", ["abandon", "primary"]],
-    ["failed", ["failure", "sdk", "primary"]],
+    ["failed", ["failure", "unknown", "primary"]],
   ] as const)("fires start, then the end of a %s purchase, on every hook", async (ending, last) => {
     const watcher = recorder();
     const { result } = renderWithProvider(
@@ -85,7 +85,7 @@ describe("purchase callbacks for a store purchase made by the SDK", () => {
 
     expect(own.calls).toEqual([
       ["start", "primary"],
-      ["failure", "sdk", "primary"],
+      ["failure", "unknown", "primary"],
     ]);
   });
 });

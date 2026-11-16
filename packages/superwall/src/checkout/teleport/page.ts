@@ -2,13 +2,20 @@ import { teleportOf } from "@superwall/runtime";
 import { asString } from "../api/decode";
 import { checkoutEvents } from "../events";
 import { startLoading, stopLoading } from "../loading";
-import { completeTeleportCheckout, readTeleportQuery, readTeleportStatus } from "./api";
+import {
+  completeTeleportCheckout,
+  readTeleportQuery,
+  readTeleportStatus,
+  RETURN_DATA_MAX_BYTES,
+  saveTeleportReturn,
+} from "./api";
 import { readTeleportBoot, type TeleportBoot } from "./boot";
 import { teleportCopyFor } from "./copy";
 import { createReturnDim, createTeleportScreen, poweredByHref, promptsLikeSafari } from "./screen";
 import {
   createStatusStore,
   withTimeout,
+  type PageReturn,
   type ReturnReason,
   type ReturnResult,
   type TeleportPage,
@@ -298,6 +305,24 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     return pageCheck;
   };
 
+  const leaveForApp = (query: Record<string, string>, returned: PageReturn) => {
+    if (returned.failure === undefined && returned.data === undefined) return;
+    const size = new TextEncoder().encode(JSON.stringify(returned.data ?? {})).length;
+    if (size > RETURN_DATA_MAX_BYTES) {
+      console.warn(
+        `The data for the app is ${size} bytes, over the ${RETURN_DATA_MAX_BYTES}-byte limit; returning without it.`,
+      );
+      return;
+    }
+    saveTeleportReturn(publicApiKey(), boot.id, query, returned).then(
+      (saved) => {
+        if (!saved)
+          console.warn("The teleport is closed, so the app won't receive what the page left it.");
+      },
+      (error: unknown) => console.warn("Leaving the failure and data for the app failed:", error),
+    );
+  };
+
   const teleporter: TeleportPage = {
     kind: "page",
     getStatus: store.getStatus,
@@ -363,8 +388,9 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
       tapped = next;
       store.setStatus({ status: "arrived", productReference: next });
     },
-    returnToApp: async (reason) => {
+    returnToApp: async (reason, left) => {
       if (settings() === undefined) return "no_app";
+      if (left !== undefined) leaveForApp(left.query, left.returned);
       return track(openApp(boot, reason, hintFor(reason)));
     },
     returning: () => returns > 0,

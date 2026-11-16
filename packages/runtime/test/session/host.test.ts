@@ -113,10 +113,10 @@ describe("a session hosted in-process", () => {
     await flushMicrotasks();
     await expect(failed.session.purchase("primary")).resolves.toMatchObject({
       status: "failed",
-      reason: "sdk",
+      reason: "unknown",
     });
     expect(failed.session.getSnapshot().pendingPurchase).toBeUndefined();
-    expect(failed.session.getSnapshot().lastPurchaseFailure?.reason).toBe("sdk");
+    expect(failed.session.getSnapshot().lastPurchaseFailure?.reason).toBe("unknown");
   });
 
   it("supports per-product purchase outcomes", async () => {

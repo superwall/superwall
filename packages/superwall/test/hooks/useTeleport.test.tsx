@@ -96,6 +96,103 @@ describe("useTeleport on the web half", () => {
     expect(pageNavigation.assign).toHaveBeenCalledWith("myapp://superwall/return?reason=failed");
   });
 
+  it("leaves the app the failure and data, without waiting on it, beside the flow", async () => {
+    bootWebHalf();
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    const failure = {
+      reason: "insufficient_funds" as const,
+      store: "stripe" as const,
+      declineCode: "insufficient_funds",
+    };
+    const { result } = renderWithProvider(
+      () => ({ session: useSuperwallSession(), teleport: useTeleport(), purchase: usePurchase() }),
+      {
+        config: { ...config, checkout: "applePay" },
+        host: {
+          device: { ...device, platform: "web" },
+          products: [{ reference: "primary", productId: "test:price_1:no-trial" }],
+        },
+      },
+    );
+    await flush();
+    vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue({
+      status: "failed",
+      failure,
+    });
+    await act(async () => {
+      await result.current.purchase.purchase("primary");
+    });
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockClear();
+    let save: (value: Response) => void = () => undefined;
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => (save = resolve)));
+
+    act(() => {
+      void result.current.teleport.returnToApp({ data: { offer: "apple_pay" } });
+    });
+
+    expect(pageNavigation.assign).toHaveBeenCalledWith("myapp://superwall/return?reason=failed");
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toMatch(/checkout\/teleport\/session$/);
+    expect(init?.keepalive).toBe(true);
+    expect(JSON.parse(String(init?.body))).toEqual({
+      teleportId: "v1:tp",
+      session: { query: {}, returned: { failure, data: { offer: "apple_pay" } } },
+    });
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await act(async () => {
+      save(new Response(JSON.stringify({ saved: false })));
+      await Promise.resolve();
+    });
+    await flush();
+    expect(warn).toHaveBeenCalledWith(
+      "The teleport is closed, so the app won't receive what the page left it.",
+    );
+  });
+
+  it("leaves nothing when there is no failure and no data, and refuses data over 16 KB", async () => {
+    bootWebHalf();
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { result } = renderWithProvider(() => useTeleport(), { config, host: { device } });
+    await flush();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockClear();
+
+    act(() => {
+      void result.current.returnToApp();
+    });
+    act(() => {
+      void result.current.returnToApp({ data: { blob: "x".repeat(17 * 1024) } });
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/over the 16384-byte limit/));
+    expect(pageNavigation.assign).toHaveBeenCalledTimes(2);
+  });
+
+  it("logs a save that fails, and still returns", async () => {
+    bootWebHalf();
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { result } = renderWithProvider(() => useTeleport(), { config, host: { device } });
+    await flush();
+    vi.mocked(fetch).mockRejectedValue(new Error("offline"));
+
+    await act(async () => {
+      void result.current.returnToApp({ data: { offer: "apple_pay" } });
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(pageNavigation.assign).toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      "Leaving the failure and data for the app failed:",
+      expect.any(Error),
+    );
+  });
+
   it("resolves close() with the return's result instead of closing", async () => {
     bootWebHalf();
     const { result } = renderWithProvider(() => useActions(), { config, host: { device } });
@@ -136,6 +233,57 @@ describe("useTeleport in the app", () => {
     });
     rerender();
     expect(result.current.teleport).toMatchObject({ status: "waiting", failure });
+  });
+
+  it("shows the data the page left and calls onReturnData once the shopper is back", async () => {
+    vi.useFakeTimers();
+    try {
+      const replies: Record<string, unknown> = {
+        "checkout/teleport": {
+          teleportId: "v1:tp",
+          url: "https://acme.superwall.app/sw-teleport/v1:tp",
+        },
+        "checkout/teleport/status": { status: "claimed", checkoutContextId: "ctx_1" },
+        "checkout/status": { status: "pending" },
+        "checkout/teleport/session": { saved: true },
+        "checkout/teleport/session/read": {
+          session: { query: {}, returned: { data: { offer: "apple_pay" } } },
+        },
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
+          return new Response(JSON.stringify(replies[path] ?? {}));
+        }),
+      );
+      Reflect.set(window, "app", {});
+      const onReturnData = vi.fn();
+      const { result } = renderWithProvider(
+        () => ({ session: useSuperwallSession(), teleport: useTeleport({ onReturnData }) }),
+        { config, host: { device } },
+      );
+      await flush();
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      await act(async () => {
+        void teleporter.begin({ productReference: "card", query: {} });
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      await act(async () => {
+        void teleporter.handleReturn("closed");
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(result.current.teleport).toMatchObject({
+        status: "waiting",
+        returned: true,
+        data: { offer: "apple_pay" },
+      });
+      expect(onReturnData).toHaveBeenCalledExactlyOnceWith({ offer: "apple_pay" });
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
   });
 
   it("closes the paywall with close(), which returns nothing", async () => {

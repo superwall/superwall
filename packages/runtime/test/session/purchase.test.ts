@@ -52,9 +52,9 @@ describe("purchase outcomes", () => {
       const { session, transport } = createSession();
       const result = session.purchase("primary");
       transport.accept({ event_name, product: "primary" });
-      await expect(result).resolves.toMatchObject({ status: "failed", reason: "sdk" });
+      await expect(result).resolves.toMatchObject({ status: "failed", reason: "unknown" });
       expect(session.getSnapshot().pendingPurchase).toBeUndefined();
-      expect(session.getSnapshot().lastPurchaseFailure?.reason).toBe("sdk");
+      expect(session.getSnapshot().lastPurchaseFailure?.reason).toBe("unknown");
     }
   });
 
@@ -91,7 +91,7 @@ describe("purchase outcomes", () => {
 
     transport.accept({ event_name: "transaction_fail", product: "primary" });
 
-    await expect(first).resolves.toMatchObject({ status: "failed", reason: "sdk" });
+    await expect(first).resolves.toMatchObject({ status: "failed", reason: "unknown" });
     expect(session.getSnapshot().lastPurchaseFailure?.product.reference).toBe("primary");
     expect(session.getSnapshot().pendingPurchase?.reference).toBe("secondary");
     void second;

@@ -41,11 +41,11 @@ describe("createPurchaseTracker", () => {
     const first = tracker.begin(primary);
     const second = tracker.begin(secondary);
 
-    expect(tracker.fail("missing", "sdk")).toBeUndefined();
-    expect(tracker.fail("primary", "sdk")).toMatchObject({ reason: "sdk" });
+    expect(tracker.fail("missing", "unknown")).toBeUndefined();
+    expect(tracker.fail("primary", "unknown")).toMatchObject({ reason: "unknown" });
     tracker.failAll("superseded");
 
-    await expect(first).resolves.toMatchObject({ reason: "sdk" });
+    await expect(first).resolves.toMatchObject({ reason: "unknown" });
     await expect(second).resolves.toMatchObject({ reason: "superseded" });
   });
 
