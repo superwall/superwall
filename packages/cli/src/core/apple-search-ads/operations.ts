@@ -6,6 +6,7 @@ import {
   asaGroups,
   asaVariants,
   fillPath,
+  filterValue,
   placeholdersOf,
   selectVariant,
   type AsaFlag,
@@ -53,6 +54,27 @@ function idValue(id: string): number | string {
   return /^\d+$/.test(id) ? Number(id) : id;
 }
 
+export function assignField(target: Record<string, unknown>, path: string, value: unknown): void {
+  const [key = "", ...rest] = path.split(".");
+  if (rest.length === 0) {
+    target[key] = value;
+    return;
+  }
+  const current = target[key];
+  const child: Record<string, unknown> = isRecord(current) ? { ...current } : {};
+  target[key] = child;
+  assignField(child, rest.join("."), value);
+}
+
+export function deepMerge(base: Record<string, unknown>, extra: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(extra)) {
+    const current = out[key];
+    out[key] = isRecord(current) && isRecord(value) ? deepMerge(current, value) : value;
+  }
+  return out;
+}
+
 type CurrencyResolver = () => Promise<string>;
 
 async function convertFlag(f: AsaFlag, value: unknown, currency: CurrencyResolver): Promise<unknown> {
@@ -70,8 +92,8 @@ async function convertFlag(f: AsaFlag, value: unknown, currency: CurrencyResolve
   }
 }
 
-interface SelectorInput {
-  selector?: unknown;
+interface QueryInput {
+  query?: unknown;
   field?: string;
   op?: string;
   values?: string;
@@ -79,60 +101,64 @@ interface SelectorInput {
   fields?: string;
   limit?: number;
   offset?: number;
+  filters?: Record<string, unknown>[];
 }
 
-export function buildSelector(input: SelectorInput): Record<string, unknown> {
-  const base = given(input.selector) ? readJsonInput(input.selector, "--selector") : {};
-  if (!isRecord(base)) throw new Error("--selector must be a JSON object.");
-  const selector: Record<string, unknown> = { ...base };
-  if (input.field || input.op || input.values) {
-    if (!input.field || !input.op || !input.values) {
-      throw new Error("--field, --op and --values go together (e.g. --field status --op EQUALS --values ENABLED).");
-    }
-    const conditions = Array.isArray(selector.conditions) ? [...selector.conditions] : [];
-    conditions.push({
-      field: input.field,
-      operator: input.op.toUpperCase(),
-      values: splitList(input.values),
-    });
-    selector.conditions = conditions;
+function shorthandFilter(input: QueryInput): Record<string, unknown> | undefined {
+  if (!input.field && !input.op && input.values === undefined) return undefined;
+  const operator = input.op?.toUpperCase();
+  const valueless = operator === "IS_NULL" || operator === "IS_NOT_NULL";
+  if (!input.field || !operator || (!valueless && !input.values)) {
+    throw new Error("--field, --op and --values go together (e.g. --field status --op EQUALS --values ENABLED).");
   }
+  if (valueless) return { field: input.field, operator };
+  const values = splitList(input.values);
+  const listed = ["IN", "NOT_IN", "CONTAINS_ANY", "NOT_CONTAINS_ANY", "CONTAINS_ALL", "NOT_CONTAINS_ALL", "BETWEEN"].includes(operator);
+  const value = listed || values.length > 1 ? values : values[0];
+  return { field: input.field, operator, value };
+}
+
+export function buildQuery(input: QueryInput): Record<string, unknown> {
+  const base = given(input.query) ? readJsonInput(input.query, "--query") : {};
+  if (!isRecord(base)) throw new Error("--query must be a JSON object.");
+  const request: Record<string, unknown> = { ...base };
+  const own = Array.isArray(base.filters) ? base.filters : [];
+  const shorthand = shorthandFilter(input);
+  const filters = [...own, ...(input.filters ?? []), ...(shorthand ? [shorthand] : [])];
+  if (filters.length) request.filters = filters;
   if (input.orderBy) {
     const [field, dir] = input.orderBy.split(":");
-    const sortOrder = (dir ?? "asc").toLowerCase().startsWith("desc") ? "DESCENDING" : "ASCENDING";
-    selector.orderBy = [{ field, sortOrder }];
+    const order = (dir ?? "asc").toLowerCase().startsWith("desc") ? "DESC" : "ASC";
+    request.sorting = [{ field, order }];
   }
-  if (input.fields) selector.fields = splitList(input.fields);
+  if (input.fields) request.fields = splitList(input.fields);
   if (input.limit !== undefined || input.offset !== undefined) {
-    selector.pagination = { offset: input.offset ?? 0, pageSize: input.limit ?? 20 };
+    const own = isRecord(base.pagination) ? base.pagination : {};
+    request.pagination = { ...own, offset: input.offset ?? 0, pageSize: input.limit ?? 20 };
   }
-  return selector;
+  return request;
 }
 
-interface ReportInput {
+interface ReportInput extends QueryInput {
   start?: string;
   end?: string;
   granularity?: string;
   groupBy?: string;
-  selector?: unknown;
   timeZone?: string;
-  searchTerms: boolean;
+  zoned: boolean;
 }
 
 export function buildReport(input: ReportInput): Record<string, unknown> {
-  if (!input.start || !input.end) throw new Error("Reports need --start and --end (YYYY-MM-DD).");
-  const report: Record<string, unknown> = {
-    startTime: input.start,
-    endTime: input.end,
-    timeZone: input.timeZone ?? "UTC",
-    returnRowTotals: true,
-    returnGrandTotals: true,
-    selector: given(input.selector)
-      ? readJsonInput(input.selector, "--selector")
-      : { orderBy: [{ field: "localSpend", sortOrder: "DESCENDING" }] },
-  };
-  if (input.granularity) report.granularity = input.granularity.toUpperCase();
-  else if (!input.searchTerms) report.granularity = "DAILY";
+  const report = buildQuery(input);
+  const range: Record<string, unknown> = isRecord(report.timeRange) ? { ...report.timeRange } : {};
+  if (input.start) range.start = input.start;
+  if (input.end) range.end = input.end;
+  if (!range.start || !range.end) throw new Error("Reports need --start and --end (YYYY-MM-DD).");
+  if (input.granularity) range.granularity = input.granularity.toUpperCase();
+  else range.granularity ??= "DAILY";
+  if (input.timeZone) range.timeZone = input.timeZone;
+  else if (input.zoned) range.timeZone ??= "UTC";
+  report.timeRange = range;
   if (input.groupBy) report.groupBy = splitList(input.groupBy);
   return report;
 }
@@ -145,9 +171,14 @@ interface AsaRunInput {
   params: Record<string, unknown>;
 }
 
+export interface AsaAccount {
+  id: () => Promise<string>;
+  currency: CurrencyResolver;
+}
+
 interface AsaRunOptions {
   adAccountId?: string;
-  currency: CurrencyResolver;
+  account: AsaAccount;
 }
 
 interface AsaRunResult {
@@ -170,79 +201,101 @@ function numberFlag(flags: Record<string, unknown>, name: string): number | unde
   return v === undefined || v === null || v === "" ? undefined : numeric(v, name);
 }
 
+async function fieldsOf(op: AsaOperation, flags: Record<string, unknown>, currency: CurrencyResolver): Promise<Record<string, unknown>> {
+  const data: Record<string, unknown> = {};
+  for (const f of op.flags ?? []) {
+    const v = flagValue(flags, f.flag);
+    if (v === undefined || v === null || v === "") continue;
+    assignField(data, f.key, await convertFlag(f, v, currency));
+  }
+  return data;
+}
+
 async function objectBody(
   op: AsaOperation,
   flags: Record<string, unknown>,
   params: Record<string, unknown>,
-  currency: CurrencyResolver,
+  body: unknown,
+  options: AsaRunOptions,
 ): Promise<Record<string, unknown>> {
-  const bodyInput = flagValue(flags, "body");
-  const base = given(bodyInput) ? readJsonInput(bodyInput, "--body") : {};
-  if (!isRecord(base)) throw new Error("--body must be a JSON object for this command.");
-  const body: Record<string, unknown> = { ...base };
-  for (const f of op.flags ?? []) {
-    const v = flagValue(flags, f.flag);
-    if (v === undefined || v === null || v === "") continue;
-    body[f.key] = await convertFlag(f, v, currency);
+  if (body !== undefined && !isRecord(body)) throw new Error("--body must be a JSON object for this command.");
+  let out = deepMerge(op.defaults ?? {}, body ?? {});
+  out = deepMerge(out, await fieldsOf(op, flags, options.account.currency));
+  out = deepMerge(out, params);
+  if (op.account && out[op.account] === undefined) {
+    const id = idValue(await options.account.id());
+    out[op.account] = op.account === "adAccountIds" ? [id] : id;
   }
-  Object.assign(body, params);
-  return body;
+  return out;
 }
 
-async function arrayBody(
+const bulkItem = (data: unknown, index: number) => {
+  if (isRecord(data) && isRecord(data.data)) return { correlationId: index, ...data };
+  return { correlationId: index, data };
+};
+
+async function bulkBody(
   op: AsaOperation,
   flags: Record<string, unknown>,
   params: Record<string, unknown>,
+  body: unknown,
   ids: string[],
   currency: CurrencyResolver,
-): Promise<unknown[]> {
-  const bodyInput = flagValue(flags, "body");
-  if (given(bodyInput)) {
-    const parsed = readJsonInput(bodyInput, "--body");
-    if (Array.isArray(parsed)) return parsed;
-    if (isRecord(parsed)) return [parsed];
-    throw new Error("--body must be a JSON array (or one object) for this command.");
-  }
-  const item = await objectBody({ ...op, envelope: undefined }, flags, params, currency);
-  if (ids[0] !== undefined) item.id = idValue(ids[0]);
-  if (Object.keys(item).length === 0) {
+): Promise<Record<string, unknown>> {
+  if (isRecord(body) && Array.isArray(body.items)) return body;
+  if (Array.isArray(body)) return { items: body.map(bulkItem) };
+  if (body !== undefined && !isRecord(body)) throw new Error("--body must be a JSON array (or one object) for this command.");
+  const data = deepMerge(deepMerge(body ?? {}, await fieldsOf(op, flags, currency)), params);
+  if (Object.keys(data).length === 0) {
     const hint = (op.flags ?? []).map((f) => `--${f.flag}`).join(", ");
     throw new Error(`Nothing to send. Pass fields (${hint}) or --body '[...]'.`);
   }
-  return [item];
+  if (ids.length) return { items: ids.map((id, index) => bulkItem({ ...data, id: idValue(id) }, index)) };
+  return { items: [bulkItem(data, 0)] };
+}
+
+function arrayBody(op: AsaOperation, body: unknown): unknown[] {
+  if (Array.isArray(body)) return body;
+  if (isRecord(body)) return [body];
+  throw new Error(`asa ${op.group} ${op.action} needs --body '[...]', as Apple documents it.`);
 }
 
 const QUERY_NAMES: Record<string, string> = {
-  fields: "fields",
   limit: "limit",
   offset: "offset",
-  name: "name",
-  states: "states",
+  owned: "returnOwnedApps",
+  "store-fronts": "storeFronts",
   country: "countrycode",
   entity: "entity",
-  countries: "countriesOrRegions",
-  "device-classes": "deviceClasses",
-  "language-codes": "languageCodes",
-  expand: "expand",
-  owned: "returnOwnedApps",
-  "include-deleted-assets": "includeDeletedCreativeSetAssets",
+  "supply-source": "supplySource",
+  eligible: "eligible",
+  "resource-type": "resourceType",
 };
 
 function queryFor(op: AsaOperation, flags: Record<string, unknown>, positional: string | undefined): URLSearchParams {
   const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(op.defaults ?? {})) qs.set(key, String(value));
   if (op.positional === "query") {
     if (!positional) throw new Error(`asa ${op.group} ${op.action} needs a search query.`);
     qs.set("query", positional);
   }
   for (const name of op.query ?? []) {
-    if (name === "all" || name === "adam-id") continue;
-    const key = QUERY_NAMES[name];
+    const key = name === "limit" ? (op.pageSize ?? "limit") : QUERY_NAMES[name];
     if (!key) continue;
     const v = flagValue(flags, name);
     if (v === undefined || v === null || v === "" || v === false) continue;
     qs.set(key, v === true ? "true" : String(v));
   }
   return qs;
+}
+
+function scopeFilters(op: AsaOperation, scope: AsaScope): Record<string, unknown>[] {
+  return (op.filters ?? []).flatMap((filter) => {
+    const value = filterValue(filter, scope);
+    if (!value) return [];
+    const typed = filter.text ? value : idValue(value);
+    return [{ field: filter.field, operator: "EQUALS", value: filter.list ? [typed] : typed }];
+  });
 }
 
 export async function collectPages(
@@ -268,7 +321,9 @@ export async function collectPages(
   };
 }
 
-export function resolveOperation(input: AsaRunInput): { op: AsaOperation; scope: AsaScope } {
+const isBulkBody = (body: unknown) => Array.isArray(body) || (isRecord(body) && Array.isArray(body.items));
+
+export function resolveOperation(input: AsaRunInput, body?: unknown): { op: AsaOperation; scope: AsaScope } {
   const variants = asaVariants(input.group, input.action);
   if (variants.length === 0) {
     if (!asaGroups().includes(input.group)) {
@@ -282,15 +337,16 @@ export function resolveOperation(input: AsaRunInput): { op: AsaOperation; scope:
   }
   const positional = variants[0]?.positional;
   const ids = positional === "id" || positional === "ids" ? splitList(input.positional) : [];
+  const bulk = variants.some((v) => v.body === "bulk") && isBulkBody(body);
   const scope: AsaScope = {
     campaign: stringFlag(input.flags, "campaign"),
     adgroup: stringFlag(input.flags, "adgroup"),
     adamId: stringFlag(input.flags, "adam-id") ?? (positional === "adam-id" ? input.positional : undefined),
     ids,
-    adgroupLevel: input.flags.adgroupLevel === true,
+    bulk,
   };
-  const needsId = variants.every((v) => placeholdersOf(v.path).includes("id") || v.body === "ids");
-  if ((positional === "id" || positional === "ids") && ids.length === 0 && needsId) {
+  const needsId = variants.every((v) => placeholdersOf(v.path).includes("id") || v.body === "bulk");
+  if ((positional === "id" || positional === "ids") && ids.length === 0 && needsId && !bulk) {
     throw new Error(`asa ${input.group} ${input.action} needs an id.`);
   }
   if (positional === "adam-id" && !scope.adamId) {
@@ -305,19 +361,22 @@ export async function runAsaOperation(
   input: AsaRunInput,
   options: AsaRunOptions,
 ): Promise<AsaRunResult> {
-  const { op, scope } = resolveOperation(input);
-  const path = fillPath(op.path, scope);
   const flags = input.flags;
-  const proxy = <T>(method: string, p: string, body?: unknown) => {
-    return asaProxy<T>(api, appId, method, p, body, { adAccountId: options.adAccountId });
+  const bodyInput = flagValue(flags, "body");
+  const body = given(bodyInput) ? readJsonInput(bodyInput, "--body") : undefined;
+  const { op, scope } = resolveOperation(input, body);
+  const path = fillPath(op.path, scope);
+  const proxy = <T>(method: string, p: string, payload?: unknown) => {
+    return asaProxy<T>(api, appId, method, p, payload, { adAccountId: options.adAccountId });
   };
   const all = flags.all === true;
   const limit = numberFlag(flags, "limit");
   const offset = numberFlag(flags, "offset") ?? 0;
+  const send = async (payload: unknown) => ({ op, path, response: await proxy<AsaPage>(op.method, path, payload) });
 
-  if (op.body === "selector") {
-    const selector = buildSelector({
-      selector: flagValue(flags, "selector"),
+  if (op.body === "query" || op.body === "report") {
+    const query: QueryInput = {
+      query: flagValue(flags, "query"),
       field: stringFlag(flags, "field"),
       op: stringFlag(flags, "op"),
       values: stringFlag(flags, "values"),
@@ -325,55 +384,53 @@ export async function runAsaOperation(
       fields: stringFlag(flags, "fields"),
       limit,
       offset: numberFlag(flags, "offset"),
-    });
-    if (all) {
-      const response = await collectPages(
-        (pageOffset, pageLimit) => {
-          const pagination = { offset: pageOffset, pageSize: pageLimit };
-          return proxy<AsaPage>(op.method, path, { ...selector, pagination });
-        },
-        offset,
-        limit ?? DEFAULT_PAGE,
-      );
-      return { op, path, response };
+      filters: scopeFilters(op, scope),
+    };
+    const request =
+      op.body === "report"
+        ? buildReport({
+            ...query,
+            start: stringFlag(flags, "start"),
+            end: stringFlag(flags, "end"),
+            granularity: stringFlag(flags, "granularity"),
+            groupBy: stringFlag(flags, "group-by"),
+            timeZone: stringFlag(flags, "time-zone"),
+            zoned: op.zoned === true,
+          })
+        : buildQuery(query);
+    if (!all) return send(request);
+    const response = await collectPages(
+      (pageOffset, pageSize) => {
+        return proxy<AsaPage>(op.method, path, { ...request, pagination: { offset: pageOffset, pageSize, fetchTotalCount: true } });
+      },
+      offset,
+      limit ?? DEFAULT_PAGE,
+    );
+    return { op, path, response };
+  }
+
+  if (op.body === "bulk") {
+    if (op.flags === undefined) {
+      if (isBulkBody(body)) return send(await bulkBody(op, {}, {}, body, [], options.account.currency));
+      return send({ items: scope.ids.map((id, index) => bulkItem({ id: idValue(id) }, index)) });
     }
-    return { op, path, response: await proxy<AsaPage>(op.method, path, selector) };
+    return send(await bulkBody(op, flags, input.params, body, scope.ids, options.account.currency));
   }
 
-  if (op.body === "report") {
-    const report = buildReport({
-      start: stringFlag(flags, "start"),
-      end: stringFlag(flags, "end"),
-      granularity: stringFlag(flags, "granularity"),
-      groupBy: stringFlag(flags, "group-by"),
-      selector: flagValue(flags, "selector"),
-      timeZone: stringFlag(flags, "time-zone"),
-      searchTerms: op.action === "searchterms",
-    });
-    return { op, path, response: await proxy<AsaPage>(op.method, path, report) };
-  }
-
-  if (op.body === "ids") {
-    return { op, path, response: await proxy<AsaPage>(op.method, path, scope.ids.map(idValue)) };
-  }
+  if (op.body === "array") return send(arrayBody(op, body));
 
   if (op.body === "geo") {
     const entity = stringFlag(flags, "entity");
     if (!entity) throw new Error("asa geo get needs --entity <Country|AdminArea|Locality>.");
-    const body = scope.ids.map((id) => ({ id, entity }));
-    return { op, path, response: await proxy<AsaPage>(op.method, path, body) };
+    const request: Record<string, unknown> = {
+      geoRequest: scope.ids.map((id) => ({ id, entity })),
+      supplySource: stringFlag(flags, "supply-source") ?? "APPSTORE",
+    };
+    if (limit !== undefined || numberFlag(flags, "offset") !== undefined) request.pagination = { offset, pageSize: limit ?? 20 };
+    return send(request);
   }
 
-  if (op.body === "array") {
-    const body = await arrayBody(op, flags, input.params, scope.ids, options.currency);
-    return { op, path, response: await proxy<AsaPage>(op.method, path, body) };
-  }
-
-  if (op.body === "object") {
-    const body = await objectBody(op, flags, input.params, options.currency);
-    const payload = op.envelope ? { [op.envelope]: body } : body;
-    return { op, path, response: await proxy<AsaPage>(op.method, path, payload) };
-  }
+  if (op.body === "object") return send(await objectBody(op, flags, input.params, body, options));
 
   if (op.method === "GET") {
     const qs = queryFor(op, flags, input.positional);
@@ -383,12 +440,13 @@ export async function runAsaOperation(
       }
       qs.set(key, String(value));
     }
-    if (op.paged === "query" && all) {
+    if (op.paged && all) {
+      const sizeParam = op.pageSize ?? "limit";
       const response = await collectPages(
         (pageOffset, pageLimit) => {
           const page = new URLSearchParams(qs);
           page.set("offset", String(pageOffset));
-          page.set("limit", String(pageLimit));
+          page.set(sizeParam, String(pageLimit));
           return proxy<AsaPage>("GET", withQuery(path, page));
         },
         offset,
@@ -412,41 +470,45 @@ const currencyOf = (account: Record<string, unknown> | undefined) => {
   return account && typeof account.currency === "string" && account.currency ? account.currency.toUpperCase() : undefined;
 };
 
-export function currencyResolver(
+export function accountResolver(
   api: SuperwallApi,
   appId: string,
-  explicit: string | undefined,
+  explicitCurrency: string | undefined,
   adAccountId: string | undefined,
-): CurrencyResolver {
-  let cached: Promise<string> | undefined;
-  return () => {
-    if (explicit) return Promise.resolve(explicit.toUpperCase());
-    cached ??= (async () => {
-      const accounts = aclAccounts(await asaProxy<AsaPage>(api, appId, "GET", "/acls"));
-      const account = adAccountId
-        ? accounts.find((a) => String(a.id) === adAccountId)
-        : accounts.length === 1
-          ? accounts[0]
-          : undefined;
-      if (!account) {
-        const ids = accounts.map((a) => String(a.id)).join(", ");
-        if (adAccountId) {
-          const reach = ids ? ` It reaches: ${ids}.` : "";
-          throw new Error(`This API user can't reach ad account ${adAccountId}.${reach} Pass --currency (e.g. USD) to skip the lookup.`);
-        }
-        if (!ids) throw new Error("This API user can't reach any Apple Ads ad account. Pass --currency (e.g. USD).");
-        throw new Error(`This API user reaches several ad accounts (${ids}). Pass --ad-account-id or --currency.`);
-      }
-      const listed = currencyOf(account);
-      if (listed) return listed;
-      const id = String(account.id);
-      const detail = await asaProxy<AsaPage>(api, appId, "GET", `/ad-accounts/${encodeURIComponent(id)}`, undefined, {
-        adAccountId: id,
-      });
-      const currency = currencyOf(detail && isRecord(detail.result) ? detail.result : undefined);
-      if (!currency) throw new Error(`Couldn't read ad account ${id}'s currency from Apple Ads. Pass --currency (e.g. USD).`);
-      return currency;
-    })();
-    return cached;
+): AsaAccount {
+  let accounts: Promise<Record<string, unknown>[]> | undefined;
+  let cachedCurrency: Promise<string> | undefined;
+  const choose = async (forCurrency: boolean): Promise<Record<string, unknown>> => {
+    accounts ??= asaProxy<AsaPage>(api, appId, "GET", "/acls").then(aclAccounts);
+    const list = await accounts;
+    const account = adAccountId ? list.find((a) => String(a.id) === adAccountId) : list.length === 1 ? list[0] : undefined;
+    if (account) return account;
+    const ids = list.map((a) => String(a.id)).join(", ");
+    if (adAccountId) {
+      const reach = ids ? ` It reaches: ${ids}.` : "";
+      const skip = forCurrency ? " Pass --currency (e.g. USD) to skip the lookup." : "";
+      throw new Error(`This API user can't reach ad account ${adAccountId}.${reach}${skip}`);
+    }
+    if (!ids) throw new Error(`This API user can't reach any Apple Ads ad account.${forCurrency ? " Pass --currency (e.g. USD)." : ""}`);
+    throw new Error(`This API user reaches several ad accounts (${ids}). Pass --ad-account-id${forCurrency ? " or --currency" : ""}.`);
+  };
+  return {
+    id: async () => adAccountId ?? String((await choose(false)).id),
+    currency: () => {
+      if (explicitCurrency) return Promise.resolve(explicitCurrency.toUpperCase());
+      cachedCurrency ??= (async () => {
+        const account = await choose(true);
+        const listed = currencyOf(account);
+        if (listed) return listed;
+        const id = String(account.id);
+        const detail = await asaProxy<AsaPage>(api, appId, "GET", `/ad-accounts/${encodeURIComponent(id)}`, undefined, {
+          adAccountId: id,
+        });
+        const currency = currencyOf(detail && isRecord(detail.result) ? detail.result : undefined);
+        if (!currency) throw new Error(`Couldn't read ad account ${id}'s currency from Apple Ads. Pass --currency (e.g. USD).`);
+        return currency;
+      })();
+      return cachedCurrency;
+    },
   };
 }

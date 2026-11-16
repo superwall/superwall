@@ -21,8 +21,10 @@ const fixture = (name: string): unknown =>
 test("renderAsaCatalog lists every group with usage and paths", () => {
   const md = renderAsaCatalog();
   assert.match(md, /## campaigns/);
+  assert.match(md, /Every Apple Ads Platform API v1 endpoint/);
   assert.match(md, /`superwall asa campaigns get <id>` — Get a campaign  \(GET \/campaigns\/\{id\}\)/);
-  assert.match(md, /superwall asa keywords delete <id\[,id\.\.\.\]> --campaign <id> --adgroup <id>/);
+  assert.match(md, /`superwall asa keywords delete <id\[,id\.\.\.\]>` — Delete a targeting keyword  \(DELETE \/keywords\/\{id\} \| POST \/keywords\/bulk-delete\)/);
+  assert.match(md, /`superwall asa keywords list \[--campaign <id>\] \[--adgroup <id>\]` — List targeting keywords  \(POST \/keywords\/query\)/);
   assert.match(md, /superwall asa me/);
   assert.match(md, /superwall asa acls/);
   assert.match(md, /Raw: `superwall asa get\|post\|put\|delete/);
@@ -31,19 +33,24 @@ test("renderAsaCatalog lists every group with usage and paths", () => {
 test("renderAsaGroup shows each variant with its flags", () => {
   const md = renderAsaGroup("campaigns");
   assert.match(md, /## superwall asa campaigns create/);
-  assert.match(md, /--daily-budget <amount>  Daily budget → `dailyBudgetAmount`/);
+  assert.match(md, /--daily-budget <amount>  Daily budget → `dailyBudget.value`/);
   assert.match(md, /--body <json\|@file\|@->/);
-  assert.match(md, /https:\/\/developer\.apple\.com\/documentation\/apple_ads\/create-a-campaign/);
-  const negatives = renderAsaGroup("negative-keywords");
-  assert.match(negatives, /--adgroup-level/);
+  assert.match(md, /https:\/\/developer\.apple\.com\/documentation\/apple-ads-platform-api\/post-campaigns/);
+  assert.match(md, /--query <json\|@file\|@->  Full Apple query request/);
+  const keywords = renderAsaGroup("keywords");
+  assert.match(keywords, /## superwall asa keywords create\nCreate targeting keywords \(bulk\)\n`POST \/keywords\/bulk-create`/);
+  assert.match(keywords, /--body <json\|@file\|@->  Full request body \(bulk: an array of items\)/);
   const geo = renderAsaGroup("geo");
-  assert.match(geo, /--entity <Country\|AdminArea\|Locality>/);
+  assert.match(geo, /--entity <Country\|AdminArea\|Locality>  Entity type for each id\n  --supply-source <APPSTORE\|MAPS>/);
   const reports = renderAsaGroup("reports");
+  assert.match(reports, /--start <YYYY-MM-DD> --end <YYYY-MM-DD>  Report range/);
   assert.match(reports, /--time-zone/);
+  assert.doesNotMatch(renderAsaGroup("insights"), /--time-zone/);
+  assert.match(renderAsaGroup("recommendations"), /--body <json\|@file\|@->  The request body: an array/);
 });
 
 test("search finds operations by summary, path, or name", () => {
-  assert.ok(searchAsaCatalog("negativekeywords").length >= 6);
+  assert.ok(searchAsaCatalog("negative-keywords").length >= 8);
   assert.match(renderAsaSearch("impression"), /impression-share/);
   assert.match(renderAsaSearch("zzz"), /No Apple Search Ads endpoint matches/);
 });
@@ -68,10 +75,10 @@ test("renderAsaOperationDocs stitches the usage, Apple's page, and the body obje
   const fetched: string[] = [];
   const md = await renderAsaOperationDocs("campaigns", "list", async (url) => {
     fetched.push(url);
-    if (url.endsWith("/get-all-campaigns.json")) return fixture("asa-doc-get-all-campaigns.json");
+    if (url.endsWith("/post-campaigns-query.json")) return fixture("asa-doc-get-all-campaigns.json");
     throw new Error("unexpected");
   });
-  assert.deepEqual(fetched, [`${APPLE_DOC_DATA_BASE}/get-all-campaigns.json`]);
+  assert.deepEqual(fetched, [`${APPLE_DOC_DATA_BASE}/post-campaigns-query.json`]);
   assert.match(md, /## superwall asa campaigns list/);
   assert.match(md, /# Get all Campaigns/);
 });
@@ -92,7 +99,7 @@ test("renderAsaOperationDocs follows the request body type and reports fetch fai
     references: {},
   };
   const md = await renderAsaOperationDocs("campaigns", "create", async (url) => {
-    if (url.endsWith("/create-a-campaign.json")) return withBody;
+    if (url.endsWith("/post-campaigns.json")) return withBody;
     if (url.endsWith("/campaign.json")) return fixture("asa-doc-campaign.json");
     throw new Error("unexpected");
   });
@@ -100,7 +107,7 @@ test("renderAsaOperationDocs follows the request body type and reports fetch fai
   assert.match(md, /## Properties/);
 
   const failing = await renderAsaOperationDocs("campaigns", "create", async (url) => {
-    if (url.endsWith("/create-a-campaign.json")) return withBody;
+    if (url.endsWith("/post-campaigns.json")) return withBody;
     throw new Error("offline");
   });
   assert.match(failing, /Couldn't fetch the `Campaign` object page \(offline\)/);
@@ -153,10 +160,10 @@ test("renderAppleDoc handles lists, tables, code, and inline references", () => 
 });
 
 test("renderAsaOperationDocs downloads Apple's page itself when no fetcher is given", async () => {
-  const log = useFetch([{ match: "/get-me-details.json", body: { metadata: { title: "Get Me Details" } } }]);
+  const log = useFetch([{ match: "/get-current-user-details.json", body: { metadata: { title: "Get Me Details" } } }]);
   const md = await renderAsaOperationDocs("me", "get");
-  assert.deepEqual(log.map((entry) => entry.url), [`${APPLE_DOC_DATA_BASE}/get-me-details.json`]);
-  assert.match(md, /^## superwall asa me\nShow the calling API user\n`GET \/me`\n\nApple: .*get-me-details\n\n# Get Me Details$/);
+  assert.deepEqual(log.map((entry) => entry.url), [`${APPLE_DOC_DATA_BASE}/get-current-user-details.json`]);
+  assert.match(md, /^## superwall asa me\nShow the calling API user\n`GET \/me`\n\nApple: .*apple-ads-platform-api\/get-current-user-details\n\n# Get Me Details$/);
 
   useFetch([]);
   assert.match(await renderAsaOperationDocs("acls", "list"), /Couldn't fetch Apple's page \(HTTP 404\)/);
@@ -216,23 +223,22 @@ test("renderAppleDoc renders content sections, bounds, and skips what it can't r
   );
 });
 
-test("renderAsaGroup lists each operation's query filters, typed flags and id lists", () => {
+test("renderAsaGroup lists each operation's URL params, filters, typed flags and their body keys", () => {
   const apps = renderAsaGroup("apps");
-  assert.match(apps, /## superwall asa apps search <query>\n.*\n.*\n\n {2}--limit <n> --offset <n> --all {2}Paging \(--all walks every page\)\n {2}--owned {2}Only apps this org owns/);
+  assert.match(apps, /## superwall asa apps search <query>\n.*\n.*\n\n {2}--limit <n> --offset <n> --all {2}Paging \(--all walks every page\)\n {2}--owned {2}Only apps this account owns\n {2}--store-fronts <a,b>/);
   assert.match(apps, /## superwall asa apps get <adam-id>\n/);
+  assert.match(apps, /## superwall asa apps eligibility <adam-id>\n/);
   const geo = renderAsaGroup("geo");
-  assert.match(geo, / {2}--country <CC> {2}Restrict to a country code\n {2}--entity <Country\|AdminArea\|Locality>\n/);
-  const pages = renderAsaGroup("product-pages");
-  assert.match(pages, /## superwall asa product-pages list --adam-id <id>\n/);
-  assert.match(pages, / {2}--name <text> {2}Filter by name\n {2}--states <a,b> {2}Filter by state/);
-  assert.match(pages, / {2}--device-classes <a,b> --language-codes <a,b> --expand/);
-  assert.match(pages, / {2}--countries <a,b> {2}Restrict to country codes/);
-  assert.match(renderAsaGroup("negative-keywords"), /## superwall asa negative-keywords delete <id\[,id\.\.\.\]> --campaign <id>\n.*\n.*\n\n {2}ids {2}Comma-separated ids in the positional/);
+  assert.match(geo, / {2}--country <CC> {2}Restrict to a country code\n {2}--entity <Country\|AdminArea\|Locality>\n {2}--supply-source <APPSTORE\|MAPS>/);
+  assert.match(geo, / {2}--eligible {2}Only places that can be targeted/);
+  assert.match(renderAsaGroup("ad-accounts"), / {2}--resource-type <type> {2}e\.g\. CONTENT_PROVIDER/);
+  assert.match(renderAsaGroup("product-pages"), /## superwall asa product-pages list --adam-id <id>\n/);
+  assert.match(renderAsaGroup("reports"), /## superwall asa reports keywords --campaign <id> \[--adgroup <id>\]\n/);
   const campaigns = renderAsaGroup("campaigns");
-  assert.match(campaigns, / {2}--adam-id <n> {2}App Store app id \(adamId\) → `adamId`/);
-  assert.match(campaigns, / {2}--countries <a,b,c> {2}Comma-separated country codes → `countriesOrRegions`/);
+  assert.match(campaigns, / {2}--adam-id <value> {2}App Store app id \(adamId\) to promote → `promotedObjectId`/);
+  assert.match(campaigns, / {2}--countries <a,b,c> {2}Comma-separated country or region codes → `targeting.countryOrRegion.include`/);
   assert.match(renderAsaGroup("adgroups"), / {2}--search-match {2}Enable Search Match → `automatedKeywordsOptIn`/);
-  assert.match(renderAsaGroup("creatives"), /## superwall asa creatives get <id>\n.*\n.*\n\n {2}--fields <a,b> {2}Partial fetch\n {2}--include-deleted-assets\n/);
+  assert.match(renderAsaGroup("keywords"), / {2}--adgroup <n> {2}Ad group id → `adGroupId`/);
 });
 
 test("renderAppleDoc skips nodes it can't read inside text and lists", () => {
@@ -259,5 +265,5 @@ test("renderAsaOperationDocs fetches no object page when the body names no type"
       ],
     };
   });
-  assert.deepEqual(fetched, [`${APPLE_DOC_DATA_BASE}/create-a-campaign.json`]);
+  assert.deepEqual(fetched, [`${APPLE_DOC_DATA_BASE}/post-campaigns.json`]);
 });

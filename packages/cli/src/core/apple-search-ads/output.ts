@@ -33,7 +33,7 @@ function rowMeta(row: Record<string, unknown>): string {
 export function printResult(ctx: CommandContext, op: AsaOperation, response: AsaPage): void {
   if (ctx.json) return ctx.output.data(response);
   const rows = Array.isArray(response.result) ? response.result.filter(isRecord) : undefined;
-  const listing = op.action === "list" || op.action === "find" || op.action === "search" || op.action === "assets";
+  const listing = op.body === "query" || op.action === "search";
   if (!rows || !listing) return ctx.output.data(response);
   if (rows.length === 0) return ctx.ui.step(`No ${op.group} found`);
   const total = response.pagination?.totalCount;

@@ -16,7 +16,7 @@ export const command = defineCommand({
     body: { type: "string", value: "json", describe: "Request body as JSON: inline, @file, or @- for stdin; -d fields merge into it" },
   },
   examples: [
-    ["asa post /campaigns/find --body '{\"conditions\":[]}'", "A raw selector query"],
+    ["asa post /campaigns/query --body '{\"filters\":[]}'", "A raw query"],
   ],
   auth: "required",
   json: true,

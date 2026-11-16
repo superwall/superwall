@@ -25,7 +25,8 @@ test("asa campaigns list resolves the connected app and prints rows", async () =
     pagination: { totalCount: 1 },
   }));
   const proxied = out.requests.find((r) => r.path.includes("/apple-search-ads/proxy/"));
-  assert.equal(proxied?.path, "/v2/organizations/org-1/apple-search-ads/proxy/5/v1/campaigns");
+  assert.equal(proxied?.path, "/v2/organizations/org-1/apple-search-ads/proxy/5/v1/campaigns/query");
+  assert.equal(proxied?.method, "POST");
   assert.ok(out.calls.some((c) => c.method === "step" && c.value === "1 campaigns"));
   assert.ok(out.calls.some((c) => c.method === "info" && c.value === "`Launch`  ENABLED  5 USD  1"));
 });
@@ -47,9 +48,11 @@ test("asa campaigns create sends typed flags through the proxy with the ad accou
   );
   const post = out.requests.find((r) => r.method === "POST");
   assert.deepEqual(post?.body, {
+    promotedObjectType: "APPSTORE_APP",
     name: "Launch",
-    adamId: 123,
-    dailyBudgetAmount: { amount: "10", currency: "USD" },
+    promotedObjectId: "123",
+    dailyBudget: { value: { amount: "10", currency: "USD" } },
+    adAccountId: 42,
   });
   assert.deepEqual(post?.headers, { "x-ap-context": "adAccountId=42" });
 });

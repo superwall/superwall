@@ -48,12 +48,17 @@ test("me defaults to get, and money flags take the --currency given", async () =
   const create = fakeAsaApi(() => ({ result: { id: 1 } }));
   await runCommand(asa, {
     words: ["campaigns", "create"],
-    flags: { name: "Launch", budget: "100", currency: "eur" },
+    flags: { name: "Launch", dailyBudget: "100", currency: "eur", adAccountId: "42" },
     api: create.api,
     json: true,
   });
   const posted = create.requests.find((request) => request.method === "POST");
-  assert.deepEqual(posted?.body, { name: "Launch", budgetAmount: { amount: "100", currency: "EUR" } });
+  assert.deepEqual(posted?.body, {
+    promotedObjectType: "APPSTORE_APP",
+    name: "Launch",
+    dailyBudget: { value: { amount: "100", currency: "EUR" } },
+    adAccountId: 42,
+  });
   assert.ok(!create.requests.some((request) => request.path.endsWith("/acls")));
 });
 

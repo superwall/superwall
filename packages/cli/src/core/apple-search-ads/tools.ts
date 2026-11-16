@@ -8,10 +8,10 @@ const POSITIONAL: Record<string, { name: string; schema: JsonSchema }> = {
   "adam-id": { name: "adam_id", schema: { type: "string", description: "The App Store app id (adamId)" } },
 };
 
-const PLACEHOLDER: Record<string, { name: string; describe: string }> = {
+const SCOPE: Record<string, { name: string; describe: string }> = {
   campaign: { name: "campaign", describe: "Campaign id" },
   adgroup: { name: "adgroup", describe: "Ad group id" },
-  adamId: { name: "adam_id", describe: "App Store app id (adamId)" },
+  "adam-id": { name: "adam_id", describe: "App Store app id (adamId)" },
 };
 
 function schemaOfFlag(flag: AsaFlag): JsonSchema {
@@ -22,22 +22,24 @@ function schemaOfFlag(flag: AsaFlag): JsonSchema {
   return { type: "string", description: flag.describe };
 }
 
+const SUPPLY_SOURCE: JsonSchema = { type: "string", enum: ["APPSTORE", "MAPS"], description: "Supply source (default APPSTORE)" };
+
 const QUERY: Record<string, JsonSchema> = {
-  fields: { type: "string", description: "Comma-separated fields to return" },
-  field: { type: "string", description: "Selector shorthand: field name (with op and values)" },
-  op: { type: "string", description: "Selector shorthand: EQUALS, IN, CONTAINS, STARTSWITH, ..." },
-  values: { type: "string", description: "Selector shorthand: comma-separated values" },
-  "order-by": { type: "string", description: "Selector sort: field[:asc|desc]" },
-  name: { type: "string", description: "Name to filter by" },
-  states: { type: "string", description: "Comma-separated states" },
+  owned: { type: "boolean", description: "Only apps this account owns" },
+  "store-fronts": { type: "string", description: "Comma-separated storefronts" },
   country: { type: "string", description: "Country code" },
   entity: { type: "string", enum: ["Country", "AdminArea", "Locality"], description: "What kind of place to search for" },
-  countries: { type: "string", description: "Comma-separated country codes" },
-  "device-classes": { type: "string", description: "Comma-separated device classes" },
-  "language-codes": { type: "string", description: "Comma-separated language codes" },
-  expand: { type: "boolean", description: "Include nested versions" },
-  owned: { type: "boolean", description: "Only apps this org owns" },
-  "include-deleted-assets": { type: "boolean", description: "Include deleted assets" },
+  "supply-source": SUPPLY_SOURCE,
+  eligible: { type: "boolean", description: "Only places that can be targeted" },
+  "resource-type": { type: "string", description: "Advertiser resource type, e.g. CONTENT_PROVIDER" },
+};
+
+const QUERY_BODY: Record<string, JsonSchema> = {
+  query: { type: "object", description: "An Apple query request: filters, sorting, pagination" },
+  field: { type: "string", description: "Filter shorthand: field name (with op and values)" },
+  op: { type: "string", description: "Filter shorthand: EQUALS, IN, LIKE, STARTS_WITH, BETWEEN, ..." },
+  values: { type: "string", description: "Filter shorthand: comma-separated values" },
+  order_by: { type: "string", description: "Sort: field[:asc|desc]" },
 };
 
 const snake = (flag: string) => flag.replace(/-/g, "_");
@@ -47,7 +49,7 @@ function toolOf(group: string, action: string): CatalogTool {
   const [first] = variants;
   const properties: Record<string, JsonSchema> = {
     app: { type: "string", description: "The Superwall app whose Apple Search Ads account to use, when several have it connected" },
-    org_id: { type: "string", description: "Apple Search Ads org id, when the API user spans several" },
+    ad_account_id: { type: "string", description: "Apple Ads ad account id, when the API user reaches several" },
   };
   const positionals: string[] = [];
   const required: string[] = [];
@@ -55,36 +57,42 @@ function toolOf(group: string, action: string): CatalogTool {
   if (positional) {
     properties[positional.name] = positional.schema;
     positionals.push(positional.name);
-    if (variants.every((variant) => variant.positional === first?.positional)) required.push(positional.name);
-  }
-  for (const placeholder of first ? placeholdersOf(first.path) : []) {
-    const named = PLACEHOLDER[placeholder];
-    if (named && variants.every((variant) => placeholdersOf(variant.path).includes(placeholder))) required.push(named.name);
+    const bulkBody = variants.some((variant) => variant.body === "bulk");
+    if (!bulkBody && variants.every((variant) => variant.positional === first?.positional)) required.push(positional.name);
   }
   for (const variant of variants) {
-    for (const placeholder of placeholdersOf(variant.path)) {
-      const named = PLACEHOLDER[placeholder];
-      if (named && !properties[named.name]) properties[named.name] = { type: "string", description: named.describe };
+    if (placeholdersOf(variant.path).includes("adamId") && variant.positional !== "adam-id") {
+      properties.adam_id ??= { type: "string", description: "App Store app id (adamId)" };
+      required.push("adam_id");
+    }
+    for (const filter of variant.filters ?? []) {
+      const scope = SCOPE[filter.flag];
+      if (!scope) continue;
+      properties[scope.name] ??= { type: "string", description: `${scope.describe}: only rows for it` };
+      if (filter.required) required.push(scope.name);
     }
     for (const flag of variant.flags ?? []) properties[snake(flag.flag)] ??= schemaOfFlag(flag);
     for (const name of variant.query ?? []) {
       const schema = QUERY[name];
       if (schema) properties[snake(name)] ??= schema;
     }
-    if (variant.body === "object" || variant.body === "array") {
+    if (variant.body === "object" || variant.body === "bulk" || variant.body === "array") {
       properties.body = { type: ["object", "array"], description: "The whole request body, as Apple documents it" };
     }
-    if (variant.body === "selector" || variant.body === "report") {
-      properties.selector = { type: "object", description: "An Apple selector: conditions, orderBy, pagination" };
-    }
+    if (variant.body === "array") required.push("body");
+    if (variant.body === "query" || variant.body === "report") Object.assign(properties, QUERY_BODY);
     if (variant.body === "report") {
       properties.start = { type: "string", description: "First day, YYYY-MM-DD" };
       properties.end = { type: "string", description: "Last day, YYYY-MM-DD" };
-      properties.time_zone = { type: "string", enum: ["UTC", "ORTZ"], description: "Report time zone" };
+      properties.granularity = { type: "string", description: "HOURLY, DAILY, WEEKLY or MONTHLY (default DAILY)" };
+      properties.group_by = { type: "string", description: "Comma-separated dimensions, e.g. countryOrRegion" };
+      properties.fields = { type: "string", description: "Comma-separated fields to return" };
+      if (variant.zoned) properties.time_zone = { type: "string", enum: ["UTC", "ORTZ"], description: "Report time zone (default UTC)" };
       required.push("start", "end");
     }
     if (variant.body === "geo") {
       properties.entity = { type: "string", enum: ["Country", "AdminArea", "Locality"], description: "What kind of place the ids are" };
+      properties.supply_source = SUPPLY_SOURCE;
       required.push("entity");
     }
     if (variant.paged) {
@@ -93,9 +101,6 @@ function toolOf(group: string, action: string): CatalogTool {
       properties.all = { type: "boolean", description: "Walk every page" };
     }
     if (variant.flags?.some((flag) => flag.type === "money")) properties.currency = { type: "string", description: "Currency for amounts" };
-    if (variant.level === "adgroup") {
-      properties.adgroup_level = { type: "boolean", description: "Ad group negative keywords instead of the campaign's" };
-    }
   }
   const effect = variants.some((variant) => variant.effect === "destructive")
     ? "destructive"

@@ -56,11 +56,11 @@ test("a listing prints one row per item of v1's result, labelled by the best nam
 });
 
 test("a page of a longer listing says how many there are in all", async () => {
-  const result = await print(opOf("campaigns", "find"), {
+  const result = await print(opOf("keywords", "list"), {
     result: [{ id: 1 }],
     pagination: { offset: 0, pageSize: 1, totalCount: 12 },
   });
-  assert.deepEqual(result.said("step"), ["1 of 12 campaigns"]);
+  assert.deepEqual(result.said("step"), ["1 of 12 keywords"]);
   assert.deepEqual(result.said("info"), ["`1`  1"]);
   const all = await print(opOf("campaigns", "list"), { result: [{ id: 1 }], pagination: { totalCount: 1 } });
   assert.deepEqual(all.said("step"), ["1 campaigns"]);
