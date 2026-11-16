@@ -16,6 +16,11 @@ import { presentingPlacement } from "./host/init";
 import { hostOf } from "../host";
 import { bindsEntitlement } from "./host/surface";
 import { startLoading, stopLoading } from "./loading";
+import {
+  claimCustomStoreCheckout,
+  requestCustomStoreSession,
+  saveCustomStoreReturnRecord,
+} from "./customStore";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
 import { introductoryOfferFromFragment, readTeleportBoot } from "./teleport/boot";
 import { teleportFor } from "./teleport/flow";
@@ -487,6 +492,74 @@ export const purchaseOnWeb = async (
     console.error("Error beginning web checkout:", error);
     return "failed";
   }
+};
+
+const CUSTOM_STORE_NAVIGATION_DELAY = 250;
+
+export const purchaseCustomStoreOnWeb = async (
+  paywall: PaywallSession,
+  referenceName: string,
+  options: Pick<WebPurchaseOptions, "postPurchase"> = {},
+): Promise<PurchaseOutcome> => {
+  const snapshot = paywall.getSnapshot();
+  const product = snapshot.productsByReference[referenceName];
+  const productIdentifier = product?.productId ?? referenceName;
+  const host = hostFor(paywall);
+  const fail = (message: string, error?: unknown): PurchaseOutcome => {
+    console.error(`[superwall] ${message}`, error ?? "");
+    host.customFailed(productIdentifier, message);
+    return "failed";
+  };
+
+  if (hostOf() === "web-sdk")
+    return fail("Custom store products aren't supported in the Web SDK yet");
+  if (!product) return fail(`No product "${referenceName}" on this paywall`);
+  if (!asString(snapshot.device.publicApiKey)) {
+    return fail("Cannot start a custom store checkout: the host sent no public API key");
+  }
+
+  const release = claimCustomStoreCheckout(paywall);
+  if (!release) return "abandoned";
+
+  let session: Awaited<ReturnType<typeof requestCustomStoreSession>>;
+  try {
+    startLoading();
+    session = await requestCustomStoreSession(snapshot, product);
+  } catch (error) {
+    release();
+    stopLoading();
+    return fail(error instanceof Error ? error.message : "Custom store checkout failed", error);
+  }
+
+  const value = Number(product.variables.rawPrice);
+  saveCustomStoreReturnRecord({
+    version: 1,
+    checkoutContextId: session.checkoutContextId,
+    paywallUrl: window.location.href,
+    productReference: referenceName,
+    productIdentifier,
+    customTransactionId: session.customTransactionId,
+    ...(Number.isFinite(value) && value > 0
+      ? { price: { value, currency: String(product.variables.currencyCode || "USD") } }
+      : {}),
+    resolution: resolutionOf(options.postPurchase ?? snapshot.config?.postPurchase) ?? {
+      type: "default",
+    },
+    buyer: session.buyer,
+    createdAt: Date.now(),
+  });
+  host.customStarted(productIdentifier, session.checkoutContextId, session.customTransactionId);
+
+  const resetOnRestore = (event: PageTransitionEvent) => {
+    if (!event.persisted) return;
+    release();
+    stopLoading();
+    window.removeEventListener("pageshow", resetOnRestore);
+  };
+  window.addEventListener("pageshow", resetOnRestore);
+  await new Promise((resolve) => setTimeout(resolve, CUSTOM_STORE_NAVIGATION_DELAY));
+  window.location.assign(session.checkoutUrl);
+  return "abandoned";
 };
 
 const clearRestoredLoader = (event: PageTransitionEvent) => {

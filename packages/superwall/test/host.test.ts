@@ -54,6 +54,28 @@ describe("hostOf", () => {
     expect(hostOf()).toBe("web-paywall");
   });
 
+  it("is the hosted web paywall even though its controller installs a WebKit message handler", () => {
+    vi.stubGlobal("webkit", { messageHandlers: { paywallMessageHandler: {} } });
+    (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-direct" } };
+    expect(hostOf()).toBe("web-paywall");
+    delete (window as Holder).webPaywallCtrl;
+    at("?client_surface=web-direct");
+    expect(hostOf()).toBe("web-paywall");
+  });
+
+  it("is the Web SDK even though its controller installs a WebKit message handler", () => {
+    vi.stubGlobal("webkit", { messageHandlers: { paywallMessageHandler: {} } });
+    (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-sdk" } };
+    expect(hostOf()).toBe("web-sdk");
+  });
+
+  it("is the teleport page even with a WebKit message handler around it", () => {
+    vi.stubGlobal("webkit", { messageHandlers: { paywallMessageHandler: {} } });
+    (window as Holder).webPaywallCtrl = { props: { clientSurface: "web-direct" } };
+    Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout" });
+    expect(hostOf()).toBe("web-teleport");
+  });
+
   it("is a plain browser otherwise", () => {
     expect(hostOf()).toBe("browser");
     at("?client_surface=subdomain");

@@ -146,6 +146,19 @@ export const StripeCheckoutDiagnosticStageSchema = z.enum([
 
 export type TStripeCheckoutDiagnosticStage = z.infer<typeof StripeCheckoutDiagnosticStageSchema>;
 
+const customCheckoutStart = z.object({
+  event_name: z.literal("custom_checkout_start"),
+  checkout_context_id: z.string(),
+  product_identifier: z.string(),
+  custom_transaction_id: z.string(),
+});
+
+const customCheckoutFail = z.object({
+  event_name: z.literal("custom_checkout_fail"),
+  product_identifier: z.string(),
+  message: z.string(),
+});
+
 const stripeCheckoutDiagnostic = z.object({
   event_name: z.literal("stripe_checkout_diagnostic"),
   checkout_context_id: z.string(),
@@ -257,6 +270,8 @@ export const OutgoingMessageSchema = z.union([
   stripeCheckoutComplete,
   stripeCheckoutSubmit,
   stripeCheckoutDiagnostic,
+  customCheckoutStart,
+  customCheckoutFail,
   postCheckoutComplete,
   discountRedemptionResult,
   pageView,

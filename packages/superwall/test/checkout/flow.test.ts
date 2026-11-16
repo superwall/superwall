@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallCheckoutConfig } from "@superwall/runtime";
 import { checkoutDiagnostics } from "../../src/checkout/diagnostics";
+import { RETURN_KEY_PREFIX } from "../../src/checkout/customStore";
 import { checkoutEvents } from "../../src/checkout/events";
+import { isLoading } from "../../src/checkout/loading";
 import {
   applePayFor,
   autoPrefetchTargets,
@@ -10,6 +12,7 @@ import {
   openEmbeddedSheet,
   openHostedCheckout,
   prefetchSession,
+  purchaseCustomStoreOnWeb,
   purchaseOnWeb,
   reportCompletedCheckout,
   reprefetch,
@@ -1009,5 +1012,258 @@ describe("a hosted checkout the shopper leaves the paywall for", () => {
         .map(([message]) => message.event_name)
         .filter((name) => name !== "stripe_checkout_diagnostic"),
     ).toEqual(["initiate_web_checkout", "stripe_checkout_start"]);
+  });
+});
+
+type Holder = Window & { webPaywallCtrl?: unknown };
+const customSession = {
+  checkoutContextId: "ctx_custom",
+  checkoutUrl: "https://pay.vendor.test/c/1",
+  customTransactionId: "txn_custom",
+};
+
+const customPaywall = ({
+  publicApiKey = "pk_test",
+  postPurchase,
+}: {
+  publicApiKey?: string;
+  postPurchase?: import("@superwall/runtime").SuperwallPostPurchase;
+} = {}) => {
+  const product = {
+    reference: "primary",
+    productId: "custom|pro_monthly",
+    variables: { rawPrice: "9.99", currencyCode: "EUR" },
+    source: "sdk" as const,
+  };
+  const postMessage = vi.fn();
+  const paywall: PaywallSession = {
+    getSnapshot: () =>
+      ({
+        device: { publicApiKey },
+        user: { appUserId: "user_1" },
+        params: {},
+        products: [product],
+        productsByReference: { primary: product },
+        introductoryOffer: { eligible: false },
+        config: postPurchase === undefined ? {} : { postPurchase },
+      }) as unknown as ReturnType<PaywallSession["getSnapshot"]>,
+    postMessage,
+  };
+  return { paywall, postMessage };
+};
+
+const onHostedPage = (surface = "web-direct") => {
+  (window as Holder).webPaywallCtrl = { props: { clientSurface: surface } };
+  vi.stubGlobal("webkit", { messageHandlers: { paywallMessageHandler: {} } });
+  const assign = vi.fn();
+  vi.stubGlobal("location", {
+    href: "https://acme.superwall.app/pro",
+    hostname: "acme.superwall.app",
+    search: "",
+    hash: "",
+    assign,
+  });
+  return assign;
+};
+
+const answer = (body: unknown, status = 200) => {
+  const fetchMock = vi.fn(async () => Response.json(body, { status }));
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+};
+
+const sent = (postMessage: ReturnType<typeof vi.fn>) =>
+  postMessage.mock.calls.map(([message]) => message);
+
+describe("purchaseCustomStoreOnWeb", () => {
+  afterEach(() => {
+    delete (window as Holder).webPaywallCtrl;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    window.sessionStorage.clear();
+  });
+
+  it("keeps the return record, posts the start and sends the tab to the store's checkout", async () => {
+    const assign = onHostedPage();
+    answer(customSession);
+    const { paywall, postMessage } = customPaywall();
+
+    const pending = purchaseCustomStoreOnWeb(paywall, "primary");
+    await flushMicrotasks();
+    expect(isLoading()).toBe(true);
+    await expect(pending).resolves.toBe("abandoned");
+
+    expect(assign).toHaveBeenCalledWith(customSession.checkoutUrl);
+    expect(sent(postMessage)).toEqual([
+      {
+        event_name: "custom_checkout_start",
+        checkout_context_id: "ctx_custom",
+        product_identifier: "custom|pro_monthly",
+        custom_transaction_id: "txn_custom",
+      },
+    ]);
+    const record = JSON.parse(
+      window.sessionStorage.getItem(`${RETURN_KEY_PREFIX}ctx_custom`) ?? "",
+    );
+    expect(record).toMatchObject({
+      version: 1,
+      checkoutContextId: "ctx_custom",
+      paywallUrl: "https://acme.superwall.app/pro",
+      productReference: "primary",
+      productIdentifier: "custom|pro_monthly",
+      customTransactionId: "txn_custom",
+      price: { value: 9.99, currency: "EUR" },
+      resolution: { type: "default" },
+      buyer: { appUserId: "user_1" },
+    });
+  });
+
+  it("records the purchase's own destination over the paywall's", async () => {
+    onHostedPage();
+    answer(customSession);
+    const { paywall } = customPaywall({ postPurchase: "stay" });
+
+    await purchaseCustomStoreOnWeb(paywall, "primary", {
+      postPurchase: { redirect: "https://acme.test/thanks" },
+    });
+    const record = JSON.parse(
+      window.sessionStorage.getItem(`${RETURN_KEY_PREFIX}ctx_custom`) ?? "",
+    );
+    expect(record.resolution).toEqual({ type: "redirect", url: "https://acme.test/thanks" });
+
+    window.sessionStorage.clear();
+    await purchaseCustomStoreOnWeb(customPaywall({ postPurchase: "stay" }).paywall, "primary");
+    expect(
+      JSON.parse(window.sessionStorage.getItem(`${RETURN_KEY_PREFIX}ctx_custom`) ?? "").resolution,
+    ).toEqual({ type: "paywall" });
+  });
+
+  it("still opens the checkout when storage is off", async () => {
+    const assign = onHostedPage();
+    answer(customSession);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await expect(purchaseCustomStoreOnWeb(customPaywall().paywall, "primary")).resolves.toBe(
+      "abandoned",
+    );
+    expect(assign).toHaveBeenCalledWith(customSession.checkoutUrl);
+  });
+
+  it("fails without navigating when the session is refused, and lets the buyer try again", async () => {
+    const assign = onHostedPage();
+    const fetchMock = answer({ _tag: "Nope", message: "No checkout endpoint" }, 404);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { paywall, postMessage } = customPaywall();
+
+    await expect(purchaseCustomStoreOnWeb(paywall, "primary")).resolves.toBe("failed");
+    expect(assign).not.toHaveBeenCalled();
+    expect(isLoading()).toBe(false);
+    expect(error).toHaveBeenCalledWith("[superwall] No checkout endpoint", expect.anything());
+    expect(sent(postMessage)).toEqual([
+      {
+        event_name: "custom_checkout_fail",
+        product_identifier: "custom|pro_monthly",
+        message: "No checkout endpoint",
+      },
+    ]);
+
+    await purchaseCustomStoreOnWeb(paywall, "primary");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a custom store product under the Web SDK, as paywall.js does", async () => {
+    onHostedPage("web-sdk");
+    const fetchMock = answer(customSession);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { paywall, postMessage } = customPaywall();
+
+    await expect(purchaseCustomStoreOnWeb(paywall, "primary")).resolves.toBe("failed");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sent(postMessage)).toEqual([
+      {
+        event_name: "custom_checkout_fail",
+        product_identifier: "custom|pro_monthly",
+        message: "Custom store products aren't supported in the Web SDK yet",
+      },
+    ]);
+  });
+
+  it("records the price in USD when the product names no currency", async () => {
+    onHostedPage();
+    answer(customSession);
+    const { paywall } = customPaywall();
+    const snapshot = paywall.getSnapshot();
+    const product = { ...snapshot.productsByReference.primary, variables: { rawPrice: "9.99" } };
+    paywall.getSnapshot = () => ({
+      ...snapshot,
+      productsByReference: { primary: product },
+    });
+
+    await purchaseCustomStoreOnWeb(paywall, "primary");
+    expect(
+      JSON.parse(window.sessionStorage.getItem(`${RETURN_KEY_PREFIX}ctx_custom`) ?? "").price,
+    ).toEqual({ value: 9.99, currency: "USD" });
+  });
+
+  it("fails with a plain message when the request throws something other than an Error", async () => {
+    const assign = onHostedPage();
+    answer(customSession);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { paywall, postMessage } = customPaywall();
+    const snapshot = paywall.getSnapshot();
+    paywall.getSnapshot = () => ({
+      ...snapshot,
+      get user(): never {
+        throw "boom";
+      },
+    });
+
+    await expect(purchaseCustomStoreOnWeb(paywall, "primary")).resolves.toBe("failed");
+    expect(assign).not.toHaveBeenCalled();
+    expect(sent(postMessage)).toEqual([
+      {
+        event_name: "custom_checkout_fail",
+        product_identifier: "custom|pro_monthly",
+        message: "Custom store checkout failed",
+      },
+    ]);
+  });
+
+  it("fails without a public API key or a product", async () => {
+    onHostedPage();
+    const fetchMock = answer(customSession);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(
+      purchaseCustomStoreOnWeb(customPaywall({ publicApiKey: "" }).paywall, "primary"),
+    ).resolves.toBe("failed");
+    await expect(purchaseCustomStoreOnWeb(customPaywall().paywall, "missing")).resolves.toBe(
+      "failed",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("starts no second checkout while one is under way, until the page comes back from the cache", async () => {
+    onHostedPage();
+    const fetchMock = answer(customSession);
+    const { paywall } = customPaywall();
+
+    const first = purchaseCustomStoreOnWeb(paywall, "primary");
+    await expect(purchaseCustomStoreOnWeb(paywall, "primary")).resolves.toBe("abandoned");
+    await first;
+    await purchaseCustomStoreOnWeb(paywall, "primary");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: false }));
+    await purchaseCustomStoreOnWeb(paywall, "primary");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    expect(isLoading()).toBe(false);
+    await purchaseCustomStoreOnWeb(paywall, "primary");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
