@@ -1,4 +1,4 @@
-import type { Example, ToolEffect } from "@/program/command";
+import type { Endpoint, Example, ToolEffect } from "@/program/command";
 import { resolveApiIndex, type DocOperation } from "@/core/api/reference";
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -110,4 +110,15 @@ export function usageOf(resource: Resource, op: Operation): string {
   return positionalParams(op)
     .map((param) => argLabel(resource, param))
     .join(" ");
+}
+
+export function resourceCommandFor(owner: Resource, endpoint: Endpoint): string | undefined {
+  for (const resource of [owner, ...(owner.nested ?? [])]) {
+    const op = resource.operations.find((candidate) => candidate.method === endpoint.method && candidate.path === endpoint.path);
+    if (!op) continue;
+    const usage = usageOf(owner, op);
+    const words = owner === resource ? [owner.name, op.name] : [owner.name, resource.name, op.name];
+    return ["superwall", ...words, ...(usage ? [usage] : [])].join(" ");
+  }
+  return undefined;
 }

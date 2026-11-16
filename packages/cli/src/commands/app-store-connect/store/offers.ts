@@ -18,7 +18,7 @@ priced in --territory and equalized.`,
     {
       name: "create",
       summary: "Create an introductory offer in every territory",
-      details: "Creates introductory offers in the selected territories. New offers with overlapping dates overwrite existing introductory offers.",
+      details: "Creates introductory offers in the selected territories only; --territory just sets the price that is equalized. Apple rejects an offer whose dates overlap an existing one in the same territory (409): end it with asc offers update or remove it with asc offers delete first.",
       flags: {
         subscription: { type: "string", value: "id", describe: "The subscription's id", required: true },
         offerMode: { type: "string", value: "mode", describe: "What the customer pays", required: true, choices: OFFER_MODES },
