@@ -23,7 +23,8 @@ function rowMeta(row: Record<string, unknown>): string {
     if (typeof v === "string" && v) parts.push(v);
   }
   const budget = isRecord(row.dailyBudget) ? row.dailyBudget.value : undefined;
-  const bid = row.bid ?? budget;
+  const strategyBid = isRecord(row.bidStrategy) ? row.bidStrategy.bid : undefined;
+  const bid = row.bid ?? strategyBid ?? budget;
   if (isRecord(bid) && bid.amount !== undefined) parts.push(`${String(bid.amount)} ${String(bid.currency ?? "")}`.trim());
   const id = row.id ?? row.adamId ?? row.orgId;
   if (id !== undefined) parts.push(String(id));

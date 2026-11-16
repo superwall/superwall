@@ -55,6 +55,16 @@ test("a listing prints one row per item of v1's result, labelled by the best nam
   ]);
 });
 
+test("an ad group shows its default bid from bidStrategy", async () => {
+  const result = await print(opOf("adgroups", "list"), {
+    result: [
+      { name: "Brand", status: "ENABLED", bidStrategy: { bid: { amount: "2.5", currency: "EUR" } }, id: 11 },
+      { name: "Plain", bidStrategy: "not a strategy", id: 12 },
+    ],
+  });
+  assert.deepEqual(result.said("info"), ["`Brand`  ENABLED  2.5 EUR  11", "`Plain`  12"]);
+});
+
 test("a page of a longer listing says how many there are in all", async () => {
   const result = await print(opOf("keywords", "list"), {
     result: [{ id: 1 }],
