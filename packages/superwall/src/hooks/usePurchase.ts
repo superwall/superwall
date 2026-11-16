@@ -54,28 +54,57 @@ export type WebCheckoutFailure<TProduct extends SuperwallProduct = SuperwallProd
   CheckoutFailure & { status: "failed"; product: TProduct };
 
 /**
- * Callbacks for a web checkout purchase of a Stripe product, each optional:
- * the embedded sheet, Apple Pay, hosted checkout and a teleport. They fire
- * for every such purchase on the paywall, whichever component started it.
- * Store products bought through the native SDK fire none of them.
+ * A purchase that failed. A web checkout failure carries one of the
+ * `CheckoutFailureReason`s; a store purchase made by the native SDK carries
+ * `reason: "sdk"` (the SDK sends no detail) or `"superseded"` (another
+ * purchase replaced it).
  */
-export type UsePurchaseOptions<TProduct extends SuperwallProduct = SuperwallProduct> = {
+export type PurchaseFailure<TProduct extends SuperwallProduct = SuperwallProduct> =
+  | SuperwallPurchaseFailure<TProduct>
+  | WebCheckoutFailure<TProduct>;
+
+/**
+ * Callbacks for a purchase, each optional. They fire on every platform: for
+ * App Store and Play Store products bought through the native SDK, and for
+ * Stripe products bought on the web (the embedded sheet, Apple Pay, hosted
+ * checkout and a teleport). Custom store products fire none of them.
+ */
+export type PurchaseCallbacks<TProduct extends SuperwallProduct = SuperwallProduct> = {
   /** The purchase started. */
   onStart?: (product: TProduct) => void;
-  /** The shopper submitted payment in the sheet or authorized it in Apple Pay. */
+  /**
+   * The shopper submitted payment in the sheet or authorized it in Apple
+   * Pay. Web checkout only: the native SDKs do not report it.
+   */
   onSubmit?: (product: TProduct) => void;
   /** The purchase was paid. */
   onComplete?: (product: TProduct) => void;
-  /** The shopper left the checkout without paying. */
+  /** The shopper left the checkout or the store's sheet without paying. */
   onAbandon?: (product: TProduct) => void;
   /**
-   * A payment failed, with why in `failure.reason`. On a teleport in the
-   * app it fires as soon as the page's payment fails, while the shopper can
-   * still try again in the browser. On a teleport page, calling
-   * `useTeleport().returnToApp()` here returns with `reason=failed`.
+   * A purchase failed, with why in `failure.reason`. In the embedded sheet
+   * it fires on each decline while the shopper can still pay with another
+   * card. On a teleport in the app it fires as soon as the page's payment
+   * fails, while the shopper can still try again in the browser. On a
+   * teleport page, calling `useTeleport().returnToApp()` here returns with
+   * `reason=failed`.
    */
-  onFailure?: (failure: WebCheckoutFailure<TProduct>) => void;
+  onFailure?: (failure: PurchaseFailure<TProduct>) => void;
 };
+
+/**
+ * `usePurchase` callbacks fire for every purchase on the paywall, whichever
+ * component started it.
+ */
+export type UsePurchaseOptions<TProduct extends SuperwallProduct = SuperwallProduct> =
+  PurchaseCallbacks<TProduct>;
+
+/**
+ * A `purchase()` call's options. Its callbacks fire only while this call is
+ * in flight, beside any passed to `usePurchase`.
+ */
+export type PurchaseOptions<TProduct extends SuperwallProduct = SuperwallProduct> =
+  SuperwallPurchaseOptions & PurchaseCallbacks<TProduct>;
 
 export type PurchaseResult<TVariables extends SuperwallProductVariables> =
   | SuperwallPurchaseResult<SuperwallProduct<TVariables>>
@@ -84,14 +113,12 @@ export type PurchaseResult<TVariables extends SuperwallProductVariables> =
 export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
   purchase: (
     input: ProductReference | SuperwallProduct<TVariables>,
-    options?: SuperwallPurchaseOptions,
+    options?: PurchaseOptions<SuperwallProduct<TVariables>>,
   ) => Promise<PurchaseResult<TVariables>>;
   isPurchasing: boolean;
   pendingProduct?: SuperwallProduct<TVariables>;
   transaction?: SuperwallTransaction<SuperwallProduct<TVariables>>;
-  failure?:
-    | SuperwallPurchaseFailure<SuperwallProduct<TVariables>>
-    | WebCheckoutFailure<SuperwallProduct<TVariables>>;
+  failure?: PurchaseFailure<SuperwallProduct<TVariables>>;
   prefetch: (
     input?: ProductReference | SuperwallProduct<TVariables>,
     options?: Pick<SuperwallPurchaseOptions, "checkout" | "prepaidCards">,
@@ -100,6 +127,68 @@ export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
 
 const referenceOf = (input: string | { reference: string }): string =>
   typeof input === "string" ? input : input.reference;
+
+const listen = <TProduct extends SuperwallProduct>(
+  paywall: { getSnapshot: () => { productsByReference: Record<string, TProduct | undefined> } },
+  callbacks: () => PurchaseCallbacks<TProduct>,
+): (() => void) => {
+  const events = purchaseEventsFor(paywall);
+  const productOf = (referenceName: string) =>
+    paywall.getSnapshot().productsByReference[referenceName];
+  const each =
+    (pick: (current: PurchaseCallbacks<TProduct>) => ((product: TProduct) => void) | undefined) =>
+    ({ referenceName }: { referenceName: string }) => {
+      const product = productOf(referenceName);
+      if (product) pick(callbacks())?.(product);
+    };
+  const unsubscribers = [
+    events.on(
+      "start",
+      each((current) => current.onStart),
+    ),
+    events.on(
+      "submit",
+      each((current) => current.onSubmit),
+    ),
+    events.on(
+      "complete",
+      each((current) => current.onComplete),
+    ),
+    events.on(
+      "abandon",
+      each((current) => current.onAbandon),
+    ),
+    events.on("failure", ({ referenceName, failure }) => {
+      const product = productOf(referenceName);
+      if (product) {
+        callbacks().onFailure?.({
+          ...failure,
+          status: "failed",
+          product,
+        } as PurchaseFailure<TProduct>);
+      }
+    }),
+  ];
+  return () => {
+    for (const unsubscribe of unsubscribers) unsubscribe();
+  };
+};
+
+const reportStorePurchase = (
+  paywall: object,
+  reference: string,
+  purchase: () => Promise<SuperwallPurchaseResult>,
+): Promise<SuperwallPurchaseResult> => {
+  const events = purchaseEventsFor(paywall);
+  events.emit("start", { referenceName: reference });
+  return purchase().then((result) => {
+    const referenceName = result.product.reference;
+    if (result.status === "completed") events.emit("complete", { referenceName });
+    else if (result.status === "abandoned") events.emit("abandon", { referenceName });
+    else events.emit("failure", { referenceName, failure: { reason: result.reason } });
+    return result;
+  });
+};
 
 /**
  * Buy a product. Store products go to the native SDK; a Stripe product is
@@ -111,6 +200,10 @@ const referenceOf = (input: string | { reference: string }): string =>
  * rule, and its own `prepaidCards`. Web checkout only runs when a host
  * supplied a public API key. On a hosted web paywall a custom store product
  * opens its store's checkout in the same tab.
+ *
+ * `options` are callbacks for every purchase on the paywall; `purchase()`
+ * takes the same callbacks for that one call. `failure` is the last purchase
+ * that failed, cleared when the next one starts.
  */
 export const usePurchase = <
   TVariables extends SuperwallProductVariables = SuperwallProductVariables,
@@ -131,15 +224,15 @@ export const usePurchase = <
   useAutoPrefetch();
   useIdentityRefresh();
 
-  const purchase = React.useCallback(
+  const buy = React.useCallback(
     async (
       input: ProductReference | SuperwallProduct<TVariables>,
-      options?: SuperwallPurchaseOptions,
+      purchaseOptions: SuperwallPurchaseOptions,
     ): Promise<PurchaseResult<TVariables>> => {
       const reference = referenceOf(input);
       const product = session.getSnapshot().productsByReference[reference];
       const teleporter = teleportFor(session);
-      const { postPurchase, stripeMetadata, prepaidCards } = options ?? {};
+      const { postPurchase, stripeMetadata, prepaidCards } = purchaseOptions;
       clearWebFailure(session);
       if (
         product &&
@@ -172,11 +265,16 @@ export const usePurchase = <
         }
         const rule =
           prepaidCards ?? (teleporter.kind === "page" ? prepaidCardsFromFragment() : undefined);
-        const outcome = await purchaseOnWeb(session, reference, options?.checkout ?? webMode, {
-          postPurchase,
-          stripeMetadata,
-          ...(rule === undefined ? {} : { prepaidCards: rule }),
-        });
+        const outcome = await purchaseOnWeb(
+          session,
+          reference,
+          purchaseOptions.checkout ?? webMode,
+          {
+            postPurchase,
+            stripeMetadata,
+            ...(rule === undefined ? {} : { prepaidCards: rule }),
+          },
+        );
         return { ...outcome, product };
       }
       if (
@@ -193,54 +291,35 @@ export const usePurchase = <
         );
         return { status: "failed", product };
       }
+      const store = () =>
+        reportStorePurchase(session, reference, () => session.purchase(input, purchaseOptions));
       if (teleporter.kind === "page" || !teleporter.inFlight()) {
-        return session.purchase(input, options);
+        return store() as Promise<PurchaseResult<TVariables>>;
       }
-      return teleporter.handOff(reference, () => session.purchase(input, options));
+      return teleporter.handOff(reference, store) as Promise<PurchaseResult<TVariables>>;
     },
     [session, webMode, queryStore],
   );
 
-  React.useEffect(() => {
-    const events = purchaseEventsFor(session);
-    const productOf = (referenceName: string) =>
-      session.getSnapshot().productsByReference[referenceName];
-    const each =
-      (
-        pick: (
-          options: UsePurchaseOptions<SuperwallProduct<TVariables>>,
-        ) => ((product: SuperwallProduct<TVariables>) => void) | undefined,
-      ) =>
-      ({ referenceName }: { referenceName: string }) => {
-        const product = productOf(referenceName);
-        if (product) pick(callbacks.current)?.(product);
-      };
-    const unsubscribers = [
-      events.on(
-        "start",
-        each((current) => current.onStart),
-      ),
-      events.on(
-        "submit",
-        each((current) => current.onSubmit),
-      ),
-      events.on(
-        "complete",
-        each((current) => current.onComplete),
-      ),
-      events.on(
-        "abandon",
-        each((current) => current.onAbandon),
-      ),
-      events.on("failure", ({ referenceName, failure }) => {
-        const product = productOf(referenceName);
-        if (product) callbacks.current.onFailure?.({ ...failure, status: "failed", product });
-      }),
-    ];
-    return () => {
-      for (const unsubscribe of unsubscribers) unsubscribe();
-    };
-  }, [session]);
+  const purchase = React.useCallback(
+    async (
+      input: ProductReference | SuperwallProduct<TVariables>,
+      withCallbacks?: PurchaseOptions<SuperwallProduct<TVariables>>,
+    ): Promise<PurchaseResult<TVariables>> => {
+      const { onStart, onSubmit, onComplete, onAbandon, onFailure, ...purchaseOptions } =
+        withCallbacks ?? {};
+      const own = { onStart, onSubmit, onComplete, onAbandon, onFailure };
+      const stop = listen(session, () => own);
+      try {
+        return await buy(input, purchaseOptions);
+      } finally {
+        stop();
+      }
+    },
+    [session, buy],
+  );
+
+  React.useEffect(() => listen(session, () => callbacks.current), [session]);
 
   const webFailure = React.useSyncExternalStore(
     React.useCallback((listener: () => void) => subscribeWebFailure(session, listener), [session]),

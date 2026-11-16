@@ -37,3 +37,55 @@ describe("usePurchase when the SDK reports a failure", () => {
     expect(outcome).toMatchObject({ status: "abandoned" });
   });
 });
+
+describe("purchase callbacks for a store purchase made by the SDK", () => {
+  const recorder = () => {
+    const calls: unknown[][] = [];
+    const callbacks = {
+      onStart: (product: { reference: string }) => calls.push(["start", product.reference]),
+      onSubmit: (product: { reference: string }) => calls.push(["submit", product.reference]),
+      onComplete: (product: { reference: string }) => calls.push(["complete", product.reference]),
+      onAbandon: (product: { reference: string }) => calls.push(["abandon", product.reference]),
+      onFailure: (failure: { reason: string; product: { reference: string } }) =>
+        calls.push(["failure", failure.reason, failure.product.reference]),
+    };
+    return { calls, callbacks };
+  };
+
+  it.each([
+    ["completed", ["complete", "primary"]],
+    ["abandoned", ["abandon", "primary"]],
+    ["failed", ["failure", "sdk", "primary"]],
+  ] as const)("fires start, then the end of a %s purchase, on every hook", async (ending, last) => {
+    const watcher = recorder();
+    const { result } = renderWithProvider(
+      () => ({ buyer: usePurchase(), watcher: usePurchase(watcher.callbacks) }),
+      { host: { purchase: ending } },
+    );
+    await flush();
+
+    await act(async () => {
+      await result.current.buyer.purchase("primary");
+    });
+
+    expect(watcher.calls).toEqual([["start", "primary"], last]);
+  });
+
+  it("fires a purchase() call's own callbacks for that call only", async () => {
+    const own = recorder();
+    const { result } = renderWithProvider(() => usePurchase(), { host: { purchase: "failed" } });
+    await flush();
+
+    await act(async () => {
+      await result.current.purchase("primary", own.callbacks);
+    });
+    await act(async () => {
+      await result.current.purchase("primary");
+    });
+
+    expect(own.calls).toEqual([
+      ["start", "primary"],
+      ["failure", "sdk", "primary"],
+    ]);
+  });
+});

@@ -1,4 +1,5 @@
 import type { CheckoutFailure } from "./failure";
+import type { SuperwallPurchaseFailure } from "@superwall/runtime";
 import type { EmbeddedCheckoutSession, PaymentSession } from "./types";
 
 export type CheckoutEventType =
@@ -50,12 +51,14 @@ export const checkoutEvents = {
   },
 };
 
+type StoreFailure = { reason: SuperwallPurchaseFailure["reason"] };
+
 export type PurchaseEventPayload = {
   start: { referenceName: string };
   submit: { referenceName: string };
   complete: { referenceName: string };
   abandon: { referenceName: string };
-  failure: { referenceName: string; failure: CheckoutFailure };
+  failure: { referenceName: string; failure: CheckoutFailure | StoreFailure };
 };
 
 export type PurchaseEvent = keyof PurchaseEventPayload;

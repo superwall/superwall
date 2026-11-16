@@ -14,6 +14,17 @@ export const CHECKOUT_FAILURE_REASONS = [
 /**
  * Why a web checkout payment failed, in superwall's own words: the same
  * reasons whichever store or payment method took the payment.
+ *
+ * - `card_declined`: the issuer declined and gave no more specific reason.
+ * - `insufficient_funds`: not enough money or credit on the card.
+ * - `expired_card`: the card has expired.
+ * - `incorrect_card_details`: a wrong number, CVC, expiry, postal code or PIN.
+ * - `authentication_failed`: 3D Secure or another check by the bank failed or was cancelled.
+ * - `card_not_supported`: the card cannot pay for this kind of purchase or in this currency.
+ * - `limit_exceeded`: the card hit a spending, frequency or PIN-attempt limit.
+ * - `fraud_suspected`: the issuer or Stripe flagged the payment, or the card is lost or stolen.
+ * - `processing_error`: the issuer or the network failed; trying again may work.
+ * - `unknown`: nobody reported why, or the store gave a reason superwall does not know.
  */
 export type CheckoutFailureReason = (typeof CHECKOUT_FAILURE_REASONS)[number];
 

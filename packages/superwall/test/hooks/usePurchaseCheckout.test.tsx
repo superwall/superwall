@@ -888,7 +888,7 @@ describe("usePurchase callbacks", () => {
     ]);
   });
 
-  it("abandon when the hosted checkout ends unpaid, and nothing for a store product", async () => {
+  it("abandon when the hosted checkout ends unpaid, then a store product's own start and end", async () => {
     const { result, sessions, calls } = await renderWithCallbacks("sheet");
     vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
 
@@ -900,7 +900,45 @@ describe("usePurchase callbacks", () => {
     expect(calls).toEqual([
       ["start", "primary"],
       ["abandon", "primary"],
+      ["start", "secondary"],
+      ["complete", "secondary"],
     ]);
+  });
+
+  it("fires a purchase() call's own failure for a declined sheet, beside the hook's", async () => {
+    const own: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ status: "pending", failure: { code: "expired_card" } })),
+      ),
+    );
+    try {
+      const { result, sessions, calls } = await renderWithCallbacks("sheet");
+      vi.spyOn(sessions, "begin").mockResolvedValue(embedded);
+      let outcome: Promise<unknown> | undefined;
+      act(() => {
+        outcome = result.current.buyer.purchase("primary", {
+          onFailure: (failure) => own.push(failure.reason),
+        });
+      });
+      await flush();
+      checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+      checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+      await act(async () => {
+        await flush();
+      });
+      checkoutEvents.dispatch("SHEET_CLOSE", undefined);
+      await act(async () => {
+        await outcome;
+      });
+
+      expect(own).toEqual(["expired_card"]);
+      expect(calls.map(([name]) => name)).toEqual(["start", "failure"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("stops calling back once the hook unmounts", async () => {
