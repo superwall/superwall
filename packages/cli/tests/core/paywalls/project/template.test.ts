@@ -39,13 +39,25 @@ test("the starter's copy lives in messages and reaches the pages through t()", (
   const index = fs.readFileSync(path.join(target, "paywalls/pro/app/index.tsx"), "utf8");
   const layout = fs.readFileSync(path.join(target, "paywalls/pro/app/layout.tsx"), "utf8");
   const messages = fs.readFileSync(path.join(target, "paywalls/pro/messages/en.ts"), "utf8");
-  for (const key of ["paywall.title", "paywall.cta", "paywall.ctaBare", "paywall.restore", "paywall.close"]) {
+  for (const key of ["paywall.title", "paywall.cta", "paywall.ctaBare", "paywall.restore"]) {
     assert.match(index, new RegExp(`t\\("${key.replace(".", "\\.")}"`), key);
   }
+  assert.match(layout, /t\("paywall\.close"\)/);
   assert.match(layout, /t\("footer\.builtWith"\)/);
   assert.doesNotMatch(index, />\s*Go Pro\s*</);
   assert.match(messages, /cta: "Subscribe · \{price\}"/);
   assert.doesNotMatch(messages, /\$\d/);
+});
+
+test("the close button lives in the layout, inside the inset area, not in a page", () => {
+  const target = path.join(scratch("template"), "app");
+  writeTemplate(target);
+  const index = fs.readFileSync(path.join(target, "paywalls/pro/app/index.tsx"), "utf8");
+  const layout = fs.readFileSync(path.join(target, "paywalls/pro/app/layout.tsx"), "utf8");
+  assert.match(layout, /<div className="shell">\s*<button\s+type="button"\s+className="close"/);
+  assert.match(layout, /const \{ close, openUrl \} = useActions\(\);/);
+  assert.doesNotMatch(index, /className="close"/);
+  assert.doesNotMatch(index, /\bclose\b/);
 });
 
 test("package name comes from the directory, sanitized; superwall floats on latest", () => {
