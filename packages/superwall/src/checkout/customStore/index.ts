@@ -118,7 +118,7 @@ export const requestCustomStoreSession = async (
     const tag = errorTagOf(answer);
     if (tag === CUSTOM_STORE_REQUIRES_APP_USER_ID) {
       throw new CustomStoreCheckoutError(
-        "Custom store checkout needs a known buyer: pass app_user_id in the paywall URL",
+        "Custom store checkout refused this buyer's app_user_id: pass a real user id or none at all",
         tag,
       );
     }

@@ -55,6 +55,11 @@ describe("customStoreSessionBody", () => {
     expect(body.context.product.rawPrice).toBe(9.99);
     expect(body.context.identity.appUserId).toBe("user_1");
   });
+
+  it("sends an anonymous buyer as a Superwall alias, which the backend takes for a redemption code", () => {
+    const body = customStoreSessionBody(snapshotOf({ user: {}, params: {} }), product);
+    expect(body.context.identity.appUserId).toMatch(/^\$SuperwallAlias:/);
+  });
 });
 
 describe("requestCustomStoreSession", () => {
@@ -91,7 +96,8 @@ describe("requestCustomStoreSession", () => {
   it("names the missing buyer when the backend needs an app user id", async () => {
     answer({ _tag: CUSTOM_STORE_REQUIRES_APP_USER_ID, message: "nope" }, 400);
     await expect(requestCustomStoreSession(snapshotOf(), product)).rejects.toMatchObject({
-      message: "Custom store checkout needs a known buyer: pass app_user_id in the paywall URL",
+      message:
+        "Custom store checkout refused this buyer's app_user_id: pass a real user id or none at all",
       tag: CUSTOM_STORE_REQUIRES_APP_USER_ID,
     });
   });
