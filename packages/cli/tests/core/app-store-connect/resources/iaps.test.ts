@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { command as iaps } from "@/commands/app-store-connect/store/iaps";
-import { ascRoutes, link, one, page } from "../../../helpers/asc-proxy";
+import { appleNotFound, ascRoutes, link, one, page } from "../../../helpers/asc-proxy";
 import { APP_BY_BUNDLE, iapView, versionMadeOnPost } from "../../../helpers/asc-store";
 import { runCommand } from "../../../helpers/command";
 
@@ -124,7 +124,7 @@ test("create without a price or display name, in some territories, skips those s
     "POST /v1/inAppPurchaseAvailabilities": { data: one("inAppPurchaseAvailabilities", "IA1") },
     ...iapView("701", {
       "GET /v2/inAppPurchases/701/iapPriceSchedule?include=baseTerritory": { data: null },
-      "GET /v2/inAppPurchases/701/inAppPurchaseAvailability": { data: null },
+      "GET /v2/inAppPurchases/701/inAppPurchaseAvailability": appleNotFound("GET /v2/inAppPurchases/701/inAppPurchaseAvailability", "inAppPurchaseAvailabilities", "701"),
       "GET /v2/inAppPurchases/701/appStoreReviewScreenshot": { data: null },
       "GET /v2/inAppPurchases/701/versions": page([]),
       "GET /v2/inAppPurchases/701": { data: one("inAppPurchases", "701", { productId: "unlock" }) },
