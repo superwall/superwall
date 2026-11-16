@@ -32,25 +32,30 @@ function record(body: unknown = { data: [] }): {
   return rec;
 }
 
-test("asaUpstreamPath prefixes Apple's version unless already given", () => {
-  assert.equal(asaUpstreamPath("/campaigns"), "/api/v5/campaigns");
+test("asaUpstreamPath prefixes the Platform API's /v1 unless a version is already given", () => {
+  assert.equal(asaUpstreamPath("/campaigns"), "/v1/campaigns");
+  assert.equal(asaUpstreamPath("/campaigns/query"), "/v1/campaigns/query");
+  assert.equal(asaUpstreamPath("/v1/campaigns"), "/v1/campaigns");
+  assert.equal(asaUpstreamPath("/v1"), "/v1");
+  assert.equal(asaUpstreamPath("/v1?x=1"), "/v1?x=1");
+  assert.equal(asaUpstreamPath("/v10/campaigns"), "/v1/v10/campaigns");
   assert.equal(asaUpstreamPath("/api/v5/campaigns"), "/api/v5/campaigns");
   assert.throws(() => asaUpstreamPath("campaigns"), /must start with/);
 });
 
-test("asaProxy targets the org's proxy for the app and forwards the org context", async () => {
+test("asaProxy targets the org's proxy for the app and forwards the ad account context", async () => {
   const rec = record();
-  await asaProxy(api, "5", "get", "/campaigns?limit=1", undefined, { orgId: "9" });
+  await asaProxy(api, "5", "get", "/campaigns?limit=1", undefined, { adAccountId: "9" });
   assert.equal(
     rec.url,
-    "https://api.example.com/v2/organizations/77/apple-search-ads/proxy/5/api/v5/campaigns?limit=1",
+    "https://api.example.com/v2/organizations/77/apple-search-ads/proxy/5/v1/campaigns?limit=1",
   );
   assert.equal(rec.method, "GET");
-  assert.equal(rec.headers?.["x-ap-context"], "orgId=9");
+  assert.equal(rec.headers?.["x-ap-context"], "adAccountId=9");
 
-  await asaProxy(api, "5", "post", "/campaigns/find", { conditions: [] });
+  await asaProxy(api, "5", "post", "/campaigns/query", { filters: [] });
   assert.equal(rec.method, "POST");
-  assert.deepEqual(rec.body, { conditions: [] });
+  assert.deepEqual(rec.body, { filters: [] });
   assert.equal(rec.headers?.["x-ap-context"], undefined);
 
   await asaProxy(api, "5", "put", "/campaigns/1");

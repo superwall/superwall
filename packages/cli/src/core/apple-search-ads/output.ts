@@ -18,11 +18,12 @@ function rowLabel(row: Record<string, unknown>): string {
 
 function rowMeta(row: Record<string, unknown>): string {
   const parts: string[] = [];
-  for (const key of ["status", "servingStatus", "matchType", "state", "type", "countryOrRegion", "currency"]) {
+  for (const key of ["status", "displayStatus", "matchType", "state", "type", "countryOrRegion", "currency"]) {
     const v = row[key];
     if (typeof v === "string" && v) parts.push(v);
   }
-  const bid = row.bidAmount ?? row.dailyBudgetAmount ?? row.defaultBidAmount;
+  const budget = isRecord(row.dailyBudget) ? row.dailyBudget.value : undefined;
+  const bid = row.bid ?? budget;
   if (isRecord(bid) && bid.amount !== undefined) parts.push(`${String(bid.amount)} ${String(bid.currency ?? "")}`.trim());
   const id = row.id ?? row.adamId ?? row.orgId;
   if (id !== undefined) parts.push(String(id));
@@ -31,11 +32,11 @@ function rowMeta(row: Record<string, unknown>): string {
 
 export function printResult(ctx: CommandContext, op: AsaOperation, response: AsaPage): void {
   if (ctx.json) return ctx.output.data(response);
-  const rows = Array.isArray(response.data) ? response.data.filter(isRecord) : undefined;
+  const rows = Array.isArray(response.result) ? response.result.filter(isRecord) : undefined;
   const listing = op.action === "list" || op.action === "find" || op.action === "search" || op.action === "assets";
   if (!rows || !listing) return ctx.output.data(response);
   if (rows.length === 0) return ctx.ui.step(`No ${op.group} found`);
-  const total = response.pagination?.totalResults;
+  const total = response.pagination?.totalCount;
   const count = typeof total === "number" && total > rows.length ? `${rows.length} of ${total}` : String(rows.length);
   ctx.ui.step(`${count} ${op.group}`);
   for (const row of rows) ctx.ui.info(`\`${rowLabel(row)}\`  ${rowMeta(row)}`);

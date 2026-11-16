@@ -21,10 +21,10 @@ export async function runAsa(ctx: CommandContext<"required">, { words, flags }: 
   }
   if (extra.length) throw new Error(`\`superwall asa\` doesn't take "${extra.join(" ")}".`);
   const data = listOf(flags.d);
-  const orgId = textField(flags, "orgId");
+  const adAccountId = textField(flags, "adAccountId");
 
   if (target.startsWith("/")) {
-    return ctx.output.data(await runAsaRequest(ctx, ctx.api, { verb: "get", path: target, data, orgId }));
+    return ctx.output.data(await runAsaRequest(ctx, ctx.api, { verb: "get", path: target, data, adAccountId }));
   }
 
   const params = parseParams(data);
@@ -41,10 +41,10 @@ export async function runAsa(ctx: CommandContext<"required">, { words, flags }: 
   }
   const { app: asaApp, api } = await resolveAsaApp(ctx, ctx.api);
   const input = { group: target, action: resolvedAction, positional: value, flags, params };
-  const currency = currencyResolver(api, asaApp.id, textField(flags, "currency"), orgId);
+  const currency = currencyResolver(api, asaApp.id, textField(flags, "currency"), adAccountId);
   const label = `asa ${input.group} ${input.action}`;
   const result = await withAppleErrors(label, () => {
-    return apiCall(ctx, label, () => runAsaOperation(api, asaApp.id, input, { orgId, currency }));
+    return apiCall(ctx, label, () => runAsaOperation(api, asaApp.id, input, { adAccountId, currency }));
   });
   printResult(ctx, result.op, result.response);
 }

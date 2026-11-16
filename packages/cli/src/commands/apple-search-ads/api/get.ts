@@ -6,11 +6,11 @@ export const command = defineCommand({
   name: "asa get",
   summary: "Any GET request to the Apple Search Ads API",
   args: {
-    path: { describe: "Apple Search Ads API path, e.g. /campaigns (the /api/v5 prefix is added)", required: true },
+    path: { describe: "Apple Search Ads API path, e.g. /campaigns (the /v1 prefix is added)", required: true },
   },
   flags: {
     app: { ...app, describe: "Superwall app id or name (if several have Apple Search Ads connected)" },
-    orgId: { type: "string", value: "id", describe: "Apple Search Ads org id (X-AP-Context), if the API user spans several" },
+    adAccountId: { type: "string", value: "id", describe: "Apple Ads ad account id (X-AP-Context), if the API user reaches several" },
     d: { ...data, describe: "Query param, Stripe-style: -d key=value (string) or key:=value (number/bool/json)" },
   },
   examples: [
@@ -22,7 +22,7 @@ export const command = defineCommand({
   prompts: false,
   mcp: "read",
   async run(ctx, { args, flags }) {
-    const res = await runAsaRequest(ctx, ctx.api, { verb: "get", path: args.path, data: flags.d, orgId: flags.orgId });
+    const res = await runAsaRequest(ctx, ctx.api, { verb: "get", path: args.path, data: flags.d, adAccountId: flags.adAccountId });
     ctx.output.data(res ?? { ok: true });
   },
 });

@@ -15,8 +15,8 @@ import {
 import { asaProxy } from "./client";
 
 export interface AsaPage {
-  data?: unknown;
-  pagination?: { totalResults?: number; startIndex?: number; itemsPerPage?: number } | null;
+  result?: unknown;
+  pagination?: { offset?: number; pageSize?: number; totalCount?: number } | null;
   error?: unknown;
 }
 
@@ -104,7 +104,7 @@ export function buildSelector(input: SelectorInput): Record<string, unknown> {
   }
   if (input.fields) selector.fields = splitList(input.fields);
   if (input.limit !== undefined || input.offset !== undefined) {
-    selector.pagination = { offset: input.offset ?? 0, limit: input.limit ?? 20 };
+    selector.pagination = { offset: input.offset ?? 0, pageSize: input.limit ?? 20 };
   }
   return selector;
 }
@@ -146,7 +146,7 @@ interface AsaRunInput {
 }
 
 interface AsaRunOptions {
-  orgId?: string;
+  adAccountId?: string;
   currency: CurrencyResolver;
 }
 
@@ -254,17 +254,17 @@ export async function collectPages(
   let offset = startOffset;
   for (let i = 0; i < MAX_PAGES; i++) {
     const page = await fetchPage(offset, limit);
-    const items = Array.isArray(page.data) ? page.data : [];
+    const items = Array.isArray(page.result) ? page.result : [];
     out.push(...items);
     if (items.length === 0) break;
     offset += items.length;
-    const total = page.pagination?.totalResults;
+    const total = page.pagination?.totalCount;
     if (typeof total === "number" && offset >= total) break;
     if (items.length < limit) break;
   }
   return {
-    data: out,
-    pagination: { totalResults: out.length, startIndex: startOffset, itemsPerPage: out.length },
+    result: out,
+    pagination: { offset: startOffset, pageSize: out.length, totalCount: out.length },
   };
 }
 
@@ -309,7 +309,7 @@ export async function runAsaOperation(
   const path = fillPath(op.path, scope);
   const flags = input.flags;
   const proxy = <T>(method: string, p: string, body?: unknown) => {
-    return asaProxy<T>(api, appId, method, p, body, { orgId: options.orgId });
+    return asaProxy<T>(api, appId, method, p, body, { adAccountId: options.adAccountId });
   };
   const all = flags.all === true;
   const limit = numberFlag(flags, "limit");
@@ -329,7 +329,7 @@ export async function runAsaOperation(
     if (all) {
       const response = await collectPages(
         (pageOffset, pageLimit) => {
-          const pagination = { offset: pageOffset, limit: pageLimit };
+          const pagination = { offset: pageOffset, pageSize: pageLimit };
           return proxy<AsaPage>(op.method, path, { ...selector, pagination });
         },
         offset,
@@ -399,33 +399,53 @@ export async function runAsaOperation(
     return { op, path, response: await proxy<AsaPage>("GET", withQuery(path, qs)) };
   }
 
-  return { op, path, response: (await proxy<AsaPage>(op.method, path)) ?? { data: null } };
+  return { op, path, response: (await proxy<AsaPage>(op.method, path)) ?? { result: null } };
 }
+
+function aclAccounts(acls: AsaPage | undefined): Record<string, unknown>[] {
+  const result = acls && isRecord(acls.result) ? acls.result : {};
+  const rows = Array.isArray(result.acls) ? result.acls.filter(isRecord) : [];
+  return rows.map((r) => r.adAccount).filter(isRecord);
+}
+
+const currencyOf = (account: Record<string, unknown> | undefined) => {
+  return account && typeof account.currency === "string" && account.currency ? account.currency.toUpperCase() : undefined;
+};
 
 export function currencyResolver(
   api: SuperwallApi,
   appId: string,
   explicit: string | undefined,
-  orgId: string | undefined,
+  adAccountId: string | undefined,
 ): CurrencyResolver {
   let cached: Promise<string> | undefined;
   return () => {
     if (explicit) return Promise.resolve(explicit.toUpperCase());
     cached ??= (async () => {
-      const acls = await asaProxy<AsaPage>(api, appId, "GET", "/acls");
-      const rows = Array.isArray(acls.data) ? acls.data.filter(isRecord) : [];
-      if (orgId) {
-        const match = rows.find((r) => String(r.orgId) === orgId && typeof r.currency === "string");
-        if (match) return String(match.currency).toUpperCase();
+      const accounts = aclAccounts(await asaProxy<AsaPage>(api, appId, "GET", "/acls"));
+      const account = adAccountId
+        ? accounts.find((a) => String(a.id) === adAccountId)
+        : accounts.length === 1
+          ? accounts[0]
+          : undefined;
+      if (!account) {
+        const ids = accounts.map((a) => String(a.id)).join(", ");
+        if (adAccountId) {
+          const reach = ids ? ` It reaches: ${ids}.` : "";
+          throw new Error(`This API user can't reach ad account ${adAccountId}.${reach} Pass --currency (e.g. USD) to skip the lookup.`);
+        }
+        if (!ids) throw new Error("This API user can't reach any Apple Ads ad account. Pass --currency (e.g. USD).");
+        throw new Error(`This API user reaches several ad accounts (${ids}). Pass --ad-account-id or --currency.`);
       }
-      const currencies = [...new Set(rows.map((r) => r.currency).filter((c): c is string => typeof c === "string"))];
-      const [only] = currencies;
-      if (currencies.length === 1 && only) return only.toUpperCase();
-      throw new Error(
-        currencies.length === 0
-          ? "Couldn't determine the account currency from Apple Search Ads. Pass --currency (e.g. USD)."
-          : `This API user spans several currencies (${currencies.join(", ")}). Pass --currency or --org-id.`,
-      );
+      const listed = currencyOf(account);
+      if (listed) return listed;
+      const id = String(account.id);
+      const detail = await asaProxy<AsaPage>(api, appId, "GET", `/ad-accounts/${encodeURIComponent(id)}`, undefined, {
+        adAccountId: id,
+      });
+      const currency = currencyOf(detail && isRecord(detail.result) ? detail.result : undefined);
+      if (!currency) throw new Error(`Couldn't read ad account ${id}'s currency from Apple Ads. Pass --currency (e.g. USD).`);
+      return currency;
     })();
     return cached;
   };

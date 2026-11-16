@@ -19,14 +19,29 @@ function describeAppleError(error: ApiError, request: string): Error | undefined
   if (parsed.error === "credentials_not_found" || parsed.error === "invalid_credentials") {
     return new Error(`${error.message}\n${CONNECT_HINT}`);
   }
-  const apple = isRecord(parsed.error) && Array.isArray(parsed.error.errors) ? parsed.error.errors : undefined;
-  if (!apple || apple.length === 0) return undefined;
-  const lines = apple.filter(isRecord).map((e) => {
-    const field = typeof e.field === "string" && e.field ? `${e.field}: ` : "";
-    const code = typeof e.messageCode === "string" && e.messageCode ? ` (${e.messageCode})` : "";
-    return `  • ${field}${String(e.message ?? "")}${code}`;
-  });
+  const lines = appleErrorLines(parsed.error);
+  if (lines.length === 0) return undefined;
   return new Error(`Apple Search Ads rejected ${request} (${error.status}):\n${lines.join("\n")}`);
+}
+
+function appleErrorLines(error: unknown): string[] {
+  if (!isRecord(error)) return [];
+  if (Array.isArray(error.errors)) {
+    return error.errors.filter(isRecord).map((e) => {
+      const field = typeof e.field === "string" && e.field ? `${e.field}: ` : "";
+      const code = typeof e.messageCode === "string" && e.messageCode ? ` (${e.messageCode})` : "";
+      return `  • ${field}${String(e.message ?? "")}${code}`;
+    });
+  }
+  if (typeof error.code !== "string") return [];
+  const details = Array.isArray(error.details) ? error.details.filter(isRecord) : [];
+  if (details.length === 0) return [`  • ${String(error.message ?? error.code)} (${error.code})`];
+  return details.map((d) => {
+    const info = isRecord(d.info) ? d.info : {};
+    const field = typeof info.field === "string" && info.field ? `${info.field}: ` : "";
+    const code = typeof d.code === "string" && d.code ? ` (${d.code})` : "";
+    return `  • ${field}${String(d.message ?? error.message ?? "")}${code}`;
+  });
 }
 
 export async function withAppleErrors<T>(request: string, work: () => Promise<T>): Promise<T> {
@@ -59,9 +74,9 @@ export async function resolveAsaApp(
 export async function runAsaRequest(
   ctx: CommandContext,
   base: SuperwallApi,
-  request: { verb: AsaVerb; path: string; data: string[]; body?: string; orgId?: string },
+  request: { verb: AsaVerb; path: string; data: string[]; body?: string; adAccountId?: string },
 ): Promise<AsaPage | undefined> {
-  const { verb, path, orgId } = request;
+  const { verb, path, adAccountId } = request;
   const params = parseParams(request.data);
   if (!path.startsWith("/")) throw new Error(`Path must start with "/", e.g. /campaigns`);
   const { app, api } = await resolveAsaApp(ctx, base);
@@ -69,11 +84,11 @@ export async function runAsaRequest(
   return withAppleErrors(label, () => {
     return apiCall(ctx, label, () => {
       if (verb === "get" || verb === "delete") {
-        return asaProxy<AsaPage | undefined>(api, app.id, verb, withQuery(path, params), undefined, { orgId });
+        return asaProxy<AsaPage | undefined>(api, app.id, verb, withQuery(path, params), undefined, { adAccountId });
       }
       const body = request.body ? readJsonInput(request.body, "--body") : params;
       const payload = isRecord(body) ? { ...body, ...params } : body;
-      return asaProxy<AsaPage | undefined>(api, app.id, verb, path, payload, { orgId });
+      return asaProxy<AsaPage | undefined>(api, app.id, verb, path, payload, { adAccountId });
     });
   });
 }

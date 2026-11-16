@@ -34,7 +34,7 @@ interface Call {
   headers: Record<string, string>;
 }
 
-function record(respond: (call: Call) => unknown = () => ({ data: [] })): Call[] {
+function record(respond: (call: Call) => unknown = () => ({ result: [] })): Call[] {
   const calls: Call[] = [];
   globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
     const call: Call = {
@@ -50,7 +50,7 @@ function record(respond: (call: Call) => unknown = () => ({ data: [] })): Call[]
 }
 
 const usd = () => Promise.resolve("USD");
-const PROXY = "https://api.example.com/v2/organizations/77/apple-search-ads/proxy/5/api/v5";
+const PROXY = "https://api.example.com/v2/organizations/77/apple-search-ads/proxy/5/v1";
 
 test("readJsonInput accepts inline JSON and @file", () => {
   assert.deepEqual(readJsonInput('{"a":1}', "--body"), { a: 1 });
@@ -82,7 +82,7 @@ test("buildSelector composes shorthand, ordering, fields and paging", () => {
       conditions: [{ field: "status", operator: "EQUALS", values: ["ENABLED", "PAUSED"] }],
       orderBy: [{ field: "name", sortOrder: "DESCENDING" }],
       fields: ["id", "name"],
-      pagination: { offset: 5, limit: 10 },
+      pagination: { offset: 5, pageSize: 10 },
     },
   );
   assert.deepEqual(buildSelector({}), {});
@@ -121,29 +121,29 @@ test("buildReport defaults granularity except for search terms", () => {
   assert.throws(() => buildReport({ start: "a", searchTerms: false }), /--start and --end/);
 });
 
-test("collectPages walks by totalResults, then by short pages", async () => {
+test("collectPages walks v1 result pages by totalCount, then by short pages", async () => {
   const pages: AsaPage[] = [
-    { data: [1, 2], pagination: { totalResults: 3 } },
-    { data: [3], pagination: { totalResults: 3 } },
+    { result: [1, 2], pagination: { totalCount: 3 } },
+    { result: [3], pagination: { totalCount: 3 } },
   ];
   const seen: number[] = [];
   const res = await collectPages(
     async (offset) => {
       seen.push(offset);
-      return pages.shift() ?? { data: [] };
+      return pages.shift() ?? { result: [] };
     },
     0,
     2,
   );
-  assert.deepEqual(res.data, [1, 2, 3]);
+  assert.deepEqual(res.result, [1, 2, 3]);
   assert.deepEqual(seen, [0, 2]);
 
-  const short = await collectPages(async () => ({ data: [1] }), 0, 10);
-  assert.deepEqual(short.data, [1]);
-  const empty = await collectPages(async () => ({ data: [] }), 4, 10);
+  const short = await collectPages(async () => ({ result: [1] }), 0, 10);
+  assert.deepEqual(short.result, [1]);
+  const empty = await collectPages(async () => ({ result: [] }), 4, 10);
   assert.deepEqual(empty, {
-    data: [],
-    pagination: { totalResults: 0, startIndex: 4, itemsPerPage: 0 },
+    result: [],
+    pagination: { offset: 4, pageSize: 0, totalCount: 0 },
   });
 });
 
@@ -175,24 +175,24 @@ test("resolveOperation validates groups, actions and positionals", () => {
   assert.equal(scope.adamId, "42");
 });
 
-test("list operations send query params and the org context header", async () => {
+test("list operations send query params and the ad account context header", async () => {
   const calls = record();
   await runAsaOperation(
     api,
     "5",
     { group: "campaigns", action: "list", flags: { limit: 5, fields: "id,name" }, params: {} },
-    { orgId: "99", currency: usd },
+    { adAccountId: "99", currency: usd },
   );
   assert.equal(calls[0]!.url, `${PROXY}/campaigns?fields=id%2Cname&limit=5`);
   assert.equal(calls[0]!.method, "GET");
-  assert.equal(calls[0]!.headers["x-ap-context"], "orgId=99");
+  assert.equal(calls[0]!.headers["x-ap-context"], "adAccountId=99");
 });
 
 test("--all pages a GET list with offset/limit", async () => {
   const calls = record((call) =>
     call.url.includes("offset=0")
-      ? { data: [{ id: 1 }, { id: 2 }], pagination: { totalResults: 3 } }
-      : { data: [{ id: 3 }], pagination: { totalResults: 3 } },
+      ? { result: [{ id: 1 }, { id: 2 }], pagination: { totalCount: 3 } }
+      : { result: [{ id: 3 }], pagination: { totalCount: 3 } },
   );
   const res = await runAsaOperation(
     api,
@@ -202,15 +202,15 @@ test("--all pages a GET list with offset/limit", async () => {
   );
   assert.equal(calls.length, 2);
   assert.ok(calls[1]!.url.includes("offset=2"));
-  assert.deepEqual(res.response.data, [{ id: 1 }, { id: 2 }, { id: 3 }]);
+  assert.deepEqual(res.response.result, [{ id: 1 }, { id: 2 }, { id: 3 }]);
 });
 
 test("find sends a selector, and --all re-pages it", async () => {
   const calls = record((call) => {
     const body = call.body as { pagination: { offset: number } };
     return body.pagination.offset === 0
-      ? { data: [{ id: 1 }], pagination: { totalResults: 2 } }
-      : { data: [{ id: 2 }], pagination: { totalResults: 2 } };
+      ? { result: [{ id: 1 }], pagination: { totalCount: 2 } }
+      : { result: [{ id: 2 }], pagination: { totalCount: 2 } };
   });
   const res = await runAsaOperation(
     api,
@@ -227,12 +227,12 @@ test("find sends a selector, and --all re-pages it", async () => {
   assert.deepEqual((calls[0]!.body as { conditions: unknown }).conditions, [
     { field: "status", operator: "EQUALS", values: ["ENABLED"] },
   ]);
-  assert.deepEqual((calls[1]!.body as { pagination: unknown }).pagination, { offset: 1, limit: 1 });
-  assert.equal((res.response.data as unknown[]).length, 2);
+  assert.deepEqual((calls[1]!.body as { pagination: unknown }).pagination, { offset: 1, pageSize: 1 });
+  assert.equal((res.response.result as unknown[]).length, 2);
 });
 
 test("create builds the body from typed flags, money, lists and -d", async () => {
-  const calls = record(() => ({ data: { id: 1 } }));
+  const calls = record(() => ({ result: { id: 1 } }));
   await runAsaOperation(
     api,
     "5",
@@ -262,7 +262,7 @@ test("create builds the body from typed flags, money, lists and -d", async () =>
 });
 
 test("update wraps the campaign envelope and --body merges under flags", async () => {
-  const calls = record(() => ({ data: { id: 1 } }));
+  const calls = record(() => ({ result: { id: 1 } }));
   await runAsaOperation(
     api,
     "5",
@@ -281,7 +281,7 @@ test("update wraps the campaign envelope and --body merges under flags", async (
 });
 
 test("bulk keyword commands send arrays and pick the right delete endpoint", async () => {
-  const calls = record(() => ({ data: [] }));
+  const calls = record(() => ({ result: [] }));
   const scope = { campaign: "1", adgroup: "2" };
   await runAsaOperation(
     api,
@@ -366,7 +366,7 @@ test("bulk keyword commands send arrays and pick the right delete endpoint", asy
 });
 
 test("reports post Apple's reporting request to the scoped path", async () => {
-  const calls = record(() => ({ data: { reportingDataResponse: {} } }));
+  const calls = record(() => ({ result: { reportingDataResponse: {} } }));
   await runAsaOperation(
     api,
     "5",
@@ -392,7 +392,7 @@ test("reports post Apple's reporting request to the scoped path", async () => {
 });
 
 test("geo get posts id/entity pairs and needs --entity", async () => {
-  const calls = record(() => ({ data: [] }));
+  const calls = record(() => ({ result: [] }));
   await runAsaOperation(
     api,
     "5",
@@ -506,12 +506,12 @@ test("delete with no body returns an ok marker when the proxy answers 204", asyn
     { group: "campaigns", action: "delete", positional: "3", flags: {}, params: {} },
     { currency: usd },
   );
-  assert.deepEqual(res.response, { data: null });
+  assert.deepEqual(res.response, { result: null });
   assert.equal(res.path, "/campaigns/3");
 });
 
 test("me and acls are plain reads", async () => {
-  const calls = record(() => ({ data: { userId: 1 } }));
+  const calls = record(() => ({ result: { userId: 1 } }));
   await runAsaOperation(
     api,
     "5",
@@ -528,29 +528,50 @@ test("me and acls are plain reads", async () => {
   assert.equal(calls[1]!.url, `${PROXY}/acls`);
 });
 
-test("currencyResolver honours --currency, then the ACL list", async () => {
+test("currencyResolver honours --currency, then the ad account the ACL list names", async () => {
   assert.equal(await currencyResolver(api, "5", "usd", undefined)(), "USD");
 
-  record(() => ({ data: [{ orgId: 1, currency: "EUR" }] }));
-  const single = currencyResolver(api, "5", undefined, undefined);
-  assert.equal(await single(), "EUR");
-  assert.equal(await single(), "EUR");
+  const acls = (...adAccounts: unknown[]) => ({ result: { acls: adAccounts.map((adAccount) => ({ adAccount, roles: ["Admin"] })) } });
+  const single = record(() => acls({ id: 1, currency: "eur" }));
+  const resolve = currencyResolver(api, "5", undefined, undefined);
+  assert.equal(await resolve(), "EUR");
+  assert.equal(await resolve(), "EUR");
+  assert.equal(single.length, 1);
+  assert.equal(single[0]!.url, `${PROXY}/acls`);
+  assert.equal(single[0]!.headers["x-ap-context"], undefined);
 
-  record(() => ({
-    data: [
-      { orgId: 1, currency: "EUR" },
-      { orgId: 2, currency: "USD" },
-    ],
-  }));
+  record(() => acls({ id: 1, currency: "EUR" }, { id: 2, currency: "USD" }));
   assert.equal(await currencyResolver(api, "5", undefined, "2")(), "USD");
-  await assert.rejects(currencyResolver(api, "5", undefined, undefined)(), /several currencies/);
+  await assert.rejects(currencyResolver(api, "5", undefined, undefined)(), {
+    message: "This API user reaches several ad accounts (1, 2). Pass --ad-account-id or --currency.",
+  });
+  await assert.rejects(currencyResolver(api, "5", undefined, "3")(), {
+    message: "This API user can't reach ad account 3. It reaches: 1, 2. Pass --currency (e.g. USD) to skip the lookup.",
+  });
 
-  record(() => ({ data: [] }));
-  await assert.rejects(currencyResolver(api, "5", undefined, undefined)(), /Pass --currency/);
+  record(() => ({ result: { acls: [] } }));
+  await assert.rejects(currencyResolver(api, "5", undefined, undefined)(), {
+    message: "This API user can't reach any Apple Ads ad account. Pass --currency (e.g. USD).",
+  });
+  await assert.rejects(currencyResolver(api, "5", undefined, "3")(), {
+    message: "This API user can't reach ad account 3. Pass --currency (e.g. USD) to skip the lookup.",
+  });
+});
+
+test("currencyResolver reads the ad account itself when the ACL list leaves its currency out", async () => {
+  const calls = record((call) => {
+    return call.url.endsWith("/acls")
+      ? { result: { acls: [{ adAccount: { id: 123456789, name: "AwayFinder", orgId: 27154130 } }] } }
+      : { result: { id: 123456789, currency: "GBP" } };
+  });
+  assert.equal(await currencyResolver(api, "5", undefined, undefined)(), "GBP");
+  assert.equal(calls[1]!.url, `${PROXY}/ad-accounts/123456789`);
+  assert.equal(calls[1]!.method, "GET");
+  assert.equal(calls[1]!.headers["x-ap-context"], "adAccountId=123456789");
 });
 
 test("typed flags convert booleans, skip empty values, and refuse a bad number", async () => {
-  const calls = record(() => ({ data: { id: 1 } }));
+  const calls = record(() => ({ result: { id: 1 } }));
   await runAsaOperation(
     api,
     "5",
@@ -577,7 +598,7 @@ test("typed flags convert booleans, skip empty values, and refuse a bad number",
 });
 
 test("bulk bodies take one object as a list, keep text ids, and refuse an empty or scalar body", async () => {
-  const calls = record(() => ({ data: [] }));
+  const calls = record(() => ({ result: [] }));
   const scope = { campaign: "1", adgroup: "2" };
   await runAsaOperation(
     api,
@@ -618,32 +639,34 @@ test("buildSelector adds shorthand to a selector's own conditions and pages from
         { field: "name", operator: "CONTAINS", values: ["x"] },
         { field: "status", operator: "IN", values: ["ENABLED", "PAUSED"] },
       ],
-      pagination: { offset: 40, limit: 20 },
+      pagination: { offset: 40, pageSize: 20 },
     },
   );
 });
 
 test("--all without --limit pages a thousand at a time, and a page without rows ends the walk", async () => {
-  const find = record(() => ({ data: [{ id: 1 }], pagination: { totalResults: 1 } }));
+  const find = record(() => ({ result: [{ id: 1 }], pagination: { totalCount: 1 } }));
   await runAsaOperation(api, "5", { group: "campaigns", action: "find", flags: { all: true }, params: {} }, { currency: usd });
-  assert.deepEqual((find[0]!.body as { pagination: unknown }).pagination, { offset: 0, limit: 1000 });
+  assert.deepEqual((find[0]!.body as { pagination: unknown }).pagination, { offset: 0, pageSize: 1000 });
 
-  const list = record(() => ({ data: { not: "rows" } }));
+  const list = record(() => ({ result: { not: "rows" } }));
   const res = await runAsaOperation(api, "5", { group: "campaigns", action: "list", flags: { all: true }, params: {} }, { currency: usd });
   assert.equal(list.length, 1);
   assert.ok(list[0]!.url.endsWith("/campaigns?offset=0&limit=1000"));
-  assert.deepEqual(res.response.data, []);
+  assert.deepEqual(res.response.result, []);
 });
 
-test("currencyResolver can't tell the currency from an ACL answer without rows", async () => {
-  record(() => ({ data: { orgId: 1 } }));
-  await assert.rejects(currencyResolver(api, "5", undefined, "1")(), {
-    message: "Couldn't determine the account currency from Apple Search Ads. Pass --currency (e.g. USD).",
+test("currencyResolver can't tell the currency from an ACL answer without accounts or an account without one", async () => {
+  record(() => ({ result: { orgId: 1 } }));
+  await assert.rejects(currencyResolver(api, "5", undefined, undefined)(), /can't reach any Apple Ads ad account/);
+  record(() => ({ result: { acls: [{ adAccount: { id: 7 } }, { roles: [] }, "x"] } }));
+  await assert.rejects(currencyResolver(api, "5", undefined, "7")(), {
+    message: "Couldn't read ad account 7's currency from Apple Ads. Pass --currency (e.g. USD).",
   });
 });
 
 test("body and selector take JSON values as well as JSON text", async () => {
-  const calls = record(() => ({ data: [] }));
+  const calls = record(() => ({ result: [] }));
   const selector = { conditions: [{ field: "status", operator: "EQUALS", values: ["PAUSED"] }] };
   await runAsaOperation(api, "5", { group: "campaigns", action: "find", flags: { selector }, params: {} }, { currency: usd });
   assert.deepEqual(calls[0]!.body, selector);

@@ -10,11 +10,12 @@ function asaBase(api: SuperwallApi): string {
 
 export function asaUpstreamPath(path: string): string {
   if (!path.startsWith("/")) throw new Error(`Path must start with "/", e.g. /campaigns`);
-  return path.startsWith("/api/") ? path : `/api/v5${path}`;
+  if (path.startsWith("/api/") || path === "/v1" || path.startsWith("/v1/") || path.startsWith("/v1?")) return path;
+  return `/v1${path}`;
 }
 
 interface AsaProxyOptions {
-  orgId?: string;
+  adAccountId?: string;
 }
 
 export async function asaProxy<T>(
@@ -26,7 +27,7 @@ export async function asaProxy<T>(
   options: AsaProxyOptions = {},
 ): Promise<T> {
   const path = `${asaBase(api)}/proxy/${appId}${asaUpstreamPath(asaPath)}`;
-  const request = options.orgId ? { headers: { "x-ap-context": `orgId=${options.orgId}` } } : {};
+  const request = options.adAccountId ? { headers: { "x-ap-context": `adAccountId=${options.adAccountId}` } } : {};
   switch (method.toUpperCase()) {
     case "GET":
       return api.get<T>(path, request);

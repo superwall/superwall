@@ -10,7 +10,7 @@ export const command = defineCatalog({
   summary: "The Apple Search Ads API through Superwall's proxy: no key or token handling",
   flags: {
     app: { ...app, describe: "Superwall app id or name (if several have Apple Search Ads connected)" },
-    orgId: { type: "string", value: "id", describe: "Apple Search Ads org id (X-AP-Context), if the API user spans several" },
+    adAccountId: { type: "string", value: "id", describe: "Apple Ads ad account id (X-AP-Context), if the API user reaches several" },
     campaign: { type: "string", value: "id", describe: "Campaign id" },
     adgroup: { type: "string", value: "id", describe: "Ad group id" },
     adamId: { type: "string", value: "id", describe: "App Store app id (adamId)" },

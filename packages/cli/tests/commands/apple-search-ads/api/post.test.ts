@@ -20,11 +20,11 @@ test("asa post merges -d into --body", async () => {
 });
 
 test("asa post through the parser sends -d as the body and prints Apple's answer", async () => {
-  const { api, requests } = fakeAsaApi(() => ({ data: [{ id: 1 }] }));
+  const { api, requests } = fakeAsaApi(() => ({ result: [{ id: 1 }] }));
   const result = await runLine("asa post /campaigns/find -d pagination[limit]:=5 --json", { api });
   assert.deepEqual(requests.at(-1)?.body, { pagination: { limit: 5 } });
   assert.equal(requests.at(-1)?.method, "POST");
-  assert.deepEqual(result.json, { data: [{ id: 1 }] });
+  assert.deepEqual(result.json, { result: [{ id: 1 }] });
 });
 
 test("an asa post Apple answers with nothing prints ok", async () => {

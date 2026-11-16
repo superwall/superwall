@@ -21,29 +21,29 @@ async function run(
 
 test("asa campaigns list resolves the connected app and prints rows", async () => {
   const out = await run(["campaigns"], {}, () => ({
-    data: [{ id: 1, name: "Launch", status: "ENABLED", dailyBudgetAmount: { amount: "5", currency: "USD" } }],
-    pagination: { totalResults: 1 },
+    result: [{ id: 1, name: "Launch", status: "ENABLED", dailyBudget: { value: { amount: "5", currency: "USD" } } }],
+    pagination: { totalCount: 1 },
   }));
   const proxied = out.requests.find((r) => r.path.includes("/apple-search-ads/proxy/"));
-  assert.equal(proxied?.path, "/v2/organizations/org-1/apple-search-ads/proxy/5/api/v5/campaigns");
+  assert.equal(proxied?.path, "/v2/organizations/org-1/apple-search-ads/proxy/5/v1/campaigns");
   assert.ok(out.calls.some((c) => c.method === "step" && c.value === "1 campaigns"));
   assert.ok(out.calls.some((c) => c.method === "info" && c.value === "`Launch`  ENABLED  5 USD  1"));
 });
 
 test("asa campaigns get emits Apple's envelope untouched under --json", async () => {
   const out = await run(["campaigns", "get", "9"], { json: true }, () => ({
-    data: { id: 9, name: "Launch" },
+    result: { id: 9, name: "Launch" },
     pagination: null,
     error: null,
   }));
-  assert.deepEqual(out.json, { data: { id: 9, name: "Launch" }, pagination: null, error: null });
+  assert.deepEqual(out.json, { result: { id: 9, name: "Launch" }, pagination: null, error: null });
 });
 
-test("asa campaigns create sends typed flags through the proxy with the org context", async () => {
+test("asa campaigns create sends typed flags through the proxy with the ad account context", async () => {
   const out = await run(
     ["campaigns", "create"],
-    { json: true, flags: { name: "Launch", adamId: "123", dailyBudget: "10", currency: "usd", orgId: "42" } },
-    () => ({ data: { id: 1 } }),
+    { json: true, flags: { name: "Launch", adamId: "123", dailyBudget: "10", currency: "usd", adAccountId: "42" } },
+    () => ({ result: { id: 1 } }),
   );
   const post = out.requests.find((r) => r.method === "POST");
   assert.deepEqual(post?.body, {
@@ -51,18 +51,22 @@ test("asa campaigns create sends typed flags through the proxy with the org cont
     adamId: 123,
     dailyBudgetAmount: { amount: "10", currency: "USD" },
   });
-  assert.deepEqual(post?.headers, { "x-ap-context": "orgId=42" });
+  assert.deepEqual(post?.headers, { "x-ap-context": "adAccountId=42" });
 });
 
 test("a bare path is a GET of that path", async () => {
-  const bare = await run(["/me"], { json: true }, () => ({ data: { userId: 1 } }));
-  assert.equal(bare.requests.at(-1)?.path, "/v2/organizations/org-1/apple-search-ads/proxy/5/api/v5/me");
-  assert.deepEqual(bare.json, { data: { userId: 1 } });
+  const bare = await run(["/me"], { json: true }, () => ({ result: { userId: 1 } }));
+  assert.equal(bare.requests.at(-1)?.path, "/v2/organizations/org-1/apple-search-ads/proxy/5/v1/me");
+  assert.deepEqual(bare.json, { result: { userId: 1 } });
 });
 
 test("Apple validation errors are rewritten into readable messages", async () => {
   const body = JSON.stringify({
-    error: { errors: [{ messageCode: "INVALID_VALUE", message: "must be positive", field: "dailyBudgetAmount" }] },
+    error: {
+      code: "INVALID_ARGUMENT",
+      message: "Validation errors found",
+      details: [{ code: "INVALID_VALUE", message: "must be positive", info: { field: "dailyBudgetAmount" } }],
+    },
   });
   const out = await run(["campaigns", "create"], { json: true, flags: { name: "x" } }, () => new ApiError("POST /x", 400, body));
   const error = (out.json as { error: { message: string } }).error;
@@ -105,17 +109,17 @@ test("unknown resources are rejected with the list of groups", async () => {
 });
 
 test("empty listings and non-list results render sensibly in rich mode", async () => {
-  const empty = await run(["keywords"], { flags: { campaign: "1", adgroup: "2" } }, () => ({ data: [] }));
+  const empty = await run(["keywords"], { flags: { campaign: "1", adgroup: "2" } }, () => ({ result: [] }));
   assert.ok(empty.calls.some((c) => c.method === "step" && c.value === "No keywords found"));
 
   const report = await run(["reports", "campaigns"], { flags: { start: "2025-01-01", end: "2025-01-02" } }, () => ({
-    data: { reportingDataResponse: { row: [] } },
+    result: { reportingDataResponse: { row: [] } },
   }));
   assert.ok(report.calls.some((c) => c.method === "report"));
 
   const many = await run(["geo", "search", "Paris"], {}, () => ({
-    data: [{ id: "FR|IDF|Paris", displayName: "Paris, France", entity: "Locality" }, { id: "x" }],
-    pagination: { totalResults: 40 },
+    result: [{ id: "FR|IDF|Paris", displayName: "Paris, France", entity: "Locality" }, { id: "x" }],
+    pagination: { totalCount: 40 },
   }));
   assert.ok(many.calls.some((c) => c.method === "step" && c.value === "2 of 40 geo"));
   assert.ok(many.calls.some((c) => c.method === "info" && c.value === "`Paris, France`  FR|IDF|Paris"));

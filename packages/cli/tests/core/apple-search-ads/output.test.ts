@@ -36,13 +36,13 @@ test("listOf reads nothing, one value, or many as strings", () => {
   assert.deepEqual(listOf(["a=1", 2]), ["a=1", "2"]);
 });
 
-test("a listing prints one row per item, labelled by the best name it has", async () => {
+test("a listing prints one row per item of v1's result, labelled by the best name it has", async () => {
   const result = await print(opOf("keywords", "list"), {
-    data: [
-      { text: "photo editor", status: "ACTIVE", matchType: "EXACT", bidAmount: { amount: "1.5", currency: "USD" }, id: 7 },
-      { name: "", appName: "Acme", adamId: 99, dailyBudgetAmount: { amount: 5 } },
-      { orgId: 3, defaultBidAmount: { currency: "USD" } },
-      { status: "", servingStatus: "RUNNING" },
+    result: [
+      { text: "photo editor", status: "ACTIVE", matchType: "EXACT", bid: { amount: "1.5", currency: "USD" }, id: 7 },
+      { name: "", appName: "Acme", adamId: 99, dailyBudget: { value: { amount: 5 } } },
+      { orgId: 3, bid: { currency: "USD" }, dailyBudget: "not money" },
+      { status: "", displayStatus: "RUNNING" },
       "not a row",
     ],
   });
@@ -57,21 +57,21 @@ test("a listing prints one row per item, labelled by the best name it has", asyn
 
 test("a page of a longer listing says how many there are in all", async () => {
   const result = await print(opOf("campaigns", "find"), {
-    data: [{ id: 1 }],
-    pagination: { totalResults: 12 },
+    result: [{ id: 1 }],
+    pagination: { offset: 0, pageSize: 1, totalCount: 12 },
   });
   assert.deepEqual(result.said("step"), ["1 of 12 campaigns"]);
   assert.deepEqual(result.said("info"), ["`1`  1"]);
-  const all = await print(opOf("campaigns", "list"), { data: [{ id: 1 }], pagination: { totalResults: 1 } });
+  const all = await print(opOf("campaigns", "list"), { result: [{ id: 1 }], pagination: { totalCount: 1 } });
   assert.deepEqual(all.said("step"), ["1 campaigns"]);
 });
 
 test("anything that isn't a listing is shown whole, and --json is always Apple's answer", async () => {
-  const single = await print(opOf("campaigns", "get"), { data: [{ id: 1 }] });
+  const single = await print(opOf("campaigns", "get"), { result: [{ id: 1 }] });
   assert.deepEqual(single.said("step"), []);
   assert.equal(single.said("report").length, 1);
-  const object = await print(opOf("campaigns", "list"), { data: { id: 1 } });
+  const object = await print(opOf("campaigns", "list"), { result: { id: 1 } });
   assert.equal(object.said("report").length, 1);
-  const json = await print(opOf("campaigns", "list"), { data: [{ id: 1 }] }, true);
-  assert.deepEqual(json.json, { data: [{ id: 1 }] });
+  const json = await print(opOf("campaigns", "list"), { result: [{ id: 1 }] }, true);
+  assert.deepEqual(json.json, { result: [{ id: 1 }] });
 });
