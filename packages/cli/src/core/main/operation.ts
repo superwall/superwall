@@ -198,7 +198,7 @@ async function callOperation(
 
   const body: Record<string, unknown> = {};
   const bodyFields = new Map((spec?.body ?? []).map((field) => [field.name, field]));
-  const sendsBody = method !== "GET" && method !== "DELETE";
+  const sendsBody = method !== "GET" && (method !== "DELETE" || spec?.body !== undefined);
   for (const [flag, raw] of Object.entries(flags.fields)) {
     const field = fieldName(flag);
     const queryParam = spec?.params.find((param) => param.in === "query" && param.name === field);
@@ -246,7 +246,7 @@ async function callOperation(
         if (paged) return ctx.api.list(url);
         return ctx.api.get(url);
       case "DELETE":
-        return ctx.api.del(url);
+        return ctx.api.del(url, sendsBody ? { body } : {});
       case "POST":
         return ctx.api.post(url, body);
       case "PUT":

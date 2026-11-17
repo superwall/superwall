@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { createSuperwallApi } from "@/core/api/client";
 import { clearHomes, useHome } from "../../helpers/home";
-import { restoreFetch, useFetch } from "../../helpers/fetch";
+import { restoreFetch, useFetch, type FetchLog } from "../../helpers/fetch";
 import { helpLine, runLine } from "../../helpers/command";
 
 afterEach(() => {
@@ -10,6 +10,9 @@ afterEach(() => {
   clearHomes();
   process.exitCode = 0;
 });
+
+const sent = (log: FetchLog) =>
+  log.filter(({ url }) => url.startsWith("https://api.example.com/")).map(({ url, method, body }) => ({ url, method, body }));
 
 const api = () =>
   createSuperwallApi({
@@ -19,14 +22,23 @@ const api = () =>
     createdAt: new Date().toISOString(),
   });
 
-test("delete sends a DELETE with -d as the query, and prints the API's answer", async () => {
+test("delete sends -d as the query when the endpoint has no body, and prints the API's answer", async () => {
   useHome();
-  const log = useFetch([{ match: "/v2/products/12", body: { id: "12", deleted: true } }]);
+  const log = useFetch([
+    {
+      match: "/openapi.json",
+      body: {
+        info: { version: "2.0.0" },
+        paths: { "/v2/products/{id}": { delete: { tags: ["Products V2"], summary: "Delete Product", responses: {} } } },
+      },
+    },
+    { match: "/v2/products/12", body: { id: "12", deleted: true } },
+  ]);
 
   const result = await runLine("delete /v2/products/12 -d force:=true -d reason=gone --json", { api: api() });
 
   assert.deepEqual(
-    log.map(({ url, method, body }) => ({ url, method, body })),
+    sent(log),
     [{ url: "https://api.example.com/v2/products/12?force=true&reason=gone", method: "DELETE", body: undefined }],
   );
   assert.deepEqual(result.json, { id: "12", deleted: true });

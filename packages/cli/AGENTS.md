@@ -234,7 +234,9 @@ skill.
   used.
 - **Raw API = bare verbs**: `get|post|patch|delete /v2/… [-d k=v]` for ours,
   `asc <verb> /v1/…` for App Store Connect. httpie-style params: `k=v` string,
-  `k:=v` typed JSON, `k[sub]` nesting; on get/delete `-d` becomes query params.
+  `k:=v` typed JSON, `k[sub]` nesting; on get `-d` becomes query params, and on
+  delete too unless the reference gives the endpoint a body: then the fields it
+  lists as query params stay in the query and the rest go in the JSON body.
 - **A removed command is just unknown.** There are no aliases and no
   deprecation shims: `superwall <old>` says "Unknown command". Every removal
   gets a row in the docs' upgrade table (`superwall/docs`,
