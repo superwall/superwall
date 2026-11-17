@@ -44,11 +44,14 @@ credited without a restore.
 the paywall opens, so the tap goes straight to the browser.
 
 **A failed payment comes back with its reason.** `app/plan.tsx` passes
-`onFailure` to `usePurchase()`: when a card is short on funds it calls
-`teleport.returnToApp({ data: { offer: "app_store", plan } })`. Back in the
-app, `app/goal.tsx` reads `useTeleport().failure` and `.data` while the
-teleport is `waiting`, shows a line offering the App Store, and logs the data
-from `onReturnData`. The data is plain JSON up to 16 KB; over that only the
+`onFailure` to `usePurchase()`: after any failed payment it calls
+`teleport.returnToApp({ data: { offer, plan } })`, with `offer` set to
+`"app_store"` when the card was short on funds and `"retry"` otherwise. Back
+in the app, `app/goal.tsx` reads `useTeleport().failure` and `.data` while the
+teleport is `waiting`, offers the App Store or says the payment didn't go
+through, and logs the data from `onReturnData`. The page opens Apple Pay
+where the browser has it; elsewhere, Chrome for one, it opens the card sheet,
+which reports `unknown` until the backend reports Stripe's decline reason. The data is plain JSON up to 16 KB; over that only the
 failure is left.
 
 **Back goes home.** On the web page, Back on `plan` returns to the app.

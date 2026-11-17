@@ -13,11 +13,10 @@ export default function Plan() {
   const { getProduct } = useProducts();
   const teleport = useTeleport();
   const { purchase, prefetch } = usePurchase({
-    // A card short on funds sends the shopper back to the app, with a hint
-    // for what to offer there. The app reads it as `useTeleport().data`.
     onFailure: (failure) => {
-      if (teleport.status !== "arrived" || failure.reason !== "insufficient_funds") return;
-      void teleport.returnToApp({ data: { offer: "app_store", plan: reference } });
+      if (teleport.status !== "arrived") return;
+      const offer = failure.reason === "insufficient_funds" ? "app_store" : "retry";
+      void teleport.returnToApp({ data: { offer, plan: reference } });
     },
   });
   const { t } = useTranslation();

@@ -7,8 +7,6 @@ export default function Goal() {
   const { t } = useTranslation();
   const haptics = useHaptics();
   const [goal, setGoal] = useQueryState("goal", goalParser);
-  // Back from the browser after a failed payment: why it failed, and what the
-  // page passed to `returnToApp({ data })`.
   const teleport = useTeleport({
     onReturnData: (data) => console.log("[teleport] data from the page", data),
   });
@@ -33,9 +31,7 @@ export default function Goal() {
         <p>{t("goal.subtitle")}</p>
         {failure ? (
           <p className="notice" role="status">
-            {offer === "app_store" || failure.reason === "insufficient_funds"
-              ? t("back.noFunds")
-              : t("back.failed")}
+            {offer === "app_store" ? t("back.noFunds") : t("back.failed")}
           </p>
         ) : null}
       </div>
