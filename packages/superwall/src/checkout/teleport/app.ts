@@ -121,6 +121,11 @@ const changedQuery = (
 
 let opens = 0;
 
+const adoptAttempt = (record: OpenTeleport, attempt: PurchaseAttempt | undefined) => {
+  if (record.attempt === undefined) record.attempt = attempt;
+  else joinAttempt(record.attempt, attempt);
+};
+
 export const checkoutUrlFor = (
   url: string,
   productReference: string | undefined,
@@ -882,7 +887,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       if (phase.kind === "waiting") {
         const record = phase.record;
         if (record.freeTrial === freeTrialFor(resolved, paywall.getSnapshot())) {
-          joinAttempt(record.attempt, request.attempt);
+          adoptAttempt(record, request.attempt);
           reopen(record, request.productReference);
           return record.outcome;
         }
@@ -890,7 +895,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
           starting = undefined;
           if (!isWaiting(record)) return record.outcome;
           if (moved) {
-            joinAttempt(record.attempt, request.attempt);
+            adoptAttempt(record, request.attempt);
             reopen(record, request.productReference);
             return record.outcome;
           }

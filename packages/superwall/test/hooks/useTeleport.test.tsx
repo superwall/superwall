@@ -749,6 +749,50 @@ describe("useTeleport in the app", () => {
     }
   });
 
+  it("gives a purchase() that reopens a teleport navigation started its own decline", async () => {
+    vi.useFakeTimers();
+    try {
+      stubReplies(declinedReplies({ code: "card_declined", declineCode: "insufficient_funds" }));
+      Reflect.set(window, "app", {});
+      const everywhere = vi.fn();
+      const { result } = renderBuyer(everywhere);
+      await flush();
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      await act(async () => {
+        void teleporter.begin({ query: {} });
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      const own = vi.fn();
+      const outcomes: unknown[] = [];
+      await act(async () => {
+        void result.current.buyer
+          .purchase("primary", { onFailure: own })
+          .then((r) => outcomes.push(r));
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      await act(async () => {
+        void teleporter.handleReturn("failed");
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(own).toHaveBeenCalledOnce();
+      expect(everywhere).toHaveBeenCalledOnce();
+      await act(async () => {
+        teleporter.cancel();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(outcomes).toEqual([
+        expect.objectContaining({
+          status: "failed",
+          failure: expect.objectContaining({ reason: "insufficient_funds" }),
+        }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
   it("reports a decline to two purchase() calls made before the teleport opened", async () => {
     vi.useFakeTimers();
     try {
