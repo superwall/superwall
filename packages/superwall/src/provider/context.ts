@@ -16,6 +16,7 @@ import {
 } from "@superwall/runtime";
 import { readTeleportBoot } from "../checkout/teleport/boot";
 import { documentAttributes, HOST_ATTRIBUTE_NAMES, hostAttributes } from "../document";
+import { hostOf } from "../host";
 import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
 import "./insets.css";
 
@@ -168,7 +169,8 @@ const HostAttributes = (): null => {
 
   React.useEffect(() => {
     const root = document.documentElement;
-    const attributes = hostAttributes(device);
+    const host = hostOf();
+    const attributes = hostAttributes(device, host);
     for (const name of HOST_ATTRIBUTE_NAMES) {
       const value = attributes[name];
       if (value === undefined) root.removeAttribute(name);
@@ -179,7 +181,7 @@ const HostAttributes = (): null => {
     // host page cannot reach this cross-origin document.
     document.body.classList.toggle("web2app", attributes["data-sw-platform"] === "web");
 
-    const insets = device.safeAreaInsets;
+    const insets = host === "web-teleport" ? undefined : device.safeAreaInsets;
     for (const edge of INSET_EDGES) {
       const value = insets?.[edge];
       if (typeof value === "number")

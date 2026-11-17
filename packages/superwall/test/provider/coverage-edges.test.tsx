@@ -163,6 +163,48 @@ describe("simulated safe area from the host", () => {
   });
 });
 
+const teleportFromIPhone = () =>
+  Reflect.set(window, "__SW_TELEPORT__", {
+    id: "v1:tp",
+    route: "checkout",
+    variables: {
+      deviceProperties: {
+        platform: "iOS",
+        interfaceType: "iphone",
+        deviceModel: "iPhone17,1",
+        safeAreaInsets: { top: 62, right: 0, bottom: 34, left: 0 },
+      },
+    },
+  });
+
+describe("a teleported page in the browser", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window, "__SW_TELEPORT__");
+  });
+
+  it("describes the browser, not the app's iPhone, so no in-app floors apply", async () => {
+    teleportFromIPhone();
+    renderWithProvider(() => null);
+    await flush();
+    const root = document.documentElement;
+    expect(root.getAttribute("data-sw-platform")).toBe("web");
+    expect(root.hasAttribute("data-sw-idiom")).toBe(false);
+    expect(root.hasAttribute("data-sw-cutout")).toBe(false);
+    for (const edge of ["top", "right", "bottom", "left"])
+      expect(root.style.getPropertyValue(`--sw-safe-area-floor-${edge}`)).toBe("");
+    expect(document.body.classList.contains("web2app")).toBe(true);
+  });
+
+  it("still reports the app's platform through useDevice", async () => {
+    teleportFromIPhone();
+    const { result } = renderWithProvider(() => useDevice());
+    await flush();
+    expect(result.current.platform).toBe("iOS");
+    expect(result.current.hostPlatform).toBe("ios");
+    expect(result.current.host).toBe("web-teleport");
+  });
+});
+
 describe("web2app body on a web host", () => {
   it("marks the body web2app for a web host and clears it for a native one", async () => {
     const web = renderWithProvider(() => null, { host: { device: { platform: "web" } } });
