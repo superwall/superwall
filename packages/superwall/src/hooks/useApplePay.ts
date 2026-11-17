@@ -88,17 +88,17 @@ const sameStatus = (a: ApplePayAvailability, b: ApplePayAvailability): boolean =
   (a.status !== "unavailable" ||
     (b.status === "unavailable" && a.reason === b.reason && a.error === b.error));
 
+const NOT_PREPARED: ApplePayAvailability = { status: "unavailable", reason: "not_prepared" };
+
 const productStatusReader = (applePay: ApplePay | undefined, reference: string | undefined) => {
   let last: ApplePayAvailability | undefined;
-  return (): ApplePayAvailability | undefined => {
-    if (!applePay || reference === undefined) return undefined;
+  return (): ApplePayAvailability => {
+    if (!applePay || reference === undefined) return NOT_PREPARED;
     const next = applePay.availability(reference);
     if (!last || !sameStatus(last, next)) last = next;
     return last;
   };
 };
-
-const NOT_PREPARED: ApplePayAvailability = { status: "unavailable", reason: "not_prepared" };
 
 const PREPARING: ApplePayProductStatus = { status: "preparing" };
 const UNSUPPORTED_HOST: ApplePayProductStatus = {
@@ -109,10 +109,10 @@ const UNSUPPORTED_HOST: ApplePayProductStatus = {
 
 const productStatusOf = (
   device: UseApplePayResult,
-  wallet: ApplePayAvailability | undefined,
+  wallet: ApplePayAvailability,
 ): ApplePayProductStatus => {
   if (!device.available && device.reason === "checking") return PREPARING;
-  const failure = device.available ? (wallet ?? NOT_PREPARED) : device;
+  const failure = device.available ? wallet : device;
   if (!("reason" in failure)) return failure.status === "ready" ? { status: "ready" } : PREPARING;
   const reason = failure.reason as ApplePayProductReason;
   const status: ApplePayProductStatus = {
