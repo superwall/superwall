@@ -4,7 +4,7 @@ import type { SuperwallConfig, SuperwallSession, TOutgoingMessage } from "@super
 import { TeleportScreen } from "../../../src/checkout";
 import { pageNavigation } from "../../../src/checkout/teleport/page";
 import {
-  checkApplePayCard,
+  checkApplePay,
   usePurchase,
   useSuperwallSession,
   useTeleport,
@@ -124,17 +124,23 @@ describe("preparing the teleport", () => {
   });
 });
 
-describe("checking for an Apple Pay card", () => {
+describe("checking for Apple Pay", () => {
   it("asks Apple once as the paywall opens, so the answer is there before the tap", async () => {
     stubApi();
     const canMakePaymentsWithActiveCard = vi.fn(async () => true);
-    vi.stubGlobal("ApplePaySession", { canMakePayments: () => true, canMakePaymentsWithActiveCard });
-    await mount({ products: { card: "live:price_1:14days-free" }, teleport: { route: "checkout" } });
+    vi.stubGlobal("ApplePaySession", {
+      canMakePayments: () => true,
+      canMakePaymentsWithActiveCard,
+    });
+    await mount({
+      products: { card: "live:price_1:14days-free" },
+      teleport: { route: "checkout" },
+    });
     expect(canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(1);
     expect(canMakePaymentsWithActiveCard).toHaveBeenCalledWith(
       `merchant.${window.location.hostname}.stripe`,
     );
-    expect(await checkApplePayCard()).toEqual({ status: "ready" });
+    expect(await checkApplePay()).toEqual({ available: true });
     expect(canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(1);
   });
 });

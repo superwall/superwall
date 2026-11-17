@@ -32,13 +32,12 @@ warms the session before the tap, so the wallet opens with nothing to wait
 for. `purchase(selected)` is the same call a native paywall makes.
 
 **The button says whether Apple Pay opens.** `useApplePay(selected)` is
-`{ available }` from the browser's own Apple Pay check on a web host, and
-`available: false` with reason `unsupported_host` in the iOS and Android SDKs
-and in Studio. With a product it also says whether the wallet is ready for it,
-so the line under the button reads "opens on tap" once the prefetch has
-prepared it. The line below it is `card`, Apple's answer on whether Apple Pay
-is set up with a card on this device, on every host: the check to make before
-sending a shopper to a teleport page.
+`{ available }`, Apple's answer on whether Apple Pay is set up with a card on
+this device, the same on every host, the iOS SDK included: the check to make
+before sending a shopper to a teleport page. With a product it also says
+whether the wallet is ready for it, so on the web the line under the button
+reads "opens on tap" once the prefetch has prepared it; in the app it says the
+store takes the purchase.
 
 **Trials are quoted to Apple.** A free trial or a paid intro offer is sent as a
 recurring payment with a trial line, so the sheet reads "3-Day Free Trial" and

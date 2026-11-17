@@ -30,8 +30,9 @@ export default {
   },
   wallet: {
     none: {
-      unsupported_host:
-        "Apple Pay: in dieser App nicht angeboten (false, unsupported_host).",
+      checking: "Apple Pay: Apple wird gefragt… (false, checking)",
+      no_active_card: "Apple Pay: keine Karte in Wallet (false, no_active_card).",
+      timed_out: "Apple Pay: Apple hat nicht rechtzeitig geantwortet (false, timed_out).",
       unsupported_browser:
         "Apple Pay: dieser Browser kann die Wallet nicht selbst öffnen (false, unsupported_browser).",
       insecure_context:
@@ -42,15 +43,11 @@ export default {
         "Apple Pay: in einem Frame einer anderen Seite blockiert (false, cross_origin_frame).",
       check_failed: "Apple Pay: die Prüfung des Browsers ist fehlgeschlagen (false, check_failed).",
     },
+    inApp: "Apple Pay: verfügbar (true); in der App übernimmt der Store den Kauf.",
     preparing: "Apple Pay: verfügbar (true), Wallet wird vorbereitet…",
     ready: "Apple Pay: verfügbar (true), die Wallet öffnet sich beim Tippen.",
     unavailable:
       "Apple Pay: verfügbar (true), aber die Wallet ist nicht bereit ({reason}), daher öffnet sich das Kartenformular.",
-  },
-  card: {
-    checking: "Apple-Pay-Karte: Apple wird gefragt…",
-    ready: "Apple-Pay-Karte: eingerichtet (ready).",
-    unavailable: "Apple-Pay-Karte: nicht eingerichtet ({reason}).",
   },
   restore: {
     restored: "Käufe wiederhergestellt.",

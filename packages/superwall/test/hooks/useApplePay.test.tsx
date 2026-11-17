@@ -37,7 +37,7 @@ vi.mock("../../src/host", async (importOriginal) => ({
   hostOf: () => host.current,
 }));
 
-const { checkApplePayCard, useApplePay, usePurchase, useSuperwallSession } =
+const { checkApplePay, useApplePay, usePurchase, useSuperwallSession } =
   await import("../../src/hooks");
 const { applePayFor, sessionsFor } = await import("../../src/checkout/flow");
 const { flush, renderWithProvider, testConfig } = await import("../helpers");
@@ -53,23 +53,13 @@ const quote: ElementsCheckoutSession = {
   subscriptionDetails: { amount: 1999, currency: "usd", interval: "month", intervalCount: 1 },
 };
 
-const noCard = (reason: string, error?: { name: string; message: string }) => ({
-  status: "unavailable",
-  reason,
-  message: expect.any(String),
-  ...(error ? { error } : {}),
-});
-
-const noCardCheck = noCard("unsupported_browser");
-
-const on = { available: true, card: noCardCheck };
+const on = { available: true };
 
 const off = (reason: string, error?: { name: string; message: string }) => ({
   available: false,
   reason,
   message: expect.any(String),
   ...(error ? { error } : {}),
-  card: expect.objectContaining({ status: "unavailable" }),
 });
 
 const notReady = (reason: string, error?: { name: string; message: string }) => ({
@@ -79,8 +69,28 @@ const notReady = (reason: string, error?: { name: string; message: string }) => 
   ...(error ? { error } : {}),
 });
 
-const withApplePaySession = (canMakePayments: () => unknown) =>
-  vi.stubGlobal("ApplePaySession", { canMakePayments });
+const merchant = `merchant.${window.location.hostname}.stripe`;
+
+const withApplePaySession = (
+  canMakePayments: () => unknown,
+  activeCard: (merchantIdentifier: string) => unknown = async () => true,
+) => {
+  const canMakePaymentsWithActiveCard = vi.fn(activeCard);
+  const global = { canMakePayments: vi.fn(canMakePayments), canMakePaymentsWithActiveCard };
+  vi.stubGlobal("ApplePaySession", global);
+  return global;
+};
+
+const withActiveCard = (answer: (merchantIdentifier: string) => unknown) =>
+  withApplePaySession(() => true, answer);
+
+const deferred = () => {
+  const settle: { resolve?: (value: unknown) => void } = {};
+  const promise = new Promise<unknown>((resolve) => {
+    settle.resolve = resolve;
+  });
+  return { promise, resolve: (value: unknown) => settle.resolve?.(value) };
+};
 
 const render = async <T,>(hook: () => T, checkout?: "sheet" | "applePay") => {
   const rendered = renderWithProvider(() => ({ session: useSuperwallSession(), value: hook() }), {
@@ -102,39 +112,51 @@ afterEach(() => {
 });
 
 describe("useApplePay on each host", () => {
-  it.each<SuperwallHost>(["web-sdk", "web-paywall", "web-teleport", "browser"])(
-    "answers on %s",
+  it.each<SuperwallHost>([
+    "ios-sdk",
+    "android-sdk",
+    "studio",
+    "web-sdk",
+    "web-paywall",
+    "web-teleport",
+    "browser",
+  ])("asks Apple the same way on %s", async (name) => {
+    host.current = name;
+    const global = withApplePaySession(() => true);
+    const { result } = await render(() => useApplePay());
+    expect(result.current.value).toEqual(on);
+    expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledWith(merchant);
+    expect(global.canMakePaymentsWithActiveCard.mock.contexts[0]).toBe(global);
+  });
+
+  it.each<SuperwallHost>(["ios-sdk", "android-sdk", "studio"])(
+    "never opens the wallet for a product on %s, even when Apple Pay is available",
     async (name) => {
       host.current = name;
       withApplePaySession(() => true);
-      const { result } = await render(() => useApplePay());
-      expect(result.current.value).toEqual(on);
+      const { result } = await render(() => useApplePay("primary"));
+      expect(result.current.value).toEqual({
+        ...on,
+        product: {
+          status: "unavailable",
+          reason: "unsupported_host",
+          message:
+            "Inside the iOS or Android SDK and in Studio a purchase never opens the Apple Pay wallet.",
+        },
+      });
     },
   );
 
-  it.each<SuperwallHost>(["ios-sdk", "android-sdk", "studio"])(
-    "is an unsupported host on %s, even with a product and a browser that could pay",
-    async (name) => {
-      host.current = name;
-      const canMakePayments = vi.fn(() => true);
-      withApplePaySession(canMakePayments);
-      const { result } = await render(() => ({
-        device: useApplePay(),
-        product: useApplePay("primary"),
-      }));
-      const unsupported = {
-        available: false,
-        reason: "unsupported_host",
-        message: "Inside the iOS or Android SDK and in Studio a purchase never opens Apple Pay.",
-        card: noCardCheck,
-      };
-      expect(result.current.value).toEqual({
-        device: unsupported,
-        product: { ...unsupported, product: notReady("unsupported_host") },
-      });
-      expect(canMakePayments).not.toHaveBeenCalled();
-    },
-  );
+  it("has no card inside the iOS SDK when Apple says Wallet holds none", async () => {
+    host.current = "ios-sdk";
+    withActiveCard(async () => false);
+    const { result } = await render(() => useApplePay());
+    expect(result.current.value).toEqual({
+      available: false,
+      reason: "no_active_card",
+      message: "Apple Pay has no card to pay with here: Wallet holds none.",
+    });
+  });
 });
 
 describe("useApplePay's device answer", () => {
@@ -143,8 +165,7 @@ describe("useApplePay's device answer", () => {
     expect(result.current.value).toEqual({
       available: false,
       reason: "unsupported_browser",
-      message: "This browser has no Apple Pay JS, so it cannot open the wallet itself.",
-      card: noCardCheck,
+      message: "This page has no Apple Pay JS, so it cannot check for Apple Pay.",
     });
   });
 
@@ -366,105 +387,145 @@ describe("useApplePay with a per-call Apple Pay purchase", () => {
   });
 });
 
-const merchant = `merchant.${window.location.hostname}.stripe`;
-
-const withActiveCard = (answer: (merchantIdentifier: string) => unknown) => {
-  const canMakePaymentsWithActiveCard = vi.fn(answer);
-  const global = { canMakePayments: () => true, canMakePaymentsWithActiveCard };
-  vi.stubGlobal("ApplePaySession", global);
-  return { global, canMakePaymentsWithActiveCard };
-};
-
-const deferred = () => {
-  const settle: { resolve?: (value: unknown) => void } = {};
-  const promise = new Promise<unknown>((resolve) => {
-    settle.resolve = resolve;
+const renderHook = () =>
+  renderWithProvider(() => useApplePay(), {
+    host: { products, device: { platform: "web", publicApiKey: "pk_test" } },
   });
-  return { promise, resolve: (value: unknown) => settle.resolve?.(value) };
-};
 
-describe("checkApplePayCard", () => {
-  it("is ready when Apple says the page's own Stripe merchant has an active card", async () => {
-    const { global, canMakePaymentsWithActiveCard } = withActiveCard(async () => true);
-    expect(await checkApplePayCard()).toEqual({ status: "ready" });
-    expect(canMakePaymentsWithActiveCard).toHaveBeenCalledWith(merchant);
-    expect(canMakePaymentsWithActiveCard.mock.contexts[0]).toBe(global);
+describe("useApplePay's card answer", () => {
+  it("is checking on the first render, then available once Apple says there is a card", async () => {
+    withActiveCard(async () => true);
+    const { result } = renderHook();
+    expect(result.current).toEqual(off("checking"));
+    await flush();
+    expect(result.current).toEqual(on);
   });
 
   it("has no active card when Apple answers false, or anything but true", async () => {
     withActiveCard(async () => false);
-    expect(await checkApplePayCard()).toEqual(noCard("no_active_card"));
+    expect(await checkApplePay()).toEqual(off("no_active_card"));
     withActiveCard(() => "yes");
-    expect(await checkApplePayCard()).toEqual(noCard("no_active_card"));
+    expect(await checkApplePay()).toEqual(off("no_active_card"));
   });
 
-  it("is an unsupported browser with no ApplePaySession, as on Android or in Chrome", async () => {
-    expect(await checkApplePayCard()).toEqual(noCard("unsupported_browser"));
+  it("does not ask for a card when the device cannot pay at all", async () => {
+    const global = withApplePaySession(() => false);
+    const { result } = renderHook();
+    expect(result.current).toEqual(off("device_unsupported"));
+    await flush();
+    expect(global.canMakePaymentsWithActiveCard).not.toHaveBeenCalled();
   });
 
   it("is an unsupported browser when ApplePaySession has no card check", async () => {
-    withApplePaySession(() => true);
-    expect(await checkApplePayCard()).toEqual(noCard("unsupported_browser"));
+    vi.stubGlobal("ApplePaySession", { canMakePayments: () => true });
+    expect(await checkApplePay()).toEqual(off("unsupported_browser"));
   });
 
-  it("is an insecure context on a page not served over HTTPS, before asking Apple", async () => {
-    vi.stubGlobal("isSecureContext", false);
-    const { canMakePaymentsWithActiveCard } = withActiveCard(async () => true);
-    expect(await checkApplePayCard()).toEqual(noCard("insecure_context"));
-    expect(canMakePaymentsWithActiveCard).not.toHaveBeenCalled();
-  });
-
-  it("names a failed check, with the error, whether Apple throws or rejects", async () => {
+  it("names a failed card check, with the error, whether Apple throws or rejects", async () => {
     withActiveCard(() => {
       throw new Error("boom");
     });
-    expect(await checkApplePayCard()).toEqual(
-      noCard("check_failed", { name: "Error", message: "boom" }),
-    );
+    expect(await checkApplePay()).toEqual(off("check_failed", { name: "Error", message: "boom" }));
     withActiveCard(() => Promise.reject(new Error("later")));
-    expect(await checkApplePayCard()).toEqual(
-      noCard("check_failed", { name: "Error", message: "later" }),
-    );
+    expect(await checkApplePay()).toEqual(off("check_failed", { name: "Error", message: "later" }));
   });
 
-  it("names Safari's insecure-document refusal and a cross-origin frame", async () => {
+  it("names Safari's insecure-document refusal and a cross-origin frame on the card check", async () => {
     withActiveCard(() => {
       throw new Error("Trying to start an Apple Pay session from an insecure document.");
     });
-    expect(await checkApplePayCard()).toMatchObject({ reason: "insecure_context" });
+    expect(await checkApplePay()).toMatchObject({ reason: "insecure_context" });
     vi.stubGlobal("top", { location: { origin: "https://merchant.example" } });
     withActiveCard(() => {
       throw new Error("different security origin");
     });
-    expect(await checkApplePayCard()).toMatchObject({ reason: "cross_origin_frame" });
+    expect(await checkApplePay()).toMatchObject({ reason: "cross_origin_frame" });
   });
 
-  it("asks Apple once per page and reuses the answer, even for calls made at the same time", async () => {
-    const { canMakePaymentsWithActiveCard } = withActiveCard(async () => true);
-    const [first, second] = await Promise.all([checkApplePayCard(), checkApplePayCard()]);
-    expect(await checkApplePayCard()).toEqual({ status: "ready" });
-    expect([first, second]).toEqual([{ status: "ready" }, { status: "ready" }]);
-    expect(canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
+  it("starts with the answer the page already has, without asking again", async () => {
+    const global = withActiveCard(async () => false);
+    await checkApplePay();
+    const { result } = renderHook();
+    expect(result.current).toEqual(off("no_active_card"));
+    expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
   });
 
-  it("asks again after a check that threw", async () => {
+  it("asks Apple once for every hook and call on the page", async () => {
+    const global = withActiveCard(async () => true);
+    const { result } = renderWithProvider(() => [useApplePay(), useApplePay("primary")], {
+      host: { products, device: { platform: "web", publicApiKey: "pk_test" } },
+    });
+    const [first, second] = await Promise.all([checkApplePay(), checkApplePay()]);
+    await flush();
+    expect([first, second]).toEqual([on, on]);
+    expect(result.current.map(({ available }) => available)).toEqual([true, true]);
+    expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
+  });
+
+  it("is preparing for a product while Apple has not answered", async () => {
+    withActiveCard(() => new Promise(() => {}));
+    const { result } = renderWithProvider(() => useApplePay("primary"), {
+      host: { products, device: { platform: "web", publicApiKey: "pk_test" } },
+    });
+    expect(result.current).toEqual({ ...off("checking"), product: { status: "preparing" } });
+  });
+
+  it("asks Apple again on the next mount and call after a check that threw", async () => {
     let calls = 0;
-    const { canMakePaymentsWithActiveCard } = withActiveCard(async () => {
+    const global = withActiveCard(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("flaky");
+      return calls !== 2;
+    });
+    const first = renderHook();
+    await flush();
+    expect(first.result.current).toEqual(off("check_failed", { name: "Error", message: "flaky" }));
+    first.unmount();
+    const second = renderHook();
+    await flush();
+    expect(second.result.current).toEqual(off("no_active_card"));
+    expect(await checkApplePay()).toEqual(off("no_active_card"));
+    expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks the device again after a device check that threw", async () => {
+    let calls = 0;
+    withApplePaySession(() => {
       calls += 1;
       if (calls === 1) throw new Error("flaky");
       return true;
     });
-    expect(await checkApplePayCard()).toMatchObject({ reason: "check_failed" });
-    expect(await checkApplePayCard()).toEqual({ status: "ready" });
-    expect(canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(2);
+    expect(await checkApplePay()).toEqual(off("check_failed", { name: "Error", message: "flaky" }));
+    expect(await checkApplePay()).toEqual(on);
   });
 
-  it("times out when Apple hangs, and takes Apple's late answer on the next call", async () => {
+  it("times out after 1.5 seconds, then re-renders with Apple's late answer and keeps it", async () => {
     vi.useFakeTimers();
     try {
       const late = deferred();
-      const { canMakePaymentsWithActiveCard } = withActiveCard(() => late.promise);
-      const first = checkApplePayCard();
+      const global = withActiveCard(() => late.promise);
+      const { result } = renderHook();
+      await act(() => vi.advanceTimersByTimeAsync(1499));
+      expect(result.current).toEqual(off("checking"));
+      await act(() => vi.advanceTimersByTimeAsync(1));
+      expect(result.current).toEqual(off("timed_out"));
+      await act(async () => {
+        late.resolve(true);
+        await late.promise;
+      });
+      expect(result.current).toEqual(on);
+      expect(await checkApplePay()).toEqual(on);
+      expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resolves timed_out for a call made while Apple still has not answered, without asking twice", async () => {
+    vi.useFakeTimers();
+    try {
+      const global = withActiveCard(() => new Promise(() => {}));
+      const first = checkApplePay();
       await vi.advanceTimersByTimeAsync(1499);
       let settled = false;
       void first.then(() => {
@@ -473,124 +534,11 @@ describe("checkApplePayCard", () => {
       await Promise.resolve();
       expect(settled).toBe(false);
       await vi.advanceTimersByTimeAsync(1);
-      expect(await first).toEqual(noCard("timed_out"));
-      late.resolve(true);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(await checkApplePayCard()).toEqual({ status: "ready" });
-      expect(canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
+      expect(await first).toEqual(off("timed_out"));
+      expect(await checkApplePay()).toEqual(off("timed_out"));
+      expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
     } finally {
       vi.useRealTimers();
     }
-  });
-});
-
-const renderCard = () =>
-  renderWithProvider(() => useApplePay(), {
-    host: { products, device: { platform: "web", publicApiKey: "pk_test" } },
-  });
-
-describe("useApplePay().card", () => {
-  it.each<SuperwallHost>(["ios-sdk", "android-sdk", "studio", "web-teleport", "browser"])(
-    "is checking, then ready, on %s",
-    async (name) => {
-      host.current = name;
-      withActiveCard(async () => true);
-      const { result } = renderCard();
-      expect(result.current.card).toEqual({ status: "checking" });
-      await flush();
-      expect(result.current.card).toEqual({ status: "ready" });
-    },
-  );
-
-  it("still answers inside the iOS SDK, where the browser cannot open the wallet", async () => {
-    host.current = "ios-sdk";
-    withActiveCard(async () => false);
-    const { result } = renderCard();
-    await flush();
-    expect(result.current).toEqual({
-      ...off("unsupported_host"),
-      card: noCard("no_active_card"),
-    });
-  });
-
-  it("knows on the first render when there is no Apple Pay at all", () => {
-    const { result } = renderCard();
-    expect(result.current.card).toEqual(noCardCheck);
-  });
-
-  it("starts with the answer the page already has", async () => {
-    const { canMakePaymentsWithActiveCard } = withActiveCard(async () => false);
-    await checkApplePayCard();
-    const { result } = renderCard();
-    expect(result.current.card).toEqual(noCard("no_active_card"));
-    expect(canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
-  });
-
-  it("asks Apple once for every hook on the page", async () => {
-    const { canMakePaymentsWithActiveCard } = withActiveCard(async () => true);
-    const { result } = renderWithProvider(() => [useApplePay(), useApplePay("primary")], {
-      host: { products, device: { platform: "web", publicApiKey: "pk_test" } },
-    });
-    await flush();
-    expect(result.current.map((applePay) => applePay.card)).toEqual([
-      { status: "ready" },
-      { status: "ready" },
-    ]);
-    expect(canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
-  });
-
-  it("times out after 1.5 seconds, then re-renders with Apple's late answer", async () => {
-    vi.useFakeTimers();
-    try {
-      const late = deferred();
-      const { canMakePaymentsWithActiveCard } = withActiveCard(() => late.promise);
-      const { result } = renderCard();
-      await act(() => vi.advanceTimersByTimeAsync(1499));
-      expect(result.current.card).toEqual({ status: "checking" });
-      await act(() => vi.advanceTimersByTimeAsync(1));
-      expect(result.current.card).toEqual(noCard("timed_out"));
-      await act(async () => {
-        late.resolve(true);
-        await late.promise;
-      });
-      expect(result.current.card).toEqual({ status: "ready" });
-      expect(await checkApplePayCard()).toEqual({ status: "ready" });
-      expect(canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("keeps timed_out for a call made while Apple still has not answered", async () => {
-    vi.useFakeTimers();
-    try {
-      const { canMakePaymentsWithActiveCard } = withActiveCard(() => new Promise(() => {}));
-      const first = checkApplePayCard();
-      await vi.advanceTimersByTimeAsync(1500);
-      expect(await first).toEqual(noCard("timed_out"));
-      expect(await checkApplePayCard()).toEqual(noCard("timed_out"));
-      expect(canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("asks Apple again on the next mount after a check that threw", async () => {
-    let calls = 0;
-    const { canMakePaymentsWithActiveCard } = withActiveCard(async () => {
-      calls += 1;
-      if (calls === 1) throw new Error("flaky");
-      return true;
-    });
-    const first = renderCard();
-    await flush();
-    expect(first.result.current.card).toEqual(
-      noCard("check_failed", { name: "Error", message: "flaky" }),
-    );
-    first.unmount();
-    const second = renderCard();
-    await flush();
-    expect(second.result.current.card).toEqual({ status: "ready" });
-    expect(canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(2);
   });
 });
