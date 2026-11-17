@@ -29,6 +29,7 @@ export { markTeleportScriptStart } from "./teleport/timing";
 export { checkoutEvents } from "./events";
 export type { CheckoutEventPayload, CheckoutEventType } from "./events";
 export type { ApplePayOutcome } from "./applePay";
+export type { CheckoutFailure, CheckoutFailureReason } from "./failure";
 export type {
   AppliedDiscount,
   ApplePaySession,

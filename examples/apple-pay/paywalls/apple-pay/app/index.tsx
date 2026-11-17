@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useActions,
   useApplePay,
@@ -47,7 +47,11 @@ const describeDiscount = (
 export default function Index() {
   const { restore } = useActions();
   const { getProduct } = useProducts();
-  const { purchase } = usePurchase();
+  const { purchase, failure } = usePurchase({
+    onFailure: (reported) => console.info("onFailure", reported),
+    onComplete: () => console.info("onComplete"),
+  });
+  useEffect(() => console.info("usePurchase().failure", failure ?? null), [failure]);
   const haptics = useHaptics();
 
   const [selected, setSelected] = useState<PlanReference>("trial");

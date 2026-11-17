@@ -20,7 +20,13 @@ export default function Plan() {
   const router = useRouter();
   const { getProduct } = useProducts();
   const teleport = useTeleport();
-  const { purchase, prefetch } = usePurchase();
+  const { purchase, prefetch } = usePurchase({
+    onFailure: (failure) => {
+      if (teleport.status !== "arrived") return;
+      const offer = failure.reason === "insufficient_funds" ? "app_store" : "retry";
+      void teleport.returnToApp({ data: { offer, plan: reference } });
+    },
+  });
   const { t } = useTranslation();
   const haptics = useHaptics();
   const { eligible } = useIntroductoryOffer();

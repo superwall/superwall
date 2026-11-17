@@ -1,8 +1,10 @@
-import { field, readCheckoutStatus } from "../api/decode";
+import { field, readCheckoutFailure, readCheckoutStatus } from "../api/decode";
+import type { CheckoutFailure } from "../failure";
 import type { CheckoutStatus } from "../types";
 import { fetchWithRetry } from "../api/fetch";
 import { subscriptionsApiUrl } from "../api/url";
 import { SESSION_QUERY_FIELD, sessionQueryOf, TAPPED_PRODUCT_QUERY_KEY } from "./boot";
+import type { PageReturn, TeleportData, TeleportDataValue } from "./teleporter";
 
 export type CreatedTeleport = { teleportId: string; url: string };
 
@@ -10,6 +12,7 @@ export type ServerTeleport = {
   status: "pending" | "claimed" | "completed" | "expired";
   checkoutContextId?: string;
   checkoutProductIdentifier?: string;
+  failure?: CheckoutFailure;
 };
 
 export type NewTeleport = {
@@ -85,17 +88,19 @@ export const readTeleportStatus = async (
   const status = STATUSES.find((candidate) => candidate === field(body, "status")) ?? "pending";
   const checkoutContextId = text(body, "checkoutContextId");
   const checkoutProductIdentifier = text(body, "checkoutProductIdentifier");
+  const failure = readCheckoutFailure(field(body, "failure"));
   return {
     status,
     ...(checkoutContextId === undefined ? {} : { checkoutContextId }),
     ...(checkoutProductIdentifier === undefined ? {} : { checkoutProductIdentifier }),
+    ...(failure === undefined ? {} : { failure }),
   };
 };
 
 export const readCheckoutOf = async (
   publicApiKey: string,
   checkoutContextId: string,
-): Promise<CheckoutStatus["status"]> => {
+): Promise<CheckoutStatus> => {
   const response = await fetchWithRetry(
     subscriptionsApiUrl("checkout/status"),
     {
@@ -105,7 +110,7 @@ export const readCheckoutOf = async (
     },
     { retries: 0 },
   );
-  return readCheckoutStatus(await response.json()).status;
+  return readCheckoutStatus(await response.json());
 };
 
 export const readTeleportQuery = async (
@@ -118,6 +123,101 @@ export const readTeleportQuery = async (
     body: JSON.stringify({ teleportId }),
   });
   return sessionQueryOf(field(await response.json(), "session"));
+};
+
+export const RETURN_SESSION_FIELD = "returned";
+export const RETURN_DATA_MAX_BYTES = 16 * 1024;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.getPrototypeOf(value) === Object.prototype;
+
+const readDataValue = (value: unknown): TeleportDataValue | undefined => {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (Array.isArray(value)) {
+    const items = value.map(readDataValue);
+    return items.every((item) => item !== undefined) ? items : undefined;
+  }
+  return isPlainObject(value) ? readData(value) : undefined;
+};
+
+const readData = (value: Record<string, unknown>): TeleportData | undefined => {
+  const data: TeleportData = {};
+  for (const [key, item] of Object.entries(value)) {
+    const read = readDataValue(item);
+    if (read === undefined) return undefined;
+    Object.defineProperty(data, key, {
+      value: read,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+  return data;
+};
+
+export const readPageReturn = (session: unknown): PageReturn | undefined => {
+  const returned = field(session, RETURN_SESSION_FIELD);
+  if (!isPlainObject(returned)) return undefined;
+  const failure = readCheckoutFailure(returned.failure);
+  const data = isPlainObject(returned.data) ? readData(returned.data) : undefined;
+  const at = typeof returned.at === "number" ? returned.at : undefined;
+  return {
+    ...(failure === undefined ? {} : { failure }),
+    ...(data === undefined ? {} : { data }),
+    ...(at === undefined ? {} : { at }),
+  };
+};
+
+export const readTeleportReturn = async (
+  publicApiKey: string,
+  teleportId: string,
+): Promise<PageReturn | undefined> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
+  let body: unknown;
+  try {
+    const response = await fetchWithRetry(
+      subscriptionsApiUrl("checkout/teleport/session/read"),
+      {
+        method: "POST",
+        headers: headers(publicApiKey),
+        body: JSON.stringify({ teleportId }),
+        signal: controller.signal,
+      },
+      { retries: 0 },
+    );
+    body = await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+  return readPageReturn(field(body, "session"));
+};
+
+export const saveTeleportReturn = async (
+  publicApiKey: string,
+  teleportId: string,
+  query: Record<string, string>,
+  returned: PageReturn,
+): Promise<boolean> => {
+  const response = await fetch(subscriptionsApiUrl("checkout/teleport/session"), {
+    method: "POST",
+    headers: headers(publicApiKey),
+    keepalive: true,
+    body: JSON.stringify({
+      teleportId,
+      session: { [SESSION_QUERY_FIELD]: query, [RETURN_SESSION_FIELD]: returned },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Saving the teleport return failed: ${response.status} ${await response.text()}`,
+    );
+  }
+  return field(await response.json(), "saved") === true;
 };
 
 export const saveTeleportQuery = async (

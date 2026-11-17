@@ -29,6 +29,25 @@ enabled, `abandoned` is nothing. The button never shows a loading state — the
 store sheet is the feedback. `restore()` is awaited the same way; its `failed`
 covers both "nothing to restore" and a store error, so the copy says both.
 
+**A web checkout failure says why.** When a Stripe product's payment fails,
+`result.failure.reason` is superwall's own reason — `card_declined`,
+`insufficient_funds`, `expired_card`, … or `unknown` — whichever payment method
+took it, so the notice can say what to do. `onFailure` hears every such
+failure on the paywall, whoever started the purchase:
+
+```tsx
+const { purchase } = usePurchase({
+  onFailure: (failure) => log(failure.reason),
+});
+```
+
+A store product bought through the SDK reports no reason, so the notice falls
+back to the generic copy. `annual` here is a store product: to see a reason,
+make it a Stripe test price (`test:price_…`, as `examples/apple-pay` sells).
+Stripe's sheet stays open after a decline so the shopper can try another
+card: `onFailure` fires at the decline, and `purchase()` resolves only once
+the sheet is paid (`completed`) or closed (`failed`, with that failure).
+
 **Events fire for anything the SDK reports**, whoever started it:
 
 ```tsx

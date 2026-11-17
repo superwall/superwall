@@ -3,7 +3,11 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export const fetchWithRetry = async (
   url: string,
   init: RequestInit,
-  { retries = 2, backoffMs = 300 }: { retries?: number; backoffMs?: number } = {},
+  {
+    retries = 2,
+    backoffMs = 300,
+    returnClientErrors = false,
+  }: { retries?: number; backoffMs?: number; returnClientErrors?: boolean } = {},
 ): Promise<Response> => {
   let lastError: unknown;
 
@@ -11,6 +15,7 @@ export const fetchWithRetry = async (
     try {
       const response = await fetch(url, init);
       if (response.ok) return response;
+      if (returnClientErrors && response.status >= 400 && response.status < 500) return response;
 
       const body = await response.text().catch(() => "");
       if (response.status >= 400 && response.status < 500) {

@@ -72,7 +72,7 @@ export type SuperwallTransaction<TProduct extends SuperwallProduct = SuperwallPr
 export type SuperwallPurchaseFailure<out TProduct extends SuperwallProduct = SuperwallProduct> = {
   status: "failed";
   product: TProduct;
-  reason: "sdk" | "superseded";
+  reason: "unknown" | "superseded";
 };
 
 export type SuperwallRestoreState = {

@@ -299,7 +299,7 @@ describe("openEmbeddedSheet", () => {
     vi.useFakeTimers();
     const outcome = openEmbeddedSheet(session);
     vi.advanceTimersByTime(20_000);
-    await expect(outcome).resolves.toEqual({ status: "failed" });
+    await expect(outcome).resolves.toMatchObject({ status: "failed" });
   });
 });
 

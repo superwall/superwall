@@ -93,7 +93,7 @@ describe("SheetProvider", () => {
       first = openEmbeddedSheet(sessionFor("a"));
     });
     act(() => vi.advanceTimersByTime(10_000));
-    await expect(first).resolves.toEqual({ status: "failed" });
+    await expect(first).resolves.toMatchObject({ status: "failed" });
     expect(opened).not.toHaveBeenCalled();
     expect([...result.current.state.pooledSessions.keys()]).toEqual(["a"]);
 

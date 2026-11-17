@@ -1,8 +1,12 @@
 import * as React from "react";
 import type { SuperwallProduct } from "@superwall/runtime";
+import type { CheckoutFailure } from "../checkout/failure";
+import { lastWebFailure } from "../checkout/flow";
 import { isStripeProductIdentifier } from "../checkout/products";
 import { teleportFor } from "../checkout/teleport/flow";
-import { flowQuery } from "../checkout/teleport/teleporter";
+import { flowQuery, type TeleportData } from "../checkout/teleport/teleporter";
+
+export type { TeleportData, TeleportDataValue } from "../checkout/teleport/teleporter";
 import { QueryStoreContext } from "../navigation/query";
 import type { RouteName } from "../navigation/index";
 import { useSuperwallSession } from "../provider/context";
@@ -36,6 +40,17 @@ export type TeleportWaiting = {
   productReference?: StripeProductReference;
   /** The store product `teleport.fallbacks` offers instead, once the store has priced it. Buy it with `purchase()`. */
   fallbackReference?: ProductReference;
+  /**
+   * Why the last payment in the browser failed: what the page left with
+   * `returnToApp()` once the shopper is back, or what the backend reports
+   * while they are still in the browser. Absent while no payment failed.
+   */
+  failure?: CheckoutFailure;
+  /**
+   * What the page passed to `returnToApp({ data })`, once the shopper is back
+   * and the app has read it. Absent when the page passed none.
+   */
+  data?: TeleportData;
 };
 
 /** On the web: the paywall opened in the browser from a teleport, not paid yet. */
@@ -83,10 +98,26 @@ export type TeleportActions = {
   cancel: () => void;
   /**
    * On the web: returns to the app, as going back from the first web route
-   * does, and resolves how that went. While iOS asks "Open in App?", the page
+   * does, and resolves how that went. After a failed payment the return
+   * link carries `reason=failed`, so it can be called from
+   * `usePurchase({ onFailure })`. While iOS asks "Open in App?", the page
    * dims with an arrow at Open. In the app it resolves `"opened"` at once.
+   *
+   * The page leaves the app why the payment failed, and `data` when given:
+   * plain JSON, at most 16 KB. The app reads both once the shopper is back,
+   * as `failure` and `data` while `waiting`. Nothing is left once the
+   * purchase is paid, since the teleport has closed by then.
    */
-  returnToApp: () => Promise<TeleportReturnResult>;
+  returnToApp: (options?: TeleportReturnOptions) => Promise<TeleportReturnResult>;
+};
+
+/** What `returnToApp()` hands the app, on the web. */
+export type TeleportReturnOptions = {
+  /**
+   * Plain JSON for the app, read there as `useTeleport().data`. At most 16 KB;
+   * over that the page logs a warning and leaves the app only the failure.
+   */
+  data?: TeleportData;
 };
 
 /** What a teleport is doing right now, beside its status. */
@@ -112,6 +143,8 @@ export type UseTeleportOptions = {
   onCancel?: () => void;
   /** In the app: the web purchase was paid and is being redeemed. */
   onComplete?: () => void;
+  /** In the app: the shopper is back and the app read the `data` the page passed to `returnToApp()`. */
+  onReturnData?: (data: TeleportData) => void;
 };
 
 type Products = Readonly<Record<string, SuperwallProduct>>;
@@ -147,6 +180,8 @@ const statusOf = (
     returned: internal.returned,
     ...product,
     ...(isProductReference(products, fallback) ? { fallbackReference: fallback } : {}),
+    ...(internal.failure === undefined ? {} : { failure: internal.failure }),
+    ...(internal.data === undefined ? {} : { data: internal.data }),
   };
 };
 
@@ -178,6 +213,7 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
       teleporter.on("return", () => callbacks.current.onReturn?.()),
       teleporter.on("cancel", () => callbacks.current.onCancel?.()),
       teleporter.on("complete", () => callbacks.current.onComplete?.()),
+      teleporter.on("data", (data) => callbacks.current.onReturnData?.(data)),
     ];
     return () => {
       for (const unsubscribe of unsubscribers) unsubscribe();
@@ -197,8 +233,18 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
       cancel: () => {
         if (teleporter.kind === "app") teleporter.cancel();
       },
-      returnToApp: async (): Promise<TeleportReturnResult> => {
-        if (teleporter.kind === "page") return teleporter.returnToApp("closed");
+      returnToApp: async (returnOptions?: TeleportReturnOptions): Promise<TeleportReturnResult> => {
+        if (teleporter.kind === "page") {
+          const failure = lastWebFailure(session)?.failure;
+          const data = returnOptions?.data;
+          return teleporter.returnToApp(failure ? "failed" : "closed", {
+            query: flowQuery(store),
+            returned: {
+              ...(failure === undefined ? {} : { failure }),
+              ...(data === undefined ? {} : { data }),
+            },
+          });
+        }
         teleporter.returnToApp();
         return "opened";
       },

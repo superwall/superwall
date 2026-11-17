@@ -245,7 +245,7 @@ const createSession = (options: SuperwallSessionOptions): SuperwallSession => {
       case "transaction_fail":
       case "transaction_timeout": {
         const pending = purchases.find(message);
-        const failure = pending && purchases.fail(pending.product.reference, "sdk");
+        const failure = pending && purchases.fail(pending.product.reference, "unknown");
         if (failure) recordFailure(failure);
         break;
       }

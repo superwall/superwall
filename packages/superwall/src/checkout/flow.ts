@@ -9,7 +9,22 @@ import { asString, field } from "./api/decode";
 import { checkoutDiagnostics } from "./diagnostics";
 import { fetchWithRetry } from "./api/fetch";
 import { subscriptionsApiUrl } from "./api/url";
-import { checkoutEvents } from "./events";
+import {
+  checkoutEvents,
+  clearWebFailure,
+  purchaseEventsFor,
+  reportWebFailure,
+  type PurchaseAttempt,
+} from "./events";
+
+export {
+  clearWebFailure,
+  dismissStoreFailure,
+  isStoreFailureDismissed,
+  lastWebFailure,
+  subscribeWebFailure,
+  type WebFailure,
+} from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
 import { checkoutModeFor, sdkRedeemsCheckout } from "./host/sdk";
 import { presentingPlacement } from "./host/init";
@@ -22,6 +37,7 @@ import {
   saveCustomStoreReturnRecord,
 } from "./customStore";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
+import { sameFailure, unknownFailure, type CheckoutFailure } from "./failure";
 import { introductoryOfferFromFragment, readTeleportBoot } from "./teleport/boot";
 import { teleportFor } from "./teleport/flow";
 import type {
@@ -36,6 +52,7 @@ import type {
   SessionScope,
   WebappCompletion,
   WebPurchaseOptions,
+  WebPurchaseOutcome,
 } from "./types";
 
 export type CompletedCheckout = {
@@ -334,8 +351,12 @@ export const reportCompletedCheckout = async (
 const watchHostedCheckout = async (
   paywall: PaywallSession,
   redirect: RedirectCheckoutSession,
-): Promise<PurchaseOutcome> => {
+  onFailure?: (failure: CheckoutFailure) => void,
+): Promise<WebPurchaseOutcome> => {
   const sessions = sessionsFor(paywall);
+  let failure: CheckoutFailure | undefined;
+  const unpaid = (): WebPurchaseOutcome =>
+    failure ? { status: "failed", failure } : { status: "abandoned" };
 
   for (let attempt = 0; attempt < STATUS_POLL_LIMIT; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, STATUS_POLL_INTERVAL));
@@ -345,29 +366,36 @@ const watchHostedCheckout = async (
 
     if (status.status === "completed") {
       await reportCompletedCheckout(paywall, redirect, status.redemptionUrl);
-      return "completed";
+      return { status: "completed" };
     }
-    if (status.status === "abandoned") return "abandoned";
+    if ("failure" in status && status.failure) {
+      if (!sameFailure(failure, status.failure)) {
+        failure = status.failure;
+        onFailure?.(failure);
+      }
+    }
+    if (status.status === "abandoned") return unpaid();
   }
 
   console.warn("Gave up watching a hosted checkout after two minutes.");
-  return "abandoned";
+  return unpaid();
 };
 
 export const openHostedCheckout = async (
   paywall: PaywallSession,
   redirect: RedirectCheckoutSession,
-): Promise<PurchaseOutcome> => {
+  onFailure?: (failure: CheckoutFailure) => void,
+): Promise<WebPurchaseOutcome> => {
   const host = hostFor(paywall);
   host.initiated(contextFor(paywall, redirect.referenceName, redirect.checkoutContextId));
 
   if (!detectSuperwallHost()) {
     window.location.assign(redirect.checkoutUrl);
-    return "abandoned";
+    return { status: "abandoned" };
   }
 
   host.openHostedPage(redirect.checkoutUrl);
-  return watchHostedCheckout(paywall, redirect);
+  return watchHostedCheckout(paywall, redirect, onFailure);
 };
 
 export const watchCompletedCheckouts = (paywall: PaywallSession): (() => void) =>
@@ -378,24 +406,54 @@ export const watchCompletedCheckouts = (paywall: PaywallSession): (() => void) =
 export const purchaseWithApplePay = (
   paywall: PaywallSession,
   referenceName: string,
+  onSubmit?: () => void,
 ): Promise<ApplePayOutcome> => {
   const warmed = sessionsFor(paywall).warmed(referenceName, "apple-pay");
   return applePayFor(paywall).purchase(
     referenceName,
     contextFor(paywall, referenceName, warmed?.checkoutContextId ?? ""),
+    onSubmit,
   );
+};
+
+export const SHEET_FAILURE_LOOKUP_TIMEOUT = 8_000;
+
+const sheetFailure = async (
+  paywall: PaywallSession,
+  embedded: EmbeddedCheckoutSession,
+): Promise<CheckoutFailure> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`no answer within ${SHEET_FAILURE_LOOKUP_TIMEOUT} ms`)),
+      SHEET_FAILURE_LOOKUP_TIMEOUT,
+    );
+  });
+  const status = await Promise.race([
+    sessionsFor(paywall).status(embedded.checkoutContextId),
+    timedOut,
+  ]).catch((error: unknown) => {
+    console.warn("Looking up why the checkout failed did not work:", error);
+    return undefined;
+  });
+  clearTimeout(timer);
+  return status?.failure ?? unknownFailure();
 };
 
 export const openEmbeddedSheet = (
   embedded: EmbeddedCheckoutSession,
   host?: { paywall: PaywallSession; referenceName: string; tappedAt?: number },
-): Promise<{ status: PurchaseOutcome }> =>
+  onFailure?: (failure: CheckoutFailure) => void,
+  onSubmit?: () => void,
+): Promise<WebPurchaseOutcome> =>
   new Promise((resolve) => {
     const events = host ? hostFor(host.paywall) : null;
     const context = host
       ? contextFor(host.paywall, host.referenceName, embedded.checkoutContextId)
       : null;
     let opened = false;
+    let paid = false;
+    let failed: Promise<CheckoutFailure> | null = null;
     const diagnostics =
       context && events
         ? checkoutDiagnostics.track(
@@ -407,7 +465,7 @@ export const openEmbeddedSheet = (
 
     const readyTimeout = setTimeout(() => {
       diagnostics?.timedOut();
-      finish("failed");
+      finish({ status: "failed", failure: unknownFailure() });
     }, SHEET_READY_TIMEOUT);
 
     const isOurs = (candidate: { directive: string; clientSecret?: string }) =>
@@ -423,30 +481,44 @@ export const openEmbeddedSheet = (
         if (context) events?.initiated(context);
       }),
       checkoutEvents.subscribe("CHECKOUT_SUBMITTED", ({ session: submitted }) => {
-        if (!isOurs(submitted) || !context) return;
-        events?.submitted(context);
+        if (!isOurs(submitted)) return;
+        onSubmit?.();
+        if (context) events?.submitted(context);
       }),
-      checkoutEvents.subscribe("PAYMENT_SUCCESS", ({ session: paid }) => {
-        if (!isOurs(paid)) return;
-        finish("completed");
+      checkoutEvents.subscribe("PAYMENT_SUCCESS", ({ session: succeeded }) => {
+        if (!isOurs(succeeded)) return;
+        paid = true;
+        finish({ status: "completed" });
       }),
       checkoutEvents.subscribe("PAYMENT_ERROR", ({ session: errored }) => {
         if (!isOurs(errored)) return;
         if (context) events?.failed(context);
-        finish("failed");
+        const looked = host
+          ? sheetFailure(host.paywall, embedded)
+          : Promise.resolve(unknownFailure());
+        const earlier = failed;
+        const lookup = earlier ? earlier.then(() => looked) : looked;
+        failed = lookup;
+        void lookup.then((failure) => {
+          if (!paid) onFailure?.(failure);
+        });
       }),
       checkoutEvents.subscribe("SHEET_CLOSE", () => {
         if (!opened) return;
+        if (failed) {
+          finish(failed.then((failure) => ({ status: "failed", failure })));
+          return;
+        }
         if (context) events?.abandoned(context);
-        finish("abandoned");
+        finish({ status: "abandoned" });
       }),
     ];
 
-    const finish = (status: PurchaseOutcome) => {
+    const finish = (outcome: WebPurchaseOutcome | Promise<WebPurchaseOutcome>) => {
       clearTimeout(readyTimeout);
       stopLoading();
       unsubscribers.forEach((unsubscribe) => unsubscribe());
-      resolve({ status });
+      resolve(outcome);
     };
 
     startLoading();
@@ -458,15 +530,44 @@ export const purchaseOnWeb = async (
   referenceName: string,
   requested: CheckoutMode,
   options: WebPurchaseOptions = {},
-): Promise<PurchaseOutcome> => {
+  attempt?: PurchaseAttempt,
+): Promise<WebPurchaseOutcome> => {
+  clearWebFailure(paywall);
+  const events = purchaseEventsFor(paywall);
+  events.emit("start", { referenceName, attempt });
+  const reported = new Set<CheckoutFailure>();
+  const reportFailure = (failure: CheckoutFailure) => {
+    reported.add(failure);
+    reportWebFailure(paywall, { referenceName, failure, attempt });
+  };
+  const outcome = await runWebPurchase(paywall, referenceName, requested, options, {
+    onFailure: reportFailure,
+    onSubmit: () => events.emit("submit", { referenceName, attempt }),
+  });
+  if (outcome.status === "failed") {
+    if (!reported.has(outcome.failure)) reportFailure(outcome.failure);
+  } else if (outcome.status === "completed") {
+    clearWebFailure(paywall);
+    events.emit("complete", { referenceName, attempt });
+  } else events.emit("abandon", { referenceName, attempt });
+  return outcome;
+};
+
+const runWebPurchase = async (
+  paywall: PaywallSession,
+  referenceName: string,
+  requested: CheckoutMode,
+  options: WebPurchaseOptions,
+  report: { onFailure: (failure: CheckoutFailure) => void; onSubmit: () => void },
+): Promise<WebPurchaseOutcome> => {
   const tappedAt = Date.now();
   const sessions = sessionsFor(paywall);
   const mode = checkoutModeFor(paywall.getSnapshot(), requested);
   rememberPurchaseOptions(paywall, referenceName, options);
   try {
     if (mode === "applePay") {
-      const outcome = await purchaseWithApplePay(paywall, referenceName);
-      if (outcome.status !== "unavailable") return outcome.status;
+      const outcome = await purchaseWithApplePay(paywall, referenceName, report.onSubmit);
+      if (outcome.status !== "unavailable") return outcome;
     }
 
     const warmed =
@@ -484,13 +585,19 @@ export const purchaseOnWeb = async (
           });
 
     if (result.directive === "embedded") {
-      return (await openEmbeddedSheet(result, { paywall, referenceName, tappedAt })).status;
+      return await openEmbeddedSheet(
+        result,
+        { paywall, referenceName, tappedAt },
+        report.onFailure,
+        report.onSubmit,
+      );
     }
-    if (result.directive === "redirect") return openHostedCheckout(paywall, result);
-    return "failed";
+    if (result.directive === "redirect")
+      return await openHostedCheckout(paywall, result, report.onFailure);
+    return { status: "failed", failure: unknownFailure() };
   } catch (error) {
     console.error("Error beginning web checkout:", error);
-    return "failed";
+    return { status: "failed", failure: unknownFailure() };
   }
 };
 

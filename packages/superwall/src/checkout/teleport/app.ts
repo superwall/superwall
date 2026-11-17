@@ -10,6 +10,8 @@ import { platformOf } from "../../device";
 import { attributionOf } from "../api/body";
 import { attachCheckoutMetadata } from "../api/metadata";
 import { asString } from "../api/decode";
+import { joinAttempt, leadOf, reportWebFailure, type PurchaseAttempt } from "../events";
+import { sameFailure, type CheckoutFailure } from "../failure";
 import { hostOf } from "../../host";
 import { startLoading, stopLoading } from "../loading";
 import { isStripeProductIdentifier } from "../products";
@@ -18,6 +20,7 @@ import {
   createTeleport,
   moveTeleportIntroductoryOffer,
   readCheckoutOf,
+  readTeleportReturn,
   readTeleportStatus,
   saveTeleportQuery,
   teleportStatusUrls,
@@ -38,6 +41,7 @@ import {
   createStatusStore,
   withTimeout,
   type AttachedSession,
+  type PageReturn,
   type TeleportOutcome,
   type AppTeleport,
   type TeleportRequest,
@@ -72,11 +76,16 @@ type OpenTeleport = CreatedTeleport & {
   checkoutContextId?: string;
   checkoutProductIdentifier?: string;
   returnedAt?: number;
+  openedAt?: number;
+  attempt?: PurchaseAttempt;
   queryPatch?: string;
   postPurchase?: SuperwallPostPurchase;
   stripeMetadata?: Readonly<Record<string, string>>;
   prepaidCards?: SuperwallPrepaidCards;
   paid?: boolean;
+  failure?: CheckoutFailure;
+  pageReturn?: PageReturn;
+  failureTrip?: number;
   outcome: Promise<TeleportOutcome>;
   settle: (outcome: TeleportOutcome) => void;
 };
@@ -111,6 +120,11 @@ const changedQuery = (
   Object.fromEntries(Object.entries(now).filter(([key, value]) => saved[key] !== value));
 
 let opens = 0;
+
+const adoptAttempt = (record: OpenTeleport, attempt: PurchaseAttempt | undefined) => {
+  if (record.attempt === undefined) record.attempt = attempt;
+  else joinAttempt(record.attempt, attempt);
+};
 
 export const checkoutUrlFor = (
   url: string,
@@ -170,6 +184,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
   let shown = false;
   let prepared: Prepared | undefined;
   let starting: Promise<TeleportOutcome> | undefined;
+  let startingAttempt: { attempt?: PurchaseAttempt } = {};
   let route: string | undefined;
   let presentationId: string | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -195,7 +210,31 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       ...(record.productReference === undefined
         ? {}
         : { productReference: record.productReference }),
+      ...(record.failure === undefined ? {} : { failure: record.failure }),
+      ...(record.pageReturn?.data === undefined ? {} : { data: record.pageReturn.data }),
     };
+  };
+
+  const readPageReturn = async (key: string, record: OpenTeleport): Promise<boolean> => {
+    if (record.returnedAt === undefined || record.pageReturn !== undefined) return true;
+    const openedAt = record.openedAt;
+    try {
+      const returned = await readTeleportReturn(key, record.teleportId);
+      if (returned === undefined || !isWaiting(record) || record.openedAt !== openedAt) return true;
+      if (openedAt !== undefined && (returned.at === undefined || returned.at < openedAt)) {
+        return true;
+      }
+      record.pageReturn = returned;
+      if (returned.failure !== undefined) reportFailure(record, returned.failure, true);
+      if (returned.data !== undefined && isWaiting(record)) {
+        publish();
+        emit("data", returned.data);
+      }
+      return true;
+    } catch (error) {
+      console.warn("Reading what the teleport page left for the app failed; retrying:", error);
+      return false;
+    }
   };
 
   const publish = () => store.setStatus(statusOfPhase());
@@ -409,6 +448,28 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     record.settle({ reference, result: buy(reference) });
   };
 
+  const reportFailure = (
+    record: OpenTeleport,
+    failure: CheckoutFailure | undefined,
+    fromPage = false,
+  ) => {
+    const newTrip = fromPage && record.failureTrip !== record.openedAt;
+    if (sameFailure(record.failure, failure) && !(failure !== undefined && newTrip)) return;
+    record.failure = failure;
+    if (failure !== undefined) record.failureTrip = record.openedAt;
+    publish();
+    if (failure === undefined) return;
+    const referenceName =
+      record.productReference ??
+      paywall
+        .getSnapshot()
+        .products.find((product) => product.productId === record.checkoutProductIdentifier)
+        ?.reference;
+    if (referenceName !== undefined) {
+      reportWebFailure(paywall, { referenceName, failure, attempt: record.attempt });
+    }
+  };
+
   const poll = async (record: OpenTeleport) => {
     if (polling === record) return;
     const key = publicApiKey();
@@ -427,20 +488,27 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         redeem(record, teleport.checkoutContextId, teleport.checkoutProductIdentifier);
         return;
       }
+      const returnRead = await readPageReturn(key, record);
+      if (!isWaiting(record)) return;
+      const fromPage = record.pageReturn?.failure !== undefined;
+      let failure = record.pageReturn?.failure ?? teleport.failure;
+      if (failure !== undefined) reportFailure(record, failure, fromPage);
       if (record.checkoutContextId) {
         const checkout = await readCheckoutOf(key, record.checkoutContextId);
         if (!isWaiting(record)) return;
-        if (checkout === "completed") {
+        if (checkout.status === "completed") {
           stop();
           redeem(record, record.checkoutContextId);
           return;
         }
+        failure ??= checkout.failure;
       }
+      reportFailure(record, failure, fromPage);
       if (teleport.status === "expired") {
         settleAbandoned(record);
         return;
       }
-      checked = true;
+      checked = returnRead;
     } catch (error) {
       console.warn("Checking the web checkout failed; retrying:", error);
     } finally {
@@ -482,7 +550,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       }
       if (isParked(record) && checkoutContextId) {
         const checkout = await readCheckoutOf(key, checkoutContextId);
-        if (isParked(record) && checkout === "completed") {
+        if (isParked(record) && checkout.status === "completed") {
           stopParked();
           redeem(record, checkoutContextId, teleport.checkoutProductIdentifier);
           return "paid";
@@ -512,6 +580,8 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
 
   const open = (record: OpenTeleport) => {
     record.returnedAt = undefined;
+    record.openedAt = Date.now();
+    record.pageReturn = undefined;
     post({
       event_name: "open_url_external",
       url: checkoutUrlFor(
@@ -662,8 +732,14 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       postPurchase: request.postPurchase,
       stripeMetadata: request.stripeMetadata,
       ...(request.prepaidCards === undefined ? {} : { prepaidCards: request.prepaidCards }),
+      ...(request.attempt === undefined ? {} : { attempt: request.attempt }),
       outcome,
-      settle: resolve,
+      settle: (settled) => {
+        if (record.attempt !== undefined && record.productReference !== undefined) {
+          leadOf(record.attempt).reference = record.productReference;
+        }
+        resolve(settled);
+      },
     };
     phase = { kind: "waiting", record };
     shown = false;
@@ -732,9 +808,15 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     target: string,
     request: TeleportRequest,
   ): Promise<TeleportOutcome> => {
+    const joined = startingAttempt;
     const started = obtain(resolved, target, request).then((teleport) => {
       starting = undefined;
-      return typeof teleport === "string" ? teleport : launch(teleport, request);
+      if (typeof teleport === "string") return teleport;
+      const { attempt: _ignored, ...rest } = request;
+      return launch(
+        teleport,
+        joined.attempt === undefined ? rest : { ...rest, attempt: joined.attempt },
+      );
     });
     starting = started;
     return started;
@@ -790,7 +872,12 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       route = name;
     },
     begin: (request) => {
-      if (starting !== undefined) return starting;
+      if (starting !== undefined) {
+        if (startingAttempt.attempt === undefined) startingAttempt.attempt = request.attempt;
+        else joinAttempt(startingAttempt.attempt, request.attempt);
+        return starting;
+      }
+      startingAttempt = request.attempt === undefined ? {} : { attempt: request.attempt };
       const resolved = settings();
       const target = request.route ?? resolved?.route ?? route;
       if (resolved === undefined || target === undefined) return Promise.resolve("failed");
@@ -800,13 +887,16 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       if (phase.kind === "waiting") {
         const record = phase.record;
         if (record.freeTrial === freeTrialFor(resolved, paywall.getSnapshot())) {
+          adoptAttempt(record, request.attempt);
           reopen(record, request.productReference);
           return record.outcome;
         }
+        const joined = startingAttempt;
         starting = moveIntroductoryOffer(resolved, record).then((moved) => {
           starting = undefined;
           if (!isWaiting(record)) return record.outcome;
           if (moved) {
+            adoptAttempt(record, joined.attempt);
             reopen(record, request.productReference);
             return record.outcome;
           }
@@ -834,10 +924,11 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       prepare(target, query);
     },
     inFlight: () => phase.kind === "waiting",
-    handOff: (reference, purchase) => {
+    handOff: (reference, purchase, attempt) => {
       const record = parkWaiting();
       const result = purchase();
-      record?.settle({ reference, result });
+      joinAttempt(record?.attempt, attempt);
+      record?.settle({ reference, result, reported: true });
       return result;
     },
     open: () => {
@@ -859,7 +950,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       if (phase.kind === "waiting") {
         const record = phase.record;
         record.returnedAt ??= Date.now();
-        if (reason !== "closed" && publicApiKey() !== "") {
+        if (reason !== "closed" && reason !== "failed" && publicApiKey() !== "") {
           returnLoading = true;
           startLoading();
         }

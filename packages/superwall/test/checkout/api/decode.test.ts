@@ -2,15 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   asNumber,
   asString,
+  errorFailureOf,
   errorMessageOf,
   field,
   intentTypeOf,
   readAppliedDiscount,
   readCheckoutSession,
+  readCheckoutFailure,
   readCheckoutStatus,
   readCustomStoreSession,
   readDiscountValidation,
   readDiscountedPrice,
+  readStripeError,
   readSubscriptionDetails,
 } from "../../../src/checkout/api/decode";
 
@@ -397,5 +400,88 @@ describe("readCustomStoreSession", () => {
         customTransactionId: "txn",
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("readCheckoutStatus failure", () => {
+  it("reads the payment failure the backend reports beside the status", () => {
+    expect(
+      readCheckoutStatus({
+        status: "pending",
+        failure: { code: "card_declined", declineCode: "insufficient_funds", message: "No funds." },
+      }),
+    ).toEqual({
+      status: "pending",
+      failure: {
+        reason: "insufficient_funds",
+        store: "stripe",
+        code: "card_declined",
+        declineCode: "insufficient_funds",
+        message: "No funds.",
+      },
+    });
+  });
+
+  it("leaves the failure out when the backend sent none", () => {
+    expect(readCheckoutStatus({ status: "pending", failure: null })).toEqual({ status: "pending" });
+    expect(readCheckoutStatus({ status: "pending", failure: "declined" })).toEqual({
+      status: "pending",
+    });
+  });
+});
+
+describe("readCheckoutFailure", () => {
+  it("reads each field only when it is a non-empty string", () => {
+    expect(readCheckoutFailure({ code: 4, declineCode: "", message: ["x"] })).toEqual({
+      reason: "unknown",
+      store: "stripe",
+    });
+    expect(readCheckoutFailure({ code: "expired_card" })).toEqual({
+      reason: "expired_card",
+      store: "stripe",
+      code: "expired_card",
+    });
+  });
+
+  it("reads nothing from a value that is not an object", () => {
+    expect(readCheckoutFailure(undefined)).toBeUndefined();
+    expect(readCheckoutFailure([{ code: "card_declined" }])).toBeUndefined();
+  });
+});
+
+describe("errorFailureOf", () => {
+  it("reads the failure from a confirm error body", () => {
+    expect(errorFailureOf({ _tag: "PaymentDeclined", failure: { code: "card_declined" } })).toEqual(
+      { reason: "card_declined", store: "stripe", code: "card_declined" },
+    );
+    expect(errorFailureOf({ message: "Server error" })).toBeUndefined();
+  });
+});
+
+describe("readStripeError", () => {
+  it("reads a Stripe.js error's code, decline code and message", () => {
+    expect(
+      readStripeError({
+        type: "card_error",
+        code: "card_declined",
+        decline_code: "lost_card",
+        message: "Your card was declined.",
+      }),
+    ).toEqual({
+      reason: "fraud_suspected",
+      store: "stripe",
+      code: "card_declined",
+      declineCode: "lost_card",
+      message: "Your card was declined.",
+    });
+  });
+
+  it("is unknown for anything that is not a Stripe error", () => {
+    expect(readStripeError(new Error("boom"))).toEqual({
+      reason: "unknown",
+      store: "stripe",
+      message: "boom",
+    });
+    expect(readStripeError(null)).toEqual({ reason: "unknown", store: "stripe" });
   });
 });

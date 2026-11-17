@@ -1,4 +1,5 @@
 import type { SuperwallPostPurchase, SuperwallPrepaidCards } from "@superwall/runtime";
+import type { CheckoutFailure } from "./failure";
 
 export type CheckoutMode = "sheet" | "external" | "applePay";
 
@@ -118,9 +119,14 @@ export type DiscountValidationResult =
 
 export type PurchaseOutcome = "completed" | "abandoned" | "failed";
 
+export type WebPurchaseOutcome =
+  | { status: "completed" | "abandoned" }
+  | { status: "failed"; failure: CheckoutFailure };
+
 export type CheckoutStatus = {
   status: "pending" | "completed" | "abandoned";
   redemptionUrl?: string;
+  failure?: CheckoutFailure;
 };
 
 export type CustomerIdentity = {

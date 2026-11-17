@@ -3,18 +3,42 @@ import type {
   SuperwallPrepaidCards,
   SuperwallSession,
 } from "@superwall/runtime";
+import type { PurchaseAttempt } from "../events";
+import type { CheckoutFailure } from "../failure";
 import type { PurchaseOutcome } from "../types";
 import { NAV_QUERY_KEY } from "./boot";
 
 export type TeleportStatus =
   | { status: "idle" }
-  | { status: "waiting"; productReference?: string; returned: boolean }
+  | {
+      status: "waiting";
+      productReference?: string;
+      returned: boolean;
+      failure?: CheckoutFailure;
+      data?: TeleportData;
+    }
   | { status: "arrived"; productReference?: string }
   | { status: "completed"; productReference?: string; paidElsewhere: boolean };
 
-export type TeleportEvent = "open" | "return" | "cancel" | "complete";
+export type TeleportDataValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TeleportDataValue[]
+  | { [key: string]: TeleportDataValue };
 
-export type HandedOff = { reference: string; result: Promise<{ status: PurchaseOutcome }> };
+export type TeleportData = { [key: string]: TeleportDataValue };
+
+export type PageReturn = { failure?: CheckoutFailure; data?: TeleportData; at?: number };
+
+export type TeleportEvent = "open" | "return" | "cancel" | "complete" | "data";
+
+export type HandedOff = {
+  reference: string;
+  result: Promise<{ status: PurchaseOutcome }>;
+  reported?: boolean;
+};
 
 export type TeleportOutcome = PurchaseOutcome | HandedOff;
 
@@ -25,16 +49,18 @@ export type TeleportRequest = {
   postPurchase?: SuperwallPostPurchase;
   stripeMetadata?: Readonly<Record<string, string>>;
   prepaidCards?: SuperwallPrepaidCards;
+  attempt?: PurchaseAttempt;
 };
 
-export type ReturnReason = "purchased" | "closed";
+export type ReturnReason = "purchased" | "closed" | "failed";
 
 export type ReturnResult = "opened" | "cancelled" | "no_app";
 
 type TeleportBase = {
   getStatus(): TeleportStatus;
   subscribe(listener: () => void): () => void;
-  on(event: TeleportEvent, handler: () => void): () => void;
+  on(event: "data", handler: (data: TeleportData) => void): () => void;
+  on(event: Exclude<TeleportEvent, "data">, handler: () => void): () => void;
   attach(session: AttachedSession): () => void;
 };
 
@@ -51,6 +77,7 @@ export type AppTeleport = TeleportBase & {
   handOff<T extends { status: PurchaseOutcome }>(
     reference: string,
     purchase: () => Promise<T>,
+    attempt?: PurchaseAttempt,
   ): Promise<T>;
   open(): void;
   cancel(): void;
@@ -67,7 +94,10 @@ export type TeleportPage = TeleportBase & {
   watchPresentation(): () => void;
   completePurchase(checkoutContextId: string): Promise<void>;
   followFragment(): void;
-  returnToApp(reason?: ReturnReason): Promise<ReturnResult>;
+  returnToApp(
+    reason?: ReturnReason,
+    left?: { query: Record<string, string>; returned: PageReturn },
+  ): Promise<ReturnResult>;
   returning(): boolean;
 };
 
@@ -99,7 +129,7 @@ export const withTimeout = <T>(promise: Promise<T>, ms: number, fallback: T): Pr
 
 export const createStatusStore = (initial: TeleportStatus) => {
   const listeners = new Set<() => void>();
-  const handlers = new Map<TeleportEvent, Set<() => void>>();
+  const handlers = new Map<TeleportEvent, Set<(data: TeleportData) => void>>();
   let status = initial;
   return {
     getStatus: () => status,
@@ -117,16 +147,22 @@ export const createStatusStore = (initial: TeleportStatus) => {
         listeners.delete(listener);
       };
     },
-    on: (event: TeleportEvent, handler: () => void) => {
-      const set = handlers.get(event) ?? new Set<() => void>();
+    on: (event: TeleportEvent, handler: (data: TeleportData) => void) => {
+      const set = handlers.get(event) ?? new Set<(data: TeleportData) => void>();
       set.add(handler);
       handlers.set(event, set);
       return () => {
         set.delete(handler);
       };
     },
-    emit: (event: TeleportEvent) => {
-      for (const handler of handlers.get(event) ?? []) handler();
+    emit: (event: TeleportEvent, data: TeleportData = {}) => {
+      for (const handler of Array.from(handlers.get(event) ?? [])) {
+        try {
+          handler(data);
+        } catch (error) {
+          console.error(`[teleport] ${event} listener failed:`, error);
+        }
+      }
     },
   };
 };

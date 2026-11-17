@@ -1,7 +1,22 @@
 import { act } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { usePurchase } from "../../src/hooks";
-import { flush, renderWithProvider } from "../helpers";
+import { usePurchase, useSuperwallSnapshot } from "../../src/hooks";
+import { renderToString } from "react-dom/server";
+import { SuperwallProvider } from "../../src";
+import { flush, renderWithProvider, testConfig } from "../helpers";
+
+const recorder = () => {
+  const calls: unknown[][] = [];
+  const callbacks = {
+    onStart: (product: { reference: string }) => calls.push(["start", product.reference]),
+    onSubmit: (product: { reference: string }) => calls.push(["submit", product.reference]),
+    onComplete: (product: { reference: string }) => calls.push(["complete", product.reference]),
+    onAbandon: (product: { reference: string }) => calls.push(["abandon", product.reference]),
+    onFailure: (failure: { reason: string; product: { reference: string } }) =>
+      calls.push(["failure", failure.reason, failure.product.reference]),
+  };
+  return { calls, callbacks };
+};
 
 describe("usePurchase when the SDK reports a failure", () => {
   it("resolves as failed with the sdk reason, and clears the pending state", async () => {
@@ -13,9 +28,9 @@ describe("usePurchase when the SDK reports a failure", () => {
       outcome = await result.current.purchase("primary");
     });
 
-    expect(outcome).toMatchObject({ status: "failed", reason: "sdk" });
+    expect(outcome).toMatchObject({ status: "failed", reason: "unknown" });
     expect(result.current.isPurchasing).toBe(false);
-    expect(result.current.failure?.reason).toBe("sdk");
+    expect(result.current.failure?.reason).toBe("unknown");
     expect(result.current.transaction).toBeUndefined();
   });
 
@@ -35,5 +50,203 @@ describe("usePurchase when the SDK reports a failure", () => {
     });
 
     expect(outcome).toMatchObject({ status: "abandoned" });
+  });
+});
+
+describe("purchase callbacks for a store purchase made by the SDK", () => {
+  it.each([
+    ["completed", ["complete", "primary"]],
+    ["abandoned", ["abandon", "primary"]],
+    ["failed", ["failure", "unknown", "primary"]],
+  ] as const)("fires start, then the end of a %s purchase, on every hook", async (ending, last) => {
+    const watcher = recorder();
+    const { result } = renderWithProvider(
+      () => ({ buyer: usePurchase(), watcher: usePurchase(watcher.callbacks) }),
+      { host: { purchase: ending } },
+    );
+    await flush();
+
+    await act(async () => {
+      await result.current.buyer.purchase("primary");
+    });
+
+    expect(watcher.calls).toEqual([["start", "primary"], last]);
+  });
+
+  it("fires a purchase() call's own callbacks for that call only", async () => {
+    const own = recorder();
+    const { result } = renderWithProvider(() => usePurchase(), { host: { purchase: "failed" } });
+    await flush();
+
+    await act(async () => {
+      await result.current.purchase("primary", own.callbacks);
+    });
+    await act(async () => {
+      await result.current.purchase("primary");
+    });
+
+    expect(own.calls).toEqual([
+      ["start", "primary"],
+      ["failure", "unknown", "primary"],
+    ]);
+  });
+});
+
+describe("purchase() of a product the paywall's catalog doesn't hold", () => {
+  it("still fires the callbacks, with that product", async () => {
+    const own = recorder();
+    const watcher = recorder();
+    const { result } = renderWithProvider(
+      () => ({
+        buyer: usePurchase(watcher.callbacks),
+        primary: useSuperwallSnapshot().productsByReference.primary,
+      }),
+      { host: { purchase: "completed" } },
+    );
+    await flush();
+    const primary = result.current.primary;
+    if (!primary) throw new Error("expected the primary product");
+    const inline = { ...primary, reference: "inline", productId: "com.example.inline" };
+
+    await act(async () => {
+      await result.current.buyer.purchase(inline, own.callbacks);
+    });
+
+    expect(own.calls).toEqual([
+      ["start", "inline"],
+      ["complete", "inline"],
+    ]);
+    expect(watcher.calls).toEqual(own.calls);
+  });
+});
+
+describe("purchase() of a catalog product passed as a different object", () => {
+  it("starts with the catalog product the SDK buys", async () => {
+    const own = recorder();
+    const started: unknown[] = [];
+    const { result } = renderWithProvider(
+      () => ({
+        buyer: usePurchase(),
+        primary: useSuperwallSnapshot().productsByReference.primary,
+      }),
+      { host: { purchase: "completed" } },
+    );
+    await flush();
+    const primary = result.current.primary;
+    if (!primary) throw new Error("expected the primary product");
+    const stale = { ...primary, productId: "com.example.stale" };
+
+    await act(async () => {
+      await result.current.buyer.purchase(stale, {
+        ...own.callbacks,
+        onStart: (product) => started.push(product),
+      });
+    });
+
+    expect(started).toEqual([primary]);
+  });
+});
+
+describe("a store purchase started from onStart", () => {
+  it("keeps the newer purchase live, superseding the one whose onStart started it", async () => {
+    const answers: ((outcome: "completed") => void)[] = [];
+    const { result } = renderWithProvider(() => usePurchase(), {
+      host: {
+        purchase: () =>
+          new Promise<"completed">((resolve) => {
+            answers.push(resolve);
+          }),
+      },
+    });
+    await flush();
+
+    let newer: Promise<unknown> | undefined;
+    let older: Promise<unknown> | undefined;
+    await act(async () => {
+      older = result.current.purchase("primary", {
+        onStart: () => {
+          newer ??= result.current.purchase("primary");
+        },
+      });
+      await flush();
+    });
+    await act(async () => {
+      for (const answer of answers) answer("completed");
+      await flush();
+    });
+
+    await expect(older).resolves.toMatchObject({ status: "failed", reason: "superseded" });
+    await expect(newer).resolves.toMatchObject({ status: "completed" });
+  });
+});
+
+describe("purchase() of a custom store product inside an app", () => {
+  it("fires no callbacks", async () => {
+    const own = recorder();
+    const watcher = recorder();
+    const { result } = renderWithProvider(
+      () => ({
+        buyer: usePurchase(watcher.callbacks),
+        primary: useSuperwallSnapshot().productsByReference.primary,
+      }),
+      { host: { purchase: "completed" } },
+    );
+    await flush();
+    const primary = result.current.primary;
+    if (!primary) throw new Error("expected the primary product");
+    const custom = { ...primary, reference: "store", productId: "custom|acme_pro" };
+
+    await act(async () => {
+      await result.current.buyer.purchase(custom, own.callbacks);
+    });
+
+    expect(own.calls).toEqual([]);
+    expect(watcher.calls).toEqual([]);
+  });
+});
+
+describe("purchase() callbacks when two purchases overlap", () => {
+  it("fires each call's callbacks for its own purchase only", async () => {
+    const { result } = renderWithProvider(() => usePurchase(), { host: { purchase: "completed" } });
+    await flush();
+    const calls: string[] = [];
+    const record = (call: string) => ({
+      onStart: (product: { reference: string }) => calls.push(`${call} start ${product.reference}`),
+      onComplete: (product: { reference: string }) =>
+        calls.push(`${call} complete ${product.reference}`),
+      onFailure: (failure: { product: { reference: string } }) =>
+        calls.push(`${call} failure ${failure.product.reference}`),
+    });
+
+    await act(async () => {
+      await Promise.all([
+        result.current.purchase("primary", record("a")),
+        result.current.purchase("secondary", record("b")),
+      ]);
+    });
+
+    expect(calls.filter((call) => call.startsWith("a "))).not.toContainEqual(
+      expect.stringContaining("secondary"),
+    );
+    expect(calls.filter((call) => call.startsWith("b "))).not.toContainEqual(
+      expect.stringContaining("primary"),
+    );
+    expect(calls).toContain("a start primary");
+    expect(calls).toContain("b start secondary");
+  });
+});
+
+describe("usePurchase rendered on the server", () => {
+  it("renders, as a teleport page's prerender does", () => {
+    const Probe = () => {
+      const { failure } = usePurchase();
+      return <p>{failure ? failure.reason : "none"}</p>;
+    };
+    const html = renderToString(
+      <SuperwallProvider config={testConfig}>
+        <Probe />
+      </SuperwallProvider>,
+    );
+    expect(html).toContain("none");
   });
 });
