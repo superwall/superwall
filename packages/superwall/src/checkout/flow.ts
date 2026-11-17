@@ -429,18 +429,15 @@ const sheetFailure = async (
       SHEET_FAILURE_LOOKUP_TIMEOUT,
     );
   });
-  try {
-    const status = await Promise.race([
-      sessionsFor(paywall).status(embedded.checkoutContextId),
-      timedOut,
-    ]);
-    return status.failure ?? unknownFailure();
-  } catch (error) {
+  const status = await Promise.race([
+    sessionsFor(paywall).status(embedded.checkoutContextId),
+    timedOut,
+  ]).catch((error: unknown) => {
     console.warn("Looking up why the checkout failed did not work:", error);
-    return unknownFailure();
-  } finally {
-    clearTimeout(timer);
-  }
+    return undefined;
+  });
+  clearTimeout(timer);
+  return status?.failure ?? unknownFailure();
 };
 
 export const openEmbeddedSheet = (

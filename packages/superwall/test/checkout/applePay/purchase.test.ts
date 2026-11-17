@@ -143,6 +143,17 @@ describe("createApplePay", () => {
     expect(isLoading()).toBe(false);
   });
 
+  it("calls back once the shopper authorizes the payment in the wallet", async () => {
+    const { controller, authorize } = makeController();
+    await controller.prepare(quote());
+    const submitted = vi.fn();
+    const outcome = controller.purchase("primary", context, submitted);
+    expect(submitted).not.toHaveBeenCalled();
+    await authorize();
+    await expect(outcome).resolves.toEqual({ status: "completed" });
+    expect(submitted).toHaveBeenCalledOnce();
+  });
+
   it("builds the request from the quote: total, billing, and line items", async () => {
     const { controller, stripe } = makeController();
     await controller.prepare(

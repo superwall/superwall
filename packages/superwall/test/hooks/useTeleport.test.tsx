@@ -2,6 +2,7 @@ import { act } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallConfig } from "@superwall/runtime";
 import { pageNavigation } from "../../src/checkout/teleport/page";
+import { leadOf } from "../../src/checkout/events";
 import { applePayFor } from "../../src/checkout/flow";
 import { teleportFor } from "../../src/checkout/teleport/flow";
 import { useActions, usePurchase, useSuperwallSession, useTeleport } from "../../src/hooks";
@@ -644,6 +645,60 @@ describe("useTeleport in the app", () => {
     }
   });
 
+  it("settles with the tapped product when the reopened one has left the catalog", async () => {
+    Reflect.set(window, "app", {});
+    try {
+      stubReplies({});
+      const { result } = renderBuyer();
+      await flush();
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      vi.spyOn(teleporter, "available").mockReturnValue(true);
+      vi.spyOn(teleporter, "begin").mockImplementation(async (request) => {
+        if (request.attempt) leadOf(request.attempt).reference = "retired";
+        return "completed";
+      });
+      let outcome: unknown;
+      await act(async () => {
+        outcome = await result.current.buyer.purchase("primary");
+      });
+      expect(outcome).toMatchObject({ status: "completed", product: { reference: "primary" } });
+    } finally {
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
+  it("fails with an unknown reason, calling back once, when the teleport cannot be opened", async () => {
+    vi.useFakeTimers();
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response("down", { status: 400 })),
+      );
+      Reflect.set(window, "app", {});
+      const everywhere = vi.fn();
+      const { result } = renderBuyer(everywhere);
+      await flush();
+      const own = vi.fn();
+      let outcome: unknown;
+      await act(async () => {
+        void result.current.buyer
+          .purchase("primary", { onFailure: own })
+          .then((settled) => (outcome = settled));
+        await vi.advanceTimersByTimeAsync(3_000);
+      });
+      expect(outcome).toMatchObject({ status: "failed", failure: { reason: "unknown" } });
+      expect(own).toHaveBeenCalledOnce();
+      expect(everywhere).toHaveBeenCalledOnce();
+      expect(error).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
   it("reports a decline to every purchase() call that reopened the waiting teleport", async () => {
     vi.useFakeTimers();
     try {
@@ -1039,6 +1094,7 @@ describe("useTeleport in the app", () => {
     ).toEqual({ data: { offer: "app_store", plan: ["monthly", 1, null] } });
     expect(readPageReturn({ returned: { data: { nested: { when: new Date(0) } } } })).toEqual({});
     expect(readPageReturn({ returned: { data: { count: Number.NaN } } })).toEqual({});
+    expect(readPageReturn({ returned: { data: { plan: ["monthly", Number.NaN] } } })).toEqual({});
   });
 
   it("closes the paywall with close(), which returns nothing", async () => {
