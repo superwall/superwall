@@ -1,17 +1,19 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Renderer } from "@/ui/types";
-import { PUBLIC_REF, PUBLIC_REPO } from "@/core/repo/download";
+import { rawFileUrl, releaseRefs } from "@/core/repo/download";
 import { VENDORED_SDK } from "./project";
 
 export const STARTER_DIR = "artifacts/starter";
 
 const LATEST_TIMEOUT_MS = 1_500;
 
-type FetchVersion = (url: string, init: { signal: AbortSignal }) => Promise<{ ok: boolean; json(): Promise<unknown> }>;
+type FetchVersion = (
+  url: string,
+  init: { signal: AbortSignal },
+) => Promise<{ ok: boolean; status?: number; json(): Promise<unknown> }>;
 
-const LATEST_URL = (): string =>
-  `https://raw.githubusercontent.com/${PUBLIC_REPO}/${PUBLIC_REF}/${STARTER_DIR}/vendor/artifact-sdk/package.json`;
+const SDK_MANIFEST = `${STARTER_DIR}/vendor/artifact-sdk/package.json`;
 
 function versionOf(manifest: unknown): string | undefined {
   const version = (manifest as { version?: unknown } | null)?.version;
@@ -26,10 +28,20 @@ export function vendoredVersion(root: string): string | undefined {
   }
 }
 
+/**
+ * The artifact SDK `superwall artifacts update` would install: the one at this
+ * CLI's release tag (or `main` for an untagged build), so the "behind" warning
+ * and the update agree.
+ */
 export async function latestVersion(fetchImpl: FetchVersion = fetch): Promise<string | undefined> {
   try {
-    const response = await fetchImpl(LATEST_URL(), { signal: AbortSignal.timeout(LATEST_TIMEOUT_MS) });
-    return response.ok ? versionOf(await response.json()) : undefined;
+    const signal = AbortSignal.timeout(LATEST_TIMEOUT_MS);
+    for (const ref of releaseRefs()) {
+      const response = await fetchImpl(rawFileUrl(ref, SDK_MANIFEST), { signal });
+      if (response.ok) return versionOf(await response.json());
+      if (response.status !== 404) return undefined;
+    }
+    return undefined;
   } catch {
     return undefined;
   }

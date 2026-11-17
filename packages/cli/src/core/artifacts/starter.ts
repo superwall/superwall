@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
 import type { CommandContext } from "@/program/command";
-import { downloadRepoDir, PUBLIC_REPO, RepoDownloadError, type FetchLike } from "@/core/repo/download";
+import { downloadRepoDir, PUBLIC_REPO, releaseRefs, RepoDownloadError, type FetchLike } from "@/core/repo/download";
 import { MANIFEST_FILE, readManifest, VENDORED_SDK, ArtifactError } from "./project";
 import { compareVersions, STARTER_DIR, vendoredVersion } from "./sdk";
 
@@ -87,8 +87,9 @@ export async function runArtifactCreate(
     await downloadRepoDir(
       STARTER_DIR,
       target,
-      `No starter at ${STARTER_DIR} in github.com/${PUBLIC_REPO}. Update the CLI with \`superwall upgrade\`.`,
+      (ref) => `No starter at ${STARTER_DIR} in github.com/${PUBLIC_REPO} at ${ref.name}. Update the CLI with \`superwall upgrade\`.`,
       runtime.fetch ?? fetch,
+      releaseRefs(),
     );
     adoptStarter(target, packageNameOf(target));
   } catch (error) {
@@ -126,8 +127,9 @@ async function downloadSdk(fetchImpl: FetchLike): Promise<{ stage: string; versi
     await downloadRepoDir(
       `${STARTER_DIR}/vendor/artifact-sdk`,
       stage,
-      `No artifact SDK at ${STARTER_DIR} in github.com/${PUBLIC_REPO}. Update the CLI with \`superwall upgrade\`.`,
+      (ref) => `No artifact SDK at ${STARTER_DIR} in github.com/${PUBLIC_REPO} at ${ref.name}. Update the CLI with \`superwall upgrade\`.`,
       fetchImpl,
+      releaseRefs(),
     );
     return { stage, version: readStageVersion(stage) };
   } catch (error) {

@@ -83,28 +83,42 @@ export function fakeWrangler(
   });
 }
 
-export function repoTarball(files: Record<string, string>): Buffer {
+export function repoTarball(files: Record<string, string>, root = "superwall-main"): Buffer {
   const stage = scratch("tarball");
   for (const [file, content] of Object.entries(files)) {
-    const target = path.join(stage, "superwall-main", file);
+    const target = path.join(stage, root, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, content);
   }
   const tarball = path.join(stage, "repo.tar.gz");
-  execFileSync("tar", ["-czf", tarball, "-C", stage, "superwall-main"]);
+  execFileSync("tar", ["-czf", tarball, "-C", stage, root]);
   return fs.readFileSync(tarball);
 }
 
-export function respondWith(status: number, body: Buffer): () => Promise<{
+/**
+ * The repo archive GitHub would serve for the requested URL: its root is named
+ * after the ref, the way codeload names it (a tag loses its leading `v`).
+ */
+export const repoArchive =
+  (files: Record<string, string>) =>
+  (url: string): Buffer => {
+    const ref = /\/refs\/(?:heads|tags)\/(.+)$/.exec(url)?.[1] ?? "main";
+    return repoTarball(files, `superwall-${ref.replace(/^v(?=\d)/, "").replace(/\//g, "-")}`);
+  };
+
+export function respondWith(status: number, body: Buffer | ((url: string) => Buffer)): (url: string) => Promise<{
   ok: boolean;
   status: number;
   arrayBuffer(): Promise<ArrayBuffer>;
   json(): Promise<unknown>;
 }> {
-  return async () => ({
-    ok: status >= 200 && status < 300,
-    status,
-    arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer,
-    json: async () => JSON.parse(body.toString()),
-  });
+  return async (url) => {
+    const bytes = typeof body === "function" ? body(url) : body;
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      json: async () => JSON.parse(bytes.toString()),
+    };
+  };
 }
