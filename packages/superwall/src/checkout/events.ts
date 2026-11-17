@@ -129,6 +129,17 @@ export const clearWebFailure = (paywall: object) => {
 
 export const lastWebFailure = (paywall: object): WebFailure | undefined => webFailures.get(paywall);
 
+const dismissedStoreFailures = new WeakMap<object, object>();
+
+export const dismissStoreFailure = (paywall: object, failure: object | undefined) => {
+  if (failure === undefined || dismissedStoreFailures.get(paywall) === failure) return;
+  dismissedStoreFailures.set(paywall, failure);
+  notifyWebFailure(paywall);
+};
+
+export const isStoreFailureDismissed = (paywall: object, failure: object | undefined): boolean =>
+  failure !== undefined && dismissedStoreFailures.get(paywall) === failure;
+
 export const subscribeWebFailure = (paywall: object, listener: () => void) => {
   const listeners = webFailureListeners.get(paywall) ?? new Set<() => void>();
   webFailureListeners.set(paywall, listeners);

@@ -209,20 +209,24 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     };
   };
 
-  const readPageReturn = async (key: string, record: OpenTeleport) => {
-    if (record.returnedAt === undefined || record.pageReturn !== undefined) return;
+  const readPageReturn = async (key: string, record: OpenTeleport): Promise<boolean> => {
+    if (record.returnedAt === undefined || record.pageReturn !== undefined) return true;
     const openedAt = record.openedAt;
     try {
       const returned = await readTeleportReturn(key, record.teleportId);
-      if (returned === undefined || !isWaiting(record) || record.openedAt !== openedAt) return;
-      if (openedAt !== undefined && (returned.at === undefined || returned.at < openedAt)) return;
+      if (returned === undefined || !isWaiting(record) || record.openedAt !== openedAt) return true;
+      if (openedAt !== undefined && (returned.at === undefined || returned.at < openedAt)) {
+        return true;
+      }
       record.pageReturn = returned;
       if (returned.data !== undefined) {
         publish();
         emit("data");
       }
+      return true;
     } catch (error) {
       console.warn("Reading what the teleport page left for the app failed; retrying:", error);
+      return false;
     }
   };
 
@@ -477,7 +481,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         redeem(record, teleport.checkoutContextId, teleport.checkoutProductIdentifier);
         return;
       }
-      await readPageReturn(key, record);
+      const returnRead = await readPageReturn(key, record);
       if (!isWaiting(record)) return;
       const fromPage = record.pageReturn?.failure !== undefined;
       let failure = record.pageReturn?.failure ?? teleport.failure;
@@ -497,7 +501,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         settleAbandoned(record);
         return;
       }
-      checked = true;
+      checked = returnRead;
     } catch (error) {
       console.warn("Checking the web checkout failed; retrying:", error);
     } finally {

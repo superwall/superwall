@@ -683,6 +683,40 @@ describe("usePurchase when a web payment fails", () => {
     expect(result.current.purchase.failure).toBeUndefined();
   });
 
+  it("drops a store purchase's failure when a web purchase starts, and keeps it gone once paid", async () => {
+    const { result } = renderWithProvider(
+      () => ({ session: useSuperwallSession(), purchase: usePurchase() }),
+      {
+        config: { ...testConfig, checkout: "applePay" },
+        host: {
+          products,
+          device: { platform: "Android", publicApiKey: "pk_test" },
+          purchase: "failed",
+        },
+      },
+    );
+    await flush();
+    await act(async () => {
+      await result.current.purchase.purchase("secondary");
+    });
+    expect(result.current.purchase.failure).toMatchObject({ product: { reference: "secondary" } });
+
+    let pay: ((outcome: { status: "completed" }) => void) | undefined;
+    vi.spyOn(applePayFor(result.current.session), "purchase").mockReturnValue(
+      new Promise((resolve) => (pay = resolve)),
+    );
+    let next: Promise<unknown> | undefined;
+    act(() => {
+      next = result.current.purchase.purchase("primary");
+    });
+    expect(result.current.purchase.failure).toBeUndefined();
+    await act(async () => {
+      pay?.({ status: "completed" });
+      await next;
+    });
+    expect(result.current.purchase.failure).toBeUndefined();
+  });
+
   it("drops a web failure when a store purchase starts", async () => {
     const { result } = await renderCheckout("applePay");
     vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue(declined);

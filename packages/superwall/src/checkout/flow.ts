@@ -17,7 +17,14 @@ import {
   type PurchaseAttempt,
 } from "./events";
 
-export { clearWebFailure, lastWebFailure, subscribeWebFailure, type WebFailure } from "./events";
+export {
+  clearWebFailure,
+  dismissStoreFailure,
+  isStoreFailureDismissed,
+  lastWebFailure,
+  subscribeWebFailure,
+  type WebFailure,
+} from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
 import { checkoutModeFor, sdkRedeemsCheckout } from "./host/sdk";
 import { presentingPlacement } from "./host/init";

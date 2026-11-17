@@ -12,6 +12,8 @@ import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
 import type { ProductReference } from "./index";
 import {
   clearWebFailure,
+  dismissStoreFailure,
+  isStoreFailureDismissed,
   lastWebFailure,
   prefetchSession,
   purchaseCustomStoreOnWeb,
@@ -262,6 +264,7 @@ export const usePurchase = <
       const teleporter = teleportFor(session);
       const { postPurchase, stripeMetadata, prepaidCards } = purchaseOptions;
       clearWebFailure(session);
+      dismissStoreFailure(session, session.getSnapshot().lastPurchaseFailure);
       if (
         product &&
         sessionsFor(session).isStripeProduct(reference) &&
@@ -382,12 +385,19 @@ export const usePurchase = <
   const webFailureProduct = webFailure
     ? snapshot.productsByReference[webFailure.referenceName]
     : undefined;
+  const storeFailureDismissed = React.useSyncExternalStore(
+    React.useCallback((listener: () => void) => subscribeWebFailure(session, listener), [session]),
+    () => isStoreFailureDismissed(session, snapshot.lastPurchaseFailure),
+    () => isStoreFailureDismissed(session, snapshot.lastPurchaseFailure),
+  );
   const failure = React.useMemo(
     () =>
       webFailure && webFailureProduct
         ? { ...webFailure.failure, status: "failed" as const, product: webFailureProduct }
-        : snapshot.lastPurchaseFailure,
-    [webFailure, webFailureProduct, snapshot.lastPurchaseFailure],
+        : storeFailureDismissed
+          ? undefined
+          : snapshot.lastPurchaseFailure,
+    [webFailure, webFailureProduct, storeFailureDismissed, snapshot.lastPurchaseFailure],
   );
 
   const first = snapshot.products[0]?.reference;

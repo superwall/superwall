@@ -73,7 +73,7 @@ yourself (tests, tools), or `transportKind` to force one.
 
 - `{ status: "completed", product, message }` from `transaction_complete`
 - `{ status: "abandoned", product, message }` from `transaction_abandon`
-- `{ status: "failed", product, reason: "sdk" }` from `transaction_fail` or
+- `{ status: "failed", product, reason: "unknown" }` from `transaction_fail` or
   `transaction_timeout` (iOS reports these; Android does not, so there a
   failed purchase stays pending until the user abandons or completes)
 - `{ status: "failed", product, reason: "superseded" }` when a newer purchase
