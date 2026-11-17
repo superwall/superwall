@@ -71,7 +71,9 @@ export type NavigateOptions = {
    * Continue the flow on the web from this route: inside an iOS app the route
    * opens in the shopper's browser instead of being pushed. Needs `teleport`
    * in `definePaywall`; anywhere teleport can't run the route is pushed as
-   * usual. A push to `teleport.route` teleports without it. Default: `false`.
+   * usual. A push to `teleport.route` teleports without it; `false` pushes
+   * it in the app instead, such as when `useApplePay().available` is `false`.
+   * Default: teleport only a push to `teleport.route`.
    */
   teleport?: boolean;
 };
@@ -330,7 +332,7 @@ const Router = ({
       const teleporter = teleportFor(session);
       const teleportRoute = teleportOf(session.getSnapshot().config?.teleport)?.route;
       if (
-        (teleport === true || target === teleportRoute) &&
+        (teleport ?? target === teleportRoute) &&
         teleporter.kind === "app" &&
         teleporter.available()
       ) {

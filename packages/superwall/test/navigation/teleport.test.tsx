@@ -173,6 +173,18 @@ describe("teleporting from the app", () => {
     await expect(result).resolves.toMatchObject({ product: { reference: "card" } });
   });
 
+  it("pushes the teleport route in the app when the push says teleport: false", async () => {
+    const bodies = stubApi();
+    await mount();
+    await act(async () => {
+      captured.router?.push("checkout", { teleport: false });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText("checkout")).toBeTruthy();
+    expect(bodies).toHaveLength(0);
+  });
+
   it("pushes the route as usual on an SDK that cannot teleport", async () => {
     await mount({ ...appDevice, sdkVersionPadded: "004.017.000" });
     await act(async () => captured.router?.push("checkout"));

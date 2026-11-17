@@ -339,8 +339,9 @@ screen offers instead), `completion` (`"confirmation"` or `"direct"`),
 `introductoryOfferEligibility`. Teleport pays off only when the shopper can
 pay with Apple Pay on the web page, so check `useApplePay().available`
 before sending them there and keep them in the app (the store purchase) when
-it is `false`. A paywall with `teleport` asks Apple as it opens, so the answer
-is usually there before the first tap.
+it is `false`: `router.push(route, { teleport: false })` pushes even
+`teleport.route` in the app. A paywall with `teleport` asks Apple as it
+opens, so the answer is usually there before the first tap.
 
 ### Dev — the studio
 
