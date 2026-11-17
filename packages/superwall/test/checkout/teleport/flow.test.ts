@@ -14,7 +14,7 @@ import {
 } from "../../../src/checkout/teleport/page";
 import { flowQuery, type AttachedSession } from "../../../src/checkout/teleport/teleporter";
 import { warmTeleportPage } from "../../../src/checkout/teleport/api";
-import { purchaseEventsFor } from "../../../src/checkout/events";
+import { lastWebFailure, purchaseEventsFor } from "../../../src/checkout/events";
 import { appTeleport, teleportPage } from "./halves";
 
 type Fixture = {
@@ -270,6 +270,10 @@ describe("a paywall outside a secure context", () => {
     expect(ids()[2]).toMatch(v4);
     expect(ids()[2]).not.toBe(first);
   });
+});
+
+const leftAt = (at: number, round: number) => ({
+  session: { query: {}, returned: { data: { round }, at } },
 });
 
 describe("a teleport from the app", () => {
@@ -694,6 +698,7 @@ describe("a teleport from the app", () => {
           declineCode: "insufficient_funds",
         },
         data: { offer: "apple_pay", attempts: 2 },
+        at: Number.MAX_SAFE_INTEGER,
       },
     };
     const calls = api({
@@ -740,10 +745,46 @@ describe("a teleport from the app", () => {
       referenceName: "card",
       failure: left.returned.failure,
     });
+    expect(lastWebFailure(session)).toMatchObject({
+      referenceName: "card",
+      failure: left.returned.failure,
+    });
 
     await settle(2_000);
     expect(calls.filter((call) => call.path === "checkout/teleport/session/read")).toHaveLength(2);
     expect(data).toHaveBeenCalledOnce();
+  });
+
+  it("reads what the page left again for each trip to the browser, ignoring an earlier trip's", async () => {
+    api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": { status: "pending" },
+      "checkout/teleport/session/read": [
+        leftAt(Number.MAX_SAFE_INTEGER, 1),
+        leftAt(0, 1),
+        leftAt(Number.MAX_SAFE_INTEGER, 2),
+      ],
+    });
+    const { session } = fakeSession();
+    const teleporter = appTeleport(session);
+    attach(session);
+    const data = vi.fn();
+    teleporter.on("data", data);
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle(1_500);
+    void handleReturn("failed");
+    await settle(250);
+    await settle(2_000);
+    expect(teleporter.getStatus()).toMatchObject({ data: { round: 1 } });
+
+    teleporter.open();
+    expect(teleporter.getStatus()).not.toHaveProperty("data");
+    void handleReturn("failed");
+    await settle(250);
+    await settle(2_000);
+    await settle(2_000);
+    expect(teleporter.getStatus()).toMatchObject({ data: { round: 2 } });
+    expect(data).toHaveBeenCalledTimes(2);
   });
 
   it("shows no data when the page left only its flow", async () => {
@@ -1006,7 +1047,7 @@ describe("a teleport from the app", () => {
       return Promise.resolve({ status: "completed" as const });
     });
     expect(order).toEqual(["teleport_watch_end"]);
-    await expect(outcome).resolves.toEqual({ reference: "annual", result: bought });
+    await expect(outcome).resolves.toEqual({ reference: "annual", reported: true, result: bought });
     expect(teleporter.getStatus()).toEqual({ status: "idle" });
     expect(teleporter.inFlight()).toBe(false);
     expect(events()).not.toContain("stripe_checkout_abandon");

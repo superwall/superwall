@@ -538,6 +538,38 @@ describe("openEmbeddedSheet", () => {
     vi.unstubAllGlobals();
   });
 
+  it("calls back each decline, even when the second comes before the first lookup ends", async () => {
+    const answers: ((response: Response) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>((resolve) => answers.push(resolve))),
+    );
+    const { session } = fakeSession();
+    const failures = vi.fn();
+    void openEmbeddedSheet(embedded, { paywall: session, referenceName: "primary" }, failures);
+    checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+    checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+    checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+    await vi.waitFor(() => expect(answers).toHaveLength(2));
+
+    const declined = (declineCode: string) =>
+      new Response(
+        JSON.stringify({
+          status: "pending",
+          failure: { reason: declineCode, store: "stripe", declineCode },
+        }),
+      );
+    answers[1]?.(declined("insufficient_funds"));
+    answers[0]?.(declined("expired_card"));
+    await vi.waitFor(() => expect(failures).toHaveBeenCalledTimes(2));
+    expect(failures.mock.calls.map(([failure]) => failure.reason).sort()).toEqual([
+      "expired_card",
+      "insufficient_funds",
+    ]);
+    checkoutEvents.dispatch("SHEET_CLOSE", undefined);
+    vi.unstubAllGlobals();
+  });
+
   it("gives up waiting for Stripe after 10 seconds, not before", async () => {
     vi.useFakeTimers();
     const settled = vi.fn();
@@ -757,6 +789,7 @@ describe("purchaseOnWeb", () => {
     expect(wallet).toHaveBeenCalledWith(
       "primary",
       expect.objectContaining({ checkoutContextId: "" }),
+      expect.any(Function),
     );
   });
 });

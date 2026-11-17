@@ -9,7 +9,15 @@ import { asString, field } from "./api/decode";
 import { checkoutDiagnostics } from "./diagnostics";
 import { fetchWithRetry } from "./api/fetch";
 import { subscriptionsApiUrl } from "./api/url";
-import { checkoutEvents, purchaseEventsFor } from "./events";
+import {
+  checkoutEvents,
+  clearWebFailure,
+  purchaseEventsFor,
+  reportWebFailure,
+  type PurchaseAttempt,
+} from "./events";
+
+export { clearWebFailure, lastWebFailure, subscribeWebFailure, type WebFailure } from "./events";
 import { hostEvents, type HostContext, type HostEvents } from "./host";
 import { checkoutModeFor, sdkRedeemsCheckout } from "./host/sdk";
 import { presentingPlacement } from "./host/init";
@@ -384,11 +392,13 @@ export const watchCompletedCheckouts = (paywall: PaywallSession): (() => void) =
 export const purchaseWithApplePay = (
   paywall: PaywallSession,
   referenceName: string,
+  onSubmit?: () => void,
 ): Promise<ApplePayOutcome> => {
   const warmed = sessionsFor(paywall).warmed(referenceName, "apple-pay");
   return applePayFor(paywall).purchase(
     referenceName,
     contextFor(paywall, referenceName, warmed?.checkoutContextId ?? ""),
+    onSubmit,
   );
 };
 
@@ -409,6 +419,7 @@ export const openEmbeddedSheet = (
   embedded: EmbeddedCheckoutSession,
   host?: { paywall: PaywallSession; referenceName: string; tappedAt?: number },
   onFailure?: (failure: CheckoutFailure) => void,
+  onSubmit?: () => void,
 ): Promise<WebPurchaseOutcome> =>
   new Promise((resolve) => {
     const events = host ? hostFor(host.paywall) : null;
@@ -445,8 +456,9 @@ export const openEmbeddedSheet = (
         if (context) events?.initiated(context);
       }),
       checkoutEvents.subscribe("CHECKOUT_SUBMITTED", ({ session: submitted }) => {
-        if (!isOurs(submitted) || !context) return;
-        events?.submitted(context);
+        if (!isOurs(submitted)) return;
+        onSubmit?.();
+        if (context) events?.submitted(context);
       }),
       checkoutEvents.subscribe("PAYMENT_SUCCESS", ({ session: paid }) => {
         if (!isOurs(paid)) return;
@@ -460,7 +472,7 @@ export const openEmbeddedSheet = (
           : Promise.resolve(unknownFailure());
         failed = lookup;
         void lookup.then((failure) => {
-          if (!settled && failed === lookup) onFailure?.(failure);
+          if (!settled) onFailure?.(failure);
         });
       }),
       checkoutEvents.subscribe("SHEET_CLOSE", () => {
@@ -491,32 +503,26 @@ export const purchaseOnWeb = async (
   referenceName: string,
   requested: CheckoutMode,
   options: WebPurchaseOptions = {},
+  attempt?: PurchaseAttempt,
 ): Promise<WebPurchaseOutcome> => {
   clearWebFailure(paywall);
   const events = purchaseEventsFor(paywall);
-  events.emit("start", { referenceName });
-  const stopWatching = checkoutEvents.subscribe("CHECKOUT_SUBMITTED", ({ session }) => {
-    if (session.referenceName === referenceName) events.emit("submit", { referenceName });
-  });
+  events.emit("start", { referenceName, attempt });
   let reported: CheckoutFailure | undefined;
   const reportFailure = (failure: CheckoutFailure) => {
     reported = failure;
-    recordWebFailure(paywall, referenceName, failure);
-    events.emit("failure", { referenceName, failure });
+    reportWebFailure(paywall, { referenceName, failure, attempt });
   };
-  const outcome = await runWebPurchase(
-    paywall,
-    referenceName,
-    requested,
-    options,
-    reportFailure,
-  ).finally(stopWatching);
+  const outcome = await runWebPurchase(paywall, referenceName, requested, options, {
+    onFailure: reportFailure,
+    onSubmit: () => events.emit("submit", { referenceName, attempt }),
+  });
   if (outcome.status === "failed") {
     if (outcome.failure !== reported) reportFailure(outcome.failure);
   } else if (outcome.status === "completed") {
     clearWebFailure(paywall);
-    events.emit("complete", { referenceName });
-  } else events.emit("abandon", { referenceName });
+    events.emit("complete", { referenceName, attempt });
+  } else events.emit("abandon", { referenceName, attempt });
   return outcome;
 };
 
@@ -525,7 +531,7 @@ const runWebPurchase = async (
   referenceName: string,
   requested: CheckoutMode,
   options: WebPurchaseOptions,
-  onFailure: (failure: CheckoutFailure) => void,
+  report: { onFailure: (failure: CheckoutFailure) => void; onSubmit: () => void },
 ): Promise<WebPurchaseOutcome> => {
   const tappedAt = Date.now();
   const sessions = sessionsFor(paywall);
@@ -533,7 +539,7 @@ const runWebPurchase = async (
   rememberPurchaseOptions(paywall, referenceName, options);
   try {
     if (mode === "applePay") {
-      const outcome = await purchaseWithApplePay(paywall, referenceName);
+      const outcome = await purchaseWithApplePay(paywall, referenceName, report.onSubmit);
       if (outcome.status !== "unavailable") return outcome;
     }
 
@@ -552,7 +558,12 @@ const runWebPurchase = async (
           });
 
     if (result.directive === "embedded") {
-      return await openEmbeddedSheet(result, { paywall, referenceName, tappedAt }, onFailure);
+      return await openEmbeddedSheet(
+        result,
+        { paywall, referenceName, tappedAt },
+        report.onFailure,
+        report.onSubmit,
+      );
     }
     if (result.directive === "redirect") return await openHostedCheckout(paywall, result);
     return { status: "failed", failure: unknownFailure() };
@@ -560,41 +571,6 @@ const runWebPurchase = async (
     console.error("Error beginning web checkout:", error);
     return { status: "failed", failure: unknownFailure() };
   }
-};
-
-export type WebFailure = { referenceName: string; failure: CheckoutFailure };
-
-const webFailures = new WeakMap<object, WebFailure>();
-const webFailureListeners = new WeakMap<object, Set<() => void>>();
-
-const notifyWebFailure = (paywall: PaywallSession) => {
-  for (const listener of webFailureListeners.get(paywall) ?? []) listener();
-};
-
-const recordWebFailure = (
-  paywall: PaywallSession,
-  referenceName: string,
-  failure: CheckoutFailure,
-) => {
-  webFailures.set(paywall, { referenceName, failure });
-  notifyWebFailure(paywall);
-};
-
-export const clearWebFailure = (paywall: PaywallSession) => {
-  if (!webFailures.delete(paywall)) return;
-  notifyWebFailure(paywall);
-};
-
-export const lastWebFailure = (paywall: PaywallSession): WebFailure | undefined =>
-  webFailures.get(paywall);
-
-export const subscribeWebFailure = (paywall: PaywallSession, listener: () => void) => {
-  const listeners = webFailureListeners.get(paywall) ?? new Set<() => void>();
-  webFailureListeners.set(paywall, listeners);
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
 };
 
 const CUSTOM_STORE_NAVIGATION_DELAY = 250;

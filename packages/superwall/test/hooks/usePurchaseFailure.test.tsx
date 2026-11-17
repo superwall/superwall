@@ -1,7 +1,9 @@
 import { act } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { usePurchase } from "../../src/hooks";
-import { flush, renderWithProvider } from "../helpers";
+import { renderToString } from "react-dom/server";
+import { SuperwallProvider } from "../../src";
+import { flush, renderWithProvider, testConfig } from "../helpers";
 
 describe("usePurchase when the SDK reports a failure", () => {
   it("resolves as failed with the sdk reason, and clears the pending state", async () => {
@@ -87,5 +89,51 @@ describe("purchase callbacks for a store purchase made by the SDK", () => {
       ["start", "primary"],
       ["failure", "unknown", "primary"],
     ]);
+  });
+});
+
+describe("purchase() callbacks when two purchases overlap", () => {
+  it("fires each call's callbacks for its own purchase only", async () => {
+    const { result } = renderWithProvider(() => usePurchase(), { host: { purchase: "completed" } });
+    await flush();
+    const calls: string[] = [];
+    const record = (call: string) => ({
+      onStart: (product: { reference: string }) => calls.push(`${call} start ${product.reference}`),
+      onComplete: (product: { reference: string }) =>
+        calls.push(`${call} complete ${product.reference}`),
+      onFailure: (failure: { product: { reference: string } }) =>
+        calls.push(`${call} failure ${failure.product.reference}`),
+    });
+
+    await act(async () => {
+      await Promise.all([
+        result.current.purchase("primary", record("a")),
+        result.current.purchase("secondary", record("b")),
+      ]);
+    });
+
+    expect(calls.filter((call) => call.startsWith("a "))).not.toContainEqual(
+      expect.stringContaining("secondary"),
+    );
+    expect(calls.filter((call) => call.startsWith("b "))).not.toContainEqual(
+      expect.stringContaining("primary"),
+    );
+    expect(calls).toContain("a start primary");
+    expect(calls).toContain("b start secondary");
+  });
+});
+
+describe("usePurchase rendered on the server", () => {
+  it("renders, as a teleport page's prerender does", () => {
+    const Probe = () => {
+      const { failure } = usePurchase();
+      return <p>{failure ? failure.reason : "none"}</p>;
+    };
+    const html = renderToString(
+      <SuperwallProvider config={testConfig}>
+        <Probe />
+      </SuperwallProvider>,
+    );
+    expect(html).toContain("none");
   });
 });

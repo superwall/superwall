@@ -236,19 +236,25 @@ The stack, bottom to top — each layer depends only on the one below it:
       happens and settles only when the sheet is paid (`completed`, which
       clears the failure) or closed (`failed`). `flow.ts` holds the last failure per
       paywall (`usePurchase().failure`) and emits each purchase step on
-      `purchaseEventsFor(paywall)`, which feeds the `usePurchase` callbacks
+      `purchaseEventsFor(paywall)` (the failure store and the bus live in
+      `events.ts`, so the teleport's `app.ts` reports a failure through the same
+      `reportWebFailure`), which feeds the `usePurchase` callbacks
       (`onStart`, `onSubmit`, `onComplete`, `onAbandon`, `onFailure`) — ours, never
       Stripe's event names. `usePurchase` also emits them for a store purchase
       made by the native SDK (no `onSubmit`, and `onFailure`'s reason is
       `unknown` or `superseded`: no SDK sends why); custom store products emit
-      none. The same callbacks passed to one `purchase()` call fire only
-      while that call is in flight. A teleport page's `returnToApp()` after a failed
+      none. Every event carries the purchase attempt that started it, so the
+      callbacks passed to one `purchase()` call fire only for that call's
+      purchase, even when another overlaps it; a teleport handed to an in-app
+      purchase is reported once, by that purchase. Submission is reported by
+      the sheet or wallet the purchase opened, never matched by product. A teleport page's `returnToApp()` after a failed
       payment adds `reason=failed` to the return link, and leaves the app the
       failure and any `returnToApp({ data })` in the teleport's session
-      (`returned`, beside `query`, via `checkout/teleport/session` with
+      (`returned`, beside `query`, stamped with `at`, the time it left, via `checkout/teleport/session` with
       `keepalive`, never awaited before the navigation, so iOS still opens the
       app). Once the shopper is back, the app reads it on each check until it
-      finds it: the page's failure wins over the backend's, and `data` shows
+      finds one left after the browser last opened (`openedAt`; an earlier
+      trip's is ignored): the page's failure wins over the backend's, and `data` shows
       as `useTeleport().data` and `onReturnData`. A teleport that has
       completed refuses the write, so nothing is left after a purchase.
     - `session/` is where a checkout session comes from: `index.ts`

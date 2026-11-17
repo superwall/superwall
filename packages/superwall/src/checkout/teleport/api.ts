@@ -139,9 +139,11 @@ export const readPageReturn = (session: unknown): PageReturn | undefined => {
   if (!isPlainObject(returned)) return undefined;
   const failure = readCheckoutFailure(returned.failure);
   const data = isPlainObject(returned.data) ? (returned.data as TeleportData) : undefined;
+  const at = typeof returned.at === "number" ? returned.at : undefined;
   return {
     ...(failure === undefined ? {} : { failure }),
     ...(data === undefined ? {} : { data }),
+    ...(at === undefined ? {} : { at }),
   };
 };
 

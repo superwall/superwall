@@ -137,7 +137,10 @@ describe("useTeleport on the web half", () => {
     expect(init?.keepalive).toBe(true);
     expect(JSON.parse(String(init?.body))).toEqual({
       teleportId: "v1:tp",
-      session: { query: {}, returned: { failure, data: { offer: "apple_pay" } } },
+      session: {
+        query: {},
+        returned: { failure, data: { offer: "apple_pay" }, at: expect.any(Number) },
+      },
     });
 
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -191,7 +194,7 @@ describe("useTeleport on the web half", () => {
     const [, init] = fetchMock.mock.calls[0] ?? [];
     expect(JSON.parse(String(init?.body))).toEqual({
       teleportId: "v1:tp",
-      session: { query: {}, returned: { failure } },
+      session: { query: {}, returned: { failure, at: expect.any(Number) } },
     });
   });
 
@@ -311,7 +314,10 @@ describe("useTeleport in the app", () => {
         "checkout/status": { status: "pending" },
         "checkout/teleport/session": { saved: true },
         "checkout/teleport/session/read": {
-          session: { query: {}, returned: { data: { offer: "apple_pay" } } },
+          session: {
+            query: {},
+            returned: { data: { offer: "apple_pay" }, at: Number.MAX_SAFE_INTEGER },
+          },
         },
       };
       vi.stubGlobal(

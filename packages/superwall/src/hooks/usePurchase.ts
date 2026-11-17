@@ -20,7 +20,7 @@ import {
   subscribeWebFailure,
 } from "../checkout/flow";
 import { unknownFailure, type CheckoutFailure } from "../checkout/failure";
-import { purchaseEventsFor } from "../checkout/events";
+import { purchaseEventsFor, reportWebFailure, type PurchaseAttempt } from "../checkout/events";
 
 export type { CheckoutFailure, CheckoutFailureReason } from "../checkout/failure";
 import { isCustomStoreProductIdentifier } from "../checkout/products";
@@ -100,8 +100,8 @@ export type UsePurchaseOptions<TProduct extends SuperwallProduct = SuperwallProd
   PurchaseCallbacks<TProduct>;
 
 /**
- * A `purchase()` call's options. Its callbacks fire only while this call is
- * in flight, beside any passed to `usePurchase`.
+ * A `purchase()` call's options. Its callbacks fire only for this call's
+ * purchase, beside any passed to `usePurchase`.
  */
 export type PurchaseOptions<TProduct extends SuperwallProduct = SuperwallProduct> =
   SuperwallPurchaseOptions & PurchaseCallbacks<TProduct>;
@@ -131,14 +131,17 @@ const referenceOf = (input: string | { reference: string }): string =>
 const listen = <TProduct extends SuperwallProduct>(
   paywall: { getSnapshot: () => { productsByReference: Record<string, TProduct | undefined> } },
   callbacks: () => PurchaseCallbacks<TProduct>,
+  only?: PurchaseAttempt,
 ): (() => void) => {
   const events = purchaseEventsFor(paywall);
-  const productOf = (referenceName: string) =>
-    paywall.getSnapshot().productsByReference[referenceName];
+  const productOf = (referenceName: string, attempt: PurchaseAttempt | undefined) =>
+    only === undefined || attempt === only
+      ? paywall.getSnapshot().productsByReference[referenceName]
+      : undefined;
   const each =
     (pick: (current: PurchaseCallbacks<TProduct>) => ((product: TProduct) => void) | undefined) =>
-    ({ referenceName }: { referenceName: string }) => {
-      const product = productOf(referenceName);
+    ({ referenceName, attempt }: { referenceName: string; attempt?: PurchaseAttempt }) => {
+      const product = productOf(referenceName, attempt);
       if (product) pick(callbacks())?.(product);
     };
   const unsubscribers = [
@@ -158,8 +161,8 @@ const listen = <TProduct extends SuperwallProduct>(
       "abandon",
       each((current) => current.onAbandon),
     ),
-    events.on("failure", ({ referenceName, failure }) => {
-      const product = productOf(referenceName);
+    events.on("failure", ({ referenceName, failure, attempt }) => {
+      const product = productOf(referenceName, attempt);
       if (product) {
         callbacks().onFailure?.({
           ...failure,
@@ -178,16 +181,25 @@ const reportStorePurchase = (
   paywall: object,
   reference: string,
   purchase: () => Promise<SuperwallPurchaseResult>,
+  attempt: PurchaseAttempt,
 ): Promise<SuperwallPurchaseResult> => {
-  const events = purchaseEventsFor(paywall);
-  events.emit("start", { referenceName: reference });
+  purchaseEventsFor(paywall).emit("start", { referenceName: reference, attempt });
   return purchase().then((result) => {
-    const referenceName = result.product.reference;
-    if (result.status === "completed") events.emit("complete", { referenceName });
-    else if (result.status === "abandoned") events.emit("abandon", { referenceName });
-    else events.emit("failure", { referenceName, failure: { reason: result.reason } });
+    emitStoreResult(paywall, result, attempt);
     return result;
   });
+};
+
+const emitStoreResult = (
+  paywall: object,
+  result: SuperwallPurchaseResult,
+  attempt: PurchaseAttempt,
+) => {
+  const events = purchaseEventsFor(paywall);
+  const referenceName = result.product.reference;
+  if (result.status === "completed") events.emit("complete", { referenceName, attempt });
+  else if (result.status === "abandoned") events.emit("abandon", { referenceName, attempt });
+  else events.emit("failure", { referenceName, attempt, failure: { reason: result.reason } });
 };
 
 /**
@@ -228,6 +240,7 @@ export const usePurchase = <
     async (
       input: ProductReference | SuperwallProduct<TVariables>,
       purchaseOptions: SuperwallPurchaseOptions,
+      attempt: PurchaseAttempt,
     ): Promise<PurchaseResult<TVariables>> => {
       const reference = referenceOf(input);
       const product = session.getSnapshot().productsByReference[reference];
@@ -241,23 +254,37 @@ export const usePurchase = <
         teleporter.available()
       ) {
         const events = purchaseEventsFor(session);
-        events.emit("start", { referenceName: reference });
+        events.emit("start", { referenceName: reference, attempt });
         const outcome = await teleporter.begin({
           productReference: reference,
           query: flowQuery(queryStore),
           postPurchase,
           stripeMetadata,
           prepaidCards,
+          attempt,
         });
-        const status = typeof outcome === "string" ? outcome : (await outcome.result).status;
-        const settledReference = typeof outcome === "string" ? reference : outcome.reference;
-        const bought = session.getSnapshot().productsByReference[settledReference] ?? product;
-        if (status === "completed") events.emit("complete", { referenceName: settledReference });
-        if (status === "abandoned") events.emit("abandon", { referenceName: settledReference });
-        if (status !== "failed") return { status, product: bought };
-        const failure = unknownFailure();
-        events.emit("failure", { referenceName: settledReference, failure });
-        return { status, product: bought, failure };
+        if (typeof outcome !== "string") {
+          const result = (await outcome.result) as SuperwallPurchaseResult<
+            SuperwallProduct<TVariables>
+          >;
+          if (!outcome.reported) emitStoreResult(session, result, attempt);
+          return result;
+        }
+        const reported = lastWebFailure(session);
+        const failure = reported?.attempt === attempt ? reported.failure : undefined;
+        if (outcome === "completed") {
+          clearWebFailure(session);
+          events.emit("complete", { referenceName: reference, attempt });
+          return { status: outcome, product };
+        }
+        if (outcome === "abandoned" && failure === undefined) {
+          events.emit("abandon", { referenceName: reference, attempt });
+          return { status: outcome, product };
+        }
+        if (failure !== undefined) return { status: "failed", product, failure };
+        const unknown = unknownFailure();
+        reportWebFailure(session, { referenceName: reference, failure: unknown, attempt });
+        return { status: "failed", product, failure: unknown };
       }
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
         if (teleporter.kind === "page" && !(await teleporter.whenUnsettled())) {
@@ -274,6 +301,7 @@ export const usePurchase = <
             stripeMetadata,
             ...(rule === undefined ? {} : { prepaidCards: rule }),
           },
+          attempt,
         );
         return { ...outcome, product };
       }
@@ -292,7 +320,12 @@ export const usePurchase = <
         return { status: "failed", product };
       }
       const store = () =>
-        reportStorePurchase(session, reference, () => session.purchase(input, purchaseOptions));
+        reportStorePurchase(
+          session,
+          reference,
+          () => session.purchase(input, purchaseOptions),
+          attempt,
+        );
       if (teleporter.kind === "page" || !teleporter.inFlight()) {
         return store() as Promise<PurchaseResult<TVariables>>;
       }
@@ -309,9 +342,10 @@ export const usePurchase = <
       const { onStart, onSubmit, onComplete, onAbandon, onFailure, ...purchaseOptions } =
         withCallbacks ?? {};
       const own = { onStart, onSubmit, onComplete, onAbandon, onFailure };
-      const stop = listen(session, () => own);
+      const attempt: PurchaseAttempt = {};
+      const stop = listen(session, () => own, attempt);
       try {
-        return await buy(input, purchaseOptions);
+        return await buy(input, purchaseOptions, attempt);
       } finally {
         stop();
       }
@@ -323,6 +357,7 @@ export const usePurchase = <
 
   const webFailure = React.useSyncExternalStore(
     React.useCallback((listener: () => void) => subscribeWebFailure(session, listener), [session]),
+    () => lastWebFailure(session),
     () => lastWebFailure(session),
   );
   const webFailureProduct = webFailure

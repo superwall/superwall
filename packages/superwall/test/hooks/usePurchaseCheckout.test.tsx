@@ -2,8 +2,9 @@ import { act } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SuperwallCheckoutConfig } from "@superwall/runtime";
 import { usePurchase, useSuperwallSession } from "../../src/hooks";
-import { checkoutEvents } from "../../src/checkout/events";
+import { checkoutEvents, reportWebFailure } from "../../src/checkout/events";
 import { applePayFor, sessionsFor } from "../../src/checkout/flow";
+import { teleportFor } from "../../src/checkout/teleport/flow";
 import type {
   ElementsCheckoutSession,
   EmbeddedCheckoutSession,
@@ -524,6 +525,7 @@ describe("usePurchase with Apple Pay", () => {
     expect(wallet).toHaveBeenCalledWith(
       "primary",
       expect.objectContaining({ productIdentifier: "test:price_1:no-trial" }),
+      expect.any(Function),
     );
     expect(begin).not.toHaveBeenCalled();
     expect(outcome).toMatchObject({ status: "completed" });
@@ -772,7 +774,7 @@ describe("usePurchase callbacks", () => {
     await flush();
     checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
     checkoutEvents.dispatch("CHECKOUT_SUBMITTED", {
-      session: { ...embedded, referenceName: "other" },
+      session: { ...embedded, clientSecret: "cs_another_paywall" },
     });
     checkoutEvents.dispatch("CHECKOUT_SUBMITTED", { session: embedded });
     checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: embedded });
@@ -785,6 +787,74 @@ describe("usePurchase callbacks", () => {
       ["submit", "primary"],
       ["complete", "primary"],
     ]);
+  });
+
+  it("fires the end of a teleport handed to an in-app purchase once, from that purchase", async () => {
+    const { result, calls } = await renderWithCallbacks("sheet");
+    const teleporter = teleportFor(result.current.session);
+    if (teleporter.kind !== "app") throw new Error("expected the app half");
+    const bought = result.current.session.getSnapshot().productsByReference.secondary;
+    vi.spyOn(teleporter, "available").mockReturnValue(true);
+    vi.spyOn(teleporter, "begin").mockResolvedValue({
+      reference: "secondary",
+      result: Promise.resolve({ status: "failed", product: bought, reason: "superseded" }),
+      reported: true,
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.buyer.purchase("primary");
+    });
+
+    expect(outcome).toMatchObject({ status: "failed", reason: "superseded" });
+    expect(calls).toEqual([["start", "primary"]]);
+  });
+
+  it("fires the end of a teleport paid in the app through the store, with the store's reason", async () => {
+    const { result, calls } = await renderWithCallbacks("sheet");
+    const teleporter = teleportFor(result.current.session);
+    if (teleporter.kind !== "app") throw new Error("expected the app half");
+    const bought = result.current.session.getSnapshot().productsByReference.secondary;
+    vi.spyOn(teleporter, "available").mockReturnValue(true);
+    vi.spyOn(teleporter, "begin").mockResolvedValue({
+      reference: "secondary",
+      result: Promise.resolve({ status: "completed", product: bought }),
+    });
+
+    await act(async () => {
+      await result.current.buyer.purchase("primary");
+    });
+
+    expect(calls).toEqual([
+      ["start", "primary"],
+      ["complete", "secondary"],
+    ]);
+  });
+
+  it("settles a teleport the shopper gave up on after a decline as failed, with the decline", async () => {
+    const { result, calls } = await renderWithCallbacks("sheet");
+    const session = result.current.session;
+    const teleporter = teleportFor(session);
+    if (teleporter.kind !== "app") throw new Error("expected the app half");
+    const failure = {
+      reason: "insufficient_funds" as const,
+      store: "stripe" as const,
+      declineCode: "insufficient_funds",
+    };
+    vi.spyOn(teleporter, "available").mockReturnValue(true);
+    vi.spyOn(teleporter, "begin").mockImplementation(async (request) => {
+      reportWebFailure(session, { referenceName: "primary", failure, attempt: request.attempt });
+      return "abandoned";
+    });
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.buyer.purchase("primary");
+    });
+
+    expect(outcome).toMatchObject({ status: "failed", failure });
+    expect(result.current.buyer.failure).toMatchObject({ ...failure, status: "failed" });
+    expect(calls.map(([name]) => name)).toEqual(["start", "failure"]);
   });
 
   const declineInSheet = async () => {

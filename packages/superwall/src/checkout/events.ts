@@ -53,12 +53,16 @@ export const checkoutEvents = {
 
 type StoreFailure = { reason: SuperwallPurchaseFailure["reason"] };
 
+export type PurchaseAttempt = object;
+
+type Attempted = { referenceName: string; attempt?: PurchaseAttempt };
+
 export type PurchaseEventPayload = {
-  start: { referenceName: string };
-  submit: { referenceName: string };
-  complete: { referenceName: string };
-  abandon: { referenceName: string };
-  failure: { referenceName: string; failure: CheckoutFailure | StoreFailure };
+  start: Attempted;
+  submit: Attempted;
+  complete: Attempted;
+  abandon: Attempted;
+  failure: Attempted & { failure: CheckoutFailure | StoreFailure };
 };
 
 export type PurchaseEvent = keyof PurchaseEventPayload;
@@ -97,4 +101,39 @@ export const purchaseEventsFor = (paywall: object): PurchaseBus => {
   };
   purchaseBuses.set(paywall, bus);
   return bus;
+};
+
+export type WebFailure = {
+  referenceName: string;
+  failure: CheckoutFailure;
+  attempt?: PurchaseAttempt;
+};
+
+const webFailures = new WeakMap<object, WebFailure>();
+const webFailureListeners = new WeakMap<object, Set<() => void>>();
+
+const notifyWebFailure = (paywall: object) => {
+  for (const listener of webFailureListeners.get(paywall) ?? []) listener();
+};
+
+export const reportWebFailure = (paywall: object, reported: WebFailure) => {
+  webFailures.set(paywall, reported);
+  notifyWebFailure(paywall);
+  purchaseEventsFor(paywall).emit("failure", reported);
+};
+
+export const clearWebFailure = (paywall: object) => {
+  if (!webFailures.delete(paywall)) return;
+  notifyWebFailure(paywall);
+};
+
+export const lastWebFailure = (paywall: object): WebFailure | undefined => webFailures.get(paywall);
+
+export const subscribeWebFailure = (paywall: object, listener: () => void) => {
+  const listeners = webFailureListeners.get(paywall) ?? new Set<() => void>();
+  webFailureListeners.set(paywall, listeners);
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 };

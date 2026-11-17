@@ -100,7 +100,11 @@ export type ApplePay = {
   availability(referenceName: string): ApplePayAvailability;
   markUnavailable(referenceName: string, reason: ApplePayWalletReason, error?: unknown): void;
   prepare(quote: ElementsCheckoutSession, identity?: CustomerIdentity): Promise<void>;
-  purchase(referenceName: string, context: HostContext): Promise<ApplePayOutcome>;
+  purchase(
+    referenceName: string,
+    context: HostContext,
+    onSubmit?: () => void,
+  ): Promise<ApplePayOutcome>;
   clear(): void;
   subscribe(listener: () => void): () => void;
 };
@@ -135,13 +139,18 @@ type Prepared = {
   clientSecret: string | null;
   session: ApplePaySession;
   context: HostContext | null;
+  onSubmit?: () => void;
   ready: boolean;
   inProgress: boolean;
   authorized: boolean;
   settle: ((outcome: ApplePayOutcome) => void) | null;
 };
 
-type Pending = { context: HostContext; resolve: (outcome: ApplePayOutcome) => void };
+type Pending = {
+  context: HostContext;
+  onSubmit?: () => void;
+  resolve: (outcome: ApplePayOutcome) => void;
+};
 
 type WalletState = { status: "ready"; prepared: Prepared } | { status: "preparing" } | Unavailable;
 
@@ -323,6 +332,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
   const onPaymentMethod = async (ready: Prepared, event: PaymentRequestPaymentMethodEvent) => {
     ready.authorized = true;
     checkoutEvents.dispatch("CHECKOUT_SUBMITTED", { session: ready.session });
+    ready.onSubmit?.();
     if (ready.context) options.host.submitted(ready.context);
 
     let completed = false;
@@ -367,10 +377,15 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
     ready.settle({ status: "abandoned" });
   };
 
-  const show = (ready: Prepared, context: HostContext): Promise<ApplePayOutcome> => {
+  const show = (
+    ready: Prepared,
+    context: HostContext,
+    onSubmit?: () => void,
+  ): Promise<ApplePayOutcome> => {
     if (ready.inProgress) return Promise.resolve({ status: "failed", failure: unknownFailure() });
 
     ready.context = context;
+    ready.onSubmit = onSubmit;
     ready.authorized = false;
     ready.inProgress = true;
 
@@ -424,13 +439,13 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
       pending.clear();
     },
 
-    purchase: (referenceName, context) => {
+    purchase: (referenceName, context, onSubmit) => {
       const state = stateOf(referenceName);
-      if (state.status === "ready") return show(state.prepared, context);
+      if (state.status === "ready") return show(state.prepared, context, onSubmit);
       if (state.status === "unavailable") return Promise.resolve(state);
       startLoading();
       return new Promise((resolve) => {
-        pending.set(referenceName, { context, resolve });
+        pending.set(referenceName, { context, onSubmit, resolve });
       });
     },
 
@@ -510,7 +525,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
       prepared.set(referenceName, ready);
       notify();
       const waiting = takePending(referenceName);
-      if (waiting) void show(ready, waiting.context).then(waiting.resolve);
+      if (waiting) void show(ready, waiting.context, waiting.onSubmit).then(waiting.resolve);
     },
   };
 };

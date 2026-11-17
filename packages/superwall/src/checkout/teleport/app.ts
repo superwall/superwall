@@ -10,7 +10,7 @@ import { platformOf } from "../../device";
 import { attributionOf } from "../api/body";
 import { attachCheckoutMetadata } from "../api/metadata";
 import { asString } from "../api/decode";
-import { purchaseEventsFor } from "../events";
+import { reportWebFailure, type PurchaseAttempt } from "../events";
 import type { CheckoutFailure } from "../failure";
 import { hostOf } from "../../host";
 import { startLoading, stopLoading } from "../loading";
@@ -76,6 +76,8 @@ type OpenTeleport = CreatedTeleport & {
   checkoutContextId?: string;
   checkoutProductIdentifier?: string;
   returnedAt?: number;
+  openedAt?: number;
+  attempt?: PurchaseAttempt;
   queryPatch?: string;
   postPurchase?: SuperwallPostPurchase;
   stripeMetadata?: Readonly<Record<string, string>>;
@@ -217,9 +219,11 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
 
   const readPageReturn = async (key: string, record: OpenTeleport) => {
     if (record.returnedAt === undefined || record.pageReturn !== undefined) return;
+    const openedAt = record.openedAt;
     try {
       const returned = await readTeleportReturn(key, record.teleportId);
-      if (returned === undefined || !isWaiting(record)) return;
+      if (returned === undefined || !isWaiting(record) || record.openedAt !== openedAt) return;
+      if (openedAt !== undefined && (returned.at === undefined || returned.at < openedAt)) return;
       record.pageReturn = returned;
       if (returned.data !== undefined) {
         publish();
@@ -453,7 +457,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         .products.find((product) => product.productId === record.checkoutProductIdentifier)
         ?.reference;
     if (referenceName !== undefined) {
-      purchaseEventsFor(paywall).emit("failure", { referenceName, failure });
+      reportWebFailure(paywall, { referenceName, failure, attempt: record.attempt });
     }
   };
 
@@ -565,6 +569,8 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
 
   const open = (record: OpenTeleport) => {
     record.returnedAt = undefined;
+    record.openedAt = Date.now();
+    record.pageReturn = undefined;
     post({
       event_name: "open_url_external",
       url: checkoutUrlFor(
@@ -715,6 +721,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       postPurchase: request.postPurchase,
       stripeMetadata: request.stripeMetadata,
       ...(request.prepaidCards === undefined ? {} : { prepaidCards: request.prepaidCards }),
+      ...(request.attempt === undefined ? {} : { attempt: request.attempt }),
       outcome,
       settle: resolve,
     };
@@ -890,7 +897,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     handOff: (reference, purchase) => {
       const record = parkWaiting();
       const result = purchase();
-      record?.settle({ reference, result });
+      record?.settle({ reference, result, reported: true });
       return result;
     },
     open: () => {

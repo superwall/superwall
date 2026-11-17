@@ -3,6 +3,7 @@ import type {
   SuperwallPrepaidCards,
   SuperwallSession,
 } from "@superwall/runtime";
+import type { PurchaseAttempt } from "../events";
 import type { CheckoutFailure } from "../failure";
 import type { PurchaseOutcome } from "../types";
 import { NAV_QUERY_KEY } from "./boot";
@@ -29,11 +30,15 @@ export type TeleportDataValue =
 
 export type TeleportData = { [key: string]: TeleportDataValue };
 
-export type PageReturn = { failure?: CheckoutFailure; data?: TeleportData };
+export type PageReturn = { failure?: CheckoutFailure; data?: TeleportData; at?: number };
 
 export type TeleportEvent = "open" | "return" | "cancel" | "complete" | "data";
 
-export type HandedOff = { reference: string; result: Promise<{ status: PurchaseOutcome }> };
+export type HandedOff = {
+  reference: string;
+  result: Promise<{ status: PurchaseOutcome }>;
+  reported?: boolean;
+};
 
 export type TeleportOutcome = PurchaseOutcome | HandedOff;
 
@@ -44,6 +49,7 @@ export type TeleportRequest = {
   postPurchase?: SuperwallPostPurchase;
   stripeMetadata?: Readonly<Record<string, string>>;
   prepaidCards?: SuperwallPrepaidCards;
+  attempt?: PurchaseAttempt;
 };
 
 export type ReturnReason = "purchased" | "closed" | "failed";
