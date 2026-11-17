@@ -124,21 +124,39 @@ describe("VIEWPORT_FIT_GUARD", () => {
 describe("hostAttributes", () => {
   it("describes the host the paywall is running in, for the inset floors", () => {
     expect(
-      hostAttributes({ platform: "iOS", interfaceType: "iphone", deviceModel: "iPhone18,3" }),
+      hostAttributes(
+        { platform: "iOS", interfaceType: "iphone", deviceModel: "iPhone18,3" },
+        "ios-sdk",
+      ),
     ).toEqual({
       "data-sw-platform": "ios",
       "data-sw-idiom": "phone",
       "data-sw-cutout": "island",
     });
-    expect(hostAttributes({ platform: "Android", deviceModel: "Pixel 10" })).toEqual({
-      "data-sw-platform": "android",
+    expect(hostAttributes({ platform: "Android", deviceModel: "Pixel 10" }, "android-sdk")).toEqual(
+      {
+        "data-sw-platform": "android",
+        "data-sw-idiom": undefined,
+        "data-sw-cutout": undefined,
+      },
+    );
+  });
+
+  it("describes the browser on a teleported page, whatever device the app sent", () => {
+    expect(
+      hostAttributes(
+        { platform: "iOS", interfaceType: "iphone", deviceModel: "iPhone18,3" },
+        "web-teleport",
+      ),
+    ).toEqual({
+      "data-sw-platform": "web",
       "data-sw-idiom": undefined,
       "data-sw-cutout": undefined,
     });
   });
 
   it("leaves every attribute off for a host that has said nothing", () => {
-    expect(hostAttributes({})).toEqual({
+    expect(hostAttributes({}, "browser")).toEqual({
       "data-sw-platform": undefined,
       "data-sw-idiom": undefined,
       "data-sw-cutout": undefined,

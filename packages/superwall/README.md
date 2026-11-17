@@ -268,6 +268,10 @@ open in portrait, and a host app built with an older iOS SDK runs beside it
 rather than under it, so only `env()` knows the real inset. A host may also
 report `safeAreaInsets` in its device variables; the provider writes them
 as the floors. The studio does this for its iPhone Duo presets.
+A teleported page runs in the browser, not in the app, so it stamps
+`data-sw-platform="web"` and no idiom or cutout, and ignores the app's
+`safeAreaInsets`: only the browser's `env()` insets apply, as on its
+pre-rendered first paint. `useDevice()` still reports the app's platform.
 Framework paywalls always report `env()` insets: the document sets
 `viewport-fit=cover` and, before anything else runs, a script adds it back to
 the viewport tag SuperwallKit for iOS appends after load, without which every

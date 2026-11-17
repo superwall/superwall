@@ -5,6 +5,7 @@ import {
   type SuperwallDeviceVariables,
 } from "@superwall/runtime";
 import { cutoutOf, idiomOf, modelOf, platformOf } from "./device";
+import type { SuperwallHost } from "./host";
 
 export const SUPERWALL_GENERATION = 5;
 
@@ -31,11 +32,15 @@ export const HOST_ATTRIBUTE_NAMES = [
 
 export const hostAttributes = (
   device: SuperwallDeviceVariables,
-): Record<(typeof HOST_ATTRIBUTE_NAMES)[number], string | undefined> => ({
-  "data-sw-platform": platformOf(device),
-  "data-sw-idiom": idiomOf(device),
-  "data-sw-cutout": cutoutOf(modelOf(device)),
-});
+  host: SuperwallHost,
+): Record<(typeof HOST_ATTRIBUTE_NAMES)[number], string | undefined> =>
+  host === "web-teleport"
+    ? { "data-sw-platform": "web", "data-sw-idiom": undefined, "data-sw-cutout": undefined }
+    : {
+        "data-sw-platform": platformOf(device),
+        "data-sw-idiom": idiomOf(device),
+        "data-sw-cutout": cutoutOf(modelOf(device)),
+      };
 
 export const PLATFORM_STYLESHEET_URL = "https://api.superwall.com/runtime/live.css";
 
