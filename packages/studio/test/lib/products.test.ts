@@ -254,6 +254,52 @@ describe("productVariables", () => {
       });
     });
 
+    // FeedbackRequest #2 (report 8): App Store product 012b_pro_annual_80_30dt_3,
+    // $79.99/year with a $2.99 30-day intro. The products API sends amounts in
+    // minor units (ProductMapper's majorToMinorUnits), so 7999 and 299.
+    describe("the reported 30-day intro on $79.99/year", () => {
+      const reported = (trialAmount: number) =>
+        productVariables({
+          identifier: "012b_pro_annual_80_30dt_3",
+          price: { amount: 7999, currency: "USD" },
+          trial_price: { amount: trialAmount, currency: "USD" },
+          subscription: { period: "year", period_count: 1, trial_period_days: 30 },
+        });
+      const length = {
+        price: "$79.99",
+        rawPrice: 79.99,
+        trialPeriodDays: 30,
+        trialPeriodWeeks: 4,
+        trialPeriodMonths: 1,
+        trialPeriodYears: 0,
+        trialPeriodText: "30-day",
+      };
+
+      it("paid ($2.99) carries its intro price, spread over the 30 days", () => {
+        expect(reported(299)).toMatchObject({
+          ...length,
+          rawTrialPeriodPrice: 2.99,
+          trialPeriodPrice: "$2.99",
+          trialPeriodDailyPrice: "$0.10",
+          trialPeriodWeeklyPrice: "$0.70",
+          trialPeriodMonthlyPrice: "$3.03",
+          trialPeriodYearlyPrice: "$36.38",
+        });
+      });
+
+      it("free ($0) carries 0 and $0.00, so a price-guarded free-trial CTA previews", () => {
+        expect(reported(0)).toMatchObject({
+          ...length,
+          rawTrialPeriodPrice: 0,
+          trialPeriodPrice: "$0.00",
+          trialPeriodDailyPrice: "$0.00",
+          trialPeriodWeeklyPrice: "$0.00",
+          trialPeriodMonthlyPrice: "$0.00",
+          trialPeriodYearlyPrice: "$0.00",
+        });
+      });
+    });
+
     it("a paid trial in another currency is dropped rather than shown in the wrong one", () => {
       const otherCurrency = productVariables({
         ...annual,
