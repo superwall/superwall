@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ApiError } from "@/core/api/client";
+import { ApiError, type SuperwallApi } from "@/core/api/client";
 import { readJsonInput } from "@/core/apple-search-ads/operations";
 import { memoryStore } from "@/core/state/store";
 import { apiFor, callResult, instructions, listTools, useToolCache, type Tool } from "@/tools";
 import { fakeResourceApi, op, type ApiCall } from "./helpers/resources";
 import { routedApi } from "./helpers/routed-api";
+import { ascRoutes } from "./helpers/asc-proxy";
+import { writeCachedIndex } from "@/core/app-store-connect/api/spec";
 
 const cache = memoryStore();
 cache.write(
@@ -191,6 +193,20 @@ test("a command tool takes its arguments by name", async () => {
   const result = await tool("get").run({ path: "/v2/projects/1" }, api);
   assert.deepEqual(result, { ok: true, data: { id: "1" } });
   assert.deepEqual(sent, [{ method: "GET", path: "/v2/projects/1" }]);
+});
+
+test("App Store Connect writes Apple answers with no content are ok, not an internal error", async () => {
+  writeCachedIndex({ specVersion: "test", openapi: "3.0.1", fetchedAt: Date.now(), paths: {} });
+  const asc = ascRoutes({
+    "DELETE /v1/subscriptionGroups/G1": undefined,
+    "POST /v1/subscriptions/S1/relationships/introductoryOffers": undefined,
+    "PATCH /v1/apps/555/relationships/appAvailability": undefined,
+  });
+  const api = asc.api as SuperwallApi;
+  assert.deepEqual(await tool("asc_delete").run({ path: "/v1/subscriptionGroups/G1" }, api), { ok: true, data: { ok: true } });
+  assert.deepEqual(await tool("asc_post").run({ path: "/v1/subscriptions/S1/relationships/introductoryOffers" }, api), { ok: true, data: { ok: true } });
+  assert.deepEqual(await tool("asc_patch").run({ path: "/v1/apps/555/relationships/appAvailability" }, api), { ok: true, data: { ok: true } });
+  assert.deepEqual(asc.sent.map((request) => request.method), ["DELETE", "POST", "PATCH"]);
 });
 
 test("a failure is the command's error, marked not ok", async () => {
