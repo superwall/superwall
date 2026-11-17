@@ -495,9 +495,11 @@ export const openEmbeddedSheet = (
       checkoutEvents.subscribe("PAYMENT_ERROR", ({ session: errored }) => {
         if (!isOurs(errored)) return;
         if (context) events?.failed(context);
-        const lookup = host
+        const looked = host
           ? sheetFailure(host.paywall, embedded)
           : Promise.resolve(unknownFailure());
+        const earlier = failed;
+        const lookup = earlier ? earlier.then(() => looked) : looked;
         failed = lookup;
         void lookup.then((failure) => {
           if (!settled) onFailure?.(failure);

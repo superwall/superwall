@@ -1000,9 +1000,17 @@ describe("usePurchase callbacks", () => {
       });
       checkoutEvents.dispatch("SHEET_CLOSE", undefined);
       await act(async () => {
-        await expect(outcome).resolves.toMatchObject({ status: "failed" });
+        await expect(outcome).resolves.toMatchObject({
+          status: "failed",
+          failure: { reason: "insufficient_funds" },
+        });
       });
-      expect(rendered.calls.filter(([name]) => name === "failure")).toHaveLength(2);
+      const failures = rendered.calls.filter(([name]) => name === "failure");
+      expect(failures.map(([, failure]) => (failure as { reason: string }).reason)).toEqual([
+        "expired_card",
+        "insufficient_funds",
+      ]);
+      expect(rendered.result.current.buyer.failure).toMatchObject({ reason: "insufficient_funds" });
     } finally {
       vi.unstubAllGlobals();
     }
