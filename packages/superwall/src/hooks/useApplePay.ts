@@ -7,16 +7,35 @@ import {
   type ApplePayError,
   type ApplePayWalletReason,
 } from "../checkout/applePay";
+import {
+  applePaySession,
+  reasonOfThrow,
+  readApplePayCard,
+  subscribeToApplePayCard,
+  type ApplePayCardReason,
+  type ApplePayCardResult,
+  type ApplePayCardStatus,
+} from "../checkout/applePay/card";
 import { applePayFor } from "../checkout/flow";
 import { hostOf, WEB_HOSTS } from "../host";
 import { useSuperwallSession } from "../provider/context";
 import type { ProductReference } from "./index";
 
-export type { ApplePayError, ApplePayWalletReason };
+export type {
+  ApplePayCardReason,
+  ApplePayCardResult,
+  ApplePayCardStatus,
+  ApplePayError,
+  ApplePayWalletReason,
+};
+export { checkApplePayCard } from "../checkout/applePay/card";
 
 /**
  * Why the browser cannot open the Apple Pay wallet itself.
  *
+ * - `"unsupported_host"`: the paywall runs inside the iOS or Android SDK or
+ *   in Studio, where a Stripe purchase never opens Apple Pay. `card` still
+ *   answers there.
  * - `"unsupported_browser"`: the browser has no Apple Pay JS
  *   (`ApplePaySession`), as in Chrome, Firefox or Edge on a desktop. The card
  *   sheet may still offer Apple Pay there through a QR code scanned with an
@@ -32,6 +51,7 @@ export type { ApplePayError, ApplePayWalletReason };
  *   `error` holds it.
  */
 export type ApplePayUnavailableReason =
+  | "unsupported_host"
   | "unsupported_browser"
   | "insecure_context"
   | "device_unsupported"
@@ -46,18 +66,18 @@ export type ApplePayProductReason = ApplePayUnavailableReason | ApplePayWalletRe
 
 /**
  * Whether this browser can open the Apple Pay wallet itself (direct Apple
- * Pay), from `ApplePaySession.canMakePayments()`. Only web hosts (the Web
- * SDK, a hosted web paywall, a teleport page and a plain browser page)
- * answer; `useApplePay()` is `undefined` inside the iOS and Android SDKs and
- * in Studio, where a Stripe purchase never opens Apple Pay.
+ * Pay), from `ApplePaySession.canMakePayments()`, and whether Apple Pay is
+ * set up with a card, as `card`. Only web hosts (the Web SDK, a hosted web
+ * paywall, a teleport page and a plain browser page) can open the wallet;
+ * inside the iOS and Android SDKs and in Studio `available` is `false` with
+ * `"unsupported_host"`.
  *
- * It is known on the first render and needs no checkout session, but it
- * cannot see whether a card is in Wallet or whether the domain is registered
- * for Apple Pay with Stripe: only Stripe can, once it prepares a product, and
- * `useApplePay(product)` reports that as `product`. `useApplePayCard()` checks
- * for a card on every host, in the app too.
+ * `available` is known on the first render and needs no checkout session,
+ * but it cannot see whether the domain is registered for Apple Pay with
+ * Stripe: only Stripe can, once it prepares a product, and
+ * `useApplePay(product)` reports that as `product`.
  */
-export type UseApplePayResult =
+export type UseApplePayResult = (
   | {
       /** The browser can open the Apple Pay wallet. */
       available: true;
@@ -71,7 +91,15 @@ export type UseApplePayResult =
       message: string;
       /** What the browser threw, when the check threw. */
       error?: ApplePayError;
-    };
+    }
+) & {
+  /**
+   * Whether Apple Pay is set up with a card on this device, on every host,
+   * in the app too: `"checking"` until Apple answers, then `"ready"` or
+   * `"unavailable"` with a reason. See `ApplePayCardStatus`.
+   */
+  card: ApplePayCardStatus;
+};
 
 /**
  * Whether the wallet is ready to open for one product. The wallet opens only
@@ -101,61 +129,6 @@ export type ApplePayProductStatus =
       error?: ApplePayError;
     };
 
-/**
- * Why `useApplePayCard()` or `checkApplePayCard()` cannot say that Apple Pay
- * is set up with a card.
- *
- * - `"no_active_card"`: Apple answered that Apple Pay has no card to pay
- *   with here: Wallet holds none, or the device cannot use Apple Pay.
- * - `"unsupported_browser"`: the page has no
- *   `ApplePaySession.canMakePaymentsWithActiveCard`, as inside the Android
- *   SDK, in Chrome or Firefox on a desktop, and in Studio in those browsers.
- * - `"insecure_context"`: the page is not served over HTTPS.
- * - `"cross_origin_frame"`: the paywall runs in a frame of another origin and
- *   the browser refused the check there.
- * - `"check_failed"`: Apple's check threw for another reason; `error` holds it.
- * - `"timed_out"`: Apple did not answer within 1.5 seconds.
- */
-export type ApplePayCardReason =
-  | "no_active_card"
-  | "unsupported_browser"
-  | "insecure_context"
-  | "cross_origin_frame"
-  | "check_failed"
-  | "timed_out";
-
-/**
- * Whether Apple Pay is set up with a card on this device, from Apple's
- * `ApplePaySession.canMakePaymentsWithActiveCard` for the page's own Stripe
- * merchant (`merchant.<hostname>.stripe`). It answers inside the iOS SDK and
- * on every web host, the teleport page included. Any usable card counts,
- * Apple Cash with no balance too, so `"ready"` means Apple Pay is set up, not
- * that a payment will go through.
- */
-export type ApplePayCardResult =
-  | {
-      /** Apple Pay is set up with a card. */
-      status: "ready";
-    }
-  | {
-      /** Apple Pay is not set up with a card, or the page could not ask. */
-      status: "unavailable";
-      /** Why. See `ApplePayCardReason`. */
-      reason: ApplePayCardReason;
-      /** The reason in a sentence, in English, for logs and debugging. */
-      message: string;
-      /** What the browser threw, when the check threw. */
-      error?: ApplePayError;
-    };
-
-/** The result of `useApplePayCard()`: `"checking"` until Apple answers, then an `ApplePayCardResult`. */
-export type UseApplePayCardResult =
-  | {
-      /** Apple has not answered yet. */
-      status: "checking";
-    }
-  | ApplePayCardResult;
-
 /** The result of `useApplePay(product)`: the browser's answer, and the product's. */
 export type UseApplePayProductResult = UseApplePayResult & {
   /** Whether the wallet is ready to open for the product. */
@@ -163,6 +136,7 @@ export type UseApplePayProductResult = UseApplePayResult & {
 };
 
 const MESSAGES: Record<ApplePayProductReason, string> = {
+  unsupported_host: "Inside the iOS or Android SDK and in Studio a purchase never opens Apple Pay.",
   unsupported_browser: "This browser has no Apple Pay JS, so it cannot open the wallet itself.",
   insecure_context: "Apple Pay needs the page to be served over HTTPS.",
   device_unsupported: "The browser says this device cannot pay with Apple Pay.",
@@ -179,51 +153,18 @@ const MESSAGES: Record<ApplePayProductReason, string> = {
   show_failed: "The wallet failed to open on the last tap.",
 };
 
-const CARD_MESSAGES: Record<ApplePayCardReason, string> = {
-  no_active_card:
-    "Apple Pay has no card to pay with here: Wallet holds none, or the device cannot use Apple Pay.",
-  unsupported_browser:
-    "This page has no ApplePaySession.canMakePaymentsWithActiveCard, so it cannot check for a card.",
-  insecure_context: MESSAGES.insecure_context,
-  cross_origin_frame: MESSAGES.cross_origin_frame,
-  check_failed: "The browser threw on the Apple Pay card check.",
-  timed_out: "Apple did not answer the Apple Pay card check in time.",
-};
+type ApplePayDevice = UseApplePayResult extends infer T
+  ? T extends unknown
+    ? Omit<T, "card">
+    : never
+  : never;
 
-/** How long `checkApplePayCard()` waits for Apple's answer before it reports `timed_out`. */
-const APPLE_PAY_CARD_TIMEOUT_MS = 1500;
-
-type ApplePaySessionGlobal = {
-  canMakePayments?: () => unknown;
-  canMakePaymentsWithActiveCard?: (merchantIdentifier: string) => unknown;
-};
-
-const applePaySession = (): ApplePaySessionGlobal | undefined =>
-  (window as typeof window & { ApplePaySession?: ApplePaySessionGlobal }).ApplePaySession;
-
-const unavailable = (reason: ApplePayUnavailableReason, error?: ApplePayError): UseApplePayResult =>
+const unavailable = (reason: ApplePayUnavailableReason, error?: ApplePayError): ApplePayDevice =>
   error === undefined
     ? { available: false, reason, message: MESSAGES[reason] }
     : { available: false, reason, message: MESSAGES[reason], error };
 
-const isCrossOriginFrame = (): boolean => {
-  if (window.top === window.self) return false;
-  try {
-    return window.top?.location.origin !== window.location.origin;
-  } catch {
-    return true;
-  }
-};
-
-const reasonOfThrow = (
-  error: ApplePayError,
-): "insecure_context" | "cross_origin_frame" | "check_failed" => {
-  if (/insecure/i.test(error.message)) return "insecure_context";
-  if (isCrossOriginFrame()) return "cross_origin_frame";
-  return "check_failed";
-};
-
-const checkApplePay = (): UseApplePayResult => {
+const checkApplePay = (): ApplePayDevice => {
   const global = applePaySession();
   if (window.isSecureContext === false) return unavailable("insecure_context");
   if (typeof global?.canMakePayments !== "function") return unavailable("unsupported_browser");
@@ -235,113 +176,6 @@ const checkApplePay = (): UseApplePayResult => {
     const error = applePayErrorOf(thrown);
     return unavailable(reasonOfThrow(error), error);
   }
-};
-
-const cardUnavailable = (reason: ApplePayCardReason, error?: ApplePayError): ApplePayCardResult =>
-  error === undefined
-    ? { status: "unavailable", reason, message: CARD_MESSAGES[reason] }
-    : { status: "unavailable", reason, message: CARD_MESSAGES[reason], error };
-
-type CardQuestion = {
-  global: ApplePaySessionGlobal;
-  ask: (merchantIdentifier: string) => unknown;
-};
-
-const cardAnswers = new WeakMap<ApplePaySessionGlobal, Promise<ApplePayCardResult>>();
-const cardResults = new WeakMap<ApplePaySessionGlobal, ApplePayCardResult>();
-
-const cardQuestion = (): ApplePayCardResult | CardQuestion => {
-  if (window.isSecureContext === false) return cardUnavailable("insecure_context");
-  const global = applePaySession();
-  const ask = global?.canMakePaymentsWithActiveCard;
-  if (global === undefined || typeof ask !== "function") {
-    return cardUnavailable("unsupported_browser");
-  }
-  return cardResults.get(global) ?? { global, ask };
-};
-
-const askApple = ({ global, ask }: CardQuestion): Promise<ApplePayCardResult> => {
-  const asked = cardAnswers.get(global);
-  if (asked) return asked;
-  const answer = new Promise<unknown>((resolve) => {
-    resolve(ask.call(global, `merchant.${window.location.hostname}.stripe`));
-  }).then(
-    (value): ApplePayCardResult => {
-      const result: ApplePayCardResult =
-        value === true ? { status: "ready" } : cardUnavailable("no_active_card");
-      cardResults.set(global, result);
-      return result;
-    },
-    (thrown: unknown) => {
-      cardAnswers.delete(global);
-      const error = applePayErrorOf(thrown);
-      return cardUnavailable(reasonOfThrow(error), error);
-    },
-  );
-  cardAnswers.set(global, answer);
-  return answer;
-};
-
-const withinTimeout = (answer: Promise<ApplePayCardResult>): Promise<ApplePayCardResult> =>
-  new Promise((resolve) => {
-    const timer = setTimeout(
-      () => resolve(cardUnavailable("timed_out")),
-      APPLE_PAY_CARD_TIMEOUT_MS,
-    );
-    void answer.then((result) => {
-      clearTimeout(timer);
-      resolve(result);
-    });
-  });
-
-/**
- * Whether Apple Pay is set up with a card on this device, for code outside
- * React; `useApplePayCard()` is the hook. Apple is asked once per page and its
- * answer is reused; a check that threw or timed out is asked again next time.
- * It never rejects. See `ApplePayCardResult`.
- *
- * ```ts
- * const teleport = (await checkApplePayCard()).status === "ready";
- * ```
- */
-export const checkApplePayCard = (): Promise<ApplePayCardResult> => {
-  const question = cardQuestion();
-  return "status" in question ? Promise.resolve(question) : withinTimeout(askApple(question));
-};
-
-/**
- * Whether Apple Pay is set up with a card on this device, in the app (iOS SDK)
- * and on the web alike: `"checking"` until Apple answers, usually right after
- * the first render, then `"ready"` or `"unavailable"` with a reason. Answers
- * already known, such as no Apple Pay at all on Android, are there on the first
- * render. See `ApplePayCardResult`.
- *
- * Teleport pays off only when the shopper can pay with Apple Pay on the web
- * page, so check this before sending them there and keep them in the app
- * otherwise:
- *
- * ```tsx
- * const card = useApplePayCard();
- * const onContinue = () =>
- *   card.status === "ready" ? router.push("checkout", { teleport: true }) : purchase("annual");
- * ```
- */
-export const useApplePayCard = (): UseApplePayCardResult => {
-  const [card, setCard] = React.useState<UseApplePayCardResult>(() => {
-    const question = cardQuestion();
-    return "status" in question ? question : { status: "checking" };
-  });
-  React.useEffect(() => {
-    if (card.status !== "checking") return undefined;
-    let live = true;
-    void checkApplePayCard().then((result) => {
-      if (live) setCard(result);
-    });
-    return () => {
-      live = false;
-    };
-  }, [card.status]);
-  return card;
 };
 
 const subscribeToNothing = () => () => {};
@@ -361,13 +195,15 @@ const productStatusReader = (applePay: ApplePay | undefined, reference: string |
   };
 };
 
+const NOT_PREPARED: ApplePayAvailability = { status: "unavailable", reason: "not_prepared" };
+
 const productStatusOf = (
-  device: UseApplePayResult,
-  wallet: ApplePayAvailability,
+  device: ApplePayDevice,
+  wallet: ApplePayAvailability | undefined,
 ): ApplePayProductStatus => {
-  const failure = device.available ? wallet : device;
+  const failure = device.available ? (wallet ?? NOT_PREPARED) : device;
   if (!("reason" in failure))
-    return wallet.status === "ready" ? { status: "ready" } : { status: "preparing" };
+    return failure.status === "ready" ? { status: "ready" } : { status: "preparing" };
   const status: ApplePayProductStatus = {
     status: "unavailable",
     reason: failure.reason,
@@ -378,11 +214,11 @@ const productStatusOf = (
 
 /**
  * Whether direct Apple Pay, the wallet the browser opens itself, is available
- * on a web host, and why not when it is not. With a product it also says
- * whether the wallet is ready for that product, which is the only answer that
- * knows about the cards in Wallet and the domain's Stripe registration, and
- * re-renders as the checkout prepares it. `undefined` inside the iOS and
- * Android SDKs and in Studio.
+ * on a web host, and why not when it is not, with whether Apple Pay is set up
+ * with a card as `card` on every host. With a product it also says whether
+ * the wallet is ready for that product, which is the only answer that knows
+ * about the domain's Stripe registration, and re-renders as the checkout
+ * prepares it.
  *
  * On a paywall whose config `checkout` is `"sheet"`, prefetch the product for
  * Apple Pay before the tap; with `checkout: "applePay"` the paywall does it on
@@ -393,25 +229,42 @@ const productStatusOf = (
  * const { purchase, prefetch } = usePurchase();
  * const applePay = useApplePay(reference);
  * useEffect(() => {
- *   if (applePay?.available) prefetch(reference, { checkout: "applePay" });
- * }, [applePay?.available, prefetch, reference]);
- * return applePay?.available && applePay.product.status === "ready" ? (
+ *   if (applePay.available) prefetch(reference, { checkout: "applePay" });
+ * }, [applePay.available, prefetch, reference]);
+ * return applePay.available && applePay.product.status === "ready" ? (
  *   <button onClick={() => purchase(reference, { checkout: "applePay" })}>Apple Pay</button>
  * ) : (
  *   <button onClick={() => purchase(reference, { checkout: "sheet" })}>Pay with card</button>
  * );
  * ```
+ *
+ * Teleport pays off only when the shopper can pay with Apple Pay on the web
+ * page, so check `card` before sending them there and keep them in the app
+ * otherwise. `card` stays `"checking"` until Apple answers, at most 1.5
+ * seconds, and a paywall with `teleport` in its config asks as it opens:
+ *
+ * ```tsx
+ * const { card } = useApplePay();
+ * const onContinue = () =>
+ *   card.status === "ready" ? router.push("checkout", { teleport: true }) : purchase("annual");
+ * ```
  */
-export function useApplePay(): UseApplePayResult | undefined;
-export function useApplePay(
-  product: ProductReference | SuperwallProduct,
-): UseApplePayProductResult | undefined;
+export function useApplePay(): UseApplePayResult;
+export function useApplePay(product: ProductReference | SuperwallProduct): UseApplePayProductResult;
 export function useApplePay(
   product?: ProductReference | SuperwallProduct,
-): UseApplePayResult | UseApplePayProductResult | undefined {
+): UseApplePayResult | UseApplePayProductResult {
   const session = useSuperwallSession();
   const web = React.useMemo(() => WEB_HOSTS.has(hostOf()), []);
-  const device = React.useMemo(() => (web ? checkApplePay() : undefined), [web]);
+  const device = React.useMemo(
+    () => (web ? checkApplePay() : unavailable("unsupported_host")),
+    [web],
+  );
+  const card = React.useSyncExternalStore(
+    subscribeToApplePayCard,
+    readApplePayCard,
+    readApplePayCard,
+  );
   const reference =
     product === undefined || typeof product === "string" ? product : product.reference;
   const applePay = web && reference !== undefined ? applePayFor(session) : undefined;
@@ -422,7 +275,9 @@ export function useApplePay(
     read,
   );
   return React.useMemo(() => {
-    if (!device) return undefined;
-    return wallet ? { ...device, product: productStatusOf(device, wallet) } : device;
-  }, [device, wallet]);
+    const result: UseApplePayResult = { ...device, card };
+    return reference === undefined
+      ? result
+      : { ...result, product: productStatusOf(device, wallet) };
+  }, [device, card, wallet, reference]);
 }
