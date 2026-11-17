@@ -535,6 +535,75 @@ describe("useTeleport in the app", () => {
     }
   });
 
+  it("reports the page's failure before onReturnData, so cancelling there still settles failed", async () => {
+    vi.useFakeTimers();
+    try {
+      const failure = { code: "card_declined", declineCode: "insufficient_funds" };
+      const replies: Record<string, unknown> = {
+        "checkout/teleport": {
+          teleportId: "v1:tp",
+          url: "https://acme.superwall.app/sw-teleport/v1:tp",
+        },
+        "checkout/teleport/status": { status: "claimed", checkoutContextId: "ctx_1" },
+        "checkout/status": { status: "pending" },
+        "checkout/teleport/session": { saved: true },
+        "checkout/teleport/session/read": {
+          session: {
+            query: {},
+            returned: { failure, data: { offer: "app_store" }, at: Number.MAX_SAFE_INTEGER },
+          },
+        },
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
+          return new Response(JSON.stringify(replies[path] ?? {}));
+        }),
+      );
+      Reflect.set(window, "app", {});
+      const onFailure = vi.fn();
+      const holder: { cancel?: () => void } = {};
+      const { result } = renderWithProvider(
+        () => {
+          const teleport = useTeleport({ onReturnData: () => holder.cancel?.() });
+          if (teleport.status === "waiting") holder.cancel = teleport.cancel;
+          return { session: useSuperwallSession(), teleport, buyer: usePurchase({ onFailure }) };
+        },
+        {
+          config,
+          host: {
+            device,
+            products: [{ reference: "primary", productId: "test:price_1:no-trial" }],
+          },
+        },
+      );
+      await flush();
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      let outcome: unknown;
+      await act(async () => {
+        void teleporter.begin({ productReference: "primary", query: {} }).then((settled) => {
+          outcome = settled;
+        });
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      await act(async () => {
+        void teleporter.handleReturn("failed");
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(onFailure).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ reason: "insufficient_funds" }),
+      );
+      expect(result.current.buyer.failure).toMatchObject({ reason: "insufficient_funds" });
+      expect(outcome).toBeDefined();
+      expect(result.current.teleport.status).not.toBe("waiting");
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
   it("reports the same decline again when a later trip to the browser returns with it", async () => {
     vi.useFakeTimers();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);

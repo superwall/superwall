@@ -219,7 +219,8 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         return true;
       }
       record.pageReturn = returned;
-      if (returned.data !== undefined) {
+      if (returned.failure !== undefined) reportFailure(record, returned.failure, true);
+      if (returned.data !== undefined && isWaiting(record)) {
         publish();
         emit("data");
       }
