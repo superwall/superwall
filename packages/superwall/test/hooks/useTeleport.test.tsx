@@ -415,6 +415,61 @@ describe("useTeleport in the app", () => {
     }
   });
 
+  it("gives up on a stalled read of what the page left and still sees the payment complete", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      let paid = false;
+      const replies: Record<string, unknown> = {
+        "checkout/teleport": {
+          teleportId: "v1:tp",
+          url: "https://acme.superwall.app/sw-teleport/v1:tp",
+        },
+        "checkout/teleport/status": { status: "claimed", checkoutContextId: "ctx_1" },
+        "checkout/teleport/session": { saved: true },
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, init: RequestInit = {}) => {
+          const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
+          if (path === "checkout/teleport/session/read") {
+            return new Promise<Response>((_, reject) => {
+              init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+            });
+          }
+          if (path === "checkout/status") {
+            return new Response(JSON.stringify({ status: paid ? "completed" : "pending" }));
+          }
+          return new Response(JSON.stringify(replies[path] ?? {}));
+        }),
+      );
+      Reflect.set(window, "app", {});
+      const { result } = renderWithProvider(
+        () => ({ session: useSuperwallSession(), teleport: useTeleport() }),
+        { config, host: { device } },
+      );
+      await flush();
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      await act(async () => {
+        void teleporter.begin({ productReference: "card", query: {} });
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      await act(async () => {
+        void teleporter.handleReturn("closed");
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
+      paid = true;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(result.current.teleport.status).not.toBe("waiting");
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
   it("shows the page's failure even when the checkout's status cannot be read", async () => {
     vi.useFakeTimers();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);

@@ -176,16 +176,25 @@ export const readTeleportReturn = async (
   publicApiKey: string,
   teleportId: string,
 ): Promise<PageReturn | undefined> => {
-  const response = await fetchWithRetry(
-    subscriptionsApiUrl("checkout/teleport/session/read"),
-    {
-      method: "POST",
-      headers: headers(publicApiKey),
-      body: JSON.stringify({ teleportId }),
-    },
-    { retries: 0 },
-  );
-  return readPageReturn(field(await response.json(), "session"));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
+  let body: unknown;
+  try {
+    const response = await fetchWithRetry(
+      subscriptionsApiUrl("checkout/teleport/session/read"),
+      {
+        method: "POST",
+        headers: headers(publicApiKey),
+        body: JSON.stringify({ teleportId }),
+        signal: controller.signal,
+      },
+      { retries: 0 },
+    );
+    body = await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+  return readPageReturn(field(body, "session"));
 };
 
 export const saveTeleportReturn = async (
