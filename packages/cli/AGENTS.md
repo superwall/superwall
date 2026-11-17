@@ -33,8 +33,10 @@ build` bundles every skill of the repo into `dist/skills/`
 (`scripts/vendor-skills.ts`): all of `main`, then whatever `next` adds, with
 `dist/skills/index.json` recording each skill's channel (`CHANNELS` in
 `src/environment.ts` maps `latest` to `main` and `next` to `next`). A new skill
-on either branch ships with the next build; nothing in the CLI or the MCP has to
-learn its name. `superwall skills` installs every skill of the channel's branch,
+on either branch ships with the next build; nothing in the CLI has to learn its
+name. It reaches mcp.superwall.com only once pwn's bump PR for that release
+merges (see "The MCP updates only when pwn's bump PR merges"). `superwall
+skills` installs every skill of the channel's branch,
 and the bundled fallback installs the bundled ones on that channel. Skills can
 also come
 from a local checkout with
@@ -504,7 +506,8 @@ as the viewer. The platform itself lives in a private repo.
 
 The registry is the only definition of a command. The terminal and the MCP
 server at mcp.superwall.com run the same commands; `@superwall/cli/tools`
-(`src/tools.ts`) turns the registry into MCP tools, and the server imports it.
+(`src/tools.ts`) turns the registry into MCP tools, and the server imports it
+from npm, pinned to one version.
 
 - **Every command says whether it is an MCP tool**: `mcp: "read" | "write" |
   "destructive" | false`. The first three make it a tool (it must answer
@@ -553,7 +556,8 @@ server at mcp.superwall.com run the same commands; `@superwall/cli/tools`
   copies every skill on `next` into `dist/tools-skills`, except those in
   `TOOLS_EXCLUDED_SKILLS` (work that needs a shell, today `superwall-framework`),
   and `build-tools.ts` embeds that directory into `dist/tools.js`. A new skill on
-  `next` reaches the MCP with the next release, with no change here. `listSkills()` and `readSkill(uri)`
+  `next` is in the next release's `dist/tools.js`, and reaches the MCP when
+  pwn's bump PR for that release merges. `listSkills()` and `readSkill(uri)`
   serve them as `skill://` resources (`superwall/SKILL.md` first), and the
   read-only `skill` tool comes first in `listTools()` for clients that don't
   read resources. Vendor before building the tools; the build fails without
@@ -563,6 +567,19 @@ server at mcp.superwall.com run the same commands; `@superwall/cli/tools`
   picocolors, printing the chain. A CLI-only command imports its core with
   `await import()` inside `run`; a tool's core reads files and the machine only
   through the host.
+- **The MCP updates only when pwn's bump PR merges.** mcp.superwall.com serves
+  the `@superwall/cli` version pinned in pwn's `apps/mcp/package.json`, and that
+  pin moves only when a `bot/mcp-cli-<version>` PR merges. pwn's
+  `.github/workflows/mcp-cli-bump.yml` opens that PR on a schedule; a human has
+  to merge it. Publishing the CLI changes nothing on the MCP, so a release that
+  changes a tool, an annotation, `instructions()` or a skill on `next` is
+  unfinished until that PR merges. After releasing, check that the PR for your
+  version is open in pwn, mergeable and merged
+  (`gh pr list -R superwall/paywall-next --head bot/mcp-cli-<version>`). If none
+  has opened a few hours after the release, run the workflow by hand
+  (`gh workflow run mcp-cli-bump.yml -R superwall/paywall-next`). If it is
+  stuck (conflicts, failing checks, nobody merging), file the fix as a task in
+  pwn. Never report the MCP as updated because the CLI was published.
 
 ## Why it works this way
 
