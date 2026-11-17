@@ -482,6 +482,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       await readPageReturn(key, record);
       if (!isWaiting(record)) return;
       let failure = record.pageReturn?.failure ?? teleport.failure;
+      if (failure !== undefined) reportFailure(record, failure);
       if (record.checkoutContextId) {
         const checkout = await readCheckoutOf(key, record.checkoutContextId);
         if (!isWaiting(record)) return;

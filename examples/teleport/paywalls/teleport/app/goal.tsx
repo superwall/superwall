@@ -1,4 +1,4 @@
-import { useHaptics, useTeleport, useTranslation } from "superwall/hooks";
+import { useHaptics, usePurchase, useTeleport, useTranslation } from "superwall/hooks";
 import { useQueryState, useRouter } from "superwall/navigation";
 import { GOALS, goalParser } from "../components/goals";
 
@@ -12,6 +12,7 @@ export default function Goal() {
   });
   const failure = teleport.status === "waiting" ? teleport.failure : undefined;
   const offer = teleport.status === "waiting" ? teleport.data?.offer : undefined;
+  const { purchase } = usePurchase();
 
   return (
     <main className="page">
@@ -33,6 +34,18 @@ export default function Goal() {
           <p className="notice" role="status">
             {offer === "app_store" ? t("back.noFunds") : t("back.failed")}
           </p>
+        ) : null}
+        {failure && offer === "app_store" ? (
+          <button
+            type="button"
+            className="button button--primary"
+            onClick={() => {
+              haptics.medium();
+              void purchase("annual");
+            }}
+          >
+            {t("back.appStore")}
+          </button>
         ) : null}
       </div>
 

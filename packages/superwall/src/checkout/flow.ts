@@ -508,9 +508,9 @@ export const purchaseOnWeb = async (
   clearWebFailure(paywall);
   const events = purchaseEventsFor(paywall);
   events.emit("start", { referenceName, attempt });
-  let reported: CheckoutFailure | undefined;
+  const reported = new Set<CheckoutFailure>();
   const reportFailure = (failure: CheckoutFailure) => {
-    reported = failure;
+    reported.add(failure);
     reportWebFailure(paywall, { referenceName, failure, attempt });
   };
   const outcome = await runWebPurchase(paywall, referenceName, requested, options, {
@@ -518,7 +518,7 @@ export const purchaseOnWeb = async (
     onSubmit: () => events.emit("submit", { referenceName, attempt }),
   });
   if (outcome.status === "failed") {
-    if (outcome.failure !== reported) reportFailure(outcome.failure);
+    if (!reported.has(outcome.failure)) reportFailure(outcome.failure);
   } else if (outcome.status === "completed") {
     clearWebFailure(paywall);
     events.emit("complete", { referenceName, attempt });

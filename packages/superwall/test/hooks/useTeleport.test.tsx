@@ -356,6 +356,71 @@ describe("useTeleport in the app", () => {
     }
   });
 
+  it("shows the page's failure even when the checkout's status cannot be read", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const failure = { code: "card_declined", declineCode: "insufficient_funds" };
+      const replies: Record<string, unknown> = {
+        "checkout/teleport": {
+          teleportId: "v1:tp",
+          url: "https://acme.superwall.app/sw-teleport/v1:tp",
+        },
+        "checkout/teleport/status": { status: "claimed", checkoutContextId: "ctx_1" },
+        "checkout/teleport/session": { saved: true },
+        "checkout/teleport/session/read": {
+          session: { query: {}, returned: { failure, at: Number.MAX_SAFE_INTEGER } },
+        },
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
+          if (path === "checkout/status") throw new Error("offline");
+          return new Response(JSON.stringify(replies[path] ?? {}));
+        }),
+      );
+      Reflect.set(window, "app", {});
+      const onFailure = vi.fn();
+      const { result } = renderWithProvider(
+        () => ({
+          session: useSuperwallSession(),
+          teleport: useTeleport(),
+          buyer: usePurchase({ onFailure }),
+        }),
+        {
+          config,
+          host: {
+            device,
+            products: [{ reference: "primary", productId: "test:price_1:no-trial" }],
+          },
+        },
+      );
+      await flush();
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      await act(async () => {
+        void teleporter.begin({ productReference: "primary", query: {} });
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      await act(async () => {
+        void teleporter.handleReturn("failed");
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(result.current.teleport).toMatchObject({
+        status: "waiting",
+        failure: { reason: "insufficient_funds" },
+      });
+      expect(result.current.buyer.failure).toMatchObject({ reason: "insufficient_funds" });
+      expect(onFailure).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: "insufficient_funds" }),
+      );
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
   it("closes the paywall with close(), which returns nothing", async () => {
     const { result } = renderWithProvider(() => useActions(), { config, host: { device } });
     await flush();

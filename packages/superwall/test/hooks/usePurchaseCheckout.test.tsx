@@ -932,6 +932,48 @@ describe("usePurchase callbacks", () => {
     }
   });
 
+  it("calls back each of two declines once, when their lookups end out of order and the sheet closes", async () => {
+    const answers: ((response: Response) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        String(url).includes("checkout/status")
+          ? new Promise<Response>((resolve) => answers.push(resolve))
+          : Promise.resolve(new Response(JSON.stringify({ status: "pending" }))),
+      ),
+    );
+    try {
+      const rendered = await renderWithCallbacks("sheet");
+      vi.spyOn(rendered.sessions, "begin").mockResolvedValue(embedded);
+      let outcome: Promise<unknown> | undefined;
+      act(() => {
+        outcome = rendered.result.current.buyer.purchase("primary");
+      });
+      await flush();
+      checkoutEvents.dispatch("EMBEDDED_READY", { clientSecret: embedded.clientSecret });
+      checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+      checkoutEvents.dispatch("PAYMENT_ERROR", { error: new Error("declined"), session: embedded });
+      await vi.waitFor(() => expect(answers).toHaveLength(2));
+      const declined = (declineCode: string) =>
+        new Response(
+          JSON.stringify({ status: "pending", failure: { code: "card_declined", declineCode } }),
+        );
+      await act(async () => {
+        answers[1]?.(declined("insufficient_funds"));
+        await flush();
+        answers[0]?.(declined("expired_card"));
+        await flush();
+      });
+      checkoutEvents.dispatch("SHEET_CLOSE", undefined);
+      await act(async () => {
+        await expect(outcome).resolves.toMatchObject({ status: "failed" });
+      });
+      expect(rendered.calls.filter(([name]) => name === "failure")).toHaveLength(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("failure with the product and why, when Apple Pay is declined", async () => {
     const { result, calls } = await renderWithCallbacks("applePay");
     vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue({

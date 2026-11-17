@@ -29,6 +29,7 @@ export default {
   },
   back: {
     noFunds: "Your card was short on funds. Try the App Store instead.",
+    appStore: "Buy yearly in the App Store",
     failed: "The payment in the browser didn't go through.",
   },
   common: {
