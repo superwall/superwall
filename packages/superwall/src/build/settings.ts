@@ -53,6 +53,7 @@ const DESTINATION_WIRE: Record<SuperwallCheckoutMode, WebCheckoutDestinationWire
   external: "EXTERNAL",
   sheet: "PAYWALL_EMBEDDED",
   applePay: "PAYWALL_APPLE_PAY",
+  elements: "PAYWALL_APPLE_PAY",
 };
 
 const dimension = (label: string, value: number | undefined, fallback: number): number => {
@@ -108,7 +109,7 @@ export const webCheckoutDestinationOf = (
 
 export const checkoutNeedsPaymentUi = (checkout: SuperwallCheckoutConfig | undefined): boolean => {
   const mode = checkoutModeOf(checkout);
-  return mode === "sheet" || mode === "applePay";
+  return mode === "sheet" || mode === "applePay" || mode === "elements";
 };
 
 export const allowedHostsWire = (

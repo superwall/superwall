@@ -42,6 +42,11 @@ export const sdkHostsCheckoutInPaywall = (snapshot: SuperwallRuntimeSnapshot): b
 export const sdkRedeemsCheckout = (snapshot: SuperwallRuntimeSnapshot): boolean =>
   hostOf() === "web-sdk" || paddedVersionOf(snapshot) >= CHECKOUT_EVENTS;
 
+const IN_PAYWALL_MODES: readonly CheckoutMode[] = ["sheet", "applePay", "elements"];
+
+const inPaywall = (mode: CheckoutMode | undefined): mode is CheckoutMode =>
+  mode !== undefined && IN_PAYWALL_MODES.includes(mode);
+
 export const checkoutModeFor = (
   snapshot: SuperwallRuntimeSnapshot,
   requested?: CheckoutMode,
@@ -49,10 +54,10 @@ export const checkoutModeFor = (
   const configured = checkoutModeOf(snapshot.config?.checkout);
   if (readTeleportBoot() !== undefined) {
     const wanted = requested ?? configured;
-    return wanted === "sheet" || wanted === "applePay" ? wanted : "applePay";
+    return inPaywall(wanted) ? wanted : "applePay";
   }
   if (!sdkHostsCheckoutInPaywall(snapshot)) return "external";
   if (hostOf() !== "web-sdk" && platformOf(snapshot.device) === "ios") return "external";
-  if (configured !== "sheet" && configured !== "applePay") return "external";
+  if (!inPaywall(configured)) return "external";
   return requested ?? configured;
 };

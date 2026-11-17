@@ -51,12 +51,12 @@ describe("useAutoPrefetch", () => {
       expect.objectContaining({
         referenceName: "primary",
         mode: "applePay",
-        scope: "apple-pay",
+        scope: "elements",
       }),
       expect.objectContaining({
         referenceName: "secondary",
         mode: "applePay",
-        scope: "apple-pay",
+        scope: "elements",
       }),
     ]);
   });

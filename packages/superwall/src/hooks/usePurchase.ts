@@ -226,8 +226,10 @@ const emitStoreResult = (
  * Buy a product. Store products go to the native SDK; a Stripe product is
  * always bought on the web. With `checkout: "sheet"` it opens Stripe's
  * embedded sheet; with `"applePay"` it opens the wallet where the device
- * offers it and falls back to the sheet; otherwise, and always inside an iOS
- * app, it opens Superwall's hosted checkout in the browser. A `purchase()` or
+ * offers it and falls back to the sheet; with `"elements"` it opens the
+ * sheet, since an `elements` form pays through `useCheckout().submit()`;
+ * otherwise, and always inside an iOS app, it opens Superwall's hosted
+ * checkout in the browser. A `purchase()` or
  * `prefetch()` call can pass its own `checkout` mode, under the same iOS
  * rule, and its own `prepaidCards`. Web checkout only runs when a host
  * supplied a public API key. On a hosted web paywall a custom store product

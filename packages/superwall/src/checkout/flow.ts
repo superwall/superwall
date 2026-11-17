@@ -5,6 +5,7 @@ import type {
 } from "@superwall/runtime";
 import { checkoutPrefetchOf, detectSuperwallHost } from "@superwall/runtime";
 import { createApplePay, type ApplePay, type ApplePayOutcome } from "./applePay";
+import { createElementsCheckout, type CollectedPayment, type ElementsCheckout } from "./elements";
 import { asString, field } from "./api/decode";
 import { checkoutDiagnostics } from "./diagnostics";
 import { fetchWithRetry } from "./api/fetch";
@@ -37,7 +38,7 @@ import {
   saveCustomStoreReturnRecord,
 } from "./customStore";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
-import { sameFailure, unknownFailure, type CheckoutFailure } from "./failure";
+import { failureOfError, sameFailure, unknownFailure, type CheckoutFailure } from "./failure";
 import { introductoryOfferFromFragment, readTeleportBoot } from "./teleport/boot";
 import { teleportFor } from "./teleport/flow";
 import type {
@@ -93,7 +94,7 @@ export const resolutionOf = (
   return { type: "redirect", url: postPurchase.redirect };
 };
 
-const APPLE_PAY_PREFETCH_LIMIT = 10;
+const DEFERRED_PREFETCH_LIMIT = 10;
 const SHEET_READY_TIMEOUT = 10_000;
 const STATUS_POLL_INTERVAL = 2_000;
 const STATUS_POLL_LIMIT = 60;
@@ -102,6 +103,7 @@ export type PaywallSession = Pick<SuperwallSession, "getSnapshot" | "postMessage
 
 const sessionsByPaywall = new WeakMap<object, CheckoutSessions>();
 const applePayByPaywall = new WeakMap<object, ApplePay>();
+const elementsByPaywall = new WeakMap<object, ElementsCheckout>();
 
 export const sessionsFor = (paywall: PaywallSession): CheckoutSessions => {
   const existing = sessionsByPaywall.get(paywall);
@@ -129,6 +131,20 @@ export const applePayFor = (paywall: PaywallSession): ApplePay => {
   return applePay;
 };
 
+export const elementsFor = (paywall: PaywallSession): ElementsCheckout => {
+  const existing = elementsByPaywall.get(paywall);
+  if (existing) return existing;
+  const elements = createElementsCheckout({
+    publicApiKey: () => String(paywall.getSnapshot().device.publicApiKey ?? ""),
+    host: hostFor(paywall),
+  });
+  elementsByPaywall.set(paywall, elements);
+  return elements;
+};
+
+const defersIntent = (mode: CheckoutMode): mode is "applePay" | "elements" =>
+  mode === "applePay" || mode === "elements";
+
 export const contextFor = (
   paywall: PaywallSession,
   referenceName: string,
@@ -149,6 +165,7 @@ export const contextFor = (
 export const invalidateSessions = (paywall: PaywallSession, reason: string) => {
   sessionsFor(paywall).invalidate();
   applePayFor(paywall).clear();
+  elementsFor(paywall).clear();
   checkoutEvents.dispatch("SESSION_INVALIDATED", { reason });
 };
 
@@ -194,10 +211,10 @@ export const autoPrefetchTargets = (paywall: PaywallSession, mode: CheckoutMode)
     typeof configured === "string" && stripeReferences.includes(configured)
       ? configured
       : firstStripe;
-  if (mode !== "applePay") return [preferred];
+  if (!defersIntent(mode)) return [preferred];
   return [preferred, ...stripeReferences.filter((reference) => reference !== preferred)].slice(
     0,
-    APPLE_PAY_PREFETCH_LIMIT,
+    DEFERRED_PREFETCH_LIMIT,
   );
 };
 
@@ -231,7 +248,7 @@ export const warmOnOpen = (paywall: PaywallSession, open: object) => {
 };
 
 const scopeFor = (mode: CheckoutMode): SessionScope => {
-  if (mode === "applePay") return "apple-pay";
+  if (defersIntent(mode)) return "elements";
   if (mode === "external") return "external";
   return "default";
 };
@@ -243,6 +260,10 @@ export const prefetchSession = async (
   prepaidCards?: SuperwallPrepaidCards,
 ): Promise<void> => {
   const sessions = sessionsFor(paywall);
+  const elements = mode === "elements" ? elementsFor(paywall) : null;
+  if (elements && elements.quoteOf(referenceName).status !== "ready") {
+    elements.preparing(referenceName);
+  }
   let result: CheckoutSessionResult | null;
   try {
     result = await sessions.prefetch({
@@ -255,6 +276,7 @@ export const prefetchSession = async (
   } catch (error) {
     if (mode === "applePay")
       applePayFor(paywall).markUnavailable(referenceName, "session_failed", error);
+    elements?.markUnavailable(referenceName, "session_failed", error);
     return;
   }
   if (!result) return;
@@ -262,6 +284,20 @@ export const prefetchSession = async (
   hostFor(paywall).prefetched(contextFor(paywall, referenceName, result.checkoutContextId));
 
   if (result.directive === "elements") {
+    if (elements) {
+      const current = elements.quoteOf(referenceName);
+      if (
+        current.status === "ready" &&
+        current.quote.checkoutContextId === result.checkoutContextId
+      )
+        return;
+      try {
+        await elements.prepare(result, sessions.identity());
+      } catch (error) {
+        elements.markUnavailable(referenceName, "stripe_load_failed", error);
+      }
+      return;
+    }
     if (mode !== "applePay") return;
     const applePay = applePayFor(paywall);
     try {
@@ -271,6 +307,7 @@ export const prefetchSession = async (
     }
     return;
   }
+  elements?.markUnavailable(referenceName, "session_unsupported");
   if (result.directive === "embedded") {
     if (mode === "applePay") {
       applePayFor(paywall).markUnavailable(referenceName, "session_unsupported");
@@ -408,7 +445,7 @@ export const purchaseWithApplePay = (
   referenceName: string,
   onSubmit?: () => void,
 ): Promise<ApplePayOutcome> => {
-  const warmed = sessionsFor(paywall).warmed(referenceName, "apple-pay");
+  const warmed = sessionsFor(paywall).warmed(referenceName, "elements");
   return applePayFor(paywall).purchase(
     referenceName,
     contextFor(paywall, referenceName, warmed?.checkoutContextId ?? ""),
@@ -525,12 +562,13 @@ export const openEmbeddedSheet = (
     checkoutEvents.dispatch("SESSION_CREATED", embedded);
   });
 
-export const purchaseOnWeb = async (
+type PurchaseReport = { onFailure: (failure: CheckoutFailure) => void; onSubmit: () => void };
+
+const trackWebPurchase = async (
   paywall: PaywallSession,
   referenceName: string,
-  requested: CheckoutMode,
-  options: WebPurchaseOptions = {},
-  attempt?: PurchaseAttempt,
+  attempt: PurchaseAttempt | undefined,
+  run: (report: PurchaseReport) => Promise<WebPurchaseOutcome>,
 ): Promise<WebPurchaseOutcome> => {
   clearWebFailure(paywall);
   const events = purchaseEventsFor(paywall);
@@ -540,7 +578,7 @@ export const purchaseOnWeb = async (
     reported.add(failure);
     reportWebFailure(paywall, { referenceName, failure, attempt });
   };
-  const outcome = await runWebPurchase(paywall, referenceName, requested, options, {
+  const outcome = await run({
     onFailure: reportFailure,
     onSubmit: () => events.emit("submit", { referenceName, attempt }),
   });
@@ -553,12 +591,60 @@ export const purchaseOnWeb = async (
   return outcome;
 };
 
+export const purchaseOnWeb = (
+  paywall: PaywallSession,
+  referenceName: string,
+  requested: CheckoutMode,
+  options: WebPurchaseOptions = {},
+  attempt?: PurchaseAttempt,
+): Promise<WebPurchaseOutcome> =>
+  trackWebPurchase(paywall, referenceName, attempt, (report) =>
+    runWebPurchase(paywall, referenceName, requested, options, report),
+  );
+
+export type { CollectedPayment };
+
+/**
+ * Pays for a product with a payment method an `elements` form collected,
+ * reporting the purchase exactly as Apple Pay and the sheet do. `collect`
+ * runs once the purchase has started: it resolves the payment method, or
+ * `null` when the shopper backed out, such as by closing a wallet.
+ */
+export const purchaseWithElements = (
+  paywall: PaywallSession,
+  referenceName: string,
+  collect: () => Promise<CollectedPayment | null>,
+  options: WebPurchaseOptions = {},
+  attempt?: PurchaseAttempt,
+): Promise<WebPurchaseOutcome> =>
+  trackWebPurchase(paywall, referenceName, attempt, async (report) => {
+    const elements = elementsFor(paywall);
+    const state = elements.quoteOf(referenceName);
+    if (state.status !== "ready") return { status: "failed", failure: unknownFailure() };
+    rememberPurchaseOptions(paywall, referenceName, options);
+    const host = hostFor(paywall);
+    const context = contextFor(paywall, referenceName, state.quote.checkoutContextId);
+    host.initiated(context);
+    let collected: CollectedPayment | null;
+    try {
+      collected = await collect();
+    } catch (error) {
+      host.failed(context);
+      return { status: "failed", failure: failureOfError(error) };
+    }
+    if (collected === null) {
+      host.abandoned(context);
+      return { status: "abandoned" };
+    }
+    return elements.pay(referenceName, collected, context, report.onSubmit);
+  });
+
 const runWebPurchase = async (
   paywall: PaywallSession,
   referenceName: string,
   requested: CheckoutMode,
   options: WebPurchaseOptions,
-  report: { onFailure: (failure: CheckoutFailure) => void; onSubmit: () => void },
+  report: PurchaseReport,
 ): Promise<WebPurchaseOutcome> => {
   const tappedAt = Date.now();
   const sessions = sessionsFor(paywall);
@@ -570,10 +656,9 @@ const runWebPurchase = async (
       if (outcome.status !== "unavailable") return outcome;
     }
 
-    const warmed =
-      mode === "applePay"
-        ? sessions.warmed(referenceName, "apple-pay", options.prepaidCards)
-        : null;
+    const warmed = defersIntent(mode)
+      ? sessions.warmed(referenceName, "elements", options.prepaidCards)
+      : null;
     const result =
       warmed?.directive === "embedded"
         ? warmed

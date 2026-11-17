@@ -25,6 +25,7 @@ describe("checkout wire", () => {
   it("asks for the payment UI only where payment happens in the page", () => {
     expect(checkoutNeedsPaymentUi("sheet")).toBe(true);
     expect(checkoutNeedsPaymentUi("applePay")).toBe(true);
+    expect(checkoutNeedsPaymentUi({ mode: "elements" })).toBe(true);
     expect(checkoutNeedsPaymentUi("external")).toBe(false);
     expect(checkoutNeedsPaymentUi(undefined)).toBe(false);
   });
@@ -35,6 +36,7 @@ describe("checkout wire", () => {
     expect(webCheckoutDestinationOf({ mode: "applePay", prefetch: false })).toBe(
       "PAYWALL_APPLE_PAY",
     );
+    expect(webCheckoutDestinationOf("elements")).toBe("PAYWALL_APPLE_PAY");
     expect(webCheckoutDestinationOf(undefined)).toBeUndefined();
   });
 });

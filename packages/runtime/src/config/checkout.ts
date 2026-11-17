@@ -6,13 +6,18 @@
  * - `sheet` — take payment in the paywall, in a sheet Superwall renders.
  * - `applePay` — go straight to Apple Pay, falling back to the sheet where
  *   Apple Pay is unavailable.
+ * - `elements` — take payment in a form the paywall builds itself from
+ *   Stripe's own elements, with `<Checkout>`, `useCheckout()` and
+ *   `<PurchaseButton>` from `superwall/checkout`. A plain `purchase()`
+ *   opens the sheet. Inside an iOS app the form is unavailable and a
+ *   purchase opens the hosted checkout.
  *
  * The sheet's appearance is fixed and takes nothing from the paywall around
- * it. `sheet` and `applePay` carry Stripe's payment UI into the bundle;
- * `external` costs nothing. Read this before shipping either:
+ * it. `sheet`, `applePay` and `elements` carry Stripe's payment UI into the
+ * bundle; `external` costs nothing. Read this before shipping either:
  * https://superwall.com/docs/web-checkout
  */
-export type SuperwallCheckoutMode = "external" | "sheet" | "applePay";
+export type SuperwallCheckoutMode = "external" | "sheet" | "applePay" | "elements";
 
 /**
  * The mode alone, or the object form to steer it:
@@ -38,8 +43,8 @@ export type SuperwallCheckoutConfig<TReference extends string = string> =
  * Whether a web checkout accepts prepaid cards: `"allow"` (the default) or
  * `"block"`, which makes Stripe refuse them, a defence against free-trial
  * abuse. It applies to the sheet and the hosted checkout page; an Apple Pay
- * payment can't be filtered by card type, so in `applePay` mode only the
- * sheet fallback refuses them. Store purchases ignore it.
+ * payment or a payment in an `elements` form can't be filtered by card type,
+ * so in `applePay` and `elements` mode only the sheet fallback refuses them. Store purchases ignore it.
  */
 export type SuperwallPrepaidCards = "allow" | "block";
 

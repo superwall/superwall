@@ -29,6 +29,22 @@ describe("allowedDirectivesFor", () => {
     expect(allowedDirectivesFor("external")).toEqual(["redirect"]);
     expect(allowedDirectivesFor("sheet")).toEqual(["embedded", "redirect"]);
     expect(allowedDirectivesFor("applePay")).toEqual(["elements", "embedded", "redirect"]);
+    expect(allowedDirectivesFor("elements")).toEqual(["elements", "embedded", "redirect"]);
+  });
+
+  it("asks for a deferred quote only where a wallet or a form pays with it", () => {
+    const bodyFor = (mode: "sheet" | "external" | "applePay" | "elements") =>
+      sessionBody({
+        snapshot: snapshotOf(),
+        product: { reference: "primary", variables: {}, source: "sdk" },
+        productIdentifier: "test:price_1:no-trial",
+        mode,
+        silent: true,
+      });
+    expect(bodyFor("elements").deferElementsIntentCreation).toBe(true);
+    expect(bodyFor("applePay").deferElementsIntentCreation).toBe(true);
+    expect(bodyFor("sheet").deferElementsIntentCreation).toBe(false);
+    expect(bodyFor("external").deferElementsIntentCreation).toBe(false);
   });
 });
 

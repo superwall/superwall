@@ -7,6 +7,7 @@ import type {
 import { buildApplePayConfig, buildApplePayLineItems } from "./request";
 import { fetchWithRetry as defaultFetchWithRetry } from "../api/fetch";
 import { createConfirmation } from "../elements/confirm";
+import { checkoutErrorOf, type CheckoutError } from "../elements";
 import { failureOfError, unknownFailure, type CheckoutFailure } from "../failure";
 import { checkoutEvents } from "../events";
 import type { HostEvents, HostContext } from "../host";
@@ -48,17 +49,9 @@ export type ApplePayWalletReason =
   | "show_failed";
 
 /** An error a browser or Stripe threw, as its name and message. */
-export type ApplePayError = {
-  /** The error's name, such as `"InvalidAccessError"`. */
-  name: string;
-  /** The error's message, as the browser or Stripe wrote it. */
-  message: string;
-};
+export type ApplePayError = CheckoutError;
 
-export const applePayErrorOf = (error: unknown): ApplePayError =>
-  error instanceof Error
-    ? { name: error.name, message: error.message }
-    : { name: "Error", message: String(error) };
+export const applePayErrorOf = checkoutErrorOf;
 
 type Unavailable = { status: "unavailable"; reason: ApplePayWalletReason; error?: ApplePayError };
 

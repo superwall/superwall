@@ -40,7 +40,7 @@ describe("sdkRedeemsCheckout", () => {
 
 const app = (
   platform: string,
-  checkout?: "sheet" | "applePay" | "external",
+  checkout?: "sheet" | "applePay" | "external" | "elements",
 ): SuperwallRuntimeSnapshot =>
   ({ device: { platform, sdkVersionPadded: "004.017.000" }, config: { checkout } }) as never;
 
@@ -48,12 +48,15 @@ describe("checkoutModeFor", () => {
   it("is always the hosted page inside an iOS app, whatever the paywall asks for", () => {
     expect(checkoutModeFor(app("iOS", "sheet"))).toBe("external");
     expect(checkoutModeFor(app("iOS", "applePay"))).toBe("external");
+    expect(checkoutModeFor(app("iOS", "elements"))).toBe("external");
     expect(checkoutModeFor(app("iOS"), "sheet")).toBe("external");
   });
 
   it("keeps the configured mode elsewhere, and is the hosted page when none is configured", () => {
     expect(checkoutModeFor(app("Android", "sheet"))).toBe("sheet");
     expect(checkoutModeFor(app("web", "applePay"))).toBe("applePay");
+    expect(checkoutModeFor(app("web", "elements"))).toBe("elements");
+    expect(checkoutModeFor(app("Android", "elements"), "sheet")).toBe("sheet");
     expect(checkoutModeFor(app("Android"))).toBe("external");
     expect(checkoutModeFor(app("Android", "sheet"), "applePay")).toBe("applePay");
   });
@@ -84,6 +87,7 @@ describe("checkoutModeFor on the web half of a teleport", () => {
     Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout" });
     expect(checkoutModeFor(app("iOS", "sheet"))).toBe("sheet");
     expect(checkoutModeFor(app("iOS", "applePay"))).toBe("applePay");
+    expect(checkoutModeFor(app("iOS", "elements"))).toBe("elements");
     expect(checkoutModeFor(app("iOS", "external"))).toBe("applePay");
     expect(checkoutModeFor(app("iOS"))).toBe("applePay");
   });

@@ -15,6 +15,7 @@ export const allowedDirectivesFor = (mode: CheckoutMode): readonly string[] => {
     case "external":
       return ["redirect"];
     case "applePay":
+    case "elements":
       return ["elements", "embedded", "redirect"];
     case "sheet":
       return ["embedded", "redirect"];
@@ -184,7 +185,7 @@ export const sessionBody = ({
         : allowedDirectivesFor(mode).filter((directive) => directive !== "redirect"),
     shouldRespectIsFreeTrialAvailable: false,
     isPrefetch: silent,
-    deferElementsIntentCreation: mode === "applePay",
+    deferElementsIntentCreation: mode === "applePay" || mode === "elements",
     ...(teleportId === undefined ? {} : { teleportId }),
     context: {
       ...attributionOf(snapshot),

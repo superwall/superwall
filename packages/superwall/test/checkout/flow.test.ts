@@ -715,7 +715,7 @@ describe("purchaseOnWeb", () => {
       status: "unavailable",
       reason: "session_unsupported",
     });
-    sessionsFor(session).cache.set("primary", embedded, "apple-pay");
+    sessionsFor(session).cache.set("primary", embedded, "elements");
     const begin = vi.spyOn(sessionsFor(session), "begin");
 
     const outcome = purchaseOnWeb(session, "primary", "applePay");
