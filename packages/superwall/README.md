@@ -176,8 +176,8 @@ teleport screen),
 way on every host (the iOS SDK, the Web SDK, a hosted web paywall, a teleport
 page, a browser): Apple Pay is set up with a card, from Apple's
 `ApplePaySession.canMakePaymentsWithActiveCard` for the page's own Stripe merchant,
-`merchant.<hostname>.stripe` (Superwall registers both the in-app paywall
-domain and the teleport domain with the customer's Stripe account). It is `{
+`merchant.<hostname>.stripe`; the answer follows the cards in Wallet, not
+the domain's Stripe registration. It is `{
 available: true }`, or `{ available: false, reason, message, error? }` with a
 typed `ApplePayUnavailableReason`: `checking` until Apple answers;
 `no_active_card`; `unsupported_browser`, as inside the
