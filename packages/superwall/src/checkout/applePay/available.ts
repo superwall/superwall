@@ -20,7 +20,7 @@ import { applePayErrorOf, type ApplePayError } from "./index";
  * - `"check_failed"`: the browser threw on the check for another reason;
  *   `error` holds it.
  * - `"timed_out"`: Apple did not answer within 1.5 seconds. Its late answer
- *   still replaces this one.
+ *   still replaces this one, and the next check asks Apple again.
  */
 export type ApplePayUnavailableReason =
   | "checking"
@@ -153,6 +153,10 @@ const answered = (check: Check, result: UseApplePayResult) => {
 };
 
 const ask = (global: ApplePaySessionGlobal, check: Check) => {
+  if (check.result === TIMED_OUT) {
+    check.asking = false;
+    settle(check, CHECKING);
+  }
   if (check.asking) return;
   if (check.asked && !check.result.available && check.result.error !== undefined) {
     settle(check, CHECKING);
@@ -194,8 +198,9 @@ export const subscribeToApplePay = (listener: () => void): (() => void) => {
  * Whether Apple Pay is available on this device, for code outside React;
  * `useApplePay()` is the same answer in a component. Apple is asked once per
  * page and its answer is reused. After 1.5 seconds without an answer it
- * resolves `timed_out`, but the check goes on, so a later call gets Apple's
- * answer. A check that threw is asked again next time. It never rejects and
+ * resolves `timed_out`, but the check goes on, so Apple's late answer still
+ * lands; a later call while it is still `timed_out` asks Apple again. A check
+ * that threw is asked again next time. It never rejects and
  * never resolves `checking`. See `UseApplePayResult`.
  *
  * ```ts

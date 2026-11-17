@@ -497,21 +497,34 @@ describe("useApplePay's card answer", () => {
     }
   });
 
-  it("resolves timed_out for a call made while Apple still has not answered, without asking twice", async () => {
+  it("asks Apple again on a call made after a timeout, and takes whichever answer comes", async () => {
+    vi.useFakeTimers();
+    try {
+      const answers = [deferred(), deferred()];
+      let calls = 0;
+      const global = withActiveCard(() => answers[calls++]?.promise ?? new Promise(() => {}));
+      const first = checkApplePay();
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await first).toEqual(off("timed_out"));
+      const second = checkApplePay();
+      expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(2);
+      answers[1]?.resolve(true);
+      expect(await second).toEqual(on);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await checkApplePay()).toEqual(on);
+      expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("asks once for calls made together, while Apple has not answered", async () => {
     vi.useFakeTimers();
     try {
       const global = withActiveCard(() => new Promise(() => {}));
-      const first = checkApplePay();
-      await vi.advanceTimersByTimeAsync(1499);
-      let settled = false;
-      void first.then(() => {
-        settled = true;
-      });
-      await Promise.resolve();
-      expect(settled).toBe(false);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(await first).toEqual(off("timed_out"));
-      expect(await checkApplePay()).toEqual(off("timed_out"));
+      const both = Promise.all([checkApplePay(), checkApplePay()]);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await both).toEqual([off("timed_out"), off("timed_out")]);
       expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
     } finally {
       vi.useRealTimers();

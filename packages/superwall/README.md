@@ -187,8 +187,8 @@ by QR code; `insecure_context`, not HTTPS, `http://localhost` included;
 `timed_out` after 1.5 seconds, which Apple's late answer still replaces. Any
 usable card counts, Apple Cash with no balance too, so `available` means Apple
 Pay is set up, not that a payment will succeed. Apple is asked once per page
-and every `useApplePay()` shares the answer; a check that threw is asked
-again. `checkApplePay()` is the same answer as a promise for code outside
+and every `useApplePay()` shares the answer; a check that threw or timed out
+is asked again. `checkApplePay()` is the same answer as a promise for code outside
 React, never `checking`. With a product `useApplePay` adds
 `product`: `preparing`, `ready`, or `unavailable` with a typed
 `ApplePayProductReason` (`unsupported_host` inside the iOS and Android SDKs
