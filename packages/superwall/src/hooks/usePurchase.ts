@@ -9,6 +9,7 @@ import type {
 } from "@superwall/runtime";
 import { useSuperwallSession } from "../provider/context";
 import { useSuperwallSnapshot } from "./useSuperwallSnapshot";
+import { listenToPurchases } from "./purchaseListener";
 import type { ProductReference } from "./index";
 import {
   clearWebFailure,
@@ -26,9 +27,7 @@ import {
   purchaseEventsFor,
   leadOf,
   reportWebFailure,
-  sameAttempt,
   type PurchaseAttempt,
-  type PurchaseEventPayload,
 } from "../checkout/events";
 
 export type { CheckoutFailure, CheckoutFailureReason } from "../checkout/failure";
@@ -136,57 +135,6 @@ export type UsePurchaseResult<TVariables extends SuperwallProductVariables> = {
 
 const referenceOf = (input: string | { reference: string }): string =>
   typeof input === "string" ? input : input.reference;
-
-const listen = <TProduct extends SuperwallProduct>(
-  paywall: { getSnapshot: () => { productsByReference: Record<string, TProduct | undefined> } },
-  callbacks: () => PurchaseCallbacks<TProduct>,
-  only?: PurchaseAttempt,
-): (() => void) => {
-  const events = purchaseEventsFor(paywall);
-  const productOf = ({ referenceName, attempt, product }: PurchaseEventPayload["start"]) =>
-    only === undefined || sameAttempt(only, attempt)
-      ? ((product as TProduct | undefined) ??
-        paywall.getSnapshot().productsByReference[referenceName])
-      : undefined;
-  const each =
-    (pick: (current: PurchaseCallbacks<TProduct>) => ((product: TProduct) => void) | undefined) =>
-    (payload: PurchaseEventPayload["start"]) => {
-      const product = productOf(payload);
-      if (product) pick(callbacks())?.(product);
-    };
-  const unsubscribers = [
-    events.on(
-      "start",
-      each((current) => current.onStart),
-    ),
-    events.on(
-      "submit",
-      each((current) => current.onSubmit),
-    ),
-    events.on(
-      "complete",
-      each((current) => current.onComplete),
-    ),
-    events.on(
-      "abandon",
-      each((current) => current.onAbandon),
-    ),
-    events.on("failure", (payload) => {
-      const { failure } = payload;
-      const product = productOf(payload);
-      if (product) {
-        callbacks().onFailure?.({
-          ...failure,
-          status: "failed",
-          product,
-        } as PurchaseFailure<TProduct>);
-      }
-    }),
-  ];
-  return () => {
-    for (const unsubscribe of unsubscribers) unsubscribe();
-  };
-};
 
 const reportStorePurchase = (
   paywall: object,
@@ -383,7 +331,7 @@ export const usePurchase = <
         withCallbacks ?? {};
       const own = { onStart, onSubmit, onComplete, onAbandon, onFailure };
       const attempt: PurchaseAttempt = {};
-      const stop = listen(session, () => own, attempt);
+      const stop = listenToPurchases(session, () => own, attempt);
       try {
         return await buy(input, purchaseOptions, attempt);
       } finally {
@@ -393,7 +341,7 @@ export const usePurchase = <
     [session, buy],
   );
 
-  React.useEffect(() => listen(session, () => callbacks.current), [session]);
+  React.useEffect(() => listenToPurchases(session, () => callbacks.current), [session]);
 
   const webFailure = React.useSyncExternalStore(
     React.useCallback((listener: () => void) => subscribeWebFailure(session, listener), [session]),

@@ -39,3 +39,31 @@ export type {
   PaymentSession,
   SubscriptionDetails,
 } from "./types";
+export { Checkout } from "./elements/Checkout";
+export type { CheckoutElementsOptions, CheckoutProps } from "./elements/Checkout";
+export { useCheckout } from "./elements/useCheckout";
+export type {
+  CheckoutAmounts,
+  CheckoutSubmitResult,
+  CheckoutUnavailableReason,
+  UseCheckoutResult,
+} from "./elements/useCheckout";
+export type { CheckoutError } from "./elements";
+export { PurchaseButton } from "./elements/PurchaseButton";
+export type { PurchaseButtonProps } from "./elements/PurchaseButton";
+export { ExpressCheckoutElement } from "./elements/ExpressCheckoutElement";
+export type { ExpressCheckoutElementProps } from "./elements/ExpressCheckoutElement";
+export {
+  AddressElement,
+  LinkAuthenticationElement,
+  PaymentElement,
+  PaymentMethodMessagingElement,
+  useElements,
+  useStripe,
+} from "@stripe/react-stripe-js";
+export type {
+  AddressElementProps,
+  LinkAuthenticationElementProps,
+  PaymentElementProps,
+  PaymentMethodMessagingElementProps,
+} from "@stripe/react-stripe-js";
