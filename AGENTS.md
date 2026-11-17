@@ -245,8 +245,11 @@ The stack, bottom to top — each layer depends only on the one below it:
       `unknown` or `superseded`: no SDK sends why); custom store products emit
       none. Every event carries the purchase attempt that started it, so the
       callbacks passed to one `purchase()` call fire only for that call's
-      purchase, even when another overlaps it; a teleport handed to an in-app
-      purchase is reported once, by that purchase. Submission is reported by
+      purchase, even when another overlaps it. A call that reopens a waiting
+      teleport, or an in-app purchase it is handed to, joins the teleport's
+      attempt (`joinAttempt`): every joined call's callbacks see its events, the
+      paywall-wide ones see each once, and the attempt keeps its own failure,
+      so clearing the shown failure never changes how a call settles. Submission is reported by
       the sheet or wallet the purchase opened, never matched by product. A teleport page's `returnToApp()` after a failed
       payment adds `reason=failed` to the return link, and leaves the app the
       failure and any `returnToApp({ data })` in the teleport's session

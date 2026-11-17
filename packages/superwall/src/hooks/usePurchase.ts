@@ -24,7 +24,9 @@ import {
 import { unknownFailure, type CheckoutFailure } from "../checkout/failure";
 import {
   purchaseEventsFor,
+  leadOf,
   reportWebFailure,
+  sameAttempt,
   type PurchaseAttempt,
   type PurchaseEventPayload,
 } from "../checkout/events";
@@ -142,7 +144,7 @@ const listen = <TProduct extends SuperwallProduct>(
 ): (() => void) => {
   const events = purchaseEventsFor(paywall);
   const productOf = ({ referenceName, attempt, product }: PurchaseEventPayload["start"]) =>
-    only === undefined || attempt === only
+    only === undefined || sameAttempt(only, attempt)
       ? ((product as TProduct | undefined) ??
         paywall.getSnapshot().productsByReference[referenceName])
       : undefined;
@@ -281,27 +283,33 @@ export const usePurchase = <
           prepaidCards,
           attempt,
         });
+        const lead = leadOf(attempt);
+        const first = lead.settled !== true;
+        lead.settled = true;
         if (typeof outcome !== "string") {
           const result = (await outcome.result) as SuperwallPurchaseResult<
             SuperwallProduct<TVariables>
           >;
-          if (!outcome.reported) emitStoreResult(session, result, attempt);
-          return result;
+          if (!outcome.reported && first) emitStoreResult(session, result, lead);
+          const sold = session.getSnapshot().productsByReference[outcome.reference];
+          return { ...result, product: sold ?? product } as PurchaseResult<TVariables>;
         }
-        const reported = lastWebFailure(session);
-        const failure = reported?.attempt === attempt ? reported.failure : undefined;
+        const failure = lead.failure;
         if (outcome === "completed") {
-          clearWebFailure(session);
-          events.emit("complete", { referenceName: reference, attempt });
+          if (first) {
+            clearWebFailure(session);
+            events.emit("complete", { referenceName: reference, attempt: lead });
+          }
           return { status: outcome, product };
         }
         if (outcome === "abandoned" && failure === undefined) {
-          events.emit("abandon", { referenceName: reference, attempt });
+          if (first) events.emit("abandon", { referenceName: reference, attempt: lead });
           return { status: outcome, product };
         }
         if (failure !== undefined) return { status: "failed", product, failure };
         const unknown = unknownFailure();
-        reportWebFailure(session, { referenceName: reference, failure: unknown, attempt });
+        if (first)
+          reportWebFailure(session, { referenceName: reference, failure: unknown, attempt: lead });
         return { status: "failed", product, failure: unknown };
       }
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
@@ -351,7 +359,7 @@ export const usePurchase = <
       if (teleporter.kind === "page" || !teleporter.inFlight()) {
         return store() as Promise<PurchaseResult<TVariables>>;
       }
-      return teleporter.handOff(reference, store) as Promise<PurchaseResult<TVariables>>;
+      return teleporter.handOff(reference, store, attempt) as Promise<PurchaseResult<TVariables>>;
     },
     [session, webMode, queryStore],
   );

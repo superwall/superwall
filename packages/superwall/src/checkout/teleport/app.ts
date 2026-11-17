@@ -10,7 +10,7 @@ import { platformOf } from "../../device";
 import { attributionOf } from "../api/body";
 import { attachCheckoutMetadata } from "../api/metadata";
 import { asString } from "../api/decode";
-import { reportWebFailure, type PurchaseAttempt } from "../events";
+import { joinAttempt, reportWebFailure, type PurchaseAttempt } from "../events";
 import { sameFailure, type CheckoutFailure } from "../failure";
 import { hostOf } from "../../host";
 import { startLoading, stopLoading } from "../loading";
@@ -865,6 +865,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       if (phase.kind === "waiting") {
         const record = phase.record;
         if (record.freeTrial === freeTrialFor(resolved, paywall.getSnapshot())) {
+          joinAttempt(record.attempt, request.attempt);
           reopen(record, request.productReference);
           return record.outcome;
         }
@@ -872,6 +873,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
           starting = undefined;
           if (!isWaiting(record)) return record.outcome;
           if (moved) {
+            joinAttempt(record.attempt, request.attempt);
             reopen(record, request.productReference);
             return record.outcome;
           }
@@ -899,9 +901,10 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       prepare(target, query);
     },
     inFlight: () => phase.kind === "waiting",
-    handOff: (reference, purchase) => {
+    handOff: (reference, purchase, attempt) => {
       const record = parkWaiting();
       const result = purchase();
+      joinAttempt(record?.attempt, attempt);
       record?.settle({ reference, result, reported: true });
       return result;
     },

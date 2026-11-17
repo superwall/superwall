@@ -1,5 +1,6 @@
 import { teleportOf } from "@superwall/runtime";
 import { platformOf } from "../../device";
+import { joinAttempt, type PurchaseAttempt } from "../events";
 import type { PurchaseOutcome } from "../types";
 import { NAV_QUERY_KEY, TAPPED_PRODUCT_QUERY_KEY } from "./boot";
 import {
@@ -26,6 +27,7 @@ export const provideInlineRouter = (paywall: object, router: InlineRouter): (() 
 type WebHalf = {
   depth: number;
   productReference?: string;
+  attempt?: PurchaseAttempt;
   settle: (outcome: TeleportOutcome) => void;
 };
 
@@ -89,6 +91,7 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
         web = {
           depth: depth + 1,
           settle: resolve,
+          ...(request.attempt === undefined ? {} : { attempt: request.attempt }),
           ...(request.productReference === undefined
             ? {}
             : { productReference: request.productReference }),
@@ -121,11 +124,13 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
     handOff: <T extends { status: PurchaseOutcome }>(
       reference: string,
       purchase: () => Promise<T>,
+      attempt?: PurchaseAttempt,
     ): Promise<T> => {
       const half = web;
       const result = purchase();
       if (half === undefined) return result;
-      half.settle({ reference, result });
+      joinAttempt(half.attempt, attempt);
+      half.settle({ reference, result, reported: true });
       result.then(
         (bought) => {
           if (bought.status === "completed" && web === half) completed(half);

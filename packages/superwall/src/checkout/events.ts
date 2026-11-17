@@ -53,7 +53,29 @@ export const checkoutEvents = {
 
 type StoreFailure = { reason: SuperwallPurchaseFailure["reason"] };
 
-export type PurchaseAttempt = object;
+export type PurchaseAttempt = {
+  lead?: PurchaseAttempt;
+  members?: Set<PurchaseAttempt>;
+  failure?: CheckoutFailure;
+  settled?: boolean;
+};
+
+export const leadOf = (attempt: PurchaseAttempt): PurchaseAttempt => attempt.lead ?? attempt;
+
+export const joinAttempt = (
+  lead: PurchaseAttempt | undefined,
+  joiner: PurchaseAttempt | undefined,
+) => {
+  if (lead === undefined || joiner === undefined) return;
+  const head = leadOf(lead);
+  if (leadOf(joiner) === head) return;
+  head.members ??= new Set([head]);
+  head.members.add(joiner);
+  joiner.lead = head;
+};
+
+export const sameAttempt = (listening: PurchaseAttempt, reported: PurchaseAttempt | undefined) =>
+  reported !== undefined && (reported === listening || leadOf(reported) === leadOf(listening));
 
 type Attempted = { referenceName: string; attempt?: PurchaseAttempt; product?: SuperwallProduct };
 
@@ -117,6 +139,7 @@ const notifyWebFailure = (paywall: object) => {
 };
 
 export const reportWebFailure = (paywall: object, reported: WebFailure) => {
+  if (reported.attempt !== undefined) leadOf(reported.attempt).failure = reported.failure;
   webFailures.set(paywall, reported);
   notifyWebFailure(paywall);
   purchaseEventsFor(paywall).emit("failure", reported);

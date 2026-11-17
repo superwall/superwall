@@ -76,6 +76,7 @@ export type AppTeleport = TeleportBase & {
   handOff<T extends { status: PurchaseOutcome }>(
     reference: string,
     purchase: () => Promise<T>,
+    attempt?: PurchaseAttempt,
   ): Promise<T>;
   open(): void;
   cancel(): void;

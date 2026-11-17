@@ -29,6 +29,46 @@ const setVisibility = (state: "visible" | "hidden") => {
   document.dispatchEvent(new Event("visibilitychange"));
 };
 
+const declinedReplies = (failure: object) => ({
+  "checkout/teleport": {
+    teleportId: "v1:tp",
+    url: "https://acme.superwall.app/sw-teleport/v1:tp",
+  },
+  "checkout/teleport/status": { status: "claimed", checkoutContextId: "ctx_1" },
+  "checkout/status": { status: "pending" },
+  "checkout/teleport/session": { saved: true },
+  "checkout/teleport/session/read": {
+    session: { query: {}, returned: { failure, at: Number.MAX_SAFE_INTEGER } },
+  },
+});
+
+const stubReplies = (replies: Record<string, unknown>) =>
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
+      return new Response(JSON.stringify(replies[path] ?? {}));
+    }),
+  );
+
+const renderBuyer = (onFailure = vi.fn()) =>
+  renderWithProvider(
+    () => {
+      const teleport = useTeleport();
+      return { session: useSuperwallSession(), teleport, buyer: usePurchase({ onFailure }) };
+    },
+    {
+      config,
+      host: {
+        device,
+        products: [
+          { reference: "primary", productId: "test:price_1:no-trial" },
+          { reference: "annual", productId: "com.acme.annual" },
+        ],
+      },
+    },
+  );
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -598,6 +638,140 @@ describe("useTeleport in the app", () => {
       expect(result.current.buyer.failure).toMatchObject({ reason: "insufficient_funds" });
       expect(outcome).toBeDefined();
       expect(result.current.teleport.status).not.toBe("waiting");
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
+  it("reports a decline to every purchase() call that reopened the waiting teleport", async () => {
+    vi.useFakeTimers();
+    try {
+      stubReplies(declinedReplies({ code: "card_declined", declineCode: "insufficient_funds" }));
+      Reflect.set(window, "app", {});
+      const everywhere = vi.fn();
+      const { result } = renderBuyer(everywhere);
+      await flush();
+      const first = vi.fn();
+      const second = vi.fn();
+      const outcomes: unknown[] = [];
+      await act(async () => {
+        void result.current.buyer
+          .purchase("primary", { onFailure: first })
+          .then((r) => outcomes.push(r));
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      await act(async () => {
+        void result.current.buyer
+          .purchase("primary", { onFailure: second })
+          .then((r) => outcomes.push(r));
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      await act(async () => {
+        void teleporter.handleReturn("failed");
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(first).toHaveBeenCalledOnce();
+      expect(second).toHaveBeenCalledOnce();
+      expect(everywhere).toHaveBeenCalledOnce();
+      await act(async () => {
+        teleporter.cancel();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(outcomes).toHaveLength(2);
+      for (const outcome of outcomes) {
+        expect(outcome).toMatchObject({
+          status: "failed",
+          failure: { reason: "insufficient_funds" },
+        });
+      }
+      expect(everywhere).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
+  it("settles a declined teleport failed even when onFailure starts another purchase", async () => {
+    vi.useFakeTimers();
+    try {
+      stubReplies(declinedReplies({ code: "card_declined", declineCode: "insufficient_funds" }));
+      Reflect.set(window, "app", {});
+      const holder: { retry?: () => void } = {};
+      const { result } = renderBuyer(vi.fn(() => holder.retry?.()));
+      await flush();
+      const onAbandon = vi.fn();
+      let outcome: unknown;
+      await act(async () => {
+        void result.current.buyer.purchase("primary", { onAbandon }).then((settled) => {
+          outcome = settled;
+        });
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      holder.retry = () => {
+        holder.retry = undefined;
+        teleporter.cancel();
+        void result.current.buyer.purchase("primary");
+      };
+      await act(async () => {
+        void teleporter.handleReturn("failed");
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(outcome).toMatchObject({
+        status: "failed",
+        failure: { reason: "insufficient_funds" },
+      });
+      expect(onAbandon).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
+  it("gives the teleport's own call the result of the native purchase that replaced it, once", async () => {
+    vi.useFakeTimers();
+    try {
+      stubReplies(declinedReplies({}));
+      Reflect.set(window, "app", {});
+      const everywhere = vi.fn();
+      const { result } = renderWithProvider(
+        () => ({
+          session: useSuperwallSession(),
+          buyer: usePurchase({ onComplete: everywhere }),
+        }),
+        {
+          config,
+          host: {
+            device,
+            products: [
+              { reference: "primary", productId: "test:price_1:no-trial" },
+              { reference: "annual", productId: "com.acme.annual" },
+            ],
+          },
+        },
+      );
+      await flush();
+      const onComplete = vi.fn();
+      let outcome: unknown;
+      await act(async () => {
+        void result.current.buyer.purchase("primary", { onComplete }).then((settled) => {
+          outcome = settled;
+        });
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      await act(async () => {
+        await result.current.buyer.purchase("annual");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(outcome).toMatchObject({ status: "completed", product: { reference: "annual" } });
+      expect(onComplete).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ reference: "annual" }),
+      );
+      expect(everywhere).toHaveBeenCalledOnce();
     } finally {
       vi.useRealTimers();
       Reflect.deleteProperty(window, "app");
