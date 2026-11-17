@@ -73,5 +73,6 @@ export async function sendAscRequest(
   }
 
   const teamId = await resolveAscTeam(ctx, api, options.team);
-  return apiCall(ctx, `${verb.toUpperCase()} ${path}`, () => ascProxy(api, teamId, verb, path, body));
+  const response = await apiCall(ctx, `${verb.toUpperCase()} ${path}`, () => ascProxy(api, teamId, verb, path, body));
+  return response ?? { ok: true };
 }

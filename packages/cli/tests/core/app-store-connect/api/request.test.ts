@@ -7,7 +7,7 @@ import { command as get } from "@/commands/app-store-connect/api/get";
 import { command as post } from "@/commands/app-store-connect/api/post";
 import { readCachedIndex } from "@/core/app-store-connect/api/spec";
 import { buildZip, serveZip } from "../../../helpers/asc-spec";
-import { fakeAscApi } from "../../../helpers/asc-proxy";
+import { ascRoutes, fakeAscApi } from "../../../helpers/asc-proxy";
 import { runCommand } from "../../../helpers/command";
 import { restoreFetch } from "../../../helpers/fetch";
 
@@ -92,4 +92,15 @@ test("no App Store Connect key, or several, stops before Apple is called", async
   const ambiguous = await runCommand(get, { api: several.api, args: { path: "/v1/apps" } });
   assert.equal(errorOf(ambiguous), "Multiple App Store Connect teams (T1, 9, ). Pass --team <id>.");
   assert.ok(!several.requests.some((request) => request.path.includes("/proxy/")));
+});
+
+test("an answer with no content is ok, and an answer with a body passes through unchanged", async () => {
+  const { api } = ascRoutes({
+    "POST /v1/things": undefined,
+    "GET /v1/apps": { data: [{ id: "555" }] },
+  });
+  const empty = await runCommand(post, { api, args: { path: "/v1/things" }, flags: { force: true }, json: true });
+  assert.deepEqual(empty.json, { ok: true });
+  const body = await runCommand(get, { api, args: { path: "/v1/apps" }, json: true });
+  assert.deepEqual(body.json, { data: [{ id: "555" }] });
 });
