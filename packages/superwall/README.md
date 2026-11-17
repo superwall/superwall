@@ -172,23 +172,35 @@ and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedempt
 `idle`, `waiting`, `arrived`, `completed` — with `prefetch`, `reopen`,
 `cancel`, `returnToApp` and `returning`, for a paywall that draws its own
 teleport screen),
-`useApplePay` says whether direct Apple Pay, the wallet the browser opens
-itself, is available on a web host (Web SDK, hosted web paywall, teleport page
-or browser): `{ available: true }`, or `{ available: false, reason, message,
-error? }` with a typed `ApplePayUnavailableReason` (`unsupported_browser`, as
-in desktop Chrome, whose card sheet may still offer Apple Pay by QR code;
-`insecure_context`, not HTTPS, `http://localhost` included;
-`device_unsupported`; `cross_origin_frame`; `check_failed`) and the browser's
-own `error` when its check threw; `undefined` inside the iOS and Android SDKs
-and in Studio. With a product it adds `product`: `preparing`, `ready`, or
-`unavailable` with a typed `ApplePayProductReason`, `message` and `error?`.
-Only Stripe's check, made when it prepares the product, sees the cards in
-Wallet and the domain's registration, and reports a refusal as
-`stripe_declined`. The wallet opens only for a product prepared before the
-tap: a config `checkout: "applePay"` prepares it on its own, and on a
-`checkout: "sheet"` paywall `prefetch(reference, { checkout: "applePay" })`
-does; a `purchase(reference, { checkout: "applePay" })` of anything else opens
-the sheet, with `reason` `not_prepared`.
+`useApplePay` says whether Apple Pay is available on this device, the same
+way on every host (the iOS SDK, the Web SDK, a hosted web paywall, a teleport
+page, a browser): Apple Pay is set up with a card, from Apple's
+`ApplePaySession.canMakePaymentsWithActiveCard` for the page's own Stripe merchant,
+`merchant.<hostname>.stripe`; the answer follows the cards in Wallet, not
+the domain's Stripe registration. It is `{
+available: true }`, or `{ available: false, reason, message, error? }` with a
+typed `ApplePayUnavailableReason`: `checking` until Apple answers;
+`no_active_card`; `unsupported_browser`, as inside the
+Android SDK and in desktop Chrome, whose card sheet may still offer Apple Pay
+by QR code; `insecure_context`, not HTTPS, `http://localhost` included;
+`cross_origin_frame`; `check_failed`, with the browser's own `error`; and
+`timed_out` after 1.5 seconds, which Apple's late answer still replaces. Any
+usable card counts, Apple Cash with no balance too, so `available` means Apple
+Pay is set up, not that a payment will succeed. Apple is asked once per page
+and every `useApplePay()` shares the answer; a check that threw or timed out
+is asked again. `checkApplePay()` is the same answer as a promise for code outside
+React, never `checking`. With a product `useApplePay` adds
+`product`: `preparing`, `ready`, or `unavailable` with a typed
+`ApplePayProductReason` (`unsupported_host` inside the iOS and Android SDKs
+and in Studio, where a purchase never opens the wallet), `message` and
+`error?`. Only Stripe's check, made
+when it prepares the product, sees the cards in Wallet and the domain's
+registration, and reports a refusal as `stripe_declined`. The wallet opens
+only for a product prepared before the tap: a config `checkout: "applePay"`
+prepares it on its own, and on a `checkout: "sheet"` paywall
+`prefetch(reference, { checkout: "applePay" })` does; a
+`purchase(reference, { checkout: "applePay" })` of anything else opens the
+sheet, with `reason` `not_prepared`.
 
 `useUserAttribute(key, parser)` is one user attribute as typed state —
 `useQueryState`'s API with the same parsers, kept by the host SDK across
@@ -324,7 +336,12 @@ web half's `close()` resolve `"opened"`, `"cancelled"` or `"no_app"`, and
 `useTeleport().returning` is true while one is in flight. Options:
 `route`, `overlay` (the teleport screen), `fallbacks` (a store product the
 screen offers instead), `completion` (`"confirmation"` or `"direct"`),
-`introductoryOfferEligibility`.
+`introductoryOfferEligibility`. Teleport pays off only when the shopper can
+pay with Apple Pay on the web page, so check `useApplePay().available`
+before sending them there and keep them in the app (the store purchase) when
+it is `false`: `router.push(route, { teleport: false })` pushes even
+`teleport.route` in the app. A paywall with `teleport` asks Apple as it
+opens, so the answer is usually there before the first tap.
 
 ### Dev — the studio
 
@@ -484,7 +501,7 @@ Opt out with `SUPERWALL_TELEMETRY_DISABLED=1` or `DO_NOT_TRACK=1`.
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `superwall`            | `SuperwallProvider` and the runtime types (`SuperwallProduct`, `SuperwallSession`, …)                             |
 | `superwall/config`     | `definePaywall`                                                                                                   |
-| `superwall/hooks`      | every hook, `readAttribute` + parsers, `createSuperwall` and `useSuperwallSession`                                |
+| `superwall/hooks`      | every hook, `readAttribute` + parsers, `checkApplePay`, `createSuperwall` and `useSuperwallSession`               |
 | `superwall/navigation` | `useRouter`, `useIsFocused`, `useQueryState` + parsers, `replayStack`, `PaywallRouter`                            |
 | `superwall/checkout`   | web checkout (Stripe) and `TeleportScreen` — bundled only when `config.checkout` or `config.teleport` asks for it |
 | `superwall/assets`     | ambient types for asset imports                                                                                   |

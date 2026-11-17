@@ -29,18 +29,19 @@ export default {
     failed: "Das hat nicht geklappt. Bitte erneut versuchen.",
   },
   wallet: {
-    native: "Apple Pay: in dieser App nicht angeboten (undefined).",
     none: {
+      checking: "Apple Pay: Apple wird gefragt… (false, checking)",
+      no_active_card: "Apple Pay: keine Karte in Wallet (false, no_active_card).",
+      timed_out: "Apple Pay: Apple hat nicht rechtzeitig geantwortet (false, timed_out).",
       unsupported_browser:
         "Apple Pay: dieser Browser kann die Wallet nicht selbst öffnen (false, unsupported_browser).",
       insecure_context:
         "Apple Pay: die Seite wird nicht über HTTPS geladen (false, insecure_context).",
-      device_unsupported:
-        "Apple Pay: dieses Gerät kann nicht mit Apple Pay zahlen (false, device_unsupported).",
       cross_origin_frame:
         "Apple Pay: in einem Frame einer anderen Seite blockiert (false, cross_origin_frame).",
       check_failed: "Apple Pay: die Prüfung des Browsers ist fehlgeschlagen (false, check_failed).",
     },
+    inApp: "Apple Pay: verfügbar (true); in der App übernimmt der Store den Kauf.",
     preparing: "Apple Pay: verfügbar (true), Wallet wird vorbereitet…",
     ready: "Apple Pay: verfügbar (true), die Wallet öffnet sich beim Tippen.",
     unavailable:
