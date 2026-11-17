@@ -179,6 +179,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
   let shown = false;
   let prepared: Prepared | undefined;
   let starting: Promise<TeleportOutcome> | undefined;
+  let startingAttempt: { attempt?: PurchaseAttempt } = {};
   let route: string | undefined;
   let presentationId: string | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -797,9 +798,15 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     target: string,
     request: TeleportRequest,
   ): Promise<TeleportOutcome> => {
+    const joined = startingAttempt;
     const started = obtain(resolved, target, request).then((teleport) => {
       starting = undefined;
-      return typeof teleport === "string" ? teleport : launch(teleport, request);
+      if (typeof teleport === "string") return teleport;
+      const { attempt: _ignored, ...rest } = request;
+      return launch(
+        teleport,
+        joined.attempt === undefined ? rest : { ...rest, attempt: joined.attempt },
+      );
     });
     starting = started;
     return started;
@@ -855,7 +862,12 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       route = name;
     },
     begin: (request) => {
-      if (starting !== undefined) return starting;
+      if (starting !== undefined) {
+        if (startingAttempt.attempt === undefined) startingAttempt.attempt = request.attempt;
+        else joinAttempt(startingAttempt.attempt, request.attempt);
+        return starting;
+      }
+      startingAttempt = request.attempt === undefined ? {} : { attempt: request.attempt };
       const resolved = settings();
       const target = request.route ?? resolved?.route ?? route;
       if (resolved === undefined || target === undefined) return Promise.resolve("failed");

@@ -68,10 +68,14 @@ export const joinAttempt = (
 ) => {
   if (lead === undefined || joiner === undefined) return;
   const head = leadOf(lead);
-  if (leadOf(joiner) === head) return;
+  const other = leadOf(joiner);
+  if (other === head) return;
   head.members ??= new Set([head]);
-  head.members.add(joiner);
-  joiner.lead = head;
+  for (const member of other.members ?? [other]) {
+    head.members.add(member);
+    member.lead = head;
+  }
+  delete other.members;
 };
 
 export const sameAttempt = (listening: PurchaseAttempt, reported: PurchaseAttempt | undefined) =>
