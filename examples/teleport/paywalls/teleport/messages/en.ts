@@ -26,6 +26,10 @@ export default {
     ctaBare: "Subscribe",
     failed: "The payment didn't go through. Try again.",
   },
+  back: {
+    noFunds: "Your card was short on funds. Try the App Store instead.",
+    failed: "The payment in the browser didn't go through.",
+  },
   common: {
     back: "Back",
   },

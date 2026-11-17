@@ -151,6 +151,70 @@ describe("useTeleport on the web half", () => {
     );
   });
 
+  it("drops data over 16 KB but still leaves the failure for the app", async () => {
+    bootWebHalf();
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const failure = {
+      reason: "insufficient_funds" as const,
+      store: "stripe" as const,
+      code: "card_declined",
+      declineCode: "insufficient_funds",
+    };
+    const { result } = renderWithProvider(
+      () => ({ session: useSuperwallSession(), teleport: useTeleport(), purchase: usePurchase() }),
+      {
+        config: { ...config, checkout: "applePay" },
+        host: {
+          device: { ...device, platform: "web" },
+          products: [{ reference: "primary", productId: "test:price_1:no-trial" }],
+        },
+      },
+    );
+    await flush();
+    vi.spyOn(applePayFor(result.current.session), "purchase").mockResolvedValue({
+      status: "failed",
+      failure,
+    });
+    await act(async () => {
+      await result.current.purchase.purchase("primary");
+    });
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ saved: true })));
+
+    act(() => {
+      void result.current.teleport.returnToApp({ data: { blob: "x".repeat(17 * 1024) } });
+    });
+
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/over the 16384-byte limit/));
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      teleportId: "v1:tp",
+      session: { query: {}, returned: { failure } },
+    });
+  });
+
+  it("logs a save the backend refuses with an error, apart from a closed teleport", async () => {
+    bootWebHalf();
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { result } = renderWithProvider(() => useTeleport(), { config, host: { device } });
+    await flush();
+    vi.mocked(fetch).mockResolvedValue(new Response("boom", { status: 500 }));
+
+    await act(async () => {
+      void result.current.returnToApp({ data: { offer: "apple_pay" } });
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(warn).toHaveBeenCalledWith(
+      "Leaving the failure and data for the app failed:",
+      expect.objectContaining({ message: "Saving the teleport return failed: 500 boom" }),
+    );
+  });
+
   it("leaves nothing when there is no failure and no data, and refuses data over 16 KB", async () => {
     bootWebHalf();
     vi.spyOn(document, "hasFocus").mockReturnValue(true);

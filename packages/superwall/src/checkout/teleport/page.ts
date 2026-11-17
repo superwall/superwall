@@ -308,13 +308,15 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
   const leaveForApp = (query: Record<string, string>, returned: PageReturn) => {
     if (returned.failure === undefined && returned.data === undefined) return;
     const size = new TextEncoder().encode(JSON.stringify(returned.data ?? {})).length;
+    let leaving = returned;
     if (size > RETURN_DATA_MAX_BYTES) {
       console.warn(
         `The data for the app is ${size} bytes, over the ${RETURN_DATA_MAX_BYTES}-byte limit; returning without it.`,
       );
-      return;
+      if (returned.failure === undefined) return;
+      leaving = { failure: returned.failure };
     }
-    saveTeleportReturn(publicApiKey(), boot.id, query, returned).then(
+    saveTeleportReturn(publicApiKey(), boot.id, query, leaving).then(
       (saved) => {
         if (!saved)
           console.warn("The teleport is closed, so the app won't receive what the page left it.");

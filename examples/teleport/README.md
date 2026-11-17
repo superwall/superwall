@@ -43,6 +43,14 @@ credited without a restore.
 **It opens at once.** Because `route` is named, the teleport is prepared when
 the paywall opens, so the tap goes straight to the browser.
 
+**A failed payment comes back with its reason.** `app/plan.tsx` passes
+`onFailure` to `usePurchase()`: when a card is short on funds it calls
+`teleport.returnToApp({ data: { offer: "app_store", plan } })`. Back in the
+app, `app/goal.tsx` reads `useTeleport().failure` and `.data` while the
+teleport is `waiting`, shows a line offering the App Store, and logs the data
+from `onReturnData`. The data is plain JSON up to 16 KB; over that only the
+failure is left.
+
 **Back goes home.** On the web page, Back on `plan` returns to the app.
 
 **Where teleport can't run,** on Android or an SDK before 4.18.0, `plan` opens

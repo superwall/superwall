@@ -12,7 +12,14 @@ export default function Plan() {
   const router = useRouter();
   const { getProduct } = useProducts();
   const teleport = useTeleport();
-  const { purchase, prefetch } = usePurchase();
+  const { purchase, prefetch } = usePurchase({
+    // A card short on funds sends the shopper back to the app, with a hint
+    // for what to offer there. The app reads it as `useTeleport().data`.
+    onFailure: (failure) => {
+      if (teleport.status !== "arrived" || failure.reason !== "insufficient_funds") return;
+      void teleport.returnToApp({ data: { offer: "app_store", plan: reference } });
+    },
+  });
   const { t } = useTranslation();
   const haptics = useHaptics();
   const [goal] = useQueryState("goal", goalParser);

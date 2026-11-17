@@ -113,7 +113,10 @@ export type TeleportActions = {
 
 /** What `returnToApp()` hands the app, on the web. */
 export type TeleportReturnOptions = {
-  /** Plain JSON for the app, read there as `useTeleport().data`. At most 16 KB. */
+  /**
+   * Plain JSON for the app, read there as `useTeleport().data`. At most 16 KB;
+   * over that the page logs a warning and leaves the app only the failure.
+   */
   data?: TeleportData;
 };
 

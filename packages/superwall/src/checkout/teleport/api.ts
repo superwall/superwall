@@ -176,7 +176,11 @@ export const saveTeleportReturn = async (
       session: { [SESSION_QUERY_FIELD]: query, [RETURN_SESSION_FIELD]: returned },
     }),
   });
-  if (!response.ok) return false;
+  if (!response.ok) {
+    throw new Error(
+      `Saving the teleport return failed: ${response.status} ${await response.text()}`,
+    );
+  }
   return field(await response.json(), "saved") === true;
 };
 

@@ -1,4 +1,4 @@
-import { useHaptics, useTranslation } from "superwall/hooks";
+import { useHaptics, useTeleport, useTranslation } from "superwall/hooks";
 import { useQueryState, useRouter } from "superwall/navigation";
 import { GOALS, goalParser } from "../components/goals";
 
@@ -7,6 +7,13 @@ export default function Goal() {
   const { t } = useTranslation();
   const haptics = useHaptics();
   const [goal, setGoal] = useQueryState("goal", goalParser);
+  // Back from the browser after a failed payment: why it failed, and what the
+  // page passed to `returnToApp({ data })`.
+  const teleport = useTeleport({
+    onReturnData: (data) => console.log("[teleport] data from the page", data),
+  });
+  const failure = teleport.status === "waiting" ? teleport.failure : undefined;
+  const offer = teleport.status === "waiting" ? teleport.data?.offer : undefined;
 
   return (
     <main className="page">
@@ -24,6 +31,13 @@ export default function Goal() {
       <div className="lede">
         <h1>{t("goal.title")}</h1>
         <p>{t("goal.subtitle")}</p>
+        {failure ? (
+          <p className="notice" role="status">
+            {offer === "app_store" || failure.reason === "insufficient_funds"
+              ? t("back.noFunds")
+              : t("back.failed")}
+          </p>
+        ) : null}
       </div>
 
       <ul className="choices">
