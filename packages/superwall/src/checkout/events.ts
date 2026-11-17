@@ -112,7 +112,7 @@ export const purchaseEventsFor = (paywall: object): PurchaseBus => {
       };
     },
     emit: (event, payload) => {
-      handlers[event]?.forEach((listener) => {
+      [...(handlers[event] ?? [])].forEach((listener) => {
         try {
           listener(payload);
         } catch (error) {
