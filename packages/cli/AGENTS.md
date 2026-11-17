@@ -575,8 +575,9 @@ from npm, pinned to one version.
   changes a tool, an annotation, `instructions()` or a skill on `next` is
   unfinished until that PR merges. After releasing, check that the PR for your
   version is open in pwn, mergeable and merged
-  (`gh pr list -R superwall/paywall-next --head bot/mcp-cli-<version>`). If none
-  has opened a few hours after the release, run the workflow by hand
+  (`gh pr list -R superwall/paywall-next --state all --head
+  bot/mcp-cli-<version>`, which also lists it once merged). If none has
+  opened a few hours after the release, run the workflow by hand
   (`gh workflow run mcp-cli-bump.yml -R superwall/paywall-next`). If it is
   stuck (conflicts, failing checks, nobody merging), file the fix as a task in
   pwn. Never report the MCP as updated because the CLI was published.
