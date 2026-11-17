@@ -4,7 +4,7 @@ import type { CheckoutStatus } from "../types";
 import { fetchWithRetry } from "../api/fetch";
 import { subscriptionsApiUrl } from "../api/url";
 import { SESSION_QUERY_FIELD, sessionQueryOf, TAPPED_PRODUCT_QUERY_KEY } from "./boot";
-import type { PageReturn, TeleportData } from "./teleporter";
+import type { PageReturn, TeleportData, TeleportDataValue } from "./teleporter";
 
 export type CreatedTeleport = { teleportId: string; url: string };
 
@@ -134,11 +134,31 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   !Array.isArray(value) &&
   Object.getPrototypeOf(value) === Object.prototype;
 
+const readDataValue = (value: unknown): TeleportDataValue | undefined => {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (Array.isArray(value)) {
+    const items = value.map(readDataValue);
+    return items.every((item) => item !== undefined) ? items : undefined;
+  }
+  return isPlainObject(value) ? readData(value) : undefined;
+};
+
+const readData = (value: Record<string, unknown>): TeleportData | undefined => {
+  const data: TeleportData = {};
+  for (const [key, item] of Object.entries(value)) {
+    const read = readDataValue(item);
+    if (read === undefined) return undefined;
+    data[key] = read;
+  }
+  return data;
+};
+
 export const readPageReturn = (session: unknown): PageReturn | undefined => {
   const returned = field(session, RETURN_SESSION_FIELD);
   if (!isPlainObject(returned)) return undefined;
   const failure = readCheckoutFailure(returned.failure);
-  const data = isPlainObject(returned.data) ? (returned.data as TeleportData) : undefined;
+  const data = isPlainObject(returned.data) ? readData(returned.data) : undefined;
   const at = typeof returned.at === "number" ? returned.at : undefined;
   return {
     ...(failure === undefined ? {} : { failure }),

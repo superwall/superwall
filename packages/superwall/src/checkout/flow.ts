@@ -30,7 +30,7 @@ import {
   saveCustomStoreReturnRecord,
 } from "./customStore";
 import { createCheckoutSessions, type CheckoutSessions } from "./session";
-import { unknownFailure, type CheckoutFailure } from "./failure";
+import { sameFailure, unknownFailure, type CheckoutFailure } from "./failure";
 import { introductoryOfferFromFragment, readTeleportBoot } from "./teleport/boot";
 import { teleportFor } from "./teleport/flow";
 import type {
@@ -344,6 +344,7 @@ export const reportCompletedCheckout = async (
 const watchHostedCheckout = async (
   paywall: PaywallSession,
   redirect: RedirectCheckoutSession,
+  onFailure?: (failure: CheckoutFailure) => void,
 ): Promise<WebPurchaseOutcome> => {
   const sessions = sessionsFor(paywall);
   let failure: CheckoutFailure | undefined;
@@ -360,7 +361,12 @@ const watchHostedCheckout = async (
       await reportCompletedCheckout(paywall, redirect, status.redemptionUrl);
       return { status: "completed" };
     }
-    if ("failure" in status && status.failure) failure = status.failure;
+    if ("failure" in status && status.failure) {
+      if (!sameFailure(failure, status.failure)) {
+        failure = status.failure;
+        onFailure?.(failure);
+      }
+    }
     if (status.status === "abandoned") return unpaid();
   }
 
@@ -371,6 +377,7 @@ const watchHostedCheckout = async (
 export const openHostedCheckout = async (
   paywall: PaywallSession,
   redirect: RedirectCheckoutSession,
+  onFailure?: (failure: CheckoutFailure) => void,
 ): Promise<WebPurchaseOutcome> => {
   const host = hostFor(paywall);
   host.initiated(contextFor(paywall, redirect.referenceName, redirect.checkoutContextId));
@@ -381,7 +388,7 @@ export const openHostedCheckout = async (
   }
 
   host.openHostedPage(redirect.checkoutUrl);
-  return watchHostedCheckout(paywall, redirect);
+  return watchHostedCheckout(paywall, redirect, onFailure);
 };
 
 export const watchCompletedCheckouts = (paywall: PaywallSession): (() => void) =>
@@ -565,7 +572,8 @@ const runWebPurchase = async (
         report.onSubmit,
       );
     }
-    if (result.directive === "redirect") return await openHostedCheckout(paywall, result);
+    if (result.directive === "redirect")
+      return await openHostedCheckout(paywall, result, report.onFailure);
     return { status: "failed", failure: unknownFailure() };
   } catch (error) {
     console.error("Error beginning web checkout:", error);

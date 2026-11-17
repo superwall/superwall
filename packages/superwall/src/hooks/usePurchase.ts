@@ -20,7 +20,12 @@ import {
   subscribeWebFailure,
 } from "../checkout/flow";
 import { unknownFailure, type CheckoutFailure } from "../checkout/failure";
-import { purchaseEventsFor, reportWebFailure, type PurchaseAttempt } from "../checkout/events";
+import {
+  purchaseEventsFor,
+  reportWebFailure,
+  type PurchaseAttempt,
+  type PurchaseEventPayload,
+} from "../checkout/events";
 
 export type { CheckoutFailure, CheckoutFailureReason } from "../checkout/failure";
 import { isCustomStoreProductIdentifier } from "../checkout/products";
@@ -134,14 +139,15 @@ const listen = <TProduct extends SuperwallProduct>(
   only?: PurchaseAttempt,
 ): (() => void) => {
   const events = purchaseEventsFor(paywall);
-  const productOf = (referenceName: string, attempt: PurchaseAttempt | undefined) =>
+  const productOf = ({ referenceName, attempt, product }: PurchaseEventPayload["start"]) =>
     only === undefined || attempt === only
-      ? paywall.getSnapshot().productsByReference[referenceName]
+      ? ((product as TProduct | undefined) ??
+        paywall.getSnapshot().productsByReference[referenceName])
       : undefined;
   const each =
     (pick: (current: PurchaseCallbacks<TProduct>) => ((product: TProduct) => void) | undefined) =>
-    ({ referenceName, attempt }: { referenceName: string; attempt?: PurchaseAttempt }) => {
-      const product = productOf(referenceName, attempt);
+    (payload: PurchaseEventPayload["start"]) => {
+      const product = productOf(payload);
       if (product) pick(callbacks())?.(product);
     };
   const unsubscribers = [
@@ -161,8 +167,9 @@ const listen = <TProduct extends SuperwallProduct>(
       "abandon",
       each((current) => current.onAbandon),
     ),
-    events.on("failure", ({ referenceName, failure, attempt }) => {
-      const product = productOf(referenceName, attempt);
+    events.on("failure", (payload) => {
+      const { failure } = payload;
+      const product = productOf(payload);
       if (product) {
         callbacks().onFailure?.({
           ...failure,
@@ -179,11 +186,15 @@ const listen = <TProduct extends SuperwallProduct>(
 
 const reportStorePurchase = (
   paywall: object,
-  reference: string,
+  input: ProductReference | SuperwallProduct,
   purchase: () => Promise<SuperwallPurchaseResult>,
   attempt: PurchaseAttempt,
 ): Promise<SuperwallPurchaseResult> => {
-  purchaseEventsFor(paywall).emit("start", { referenceName: reference, attempt });
+  purchaseEventsFor(paywall).emit("start", {
+    referenceName: referenceOf(input),
+    attempt,
+    ...(typeof input === "string" ? {} : { product: input }),
+  });
   return purchase().then((result) => {
     emitStoreResult(paywall, result, attempt);
     return result;
@@ -196,10 +207,13 @@ const emitStoreResult = (
   attempt: PurchaseAttempt,
 ) => {
   const events = purchaseEventsFor(paywall);
-  const referenceName = result.product.reference;
-  if (result.status === "completed") events.emit("complete", { referenceName, attempt });
-  else if (result.status === "abandoned") events.emit("abandon", { referenceName, attempt });
-  else events.emit("failure", { referenceName, attempt, failure: { reason: result.reason } });
+  const { product } = result;
+  const referenceName = product.reference;
+  if (result.status === "completed") events.emit("complete", { referenceName, attempt, product });
+  else if (result.status === "abandoned")
+    events.emit("abandon", { referenceName, attempt, product });
+  else
+    events.emit("failure", { referenceName, attempt, product, failure: { reason: result.reason } });
 };
 
 /**
@@ -322,7 +336,7 @@ export const usePurchase = <
       const store = () =>
         reportStorePurchase(
           session,
-          reference,
+          input,
           () => session.purchase(input, purchaseOptions),
           attempt,
         );

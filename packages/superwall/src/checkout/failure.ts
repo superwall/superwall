@@ -146,3 +146,12 @@ export class CheckoutFailureError extends Error {
 
 export const failureOfError = (error: unknown): CheckoutFailure =>
   error instanceof CheckoutFailureError ? error.failure : unknownFailure();
+
+export const sameFailure = (a: CheckoutFailure | undefined, b: CheckoutFailure | undefined) =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.reason === b.reason &&
+    a.code === b.code &&
+    a.declineCode === b.declineCode &&
+    a.message === b.message);

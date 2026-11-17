@@ -1288,6 +1288,28 @@ describe("a hosted checkout the shopper leaves the paywall for", () => {
     await expect(outcome).resolves.toEqual({ status: "completed" });
   });
 
+  it("reports each new decline as it sees it, once, before the retry is paid", async () => {
+    nativeHost();
+    vi.useFakeTimers();
+    statuses(
+      { status: "pending", failure: { code: "card_declined" } },
+      { status: "pending", failure: { code: "card_declined" } },
+      { status: "pending", failure: { code: "expired_card" } },
+      { status: "completed", redemptionUrl: "myapp://redeem/abc" },
+    );
+    const { session } = fakeSession({ sdkVersionPadded: "004.014.000" });
+    const onFailure = vi.fn();
+
+    const outcome = openHostedCheckout(session, redirect, onFailure);
+    await vi.advanceTimersByTimeAsync(8000);
+
+    await expect(outcome).resolves.toEqual({ status: "completed" });
+    expect(onFailure.mock.calls.map(([failure]) => failure.reason)).toEqual([
+      "card_declined",
+      "expired_card",
+    ]);
+  });
+
   it("keeps watching through a status call that fails", async () => {
     nativeHost();
     vi.useFakeTimers();

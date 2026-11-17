@@ -1,5 +1,5 @@
 import type { CheckoutFailure } from "./failure";
-import type { SuperwallPurchaseFailure } from "@superwall/runtime";
+import type { SuperwallProduct, SuperwallPurchaseFailure } from "@superwall/runtime";
 import type { EmbeddedCheckoutSession, PaymentSession } from "./types";
 
 export type CheckoutEventType =
@@ -55,7 +55,7 @@ type StoreFailure = { reason: SuperwallPurchaseFailure["reason"] };
 
 export type PurchaseAttempt = object;
 
-type Attempted = { referenceName: string; attempt?: PurchaseAttempt };
+type Attempted = { referenceName: string; attempt?: PurchaseAttempt; product?: SuperwallProduct };
 
 export type PurchaseEventPayload = {
   start: Attempted;

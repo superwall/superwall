@@ -11,7 +11,7 @@ import { attributionOf } from "../api/body";
 import { attachCheckoutMetadata } from "../api/metadata";
 import { asString } from "../api/decode";
 import { reportWebFailure, type PurchaseAttempt } from "../events";
-import type { CheckoutFailure } from "../failure";
+import { sameFailure, type CheckoutFailure } from "../failure";
 import { hostOf } from "../../host";
 import { startLoading, stopLoading } from "../loading";
 import { isStripeProductIdentifier } from "../products";
@@ -85,6 +85,7 @@ type OpenTeleport = CreatedTeleport & {
   paid?: boolean;
   failure?: CheckoutFailure;
   pageReturn?: PageReturn;
+  failureReturnedAt?: number;
   outcome: Promise<TeleportOutcome>;
   settle: (outcome: TeleportOutcome) => void;
 };
@@ -117,15 +118,6 @@ const changedQuery = (
   now: Record<string, string>,
 ): Record<string, string> =>
   Object.fromEntries(Object.entries(now).filter(([key, value]) => saved[key] !== value));
-
-const sameFailure = (a: CheckoutFailure | undefined, b: CheckoutFailure | undefined) =>
-  a === b ||
-  (a !== undefined &&
-    b !== undefined &&
-    a.reason === b.reason &&
-    a.code === b.code &&
-    a.declineCode === b.declineCode &&
-    a.message === b.message);
 
 let opens = 0;
 
@@ -445,9 +437,15 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     record.settle({ reference, result: buy(reference) });
   };
 
-  const reportFailure = (record: OpenTeleport, failure: CheckoutFailure | undefined) => {
-    if (sameFailure(record.failure, failure)) return;
+  const reportFailure = (
+    record: OpenTeleport,
+    failure: CheckoutFailure | undefined,
+    returnedAt?: number,
+  ) => {
+    const newReturn = returnedAt !== undefined && returnedAt !== record.failureReturnedAt;
+    if (sameFailure(record.failure, failure) && !newReturn) return;
     record.failure = failure;
+    if (returnedAt !== undefined) record.failureReturnedAt = returnedAt;
     publish();
     if (failure === undefined) return;
     const referenceName =
@@ -481,8 +479,9 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       }
       await readPageReturn(key, record);
       if (!isWaiting(record)) return;
+      const returnedAt = record.pageReturn?.failure ? record.pageReturn.at : undefined;
       let failure = record.pageReturn?.failure ?? teleport.failure;
-      if (failure !== undefined) reportFailure(record, failure);
+      if (failure !== undefined) reportFailure(record, failure, returnedAt);
       if (record.checkoutContextId) {
         const checkout = await readCheckoutOf(key, record.checkoutContextId);
         if (!isWaiting(record)) return;
@@ -493,7 +492,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         }
         failure ??= checkout.failure;
       }
-      reportFailure(record, failure);
+      reportFailure(record, failure, returnedAt);
       if (teleport.status === "expired") {
         settleAbandoned(record);
         return;

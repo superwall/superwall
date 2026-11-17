@@ -1,9 +1,22 @@
 import { act } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { usePurchase } from "../../src/hooks";
+import { usePurchase, useSuperwallSnapshot } from "../../src/hooks";
 import { renderToString } from "react-dom/server";
 import { SuperwallProvider } from "../../src";
 import { flush, renderWithProvider, testConfig } from "../helpers";
+
+const recorder = () => {
+  const calls: unknown[][] = [];
+  const callbacks = {
+    onStart: (product: { reference: string }) => calls.push(["start", product.reference]),
+    onSubmit: (product: { reference: string }) => calls.push(["submit", product.reference]),
+    onComplete: (product: { reference: string }) => calls.push(["complete", product.reference]),
+    onAbandon: (product: { reference: string }) => calls.push(["abandon", product.reference]),
+    onFailure: (failure: { reason: string; product: { reference: string } }) =>
+      calls.push(["failure", failure.reason, failure.product.reference]),
+  };
+  return { calls, callbacks };
+};
 
 describe("usePurchase when the SDK reports a failure", () => {
   it("resolves as failed with the sdk reason, and clears the pending state", async () => {
@@ -41,19 +54,6 @@ describe("usePurchase when the SDK reports a failure", () => {
 });
 
 describe("purchase callbacks for a store purchase made by the SDK", () => {
-  const recorder = () => {
-    const calls: unknown[][] = [];
-    const callbacks = {
-      onStart: (product: { reference: string }) => calls.push(["start", product.reference]),
-      onSubmit: (product: { reference: string }) => calls.push(["submit", product.reference]),
-      onComplete: (product: { reference: string }) => calls.push(["complete", product.reference]),
-      onAbandon: (product: { reference: string }) => calls.push(["abandon", product.reference]),
-      onFailure: (failure: { reason: string; product: { reference: string } }) =>
-        calls.push(["failure", failure.reason, failure.product.reference]),
-    };
-    return { calls, callbacks };
-  };
-
   it.each([
     ["completed", ["complete", "primary"]],
     ["abandoned", ["abandon", "primary"]],
@@ -89,6 +89,34 @@ describe("purchase callbacks for a store purchase made by the SDK", () => {
       ["start", "primary"],
       ["failure", "unknown", "primary"],
     ]);
+  });
+});
+
+describe("purchase() of a product the paywall's catalog doesn't hold", () => {
+  it("still fires the callbacks, with that product", async () => {
+    const own = recorder();
+    const watcher = recorder();
+    const { result } = renderWithProvider(
+      () => ({
+        buyer: usePurchase(watcher.callbacks),
+        primary: useSuperwallSnapshot().productsByReference.primary,
+      }),
+      { host: { purchase: "completed" } },
+    );
+    await flush();
+    const primary = result.current.primary;
+    if (!primary) throw new Error("expected the primary product");
+    const inline = { ...primary, reference: "inline", productId: "com.example.inline" };
+
+    await act(async () => {
+      await result.current.buyer.purchase(inline, own.callbacks);
+    });
+
+    expect(own.calls).toEqual([
+      ["start", "inline"],
+      ["complete", "inline"],
+    ]);
+    expect(watcher.calls).toEqual(own.calls);
   });
 });
 
