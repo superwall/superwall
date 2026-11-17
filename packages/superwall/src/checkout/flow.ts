@@ -455,7 +455,7 @@ export const openEmbeddedSheet = (
       ? contextFor(host.paywall, host.referenceName, embedded.checkoutContextId)
       : null;
     let opened = false;
-    let settled = false;
+    let paid = false;
     let failed: Promise<CheckoutFailure> | null = null;
     const diagnostics =
       context && events
@@ -488,8 +488,9 @@ export const openEmbeddedSheet = (
         onSubmit?.();
         if (context) events?.submitted(context);
       }),
-      checkoutEvents.subscribe("PAYMENT_SUCCESS", ({ session: paid }) => {
-        if (!isOurs(paid)) return;
+      checkoutEvents.subscribe("PAYMENT_SUCCESS", ({ session: succeeded }) => {
+        if (!isOurs(succeeded)) return;
+        paid = true;
         finish({ status: "completed" });
       }),
       checkoutEvents.subscribe("PAYMENT_ERROR", ({ session: errored }) => {
@@ -502,7 +503,7 @@ export const openEmbeddedSheet = (
         const lookup = earlier ? earlier.then(() => looked) : looked;
         failed = lookup;
         void lookup.then((failure) => {
-          if (!settled) onFailure?.(failure);
+          if (!paid) onFailure?.(failure);
         });
       }),
       checkoutEvents.subscribe("SHEET_CLOSE", () => {
@@ -517,7 +518,6 @@ export const openEmbeddedSheet = (
     ];
 
     const finish = (outcome: WebPurchaseOutcome | Promise<WebPurchaseOutcome>) => {
-      settled = true;
       clearTimeout(readyTimeout);
       stopLoading();
       unsubscribers.forEach((unsubscribe) => unsubscribe());
