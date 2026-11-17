@@ -10,7 +10,7 @@ import { platformOf } from "../../device";
 import { attributionOf } from "../api/body";
 import { attachCheckoutMetadata } from "../api/metadata";
 import { asString } from "../api/decode";
-import { joinAttempt, reportWebFailure, type PurchaseAttempt } from "../events";
+import { joinAttempt, leadOf, reportWebFailure, type PurchaseAttempt } from "../events";
 import { sameFailure, type CheckoutFailure } from "../failure";
 import { hostOf } from "../../host";
 import { startLoading, stopLoading } from "../loading";
@@ -729,7 +729,12 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       ...(request.prepaidCards === undefined ? {} : { prepaidCards: request.prepaidCards }),
       ...(request.attempt === undefined ? {} : { attempt: request.attempt }),
       outcome,
-      settle: resolve,
+      settle: (settled) => {
+        if (record.attempt !== undefined && record.productReference !== undefined) {
+          leadOf(record.attempt).reference = record.productReference;
+        }
+        resolve(settled);
+      },
     };
     phase = { kind: "waiting", record };
     shown = false;

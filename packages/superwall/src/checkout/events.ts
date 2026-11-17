@@ -58,6 +58,7 @@ export type PurchaseAttempt = {
   members?: Set<PurchaseAttempt>;
   failure?: CheckoutFailure;
   settled?: boolean;
+  reference?: string;
 };
 
 export const leadOf = (attempt: PurchaseAttempt): PurchaseAttempt => attempt.lead ?? attempt;

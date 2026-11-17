@@ -295,22 +295,29 @@ export const usePurchase = <
           return { ...result, product: sold ?? product } as PurchaseResult<TVariables>;
         }
         const failure = lead.failure;
+        const settledReference = lead.reference ?? reference;
+        const settledProduct =
+          session.getSnapshot().productsByReference[settledReference] ?? product;
         if (outcome === "completed") {
           if (first) {
             clearWebFailure(session);
-            events.emit("complete", { referenceName: reference, attempt: lead });
+            events.emit("complete", { referenceName: settledReference, attempt: lead });
           }
-          return { status: outcome, product };
+          return { status: outcome, product: settledProduct };
         }
         if (outcome === "abandoned" && failure === undefined) {
-          if (first) events.emit("abandon", { referenceName: reference, attempt: lead });
-          return { status: outcome, product };
+          if (first) events.emit("abandon", { referenceName: settledReference, attempt: lead });
+          return { status: outcome, product: settledProduct };
         }
-        if (failure !== undefined) return { status: "failed", product, failure };
+        if (failure !== undefined) return { status: "failed", product: settledProduct, failure };
         const unknown = unknownFailure();
         if (first)
-          reportWebFailure(session, { referenceName: reference, failure: unknown, attempt: lead });
-        return { status: "failed", product, failure: unknown };
+          reportWebFailure(session, {
+            referenceName: settledReference,
+            failure: unknown,
+            attempt: lead,
+          });
+        return { status: "failed", product: settledProduct, failure: unknown };
       }
       if (webMode && product && sessionsFor(session).isStripeProduct(reference)) {
         if (teleporter.kind === "page" && !(await teleporter.whenUnsettled())) {

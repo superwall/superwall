@@ -779,6 +779,70 @@ describe("useTeleport in the app", () => {
     }
   });
 
+  it("completes every joined call with the product the browser was reopened for", async () => {
+    vi.useFakeTimers();
+    try {
+      const replies: Record<string, unknown> = {
+        "checkout/teleport": {
+          teleportId: "v1:tp",
+          url: "https://acme.superwall.app/sw-teleport/v1:tp",
+        },
+        "checkout/teleport/status": { status: "pending" },
+        "checkout/status": { status: "pending" },
+      };
+      stubReplies(replies);
+      Reflect.set(window, "app", {});
+      const everywhere = vi.fn();
+      const { result } = renderWithProvider(
+        () => ({
+          session: useSuperwallSession(),
+          buyer: usePurchase({ onComplete: everywhere }),
+        }),
+        {
+          config,
+          host: {
+            device,
+            products: [
+              { reference: "primary", productId: "test:price_1:no-trial" },
+              { reference: "secondary", productId: "test:price_2:no-trial" },
+            ],
+          },
+        },
+      );
+      await flush();
+      const first = vi.fn();
+      const outcomes: unknown[] = [];
+      await act(async () => {
+        void result.current.buyer
+          .purchase("primary", { onComplete: first })
+          .then((r) => outcomes.push(r));
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      await act(async () => {
+        void result.current.buyer.purchase("secondary").then((r) => outcomes.push(r));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      replies["checkout/teleport/status"] = { status: "completed", checkoutContextId: "ctx_1" };
+      replies["checkout/status"] = { status: "completed" };
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(outcomes).toHaveLength(2);
+      for (const outcome of outcomes) {
+        expect(outcome).toMatchObject({ status: "completed", product: { reference: "secondary" } });
+      }
+      expect(first).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ reference: "secondary" }),
+      );
+      expect(everywhere).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ reference: "secondary" }),
+      );
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
   it("gives the teleport's own call the result of the native purchase that replaced it, once", async () => {
     vi.useFakeTimers();
     try {
