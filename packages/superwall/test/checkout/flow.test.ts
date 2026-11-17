@@ -18,6 +18,7 @@ import {
   purchaseCustomStoreOnWeb,
   purchaseOnWeb,
   reportCompletedCheckout,
+  SHEET_FAILURE_LOOKUP_TIMEOUT,
   reprefetch,
   resolutionOf,
   watchCompletedCheckouts,
@@ -441,6 +442,27 @@ describe("openEmbeddedSheet", () => {
         status: "failed",
         failure: { reason: "unknown", store: "stripe" },
       });
+    });
+
+    it("settles a closed sheet as unknown when the lookup never answers", async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => new Promise<Response>(() => undefined)),
+      );
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const settled = vi.fn();
+      void failSheet().then(settled);
+      await vi.advanceTimersByTimeAsync(SHEET_FAILURE_LOOKUP_TIMEOUT - 1);
+      expect(settled).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      vi.useRealTimers();
+
+      expect(settled).toHaveBeenCalledWith({
+        status: "failed",
+        failure: { reason: "unknown", store: "stripe" },
+      });
+      expect(warn).toHaveBeenCalled();
     });
 
     it("logs a lookup that fails and says unknown, never that nothing failed", async () => {

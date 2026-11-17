@@ -186,14 +186,15 @@ const listen = <TProduct extends SuperwallProduct>(
 
 const reportStorePurchase = (
   paywall: object,
-  input: ProductReference | SuperwallProduct,
+  referenceName: string,
+  started: SuperwallProduct | undefined,
   purchase: () => Promise<SuperwallPurchaseResult>,
   attempt: PurchaseAttempt,
 ): Promise<SuperwallPurchaseResult> => {
   purchaseEventsFor(paywall).emit("start", {
-    referenceName: referenceOf(input),
+    referenceName,
     attempt,
-    ...(typeof input === "string" ? {} : { product: input }),
+    ...(started === undefined ? {} : { product: started }),
   });
   return purchase().then((result) => {
     emitStoreResult(paywall, result, attempt);
@@ -333,13 +334,17 @@ export const usePurchase = <
         );
         return { status: "failed", product };
       }
+      const bought = product ?? (typeof input === "string" ? undefined : input);
       const store = () =>
-        reportStorePurchase(
-          session,
-          input,
-          () => session.purchase(input, purchaseOptions),
-          attempt,
-        );
+        bought && isCustomStoreProductIdentifier(bought.productId)
+          ? session.purchase(input, purchaseOptions)
+          : reportStorePurchase(
+              session,
+              reference,
+              bought,
+              () => session.purchase(input, purchaseOptions),
+              attempt,
+            );
       if (teleporter.kind === "page" || !teleporter.inFlight()) {
         return store() as Promise<PurchaseResult<TVariables>>;
       }

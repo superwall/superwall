@@ -488,6 +488,82 @@ describe("useTeleport in the app", () => {
     }
   });
 
+  it("reports a decline once when the backend sees it before the page's return arrives", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const failure = { code: "card_declined", declineCode: "insufficient_funds" };
+      let pageLeft = false;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
+          const replies: Record<string, unknown> = {
+            "checkout/teleport": {
+              teleportId: "v1:tp",
+              url: "https://acme.superwall.app/sw-teleport/v1:tp",
+            },
+            "checkout/teleport/status": {
+              status: "claimed",
+              checkoutContextId: "ctx_1",
+              failure,
+            },
+            "checkout/status": { status: "pending" },
+            "checkout/teleport/session": { saved: true },
+            "checkout/teleport/session/read": {
+              session: pageLeft
+                ? { query: {}, returned: { failure, at: Number.MAX_SAFE_INTEGER } }
+                : { query: {} },
+            },
+          };
+          return new Response(JSON.stringify(replies[path] ?? {}));
+        }),
+      );
+      Reflect.set(window, "app", {});
+      const onFailure = vi.fn();
+      const { result } = renderWithProvider(
+        () => ({ session: useSuperwallSession(), buyer: usePurchase({ onFailure }) }),
+        {
+          config,
+          host: {
+            device,
+            products: [{ reference: "primary", productId: "test:price_1:no-trial" }],
+          },
+        },
+      );
+      await flush();
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      await act(async () => {
+        void teleporter.begin({ productReference: "primary", query: {} });
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      await act(async () => {
+        void teleporter.handleReturn("failed");
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      pageLeft = true;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_000);
+      });
+      expect(onFailure).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
+  it("keeps a __proto__ key in return data as data", async () => {
+    const { readPageReturn } = await import("../../src/checkout/teleport/api");
+    const read = readPageReturn(
+      JSON.parse('{"returned":{"data":{"__proto__":{"offer":"apple_pay"},"plan":"monthly"}}}'),
+    );
+    expect(JSON.stringify(read)).toBe(
+      '{"data":{"__proto__":{"offer":"apple_pay"},"plan":"monthly"}}',
+    );
+    expect(Object.getPrototypeOf(read?.data)).toBe(Object.prototype);
+  });
+
   it("drops return data that is not plain JSON", async () => {
     const { readPageReturn } = await import("../../src/checkout/teleport/api");
     expect(

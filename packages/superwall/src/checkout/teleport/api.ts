@@ -149,7 +149,12 @@ const readData = (value: Record<string, unknown>): TeleportData | undefined => {
   for (const [key, item] of Object.entries(value)) {
     const read = readDataValue(item);
     if (read === undefined) return undefined;
-    data[key] = read;
+    Object.defineProperty(data, key, {
+      value: read,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   return data;
 };

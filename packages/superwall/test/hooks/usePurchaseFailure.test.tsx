@@ -120,6 +120,58 @@ describe("purchase() of a product the paywall's catalog doesn't hold", () => {
   });
 });
 
+describe("purchase() of a catalog product passed as a different object", () => {
+  it("starts with the catalog product the SDK buys", async () => {
+    const own = recorder();
+    const started: unknown[] = [];
+    const { result } = renderWithProvider(
+      () => ({
+        buyer: usePurchase(),
+        primary: useSuperwallSnapshot().productsByReference.primary,
+      }),
+      { host: { purchase: "completed" } },
+    );
+    await flush();
+    const primary = result.current.primary;
+    if (!primary) throw new Error("expected the primary product");
+    const stale = { ...primary, productId: "com.example.stale" };
+
+    await act(async () => {
+      await result.current.buyer.purchase(stale, {
+        ...own.callbacks,
+        onStart: (product) => started.push(product),
+      });
+    });
+
+    expect(started).toEqual([primary]);
+  });
+});
+
+describe("purchase() of a custom store product inside an app", () => {
+  it("fires no callbacks", async () => {
+    const own = recorder();
+    const watcher = recorder();
+    const { result } = renderWithProvider(
+      () => ({
+        buyer: usePurchase(watcher.callbacks),
+        primary: useSuperwallSnapshot().productsByReference.primary,
+      }),
+      { host: { purchase: "completed" } },
+    );
+    await flush();
+    const primary = result.current.primary;
+    if (!primary) throw new Error("expected the primary product");
+    const custom = { ...primary, reference: "store", productId: "custom|acme_pro" };
+
+    await act(async () => {
+      await result.current.buyer.purchase(custom, own.callbacks);
+    });
+
+    expect(own.calls).toEqual([]);
+    expect(watcher.calls).toEqual([]);
+  });
+});
+
 describe("purchase() callbacks when two purchases overlap", () => {
   it("fires each call's callbacks for its own purchase only", async () => {
     const { result } = renderWithProvider(() => usePurchase(), { host: { purchase: "completed" } });

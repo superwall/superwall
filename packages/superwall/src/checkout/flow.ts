@@ -409,16 +409,30 @@ export const purchaseWithApplePay = (
   );
 };
 
+export const SHEET_FAILURE_LOOKUP_TIMEOUT = 8_000;
+
 const sheetFailure = async (
   paywall: PaywallSession,
   embedded: EmbeddedCheckoutSession,
 ): Promise<CheckoutFailure> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`no answer within ${SHEET_FAILURE_LOOKUP_TIMEOUT} ms`)),
+      SHEET_FAILURE_LOOKUP_TIMEOUT,
+    );
+  });
   try {
-    const status = await sessionsFor(paywall).status(embedded.checkoutContextId);
+    const status = await Promise.race([
+      sessionsFor(paywall).status(embedded.checkoutContextId),
+      timedOut,
+    ]);
     return status.failure ?? unknownFailure();
   } catch (error) {
     console.warn("Looking up why the checkout failed did not work:", error);
     return unknownFailure();
+  } finally {
+    clearTimeout(timer);
   }
 };
 

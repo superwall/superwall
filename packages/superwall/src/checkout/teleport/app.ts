@@ -85,7 +85,7 @@ type OpenTeleport = CreatedTeleport & {
   paid?: boolean;
   failure?: CheckoutFailure;
   pageReturn?: PageReturn;
-  failureReturnedAt?: number;
+  failureTrip?: number;
   outcome: Promise<TeleportOutcome>;
   settle: (outcome: TeleportOutcome) => void;
 };
@@ -440,12 +440,12 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
   const reportFailure = (
     record: OpenTeleport,
     failure: CheckoutFailure | undefined,
-    returnedAt?: number,
+    fromPage = false,
   ) => {
-    const newReturn = returnedAt !== undefined && returnedAt !== record.failureReturnedAt;
-    if (sameFailure(record.failure, failure) && !newReturn) return;
+    const newTrip = fromPage && record.failureTrip !== record.openedAt;
+    if (sameFailure(record.failure, failure) && !(failure !== undefined && newTrip)) return;
     record.failure = failure;
-    if (returnedAt !== undefined) record.failureReturnedAt = returnedAt;
+    if (failure !== undefined) record.failureTrip = record.openedAt;
     publish();
     if (failure === undefined) return;
     const referenceName =
@@ -479,9 +479,9 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       }
       await readPageReturn(key, record);
       if (!isWaiting(record)) return;
-      const returnedAt = record.pageReturn?.failure ? record.pageReturn.at : undefined;
+      const fromPage = record.pageReturn?.failure !== undefined;
       let failure = record.pageReturn?.failure ?? teleport.failure;
-      if (failure !== undefined) reportFailure(record, failure, returnedAt);
+      if (failure !== undefined) reportFailure(record, failure, fromPage);
       if (record.checkoutContextId) {
         const checkout = await readCheckoutOf(key, record.checkoutContextId);
         if (!isWaiting(record)) return;
@@ -492,7 +492,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         }
         failure ??= checkout.failure;
       }
-      reportFailure(record, failure, returnedAt);
+      reportFailure(record, failure, fromPage);
       if (teleport.status === "expired") {
         settleAbandoned(record);
         return;
