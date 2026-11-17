@@ -891,11 +891,12 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
           reopen(record, request.productReference);
           return record.outcome;
         }
+        const joined = startingAttempt;
         starting = moveIntroductoryOffer(resolved, record).then((moved) => {
           starting = undefined;
           if (!isWaiting(record)) return record.outcome;
           if (moved) {
-            adoptAttempt(record, request.attempt);
+            adoptAttempt(record, joined.attempt);
             reopen(record, request.productReference);
             return record.outcome;
           }

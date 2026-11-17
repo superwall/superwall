@@ -156,7 +156,13 @@ export const createStatusStore = (initial: TeleportStatus) => {
       };
     },
     emit: (event: TeleportEvent, data: TeleportData = {}) => {
-      for (const handler of Array.from(handlers.get(event) ?? [])) handler(data);
+      for (const handler of Array.from(handlers.get(event) ?? [])) {
+        try {
+          handler(data);
+        } catch (error) {
+          console.error(`[teleport] ${event} listener failed:`, error);
+        }
+      }
     },
   };
 };

@@ -14,7 +14,12 @@ import {
 } from "../../../src/checkout/teleport/page";
 import { flowQuery, type AttachedSession } from "../../../src/checkout/teleport/teleporter";
 import { warmTeleportPage } from "../../../src/checkout/teleport/api";
-import { lastWebFailure, purchaseEventsFor } from "../../../src/checkout/events";
+import {
+  lastWebFailure,
+  leadOf,
+  purchaseEventsFor,
+  type PurchaseAttempt,
+} from "../../../src/checkout/events";
 import { appTeleport, teleportPage } from "./halves";
 
 type Fixture = {
@@ -2666,6 +2671,27 @@ describe("teleport races, as paywall.js settles them", () => {
     await settle(250);
     await back;
     expect(calls.filter((path) => path === "checkout/teleport/status")).toHaveLength(2);
+  });
+
+  it("keeps a purchase that joins a navigation's trial-offer move as the teleport's own", async () => {
+    const { answer } = hanging(["checkout/teleport/introductory-offer"], {
+      "checkout/teleport/status": { status: "pending" },
+    });
+    const trial = { eligible: false };
+    const { session } = fakeSession({ trial });
+    const teleporter = appTeleport(session);
+    void teleporter.begin({ productReference: "card", query: {} });
+    await settle();
+    trial.eligible = true;
+    void teleporter.begin({ productReference: "card", query: {} });
+    const joined: PurchaseAttempt = {};
+    void teleporter.begin({ productReference: "card", query: {}, attempt: joined });
+    answer("checkout/teleport/introductory-offer", { updated: true });
+    await settle();
+    const later: PurchaseAttempt = {};
+    void teleporter.begin({ productReference: "card", query: {}, attempt: later });
+    expect(leadOf(later)).toBe(joined);
+    teleporter.cancel();
   });
 
   it("gives a teleport up when its trial offer can't move and it was left meanwhile", async () => {
