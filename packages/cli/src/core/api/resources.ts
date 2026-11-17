@@ -432,20 +432,31 @@ export function pushPaywallVersion(
     products?: VersionProduct[];
     settings?: PaywallSettings;
     locales?: string[];
+    frameworkVersion?: string;
     teleportPages?: VersionTeleportPage[];
   },
 ): Promise<PushedVersion> {
+  const frameworkVersion = selectFrameworkVersion(opts.frameworkVersion);
   return api.post<PushedVersion>(`/v2/paywalls/${encodeURIComponent(paywallId)}/versions`, {
     html: opts.html,
     ...(opts.surface ? { surface: opts.surface } : {}),
     ...(opts.assets && opts.assets.length > 0 ? { assets: opts.assets } : {}),
     ...(opts.products && opts.products.length > 0 ? { products: opts.products } : {}),
     ...(opts.locales && opts.locales.length > 0 ? { locales: opts.locales } : {}),
+    ...(frameworkVersion ? { framework_version: frameworkVersion } : {}),
     ...(opts.teleportPages && opts.teleportPages.length > 0
       ? { teleport_pages: opts.teleportPages.map(({ key, html }) => ({ key, html })) }
       : {}),
     ...(opts.settings ?? {}),
   });
+}
+
+const FRAMEWORK_VERSION_MAX_LENGTH = 64;
+
+function selectFrameworkVersion(version: string | undefined): string | undefined {
+  const trimmed = version?.trim();
+  if (!trimmed || trimmed === "unknown" || trimmed.length > FRAMEWORK_VERSION_MAX_LENGTH) return undefined;
+  return trimmed;
 }
 
 export interface VersionTeleportPage {

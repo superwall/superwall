@@ -202,6 +202,23 @@ test("push runs link, build, assets, push and source, and stops before promote",
   assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link"]);
 });
 
+test("push sends the project's installed superwall version with the version", async () => {
+  const project = scaffold();
+  const installed = path.join(project.root, "node_modules", "superwall");
+  fs.mkdirSync(installed, { recursive: true });
+  fs.writeFileSync(path.join(installed, "package.json"), JSON.stringify({ name: "superwall", version: "2.6.0-beta.2" }));
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api), {
+    dir: project.root,
+    promote: false,
+    load: async () => frameworkFor(project),
+  });
+
+  const body: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  assert.equal(Reflect.get(Object(body), "framework_version"), "2.6.0-beta.2");
+});
+
 test("a product Superwall has no record of stops the push before any version exists", async () => {
   const project = scaffold();
   const fake = await fakeApi({ products: { body: { data: [] } } });
