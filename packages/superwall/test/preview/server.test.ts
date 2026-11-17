@@ -36,6 +36,17 @@ describe("the dev server's JSX runtime", () => {
     });
   });
 
+  it("pre-bundles Stripe's React bindings with the React the page uses", () => {
+    expect(vi.mocked(createServer).mock.calls[0]?.[0]?.optimizeDeps?.include).toEqual(
+      expect.arrayContaining([
+        "react",
+        "react-dom",
+        "superwall > @stripe/react-stripe-js",
+        "superwall > @stripe/stripe-js",
+      ]),
+    );
+  });
+
   it("serves the framework's checkout without bare React.createElement", async () => {
     const served = await server.transformRequest(CHECKOUT);
 
