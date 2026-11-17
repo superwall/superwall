@@ -202,6 +202,23 @@ test("push runs link, build, assets, push and source, and stops before promote",
   assert.deepEqual(fake.calls, ["projects", "products", "live", "versions", "access", "link"]);
 });
 
+test("push sends the project's installed superwall version with the version", async () => {
+  const project = scaffold();
+  const installed = path.join(project.root, "node_modules", "superwall");
+  fs.mkdirSync(installed, { recursive: true });
+  fs.writeFileSync(path.join(installed, "package.json"), JSON.stringify({ name: "superwall", version: "2.6.0-beta.2" }));
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api), {
+    dir: project.root,
+    promote: false,
+    load: async () => frameworkFor(project),
+  });
+
+  const body: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  assert.equal(Reflect.get(Object(body), "framework_version"), "2.6.0-beta.2");
+});
+
 test("a product Superwall has no record of stops the push before any version exists", async () => {
   const project = scaffold();
   const fake = await fakeApi({ products: { body: { data: [] } } });
@@ -1957,4 +1974,52 @@ test("--source still pushes the source of an app whose paywall did not change wh
       "/v2/paywalls/3080/source-access",
     ],
   );
+});
+
+test("push sends the pre-rendered teleport pages with the version and prints the pre-render's warnings", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+  const calls: RendererCall[] = [];
+  useRenderer(recordingRenderer(calls));
+
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      load: async () =>
+        frameworkFor(project, {
+          buildSnapshot: async () =>
+            built({
+              teleportPages: [
+                { key: "en/annual/1", html: "<main>annual</main>" },
+                { key: "en/__none__/0", html: "<main>none</main>" },
+              ],
+              warnings: ["Some teleport pages were not pre-rendered: `de/annual/1` threw."],
+            }),
+        }),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  const body: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  assert.deepEqual(Reflect.get(Object(body), "teleport_pages"), [
+    { key: "en/annual/1", html: "<main>annual</main>" },
+    { key: "en/__none__/0", html: "<main>none</main>" },
+  ]);
+  const printed = JSON.stringify(calls);
+  assert.ok(printed.includes("2 pre-rendered"));
+  assert.ok(printed.includes("`de/annual/1` threw."));
+});
+
+test("push sends no teleport_pages for a build without them", async () => {
+  const project = scaffold();
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () => frameworkFor(project, { buildSnapshot: async () => built({ teleportPages: [] }) }),
+  });
+
+  const body: unknown = JSON.parse(fake.bodies.versions ?? "{}");
+  assert.equal(Reflect.has(Object(body), "teleport_pages"), false);
 });

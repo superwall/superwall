@@ -150,6 +150,63 @@ describe("variables", () => {
   });
 });
 
+describe("variables known before the host speaks", () => {
+  const config: SuperwallConfig = {
+    localization: {
+      defaultLocale: "en",
+      messages: { en: { title: "Go Pro" }, de: { title: "Hol dir Pro" } },
+    },
+  };
+
+  it("open the session with that device, user, params and locale, without listening", () => {
+    const session = createSuperwallSession({
+      transport: new TestTransport(),
+      config,
+      variables: {
+        device: { deviceLocale: "de_DE", platform: "iOS" },
+        user: { aliasId: "a1" },
+        params: { source: "teleport" },
+      },
+    });
+
+    const snapshot = session.getSnapshot();
+    expect(snapshot.status).toBe("idle");
+    expect(snapshot.device).toEqual({ deviceLocale: "de_DE", platform: "iOS" });
+    expect(snapshot.user).toEqual({ aliasId: "a1" });
+    expect(snapshot.params).toEqual({ source: "teleport" });
+    expect(snapshot.locale).toBe("de");
+    expect(session.t("title")).toBe("Hol dir Pro");
+    expect(snapshot.state).toMatchObject({ user: { aliasId: "a1" } });
+  });
+
+  it("open with the products they carry, merged over the prices the build baked inline", () => {
+    const session = createSuperwallSession({
+      transport: new TestTransport(),
+      config: { products: { card14: "live:price_1:14days-free" } },
+      inlineProducts: { card14: { price: "$59.99", period: "year", trialPeriodDays: 14 } },
+      variables: { products: [{ card14: { price: "$49.99" } }] },
+    });
+
+    expect(session.getSnapshot().productsByReference.card14?.variables).toEqual(
+      expect.objectContaining({ price: "$49.99", period: "year", trialPeriodDays: 14 }),
+    );
+  });
+
+  it("are not the host's answer, so a write before the host's first state still survives it", () => {
+    const transport = new TestTransport();
+    const session = createSuperwallSession({ transport, variables: { user: { aliasId: "a1" } } });
+    session.start();
+
+    session.setUserAttributes({ plan: "pro" });
+    transport.accept({
+      event_name: "template_variables",
+      variables: { user: { aliasId: "a1", plan: "stale" } },
+    });
+
+    expect(session.getSnapshot().user).toEqual({ aliasId: "a1", plan: "pro" });
+  });
+});
+
 describe("introductory offer", () => {
   it("derives eligibility from the substitutions prefix", () => {
     const { session, transport } = createSession();
@@ -161,6 +218,17 @@ describe("introductory offer", () => {
 
     transport.accept({ event_name: "template_substitutions_prefix", prefix: null });
     expect(session.getSnapshot().introductoryOffer.eligible).toBe(false);
+  });
+
+  it("opens with the eligibility it was given, before any host message", () => {
+    const session = createSuperwallSession({
+      transport: new TestTransport(),
+      introductoryOffer: { eligible: true },
+    });
+
+    expect(session.getSnapshot().introductoryOffer.eligible).toBe(true);
+    expect(session.getSnapshot().state).toMatchObject({ products: { hasIntroductoryOffer: true } });
+    expect(session.getSnapshot().variables).toEqual({});
   });
 });
 

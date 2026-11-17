@@ -12,6 +12,7 @@ export type TeleportBoot = {
   shared: boolean;
   query: Record<string, string>;
   loadSession: boolean;
+  variables?: Record<string, unknown>;
 };
 
 export const NAV_QUERY_KEY = "sw_nav";
@@ -45,6 +46,15 @@ export const sessionQueryOf = (session: unknown): Record<string, string> => {
     if (typeof value === "string" && key !== NAV_QUERY_KEY) entries[key] = value;
   }
   return entries;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+export const hostVariablesOf = (value: unknown): Record<string, unknown> | undefined => {
+  if (!isRecord(value)) return undefined;
+  const { deviceProperties, ...rest } = value;
+  return isRecord(deviceProperties) ? { ...rest, device: deviceProperties } : rest;
 };
 
 const fragment = (): URLSearchParams => new URLSearchParams(window.location.hash.replace(/^#/, ""));
@@ -98,6 +108,7 @@ export const readTeleportBoot = (): TeleportBoot | undefined => {
   const hasIntroductoryOffer =
     introductoryOfferFromFragment() ?? (typeof booted === "boolean" ? booted : undefined);
   const email = textOf(field(value, "email"));
+  const variables = hostVariablesOf(field(value, "variables"));
   return {
     id,
     route,
@@ -109,6 +120,7 @@ export const readTeleportBoot = (): TeleportBoot | undefined => {
     shared: field(value, "shared") === true,
     query: { ...sessionQueryOf(field(value, "session")), ...fragmentQuery() },
     loadSession: field(value, "loadSession") === true && field(value, "session") === undefined,
+    ...(variables === undefined ? {} : { variables }),
   };
 };
 

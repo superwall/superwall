@@ -232,6 +232,23 @@ test("publish pushes the source between the version and the promote", async () =
   ]);
 });
 
+test("push sends the project's installed superwall version, and leaves it out when unreadable", async () => {
+  const api = await startApi();
+  const project = boundProject();
+
+  await createStudioActions(framework, project).run("push", surface);
+  const unread: unknown = JSON.parse(api.bodies["/v2/paywalls/208540/versions"] ?? "{}");
+  assert.equal(Reflect.has(Object(unread), "framework_version"), false);
+
+  const installed = path.join(project.root, "node_modules", "superwall");
+  fs.mkdirSync(installed, { recursive: true });
+  fs.writeFileSync(path.join(installed, "package.json"), JSON.stringify({ name: "superwall", version: "2.5.2" }));
+
+  await createStudioActions(framework, project).run("push", surface);
+  const read: unknown = JSON.parse(api.bodies["/v2/paywalls/208540/versions"] ?? "{}");
+  assert.equal(Reflect.get(Object(read), "framework_version"), "2.5.2");
+});
+
 test("the build is told where this app's assets are hosted, using the resolved app id", async () => {
   await startApi();
   const project = boundProject();

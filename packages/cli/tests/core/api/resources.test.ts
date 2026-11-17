@@ -301,6 +301,24 @@ test("pushPaywallVersion omits an empty asset list rather than sending []", asyn
   });
 });
 
+test("pushPaywallVersion sends the framework version only when it is usable", async () => {
+  const recs = mockFetch(() => ({ version: 7, snapshot_id: "a", url: "u" }));
+
+  await pushPaywallVersion(api, "208540", { html: "<html>", frameworkVersion: "2.6.0-beta.2" });
+  assert.deepEqual(recs[0]?.body, { html: "<html>", framework_version: "2.6.0-beta.2" });
+
+  for (const frameworkVersion of ["unknown", "", "  ", "9".repeat(65)]) {
+    await pushPaywallVersion(api, "208540", { html: "<html>", frameworkVersion });
+  }
+  await pushPaywallVersion(api, "208540", { html: "<html>", frameworkVersion: "9".repeat(64) });
+
+  assert.deepEqual(
+    recs.slice(1, 5).map((rec) => rec.body),
+    [{ html: "<html>" }, { html: "<html>" }, { html: "<html>" }, { html: "<html>" }],
+  );
+  assert.deepEqual(recs[5]?.body, { html: "<html>", framework_version: "9".repeat(64) });
+});
+
 test("pushPaywallAssets drops malformed rows and refuses a response with no list", async () => {
   mockFetch(() => ({
     assets: [
@@ -463,4 +481,18 @@ test("pushPaywallVersion spreads background and checkout destination from the se
   assert.ok(!("background_color_hex" in (calls[1] ?? {})));
   assert.ok(!("dark_background_color_hex" in (calls[1] ?? {})));
   assert.ok(!("web_checkout_destination" in (calls[1] ?? {})));
+});
+
+test("pushPaywallVersion sends teleport pages as key and html only, and none when there are none", async () => {
+  const recs = mockFetch(() => ({ version: 7, snapshot_id: "a", url: "u" }));
+
+  await pushPaywallVersion(api, "208540", { html: "<html>", teleportPages: [] });
+  assert.deepEqual(recs[0]?.body, { html: "<html>" });
+
+  const page = Object.assign({ key: "de/annual/1", html: "<main>Jetzt</main>" }, { extra: 1 });
+  await pushPaywallVersion(api, "208540", { html: "<html>", teleportPages: [page] });
+  assert.deepEqual(recs[1]?.body, {
+    html: "<html>",
+    teleport_pages: [{ key: "de/annual/1", html: "<main>Jetzt</main>" }],
+  });
 });

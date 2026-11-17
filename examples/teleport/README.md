@@ -32,7 +32,14 @@ there, so nothing is built twice.
 **The answers come along.** `app/goal.tsx` keeps the goal with
 `useQueryState`, and `app/plan.tsx` reads it back on the web page as if the
 whole flow had been there. `useTeleport()` says where the teleport stands:
-`plan.tsx` shows a line when its status is `"arrived"`.
+`plan.tsx` shows a line when its status is `"arrived"`, and selects the plan
+the shopper tapped in the app (`productReference`).
+
+**The page arrives drawn.** `superwall push` pre-renders `plan` once per
+locale, Stripe product (plus none) and trial on or off, so the browser paints
+the tapped plan before any script runs. `superwall build --platform ios`
+writes the same pages, but only the no-product ones: it has no store prices,
+and says so.
 
 **The app waits, then unlocks.** While the shopper is in the browser, the app
 shows Superwall's teleport screen: Complete in Browser, Continue In-App Instead

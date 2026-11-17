@@ -630,6 +630,13 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   command, because agents do the upgrade. Nothing auto-updates a project's pin or stops a command: a
   major can break paywalls, so we only prompt. No cache or an unreachable
   registry prints nothing.
+- **Every headless push names its framework.** `pushPaywallVersion` sends
+  `framework_version`, the project's installed `superwall`
+  (`frameworkVersion(dir)`, the resolved copy, not the `package.json` range),
+  so the dashboard-hosted studio can show the same update banner. It is left
+  out when the version reads as `unknown`, is empty or exceeds the API's 64
+  characters: a missing version only hides the banner, it never fails a push.
+  The API refuses fields it doesn't know, so this needs pwn's API (#6464) live.
 - **Telemetry is anonymous by design**: a random persisted id, enum/boolean/
   number properties only, no person profiles, and a fetch timeout shorter than
   the exit flush so an unreachable endpoint can't hold the process open.

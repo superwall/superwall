@@ -233,6 +233,7 @@ export function createStudioActions(
         }
 
         const collected = await collectSourceFiles(project.superwallDir);
+        const installed = frameworkVersion(project.root);
         let version = 0;
         const external = new Set<string>();
         for (const target of targets) {
@@ -268,6 +269,7 @@ export function createStudioActions(
                 built.billingPlans,
               ),
               settings: built.settings,
+              frameworkVersion: installed,
             }),
           );
           await step("source", async () => {
@@ -279,7 +281,7 @@ export function createStudioActions(
               applicationId: binding.applicationId,
               version: pushed.version,
               files: collected.files,
-              framework: frameworkVersion(project.root),
+              framework: installed,
               surface: surface.id,
               kind: surface.kind,
               snapshotId: built.snapshotId,
