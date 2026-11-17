@@ -565,6 +565,25 @@ lint → format:check → typecheck → test:coverage; publishing is
 `.github/workflows/release.yml` (see Releasing). Every gate that runs in CI
 runs identically on a laptop — keep it that way.
 
+## Releasing
+
+Publishing a GitHub Release tagged `vX.Y.Z` runs
+`.github/workflows/release.yml`: it runs the gates, stamps every package
+(`protocol host runtime studio cli superwall`) at that version, publishes them
+to npm in dependency order and commits the stamp back to `main`. A prerelease
+tag (`vX.Y.Z-beta.1`) publishes to the `next` dist-tag. Run the workflow by hand
+with `dry_run` to rehearse a release without publishing.
+
+A CLI release does not update mcp.superwall.com. The MCP serves the
+`@superwall/cli` version pinned in pwn, which moves only when pwn's
+`bot/mcp-cli-<version>` PR merges. A release that changes a tool, an annotation,
+`instructions()` or a skill on `next` is unfinished until that PR merges: check
+that it opens, is mergeable and merges; run pwn's `mcp-cli-bump` workflow by
+hand if it has not opened a few hours after the release; file the fix in pwn if
+it is stuck. Never report the MCP as updated because the CLI was published. The
+full rule is "The MCP updates only when pwn's bump PR merges" in
+`packages/cli/AGENTS.md`.
+
 ## Verifying device-visible changes — the static config is the truth
 
 Unit tests prove the plumbing; only the SDK's own config proves a push landed.
