@@ -228,7 +228,7 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       if (returned.failure !== undefined) reportFailure(record, returned.failure, true);
       if (returned.data !== undefined && isWaiting(record)) {
         publish();
-        emit("data");
+        emit("data", returned.data);
       }
       return true;
     } catch (error) {

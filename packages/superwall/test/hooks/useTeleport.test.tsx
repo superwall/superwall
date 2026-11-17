@@ -645,6 +645,68 @@ describe("useTeleport in the app", () => {
     }
   });
 
+  it("hands the data to every onReturnData, even after an earlier one cancels", async () => {
+    vi.useFakeTimers();
+    try {
+      const replies: Record<string, unknown> = {
+        "checkout/teleport": {
+          teleportId: "v1:tp",
+          url: "https://acme.superwall.app/sw-teleport/v1:tp",
+        },
+        "checkout/teleport/status": { status: "claimed", checkoutContextId: "ctx_1" },
+        "checkout/status": { status: "pending" },
+        "checkout/teleport/session": { saved: true },
+        "checkout/teleport/session/read": {
+          session: {
+            query: {},
+            returned: { data: { offer: "app_store" }, at: Number.MAX_SAFE_INTEGER },
+          },
+        },
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          const path = new URL(url).pathname.replace(/^.*\/public\/v1\//, "");
+          return new Response(JSON.stringify(replies[path] ?? {}));
+        }),
+      );
+      Reflect.set(window, "app", {});
+      const second = vi.fn();
+      const holder: { cancel?: () => void } = {};
+      const { result } = renderWithProvider(
+        () => {
+          const first = useTeleport({ onReturnData: () => holder.cancel?.() });
+          if (first.status === "waiting") holder.cancel = first.cancel;
+          useTeleport({ onReturnData: second });
+          return { session: useSuperwallSession(), first };
+        },
+        {
+          config,
+          host: {
+            device,
+            products: [{ reference: "primary", productId: "test:price_1:no-trial" }],
+          },
+        },
+      );
+      await flush();
+      const teleporter = teleportFor(result.current.session);
+      if (teleporter.kind !== "app") throw new Error("expected the app half");
+      await act(async () => {
+        void teleporter.begin({ productReference: "primary", query: {} });
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      await act(async () => {
+        void teleporter.handleReturn("closed");
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(result.current.first.status).not.toBe("waiting");
+      expect(second).toHaveBeenCalledExactlyOnceWith({ offer: "app_store" });
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(window, "app");
+    }
+  });
+
   it("settles with the tapped product when the reopened one has left the catalog", async () => {
     Reflect.set(window, "app", {});
     try {

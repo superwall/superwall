@@ -59,7 +59,8 @@ export type ReturnResult = "opened" | "cancelled" | "no_app";
 type TeleportBase = {
   getStatus(): TeleportStatus;
   subscribe(listener: () => void): () => void;
-  on(event: TeleportEvent, handler: () => void): () => void;
+  on(event: "data", handler: (data: TeleportData) => void): () => void;
+  on(event: Exclude<TeleportEvent, "data">, handler: () => void): () => void;
   attach(session: AttachedSession): () => void;
 };
 
@@ -128,7 +129,7 @@ export const withTimeout = <T>(promise: Promise<T>, ms: number, fallback: T): Pr
 
 export const createStatusStore = (initial: TeleportStatus) => {
   const listeners = new Set<() => void>();
-  const handlers = new Map<TeleportEvent, Set<() => void>>();
+  const handlers = new Map<TeleportEvent, Set<(data: TeleportData) => void>>();
   let status = initial;
   return {
     getStatus: () => status,
@@ -146,16 +147,16 @@ export const createStatusStore = (initial: TeleportStatus) => {
         listeners.delete(listener);
       };
     },
-    on: (event: TeleportEvent, handler: () => void) => {
-      const set = handlers.get(event) ?? new Set<() => void>();
+    on: (event: TeleportEvent, handler: (data: TeleportData) => void) => {
+      const set = handlers.get(event) ?? new Set<(data: TeleportData) => void>();
       set.add(handler);
       handlers.set(event, set);
       return () => {
         set.delete(handler);
       };
     },
-    emit: (event: TeleportEvent) => {
-      for (const handler of handlers.get(event) ?? []) handler();
+    emit: (event: TeleportEvent, data: TeleportData = {}) => {
+      for (const handler of Array.from(handlers.get(event) ?? [])) handler(data);
     },
   };
 };

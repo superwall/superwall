@@ -213,12 +213,7 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
       teleporter.on("return", () => callbacks.current.onReturn?.()),
       teleporter.on("cancel", () => callbacks.current.onCancel?.()),
       teleporter.on("complete", () => callbacks.current.onComplete?.()),
-      teleporter.on("data", () => {
-        const current = teleporter.getStatus();
-        if (current.status === "waiting" && current.data !== undefined) {
-          callbacks.current.onReturnData?.(current.data);
-        }
-      }),
+      teleporter.on("data", (data) => callbacks.current.onReturnData?.(data)),
     ];
     return () => {
       for (const unsubscribe of unsubscribers) unsubscribe();
