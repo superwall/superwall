@@ -29,8 +29,9 @@ export default {
     failed: "That didn't go through. Try again.",
   },
   wallet: {
-    native: "Apple Pay: not offered in this app (undefined).",
     none: {
+      unsupported_host:
+        "Apple Pay: not offered in this app (false, unsupported_host).",
       unsupported_browser:
         "Apple Pay: this browser can't open the wallet itself (false, unsupported_browser).",
       insecure_context: "Apple Pay: the page isn't served over HTTPS (false, insecure_context).",
@@ -44,6 +45,11 @@ export default {
     ready: "Apple Pay: available (true), the wallet opens on tap.",
     unavailable:
       "Apple Pay: available (true), but the wallet isn't ready ({reason}), so the card sheet opens.",
+  },
+  card: {
+    checking: "Apple Pay card: asking Apple…",
+    ready: "Apple Pay card: set up (ready).",
+    unavailable: "Apple Pay card: not set up ({reason}).",
   },
   restore: {
     restored: "Purchases restored.",

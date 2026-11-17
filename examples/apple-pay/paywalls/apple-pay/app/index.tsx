@@ -102,21 +102,22 @@ export default function Index() {
     return price ? t("plans.intro", { price }) : t("plans.introBare");
   };
 
-  const wallet =
-    applePay === undefined
-      ? t("wallet.native")
-      : !applePay.available
-        ? t(`wallet.none.${applePay.reason}`)
-        : applePay.product.status === "unavailable"
-          ? t("wallet.unavailable", { reason: applePay.product.reason })
-          : t(`wallet.${applePay.product.status}`);
+  const wallet = !applePay.available
+    ? t(`wallet.none.${applePay.reason}`)
+    : applePay.product.status === "unavailable"
+      ? t("wallet.unavailable", { reason: applePay.product.reason })
+      : t(`wallet.${applePay.product.status}`);
 
-  const walletError =
-    applePay && !applePay.available
-      ? applePay.error
-      : applePay?.product.status === "unavailable"
-        ? applePay.product.error
-        : undefined;
+  const walletError = !applePay.available
+    ? applePay.error
+    : applePay.product.status === "unavailable"
+      ? applePay.product.error
+      : undefined;
+
+  const card =
+    applePay.card.status === "unavailable"
+      ? t("card.unavailable", { reason: applePay.card.reason })
+      : t(`card.${applePay.card.status}`);
 
   const description = applied
     ? describeDiscount(applied.discount, getDiscountedProduct(selected), t)
@@ -227,12 +228,15 @@ export default function Index() {
             // abandoned: the shopper closed the sheet — nothing changes, nothing is said
           }}
         >
-          {applePay?.available && applePay.product.status === "ready"
+          {applePay.available && applePay.product.status === "ready"
             ? t("purchase.applePay")
             : t("purchase.continue")}
         </button>
-        <p className="notice" data-apple-pay={applePay ? String(applePay.available) : "undefined"}>
+        <p className="notice" data-apple-pay={String(applePay.available)}>
           {wallet}
+        </p>
+        <p className="notice" data-apple-pay-card={applePay.card.status}>
+          {card}
         </p>
         {walletError ? (
           <p className="notice" data-apple-pay-error={walletError.name}>

@@ -76,7 +76,7 @@ export type SuperwallDeviceVariables = {
   /**
    * @deprecated The native SDK always reports `true`, so this says nothing
    * about Apple Pay. To know whether Apple Pay is set up with a card, in the
-   * app or on the web, use `useApplePayCard()` or `checkApplePayCard()` from
+   * app or on the web, use `useApplePay().card` or `checkApplePayCard()` from
    * `superwall/hooks`. In `checkout: "applePay"` mode Stripe's
    * `canMakePayment()` decides, reported by `useApplePay(product).product`.
    */
