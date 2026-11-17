@@ -36,8 +36,6 @@ export default {
       unsupported_browser:
         "Apple Pay: this browser can't open the wallet itself (false, unsupported_browser).",
       insecure_context: "Apple Pay: the page isn't served over HTTPS (false, insecure_context).",
-      device_unsupported:
-        "Apple Pay: this device can't pay with Apple Pay (false, device_unsupported).",
       cross_origin_frame:
         "Apple Pay: blocked in a frame of another site (false, cross_origin_frame).",
       check_failed: "Apple Pay: the browser's check failed (false, check_failed).",

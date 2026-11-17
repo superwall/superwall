@@ -174,14 +174,13 @@ and `setUserAttributes`, deprecated for `useUserAttribute`), `useCheckoutRedempt
 teleport screen),
 `useApplePay` says whether Apple Pay is available on this device, the same
 way on every host (the iOS SDK, the Web SDK, a hosted web paywall, a teleport
-page, a browser): Apple Pay JS is there, the device can pay, and Wallet holds
-a card, from Apple's `ApplePaySession.canMakePayments` and
-`canMakePaymentsWithActiveCard` for the page's own Stripe merchant,
+page, a browser): Apple Pay is set up with a card, from Apple's
+`ApplePaySession.canMakePaymentsWithActiveCard` for the page's own Stripe merchant,
 `merchant.<hostname>.stripe` (Superwall registers both the in-app paywall
 domain and the teleport domain with the customer's Stripe account). It is `{
 available: true }`, or `{ available: false, reason, message, error? }` with a
 typed `ApplePayUnavailableReason`: `checking` until Apple answers;
-`no_active_card`; `device_unsupported`; `unsupported_browser`, as inside the
+`no_active_card`; `unsupported_browser`, as inside the
 Android SDK and in desktop Chrome, whose card sheet may still offer Apple Pay
 by QR code; `insecure_context`, not HTTPS, `http://localhost` included;
 `cross_origin_frame`; `check_failed`, with the browser's own `error`; and

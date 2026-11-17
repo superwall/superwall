@@ -7,11 +7,9 @@ import { applePayErrorOf, type ApplePayError } from "./index";
  *   1.5 seconds; a paywall with `teleport` in its config asks as it opens, so
  *   the answer is usually there before the first tap.
  * - `"no_active_card"`: Apple answered that Apple Pay has no card to pay with
- *   here: Wallet holds none.
- * - `"device_unsupported"`: the browser has Apple Pay JS but says this device
- *   cannot pay with it, such as a Mac without Touch ID and no iPhone or Apple
- *   Watch nearby to confirm.
- * - `"unsupported_browser"`: the page has no Apple Pay JS (`ApplePaySession`),
+ *   here: Wallet holds none, or the device cannot use Apple Pay.
+ * - `"unsupported_browser"`: the page has no
+ *   `ApplePaySession.canMakePaymentsWithActiveCard`,
  *   as inside the Android SDK, in Chrome, Firefox or Edge on a desktop, and in
  *   Studio in those browsers. The card sheet may still offer Apple Pay there
  *   through a QR code scanned with an iPhone, which is not direct Apple Pay.
@@ -27,7 +25,6 @@ import { applePayErrorOf, type ApplePayError } from "./index";
 export type ApplePayUnavailableReason =
   | "checking"
   | "no_active_card"
-  | "device_unsupported"
   | "unsupported_browser"
   | "insecure_context"
   | "cross_origin_frame"
@@ -35,9 +32,7 @@ export type ApplePayUnavailableReason =
   | "timed_out";
 
 /**
- * Whether Apple Pay is available on this device: Apple Pay JS is there, the
- * device can pay with it, and Wallet holds a card, from Apple's
- * `ApplePaySession.canMakePayments()` and
+ * Whether Apple Pay is set up with a card on this device, from Apple's
  * `ApplePaySession.canMakePaymentsWithActiveCard()` for the page's own Stripe
  * merchant (`merchant.<hostname>.stripe`). It answers the same way on every
  * host: inside the iOS SDK, on the web, and on a teleport page. Any usable
@@ -63,8 +58,8 @@ export type UseApplePayResult =
 export const APPLE_PAY_MESSAGES: Record<ApplePayUnavailableReason, string> = {
   checking: "Apple has not answered the Apple Pay check yet.",
   no_active_card: "Apple Pay has no card to pay with here: Wallet holds none.",
-  device_unsupported: "The browser says this device cannot pay with Apple Pay.",
-  unsupported_browser: "This page has no Apple Pay JS, so it cannot check for Apple Pay.",
+  unsupported_browser:
+    "This page has no ApplePaySession.canMakePaymentsWithActiveCard, so it cannot check for a card.",
   insecure_context: "Apple Pay needs the page to be served over HTTPS.",
   cross_origin_frame: "The browser refused the Apple Pay check in a frame of another origin.",
   check_failed: "The browser threw on the Apple Pay check.",
@@ -74,7 +69,6 @@ export const APPLE_PAY_MESSAGES: Record<ApplePayUnavailableReason, string> = {
 const APPLE_PAY_TIMEOUT_MS = 1500;
 
 type ApplePaySessionGlobal = {
-  canMakePayments?: () => unknown;
   canMakePaymentsWithActiveCard?: (merchantIdentifier: string) => unknown;
 };
 
@@ -113,7 +107,6 @@ const thrown = (value: unknown): Unavailable => {
 const AVAILABLE: UseApplePayResult = { available: true };
 const CHECKING = unavailable("checking");
 const NO_ACTIVE_CARD = unavailable("no_active_card");
-const DEVICE_UNSUPPORTED = unavailable("device_unsupported");
 const UNSUPPORTED_BROWSER = unavailable("unsupported_browser");
 const INSECURE_CONTEXT = unavailable("insecure_context");
 const TIMED_OUT = unavailable("timed_out");
@@ -131,26 +124,15 @@ const checks = new WeakMap<ApplePaySessionGlobal, Check>();
 const askable = (): ApplePaySessionGlobal | UseApplePayResult => {
   if (window.isSecureContext === false) return INSECURE_CONTEXT;
   const global = applePaySession();
-  if (typeof global?.canMakePayments !== "function") return UNSUPPORTED_BROWSER;
+  if (typeof global?.canMakePaymentsWithActiveCard !== "function") return UNSUPPORTED_BROWSER;
   return global;
-};
-
-const deviceCheck = (global: ApplePaySessionGlobal): UseApplePayResult => {
-  try {
-    if (global.canMakePayments?.() !== true) return DEVICE_UNSUPPORTED;
-  } catch (error) {
-    return thrown(error);
-  }
-  return typeof global.canMakePaymentsWithActiveCard === "function"
-    ? CHECKING
-    : UNSUPPORTED_BROWSER;
 };
 
 const checkOf = (global: ApplePaySessionGlobal): Check => {
   const known = checks.get(global);
   if (known) return known;
   const check: Check = {
-    result: deviceCheck(global),
+    result: CHECKING,
     asked: false,
     asking: false,
     listeners: new Set(),
@@ -173,7 +155,7 @@ const answered = (check: Check, result: UseApplePayResult) => {
 const ask = (global: ApplePaySessionGlobal, check: Check) => {
   if (check.asking) return;
   if (check.asked && !check.result.available && check.result.error !== undefined) {
-    settle(check, deviceCheck(global));
+    settle(check, CHECKING);
   }
   check.asked = true;
   if (check.result !== CHECKING) return;

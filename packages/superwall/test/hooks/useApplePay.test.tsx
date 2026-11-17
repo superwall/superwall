@@ -71,18 +71,11 @@ const notReady = (reason: string, error?: { name: string; message: string }) => 
 
 const merchant = `merchant.${window.location.hostname}.stripe`;
 
-const withApplePaySession = (
-  canMakePayments: () => unknown,
-  activeCard: (merchantIdentifier: string) => unknown = async () => true,
-) => {
-  const canMakePaymentsWithActiveCard = vi.fn(activeCard);
-  const global = { canMakePayments: vi.fn(canMakePayments), canMakePaymentsWithActiveCard };
+const withActiveCard = (answer: (merchantIdentifier: string) => unknown = async () => true) => {
+  const global = { canMakePaymentsWithActiveCard: vi.fn(answer) };
   vi.stubGlobal("ApplePaySession", global);
   return global;
 };
-
-const withActiveCard = (answer: (merchantIdentifier: string) => unknown) =>
-  withApplePaySession(() => true, answer);
 
 const deferred = () => {
   const settle: { resolve?: (value: unknown) => void } = {};
@@ -122,7 +115,7 @@ describe("useApplePay on each host", () => {
     "browser",
   ])("asks Apple the same way on %s", async (name) => {
     host.current = name;
-    const global = withApplePaySession(() => true);
+    const global = withActiveCard();
     const { result } = await render(() => useApplePay());
     expect(result.current.value).toEqual(on);
     expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledWith(merchant);
@@ -133,7 +126,7 @@ describe("useApplePay on each host", () => {
     "never opens the wallet for a product on %s, even when Apple Pay is available",
     async (name) => {
       host.current = name;
-      withApplePaySession(() => true);
+      withActiveCard();
       const { result } = await render(() => useApplePay("primary"));
       expect(result.current.value).toEqual({
         ...on,
@@ -165,23 +158,23 @@ describe("useApplePay's device answer", () => {
     expect(result.current.value).toEqual({
       available: false,
       reason: "unsupported_browser",
-      message: "This page has no Apple Pay JS, so it cannot check for Apple Pay.",
+      message:
+        "This page has no ApplePaySession.canMakePaymentsWithActiveCard, so it cannot check for a card.",
     });
   });
 
   it("is an insecure context on a page not served over HTTPS, before asking the browser", async () => {
     vi.stubGlobal("isSecureContext", false);
-    const canMakePayments = vi.fn(() => true);
-    withApplePaySession(canMakePayments);
+    const global = withActiveCard();
     const { result } = await render(() => useApplePay());
     expect(result.current.value).toEqual(off("insecure_context"));
-    expect(canMakePayments).not.toHaveBeenCalled();
+    expect(global.canMakePaymentsWithActiveCard).not.toHaveBeenCalled();
   });
 
   it("is an insecure context, with Safari's error, when Safari refuses an insecure document", async () => {
     const error = new Error("Trying to start an Apple Pay session from an insecure document.");
     error.name = "InvalidAccessError";
-    withApplePaySession(() => {
+    withActiveCard(() => {
       throw error;
     });
     const { result } = await render(() => useApplePay());
@@ -190,16 +183,8 @@ describe("useApplePay's device answer", () => {
     );
   });
 
-  it("is an unsupported device when the browser says it cannot pay, or answers with anything but true", async () => {
-    const unsupported = off("device_unsupported");
-    withApplePaySession(() => false);
-    expect((await render(() => useApplePay())).result.current.value).toEqual(unsupported);
-    withApplePaySession(() => "yes");
-    expect((await render(() => useApplePay())).result.current.value).toEqual(unsupported);
-  });
-
   it("names a failed check and returns the browser's error, never throwing", async () => {
-    withApplePaySession(() => {
+    withActiveCard(() => {
       throw new Error("user agent scripts were evaluated");
     });
     const { result } = await render(() => useApplePay());
@@ -209,7 +194,7 @@ describe("useApplePay's device answer", () => {
   });
 
   it("names a failed check when the browser throws something that is not an Error", async () => {
-    withApplePaySession(() => {
+    withActiveCard(() => {
       throw "nope";
     });
     const { result } = await render(() => useApplePay());
@@ -228,7 +213,7 @@ describe("useApplePay's device answer", () => {
     ["a frame of another origin", { location: { origin: "https://merchant.example" } }],
   ])("names a cross-origin frame when the check throws in %s", async (_, top) => {
     vi.stubGlobal("top", top);
-    withApplePaySession(() => {
+    withActiveCard(() => {
       throw new Error("different security origin");
     });
     const { result } = await render(() => useApplePay());
@@ -239,7 +224,7 @@ describe("useApplePay's device answer", () => {
 
   it("is a failed check, not a cross-origin frame, in a frame of the same origin", async () => {
     vi.stubGlobal("top", { location: { origin: window.location.origin } });
-    withApplePaySession(() => {
+    withActiveCard(() => {
       throw new Error("other");
     });
     const { result } = await render(() => useApplePay());
@@ -247,19 +232,18 @@ describe("useApplePay's device answer", () => {
   });
 
   it("asks the browser once, not on every render", async () => {
-    const canMakePayments = vi.fn(() => true);
-    withApplePaySession(canMakePayments);
+    const global = withActiveCard();
     const { result, rerender } = await render(() => useApplePay());
     const first = result.current.value;
     rerender();
     expect(result.current.value).toBe(first);
-    expect(canMakePayments).toHaveBeenCalledOnce();
+    expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledOnce();
   });
 });
 
 describe("useApplePay for a product", () => {
   it("is not prepared when nothing prepared the wallet for it, whatever the device says", async () => {
-    withApplePaySession(() => true);
+    withActiveCard();
     const { result } = await render(() => useApplePay("primary"));
     expect(result.current.value).toEqual({
       ...on,
@@ -268,7 +252,7 @@ describe("useApplePay for a product", () => {
   });
 
   it("follows the wallet from preparing to ready, and back to not prepared on clear", async () => {
-    withApplePaySession(() => true);
+    withActiveCard();
     const { result, applePay } = await render(() => useApplePay(products[0] as never));
 
     stripe.answer.value = { applePay: true };
@@ -293,7 +277,7 @@ describe("useApplePay for a product", () => {
   });
 
   it("turns unavailable with the reason when Stripe finds no Apple Pay", async () => {
-    withApplePaySession(() => true);
+    withActiveCard();
     const { result, applePay } = await render(() => useApplePay("primary"));
 
     stripe.answer.value = { applePay: false };
@@ -310,7 +294,7 @@ describe("useApplePay for a product", () => {
   });
 
   it("keeps the same result while the wallet's state stays the same", async () => {
-    withApplePaySession(() => true);
+    withActiveCard();
     const { result, rerender, applePay } = await render(() => useApplePay("primary"));
     act(() => applePay.markUnavailable("primary", "session_unsupported"));
     const first = result.current.value;
@@ -321,7 +305,7 @@ describe("useApplePay for a product", () => {
   });
 
   it("carries the error a step threw, as its name and message", async () => {
-    withApplePaySession(() => true);
+    withActiveCard();
     const { result, applePay } = await render(() => useApplePay("primary"));
     act(() => applePay.markUnavailable("primary", "session_failed", new TypeError("offline")));
     expect(result.current.value).toEqual({
@@ -342,7 +326,7 @@ describe("useApplePay for a product", () => {
 
 describe("useApplePay with a per-call Apple Pay purchase", () => {
   it("is not prepared on a sheet paywall, so the purchase falls back to the sheet", async () => {
-    withApplePaySession(() => true);
+    withActiveCard();
     const { result } = await render(
       () => ({ applePay: useApplePay("primary"), purchase: usePurchase() }),
       "sheet",
@@ -360,7 +344,7 @@ describe("useApplePay with a per-call Apple Pay purchase", () => {
   });
 
   it("is ready once prefetch asks for Apple Pay, and the purchase opens the wallet", async () => {
-    withApplePaySession(() => true);
+    withActiveCard();
     stripe.answer.value = { applePay: true };
     const { result } = await render(
       () => ({ applePay: useApplePay("primary"), purchase: usePurchase() }),
@@ -408,16 +392,8 @@ describe("useApplePay's card answer", () => {
     expect(await checkApplePay()).toEqual(off("no_active_card"));
   });
 
-  it("does not ask for a card when the device cannot pay at all", async () => {
-    const global = withApplePaySession(() => false);
-    const { result } = renderHook();
-    expect(result.current).toEqual(off("device_unsupported"));
-    await flush();
-    expect(global.canMakePaymentsWithActiveCard).not.toHaveBeenCalled();
-  });
-
   it("is an unsupported browser when ApplePaySession has no card check", async () => {
-    vi.stubGlobal("ApplePaySession", { canMakePayments: () => true });
+    vi.stubGlobal("ApplePaySession", {});
     expect(await checkApplePay()).toEqual(off("unsupported_browser"));
   });
 
@@ -488,9 +464,9 @@ describe("useApplePay's card answer", () => {
     expect(global.canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(2);
   });
 
-  it("asks the device again after a device check that threw", async () => {
+  it("asks Apple again after a check that threw synchronously", async () => {
     let calls = 0;
-    withApplePaySession(() => {
+    withActiveCard(() => {
       calls += 1;
       if (calls === 1) throw new Error("flaky");
       return true;

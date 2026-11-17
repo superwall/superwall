@@ -128,10 +128,7 @@ describe("checking for Apple Pay", () => {
   it("asks Apple once as the paywall opens, so the answer is there before the tap", async () => {
     stubApi();
     const canMakePaymentsWithActiveCard = vi.fn(async () => true);
-    vi.stubGlobal("ApplePaySession", {
-      canMakePayments: () => true,
-      canMakePaymentsWithActiveCard,
-    });
+    vi.stubGlobal("ApplePaySession", { canMakePaymentsWithActiveCard });
     await mount({
       products: { card: "live:price_1:14days-free" },
       teleport: { route: "checkout" },
