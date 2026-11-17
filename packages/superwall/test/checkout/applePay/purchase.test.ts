@@ -68,6 +68,7 @@ const makeController = ({
   confirmCardSetup = { setupIntent: { id: "seti_1", status: "succeeded" } } as unknown,
   confirmResponse = { customerId: "cus_1", subscriptionId: "sub_1" } as Record<string, unknown>,
   confirmStatus = 200,
+  realFetch = false,
 } = {}) => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const paymentRequest = {
@@ -91,7 +92,7 @@ const makeController = ({
     publicApiKey: () => "pk_public",
     host: hostEvents(post),
     loadStripe: vi.fn().mockResolvedValue(stripeLoads ? stripe : null) as never,
-    fetchWithRetry,
+    ...(realFetch ? {} : { fetchWithRetry }),
     confirmUrl: () => "https://subscriptions.test/confirm",
   });
   const authorize = (event: Partial<{ payerEmail: string; complete: () => void }> = {}) =>
@@ -313,7 +314,7 @@ describe("createApplePay", () => {
           email: "shopper@example.com",
         }),
       }),
-      { retries: 0 },
+      { retries: 0, returnClientErrors: true },
     );
     expect(posted("stripe_checkout_submit")).toHaveLength(1);
     // Reporting the completion is the flow's job; the wallet says it happened
@@ -960,6 +961,33 @@ describe("why the wallet's payment failed", () => {
     expect(heard.mock.calls[0]![0].failure).toEqual(exact);
     expect(heard.mock.calls[0]![0].error.message).toBe("Your card has insufficient funds.");
     expect(made.posted("stripe_checkout_fail")).toHaveLength(1);
+  });
+
+  it("reads the backend's decline through the real fetch helper, asking only once", async () => {
+    const request = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            title: "Your card has insufficient funds.",
+            failure: { code: "card_declined", declineCode: "insufficient_funds" },
+          }),
+          { status: 402 },
+        ),
+    );
+    vi.stubGlobal("fetch", request);
+    try {
+      const { controller, authorize } = makeController({ realFetch: true });
+      await controller.prepare(quote());
+      const outcome = controller.purchase("primary", context);
+      await authorize();
+      await expect(outcome).resolves.toMatchObject({
+        status: "failed",
+        failure: { reason: "insufficient_funds", declineCode: "insufficient_funds" },
+      });
+      expect(request).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("says unknown when the backend refuses without naming a failure", async () => {

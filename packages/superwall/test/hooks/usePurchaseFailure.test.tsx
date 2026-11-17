@@ -147,6 +147,39 @@ describe("purchase() of a catalog product passed as a different object", () => {
   });
 });
 
+describe("a store purchase started from onStart", () => {
+  it("keeps the newer purchase live, superseding the one whose onStart started it", async () => {
+    const answers: ((outcome: "completed") => void)[] = [];
+    const { result } = renderWithProvider(() => usePurchase(), {
+      host: {
+        purchase: () =>
+          new Promise<"completed">((resolve) => {
+            answers.push(resolve);
+          }),
+      },
+    });
+    await flush();
+
+    let newer: Promise<unknown> | undefined;
+    let older: Promise<unknown> | undefined;
+    await act(async () => {
+      older = result.current.purchase("primary", {
+        onStart: () => {
+          newer ??= result.current.purchase("primary");
+        },
+      });
+      await flush();
+    });
+    await act(async () => {
+      for (const answer of answers) answer("completed");
+      await flush();
+    });
+
+    await expect(older).resolves.toMatchObject({ status: "failed", reason: "superseded" });
+    await expect(newer).resolves.toMatchObject({ status: "completed" });
+  });
+});
+
 describe("purchase() of a custom store product inside an app", () => {
   it("fires no callbacks", async () => {
     const own = recorder();

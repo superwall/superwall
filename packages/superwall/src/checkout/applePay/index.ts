@@ -239,7 +239,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
         },
         body: JSON.stringify({ checkoutContextId: ready.quote.checkoutContextId, ...payload }),
       },
-      { retries: 0 },
+      { retries: 0, returnClientErrors: true },
     );
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) {

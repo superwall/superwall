@@ -195,12 +195,13 @@ const reportStorePurchase = (
   purchase: () => Promise<SuperwallPurchaseResult>,
   attempt: PurchaseAttempt,
 ): Promise<SuperwallPurchaseResult> => {
+  const pending = purchase();
   purchaseEventsFor(paywall).emit("start", {
     referenceName,
     attempt,
     ...(started === undefined ? {} : { product: started }),
   });
-  return purchase().then((result) => {
+  return pending.then((result) => {
     emitStoreResult(paywall, result, attempt);
     return result;
   });

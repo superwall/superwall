@@ -28,6 +28,29 @@ describe("fetchWithRetry", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it("hands back a client error's response unread when asked, without retrying", async () => {
+    const fetchMock = respond(402, 200);
+    const response = await fetchWithRetry(
+      "https://x",
+      {},
+      { backoffMs: 0, returnClientErrors: true },
+    );
+    expect(response.status).toBe(402);
+    await expect(response.text()).resolves.toBe("body");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("still retries a server error when client errors are handed back", async () => {
+    const fetchMock = respond(503, 200);
+    const response = await fetchWithRetry(
+      "https://x",
+      {},
+      { retries: 1, backoffMs: 0, returnClientErrors: true },
+    );
+    expect(response.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("retries any server error, as paywall.js does", async () => {
     const fetchMock = respond(501, 200);
     const response = await fetchWithRetry("https://x", {}, { retries: 1, backoffMs: 0 });
