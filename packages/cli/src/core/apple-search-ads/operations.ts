@@ -372,7 +372,7 @@ export async function runAsaOperation(
   const all = flags.all === true;
   const limit = numberFlag(flags, "limit");
   const offset = numberFlag(flags, "offset") ?? 0;
-  const send = async (payload: unknown) => ({ op, path, response: await proxy<AsaPage>(op.method, path, payload) });
+  const send = async (payload: unknown) => ({ op, path, response: (await proxy<AsaPage>(op.method, path, payload)) ?? { result: null } });
 
   if (op.body === "query" || op.body === "report") {
     const query: QueryInput = {

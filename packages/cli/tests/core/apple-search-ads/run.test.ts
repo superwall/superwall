@@ -70,3 +70,17 @@ test("an unknown resource or operation names what there is, without looking up a
   assert.equal(errorOf(action), 'asa me has no "list". It takes: get.\nRun superwall asa me --help for what each does.');
   assert.deepEqual(requests, []);
 });
+
+test("Apple answering a bulk write or a raw path with no content prints valid JSON, not undefined", async () => {
+  const { api, requests } = fakeAsaApi((method) => (method === "GET" ? { result: [{ adAccount: { id: 40, currency: "USD" } }] } : undefined));
+  const bulk = await runCommand(asa, { words: ["keywords", "delete", "1,2"], flags: { campaignId: "3", adgroupId: "4" }, api, json: true });
+  assert.ok(requests.some((request) => request.method === "POST" && request.path.includes("/keywords/bulk-delete")));
+  assert.deepEqual(bulk.json, { result: null });
+  const text = await runCommand(asa, { words: ["keywords", "delete", "1,2"], flags: { campaignId: "3", adgroupId: "4" }, api });
+  assert.equal(process.exitCode, 0);
+  assert.deepEqual(text.said("report"), [JSON.stringify({ result: null }, null, 2)]);
+
+  const empty = fakeAsaApi(() => undefined);
+  const raw = await runCommand(asa, { words: ["/campaigns/7"], api: empty.api, json: true });
+  assert.deepEqual(raw.json, { ok: true });
+});

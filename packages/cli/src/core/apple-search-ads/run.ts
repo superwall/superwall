@@ -24,7 +24,7 @@ export async function runAsa(ctx: CommandContext<"required">, { words, flags }: 
   const adAccountId = textField(flags, "adAccountId");
 
   if (target.startsWith("/")) {
-    return ctx.output.data(await runAsaRequest(ctx, ctx.api, { verb: "get", path: target, data, adAccountId }));
+    return ctx.output.data((await runAsaRequest(ctx, ctx.api, { verb: "get", path: target, data, adAccountId })) ?? { ok: true });
   }
 
   const params = parseParams(data);
