@@ -10,7 +10,6 @@ export {
   CardExpiryElement,
   CardNumberElement,
   PaymentElement,
-  PaymentMethodMessagingElement,
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
@@ -22,5 +21,4 @@ export type {
   CardNumberElementProps,
   LinkAuthenticationElementProps,
   PaymentElementProps,
-  PaymentMethodMessagingElementProps,
 } from "@stripe/react-stripe-js";

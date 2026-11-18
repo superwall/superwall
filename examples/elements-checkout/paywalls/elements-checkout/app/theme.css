@@ -487,6 +487,8 @@ button,
 
 .field {
   display: flex;
+  user-select: text;
+  -webkit-user-select: text;
   flex-direction: column;
   gap: 6px;
   font-size: 14px;
@@ -498,12 +500,59 @@ button,
   gap: 12px;
 }
 
+/*
+ * The paywall's own inputs and Stripe's classic card fields share one look
+ * with Stripe's Payment Element (components/appearance.ts): the plan rows'
+ * surface, one hairline, a teal edge on focus.
+ */
 .input {
+  width: 100%;
+  min-height: 46px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 12px;
-  background: transparent;
+  background: var(--surface);
   color: inherit;
   font: inherit;
   font-size: 16px;
+  transition: border-color var(--duration-hover) var(--ease-out);
+}
+
+.input::placeholder {
+  color: var(--fg-muted);
+}
+
+.input:focus,
+.input.StripeElement--focus {
+  border-color: var(--accent);
+}
+
+.input.StripeElement--invalid {
+  border-color: var(--destructive-ink);
+}
+
+.field > span {
+  color: var(--fg-secondary);
+  font-weight: 500;
+}
+
+.promo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+
+form.promo {
+  align-items: stretch;
+}
+
+.promo .input {
+  flex: 1;
+}
+
+.promo .button {
+  width: auto;
+  min-height: 0;
 }

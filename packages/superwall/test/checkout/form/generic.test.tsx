@@ -96,10 +96,27 @@ describe("the store-agnostic checkout API", () => {
         "PaymentElement",
         "LinkAuthenticationElement",
         "AddressElement",
-        "PaymentMethodMessagingElement",
+        "CardElement",
+        "CardNumberElement",
+        "CardExpiryElement",
+        "CardCvcElement",
         "useStripe",
         "useElements",
       ]),
     );
+  });
+
+  it("leaves out the elements whose data a superwall purchase can't use", async () => {
+    const stripe = Object.keys(await import("../../../src/checkout/stripe"));
+    for (const unsupported of [
+      "PaymentMethodMessagingElement",
+      "IbanElement",
+      "ShippingAddressElement",
+      "TaxIdElement",
+      "EmbeddedCheckout",
+      "CheckoutProvider",
+    ]) {
+      expect(stripe).not.toContain(unsupported);
+    }
   });
 });

@@ -1,6 +1,11 @@
 import * as React from "react";
 import { Elements, useElements, useStripe } from "@stripe/react-stripe-js";
-import type { Stripe, StripeElements, StripeElementsOptionsMode } from "@stripe/stripe-js";
+import type {
+  Stripe,
+  StripeElementLocale,
+  StripeElements,
+  StripeElementsOptionsMode,
+} from "@stripe/stripe-js";
 import type {
   SuperwallPostPurchase,
   SuperwallProduct,
@@ -39,6 +44,8 @@ import { EmailContext } from "./LinkAuthenticationElement";
  * `locale` and `paymentMethodTypes`. `<StripeCheckout>` sets the amount, currency
  * and mode from the product. `paymentMethodTypes` defaults to
  * `["card", "link"]`, which covers cards, Apple Pay, Google Pay and Link.
+ * `locale` defaults to the paywall's locale, so Stripe's labels and errors
+ * match the paywall's language.
  */
 export type StripeCheckoutOptions = Omit<
   StripeElementsOptionsMode,
@@ -142,6 +149,7 @@ type CheckoutPriceFields = {
 export const elementsOptionsOf = (
   quote: ElementsCheckoutSession,
   options: StripeCheckoutOptions = {},
+  locale?: string,
 ): StripeElementsOptionsMode => {
   const { currency, dueNow } = amountsOf(quote);
   const {
@@ -154,6 +162,7 @@ export const elementsOptionsOf = (
   } = options as CheckoutPriceFields & StripeCheckoutOptions;
   const base = {
     paymentMethodTypes: DEFAULT_PAYMENT_METHOD_TYPES,
+    ...(locale ? { locale: locale as StripeElementLocale } : {}),
     ...stripeOptions,
     currency,
     paymentMethodCreation: "manual" as const,
@@ -512,8 +521,8 @@ export const StripeCheckout = <TProduct extends SuperwallProduct = SuperwallProd
   if (stored.status === "ready") lastReady.current = stored;
   const shown = blocked === undefined ? lastReady.current : undefined;
   const elementsOptions = React.useMemo(
-    () => (shown ? elementsOptionsOf(shown.quote, options) : undefined),
-    [shown, options],
+    () => (shown ? elementsOptionsOf(shown.quote, options, snapshot.locale) : undefined),
+    [shown, options, snapshot.locale],
   );
 
   return (

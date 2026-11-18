@@ -337,7 +337,12 @@ The stack, bottom to top — each layer depends only on the one below it:
       `createPaymentMethod({ type: "card" })` without `elements.submit()`;
       when a Payment Element is mounted it always wins. Re-export a Stripe
       element only when its data reaches the purchase: redirect methods,
-      `IbanElement`, `TaxIdElement` and `ShippingAddressElement` stay out.
+      `IbanElement`, `TaxIdElement`, `ShippingAddressElement` and
+      `PaymentMethodMessagingElement` (it advertises the redirect methods)
+      stay out, and `test/checkout/form/generic.test.tsx` holds that list.
+      Stripe's `locale` defaults to the paywall's. The example's README
+      (`examples/elements-checkout`) is the support table, the styling
+      guide and the migration guide; keep it in step with this file.
     - `form/` is what every store's form shares, exported from
       `superwall/checkout`: `useCheckout()` and `<PurchaseButton>` read one
       context (`CheckoutContext`, a `UseCheckoutResult`) that a store's form

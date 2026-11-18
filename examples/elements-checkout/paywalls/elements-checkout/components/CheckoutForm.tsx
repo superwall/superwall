@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { PurchaseButton, useCheckout } from "superwall/checkout";
 import type { CheckoutAmounts } from "superwall/checkout";
 import {
   AddressElement,
   CardCvcElement,
+  CardElement,
   CardExpiryElement,
   CardNumberElement,
   ExpressCheckoutElement,
@@ -11,14 +12,24 @@ import {
   PaymentElement,
   StripeCheckout,
 } from "superwall/checkout/stripe";
-import type { StripeCheckoutOptions } from "superwall/checkout/stripe";
-import { useColorScheme, useHaptics, useTranslation } from "superwall/hooks";
+import type { ExpressCheckoutElementProps } from "superwall/checkout/stripe";
+import { useDiscount, useHaptics, useTranslation } from "superwall/hooks";
+import { useCardStyle, useStripeOptions } from "./appearance";
 
 /**
  * The playground's scenarios, each a different way to build the same
  * purchase. All of them pay through superwall and report the same callbacks.
  */
-export const SCENARIOS = ["full", "cardFields", "wallets", "billing"] as const;
+export const SCENARIOS = [
+  "full",
+  "applePayCard",
+  "cardFirst",
+  "cardFields",
+  "singleLine",
+  "wallets",
+  "billing",
+  "promo",
+] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
 type Props = {
@@ -27,40 +38,69 @@ type Props = {
   onCompleted: () => void;
 };
 
-/**
- * Stripe's fields in this paywall's design system: the same corner, accent,
- * typeface and light or dark scheme as the rest of the page. Kept stable
- * with `useMemo`, since a new object re-renders every element.
- */
-const useStripeAppearance = (): StripeCheckoutOptions => {
-  const scheme = useColorScheme();
-  return useMemo(
-    () => ({
-      fonts: [
-        { cssSrc: "https://fonts.googleapis.com/css2?family=Manrope:wght@400..600&display=swap" },
-      ],
-      appearance: {
-        theme: scheme === "dark" ? "night" : "stripe",
-        variables: {
-          colorPrimary: "#46d7d4",
-          fontFamily: "Manrope, system-ui, sans-serif",
-          borderRadius: "3px",
-          ...(scheme === "dark"
-            ? { colorBackground: "#232220", colorText: "#fdfef6" }
-            : { colorBackground: "#ffffff", colorText: "#0c0b0a" }),
-        },
-      },
-    }),
-    [scheme],
-  );
-};
-
 /** Minor units (cents) to a price in the shopper's language. */
 const formatAmount = (amount: number, currency: string) =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount / 100);
 
 const intervalOf = ({ interval, intervalCount }: CheckoutAmounts) =>
   intervalCount === 1 ? interval : `${intervalCount} ${interval}s`;
+
+type EmailProps = { email: string; onEmail: (email: string) => void };
+
+/** Wallet buttons sized and labelled for a subscription. */
+const WALLET_OPTIONS = { buttonHeight: 52, buttonType: { applePay: "subscribe" } } as const;
+
+/**
+ * Stripe's wallet row with a divider beside it. The row renders nothing on a
+ * device with no wallet, so the divider waits until Stripe's `onReady`
+ * reports at least one: a shopper without Apple Pay never sees "or pay with card"
+ * above nothing.
+ */
+const Wallets = ({
+  divider,
+  dividerFirst = false,
+  options = WALLET_OPTIONS,
+}: {
+  divider: string;
+  dividerFirst?: boolean;
+  options?: ExpressCheckoutElementProps["options"];
+}) => {
+  const [shown, setShown] = useState(false);
+  const line = shown ? <p className="divider">{divider}</p> : null;
+  return (
+    <>
+      {dividerFirst ? line : null}
+      <ExpressCheckoutElement
+        options={options}
+        onReady={({ availablePaymentMethods }) =>
+          setShown(Object.values(availablePaymentMethods ?? {}).some(Boolean))
+        }
+      />
+      {dividerFirst ? null : line}
+    </>
+  );
+};
+
+/**
+ * The paywall's own email box, for the layouts without Stripe's email field.
+ * Its value goes to `<StripeCheckout email>`: every purchase needs one.
+ */
+const EmailField = ({ email, onEmail }: EmailProps) => {
+  const { t } = useTranslation();
+  return (
+    <label className="field">
+      <span>{t("form.email")}</span>
+      <input
+        className="input"
+        type="email"
+        autoComplete="email"
+        placeholder={t("form.emailPlaceholder")}
+        value={email}
+        onChange={(event) => onEmail(event.target.value)}
+      />
+    </label>
+  );
+};
 
 /**
  * Stripe's wallet buttons, then the email and card form. A card payment
@@ -73,46 +113,19 @@ const FullFields = () => {
   const { t } = useTranslation();
   return (
     <div className="form">
-      <ExpressCheckoutElement
-        options={{ buttonHeight: 52, buttonType: { applePay: "subscribe" } }}
-      />
-      <p className="divider">{t("form.or")}</p>
+      <Wallets divider={t("form.or")} />
       <LinkAuthenticationElement />
       <PaymentElement options={{ layout: "tabs" }} />
     </div>
   );
 };
 
-/**
- * Stripe's separate card fields, the way many existing checkouts are built,
- * with the paywall's own email field passed to `<StripeCheckout email>`.
- */
-const CardFields = ({ email, onEmail }: { email: string; onEmail: (email: string) => void }) => {
+/** The three classic card fields, in the paywall's own labels and inputs. */
+const SplitCard = () => {
   const { t } = useTranslation();
-  const scheme = useColorScheme();
-  const style = useMemo(
-    () => ({
-      base: {
-        color: scheme === "dark" ? "#fdfef6" : "#0c0b0a",
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "16px",
-        "::placeholder": { color: "#8a8984" },
-      },
-    }),
-    [scheme],
-  );
+  const style = useCardStyle();
   return (
-    <div className="form">
-      <label className="field">
-        <span>{t("form.email")}</span>
-        <input
-          className="input"
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(event) => onEmail(event.target.value)}
-        />
-      </label>
+    <>
       <label className="field">
         <span>{t("form.cardNumber")}</span>
         <CardNumberElement className="input" options={{ style, showIcon: true }} />
@@ -127,6 +140,75 @@ const CardFields = ({ email, onEmail }: { email: string; onEmail: (email: string
           <CardCvcElement className="input" options={{ style }} />
         </label>
       </div>
+    </>
+  );
+};
+
+/**
+ * Stripe's separate card fields, the way many existing checkouts are built,
+ * with the paywall's own email field passed to `<StripeCheckout email>`.
+ */
+const CardFields = (props: EmailProps) => (
+  <div className="form">
+    <EmailField {...props} />
+    <SplitCard />
+  </div>
+);
+
+/**
+ * Only Apple Pay above the split card fields: `paymentMethods` turns off
+ * every other wallet in the express row. Where the device has no Apple Pay,
+ * the row renders nothing and the card fields stand alone.
+ */
+const ApplePayCardFields = (props: EmailProps) => {
+  const { t } = useTranslation();
+  return (
+    <div className="form">
+      <Wallets
+        divider={t("form.or")}
+        options={{
+          ...WALLET_OPTIONS,
+          paymentMethods: { applePay: "auto", googlePay: "never", link: "never" },
+        }}
+      />
+      <EmailField {...props} />
+      <SplitCard />
+    </div>
+  );
+};
+
+/**
+ * The card form first and the wallets below it, in any order a paywall
+ * likes: the elements are plain components, placed wherever the layout wants.
+ */
+const CardFirstFields = () => {
+  const { t } = useTranslation();
+  return (
+    <div className="form">
+      <LinkAuthenticationElement />
+      <PaymentElement
+        options={{ layout: "accordion", wallets: { applePay: "never", googlePay: "never" } }}
+      />
+      <Wallets
+        divider={t("form.orWallet")}
+        dividerFirst
+        options={{ ...WALLET_OPTIONS, layout: { maxColumns: 2, maxRows: 1 } }}
+      />
+    </div>
+  );
+};
+
+/** Stripe's single-line card field, the oldest card element, with an email box. */
+const SingleLineFields = (props: EmailProps) => {
+  const { t } = useTranslation();
+  const style = useCardStyle();
+  return (
+    <div className="form">
+      <EmailField {...props} />
+      <label className="field">
+        <span>{t("form.card")}</span>
+        <CardElement className="input" options={{ style, hidePostalCode: true }} />
+      </label>
     </div>
   );
 };
@@ -134,7 +216,7 @@ const CardFields = ({ email, onEmail }: { email: string; onEmail: (email: string
 /** Only the one-tap wallets: the wallet asks for the email itself. */
 const WalletFields = () => (
   <div className="form">
-    <ExpressCheckoutElement options={{ buttonHeight: 52, buttonType: { applePay: "subscribe" } }} />
+    <ExpressCheckoutElement options={WALLET_OPTIONS} />
   </div>
 );
 
@@ -150,22 +232,86 @@ const BillingFields = () => (
   </div>
 );
 
-const Fields = ({
-  scenario,
-  email,
-  onEmail,
-}: {
-  scenario: Scenario;
-  email: string;
-  onEmail: (email: string) => void;
-}) => {
+/**
+ * A promotion code box with `useDiscount()`. Redeeming a code re-prices the
+ * form: the due amount and the charge both follow the discounted price.
+ */
+const PromoFields = () => {
+  const { t } = useTranslation();
+  const { redeem, clear, applied, isRedeeming } = useDiscount();
+  const [code, setCode] = useState("");
+  const [refused, setRefused] = useState(false);
+  return (
+    <div className="form">
+      <LinkAuthenticationElement />
+      <PaymentElement options={{ layout: "tabs" }} />
+      {applied ? (
+        <div className="promo">
+          <span>{t("promo.applied", { code: applied.code })}</span>
+          <button type="button" className="link" onClick={clear}>
+            {t("promo.remove")}
+          </button>
+        </div>
+      ) : (
+        <form
+          className="promo"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setRefused(false);
+            const result = await redeem(code);
+            if (!result.valid) setRefused(true);
+          }}
+        >
+          <input
+            className="input"
+            aria-label={t("promo.label")}
+            placeholder={t("promo.label")}
+            autoCapitalize="characters"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+          />
+          <button type="submit" className="button" disabled={!code.trim() || isRedeeming}>
+            {t("promo.apply")}
+          </button>
+        </form>
+      )}
+      {refused ? (
+        <p className="notice notice--error" role="status">
+          {t("promo.invalid")}
+        </p>
+      ) : null}
+    </div>
+  );
+};
+
+const Fields = ({ scenario, ...email }: { scenario: Scenario } & EmailProps) => {
   const { status } = useCheckout();
   if (status === "unavailable") return null;
-  if (scenario === "cardFields") return <CardFields email={email} onEmail={onEmail} />;
-  if (scenario === "wallets") return <WalletFields />;
-  if (scenario === "billing") return <BillingFields />;
-  return <FullFields />;
+  switch (scenario) {
+    case "applePayCard":
+      return <ApplePayCardFields {...email} />;
+    case "cardFirst":
+      return <CardFirstFields />;
+    case "cardFields":
+      return <CardFields {...email} />;
+    case "singleLine":
+      return <SingleLineFields {...email} />;
+    case "wallets":
+      return <WalletFields />;
+    case "billing":
+      return <BillingFields />;
+    case "promo":
+      return <PromoFields />;
+    default:
+      return <FullFields />;
+  }
 };
+
+/** The layouts with the paywall's own email box, which `<StripeCheckout email>` reads. */
+const OWN_EMAIL: readonly Scenario[] = ["applePayCard", "cardFields", "singleLine"];
+
+/** The layouts paid with a button of the paywall's own instead of `<PurchaseButton>`. */
+const OWN_BUTTON: readonly Scenario[] = ["applePayCard", "cardFields"];
 
 /**
  * A purchase button built on `useCheckout().submit()` instead of
@@ -236,7 +382,7 @@ const Summary = ({ scenario }: { scenario: Scenario }) => {
           {t("purchase.unavailable", { message: message ?? "" })}
         </p>
       ) : null}
-      {scenario === "wallets" ? null : scenario === "cardFields" ? (
+      {scenario === "wallets" ? null : OWN_BUTTON.includes(scenario) ? (
         <OwnButton label={status === "paying" ? t("purchase.paying") : label} />
       ) : (
         <PurchaseButton className="button button--primary">
@@ -254,7 +400,7 @@ const Summary = ({ scenario }: { scenario: Scenario }) => {
  */
 export function CheckoutForm({ product, scenario, onCompleted }: Props) {
   const haptics = useHaptics();
-  const options = useStripeAppearance();
+  const options = useStripeOptions();
   const [email, setEmail] = useState("");
 
   return (
@@ -262,7 +408,7 @@ export function CheckoutForm({ product, scenario, onCompleted }: Props) {
       key={scenario}
       product={product}
       options={options}
-      {...(scenario === "cardFields" ? { email } : {})}
+      {...(OWN_EMAIL.includes(scenario) ? { email } : {})}
       {...(scenario === "billing" ? { stripeMetadata: { source: "elements-playground" } } : {})}
       onComplete={() => {
         haptics.success();

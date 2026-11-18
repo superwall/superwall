@@ -341,6 +341,7 @@ describe("<StripeCheckout> once the price has loaded", () => {
         currency: "usd",
         paymentMethodCreation: "manual",
         paymentMethodTypes: ["card", "link"],
+        locale: "en",
         appearance: { theme: "night" },
       },
     });
@@ -587,6 +588,12 @@ describe("intent and options for each price", () => {
       amount: 1000,
       paymentMethodTypes: ["card"],
     });
+  });
+
+  it("shows Stripe's labels in the paywall's language unless the options name one", () => {
+    expect(elementsOptionsOf(quote(), {}, "de")).toMatchObject({ locale: "de" });
+    expect(elementsOptionsOf(quote(), { locale: "fr" }, "de")).toMatchObject({ locale: "fr" });
+    expect(elementsOptionsOf(quote(), {}, undefined)).not.toHaveProperty("locale");
   });
 
   it("works out the intent from what's due now when the backend names none", () => {
