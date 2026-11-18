@@ -34,7 +34,7 @@ export interface ApiDocsIndex {
 
 const specUrl = (): string => `${API_HOST()}/openapi.json`;
 
-const CACHE_FILE = "api-index.json";
+const CACHE_FILE = "api-reference.json";
 
 type Schema = Record<string, any>;
 
@@ -195,6 +195,15 @@ export function matchesPath(template: string, concrete: string): boolean {
   return t.length === c.length && t.every((part, i) => part.startsWith("{") || part === c[i]);
 }
 
+function mentionsField(fields: DocField[] | undefined, word: string): boolean {
+  return (fields ?? []).some(
+    (field) =>
+      field.name.toLowerCase().includes(word) ||
+      Boolean(field.description?.toLowerCase().includes(word)) ||
+      mentionsField(field.fields, word),
+  );
+}
+
 function score(op: DocOperation, terms: string[]): number {
   let total = 0;
   for (const term of terms) {
@@ -205,6 +214,7 @@ function score(op: DocOperation, terms: string[]): number {
         if (op.path.toLowerCase().includes(word)) return 3;
         if (op.group.toLowerCase().includes(word)) return 2;
         if (op.description?.toLowerCase().includes(word)) return 1;
+        if (mentionsField(op.body, word)) return 0.5;
         return 0;
       }),
     );

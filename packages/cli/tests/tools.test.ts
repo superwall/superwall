@@ -11,7 +11,7 @@ import { writeCachedIndex } from "@/core/app-store-connect/api/spec";
 
 const cache = memoryStore();
 cache.write(
-  "api-index.json",
+  "api-reference.json",
   JSON.stringify({
     version: "test",
     fetchedAt: Date.now(),

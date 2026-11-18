@@ -141,7 +141,7 @@ test("a concrete path with ids finds its template, and a method narrows it", () 
 test("search ranks summary hits first and understands words agents use for the same thing", () => {
   assert.deepEqual(
     searchOperations(index(), "paywall").map((op) => op.summary),
-    ["List Paywalls", "Create Paywall"],
+    ["List Paywalls", "Create Paywall", "Create Variant"],
   );
   assert.deepEqual(
     searchOperations(index(), "experiment").map((op) => op.summary),
@@ -356,6 +356,23 @@ test("a union body field shows the fields of every branch, required only where e
     renderApiDocs(deriveApiIndex(frequencySpec), "/v2/campaigns/1/audiences/2", "patch"),
     /interval: object .*\n {6}type: "infinity" \| "minutes"\n {6}minutes\?: integer/,
   );
+});
+
+test("search finds an endpoint by a body field's name or description, below every other kind of hit", () => {
+  const frequency: ApiDocsIndex = {
+    ...deriveApiIndex(frequencySpec),
+    operations: [
+      ...deriveApiIndex(frequencySpec).operations,
+      { method: "GET", path: "/v2/frequency", group: "Other", summary: "Frequency Report", params: [], returns: [] },
+    ],
+  };
+  assert.deepEqual(
+    searchOperations(frequency, "frequency").map((op) => op.summary),
+    ["Frequency Report", "Update Audience"],
+  );
+  assert.deepEqual(searchOperations(frequency, "rolling").map((op) => op.summary), ["Update Audience"]);
+  assert.deepEqual(searchOperations(index(), "rules field").map((op) => op.summary), ["Create Variant"]);
+  assert.deepEqual(searchOperations(frequency, "nothing-like-this"), []);
 });
 
 test("one search hit shows the endpoint in full, and an empty body says so", () => {

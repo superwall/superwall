@@ -19,6 +19,6 @@ test("the empty store remembers nothing", () => {
 
 test("a file that isn't JSON reads as missing", () => {
   const store = memoryStore();
-  store.write("api-index.json", "{ not json");
-  assert.equal(readJson(store, "api-index.json"), undefined);
+  store.write("api-reference.json", "{ not json");
+  assert.equal(readJson(store, "api-reference.json"), undefined);
 });

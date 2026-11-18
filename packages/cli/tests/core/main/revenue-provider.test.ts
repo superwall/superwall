@@ -12,7 +12,7 @@ import { routedApi } from "../../helpers/routed-api";
 
 beforeEach(() => {
   const home = useHome();
-  fs.writeFileSync(path.join(home, "api-index.json"), JSON.stringify({ version: "test", fetchedAt: Date.now(), operations: [] }));
+  fs.writeFileSync(path.join(home, "api-reference.json"), JSON.stringify({ version: "test", fetchedAt: Date.now(), operations: [] }));
 });
 
 afterEach(() => {
