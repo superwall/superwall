@@ -1,5 +1,6 @@
 // @vitest-environment node
 import * as fs from "node:fs";
+import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,8 +158,18 @@ describe("the studio's project.json", () => {
     try {
       const address = server.httpServer?.address();
       const port = typeof address === "object" && address ? address.port : 0;
-      const response = await fetch(`http://127.0.0.1:${port}/__studio/project.json`);
-      return (await response.json()) as Record<string, unknown>;
+      const body = await new Promise<string>((resolve, reject) => {
+        http
+          .get({ host: "127.0.0.1", port, path: "/__studio/project.json", agent: false }, (res) => {
+            let text = "";
+            res.setEncoding("utf8");
+            res.on("data", (chunk: string) => (text += chunk));
+            res.on("end", () => resolve(text));
+            res.on("error", reject);
+          })
+          .on("error", reject);
+      });
+      return JSON.parse(body) as Record<string, unknown>;
     } finally {
       await server.close();
     }
