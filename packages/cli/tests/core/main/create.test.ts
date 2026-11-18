@@ -312,10 +312,125 @@ test("a campaign is created in the app with its first placement", async () => {
   assert.deepEqual(said(calls, "success"), ["Created campaign `Upsell` 77"]);
 });
 
+test("--paywall creates the campaign showing that paywall to everyone, with no warning", async () => {
+  const { calls, writes } = await create(
+    campaigns,
+    { description: "Upsell", placement: "onboarding", paywall: "9", app: "10" },
+    {
+      "POST /v2/campaigns": {
+        id: 77,
+        description: "Upsell",
+        audiences: [{ id: 3, enabled: true, variants: [{ id: 12, type: "treatment", percentage: 100, paywall: 9 }] }],
+      },
+    },
+  );
+  assert.deepEqual(writes, [
+    {
+      method: "POST",
+      path: "/v2/campaigns",
+      body: {
+        application_id: "10",
+        description: "Upsell",
+        placements: [{ event_name: "onboarding" }],
+        audiences: [{ variants: [{ type: "treatment", percentage: 100, paywall: "9" }] }],
+      },
+    },
+  ]);
+  assert.deepEqual(said(calls, "success"), ["Created campaign `Upsell` 77"]);
+  assert.deepEqual(said(calls, "warn"), []);
+});
+
+const HOLDOUT_CAMPAIGN = {
+  id: 77,
+  description: "Upsell",
+  audiences: [{ id: 3, enabled: true, variants: [{ id: 11, type: "holdout", percentage: 100, paywall: null }] }],
+};
+
+test("a new campaign whose audience is all holdout says it shows no paywall and how to add one", async () => {
+  const { calls } = await create(
+    campaigns,
+    { description: "Upsell", placement: "onboarding", app: "10" },
+    { "POST /v2/campaigns": HOLDOUT_CAMPAIGN },
+  );
+  assert.deepEqual(said(calls, "success"), ["Created campaign `Upsell` 77"]);
+  assert.deepEqual(said(calls, "warn"), [
+    'Audience 3 has no paywall variant with traffic (all of it goes to the holdout), so placement "onboarding" shows no paywall. ' +
+      "Add one: superwall campaigns variants create 77 3 --type treatment --paywall <paywall>",
+  ]);
+});
+
+test("a disabled audience is named with the command that enables it", async () => {
+  const { calls } = await create(
+    campaigns,
+    { description: "Upsell", placement: "onboarding", app: "10" },
+    {
+      "POST /v2/campaigns": {
+        id: 77,
+        description: "Upsell",
+        audiences: [{ id: 3, enabled: false, variants: [{ id: 12, type: "treatment", percentage: 100, paywall: 9 }] }],
+      },
+    },
+  );
+  assert.deepEqual(said(calls, "warn"), [
+    'Audience 3 is disabled, so placement "onboarding" matches no audience and shows no paywall. ' +
+      "Enable it: superwall campaigns audiences update 77 3 --enabled",
+  ]);
+});
+
+test("an enabled audience with a treatment that gets traffic warns about nothing", async () => {
+  const { calls } = await create(
+    campaigns,
+    { description: "Upsell", placement: "onboarding", app: "10" },
+    {
+      "POST /v2/campaigns": {
+        id: 77,
+        description: "Upsell",
+        audiences: [
+          {
+            id: 3,
+            enabled: true,
+            variants: [
+              { id: 11, type: "holdout", percentage: 0, paywall: null },
+              { id: 12, type: "treatment", percentage: 100, paywall: 9 },
+            ],
+          },
+        ],
+      },
+    },
+  );
+  assert.deepEqual(said(calls, "warn"), []);
+});
+
+test("--json keeps the created campaign and adds the warnings beside it", async () => {
+  const { result } = await create(
+    campaigns,
+    { description: "Upsell", placement: "onboarding", app: "10" },
+    { "POST /v2/campaigns": HOLDOUT_CAMPAIGN },
+    { json: true },
+  );
+  assert.deepEqual(result.json, {
+    ...HOLDOUT_CAMPAIGN,
+    warnings: [
+      'Audience 3 has no paywall variant with traffic (all of it goes to the holdout), so placement "onboarding" shows no paywall. ' +
+        "Add one: superwall campaigns variants create 77 3 --type treatment --paywall <paywall>",
+    ],
+  });
+});
+
 test("a dry run says where it would create, by app for app resources and by project otherwise", async () => {
   const campaign = await create(campaigns, { description: "Upsell", placement: "onboarding", app: "10", dryRun: true });
   assert.deepEqual(said(campaign.calls, "info"), ['[dry-run] would create campaign "Upsell" in Lab (iOS)']);
   assert.deepEqual(campaign.writes, []);
+
+  const shown = await create(campaigns, { description: "Upsell", placement: "onboarding", paywall: "9", app: "10", dryRun: true });
+  assert.deepEqual(said(shown.calls, "info"), ['[dry-run] would create campaign "Upsell" in Lab (iOS) showing paywall 9 to 100% of users']);
+  const shownPlan = await create(
+    campaigns,
+    { description: "Upsell", placement: "onboarding", paywall: "9", app: "10", dryRun: true },
+    {},
+    { json: true },
+  );
+  assert.equal((shownPlan.result.json as { paywall?: string }).paywall, "9");
 
   const product = await create(products, { identifier: "pro", project: "1", dryRun: true });
   assert.deepEqual(said(product.calls, "info"), ['[dry-run] would create product "pro" in Lab']);

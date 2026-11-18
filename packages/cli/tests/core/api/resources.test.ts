@@ -104,6 +104,17 @@ test("createCampaign posts placement + holdout audience and requires an app", as
   assert.throws(() => createCampaign(api, { projectId: "9" }, "x", "p"), /no application/);
 });
 
+test("createCampaign with a paywall seeds a 100% treatment instead of the holdout", async () => {
+  const recs = mockFetch(() => ({ id: 7 }));
+  await createCampaign(api, SCOPE, "My campaign", "onboarding_complete", "259923");
+  assert.deepEqual(recs[0]!.body, {
+    application_id: "42",
+    description: "My campaign",
+    placements: [{ event_name: "onboarding_complete" }],
+    audiences: [{ variants: [{ type: "treatment", percentage: 100, paywall: "259923" }] }],
+  });
+});
+
 test("rowName prefers name, then identifier, then id", () => {
   assert.equal(rowName({ id: 1, name: "N", identifier: "I" }), "N");
   assert.equal(rowName({ id: 1, identifier: "I" }), "I");

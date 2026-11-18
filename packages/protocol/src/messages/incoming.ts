@@ -3,7 +3,7 @@ import { PermissionStatusSchema, PermissionTypeSchema } from "./permissions";
 
 const templateVariables = z.object({
   event_name: z.literal("template_variables"),
-  variables: z.object({}).passthrough(),
+  variables: z.looseObject({}),
 });
 
 const templateSubstitutions = z.object({
@@ -98,7 +98,7 @@ const pageStyles = z.object({
 
 const templateJson = z.object({
   event_name: z.literal("template_json"),
-  json: z.object({}).passthrough(),
+  json: z.looseObject({}),
   reset: z.boolean().optional(),
 });
 
