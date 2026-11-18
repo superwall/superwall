@@ -21,7 +21,7 @@ describe("host fixtures", () => {
   it("template_variables carries products as an array of single-key objects", () => {
     const variables = replyEvents[0];
     if (variables?.event_name !== "template_variables") throw new Error("fixture order changed");
-    const products = z.array(z.record(z.unknown())).parse(variables.variables.products);
+    const products = z.array(z.record(z.string(), z.unknown())).parse(variables.variables.products);
     expect(products.length).toBeGreaterThan(0);
     for (const entry of products) {
       expect(Object.keys(entry)).toHaveLength(1);

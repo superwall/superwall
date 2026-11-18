@@ -64,7 +64,7 @@ const userAttributeUpdated = z.object({
 const customPlacement = z.object({
   event_name: z.literal("custom_placement"),
   name: z.string(),
-  params: z.object({}).passthrough(),
+  params: z.looseObject({}),
 });
 
 const varClick = z.object({
@@ -79,7 +79,7 @@ const pageStyles = z.object({
 
 const hasSetDom = z.object({
   event_name: z.literal("has_set_dom"),
-  data: z.object({}).passthrough(),
+  data: z.looseObject({}),
 });
 
 const initiateWebCheckout = z.object({
