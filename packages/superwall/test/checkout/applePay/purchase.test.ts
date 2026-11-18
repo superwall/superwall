@@ -320,7 +320,7 @@ describe("createApplePay", () => {
           email: "shopper@example.com",
         }),
       }),
-      { retries: 0, returnClientErrors: true },
+      { retries: 0, returnErrors: true },
     );
     expect(posted("stripe_checkout_submit")).toHaveLength(1);
     // Reporting the completion is the flow's job; the wallet says it happened

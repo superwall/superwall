@@ -6,8 +6,8 @@ export const fetchWithRetry = async (
   {
     retries = 2,
     backoffMs = 300,
-    returnClientErrors = false,
-  }: { retries?: number; backoffMs?: number; returnClientErrors?: boolean } = {},
+    returnErrors = false,
+  }: { retries?: number; backoffMs?: number; returnErrors?: boolean } = {},
 ): Promise<Response> => {
   let lastError: unknown;
 
@@ -15,7 +15,8 @@ export const fetchWithRetry = async (
     try {
       const response = await fetch(url, init);
       if (response.ok) return response;
-      if (returnClientErrors && response.status >= 400 && response.status < 500) return response;
+      if (returnErrors && response.status >= 400 && response.status < 500) return response;
+      if (returnErrors && attempt === retries) return response;
 
       const body = await response.text().catch(() => "");
       if (response.status >= 400 && response.status < 500) {

@@ -103,7 +103,7 @@ describe("createConfirmation, deferred intent", () => {
       "Content-Type": "application/json",
       Authorization: "Bearer pk_superwall",
     });
-    expect(retry).toEqual({ retries: 0, returnClientErrors: true });
+    expect(retry).toEqual({ retries: 0, returnErrors: true });
     expect(bodies()).toEqual([
       {
         checkoutContextId: "ctx_123",
@@ -442,5 +442,56 @@ describe("createConfirmation, PaymentIntent the backend already created", () => 
       "[Test] Post-payment confirm failed (non-fatal):",
       expect.any(CheckoutFailureError),
     );
+  });
+});
+
+describe("createConfirmation, a decline the backend reports with a server error", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reads the backend's failure from a 500 and reports the card as declined", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              title: "Subscription failed",
+              detail: "Failed to confirm checkout payment method",
+              failure: {
+                code: "card_declined",
+                declineCode: "generic_decline",
+                message: "Your card was declined.",
+              },
+            }),
+            { status: 500 },
+          ),
+      ),
+    );
+    const confirmation = createConfirmation({
+      publicApiKey: () => "pk_superwall",
+      confirmUrl: () => "https://api.test/confirm",
+    });
+
+    const error = await confirmation
+      .confirm({
+        name: "Test",
+        stripe: {} as Stripe,
+        quote: quote(),
+        paymentMethodId: "pm_1",
+        onAuthorized: vi.fn(),
+        onSubscription: vi.fn(),
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(CheckoutFailureError);
+    expect((error as CheckoutFailureError).failure).toEqual({
+      reason: "card_declined",
+      store: "stripe",
+      code: "card_declined",
+      declineCode: "generic_decline",
+      message: "Your card was declined.",
+    });
   });
 });

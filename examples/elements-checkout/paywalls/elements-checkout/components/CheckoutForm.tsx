@@ -91,7 +91,7 @@ const Summary = () => {
       ) : null}
       {failure ? (
         <p className="notice notice--error" role="status">
-          {t("purchase.failed", { reason: failure.message ?? failure.reason })}
+          {t("purchase.failed", { reason: failure.message ?? t("purchase.declined") })}
         </p>
       ) : null}
       {status === "unavailable" ? (

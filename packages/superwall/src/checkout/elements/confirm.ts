@@ -79,7 +79,7 @@ export const createConfirmation = (options: ConfirmationOptions): Confirmation =
         },
         body: JSON.stringify({ checkoutContextId: payment.quote.checkoutContextId, ...payload }),
       },
-      { retries: 0, returnClientErrors: true },
+      { retries: 0, returnErrors: true },
     );
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) {

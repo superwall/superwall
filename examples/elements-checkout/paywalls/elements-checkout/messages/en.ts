@@ -19,7 +19,8 @@ export default {
     startTrial: "Start free trial",
     paying: "Paying…",
     completed: "You're in. Welcome to Pro.",
-    failed: "That didn't go through: {reason}. Try another card.",
+    failed: "That didn't go through. {reason} Try another card.",
+    declined: "Your payment was declined.",
     unavailable: "Payment isn't available here: {message}",
   },
   common: {
