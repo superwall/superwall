@@ -34,7 +34,7 @@ export interface ApiDocsIndex {
 
 const specUrl = (): string => `${API_HOST()}/openapi.json`;
 
-const CACHE_FILE = "api-reference.json";
+export const API_CACHE_FILE = "api-reference.json";
 
 type Schema = Record<string, any>;
 
@@ -139,11 +139,11 @@ export async function downloadApiIndex(timeoutMs = DOWNLOAD_TIMEOUT_MS): Promise
 }
 
 function readCached(): ApiDocsIndex | undefined {
-  return readJson<ApiDocsIndex>(cache(), CACHE_FILE);
+  return readJson<ApiDocsIndex>(cache(), API_CACHE_FILE);
 }
 
 function writeCached(index: ApiDocsIndex): void {
-  cache().write(CACHE_FILE, JSON.stringify(index));
+  cache().write(API_CACHE_FILE, JSON.stringify(index));
 }
 
 let inFlight: Promise<ApiDocsIndex> | undefined;
