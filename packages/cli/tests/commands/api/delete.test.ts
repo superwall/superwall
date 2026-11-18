@@ -60,7 +60,7 @@ const SURVEY_SPEC = {
                 schema: {
                   type: "object",
                   required: ["paywall_id", "survey_presentation_condition"],
-                  properties: { paywall_id: { type: "integer" }, survey_presentation_condition: { type: "string" } },
+                  properties: { paywall_id: { type: "string" }, survey_presentation_condition: { type: "string" } },
                 },
               },
             },
@@ -77,7 +77,7 @@ test("delete sends -d as a JSON body when the endpoint documents one", async () 
   const log = useFetch([SURVEY_SPEC, { match: "/v2/surveys/3100/paywalls", body: { ok: true } }]);
 
   await runLine(
-    "delete /v2/surveys/3100/paywalls -d paywall_id:=292026 -d survey_presentation_condition=ON_MANUAL_CLOSE --json",
+    "delete /v2/surveys/3100/paywalls -d paywall_id=292026 -d survey_presentation_condition=ON_MANUAL_CLOSE --json",
     { api: api() },
   );
 
@@ -85,7 +85,7 @@ test("delete sends -d as a JSON body when the endpoint documents one", async () 
     {
       url: "https://api.example.com/v2/surveys/3100/paywalls",
       method: "DELETE",
-      body: JSON.stringify({ paywall_id: 292026, survey_presentation_condition: "ON_MANUAL_CLOSE" }),
+      body: JSON.stringify({ paywall_id: "292026", survey_presentation_condition: "ON_MANUAL_CLOSE" }),
     },
   ]);
   assert.equal(process.exitCode, 0);

@@ -45,7 +45,7 @@ const SPEC: DocOperation[] = [
   op("DELETE", "/v2/products/{id}"),
   op("DELETE", "/v2/surveys/{id}/paywalls", {
     body: [
-      { name: "paywall_id", type: "integer", required: true },
+      { name: "paywall_id", type: "string", required: true },
       { name: "survey_presentation_condition", type: "string", required: true },
     ],
   }),
@@ -227,7 +227,7 @@ test("a DELETE whose endpoint takes a body sends its flags as the body, and --dr
     assert.deepEqual(preview, {
       method: "DELETE",
       path: "/v2/surveys/3100/paywalls",
-      body: { paywall_id: 292026, survey_presentation_condition: "ON_MANUAL_CLOSE" },
+      body: { paywall_id: "292026", survey_presentation_condition: "ON_MANUAL_CLOSE" },
     });
 
     const calls: Call[] = [];
@@ -236,7 +236,7 @@ test("a DELETE whose endpoint takes a body sends its flags as the body, and --dr
       {
         method: "DELETE",
         path: "/v2/surveys/3100/paywalls",
-        body: { paywall_id: 292026, survey_presentation_condition: "ON_MANUAL_CLOSE" },
+        body: { paywall_id: "292026", survey_presentation_condition: "ON_MANUAL_CLOSE" },
       },
     ]);
   } finally {

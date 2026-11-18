@@ -251,9 +251,9 @@ test("put() sends a JSON body and per-request headers ride along", async () => {
 test("del() with a body sends it as JSON", async () => {
   const calls = mockFetch(() => ({ body: { ok: true } }));
   const api = createSuperwallApi(SESSION);
-  await api.del("/v2/surveys/3100/paywalls", { body: { paywall_id: 292026 }, headers: { "x-ap-context": "orgId=2" } });
+  await api.del("/v2/surveys/3100/paywalls", { body: { paywall_id: "292026" }, headers: { "x-ap-context": "orgId=2" } });
   assert.equal(calls[0]!.init.method, "DELETE");
-  assert.equal(calls[0]!.init.body, JSON.stringify({ paywall_id: 292026 }));
+  assert.equal(calls[0]!.init.body, JSON.stringify({ paywall_id: "292026" }));
   const headers = calls[0]!.init.headers as Record<string, string>;
   assert.equal(headers["content-type"], "application/json");
   assert.equal(headers["x-ap-context"], "orgId=2");
