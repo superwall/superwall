@@ -90,6 +90,21 @@ const MESSAGES: Record<CheckoutUnavailableReason, string> = {
 
 const DEFAULT_PAYMENT_METHOD_TYPES = ["card", "link"];
 
+export const SUPPORTED_PAYMENT_METHOD_TYPES: ReadonlySet<string> = new Set(
+  DEFAULT_PAYMENT_METHOD_TYPES,
+);
+
+export const unsupportedTypesWarning = (dropped: readonly string[]) =>
+  `[superwall] <StripeCheckout> dropped payment method types it can't complete: ${dropped.join(", ")}. Only card (with Apple Pay and Google Pay) and link are supported.`;
+
+const supportedTypesOf = (types: readonly string[] | undefined): string[] => {
+  if (types === undefined) return DEFAULT_PAYMENT_METHOD_TYPES;
+  const dropped = types.filter((type) => !SUPPORTED_PAYMENT_METHOD_TYPES.has(type));
+  if (dropped.length > 0) console.warn(unsupportedTypesWarning(dropped));
+  const kept = types.filter((type) => SUPPORTED_PAYMENT_METHOD_TYPES.has(type));
+  return kept.length > 0 ? kept : DEFAULT_PAYMENT_METHOD_TYPES;
+};
+
 const subscribeToNothing = () => () => {};
 
 const NOT_PREPARED: ElementsQuote = { status: "unavailable", reason: "not_prepared" };
@@ -161,9 +176,9 @@ export const elementsOptionsOf = (
     ...stripeOptions
   } = options as CheckoutPriceFields & StripeCheckoutOptions;
   const base = {
-    paymentMethodTypes: DEFAULT_PAYMENT_METHOD_TYPES,
     ...(locale ? { locale: locale as StripeElementLocale } : {}),
     ...stripeOptions,
+    paymentMethodTypes: supportedTypesOf(stripeOptions.paymentMethodTypes),
     currency,
     paymentMethodCreation: "manual" as const,
   };
@@ -177,6 +192,18 @@ type PaymentMethodResult = Awaited<ReturnType<Stripe["createPaymentMethod"]>>;
 const collectedOf = (result: PaymentMethodResult): CollectedPayment => {
   if (result.error) {
     throw new CheckoutFailureError(readStripeError(result.error), "Collecting payment failed");
+  }
+  if (!SUPPORTED_PAYMENT_METHOD_TYPES.has(result.paymentMethod.type)) {
+    const message = `${result.paymentMethod.type} payments aren't supported here. Pay by card, wallet or Link.`;
+    throw new CheckoutFailureError(
+      {
+        reason: "card_not_supported",
+        store: "stripe",
+        code: "payment_method_unsupported",
+        message,
+      },
+      message,
+    );
   }
   const email = result.paymentMethod.billing_details?.email;
   return { paymentMethodId: result.paymentMethod.id, ...(email ? { email } : {}) };

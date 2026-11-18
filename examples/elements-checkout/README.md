@@ -122,6 +122,16 @@ events; their props are Stripe's, minus the handlers superwall owns.
 Saved cards and a customer's earlier payment methods aren't offered: the form
 pays as a new customer each time.
 
+The form enforces this list. It drops any `paymentMethodTypes` beyond `card`
+and `link` and logs which ones it dropped. A payment method of any other type,
+say from an `IbanElement` imported straight from `@stripe/react-stripe-js`,
+fails with `card_not_supported` before anything is charged.
+
+Import every element from `superwall/checkout/stripe`, never from
+`@stripe/react-stripe-js` itself. A project's own copy of Stripe's React
+package has its own context, so its elements can't see `<StripeCheckout>` and
+throw "Could not find Elements context".
+
 ## Matching the paywall's design
 
 Stripe draws its fields in its own frame, so they can't read the paywall's

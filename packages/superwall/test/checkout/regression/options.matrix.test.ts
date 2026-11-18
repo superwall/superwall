@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   amountsOf,
   elementsOptionsOf,
@@ -48,7 +48,8 @@ const OPTIONS: Record<string, StripeCheckoutOptions> = {
   "an appearance": { appearance: { theme: "night", variables: { colorPrimary: "#46d7d4" } } },
   "a locale and fonts": { locale: "de", fonts: [{ cssSrc: "https://fonts.example/a.css" }] },
   "cards only": { paymentMethodTypes: ["card"] },
-  "cards, Link and bank debits": { paymentMethodTypes: ["card", "link", "us_bank_account"] },
+  "cards and Link only": { paymentMethodTypes: ["card", "link"] },
+  "bank debits mixed in": { paymentMethodTypes: ["card", "us_bank_account", "link", "ideal"] },
   "the price fields the types forbid": {
     mode: "payment",
     amount: 1,
@@ -58,10 +59,15 @@ const OPTIONS: Record<string, StripeCheckoutOptions> = {
   } as unknown as StripeCheckoutOptions,
 };
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("Stripe's options for every price and every option set", () => {
   for (const [priceName, priced] of Object.entries(QUOTES)) {
     for (const [optionsName, options] of Object.entries(OPTIONS)) {
       it(`${priceName}, with ${optionsName}`, () => {
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
         const built = elementsOptionsOf(priced, options) as unknown as Record<string, unknown>;
         const { currency, dueNow } = amountsOf(priced);
         const free = dueNow === 0;
@@ -77,9 +83,9 @@ describe("Stripe's options for every price and every option set", () => {
           expect(built.amount).toBe(dueNow);
           expect(built).not.toHaveProperty("setupFutureUsage");
         }
-        expect(built.paymentMethodTypes).toEqual(
-          (options as { paymentMethodTypes?: string[] }).paymentMethodTypes ?? ["card", "link"],
-        );
+        const asked = (options as { paymentMethodTypes?: string[] }).paymentMethodTypes;
+        const supported = asked?.filter((type) => type === "card" || type === "link");
+        expect(built.paymentMethodTypes).toEqual(supported?.length ? supported : ["card", "link"]);
         for (const key of ["appearance", "locale", "fonts"] as const) {
           if (key in options) expect(built[key]).toEqual(options[key]);
         }

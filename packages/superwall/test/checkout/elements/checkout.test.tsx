@@ -90,8 +90,13 @@ const { SuperwallProvider } = await import("../../../src");
 const { useSuperwallSession, usePurchase } = await import("../../../src/hooks");
 const { elementsFor, sessionsFor, watchCompletedCheckouts } =
   await import("../../../src/checkout/flow");
-const { amountsOf, elementsOptionsOf, intentTypeOf, NO_EMAIL_SOURCE_WARNING } =
-  await import("../../../src/checkout/elements/StripeCheckout");
+const {
+  amountsOf,
+  elementsOptionsOf,
+  intentTypeOf,
+  NO_EMAIL_SOURCE_WARNING,
+  unsupportedTypesWarning,
+} = await import("../../../src/checkout/elements/StripeCheckout");
 const { createHost, testConfig } = await import("../../helpers");
 
 type Session = ReturnType<typeof useSuperwallSession>;
@@ -227,7 +232,7 @@ beforeEach(() => {
   stripe.form.submit.mockResolvedValue({});
   stripe.form.getElement.mockImplementation(() => null);
   stripe.client.createPaymentMethod.mockResolvedValue({
-    paymentMethod: { id: "pm_1", billing_details: { email: "shopper@example.com" } },
+    paymentMethod: { id: "pm_1", type: "card", billing_details: { email: "shopper@example.com" } },
   });
 });
 
@@ -466,6 +471,26 @@ describe("<StripeCheckout> once the price has loaded", () => {
     ]);
   });
 
+  it("refuses a payment method of a type it can't complete and charges nothing", async () => {
+    stripe.client.createPaymentMethod.mockResolvedValue({
+      paymentMethod: { id: "pm_iban", type: "sepa_debit", billing_details: { email: "a@b.co" } },
+    });
+    const fetched = vi.fn();
+    vi.stubGlobal("fetch", fetched);
+    const { checkout, names } = await mount();
+    let result: unknown;
+    await act(async () => {
+      result = await checkout().submit();
+    });
+    expect(result).toMatchObject({
+      status: "failed",
+      failure: { reason: "card_not_supported", code: "payment_method_unsupported" },
+    });
+    expect(fetched).not.toHaveBeenCalled();
+    expect(names()).not.toContain("stripe_checkout_complete");
+    expect(checkout()).toMatchObject({ status: "ready", canSubmit: true });
+  });
+
   it("reports a decline as a failure, keeps the form open and shows it in usePurchase().failure", async () => {
     stripe.client.createPaymentMethod.mockResolvedValue({
       error: { code: "card_declined", decline_code: "insufficient_funds", message: "No funds." },
@@ -590,6 +615,20 @@ describe("intent and options for each price", () => {
     });
   });
 
+  it("drops payment method types it can't complete and says which", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect(
+      elementsOptionsOf(quote(), { paymentMethodTypes: ["card", "ideal", "sepa_debit", "link"] }),
+    ).toMatchObject({ paymentMethodTypes: ["card", "link"] });
+    expect(warn).toHaveBeenCalledWith(unsupportedTypesWarning(["ideal", "sepa_debit"]));
+    expect(elementsOptionsOf(quote(), { paymentMethodTypes: ["klarna"] })).toMatchObject({
+      paymentMethodTypes: ["card", "link"],
+    });
+    warn.mockClear();
+    elementsOptionsOf(quote(), { paymentMethodTypes: ["link"] });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("shows Stripe's labels in the paywall's language unless the options name one", () => {
     expect(elementsOptionsOf(quote(), {}, "de")).toMatchObject({ locale: "de" });
     expect(elementsOptionsOf(quote(), { locale: "fr" }, "de")).toMatchObject({ locale: "fr" });
@@ -644,7 +683,7 @@ describe("<ExpressCheckoutElement>", () => {
   it("sends no email when the wallet gives none", async () => {
     answerConfirm({ subscriptionId: "sub_1" });
     stripe.client.createPaymentMethod.mockResolvedValue({
-      paymentMethod: { id: "pm_wallet", billing_details: {} },
+      paymentMethod: { id: "pm_wallet", type: "card", billing_details: {} },
     });
     await mount({ children: <ExpressCheckoutElement /> });
     await act(async () => {
@@ -801,7 +840,7 @@ describe("<PurchaseButton>", () => {
 describe("<StripeCheckout> and the shopper's email", () => {
   const withoutEmail = () =>
     stripe.client.createPaymentMethod.mockResolvedValue({
-      paymentMethod: { id: "pm_2", billing_details: { email: null } },
+      paymentMethod: { id: "pm_2", type: "card", billing_details: { email: null } },
     });
   const sentBody = () =>
     JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
@@ -964,7 +1003,11 @@ describe("<StripeCheckout> with Stripe's separate card fields", () => {
       answerConfirm({ subscriptionId: "sub_1" });
       useCardFields(type);
       stripe.client.createPaymentMethod.mockResolvedValue({
-        paymentMethod: { id: "pm_card", billing_details: { email: "prop@example.com" } },
+        paymentMethod: {
+          id: "pm_card",
+          type: "card",
+          billing_details: { email: "prop@example.com" },
+        },
       });
       const onComplete = vi.fn();
       const { checkout } = await mount({ props: { email: "prop@example.com", onComplete } });
@@ -1049,7 +1092,7 @@ describe("<StripeCheckout> with Stripe's separate card fields", () => {
   it("refuses card fields with no email anywhere", async () => {
     useCardFields("card");
     stripe.client.createPaymentMethod.mockResolvedValue({
-      paymentMethod: { id: "pm_card", billing_details: { email: null } },
+      paymentMethod: { id: "pm_card", type: "card", billing_details: { email: null } },
     });
     const { checkout } = await mount();
     let result: unknown;
