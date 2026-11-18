@@ -267,6 +267,66 @@ describe("teleporting in the studio", () => {
   });
 });
 
+const phone = {
+  platform: "iOS",
+  deviceModel: "iPhone18,3",
+  safeAreaInsets: { top: 59, right: 0, bottom: 34, left: 0 },
+};
+const root = () => document.documentElement;
+const floor = (edge: string) => root().style.getPropertyValue(`--sw-safe-area-floor-${edge}`);
+
+describe("the document on the studio's web half", () => {
+  it("describes the browser after a teleport, without the app's floors", async () => {
+    await mount({ device: phone });
+    expect(root().getAttribute("data-sw-platform")).toBe("ios");
+    expect(floor("top")).toBe("59px");
+
+    await act(async () => captured.router?.push("checkout"));
+
+    expect(root().getAttribute("data-sw-platform")).toBe("web");
+    expect(root().hasAttribute("data-sw-idiom")).toBe(false);
+    expect(root().hasAttribute("data-sw-cutout")).toBe(false);
+    expect(floor("top")).toBe("");
+    expect(floor("bottom")).toBe("");
+    expect(document.body.classList.contains("web2app")).toBe(true);
+  });
+
+  it("stays the browser once the purchase completes there", async () => {
+    await mount({ device: phone });
+    await act(async () => {
+      void captured.purchase?.("card");
+      await settle();
+    });
+    await act(async () => {
+      await captured.purchase?.("card");
+      await flush();
+    });
+
+    expect(statusNow()).toMatchObject({ status: "completed" });
+    expect(root().getAttribute("data-sw-platform")).toBe("web");
+  });
+
+  it("describes the app again once the shopper goes back", async () => {
+    await mount({ device: phone });
+    await act(async () => captured.router?.push("checkout"));
+    await act(async () => captured.router?.back());
+
+    expect(root().getAttribute("data-sw-platform")).toBe("ios");
+    expect(root().getAttribute("data-sw-idiom")).toBe("phone");
+    expect(floor("top")).toBe("59px");
+    expect(floor("bottom")).toBe("34px");
+    expect(document.body.classList.contains("web2app")).toBe(false);
+  });
+
+  it("keeps the app's attributes when the push does not teleport", async () => {
+    await mount({ device: phone, surfaceConfig: { products: config.products } });
+    await act(async () => captured.router?.push("checkout"));
+
+    expect(root().getAttribute("data-sw-platform")).toBe("ios");
+    expect(floor("top")).toBe("59px");
+  });
+});
+
 const router = () => ({ push: () => {}, back: () => {} });
 
 const session = (posted: unknown[] = []) => ({

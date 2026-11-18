@@ -15,8 +15,9 @@ import {
   type ResolvedBackground,
 } from "@superwall/runtime";
 import { readTeleportBoot } from "../checkout/teleport/boot";
+import { teleportFor } from "../checkout/teleport/flow";
 import { documentAttributes, HOST_ATTRIBUTE_NAMES, hostAttributes } from "../document";
-import { hostOf } from "../host";
+import { hostOf, type SuperwallHost } from "../host";
 import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
 import "./insets.css";
 
@@ -164,12 +165,23 @@ const Insets = ({ insets }: { insets: SuperwallConfig["insets"] }): null => {
   return null;
 };
 
+const notOnWebHalf = () => false;
+const noSubscription = () => () => {};
+
+const useStudioWebHalf = (): boolean => {
+  const session = React.useContext(SuperwallContext);
+  const teleporter = session !== null && hostOf() === "studio" ? teleportFor(session) : undefined;
+  const onWebHalf = teleporter?.kind === "app" ? () => teleporter.inFlight() : notOnWebHalf;
+  return React.useSyncExternalStore(teleporter?.subscribe ?? noSubscription, onWebHalf, onWebHalf);
+};
+
 const HostAttributes = (): null => {
   const { device } = useSuperwallSnapshot();
+  const webHalf = useStudioWebHalf();
 
   React.useEffect(() => {
     const root = document.documentElement;
-    const host = hostOf();
+    const host: SuperwallHost = webHalf ? "web-teleport" : hostOf();
     const attributes = hostAttributes(device, host);
     for (const name of HOST_ATTRIBUTE_NAMES) {
       const value = attributes[name];
@@ -188,7 +200,7 @@ const HostAttributes = (): null => {
         root.style.setProperty(`--sw-safe-area-floor-${edge}`, `${value}px`);
       else root.style.removeProperty(`--sw-safe-area-floor-${edge}`);
     }
-  }, [device]);
+  }, [device, webHalf]);
 
   return null;
 };
