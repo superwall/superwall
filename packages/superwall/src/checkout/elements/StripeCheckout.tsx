@@ -55,6 +55,15 @@ export type StripeCheckoutProps<TProduct extends SuperwallProduct = SuperwallPro
     postPurchase?: SuperwallPostPurchase;
     /** Metadata to set on the Stripe subscription. Defaults to none. */
     stripeMetadata?: Readonly<Record<string, string>>;
+    /**
+     * The shopper's email, for a paywall that collects it in its own field;
+     * pass `""` while the field is empty.
+     * Every purchase needs one: it is the subscription customer's email, for
+     * the receipt, the redemption link and the billing portal. Defaults to
+     * the email typed into `LinkAuthenticationElement`, then the one a wallet
+     * or the Payment Element returns, then the user's `email` attribute.
+     */
+    email?: string;
     /** The form: Stripe's elements from `superwall/checkout/stripe`, a `<PurchaseButton>`, your own UI. */
     children?: React.ReactNode;
   };
@@ -154,15 +163,24 @@ export const elementsOptionsOf = (
     : { ...base, mode: "subscription", amount: dueNow };
 };
 
+type PaymentMethodResult = Awaited<ReturnType<Stripe["createPaymentMethod"]>>;
+
+const collectedOf = (result: PaymentMethodResult): CollectedPayment => {
+  if (result.error) {
+    throw new CheckoutFailureError(readStripeError(result.error), "Collecting payment failed");
+  }
+  const email = result.paymentMethod.billing_details?.email;
+  return { paymentMethodId: result.paymentMethod.id, ...(email ? { email } : {}) };
+};
+
 const collectWith =
-  (stripe: Stripe, elements: StripeElements) => async (): Promise<CollectedPayment> => {
-    const result = await stripe.createPaymentMethod({ elements });
-    if (result.error) {
-      throw new CheckoutFailureError(readStripeError(result.error), "Collecting payment failed");
-    }
-    const email = result.paymentMethod.billing_details?.email;
-    return { paymentMethodId: result.paymentMethod.id, ...(email ? { email } : {}) };
-  };
+  (stripe: Stripe, elements: StripeElements) => async (): Promise<CollectedPayment> =>
+    collectedOf(await stripe.createPaymentMethod({ elements }));
+
+export const cardFieldOf = (elements: StripeElements) =>
+  elements.getElement("payment") === null
+    ? (elements.getElement("card") ?? elements.getElement("cardNumber"))
+    : null;
 
 type Pending = {
   resolve: (payment: CollectedPayment | null) => void;
@@ -190,8 +208,12 @@ type FormProps = {
 
 const EMAIL_REQUIRED: CheckoutError = {
   name: "email_required",
-  message: "Enter an email address. Render LinkAuthenticationElement to collect one.",
+  message:
+    "Enter an email address. Render LinkAuthenticationElement, or pass `email` to <StripeCheckout>.",
 };
+
+export const NO_EMAIL_SOURCE_WARNING =
+  "[superwall] <StripeCheckout> has no way to get the shopper's email: render LinkAuthenticationElement, pass `email`, or set the user's `email` attribute. Without one, a card payment returns `incomplete` with `email_required` and charges nothing.";
 
 const knownEmailOf = (snapshot: SuperwallRuntimeSnapshot): string | undefined => {
   const email = snapshot.user.email;
@@ -203,14 +225,28 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
   const snapshot = useSuperwallSnapshot();
   const knownEmail = knownEmailOf(snapshot);
   const entered = React.useRef<string | undefined>(undefined);
+  const sources = React.useRef({ link: 0, express: 0 });
+  const registerLink = React.useCallback(() => {
+    sources.current.link += 1;
+    return () => {
+      sources.current.link -= 1;
+    };
+  }, []);
+  const registerExpress = React.useCallback(() => {
+    sources.current.express += 1;
+    return () => {
+      sources.current.express -= 1;
+    };
+  }, []);
   const emailHandlers = React.useMemo(
     () => ({
       knownEmail,
       setEmail: (email: string | undefined) => {
         entered.current = email || undefined;
       },
+      register: registerLink,
     }),
-    [knownEmail],
+    [knownEmail, registerLink],
   );
   const stripe = useStripe();
   const elements = useElements();
@@ -233,7 +269,20 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
   });
   live.current = { canSubmit, stripe, elements, product, ready, blocked, stored, knownEmail };
   const emailOf = (payment: CollectedPayment, wallet?: string | null): string | undefined =>
-    payment.email || wallet || entered.current || live.current.knownEmail;
+    callbacks.current.email ||
+    payment.email ||
+    wallet ||
+    entered.current ||
+    live.current.knownEmail;
+
+  const warned = React.useRef(false);
+  React.useEffect(() => {
+    if (!ready || warned.current) return;
+    const { link, express: wallets } = sources.current;
+    if (link > 0 || wallets > 0 || callbacks.current.email !== undefined || knownEmail) return;
+    warned.current = true;
+    console.warn(NO_EMAIL_SOURCE_WARNING);
+  }, [ready, knownEmail, callbacks]);
 
   const unavailable = (): CheckoutSubmitResult => {
     const now = live.current;
@@ -281,6 +330,32 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
       busy.current = false;
       return { status: "incomplete", product: sold as SuperwallProduct, error };
     };
+    const card = cardFieldOf(form);
+    if (card) {
+      const typed = callbacks.current.email || entered.current || live.current.knownEmail;
+      let result: PaymentMethodResult;
+      try {
+        result = await client.createPaymentMethod({
+          type: "card",
+          card,
+          ...(typed ? { billing_details: { email: typed } } : {}),
+        });
+      } catch (error) {
+        return incomplete(checkoutErrorOf(error));
+      }
+      if (result.error?.type === "validation_error") {
+        return incomplete({ name: result.error.type, message: result.error.message ?? "" });
+      }
+      let collected: CollectedPayment;
+      try {
+        collected = collectedOf(result);
+      } catch (error) {
+        return run(() => Promise.reject(error));
+      }
+      const email = emailOf(collected);
+      if (email === undefined) return incomplete(EMAIL_REQUIRED);
+      return run(() => Promise.resolve({ ...collected, email }));
+    }
     let checked: Awaited<ReturnType<StripeElements["submit"]>>;
     try {
       checked = await form.submit();
@@ -339,6 +414,7 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
     onCancel: () => {
       express.current?.resolve(null);
     },
+    register: registerExpress,
   };
 
   const quote = stored.status === "ready" ? stored.quote : undefined;

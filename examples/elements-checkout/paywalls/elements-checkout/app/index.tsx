@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useHaptics, useProducts, useTranslation } from "superwall/hooks";
-import { CheckoutForm } from "../components/CheckoutForm";
+import { CheckoutForm, SCENARIOS, type Scenario } from "../components/CheckoutForm";
 
 const PLANS = [
   { reference: "trial", label: "plans.trial", note: "plans.trialNote" },
@@ -14,6 +14,7 @@ export default function Index() {
   const haptics = useHaptics();
   const { getProduct } = useProducts();
   const [selected, setSelected] = useState<PlanReference>("trial");
+  const [scenario, setScenario] = useState<Scenario>("full");
   const [done, setDone] = useState(false);
 
   return (
@@ -47,12 +48,30 @@ export default function Index() {
         ))}
       </div>
 
+      <div className="scenarios" role="radiogroup" aria-label={t("scenarios.label")}>
+        {SCENARIOS.map((name) => (
+          <button
+            key={name}
+            type="button"
+            className="scenario"
+            role="radio"
+            aria-checked={scenario === name}
+            onClick={() => {
+              haptics.selection();
+              setScenario(name);
+            }}
+          >
+            {t(`scenarios.${name}`)}
+          </button>
+        ))}
+      </div>
+
       {done ? (
         <p className="notice" role="status">
           {t("purchase.completed")}
         </p>
       ) : (
-        <CheckoutForm product={selected} onCompleted={() => setDone(true)} />
+        <CheckoutForm product={selected} scenario={scenario} onCompleted={() => setDone(true)} />
       )}
     </main>
   );

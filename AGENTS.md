@@ -328,10 +328,16 @@ The stack, bottom to top — each layer depends only on the one below it:
       form purchase reports the same `usePurchase` callbacks and
       `stripe_checkout_*` messages as Apple Pay and the sheet. A project never
       installs Stripe. Every form purchase carries the shopper's email, as
-      the sheet and Apple Pay do: the payment method's, the wired
-      `LinkAuthenticationElement.tsx`'s, the wallet's (`emailRequired`) or
-      the user's `email` attribute; a card with none is `incomplete`
-      (`email_required`) before any purchase starts.
+      the sheet and Apple Pay do: the `email` prop, the payment method's,
+      the wired `LinkAuthenticationElement.tsx`'s, the wallet's
+      (`emailRequired`) or the user's `email` attribute; a card with none is
+      `incomplete` (`email_required`) before any purchase starts, and a form
+      with no email source at all warns once when it is ready. Stripe's
+      separate card fields (`CardElement`, `CardNumberElement`…) pay through
+      `createPaymentMethod({ type: "card" })` without `elements.submit()`;
+      when a Payment Element is mounted it always wins. Re-export a Stripe
+      element only when its data reaches the purchase: redirect methods,
+      `IbanElement`, `TaxIdElement` and `ShippingAddressElement` stay out.
     - `form/` is what every store's form shares, exported from
       `superwall/checkout`: `useCheckout()` and `<PurchaseButton>` read one
       context (`CheckoutContext`, a `UseCheckoutResult`) that a store's form

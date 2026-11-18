@@ -10,7 +10,7 @@ import type { SuperwallHost } from "../../../src/host";
 import type { ElementsCheckoutSession } from "../../../src/checkout/types";
 
 const stripe = vi.hoisted(() => {
-  const form = { submit: vi.fn() };
+  const form = { submit: vi.fn(), getElement: vi.fn((_type: string): unknown => null) };
   const client = {
     createPaymentMethod: vi.fn(),
     confirmCardPayment: vi.fn(),
@@ -69,6 +69,10 @@ vi.mock("@stripe/react-stripe-js", async () => {
       return null;
     },
     PaymentMethodMessagingElement: () => null,
+    CardElement: () => null,
+    CardNumberElement: () => null,
+    CardExpiryElement: () => null,
+    CardCvcElement: () => null,
   };
 });
 vi.mock("../../../src/host", async (importOriginal) => ({
@@ -86,7 +90,7 @@ const { SuperwallProvider } = await import("../../../src");
 const { useSuperwallSession, usePurchase } = await import("../../../src/hooks");
 const { elementsFor, sessionsFor, watchCompletedCheckouts } =
   await import("../../../src/checkout/flow");
-const { amountsOf, elementsOptionsOf, intentTypeOf } =
+const { amountsOf, elementsOptionsOf, intentTypeOf, NO_EMAIL_SOURCE_WARNING } =
   await import("../../../src/checkout/elements/StripeCheckout");
 const { createHost, testConfig } = await import("../../helpers");
 
@@ -221,6 +225,7 @@ beforeEach(() => {
   stripe.express = undefined;
   stripe.link = undefined;
   stripe.form.submit.mockResolvedValue({});
+  stripe.form.getElement.mockImplementation(() => null);
   stripe.client.createPaymentMethod.mockResolvedValue({
     paymentMethod: { id: "pm_1", billing_details: { email: "shopper@example.com" } },
   });
@@ -902,5 +907,152 @@ describe("<StripeCheckout> and the shopper's email", () => {
     await settle();
     expect(onComplete).toHaveBeenCalled();
     expect(sentBody().email).toBeUndefined();
+  });
+});
+
+describe("<StripeCheckout> with an email the paywall collects itself", () => {
+  const sentBody = () =>
+    JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+
+  it("pays with the `email` prop ahead of any other email", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    const { checkout } = await mount({ props: { email: "prop@example.com" } });
+    await act(async () => {
+      await checkout().submit();
+    });
+    await settle();
+    expect(sentBody()).toMatchObject({ email: "prop@example.com" });
+  });
+
+  it("warns once when the form has no way to get an email", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await mount();
+    expect(warn.mock.calls.filter(([text]) => text === NO_EMAIL_SOURCE_WARNING)).toHaveLength(1);
+  });
+
+  it.each<[string, Mount]>([
+    ["an email field", { children: <LinkAuthenticationElement /> }],
+    ["a wallet", { children: <ExpressCheckoutElement /> }],
+    ["the `email` prop", { props: { email: "prop@example.com" } }],
+    ["an empty `email` prop from the paywall's own field", { props: { email: "" } }],
+  ])("doesn't warn with %s", async (_name, setup) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await mount(setup);
+    expect(warn.mock.calls.some(([text]) => text === NO_EMAIL_SOURCE_WARNING)).toBe(false);
+  });
+});
+
+describe("<StripeCheckout> with Stripe's separate card fields", () => {
+  const cardField = { kind: "cardNumber" };
+  const useCardFields = (type: "card" | "cardNumber") =>
+    stripe.form.getElement.mockImplementation((asked: string) =>
+      asked === type ? cardField : null,
+    );
+  const sentBody = () =>
+    JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+
+  it.each(["card", "cardNumber"] as const)(
+    "pays from the %s field without elements.submit(), with the email on the card",
+    async (type) => {
+      answerConfirm({ subscriptionId: "sub_1" });
+      useCardFields(type);
+      stripe.client.createPaymentMethod.mockResolvedValue({
+        paymentMethod: { id: "pm_card", billing_details: { email: "prop@example.com" } },
+      });
+      const onComplete = vi.fn();
+      const { checkout } = await mount({ props: { email: "prop@example.com", onComplete } });
+      let result: unknown;
+      await act(async () => {
+        result = await checkout().submit();
+      });
+      await settle();
+      expect(stripe.form.submit).not.toHaveBeenCalled();
+      expect(stripe.client.createPaymentMethod).toHaveBeenCalledWith({
+        type: "card",
+        card: cardField,
+        billing_details: { email: "prop@example.com" },
+      });
+      expect(result).toMatchObject({ status: "completed" });
+      expect(sentBody()).toMatchObject({ paymentMethodId: "pm_card", email: "prop@example.com" });
+      expect(onComplete).toHaveBeenCalled();
+    },
+  );
+
+  it("uses the Payment Element, not the card fields, when both are mounted", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    stripe.form.getElement.mockImplementation((asked: string) =>
+      asked === "payment" || asked === "card" ? cardField : null,
+    );
+    const { checkout } = await mount();
+    await act(async () => {
+      await checkout().submit();
+    });
+    expect(stripe.form.submit).toHaveBeenCalled();
+    expect(stripe.client.createPaymentMethod).toHaveBeenCalledWith({ elements: stripe.form });
+  });
+
+  it("reports an incomplete card as incomplete and starts no purchase", async () => {
+    useCardFields("cardNumber");
+    stripe.client.createPaymentMethod.mockResolvedValue({
+      error: { type: "validation_error", message: "Your card number is incomplete." },
+    });
+    const onStart = vi.fn();
+    const { checkout } = await mount({ props: { email: "a@b.co", onStart } });
+    let result: unknown;
+    await act(async () => {
+      result = await checkout().submit();
+    });
+    expect(result).toMatchObject({
+      status: "incomplete",
+      error: { name: "validation_error", message: "Your card number is incomplete." },
+    });
+    expect(onStart).not.toHaveBeenCalled();
+    expect(checkout().canSubmit).toBe(true);
+  });
+
+  it("reports Stripe throwing on the card fields as incomplete", async () => {
+    useCardFields("card");
+    stripe.client.createPaymentMethod.mockRejectedValue(new Error("not mounted"));
+    const { checkout } = await mount({ props: { email: "a@b.co" } });
+    let result: unknown;
+    await act(async () => {
+      result = await checkout().submit();
+    });
+    expect(result).toMatchObject({ status: "incomplete", error: { message: "not mounted" } });
+  });
+
+  it("fails a card Stripe refuses, keeping the reason", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    useCardFields("card");
+    stripe.client.createPaymentMethod.mockResolvedValue({
+      error: { type: "card_error", code: "card_declined", decline_code: "stolen_card" },
+    });
+    const onFailure = vi.fn();
+    const { checkout } = await mount({ props: { email: "a@b.co", onFailure } });
+    let result: unknown;
+    await act(async () => {
+      result = await checkout().submit();
+    });
+    await settle();
+    expect(result).toMatchObject({ status: "failed" });
+    expect(onFailure).toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("refuses card fields with no email anywhere", async () => {
+    useCardFields("card");
+    stripe.client.createPaymentMethod.mockResolvedValue({
+      paymentMethod: { id: "pm_card", billing_details: { email: null } },
+    });
+    const { checkout } = await mount();
+    let result: unknown;
+    await act(async () => {
+      result = await checkout().submit();
+    });
+    expect(result).toMatchObject({ status: "incomplete", error: { name: "email_required" } });
+    expect(stripe.client.createPaymentMethod).toHaveBeenCalledWith({
+      type: "card",
+      card: cardField,
+    });
   });
 });

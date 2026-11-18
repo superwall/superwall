@@ -7,6 +7,7 @@ import {
 export type EmailHandlers = {
   knownEmail: string | undefined;
   setEmail: (email: string | undefined) => void;
+  register: () => () => void;
 };
 
 export const EmailContext = React.createContext<EmailHandlers | null>(null);
@@ -25,6 +26,8 @@ export const LinkAuthenticationElement = (props: LinkAuthenticationElementProps)
   }
   const { onChange, options } = props;
   const known = email.knownEmail;
+  const { register } = email;
+  React.useEffect(() => register(), [register]);
   const merged = React.useMemo(
     () =>
       known === undefined || options?.defaultValues?.email

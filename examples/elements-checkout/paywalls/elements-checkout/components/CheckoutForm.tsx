@@ -1,7 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { PurchaseButton, useCheckout } from "superwall/checkout";
 import type { CheckoutAmounts } from "superwall/checkout";
 import {
+  AddressElement,
+  CardCvcElement,
+  CardExpiryElement,
+  CardNumberElement,
   ExpressCheckoutElement,
   LinkAuthenticationElement,
   PaymentElement,
@@ -10,8 +14,16 @@ import {
 import type { StripeCheckoutOptions } from "superwall/checkout/stripe";
 import { useColorScheme, useHaptics, useTranslation } from "superwall/hooks";
 
+/**
+ * The playground's scenarios, each a different way to build the same
+ * purchase. All of them pay through superwall and report the same callbacks.
+ */
+export const SCENARIOS = ["full", "cardFields", "wallets", "billing"] as const;
+export type Scenario = (typeof SCENARIOS)[number];
+
 type Props = {
   product: "trial" | "monthly";
+  scenario: Scenario;
   onCompleted: () => void;
 };
 
@@ -57,10 +69,8 @@ const intervalOf = ({ interval, intervalCount }: CheckoutAmounts) =>
  * knows the email. Where the paywall can't take payment, such as inside the
  * iOS app, they render nothing, so the divider between them goes too.
  */
-const Fields = () => {
+const FullFields = () => {
   const { t } = useTranslation();
-  const { status } = useCheckout();
-  if (status === "unavailable") return null;
   return (
     <div className="form">
       <ExpressCheckoutElement
@@ -74,13 +84,132 @@ const Fields = () => {
 };
 
 /**
+ * Stripe's separate card fields, the way many existing checkouts are built,
+ * with the paywall's own email field passed to `<StripeCheckout email>`.
+ */
+const CardFields = ({ email, onEmail }: { email: string; onEmail: (email: string) => void }) => {
+  const { t } = useTranslation();
+  const scheme = useColorScheme();
+  const style = useMemo(
+    () => ({
+      base: {
+        color: scheme === "dark" ? "#fdfef6" : "#0c0b0a",
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "16px",
+        "::placeholder": { color: "#8a8984" },
+      },
+    }),
+    [scheme],
+  );
+  return (
+    <div className="form">
+      <label className="field">
+        <span>{t("form.email")}</span>
+        <input
+          className="input"
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={(event) => onEmail(event.target.value)}
+        />
+      </label>
+      <label className="field">
+        <span>{t("form.cardNumber")}</span>
+        <CardNumberElement className="input" options={{ style, showIcon: true }} />
+      </label>
+      <div className="field-row">
+        <label className="field">
+          <span>{t("form.expiry")}</span>
+          <CardExpiryElement className="input" options={{ style }} />
+        </label>
+        <label className="field">
+          <span>{t("form.cvc")}</span>
+          <CardCvcElement className="input" options={{ style }} />
+        </label>
+      </div>
+    </div>
+  );
+};
+
+/** Only the one-tap wallets: the wallet asks for the email itself. */
+const WalletFields = () => (
+  <div className="form">
+    <ExpressCheckoutElement options={{ buttonHeight: 52, buttonType: { applePay: "subscribe" } }} />
+  </div>
+);
+
+/**
+ * An accordion card form with Stripe's billing address: the address goes
+ * onto the payment method, and `stripeMetadata` onto the subscription.
+ */
+const BillingFields = () => (
+  <div className="form">
+    <LinkAuthenticationElement />
+    <AddressElement options={{ mode: "billing" }} />
+    <PaymentElement options={{ layout: "accordion" }} />
+  </div>
+);
+
+const Fields = ({
+  scenario,
+  email,
+  onEmail,
+}: {
+  scenario: Scenario;
+  email: string;
+  onEmail: (email: string) => void;
+}) => {
+  const { status } = useCheckout();
+  if (status === "unavailable") return null;
+  if (scenario === "cardFields") return <CardFields email={email} onEmail={onEmail} />;
+  if (scenario === "wallets") return <WalletFields />;
+  if (scenario === "billing") return <BillingFields />;
+  return <FullFields />;
+};
+
+/**
+ * A purchase button built on `useCheckout().submit()` instead of
+ * `<PurchaseButton>`, for a paywall that wants its own: it shows why an
+ * incomplete form didn't pay.
+ */
+const OwnButton = ({ label }: { label: string }) => {
+  const { t } = useTranslation();
+  const { canSubmit, submit } = useCheckout();
+  const [problem, setProblem] = useState<string | undefined>(undefined);
+  return (
+    <>
+      {problem ? (
+        <p className="notice notice--error" role="status">
+          {problem}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className="button button--primary"
+        disabled={!canSubmit}
+        onClick={async () => {
+          setProblem(undefined);
+          const result = await submit();
+          if (result.status === "incomplete") {
+            setProblem(result.error.message || t("form.incomplete"));
+          }
+        }}
+      >
+        {label}
+      </button>
+    </>
+  );
+};
+
+/**
  * Everything inside `<StripeCheckout>` reads the form's state from
  * `useCheckout()`, which reads the same for any store, so this summary and
  * its button would work unchanged in another store's form.
  */
-const Summary = () => {
+const Summary = ({ scenario }: { scenario: Scenario }) => {
   const { t } = useTranslation();
   const { status, amounts, failure, message } = useCheckout();
+  const label = amounts?.dueNow === 0 ? t("purchase.startTrial") : t("purchase.subscribe");
 
   return (
     <>
@@ -107,13 +236,13 @@ const Summary = () => {
           {t("purchase.unavailable", { message: message ?? "" })}
         </p>
       ) : null}
-      <PurchaseButton className="button button--primary">
-        {status === "paying"
-          ? t("purchase.paying")
-          : amounts?.dueNow === 0
-            ? t("purchase.startTrial")
-            : t("purchase.subscribe")}
-      </PurchaseButton>
+      {scenario === "wallets" ? null : scenario === "cardFields" ? (
+        <OwnButton label={status === "paying" ? t("purchase.paying") : label} />
+      ) : (
+        <PurchaseButton className="button button--primary">
+          {status === "paying" ? t("purchase.paying") : label}
+        </PurchaseButton>
+      )}
     </>
   );
 };
@@ -123,14 +252,18 @@ const Summary = () => {
  * prices the form from the product, takes the payment, runs 3D Secure and
  * the free trial, and completes the purchase; the callbacks report it.
  */
-export function CheckoutForm({ product, onCompleted }: Props) {
+export function CheckoutForm({ product, scenario, onCompleted }: Props) {
   const haptics = useHaptics();
   const options = useStripeAppearance();
+  const [email, setEmail] = useState("");
 
   return (
     <StripeCheckout
+      key={scenario}
       product={product}
       options={options}
+      {...(scenario === "cardFields" ? { email } : {})}
+      {...(scenario === "billing" ? { stripeMetadata: { source: "elements-playground" } } : {})}
       onComplete={() => {
         haptics.success();
         onCompleted();
@@ -138,9 +271,9 @@ export function CheckoutForm({ product, onCompleted }: Props) {
       onFailure={(failure) => console.info("onFailure", failure)}
       onAbandon={() => console.info("onAbandon")}
     >
-      <Fields />
+      <Fields scenario={scenario} email={email} onEmail={setEmail} />
       <div className="actions">
-        <Summary />
+        <Summary scenario={scenario} />
       </div>
     </StripeCheckout>
   );

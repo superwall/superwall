@@ -77,6 +77,39 @@ so `<PurchaseButton>` disables itself while it pays and the label says
 `<StripeCheckout>` loads that plan's price and Stripe's fields keep what the shopper
 typed.
 
+## Scenarios
+
+The row of chips above the form switches between four ways to build the
+same purchase, so the paywall doubles as a playground:
+
+| Scenario       | Stripe pieces                                                                         | What it shows                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Wallets + card | `ExpressCheckoutElement`, `LinkAuthenticationElement`, `PaymentElement` (tabs)        | The default layout, with `<PurchaseButton>`                                                                                                |
+| Card fields    | `CardNumberElement`, `CardExpiryElement`, `CardCvcElement`                            | Separate card fields, the paywall's own email `<input>` passed as `<StripeCheckout email>`, and its own button on `useCheckout().submit()` |
+| Wallets only   | `ExpressCheckoutElement`                                                              | No CTA: the wallet pays and asks for the email itself                                                                                      |
+| With address   | `LinkAuthenticationElement`, `AddressElement` (billing), `PaymentElement` (accordion) | The billing address goes onto the payment method; `stripeMetadata` goes onto the subscription                                              |
+
+**Which Stripe elements work.** `superwall/checkout/stripe` re-exports
+Stripe's own components unchanged: `PaymentElement`, `AddressElement`,
+`PaymentMethodMessagingElement`, `CardElement` and the three separate card
+fields, plus `useStripe()` and `useElements()`. Two are wrapped, because
+superwall needs their events: `ExpressCheckoutElement` (it pays and reports
+abandons) and `LinkAuthenticationElement` (it hands over the email). Elements
+that redirect (iDEAL, Klarna), collect a bank account (`IbanElement`) or have
+nowhere to send their data (`TaxIdElement`, `ShippingAddressElement`) aren't
+exported.
+
+**Porting an existing form.** Keep the elements and their options; drop your
+`<Elements>` provider, your PaymentIntent endpoint and your
+`stripe.confirmPayment()` call. Wrap the form in `<StripeCheckout product>`
+and call `useCheckout().submit()` (or render `<PurchaseButton>`) where you
+confirmed before.
+
+**No email, no payment.** Every purchase needs an email. Without
+`LinkAuthenticationElement`, a wallet, the `email` prop or the user's `email`
+attribute, the form logs a warning when it is ready, and `submit()` returns
+`incomplete` with `email_required` and charges nothing.
+
 ## Try it with a test card
 
 In a test-mode project, `4242 4242 4242 4242` with any future date and CVC

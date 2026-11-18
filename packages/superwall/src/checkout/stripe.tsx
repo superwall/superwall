@@ -5,6 +5,10 @@ export type { ExpressCheckoutElementProps } from "./elements/ExpressCheckoutElem
 export { LinkAuthenticationElement } from "./elements/LinkAuthenticationElement";
 export {
   AddressElement,
+  CardCvcElement,
+  CardElement,
+  CardExpiryElement,
+  CardNumberElement,
   PaymentElement,
   PaymentMethodMessagingElement,
   useElements,
@@ -12,6 +16,10 @@ export {
 } from "@stripe/react-stripe-js";
 export type {
   AddressElementProps,
+  CardCvcElementProps,
+  CardElementProps,
+  CardExpiryElementProps,
+  CardNumberElementProps,
   LinkAuthenticationElementProps,
   PaymentElementProps,
   PaymentMethodMessagingElementProps,

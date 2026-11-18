@@ -14,6 +14,7 @@ export type ExpressHandlers = {
     billingDetails?: { email?: string | null };
   }) => Promise<void>;
   onCancel: () => void;
+  register: () => () => void;
 };
 
 export const ExpressContext = React.createContext<ExpressHandlers | null>(null);
@@ -41,6 +42,8 @@ export const ExpressCheckoutElement = (props: ExpressCheckoutElementProps) => {
   if (express === null) {
     throw new Error("<ExpressCheckoutElement> must be rendered inside <StripeCheckout>.");
   }
+  const { register } = express;
+  React.useEffect(() => register(), [register]);
   return (
     <StripeExpressCheckoutElement
       {...props}
