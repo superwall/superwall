@@ -21,6 +21,7 @@ import {
   type Row,
   type SubscriptionPeriod,
 } from "@/core/api/resources";
+import { field, listField } from "@/core/json";
 import { apiCall } from "@/ui/spinner";
 import { textOf, type ResourceFlags } from "./input";
 
@@ -57,6 +58,7 @@ export async function create(
   );
   const grants =
     resource === "products" ? await resolveProductEntitlements(context, api, scope, entitlementValues(flags.fields)) : undefined;
+  const paywall = resource === "campaigns" ? textOf(flags.fields.paywall) : undefined;
   if (dryRun) {
     const { projectCount: _projects, appCount: _apps, ...where } = scope;
     const plan = {
@@ -64,6 +66,7 @@ export async function create(
       action: "create",
       resource,
       value,
+      ...(paywall ? { paywall } : {}),
       scope: grants?.app ? { ...where, applicationId: String(grants.app.id) } : where,
       ...(grants?.ids.length ? { entitlements: grants.ids } : {}),
     };
@@ -76,15 +79,42 @@ export async function create(
           ? `${scope.projectName ?? scope.projectId}, app ${scope.boundApplicationId}`
           : (scope.projectName ?? scope.projectId);
     const granting = grants?.ids.length ? ` granting entitlement ${grants.ids.join(", ")}` : "";
-    ui.info(`[dry-run] would create ${resource.replace(/s$/, "")} "${value}" in ${target}${granting}`);
+    const showing = paywall ? ` showing paywall ${paywall} to 100% of users` : "";
+    ui.info(`[dry-run] would create ${resource.replace(/s$/, "")} "${value}" in ${target}${granting}${showing}`);
     return;
   }
 
   const created = await apiCall(context, `Creating ${resource.replace(/s$/, "")}`, () => {
     return createOne(api, resource, scope, value, value2, flags.fields, grants);
   });
-  if (json) return context.output.data(created);
+  const warnings = resource === "campaigns" ? describeSilentAudiences(created, String(value2)) : [];
+  if (json) return context.output.data(warnings.length ? { ...created, warnings } : created);
   ui.success(`Created ${resource.replace(/s$/, "")} \`${rowName(created)}\` ${created.id ?? ""}`);
+  for (const warning of warnings) ui.warn(warning);
+}
+
+function describeSilentAudiences(campaign: Row, placement: string): string[] {
+  const campaignId = String(campaign.id ?? "<campaign>");
+  return listField(campaign, "audiences").flatMap((audience) => {
+    const audienceId = String(field(audience, "id") ?? "<audience>");
+    const lines: string[] = [];
+    if (field(audience, "enabled") === false) {
+      lines.push(
+        `Audience ${audienceId} is disabled, so placement "${placement}" matches no audience and shows no paywall. ` +
+          `Enable it: superwall campaigns audiences update ${campaignId} ${audienceId} --enabled`,
+      );
+    }
+    const shows = listField(audience, "variants").some(
+      (variant) => field(variant, "type") === "treatment" && Number(field(variant, "percentage")) > 0,
+    );
+    if (!shows) {
+      lines.push(
+        `Audience ${audienceId} has no paywall variant with traffic (all of it goes to the holdout), so placement "${placement}" shows no paywall. ` +
+          `Add one: superwall campaigns variants create ${campaignId} ${audienceId} --type treatment --paywall <paywall>`,
+      );
+    }
+    return lines;
+  });
 }
 
 const APP_PLATFORMS = ["ios", "android", "flutter", "react_native", "web"] as const;
@@ -235,7 +265,7 @@ function createOne(
       });
     }
     case "campaigns": {
-      return createCampaign(api, scope, value, String(value2));
+      return createCampaign(api, scope, value, String(value2), textOf(fields.paywall));
     }
     default:
       throw new Error(`create is not supported for ${resource} yet.`);

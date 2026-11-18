@@ -16,12 +16,14 @@ export const command = defineResource({
     {
       name: "create",
       summary: "Create a campaign that a placement triggers",
+      details: "Creates one audience. With --paywall, its only variant shows that paywall to 100% of users. Without it, its only variant is a holdout at 100%, so the placement shows no paywall until a treatment gets traffic: `campaigns variants create <campaign> <audience> --type treatment --paywall <paywall>`. The output warns about every audience that shows no paywall.",
       effect: "write",
       handler: "resource",
       usage: "--description <text> --placement <placement>",
       flags: [
         ["--description <text>", "What the campaign is for"],
         ["--placement <name>", "The event that triggers it"],
+        ["--paywall <id>", "The paywall its audience shows to 100% of users; without it, a 100% holdout"],
       ],
     },
     {
@@ -210,6 +212,7 @@ export const command = defineResource({
   examples: [
     ["campaigns list --app <app>", "Campaigns of one app"],
     ["campaigns get <campaign>", "One campaign in full"],
+    ['campaigns create --description "Upsell" --placement onboarding --paywall <paywall>', "A campaign that shows a paywall"],
     ["campaigns placements create <campaign> --event-name <placement>", "Trigger it on a placement"],
     ["campaigns audiences readout <campaign> <audience>", "How an audience is doing"],
   ],
