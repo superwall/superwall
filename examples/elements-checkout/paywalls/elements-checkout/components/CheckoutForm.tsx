@@ -13,7 +13,8 @@ import {
   StripeCheckout,
 } from "superwall/checkout/stripe";
 import type { ExpressCheckoutElementProps } from "superwall/checkout/stripe";
-import { useDiscount, useHaptics, useTranslation } from "superwall/hooks";
+import { useApplePay, useDiscount, usePurchase, useTranslation } from "superwall/hooks";
+import type { PurchaseCallbacks } from "superwall/hooks";
 import { useCardStyle, useStripeOptions } from "./appearance";
 
 /**
@@ -21,6 +22,8 @@ import { useCardStyle, useStripeOptions } from "./appearance";
  * purchase. All of them pay through superwall and report the same callbacks.
  */
 export const SCENARIOS = [
+  "applePayLink",
+  "applePayOnly",
   "full",
   "applePayCard",
   "cardFirst",
@@ -32,10 +35,12 @@ export const SCENARIOS = [
 ] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
+type Plan = "trial" | "monthly";
+
 type Props = {
-  product: "trial" | "monthly";
+  product: Plan;
   scenario: Scenario;
-  onCompleted: () => void;
+  callbacks: PurchaseCallbacks;
 };
 
 /** Minor units (cents) to a price in the shopper's language. */
@@ -80,6 +85,69 @@ const Wallets = ({
     </>
   );
 };
+
+/**
+ * superwall's own Apple Pay sheet on a button of the paywall's own: the same
+ * wallet `checkout: "applePay"` opens, called with `purchase(product,
+ * { checkout: "applePay" })`. In `elements` mode the paywall prepares it from
+ * the form's price, so it opens at once. It shows only where the wallet is
+ * ready; `alone` says why when it isn't, for the layout with nothing else.
+ */
+const ApplePayButton = ({ product, alone = false }: { product: Plan; alone?: boolean }) => {
+  const { t } = useTranslation();
+  const { product: wallet } = useApplePay(product);
+  const { purchase } = usePurchase();
+  if (wallet.status === "ready") {
+    return (
+      <button
+        type="button"
+        className="apple-pay"
+        aria-label={t("form.applePay")}
+        onClick={() => void purchase(product, { checkout: "applePay" })}
+      />
+    );
+  }
+  if (!alone) return null;
+  return (
+    <p className="notice" role="status">
+      {wallet.status === "preparing"
+        ? t("form.applePayPreparing")
+        : t("form.applePayUnavailable", { message: wallet.message })}
+    </p>
+  );
+};
+
+/**
+ * The layout superwall recommends for Apple Pay, Link and a card: Apple Pay
+ * on superwall's own sheet, Link alone in the express row, and the card form
+ * with every wallet turned off, so no wallet shows twice.
+ */
+const ApplePayLinkFields = ({ product }: { product: Plan }) => {
+  const { t } = useTranslation();
+  return (
+    <div className="form">
+      <ApplePayButton product={product} />
+      <ExpressCheckoutElement
+        options={{
+          ...WALLET_OPTIONS,
+          paymentMethods: { applePay: "never", googlePay: "never", link: "auto" },
+        }}
+      />
+      <p className="divider">{t("form.or")}</p>
+      <LinkAuthenticationElement />
+      <PaymentElement
+        options={{ layout: "tabs", wallets: { applePay: "never", googlePay: "never" } }}
+      />
+    </div>
+  );
+};
+
+/** Only superwall's Apple Pay sheet, as a `checkout: "applePay"` paywall offers it. */
+const ApplePayOnlyFields = ({ product }: { product: Plan }) => (
+  <div className="form">
+    <ApplePayButton product={product} alone />
+  </div>
+);
 
 /**
  * The paywall's own email box, for the layouts without Stripe's email field.
@@ -284,10 +352,18 @@ const PromoFields = () => {
   );
 };
 
-const Fields = ({ scenario, ...email }: { scenario: Scenario } & EmailProps) => {
+const Fields = ({
+  scenario,
+  product,
+  ...email
+}: { scenario: Scenario; product: Plan } & EmailProps) => {
   const { status } = useCheckout();
   if (status === "unavailable") return null;
   switch (scenario) {
+    case "applePayLink":
+      return <ApplePayLinkFields product={product} />;
+    case "applePayOnly":
+      return <ApplePayOnlyFields product={product} />;
     case "applePayCard":
       return <ApplePayCardFields {...email} />;
     case "cardFirst":
@@ -306,6 +382,9 @@ const Fields = ({ scenario, ...email }: { scenario: Scenario } & EmailProps) => 
       return <FullFields />;
   }
 };
+
+/** The layouts with no card form, paid only in a wallet, so with no purchase button. */
+const NO_BUTTON: readonly Scenario[] = ["wallets", "applePayOnly"];
 
 /** The layouts with the paywall's own email box, which `<StripeCheckout email>` reads. */
 const OWN_EMAIL: readonly Scenario[] = ["applePayCard", "cardFields", "singleLine"];
@@ -382,7 +461,7 @@ const Summary = ({ scenario }: { scenario: Scenario }) => {
           {t("purchase.unavailable", { message: message ?? "" })}
         </p>
       ) : null}
-      {scenario === "wallets" ? null : OWN_BUTTON.includes(scenario) ? (
+      {NO_BUTTON.includes(scenario) ? null : OWN_BUTTON.includes(scenario) ? (
         <OwnButton label={status === "paying" ? t("purchase.paying") : label} />
       ) : (
         <PurchaseButton className="button button--primary">
@@ -396,10 +475,11 @@ const Summary = ({ scenario }: { scenario: Scenario }) => {
 /**
  * A wallet row, a card form and a purchase button for one plan. superwall
  * prices the form from the product, takes the payment, runs 3D Secure and
- * the free trial, and completes the purchase; the callbacks report it.
+ * the free trial, and completes the purchase. `<StripeCheckout>`'s callbacks
+ * fire for this form's purchases only; the page's `usePurchase` callbacks
+ * hear every purchase, the Apple Pay sheet's too.
  */
-export function CheckoutForm({ product, scenario, onCompleted }: Props) {
-  const haptics = useHaptics();
+export function CheckoutForm({ product, scenario, callbacks }: Props) {
   const options = useStripeOptions();
   const [email, setEmail] = useState("");
 
@@ -410,14 +490,9 @@ export function CheckoutForm({ product, scenario, onCompleted }: Props) {
       options={options}
       {...(OWN_EMAIL.includes(scenario) ? { email } : {})}
       {...(scenario === "billing" ? { stripeMetadata: { source: "elements-playground" } } : {})}
-      onComplete={() => {
-        haptics.success();
-        onCompleted();
-      }}
-      onFailure={(failure) => console.info("onFailure", failure)}
-      onAbandon={() => console.info("onAbandon")}
+      {...callbacks}
     >
-      <Fields scenario={scenario} email={email} onEmail={setEmail} />
+      <Fields scenario={scenario} product={product} email={email} onEmail={setEmail} />
       <div className="actions">
         <Summary scenario={scenario} />
       </div>

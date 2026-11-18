@@ -81,20 +81,46 @@ typed.
 
 ## Scenarios
 
-The row of chips above the form switches between eight ways to build the
+The row of chips above the form switches between ten ways to build the
 same purchase, so the paywall doubles as a playground. Each one says on the
 page what it shows.
 
-| Scenario                | Stripe pieces                                                                                         | What it shows                                                                                                                              |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Wallets + card          | `ExpressCheckoutElement`, `LinkAuthenticationElement`, `PaymentElement` (tabs)                        | The default layout, with `<PurchaseButton>`                                                                                                |
-| Apple Pay + card fields | `ExpressCheckoutElement` (Apple Pay only), `CardNumberElement`, `CardExpiryElement`, `CardCvcElement` | `paymentMethods` turns off every other wallet; the paywall's own email box and button. Without Apple Pay, the card fields stand alone      |
-| Card first              | `LinkAuthenticationElement`, `PaymentElement` (accordion), `ExpressCheckoutElement`                   | Any order: the card form first, the wallets below it                                                                                       |
-| Card fields             | `CardNumberElement`, `CardExpiryElement`, `CardCvcElement`                                            | Separate card fields, the paywall's own email `<input>` passed as `<StripeCheckout email>`, and its own button on `useCheckout().submit()` |
-| Single card line        | `CardElement`                                                                                         | Stripe's one-line card field with an email box and `<PurchaseButton>`                                                                      |
-| Wallets only            | `ExpressCheckoutElement`                                                                              | No CTA: the wallet pays and asks for the email itself                                                                                      |
-| With address            | `LinkAuthenticationElement`, `AddressElement` (billing), `PaymentElement` (accordion)                 | The billing address goes onto the payment method; `stripeMetadata` goes onto the subscription                                              |
-| Promo code              | `LinkAuthenticationElement`, `PaymentElement`, `useDiscount()`                                        | A redeemed code re-prices the form: the due amount and the charge follow the discounted price                                              |
+| Scenario                | Stripe pieces                                                                                                                  | What it shows                                                                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Apple Pay + Link + card | superwall's Apple Pay sheet, `ExpressCheckoutElement` (Link only), `LinkAuthenticationElement`, `PaymentElement` (wallets off) | The recommended layout: `purchase(product, { checkout: "applePay" })` on the paywall's own button, shown when `useApplePay(product)` is ready |
+| Apple Pay only          | superwall's Apple Pay sheet                                                                                                    | The same sheet a `checkout: "applePay"` paywall opens, to check it works unchanged in `elements` mode                                         |
+| Wallets + card          | `ExpressCheckoutElement`, `LinkAuthenticationElement`, `PaymentElement` (tabs)                                                 | The default layout, with `<PurchaseButton>`                                                                                                   |
+| Apple Pay + card fields | `ExpressCheckoutElement` (Apple Pay only), `CardNumberElement`, `CardExpiryElement`, `CardCvcElement`                          | `paymentMethods` turns off every other wallet; the paywall's own email box and button. Without Apple Pay, the card fields stand alone         |
+| Card first              | `LinkAuthenticationElement`, `PaymentElement` (accordion), `ExpressCheckoutElement`                                            | Any order: the card form first, the wallets below it                                                                                          |
+| Card fields             | `CardNumberElement`, `CardExpiryElement`, `CardCvcElement`                                                                     | Separate card fields, the paywall's own email `<input>` passed as `<StripeCheckout email>`, and its own button on `useCheckout().submit()`    |
+| Single card line        | `CardElement`                                                                                                                  | Stripe's one-line card field with an email box and `<PurchaseButton>`                                                                         |
+| Wallets only            | `ExpressCheckoutElement`                                                                                                       | No CTA: the wallet pays and asks for the email itself                                                                                         |
+| With address            | `LinkAuthenticationElement`, `AddressElement` (billing), `PaymentElement` (accordion)                                          | The billing address goes onto the payment method; `stripeMetadata` goes onto the subscription                                                 |
+| Promo code              | `LinkAuthenticationElement`, `PaymentElement`, `useDiscount()`                                                                 | A redeemed code re-prices the form: the due amount and the charge follow the discounted price                                                 |
+
+## Events
+
+The panel under the form logs every purchase callback as it fires, with
+the listener that heard it: the page's `usePurchase` hears every purchase on
+the paywall, superwall's Apple Pay sheet included; `<StripeCheckout>` hears
+only its own form's. The native SDK gets the matching `stripe_checkout_*`
+messages, so a `transaction_abandon` reaches its analytics too.
+
+| What the shopper does                      | Callbacks, in order                         |
+| ------------------------------------------ | ------------------------------------------- |
+| Pays with a card                           | `onStart`, `onSubmit`, `onComplete`         |
+| Pays with an incomplete form or no email   | nothing: `submit()` returns `incomplete`    |
+| Card declined                              | `onStart`, `onSubmit`, `onFailure` (reason) |
+| Pays again after a decline                 | a new `onStart`, then as above              |
+| Opens Link or a wallet in the express row  | `onStart`                                   |
+| … and pays                                 | `onSubmit`, `onComplete`                    |
+| … and closes it                            | `onAbandon`                                 |
+| Taps superwall's Apple Pay button and pays | `onStart`, `onSubmit`, `onComplete`         |
+| … and closes the sheet                     | `onAbandon` (from `usePurchase` only)       |
+| Fails 3D Secure                            | `onStart`, `onSubmit`, `onFailure`          |
+
+The callbacks don't say which method paid; a paywall that needs it knows
+which of its buttons the shopper used.
 
 The wallet row renders nothing on a device with no wallet, so the example's
 divider waits for `ExpressCheckoutElement`'s `onReady` to report one.

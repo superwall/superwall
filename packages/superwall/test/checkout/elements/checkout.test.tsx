@@ -1106,3 +1106,90 @@ describe("<StripeCheckout> with Stripe's separate card fields", () => {
     });
   });
 });
+
+describe("the order the form's callbacks fire in", () => {
+  const recorder = () => {
+    const order: string[] = [];
+    const props = {
+      onStart: () => order.push("onStart"),
+      onSubmit: () => order.push("onSubmit"),
+      onComplete: () => order.push("onComplete"),
+      onAbandon: () => order.push("onAbandon"),
+      onFailure: () => order.push("onFailure"),
+    };
+    return { order, props };
+  };
+  const express = () => stripe.express as NonNullable<typeof stripe.express>;
+
+  it("starts, submits and completes a card payment", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    const { order, props } = recorder();
+    const { checkout } = await mount({ props });
+    await act(async () => {
+      await checkout().submit();
+    });
+    await settle();
+    expect(order).toEqual(["onStart", "onSubmit", "onComplete"]);
+  });
+
+  it("starts, submits and fails a card the backend declines, then starts again on the retry", async () => {
+    answerConfirm({ detail: "Your card was declined.", failure: { reason: "card_declined" } }, 402);
+    const { order, props } = recorder();
+    const { checkout } = await mount({ props });
+    await act(async () => {
+      await checkout().submit();
+    });
+    expect(order).toEqual(["onStart", "onSubmit", "onFailure"]);
+    answerConfirm({ subscriptionId: "sub_1" });
+    await act(async () => {
+      await checkout().submit();
+    });
+    await settle();
+    expect(order).toEqual([
+      "onStart",
+      "onSubmit",
+      "onFailure",
+      "onStart",
+      "onSubmit",
+      "onComplete",
+    ]);
+  });
+
+  it("fires nothing for an incomplete form", async () => {
+    stripe.form.submit.mockResolvedValueOnce({
+      error: { type: "validation_error", message: "Your card number is incomplete." },
+    });
+    const { order, props } = recorder();
+    const { checkout } = await mount({ props });
+    await act(async () => {
+      await checkout().submit();
+    });
+    expect(order).toEqual([]);
+  });
+
+  it("starts when the wallet opens and abandons when it closes", async () => {
+    const { order, props } = recorder();
+    await mount({ props, children: <ExpressCheckoutElement /> });
+    await act(async () => {
+      express().onClick({ resolve: vi.fn(), reject: vi.fn() });
+    });
+    expect(order).toEqual(["onStart"]);
+    await act(async () => {
+      express().onCancel();
+    });
+    await settle();
+    expect(order).toEqual(["onStart", "onAbandon"]);
+  });
+
+  it("starts when the wallet opens, then submits and completes when it pays", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    const { order, props } = recorder();
+    await mount({ props, children: <ExpressCheckoutElement /> });
+    await act(async () => {
+      express().onClick({ resolve: vi.fn(), reject: vi.fn() });
+      await express().onConfirm({ paymentFailed: vi.fn() });
+    });
+    await settle();
+    expect(order).toEqual(["onStart", "onSubmit", "onComplete"]);
+  });
+});

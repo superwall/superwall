@@ -11,6 +11,8 @@ export default {
   },
   scenarios: {
     label: "Checkout layout",
+    applePayLink: "Apple Pay + Link + card",
+    applePayOnly: "Apple Pay only",
     full: "Wallets + card",
     applePayCard: "Apple Pay + card fields",
     cardFirst: "Card first",
@@ -20,6 +22,10 @@ export default {
     billing: "With address",
     promo: "Promo code",
     about: {
+      applePayLink:
+        "The recommended layout: superwall's own Apple Pay sheet on its own button, Link in Stripe's express row, then the card form with no wallets of its own.",
+      applePayOnly:
+        "Only superwall's Apple Pay sheet, opened from the paywall's own button, exactly as a checkout: \"applePay\" paywall opens it.",
       full: "Apple Pay, Google Pay and Link buttons, an email field and Stripe's card form, paid with the built-in purchase button.",
       applePayCard:
         "Only the Apple Pay button above separate card fields, with the paywall's own email box and button. Without Apple Pay, the card fields stand alone.",
@@ -39,6 +45,9 @@ export default {
   },
   form: {
     or: "or pay with card",
+    applePay: "Subscribe with Apple Pay",
+    applePayPreparing: "Getting Apple Pay ready…",
+    applePayUnavailable: "Apple Pay isn't available here: {message}",
     orWallet: "or pay in one tap",
     email: "Email",
     emailPlaceholder: "you@example.com",
@@ -65,6 +74,13 @@ export default {
     failed: "That didn't go through. {reason} Try another card.",
     declined: "Your payment was declined.",
     unavailable: "Payment isn't available here: {message}",
+  },
+  events: {
+    label: "Purchase events",
+    empty: "Nothing yet. Start a purchase and its callbacks show up here.",
+    clear: "Clear",
+    paywall: "usePurchase",
+    form: "StripeCheckout",
   },
   common: {
     close: "Close",
