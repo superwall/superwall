@@ -43,6 +43,12 @@ const SPEC: DocOperation[] = [
     body: [{ name: "event_name", type: "string", required: true, description: "Event name" }],
   }),
   op("DELETE", "/v2/products/{id}"),
+  op("DELETE", "/v2/surveys/{id}/paywalls", {
+    body: [
+      { name: "paywall_id", type: "string", required: true },
+      { name: "survey_presentation_condition", type: "string", required: true },
+    ],
+  }),
   op("POST", "/v2/gadgets", {
     body: [
       { name: "tags", type: "string[]", required: false },
@@ -106,7 +112,7 @@ function fakeApi(calls: Call[], responses: Record<string, unknown> = {}, project
     post: (path: string, body: unknown) => answer("POST", path, body),
     put: (path: string, body: unknown) => answer("PUT", path, body),
     patch: (path: string, body: unknown) => answer("PATCH", path, body),
-    del: (path: string) => answer("DELETE", path),
+    del: (path: string, options?: { body?: unknown }) => answer("DELETE", path, options?.body),
     postText: async () => "",
   } as unknown as SuperwallApi;
 }
@@ -193,6 +199,49 @@ test("a destructive operation outside a terminal needs --yes", async () => {
 
   await run(["products", "delete", "12"], { yes: true }, fakeApi(calls));
   assert.deepEqual(calls, [{ method: "DELETE", path: "/v2/products/12" }]);
+});
+
+const surveys = defineResource({
+  name: "surveys",
+  summary: "Surveys",
+  operations: [
+    {
+      name: "unlink",
+      summary: "Remove a paywall from a survey",
+      effect: "destructive",
+      method: "DELETE",
+      path: "/v2/surveys/{id}/paywalls",
+      destructive: true,
+    },
+  ],
+  examples: [["surveys unlink 3100", "Remove a paywall"]],
+});
+
+test("a DELETE whose endpoint takes a body sends its flags as the body, and --dry-run shows it", async () => {
+  CATALOGS.surveys = surveys;
+  try {
+    const flags = { paywallId: "292026", surveyPresentationCondition: "ON_MANUAL_CLOSE", yes: true };
+    const dry: Call[] = [];
+    const preview = await run(["surveys", "unlink", "3100"], { ...flags, dryRun: true }, fakeApi(dry));
+    assert.equal(dry.length, 0);
+    assert.deepEqual(preview, {
+      method: "DELETE",
+      path: "/v2/surveys/3100/paywalls",
+      body: { paywall_id: "292026", survey_presentation_condition: "ON_MANUAL_CLOSE" },
+    });
+
+    const calls: Call[] = [];
+    await run(["surveys", "unlink", "3100"], flags, fakeApi(calls));
+    assert.deepEqual(calls, [
+      {
+        method: "DELETE",
+        path: "/v2/surveys/3100/paywalls",
+        body: { paywall_id: "292026", survey_presentation_condition: "ON_MANUAL_CLOSE" },
+      },
+    ]);
+  } finally {
+    delete CATALOGS.surveys;
+  }
 });
 
 test("--dry-run prints the request instead of sending it", async () => {
