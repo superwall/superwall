@@ -170,14 +170,20 @@ describe("browserLayoutFor", () => {
     expect(browserLayoutFor(deviceById("pixel-10"), { teleported: false })).toBeUndefined();
   });
 
-  it("floats the iPhone bar over a teleported paywall, which keeps the app's safe areas", () => {
+  it("ends a teleported iPhone page at Safari's toolbar, like a web-only one", () => {
+    expect(browserLayoutFor(deviceById("iphone-17"), { teleported: true })).toEqual(
+      browserLayoutFor(deviceById("iphone-17"), { teleported: false }),
+    );
     expect(browserLayoutFor(deviceById("iphone-17"), { teleported: true })).toEqual({
       kind: "phone",
-      top: 0,
-      bottom: 0,
+      top: 64,
+      bottom: 84,
       statusBar: 64,
       right: 0,
     });
+  });
+
+  it("floats the bar over a teleported landscape iPhone, where Safari's toolbar collapses", () => {
     expect(
       browserLayoutFor(deviceById("iphone-17"), { teleported: true, landscape: true }),
     ).toEqual({ kind: "phone", top: 0, bottom: 0, statusBar: 64, right: 0 });
