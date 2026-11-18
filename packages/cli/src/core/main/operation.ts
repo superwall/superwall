@@ -306,22 +306,25 @@ async function fillScope(
 }
 
 function coerce(raw: unknown, type: string): unknown {
-  if (Array.isArray(raw)) return raw.map((item) => coerce(item, type.replace(/\[\]$/, "")));
+  const parts = type.split("|").map((part) => part.trim());
+  const nullable = parts.includes("null");
+  const values = parts.filter((part) => part !== "null");
+  const item = values.length && values.every((part) => part.endsWith("[]")) ? values[0]!.slice(0, -2) : undefined;
+  const takesJson = (types: string[]) => types.some((part) => part === "object" || part === "any");
+  if (Array.isArray(raw)) return raw.map((value) => coerce(value, item ?? type));
   if (raw !== null && typeof raw === "object") return raw;
-  if (type.endsWith("[]")) {
-    const item = type.slice(0, -2);
-    const parsed = item === "object" || item === "any" ? coerce(raw, "any") : raw;
-    if (parsed !== raw) return Array.isArray(parsed) ? parsed : [parsed];
-    return String(raw)
-      .split(",")
-      .map((part) => coerce(part.trim(), item));
-  }
   const text = String(raw);
+  if (nullable && text === "null") return null;
+  if (item !== undefined) {
+    const parsed = takesJson([item]) ? coerce(raw, "any") : raw;
+    if (parsed !== raw) return Array.isArray(parsed) ? parsed : [parsed];
+    return text.split(",").map((part) => coerce(part.trim(), item));
+  }
   if (/\bboolean\b/.test(type) && /^(true|false)$/.test(text)) return text === "true";
   if (/\b(number|integer)\b/.test(type) && text.trim() !== "" && !Number.isNaN(Number(text))) {
     return Number(text);
   }
-  if ((type === "object" || type === "any") && /^[[{]/.test(text)) {
+  if (takesJson(parts) && /^[[{]/.test(text)) {
     try {
       return JSON.parse(text);
     } catch {
@@ -329,8 +332,6 @@ function coerce(raw: unknown, type: string): unknown {
     }
   }
   if (type === "null") return null;
-  // A nullable field takes the literal null to clear it (`--end-at null`).
-  if (text === "null" && type.split("|").some((part) => part.trim() === "null")) return null;
   return typeof raw === "number" && !/\b(number|integer)\b/.test(type) ? text : raw;
 }
 

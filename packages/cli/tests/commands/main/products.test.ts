@@ -12,6 +12,7 @@ beforeEach(() => {
       body: [
         { name: "name", type: "string", required: false, description: "Display name" },
         { name: "trial_days", type: "number | null", required: false },
+        { name: "subscription", type: "object | null", required: false },
       ],
     }),
     op("DELETE", "/v2/products/{id}"),
@@ -44,6 +45,23 @@ test("updating a product types each field from the API reference", async () => {
   await runLine("products update 12 --name Pro --trial-days 7 --yes --json", { api: fakeResourceApi(calls) });
 
   assert.deepEqual(calls, [{ method: "PATCH", path: "/v2/products/12", body: { name: "Pro", trial_days: 7 } }]);
+});
+
+test("products update --subscription sends the JSON as an object, not a string", async () => {
+  const calls: ApiCall[] = [];
+
+  await runLine(
+    `products update 692527 --subscription {"period":"year","period_count":1,"trial_period_days":3} --yes --json`,
+    { api: fakeResourceApi(calls) },
+  );
+
+  assert.deepEqual(calls, [
+    {
+      method: "PATCH",
+      path: "/v2/products/692527",
+      body: { subscription: { period: "year", period_count: 1, trial_period_days: 3 } },
+    },
+  ]);
 });
 
 test("deleting a product needs --yes outside a terminal, and its impact can be read first", async () => {
