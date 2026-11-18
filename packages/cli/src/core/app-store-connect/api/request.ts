@@ -4,6 +4,7 @@ import type { SuperwallApi } from "@/core/api/client";
 import { parseParams } from "@/core/api/params";
 import { apiCall } from "@/ui/spinner";
 import { ascProxy, listAscConfigs } from "./client";
+import { withAppleErrors } from "./errors";
 import { formatReplacement, selectReplacement } from "./replaced";
 import { buildAscBody, lookupAscOp, validateAscBody } from "./schema";
 import {
@@ -73,6 +74,6 @@ export async function sendAscRequest(
   }
 
   const teamId = await resolveAscTeam(ctx, api, options.team);
-  const response = await apiCall(ctx, `${verb.toUpperCase()} ${path}`, () => ascProxy(api, teamId, verb, path, body));
+  const response = await apiCall(ctx, `${verb.toUpperCase()} ${path}`, () => withAppleErrors(() => ascProxy(api, teamId, verb, path, body)));
   return response ?? { ok: true };
 }
