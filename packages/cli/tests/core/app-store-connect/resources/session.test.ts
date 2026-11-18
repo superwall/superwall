@@ -49,14 +49,15 @@ test("every page of a list is read", async () => {
 });
 
 test("an Apple error the session explains keeps Apple's HTTP status", async () => {
-  const { AscRequestError, statusOf } = await import("@/core/app-store-connect/resources/session");
+  const { AscRequestError, statusOf } = await import("@/core/app-store-connect/api/errors");
   assert.equal(statusOf(new AscRequestError("refused", 502)), 502);
   assert.equal(statusOf(new ApiError("GET x", 404, "")), 404);
   assert.equal(statusOf(new Error("plain")), undefined);
 });
 
 test("select reads Apple's explained 404 as nothing there, and rethrows any other status", async () => {
-  const { AscRequestError, AscSession } = await import("@/core/app-store-connect/resources/session");
+  const { AscSession } = await import("@/core/app-store-connect/resources/session");
+  const { AscRequestError } = await import("@/core/app-store-connect/api/errors");
   const missing = "GET /v2/inAppPurchases/701/inAppPurchaseAvailability";
   const failing = "GET /v2/inAppPurchases/702/inAppPurchaseAvailability";
   const { api } = ascRoutes({
@@ -68,7 +69,7 @@ test("select reads Apple's explained 404 as nothing there, and rethrows any othe
   await assert.rejects(session.select("/v2/inAppPurchases/702/inAppPurchaseAvailability"), (error: unknown) => {
     assert.ok(error instanceof AscRequestError);
     assert.equal(error.status, 500);
-    assert.match(error.message, /An unexpected error occurred on the server side\./);
+    assert.match(error.message, /  • UNEXPECTED_ERROR: An unexpected error occurred on the server side\./);
     return true;
   });
 });
