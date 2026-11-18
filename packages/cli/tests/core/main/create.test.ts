@@ -312,6 +312,34 @@ test("a campaign is created in the app with its first placement", async () => {
   assert.deepEqual(said(calls, "success"), ["Created campaign `Upsell` 77"]);
 });
 
+test("--paywall creates the campaign showing that paywall to everyone, with no warning", async () => {
+  const { calls, writes } = await create(
+    campaigns,
+    { description: "Upsell", placement: "onboarding", paywall: "9", app: "10" },
+    {
+      "POST /v2/campaigns": {
+        id: 77,
+        description: "Upsell",
+        audiences: [{ id: 3, enabled: true, variants: [{ id: 12, type: "treatment", percentage: 100, paywall: 9 }] }],
+      },
+    },
+  );
+  assert.deepEqual(writes, [
+    {
+      method: "POST",
+      path: "/v2/campaigns",
+      body: {
+        application_id: "10",
+        description: "Upsell",
+        placements: [{ event_name: "onboarding" }],
+        audiences: [{ variants: [{ type: "treatment", percentage: 100, paywall: "9" }] }],
+      },
+    },
+  ]);
+  assert.deepEqual(said(calls, "success"), ["Created campaign `Upsell` 77"]);
+  assert.deepEqual(said(calls, "warn"), []);
+});
+
 const HOLDOUT_CAMPAIGN = {
   id: 77,
   description: "Upsell",
@@ -393,6 +421,16 @@ test("a dry run says where it would create, by app for app resources and by proj
   const campaign = await create(campaigns, { description: "Upsell", placement: "onboarding", app: "10", dryRun: true });
   assert.deepEqual(said(campaign.calls, "info"), ['[dry-run] would create campaign "Upsell" in Lab (iOS)']);
   assert.deepEqual(campaign.writes, []);
+
+  const shown = await create(campaigns, { description: "Upsell", placement: "onboarding", paywall: "9", app: "10", dryRun: true });
+  assert.deepEqual(said(shown.calls, "info"), ['[dry-run] would create campaign "Upsell" in Lab (iOS) showing paywall 9 to 100% of users']);
+  const shownPlan = await create(
+    campaigns,
+    { description: "Upsell", placement: "onboarding", paywall: "9", app: "10", dryRun: true },
+    {},
+    { json: true },
+  );
+  assert.equal((shownPlan.result.json as { paywall?: string }).paywall, "9");
 
   const product = await create(products, { identifier: "pro", project: "1", dryRun: true });
   assert.deepEqual(said(product.calls, "info"), ['[dry-run] would create product "pro" in Lab']);

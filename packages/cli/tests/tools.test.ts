@@ -243,6 +243,7 @@ test("publish and manual grants describe their live effects", () => {
 
 test("campaigns_create says its audience starts as a holdout that shows no paywall", () => {
   assert.match(tool("campaigns_create").description, /only variant is a holdout at 100%, so the placement shows no paywall/);
+  assert.ok("paywall" in tool("campaigns_create").inputSchema.properties);
 });
 
 test("the MCP retains generic API and schema tools with fallback guidance", () => {

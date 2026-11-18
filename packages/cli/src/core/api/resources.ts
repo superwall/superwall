@@ -168,14 +168,18 @@ export function createCampaign(
   scope: Scope,
   description: string,
   placement: string,
+  paywall?: string,
 ): Promise<Row> {
   if (!scope.applicationId)
     throw new Error("This project has no application to create a campaign in.");
+  const variant = paywall
+    ? { type: "treatment", percentage: 100, paywall }
+    : { type: "holdout", percentage: 100, paywall: null };
   return api.post<Row>("/v2/campaigns", {
     application_id: scope.applicationId,
     description,
     placements: [{ event_name: placement }],
-    audiences: [{ variants: [{ type: "holdout", percentage: 100, paywall: null }] }],
+    audiences: [{ variants: [variant] }],
   });
 }
 

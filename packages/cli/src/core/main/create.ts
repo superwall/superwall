@@ -58,6 +58,7 @@ export async function create(
   );
   const grants =
     resource === "products" ? await resolveProductEntitlements(context, api, scope, entitlementValues(flags.fields)) : undefined;
+  const paywall = resource === "campaigns" ? textOf(flags.fields.paywall) : undefined;
   if (dryRun) {
     const { projectCount: _projects, appCount: _apps, ...where } = scope;
     const plan = {
@@ -65,6 +66,7 @@ export async function create(
       action: "create",
       resource,
       value,
+      ...(paywall ? { paywall } : {}),
       scope: grants?.app ? { ...where, applicationId: String(grants.app.id) } : where,
       ...(grants?.ids.length ? { entitlements: grants.ids } : {}),
     };
@@ -77,7 +79,8 @@ export async function create(
           ? `${scope.projectName ?? scope.projectId}, app ${scope.boundApplicationId}`
           : (scope.projectName ?? scope.projectId);
     const granting = grants?.ids.length ? ` granting entitlement ${grants.ids.join(", ")}` : "";
-    ui.info(`[dry-run] would create ${resource.replace(/s$/, "")} "${value}" in ${target}${granting}`);
+    const showing = paywall ? ` showing paywall ${paywall} to 100% of users` : "";
+    ui.info(`[dry-run] would create ${resource.replace(/s$/, "")} "${value}" in ${target}${granting}${showing}`);
     return;
   }
 
@@ -262,7 +265,7 @@ function createOne(
       });
     }
     case "campaigns": {
-      return createCampaign(api, scope, value, String(value2));
+      return createCampaign(api, scope, value, String(value2), textOf(fields.paywall));
     }
     default:
       throw new Error(`create is not supported for ${resource} yet.`);

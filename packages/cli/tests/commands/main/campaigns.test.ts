@@ -107,5 +107,6 @@ test("campaigns create --help says the new audience is a holdout until a treatme
   const help = await helpLine("campaigns create --help");
   assert.match(help, /only variant is a holdout at 100%/);
   assert.match(help, /campaigns variants create <campaign> <audience> --type treatment --paywall <paywall>/);
+  assert.match(help, /--paywall <id> +The paywall its audience shows to 100% of users; without it, a 100% holdout/);
 });
 
