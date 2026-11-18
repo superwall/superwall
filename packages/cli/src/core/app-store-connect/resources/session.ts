@@ -1,8 +1,8 @@
 import type { CommandContext } from "@/program/command";
 import { ApiError, type SuperwallApi } from "@/core/api/client";
-import { isRecord, parseJson } from "@/core/json";
 import { apiCall } from "@/ui/spinner";
 import { ascProxy } from "../api/client";
+import { AscRequestError, describeAppleError, statusOf } from "../api/errors";
 import { resolveAscOrgApi, resolveAscTeam } from "../api/request";
 import { parseDocument, type AscDocument, type AscResource } from "./json-api";
 
@@ -28,31 +28,6 @@ export function placeholder(name: string): string {
 
 export function isPlaceholder(value: string): boolean {
   return value.includes("${");
-}
-
-function describeAppleError(error: ApiError): string | undefined {
-  const parsed = error.body ? parseJson(error.body) : undefined;
-  const errors = isRecord(parsed) && Array.isArray(parsed.errors) ? parsed.errors.filter(isRecord) : [];
-  if (errors.length === 0) return undefined;
-  const lines = errors.map((entry) => {
-    const text = typeof entry.detail === "string" ? entry.detail : String(entry.title ?? entry.code ?? "");
-    const pointer = isRecord(entry.source) && typeof entry.source.pointer === "string" ? ` (${entry.source.pointer})` : "";
-    return `  • ${text}${pointer}`;
-  });
-  return `App Store Connect refused ${error.request.replace(/^(\w+) \/v2\/organizations\/[^/]+\/app-store-connect\/proxy\/[^/]+/, "$1 ")} (${error.status}):\n${lines.join("\n")}`;
-}
-
-export class AscRequestError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-  }
-}
-
-export function statusOf(error: unknown): number | undefined {
-  return error instanceof ApiError || error instanceof AscRequestError ? error.status : undefined;
 }
 
 export class AscSession {

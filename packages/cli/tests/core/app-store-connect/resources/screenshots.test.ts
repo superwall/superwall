@@ -230,7 +230,7 @@ test("a commit that fails every time deletes the stuck screenshot and says the e
     [
       "Apple failed to commit the screenshot after its bytes were uploaded (3 attempts):",
       "App Store Connect refused PATCH /v1/subscriptionAppStoreReviewScreenshots/NEW (500):",
-      "  • An unexpected error occurred on the server side.",
+      "  • UNEXPECTED_ERROR: An unexpected error occurred on the server side.",
       "Deleted the unfinished screenshot NEW so it doesn't stay in AWAITING_UPLOAD.",
       "The earlier screenshot OLD was deleted before the upload, so this subscription has no review screenshot now.",
       "This is an error on Apple's side. Try the upload again later.",

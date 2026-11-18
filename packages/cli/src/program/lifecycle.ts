@@ -1,6 +1,7 @@
 import pc from "picocolors";
 import { ApiError, type SuperwallApi } from "@/core/api/client";
 import { NotLoggedInError } from "@/core/account/errors";
+import { AscRequestError } from "@/core/app-store-connect/api/errors";
 import { createCommandOutput, type OutputMode, writeJson } from "@/program/output";
 import { useRenderer } from "@/ui";
 import type { Renderer } from "@/ui/types";
@@ -142,6 +143,6 @@ export function normalizeError(error: unknown): { code: string; message: string;
     return { code: "not_logged_in", message: "You aren't logged in. Run `superwall login` first." };
   }
   if (error instanceof UsageError) return { code: "invalid_arguments", message: error.message };
-  if (error instanceof ApiError) return { code: "api_error", message: error.message, status: error.status };
+  if (error instanceof ApiError || error instanceof AscRequestError) return { code: "api_error", message: error.message, status: error.status };
   return { code: "command_error", message: error instanceof Error ? error.message : String(error) };
 }
