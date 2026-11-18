@@ -102,14 +102,20 @@ export const createConfirmation = (options: ConfirmationOptions): Confirmation =
 
     if (!response.requiresAction || !response.clientSecret) return;
 
-    const result = await stripe.handleNextAction({ clientSecret: response.clientSecret });
+    const { clientSecret } = response;
     if (response.intentType === "SetupIntent") {
+      const result = await stripe.handleNextAction({ clientSecret });
       if (result.error) throw stripeDecline(result.error, "Setup authentication failed");
       const setupIntentId = result.setupIntent?.id || response.setupIntentId;
       if (!setupIntentId) throw new Error("No SetupIntent returned");
       await post(payment, { setupIntentId, email });
       return;
     }
+    const result = await stripe.confirmPayment({
+      clientSecret,
+      confirmParams: { payment_method: paymentMethodId },
+      redirect: "if_required",
+    });
     if (result.error) throw stripeDecline(result.error, "Payment authentication failed");
   };
 

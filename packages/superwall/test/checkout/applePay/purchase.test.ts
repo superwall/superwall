@@ -67,6 +67,7 @@ const makeController = ({
   confirmCardPayment = { paymentIntent: { id: "pi_1", status: "succeeded" } } as unknown,
   confirmCardSetup = { setupIntent: { id: "seti_1", status: "succeeded" } } as unknown,
   handleNextAction = undefined as unknown,
+  confirmPayment = { paymentIntent: { id: "pi_1", status: "succeeded" } } as unknown,
   confirmResponse = { customerId: "cus_1", subscriptionId: "sub_1" } as Record<string, unknown>,
   confirmStatus = 200,
   realFetch = false,
@@ -84,10 +85,10 @@ const makeController = ({
     paymentRequest: vi.fn((_options: PaymentRequestOptions) => paymentRequest),
     confirmCardPayment: vi.fn().mockResolvedValue(confirmCardPayment),
     confirmCardSetup: vi.fn().mockResolvedValue(confirmCardSetup),
-    handleNextAction: vi.fn(async ({ clientSecret }: { clientSecret: string }) => {
-      if (handleNextAction !== undefined) return handleNextAction;
-      return clientSecret.startsWith("seti") ? confirmCardSetup : confirmCardPayment;
-    }),
+    handleNextAction: vi.fn(async () =>
+      handleNextAction !== undefined ? handleNextAction : confirmCardSetup,
+    ),
+    confirmPayment: vi.fn().mockResolvedValue(confirmPayment),
   };
   const post = vi.fn();
   const fetchWithRetry = vi
@@ -354,7 +355,11 @@ describe("createApplePay", () => {
     const outcome = controller.purchase("primary", context);
     await authorize();
     await expect(outcome).resolves.toEqual({ status: "completed" });
-    expect(stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: "pi_secret" });
+    expect(stripe.confirmPayment).toHaveBeenCalledWith({
+      clientSecret: "pi_secret",
+      confirmParams: { payment_method: "pm_1" },
+      redirect: "if_required",
+    });
     expect(stripe.confirmCardPayment).not.toHaveBeenCalled();
   });
 
@@ -626,7 +631,7 @@ describe("createApplePay deferred authentication", () => {
   it("fails when authenticating a deferred PaymentIntent is refused", async () => {
     const { controller, authorize } = makeController({
       confirmResponse: { requiresAction: true, clientSecret: "pi_secret" },
-      confirmCardPayment: { error: {} },
+      confirmPayment: { error: {} },
     });
     await controller.prepare(quote());
     const outcome = controller.purchase("primary", context);
@@ -915,7 +920,7 @@ describe("why the wallet's payment failed", () => {
       setup: () => ({
         made: makeController({
           confirmResponse: { requiresAction: true, clientSecret: "pi_secret" },
-          confirmCardPayment: decline,
+          confirmPayment: decline,
         }),
         quoted: quote(),
       }),

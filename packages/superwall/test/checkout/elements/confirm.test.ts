@@ -48,16 +48,18 @@ const setup = (replies: Reply[], stripeOverrides: Partial<Record<string, unknown
     confirmCardSetup: vi
       .fn()
       .mockResolvedValue({ setupIntent: { id: "seti_1", status: "succeeded" } }),
-    handleNextAction: vi.fn(async ({ clientSecret }: { clientSecret: string }) =>
-      clientSecret.startsWith("seti")
-        ? { setupIntent: { id: "seti_1", status: "succeeded" } }
-        : { paymentIntent: { id: "pi_1", status: "succeeded" } },
-    ),
+    handleNextAction: vi
+      .fn()
+      .mockResolvedValue({ setupIntent: { id: "seti_1", status: "succeeded" } }),
+    confirmPayment: vi
+      .fn()
+      .mockResolvedValue({ paymentIntent: { id: "pi_1", status: "succeeded" } }),
     ...stripeOverrides,
   } as unknown as Stripe & {
     confirmCardPayment: ReturnType<typeof vi.fn>;
     confirmCardSetup: ReturnType<typeof vi.fn>;
     handleNextAction: ReturnType<typeof vi.fn>;
+    confirmPayment: ReturnType<typeof vi.fn>;
   };
   const confirmation = createConfirmation({
     publicApiKey: () => "pk_superwall",
@@ -130,9 +132,10 @@ describe("createConfirmation, deferred intent", () => {
 
     expect(onSubscription).not.toHaveBeenCalled();
     expect(stripe.handleNextAction).not.toHaveBeenCalled();
+    expect(stripe.confirmPayment).not.toHaveBeenCalled();
   });
 
-  it("runs 3D Secure on a payment the backend could not finish", async () => {
+  it("confirms the unpaid first invoice on the client, running 3D Secure if asked", async () => {
     const { pay, stripe, onAuthorized } = setup([
       { body: { requiresAction: true, clientSecret: "pi_secret", intentType: "PaymentIntent" } },
     ]);
@@ -140,11 +143,16 @@ describe("createConfirmation, deferred intent", () => {
     await pay();
 
     expect(onAuthorized).toHaveBeenCalledOnce();
-    expect(stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: "pi_secret" });
+    expect(stripe.confirmPayment).toHaveBeenCalledWith({
+      clientSecret: "pi_secret",
+      confirmParams: { payment_method: "pm_1" },
+      redirect: "if_required",
+    });
+    expect(stripe.handleNextAction).not.toHaveBeenCalled();
     expect(stripe.confirmCardPayment).not.toHaveBeenCalled();
   });
 
-  it("hands a Link payment's next action to Stripe without a card-only call", async () => {
+  it("confirms a Link payment with Stripe's generic call, not a card-only one", async () => {
     const { pay, stripe, bodies } = setup([
       { body: { requiresAction: true, clientSecret: "pi_secret", intentType: "PaymentIntent" } },
     ]);
@@ -152,14 +160,16 @@ describe("createConfirmation, deferred intent", () => {
     await pay({ paymentMethodId: "pm_link" });
 
     expect(bodies()[0]).toMatchObject({ paymentMethodId: "pm_link" });
-    expect(stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: "pi_secret" });
+    expect(stripe.confirmPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ confirmParams: { payment_method: "pm_link" } }),
+    );
     expect(stripe.confirmCardPayment).not.toHaveBeenCalled();
     expect(stripe.confirmCardSetup).not.toHaveBeenCalled();
   });
 
   it("maps a failed 3D Secure payment to a checkout failure", async () => {
     const { pay } = setup([{ body: { requiresAction: true, clientSecret: "pi_secret" } }], {
-      handleNextAction: vi.fn().mockResolvedValue({
+      confirmPayment: vi.fn().mockResolvedValue({
         error: { code: "card_declined", decline_code: "insufficient_funds", message: "No funds" },
       }),
     });
@@ -175,7 +185,7 @@ describe("createConfirmation, deferred intent", () => {
 
   it("falls back to its own message when Stripe gives none", async () => {
     const { pay } = setup([{ body: { requiresAction: true, clientSecret: "pi_secret" } }], {
-      handleNextAction: vi.fn().mockResolvedValue({ error: {} }),
+      confirmPayment: vi.fn().mockResolvedValue({ error: {} }),
     });
 
     await expect(pay()).rejects.toThrow("Payment authentication failed");

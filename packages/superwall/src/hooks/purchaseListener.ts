@@ -24,7 +24,7 @@ export const listenToPurchases = <TProduct extends SuperwallProduct>(
       const product = productOf(payload);
       if (product) pick(callbacks())?.(product);
     };
-  
+
   const unsubscribers = [
     events.on(
       "start",
@@ -54,7 +54,7 @@ export const listenToPurchases = <TProduct extends SuperwallProduct>(
       }
     }),
   ];
-  
+
   return () => {
     for (const unsubscribe of unsubscribers) unsubscribe();
   };

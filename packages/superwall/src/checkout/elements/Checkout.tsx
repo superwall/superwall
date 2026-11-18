@@ -18,7 +18,12 @@ import { CheckoutFailureError, type CheckoutFailure } from "../failure";
 import { elementsFor, prefetchSession, purchaseWithElements, sessionsFor } from "../flow";
 import { checkoutModeFor } from "../host/sdk";
 import type { ElementsCheckoutSession } from "../types";
-import { checkoutErrorOf, type CheckoutError, type CollectedPayment, type ElementsQuote } from "./index";
+import {
+  checkoutErrorOf,
+  type CheckoutError,
+  type CollectedPayment,
+  type ElementsQuote,
+} from "./index";
 import {
   CheckoutContext,
   type CheckoutAmounts,
