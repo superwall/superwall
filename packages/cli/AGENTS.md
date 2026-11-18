@@ -536,6 +536,37 @@ from npm, pinned to one version.
   command's `--json` output, through the same `execute()`. Tools run as if
   `--yes` were passed: the MCP client asks the human before a destructive
   call.
+- **Other people's text reaches an agent marked.** A result holds strings an
+  app's users, the account's own people and other services wrote, and the model
+  reading it holds the tools that write, send and delete. `callResult()` marks
+  every such string before it leaves (`src/core/untrusted/`): a short value
+  starts with a mark like `<<end_user_written>>`, long text sits in a fence
+  whose lines start with `| ` and whose id is random to that result, and a
+  result with any mark opens with the reading rules (`_how_to_read`, the first
+  key, or a block of its own before an array). The text and `structuredContent`
+  carry the same marked value: some clients show the model `structuredContent`
+  instead of the text, so a raw copy there would be the only one read. Going
+  in, `listTools()` takes a mark off any input (`unmarkDeep`), so a value
+  copied whole from a result still names what it named.
+  - `policy.ts` says who wrote which field (`policyFor(tool)`). A string no
+    rule names is `unknown` and is marked anyway, so a rule never grants
+    trust: it sharpens the label, or says `exact` for a value that is the
+    argument to the next call (a user id, an identifier, a URL), which keeps
+    every character and shows hidden ones as `\u{...}`. When the API gains a
+    field an outsider can write, name it there. The only tools whose text is
+    ours are in `OUR_TOOLS`, and `tests/tools.test.ts` pins that list: adding
+    one says an agent may read that tool's text as instructions.
+  - `text.ts` is a **byte-identical copy** of superwall/paywall-next's
+    `packages/untrusted-text/src/index.ts`, which the Superwall API uses for
+    its own agent-facing output, so both speak one format. Never edit it here.
+    Change it there, regenerate its `vectors.json`, and copy both files
+    (`tests/fixtures/untrusted-text-vectors.json`); the fixture pins the
+    file's SHA-256 and every function's output, and
+    `tests/untrusted-text.test.ts` fails on any drift.
+  - Short codes (40 characters, no spaces: ids, dates, enum values) are left
+    unmarked whoever wrote them, and the rules say so. Marking lowers the odds
+    that an injected instruction works. It is not what stops a destructive
+    call: that is the client asking the human, as before.
 - **The host** (`program/host.ts`) is everything a run takes from its
   surroundings: the API client, renderer, stdout, file input (`readInput`),
   the local project (`detectApp`, `readLockRef`), telemetry, failure. Storage
