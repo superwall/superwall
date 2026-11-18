@@ -38,19 +38,18 @@ const CACHE_FILE = "api-reference.json";
 
 type Schema = Record<string, any>;
 
-function typeOf(schema: Schema | undefined): string {
-  if (!schema) return "any";
+function typeParts(schema: Schema | undefined): string[] {
+  if (!schema) return ["any"];
   const options: Schema[] | undefined = schema.anyOf ?? schema.oneOf;
-  if (options) {
-    const parts = options.map(typeOf);
-    return [...new Set(parts)].join(" | ");
-  }
-  if (schema.enum) return schema.enum.map((value: unknown) => JSON.stringify(value)).join(" | ");
-  if (schema.const !== undefined) return JSON.stringify(schema.const);
-  if (schema.type === "array") return `${typeOf(schema.items)}[]`;
-  if (Array.isArray(schema.type)) return schema.type.join(" | ");
-  return schema.type ?? (schema.properties ? "object" : "any");
+  if (options) return [...new Set(options.flatMap(typeParts))];
+  if (schema.enum) return schema.enum.map((value: unknown) => JSON.stringify(value));
+  if (schema.const !== undefined) return [JSON.stringify(schema.const)];
+  if (schema.type === "array") return [`${typeOf(schema.items)}[]`];
+  if (Array.isArray(schema.type)) return schema.type;
+  return [schema.type ?? (schema.properties ? "object" : "any")];
 }
+
+const typeOf = (schema: Schema | undefined): string => typeParts(schema).join(" | ");
 
 function objectsOf(schema: Schema | undefined): Schema[] {
   if (!schema) return [];
@@ -60,7 +59,7 @@ function objectsOf(schema: Schema | undefined): Schema[] {
 }
 
 function mergedType(schemas: Schema[]): string {
-  return [...new Set(schemas.flatMap((schema) => typeOf(schema).split(" | ")))].join(" | ");
+  return [...new Set(schemas.flatMap(typeParts))].join(" | ");
 }
 
 function fieldsOf(schema: Schema | undefined, depth = 0): DocField[] | undefined {

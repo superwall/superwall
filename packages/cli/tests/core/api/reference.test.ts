@@ -358,6 +358,32 @@ test("a union body field shows the fields of every branch, required only where e
   );
 });
 
+test("an enum literal that contains a pipe stays whole, alone or merged across branches", () => {
+  const body = (schema: Record<string, unknown>) =>
+    deriveApiIndex({
+      paths: {
+        "/v2/x": {
+          post: {
+            requestBody: { content: { "application/json": { schema } } },
+            responses: { "200": {} },
+          },
+        },
+      },
+    }).operations[0]?.body;
+  assert.deepEqual(body({ properties: { mode: { enum: ["a | b", "a | c"] } } }), [
+    { name: "mode", type: '"a | b" | "a | c"', required: false },
+  ]);
+  assert.deepEqual(
+    body({
+      anyOf: [
+        { properties: { mode: { enum: ["a | b"] } } },
+        { properties: { mode: { enum: ["a | b", "a | c"] } } },
+      ],
+    }),
+    [{ name: "mode", type: '"a | b" | "a | c"', required: false }],
+  );
+});
+
 test("search finds an endpoint by a body field's name or description, below every other kind of hit", () => {
   const frequency: ApiDocsIndex = {
     ...deriveApiIndex(frequencySpec),
