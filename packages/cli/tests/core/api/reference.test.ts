@@ -141,7 +141,7 @@ test("a concrete path with ids finds its template, and a method narrows it", () 
 test("search ranks summary hits first and understands words agents use for the same thing", () => {
   assert.deepEqual(
     searchOperations(index(), "paywall").map((op) => op.summary),
-    ["List Paywalls", "Create Paywall"],
+    ["List Paywalls", "Create Paywall", "Create Variant"],
   );
   assert.deepEqual(
     searchOperations(index(), "experiment").map((op) => op.summary),
@@ -260,6 +260,145 @@ test("the index fills in defaults and describes loosely typed schemas", () => {
     { name: "either", type: "string | object", required: false, fields: [{ name: "x", type: "string", required: false }] },
   ]);
   assert.deepEqual(deriveApiIndex({}).operations, []);
+});
+
+const frequencySpec = {
+  paths: {
+    "/v2/campaigns/{id}/audiences/{audience_id}": {
+      patch: {
+        summary: "Update Audience",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  frequency_limit: {
+                    anyOf: [
+                      {
+                        type: "object",
+                        required: ["occurrences", "interval"],
+                        properties: {
+                          occurrences: { type: "integer" },
+                          interval: {
+                            anyOf: [
+                              {
+                                type: "object",
+                                required: ["type"],
+                                properties: { type: { type: "string", enum: ["infinity"] } },
+                              },
+                              {
+                                type: "object",
+                                required: ["type", "minutes"],
+                                properties: {
+                                  type: { type: "string", enum: ["minutes"] },
+                                  minutes: { type: "integer", description: "Length of the rolling window in minutes" },
+                                },
+                              },
+                            ],
+                            description: "Time window for a frequency limit",
+                          },
+                        },
+                      },
+                      { type: "null" },
+                    ],
+                    description: "Set the per-user frequency limit, or null to remove it.",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { type: "object", properties: { id: { type: "string" }, frequency_limit: {} } },
+                    { type: "object", properties: { id: { type: "string" }, deleted: { type: "boolean" } } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+test("a union body field shows the fields of every branch, required only where every branch requires them", () => {
+  const [update] = deriveApiIndex(frequencySpec).operations;
+  assert.deepEqual(update?.body, [
+    {
+      name: "frequency_limit",
+      type: "object | null",
+      required: false,
+      description: "Set the per-user frequency limit, or null to remove it.",
+      fields: [
+        { name: "occurrences", type: "integer", required: true },
+        {
+          name: "interval",
+          type: "object",
+          required: true,
+          description: "Time window for a frequency limit",
+          fields: [
+            { name: "type", type: '"infinity" | "minutes"', required: true },
+            { name: "minutes", type: "integer", required: false, description: "Length of the rolling window in minutes" },
+          ],
+        },
+      ],
+    },
+  ]);
+  assert.deepEqual(update?.returns, ["id", "frequency_limit", "deleted"]);
+  assert.match(
+    renderApiDocs(deriveApiIndex(frequencySpec), "/v2/campaigns/1/audiences/2", "patch"),
+    /interval: object .*\n {6}type: "infinity" \| "minutes"\n {6}minutes\?: integer/,
+  );
+});
+
+test("an enum literal that contains a pipe stays whole, alone or merged across branches", () => {
+  const body = (schema: Record<string, unknown>) =>
+    deriveApiIndex({
+      paths: {
+        "/v2/x": {
+          post: {
+            requestBody: { content: { "application/json": { schema } } },
+            responses: { "200": {} },
+          },
+        },
+      },
+    }).operations[0]?.body;
+  assert.deepEqual(body({ properties: { mode: { enum: ["a | b", "a | c"] } } }), [
+    { name: "mode", type: '"a | b" | "a | c"', required: false },
+  ]);
+  assert.deepEqual(
+    body({
+      anyOf: [
+        { properties: { mode: { enum: ["a | b"] } } },
+        { properties: { mode: { enum: ["a | b", "a | c"] } } },
+      ],
+    }),
+    [{ name: "mode", type: '"a | b" | "a | c"', required: false }],
+  );
+});
+
+test("search finds an endpoint by a body field's name or description, below every other kind of hit", () => {
+  const frequency: ApiDocsIndex = {
+    ...deriveApiIndex(frequencySpec),
+    operations: [
+      ...deriveApiIndex(frequencySpec).operations,
+      { method: "GET", path: "/v2/frequency", group: "Other", summary: "Frequency Report", params: [], returns: [] },
+    ],
+  };
+  assert.deepEqual(
+    searchOperations(frequency, "frequency").map((op) => op.summary),
+    ["Frequency Report", "Update Audience"],
+  );
+  assert.deepEqual(searchOperations(frequency, "rolling").map((op) => op.summary), ["Update Audience"]);
+  assert.deepEqual(searchOperations(index(), "rules field").map((op) => op.summary), ["Create Variant"]);
+  assert.deepEqual(searchOperations(frequency, "nothing-like-this"), []);
 });
 
 test("one search hit shows the endpoint in full, and an empty body says so", () => {

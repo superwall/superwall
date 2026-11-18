@@ -8,7 +8,7 @@ process.env.SUPERWALL_TOOLS_SKILLS = JSON.stringify({
 });
 const { instructions, listSkills, listTools, readSkill, useToolCache } = await import("@/tools");
 const cache = memoryStore();
-cache.write("api-index.json", JSON.stringify({ version: "test", fetchedAt: Date.now(), operations: [] }));
+cache.write("api-reference.json", JSON.stringify({ version: "test", fetchedAt: Date.now(), operations: [] }));
 useToolCache(cache);
 
 test("bundled skill files are resources, SKILL.md first, described by their front matter or heading", () => {

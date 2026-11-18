@@ -72,7 +72,7 @@ const widgets = defineResource({
 
 beforeEach(() => {
   const home = useHome();
-  fs.writeFileSync(path.join(home, "api-index.json"), JSON.stringify({ version: "test", fetchedAt: Date.now(), operations: SPEC }));
+  fs.writeFileSync(path.join(home, "api-reference.json"), JSON.stringify({ version: "test", fetchedAt: Date.now(), operations: SPEC }));
 });
 
 afterEach(() => {
@@ -130,7 +130,7 @@ test("an operation missing from the API reference says so, and a destructive one
 });
 
 test("the reference not loading at all leaves the flags the operation declares", async () => {
-  fs.rmSync(path.join(process.env.SUPERWALL_HOME!, "api-index.json"));
+  fs.rmSync(path.join(process.env.SUPERWALL_HOME!, "api-reference.json"));
   useFetch([{ match: /./, fail: true }]);
   const page = plain(await widgets.help(["update"]));
   assert.match(page, /Flags come from the API reference, which couldn't be loaded\./);

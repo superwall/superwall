@@ -19,7 +19,7 @@ const op = (method: string, path: string, extra: Partial<DocOperation> = {}): Do
 const home = process.env.SUPERWALL_HOME!;
 mkdirSync(home, { recursive: true });
 writeFileSync(
-  join(home, "api-index.json"),
+  join(home, "api-reference.json"),
   JSON.stringify({
     version: "test",
     fetchedAt: Date.now(),
