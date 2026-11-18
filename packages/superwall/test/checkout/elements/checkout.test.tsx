@@ -414,6 +414,34 @@ describe("<Checkout> once the price has loaded", () => {
     expect(result).toMatchObject({ error: { message: "" } });
   });
 
+  it("reports Stripe refusing to read the form as incomplete, and lets the next submit pay", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    stripe.form.submit.mockRejectedValueOnce(
+      Object.assign(new Error("No PaymentElement is mounted."), { name: "IntegrationError" }),
+    );
+    stripe.form.submit.mockResolvedValue({});
+    const { checkout, names } = await mount();
+    let first: unknown;
+    let second: unknown;
+    await act(async () => {
+      first = await checkout().submit();
+    });
+    await act(async () => {
+      second = await checkout().submit();
+    });
+    expect(first).toEqual({
+      status: "incomplete",
+      product: expect.objectContaining({ reference: "primary" }),
+      error: { name: "IntegrationError", message: "No PaymentElement is mounted." },
+    });
+    expect(second).toMatchObject({ status: "completed" });
+    expect(names()).toEqual([
+      "stripe_checkout_start",
+      "stripe_checkout_submit",
+      "stripe_checkout_complete",
+    ]);
+  });
+
   it("reports a decline as a failure, keeps the form open and shows it in usePurchase().failure", async () => {
     stripe.client.createPaymentMethod.mockResolvedValue({
       error: { code: "card_declined", decline_code: "insufficient_funds", message: "No funds." },

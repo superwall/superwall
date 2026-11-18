@@ -48,7 +48,9 @@ wallet reports `onAbandon`.
 `<Checkout>`: `amounts` for the "due today" line, `intentType` to say "Start
 free trial" when nothing is charged today, `failure` for a declined card,
 and `status` and `message` where the paywall can't take payment, such as
-inside the iOS app.
+inside the iOS app. Unlike a store purchase, a card payment opens no sheet,
+so `<PurchaseButton>` disables itself while it pays and the label says
+"Paying…": otherwise the shopper sees nothing for a few seconds and taps again.
 
 **Switching plans re-prices the form.** The plan rows only change `product`;
 `<Checkout>` loads that plan's price and Stripe's fields keep what the shopper

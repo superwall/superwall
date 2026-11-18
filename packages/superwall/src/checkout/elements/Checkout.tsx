@@ -18,7 +18,7 @@ import { CheckoutFailureError, type CheckoutFailure } from "../failure";
 import { elementsFor, prefetchSession, purchaseWithElements, sessionsFor } from "../flow";
 import { checkoutModeFor } from "../host/sdk";
 import type { ElementsCheckoutSession } from "../types";
-import type { CollectedPayment, ElementsQuote } from "./index";
+import { checkoutErrorOf, type CheckoutError, type CollectedPayment, type ElementsQuote } from "./index";
 import {
   CheckoutContext,
   type CheckoutAmounts,
@@ -223,14 +223,18 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
       return unavailable();
     }
     busy.current = true;
-    const checked = await form.submit();
-    if (checked.error) {
+    const incomplete = (error: CheckoutError): CheckoutSubmitResult => {
       busy.current = false;
-      return {
-        status: "incomplete",
-        product: sold as SuperwallProduct,
-        error: { name: checked.error.type, message: checked.error.message ?? "" },
-      };
+      return { status: "incomplete", product: sold as SuperwallProduct, error };
+    };
+    let checked: Awaited<ReturnType<StripeElements["submit"]>>;
+    try {
+      checked = await form.submit();
+    } catch (error) {
+      return incomplete(checkoutErrorOf(error));
+    }
+    if (checked.error) {
+      return incomplete({ name: checked.error.type, message: checked.error.message ?? "" });
     }
     return run(collectWith(client, form));
   };

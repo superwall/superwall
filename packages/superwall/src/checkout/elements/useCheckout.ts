@@ -53,8 +53,9 @@ export type CheckoutAmounts = {
 /**
  * How a `submit()` ended. `completed`, `abandoned` and `failed` are a
  * purchase, reported to every callback like any other. `incomplete` means
- * the form is not filled in: Stripe already shows the shopper what is
- * missing, and no purchase started. `unavailable` means the form cannot
+ * no purchase started: the form is not filled in, and Stripe already shows
+ * the shopper what is missing, or Stripe refused to read the form, such as
+ * when no `PaymentElement` is mounted, and `error` says why. `unavailable` means the form cannot
  * take payment; see `reason`.
  */
 export type CheckoutSubmitResult<TProduct extends SuperwallProduct = SuperwallProduct> =
@@ -62,7 +63,7 @@ export type CheckoutSubmitResult<TProduct extends SuperwallProduct = SuperwallPr
   | {
       status: "incomplete";
       product: TProduct;
-      /** What Stripe said is missing. */
+      /** What Stripe said is missing, or why it could not read the form. */
       error: CheckoutError;
     }
   | {

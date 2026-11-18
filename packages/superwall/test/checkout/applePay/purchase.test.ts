@@ -66,6 +66,7 @@ const makeController = ({
   canMakePayment = { applePay: true } as Record<string, boolean> | null,
   confirmCardPayment = { paymentIntent: { id: "pi_1", status: "succeeded" } } as unknown,
   confirmCardSetup = { setupIntent: { id: "seti_1", status: "succeeded" } } as unknown,
+  handleNextAction = undefined as unknown,
   confirmResponse = { customerId: "cus_1", subscriptionId: "sub_1" } as Record<string, unknown>,
   confirmStatus = 200,
   realFetch = false,
@@ -83,6 +84,10 @@ const makeController = ({
     paymentRequest: vi.fn((_options: PaymentRequestOptions) => paymentRequest),
     confirmCardPayment: vi.fn().mockResolvedValue(confirmCardPayment),
     confirmCardSetup: vi.fn().mockResolvedValue(confirmCardSetup),
+    handleNextAction: vi.fn(async ({ clientSecret }: { clientSecret: string }) => {
+      if (handleNextAction !== undefined) return handleNextAction;
+      return clientSecret.startsWith("seti") ? confirmCardSetup : confirmCardPayment;
+    }),
   };
   const post = vi.fn();
   const fetchWithRetry = vi
@@ -349,9 +354,8 @@ describe("createApplePay", () => {
     const outcome = controller.purchase("primary", context);
     await authorize();
     await expect(outcome).resolves.toEqual({ status: "completed" });
-    expect(stripe.confirmCardPayment).toHaveBeenCalledWith("pi_secret", {
-      payment_method: "pm_1",
-    });
+    expect(stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: "pi_secret" });
+    expect(stripe.confirmCardPayment).not.toHaveBeenCalled();
   });
 
   it("confirms a quote that already carries a SetupIntent on the client first", async () => {
@@ -564,7 +568,7 @@ describe("createApplePay deferred authentication", () => {
     await authorize();
     await expect(outcome).resolves.toEqual({ status: "completed" });
 
-    expect(stripe.confirmCardSetup).toHaveBeenCalledWith("seti_secret");
+    expect(stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: "seti_secret" });
     expect(JSON.parse(fetchWithRetry.mock.calls[1]![1].body as string)).toMatchObject({
       setupIntentId: "seti_1",
     });
@@ -640,6 +644,7 @@ describe("createApplePay deferred authentication", () => {
     await expect(outcome).resolves.toEqual({ status: "completed" });
     expect(stripe.confirmCardSetup).not.toHaveBeenCalled();
     expect(stripe.confirmCardPayment).not.toHaveBeenCalled();
+    expect(stripe.handleNextAction).not.toHaveBeenCalled();
   });
 
   it("survives a wallet whose complete() throws, and an unreadable confirm body", async () => {
