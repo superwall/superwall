@@ -7,8 +7,9 @@
  * - `applePay` — go straight to Apple Pay, falling back to the sheet where
  *   Apple Pay is unavailable.
  * - `elements` — take payment in a form the paywall builds itself from
- *   Stripe's own elements, with `<Checkout>`, `useCheckout()` and
- *   `<PurchaseButton>` from `superwall/checkout`. A plain `purchase()`
+ *   Stripe's own elements, with `<StripeCheckout>` from
+ *   `superwall/checkout/stripe` and `useCheckout()` and `<PurchaseButton>`
+ *   from `superwall/checkout`. A plain `purchase()`
  *   opens the sheet. Inside an iOS app the form is unavailable and a
  *   purchase opens the hosted checkout.
  *
