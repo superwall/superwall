@@ -284,6 +284,14 @@ export const prefetchSession = async (
   hostFor(paywall).prefetched(contextFor(paywall, referenceName, result.checkoutContextId));
 
   if (result.directive === "elements") {
+    const prepareWallet = async () => {
+      const applePay = applePayFor(paywall);
+      try {
+        await applePay.prepare(result, sessions.identity());
+      } catch (error) {
+        applePay.markUnavailable(referenceName, "stripe_load_failed", error);
+      }
+    };
     if (elements) {
       const current = elements.quoteOf(referenceName);
       if (
@@ -291,20 +299,13 @@ export const prefetchSession = async (
         current.quote.checkoutContextId === result.checkoutContextId
       )
         return;
-      try {
-        await elements.prepare(result, sessions.identity());
-      } catch (error) {
+      const form = elements.prepare(result, sessions.identity()).catch((error: unknown) => {
         elements.markUnavailable(referenceName, "stripe_load_failed", error);
-      }
+      });
+      await Promise.all([form, prepareWallet()]);
       return;
     }
-    if (mode !== "applePay") return;
-    const applePay = applePayFor(paywall);
-    try {
-      await applePay.prepare(result, sessions.identity());
-    } catch (error) {
-      applePay.markUnavailable(referenceName, "stripe_load_failed", error);
-    }
+    if (mode === "applePay") await prepareWallet();
     return;
   }
   elements?.markUnavailable(referenceName, "session_unsupported");
