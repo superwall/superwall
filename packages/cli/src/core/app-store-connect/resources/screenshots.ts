@@ -3,7 +3,8 @@ import { timing } from "@/core/timing";
 import { attribute, linkTo, type AscResource } from "./json-api";
 import { argOf, type AscInput, type AscOutput } from "./operation";
 import type { PricedKind } from "./pricing";
-import { statusOf, type AscSession, type UploadOperation } from "./session";
+import { statusOf } from "../api/errors";
+import type { AscSession, UploadOperation } from "./session";
 import { resolveTarget } from "./targets";
 
 const PRICED: readonly PricedKind[] = ["subscription", "iap"];

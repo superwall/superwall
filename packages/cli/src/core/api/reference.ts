@@ -34,46 +34,49 @@ export interface ApiDocsIndex {
 
 const specUrl = (): string => `${API_HOST()}/openapi.json`;
 
-const CACHE_FILE = "api-index.json";
+export const API_CACHE_FILE = "api-reference.json";
 
 type Schema = Record<string, any>;
 
-function typeOf(schema: Schema | undefined): string {
-  if (!schema) return "any";
+function typeParts(schema: Schema | undefined): string[] {
+  if (!schema) return ["any"];
   const options: Schema[] | undefined = schema.anyOf ?? schema.oneOf;
-  if (options) {
-    const parts = options.map(typeOf);
-    return [...new Set(parts)].join(" | ");
-  }
-  if (schema.enum) return schema.enum.map((value: unknown) => JSON.stringify(value)).join(" | ");
-  if (schema.const !== undefined) return JSON.stringify(schema.const);
-  if (schema.type === "array") return `${typeOf(schema.items)}[]`;
-  if (Array.isArray(schema.type)) return schema.type.join(" | ");
-  return schema.type ?? (schema.properties ? "object" : "any");
+  if (options) return [...new Set(options.flatMap(typeParts))];
+  if (schema.enum) return schema.enum.map((value: unknown) => JSON.stringify(value));
+  if (schema.const !== undefined) return [JSON.stringify(schema.const)];
+  if (schema.type === "array") return [`${typeOf(schema.items)}[]`];
+  if (Array.isArray(schema.type)) return schema.type;
+  return [schema.type ?? (schema.properties ? "object" : "any")];
 }
 
-function objectOf(schema: Schema | undefined): Schema | undefined {
-  if (!schema) return undefined;
-  if (schema.properties) return schema;
-  if (schema.type === "array") return objectOf(schema.items);
-  for (const option of schema.anyOf ?? schema.oneOf ?? []) {
-    const found = objectOf(option);
-    if (found) return found;
-  }
-  return undefined;
+const typeOf = (schema: Schema | undefined): string => typeParts(schema).join(" | ");
+
+function objectsOf(schema: Schema | undefined): Schema[] {
+  if (!schema) return [];
+  if (schema.properties) return [schema];
+  if (schema.type === "array") return objectsOf(schema.items);
+  return (schema.anyOf ?? schema.oneOf ?? []).flatMap(objectsOf);
+}
+
+function mergedType(schemas: Schema[]): string {
+  return [...new Set(schemas.flatMap(typeParts))].join(" | ");
 }
 
 function fieldsOf(schema: Schema | undefined, depth = 0): DocField[] | undefined {
-  const object = objectOf(schema);
-  if (!object?.properties || depth >= MAX_DEPTH) return undefined;
-  const required = new Set<string>(object.required ?? []);
-  return Object.entries<Schema>(object.properties).map(([name, field]) => {
-    const nested = fieldsOf(field, depth + 1);
+  const objects = objectsOf(schema);
+  if (!objects.length || depth >= MAX_DEPTH) return undefined;
+  const branches = new Map<string, Schema[]>();
+  for (const object of objects)
+    for (const [name, field] of Object.entries<Schema>(object.properties))
+      branches.set(name, [...(branches.get(name) ?? []), field]);
+  return [...branches].map(([name, schemas]) => {
+    const nested = fieldsOf(schemas.length === 1 ? schemas[0] : { anyOf: schemas }, depth + 1);
+    const description = schemas.find((field) => field.description)?.description;
     return {
       name,
-      type: typeOf(field),
-      required: required.has(name),
-      ...(field.description ? { description: oneLine(field.description) } : {}),
+      type: mergedType(schemas),
+      required: objects.every((object) => (object.required ?? []).includes(name)),
+      ...(description ? { description: oneLine(description) } : {}),
       ...(nested ? { fields: nested } : {}),
     };
   });
@@ -91,7 +94,7 @@ export function deriveApiIndex(spec: Schema): ApiDocsIndex {
       const description = op.description ? oneLine(op.description) : undefined;
       const responses = Object.entries<Schema>(op.responses ?? {});
       const success = responses.find(([code]) => code.startsWith("2"))?.[1];
-      const returned = objectOf(success?.content?.["application/json"]?.schema);
+      const returned = objectsOf(success?.content?.["application/json"]?.schema);
       const scope = description?.match(/Requires ([a-z_]+:[a-z]+) scope/)?.[1];
       operations.push({
         method: method.toUpperCase(),
@@ -112,7 +115,7 @@ export function deriveApiIndex(spec: Schema): ApiDocsIndex {
         ...(op.requestBody
           ? { body: fieldsOf(op.requestBody.content?.["application/json"]?.schema) ?? [] }
           : {}),
-        returns: Object.keys(returned?.properties ?? {}),
+        returns: [...new Set(returned.flatMap((object) => Object.keys(object.properties)))],
       });
     }
   }
@@ -136,11 +139,11 @@ export async function downloadApiIndex(timeoutMs = DOWNLOAD_TIMEOUT_MS): Promise
 }
 
 function readCached(): ApiDocsIndex | undefined {
-  return readJson<ApiDocsIndex>(cache(), CACHE_FILE);
+  return readJson<ApiDocsIndex>(cache(), API_CACHE_FILE);
 }
 
 function writeCached(index: ApiDocsIndex): void {
-  cache().write(CACHE_FILE, JSON.stringify(index));
+  cache().write(API_CACHE_FILE, JSON.stringify(index));
 }
 
 let inFlight: Promise<ApiDocsIndex> | undefined;
@@ -191,6 +194,15 @@ export function matchesPath(template: string, concrete: string): boolean {
   return t.length === c.length && t.every((part, i) => part.startsWith("{") || part === c[i]);
 }
 
+function mentionsField(fields: DocField[] | undefined, word: string): boolean {
+  return (fields ?? []).some(
+    (field) =>
+      field.name.toLowerCase().includes(word) ||
+      Boolean(field.description?.toLowerCase().includes(word)) ||
+      mentionsField(field.fields, word),
+  );
+}
+
 function score(op: DocOperation, terms: string[]): number {
   let total = 0;
   for (const term of terms) {
@@ -201,6 +213,7 @@ function score(op: DocOperation, terms: string[]): number {
         if (op.path.toLowerCase().includes(word)) return 3;
         if (op.group.toLowerCase().includes(word)) return 2;
         if (op.description?.toLowerCase().includes(word)) return 1;
+        if (mentionsField(op.body, word)) return 0.5;
         return 0;
       }),
     );

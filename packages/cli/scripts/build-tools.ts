@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { downloadAscIndex } from "@/core/app-store-connect/api/spec";
-import { downloadApiIndex } from "@/core/api/reference";
+import { API_CACHE_FILE, downloadApiIndex } from "@/core/api/reference";
 
 interface ResolveArgs {
   path: string;
@@ -39,7 +39,7 @@ async function withRetries<T>(what: string, download: () => Promise<T>): Promise
 const api = await withRetries("API reference", downloadApiIndex);
 const asc = await withRetries("App Store Connect spec", downloadAscIndex);
 const seed = {
-  "api-index.json": JSON.stringify({ ...api, fetchedAt: PINNED }),
+  [API_CACHE_FILE]: JSON.stringify({ ...api, fetchedAt: PINNED }),
   "asc-index.json": JSON.stringify({ ...asc, fetchedAt: PINNED }),
 };
 

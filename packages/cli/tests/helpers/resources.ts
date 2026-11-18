@@ -20,7 +20,7 @@ export function op(method: string, path: string, extra: Partial<DocOperation> = 
 export function writeApiIndex(operations: DocOperation[]): void {
   const home = process.env.SUPERWALL_HOME ?? "";
   mkdirSync(home, { recursive: true });
-  writeFileSync(join(home, "api-index.json"), JSON.stringify({ version: "test", fetchedAt: Date.now(), operations }));
+  writeFileSync(join(home, "api-reference.json"), JSON.stringify({ version: "test", fetchedAt: Date.now(), operations }));
 }
 
 export function fakeResourceApi(

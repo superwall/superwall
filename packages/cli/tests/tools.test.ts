@@ -11,7 +11,7 @@ import { writeCachedIndex } from "@/core/app-store-connect/api/spec";
 
 const cache = memoryStore();
 cache.write(
-  "api-index.json",
+  "api-reference.json",
   JSON.stringify({
     version: "test",
     fetchedAt: Date.now(),
@@ -239,6 +239,11 @@ test("publish and manual grants describe their live effects", () => {
   assert.match(tool("entitlements_grants_create").description, /expiry time/);
   assert.match(tool("entitlements_grants_create").description, /without charging the user or creating a paid subscription/);
   assert.match(tool("entitlements_grants_create").description, /error when an active grant already exists/);
+});
+
+test("campaigns_create says its audience starts as a holdout that shows no paywall", () => {
+  assert.match(tool("campaigns_create").description, /only variant is a holdout at 100%, so the placement shows no paywall/);
+  assert.ok("paywall" in tool("campaigns_create").inputSchema.properties);
 });
 
 test("the MCP retains generic API and schema tools with fallback guidance", () => {

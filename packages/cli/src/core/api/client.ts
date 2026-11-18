@@ -169,7 +169,7 @@ export type SuperwallApi = {
   post<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
   put<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
   patch<T>(path: string, body: unknown, options?: RequestOptions): Promise<T>;
-  del<T>(path: string, options?: RequestOptions): Promise<T>;
+  del<T>(path: string, options?: RequestOptions & { body?: unknown }): Promise<T>;
   postText(path: string, body: string): Promise<string>;
   list<T>(path: string): Promise<T[]>;
 };
@@ -293,7 +293,7 @@ export const createSuperwallApi = (
     post: (path, body, options) => request("POST", path, body, options),
     put: (path, body, options) => request("PUT", path, body, options),
     patch: (path, body, options) => request("PATCH", path, body, options),
-    del: (path, options) => request("DELETE", path, undefined, options),
+    del: (path, { body, ...options } = {}) => request("DELETE", path, body, options),
     async postText(path, body) {
       const token = await authorized();
       const init = {

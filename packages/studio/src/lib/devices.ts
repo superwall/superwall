@@ -200,10 +200,8 @@ export const browserLayoutFor = (
   }
   if (kind === "desktop")
     return { kind, top: BROWSER_BAR.desktop, bottom: 0, statusBar: 0, right: 0 };
-  if (teleported) return { kind, top: 0, bottom: 0, statusBar, right: 0 };
-  return landscape
-    ? undefined
-    : { kind, top: statusBar, bottom: BROWSER_BAR.phone, statusBar, right: 0 };
+  if (!landscape) return { kind, top: statusBar, bottom: BROWSER_BAR.phone, statusBar, right: 0 };
+  return teleported ? { kind, top: 0, bottom: 0, statusBar, right: 0 } : undefined;
 };
 
 export const webViewportFor = (device: StudioDevice): { width: number; height: number } => {
