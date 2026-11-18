@@ -65,6 +65,7 @@ export default function Index() {
           </button>
         ))}
       </div>
+      <p className="scenario-about">{t(`scenarios.about.${scenario}`)}</p>
 
       {done ? (
         <p className="notice" role="status">

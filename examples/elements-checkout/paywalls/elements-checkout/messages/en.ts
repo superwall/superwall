@@ -15,6 +15,15 @@ export default {
     cardFields: "Card fields",
     wallets: "Wallets only",
     billing: "With address",
+    about: {
+      full: "Apple Pay, Google Pay and Link buttons, an email field and Stripe's card form, paid with the built-in purchase button.",
+      cardFields:
+        "Separate card number, expiry and CVC fields, with the paywall's own email box and its own button.",
+      wallets:
+        "Only the wallet buttons, with no purchase button: the wallet pays and asks for the email itself.",
+      billing:
+        "An email field, Stripe's billing address form and its card form; the purchase also sends custom metadata.",
+    },
   },
   form: {
     or: "or pay with card",

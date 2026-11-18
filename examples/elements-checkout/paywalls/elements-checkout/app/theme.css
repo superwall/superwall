@@ -479,6 +479,12 @@ button,
   color: var(--accent);
 }
 
+.scenario-about {
+  margin: -8px 0 0;
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+
 .field {
   display: flex;
   flex-direction: column;
