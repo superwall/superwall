@@ -9,14 +9,18 @@ import {
   pendingHostMessages,
   type ITransport,
   type SuperwallConfig,
+  type SuperwallDeviceVariables,
   type SuperwallProduct,
   type SuperwallProductVariables,
   type SuperwallSession,
   type ResolvedBackground,
 } from "@superwall/runtime";
 import { readTeleportBoot } from "../checkout/teleport/boot";
+import { teleportFor } from "../checkout/teleport/flow";
 import { documentAttributes, HOST_ATTRIBUTE_NAMES, hostAttributes } from "../document";
-import { hostOf } from "../host";
+import { idiomOf } from "../device";
+import { hostOf, type SuperwallHost } from "../host";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
 import "./insets.css";
 
@@ -164,12 +168,29 @@ const Insets = ({ insets }: { insets: SuperwallConfig["insets"] }): null => {
   return null;
 };
 
+const notOnWebHalf = () => false;
+const noSubscription = () => () => {};
+
+const useStudioWebHalf = (device: SuperwallDeviceVariables): boolean => {
+  const session = React.useContext(SuperwallContext);
+  const landscape = useMediaQuery("(orientation: landscape)");
+  const teleporter = session !== null && hostOf() === "studio" ? teleportFor(session) : undefined;
+  const onWebHalf = teleporter?.kind === "app" ? () => teleporter.inFlight() : notOnWebHalf;
+  const webHalf = React.useSyncExternalStore(
+    teleporter?.subscribe ?? noSubscription,
+    onWebHalf,
+    onWebHalf,
+  );
+  return webHalf && !(landscape && idiomOf(device) === "phone");
+};
+
 const HostAttributes = (): null => {
   const { device } = useSuperwallSnapshot();
+  const webHalf = useStudioWebHalf(device);
 
   React.useEffect(() => {
     const root = document.documentElement;
-    const host = hostOf();
+    const host: SuperwallHost = webHalf ? "web-teleport" : hostOf();
     const attributes = hostAttributes(device, host);
     for (const name of HOST_ATTRIBUTE_NAMES) {
       const value = attributes[name];
@@ -188,7 +209,7 @@ const HostAttributes = (): null => {
         root.style.setProperty(`--sw-safe-area-floor-${edge}`, `${value}px`);
       else root.style.removeProperty(`--sw-safe-area-floor-${edge}`);
     }
-  }, [device]);
+  }, [device, webHalf]);
 
   return null;
 };

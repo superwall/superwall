@@ -679,12 +679,13 @@ describe("SurfaceEditor's smaller states", () => {
     expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBe("phone");
     expect(screen.getByTestId("browser-bottom-bar")).toBeDefined();
     expect(screen.getAllByTitle("plus-upgrade preview")).toEqual([frame]);
-    expect(frame.getAttribute("height")).toBe("874");
+    expect(frame.getAttribute("height")).toBe(String(874 - 64 - 84));
 
     await send([view("index", 0, "back")]);
     expect(await screen.findByText("Back in the app")).toBeDefined();
     expect(screen.queryByText("In app")).toBeNull();
     expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
+    expect(frame.getAttribute("height")).toBe("874");
   });
 
   it("reloads a teleported preview in the app when the device changes", async () => {
