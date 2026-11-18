@@ -90,8 +90,13 @@ const HANDLERS: Record<string, Handler> = {
     if (!current && period === undefined) {
       throw new Error(`Product ${id} is a one-time purchase, so ${used} needs --period to make it a subscription.`);
     }
+    const kept = Object.fromEntries(
+      ["period", "period_count", "trial_period_days"].flatMap((key) =>
+        current?.[key] === undefined || current[key] === null ? [] : [[key, current[key]]],
+      ),
+    );
     const subscription = {
-      ...(current ?? { period_count: 1 }),
+      ...(current ? kept : { period_count: 1 }),
       ...(period !== undefined ? { period: String(period) } : {}),
       ...(periodCount !== undefined ? { period_count: count(periodCount, "--period-count", 1) } : {}),
       ...(trialDays !== undefined ? { trial_period_days: count(trialDays, "--trial-days", 0) } : {}),

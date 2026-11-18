@@ -46,7 +46,10 @@ test("updating a product types each field from the API reference", async () => {
   assert.deepEqual(calls, [{ method: "PATCH", path: "/v2/products/12", body: { name: "Pro" } }]);
 });
 
-const YEARLY = { id: "12", subscription: { period: "year", period_count: 1, trial_period_days: null } };
+const YEARLY = {
+  id: "12",
+  subscription: { period: "year", period_count: 1, trial_period_days: null, introductory_offer: { type: "free_trial" } },
+};
 
 test("products update --trial-days merges into the product's current subscription", async () => {
   const calls: ApiCall[] = [];
@@ -73,7 +76,7 @@ test("products update --period and --period-count replace those parts of the sub
   assert.deepEqual(calls.at(-1), {
     method: "PATCH",
     path: "/v2/products/12",
-    body: { subscription: { period: "month", period_count: 3, trial_period_days: null } },
+    body: { subscription: { period: "month", period_count: 3 } },
   });
 });
 
