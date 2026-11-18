@@ -123,7 +123,7 @@ export const createElementsCheckout = (options: ElementsCheckoutOptions): Elemen
     const loading = stripes.get(publishableKey);
     if (loading) return loading;
     const load = (async () => {
-      const loadStripe = options.loadStripe ?? (await import("@stripe/stripe-js")).loadStripe;
+      const loadStripe = options.loadStripe ?? (await import("@stripe/stripe-js/pure")).loadStripe;
       return loadStripe(publishableKey, { developerTools: { assistant: { enabled: false } } });
     })();
     stripes.set(publishableKey, load);

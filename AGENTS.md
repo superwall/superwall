@@ -319,15 +319,30 @@ The stack, bottom to top — each layer depends only on the one below it:
       SetupIntent the backend hands back, and maps every decline to a
       `CheckoutFailure`. `index.ts` (`createElementsCheckout`) is the
       per-paywall store of deferred quotes a form renders from.
-      `Checkout.tsx`, `useCheckout.ts`, `PurchaseButton.tsx` and
-      `ExpressCheckoutElement.tsx` are the public form API in
-      `superwall/checkout` (`checkout: "elements"`): `<Checkout>` wraps
-      Stripe's `<Elements>` in deferred mode, so it renders from the quote
-      and nothing exists in Stripe until the shopper pays, and every submit,
-      wallet included, goes through `flow.purchaseWithElements`, so a form
-      purchase reports the same `usePurchase` callbacks and `stripe_checkout_*`
-      messages as Apple Pay and the sheet. Stripe's elements are re-exported
-      there, so a project never installs Stripe. **Apple Pay may use nothing
+      `StripeCheckout.tsx` and `ExpressCheckoutElement.tsx` are Stripe's
+      form, exported with Stripe's own elements from `superwall/checkout/stripe`
+      (`src/checkout/stripe.tsx`; `checkout: "elements"`): `<StripeCheckout>`
+      wraps Stripe's `<Elements>` in deferred mode, so it renders from the
+      quote and nothing exists in Stripe until the shopper pays, and every
+      submit, wallet included, goes through `flow.purchaseWithElements`, so a
+      form purchase reports the same `usePurchase` callbacks and
+      `stripe_checkout_*` messages as Apple Pay and the sheet. A project never
+      installs Stripe.
+    - `form/` is what every store's form shares, exported from
+      `superwall/checkout`: `useCheckout()` and `<PurchaseButton>` read one
+      context (`CheckoutContext`, a `UseCheckoutResult`) that a store's form
+      provides. **No Stripe name or type enters `form/` or the root
+      `superwall/checkout` entry**: a reason or field only one store has
+      belongs in that store's entry (`superwall/checkout/<store>`), so a
+      second store's form (Paddle, a custom store's inline checkout) provides
+      the same context and every CTA built on `useCheckout()` works in it
+      unchanged. Runtime code loads Stripe only from `@stripe/stripe-js/pure`
+      (types may come from `@stripe/stripe-js`): the package's main entry
+      starts downloading Stripe.js, its fraud frame and telemetry the moment
+      it is imported, and a single-file build evaluates every inlined
+      dynamic import at load, so one main-entry import makes every paywall,
+      a pure iOS one included, call Stripe. `test/checkout/stripe/lazy.test.ts`
+      holds that line. **Apple Pay may use nothing
       here that the public API can't**: a step the wallet needs goes into
       the core, so whatever the wallet can do a paywall's own form can too.
       `elements` mode sends `web_checkout_destination: PAYWALL_APPLE_PAY`,

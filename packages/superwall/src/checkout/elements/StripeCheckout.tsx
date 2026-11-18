@@ -27,35 +27,34 @@ import {
 import {
   CheckoutContext,
   type CheckoutAmounts,
-  type CheckoutContextValue,
   type CheckoutSubmitResult,
   type CheckoutUnavailableReason,
-  type ExpressHandlers,
   type UseCheckoutResult,
-} from "./useCheckout";
+} from "../form/useCheckout";
+import { ExpressContext, type ExpressHandlers } from "./ExpressCheckoutElement";
 
 /**
  * Stripe's options for the form's elements, such as `appearance`, `fonts`,
- * `locale` and `paymentMethodTypes`. `<Checkout>` sets the amount, currency
+ * `locale` and `paymentMethodTypes`. `<StripeCheckout>` sets the amount, currency
  * and mode from the product. `paymentMethodTypes` defaults to
  * `["card", "link"]`, which covers cards, Apple Pay, Google Pay and Link.
  */
-export type CheckoutElementsOptions = Omit<
+export type StripeCheckoutOptions = Omit<
   StripeElementsOptionsMode,
   "mode" | "amount" | "currency" | "paymentMethodCreation" | "setupFutureUsage"
 >;
 
-export type CheckoutProps<TProduct extends SuperwallProduct = SuperwallProduct> =
+export type StripeCheckoutProps<TProduct extends SuperwallProduct = SuperwallProduct> =
   PurchaseCallbacks<TProduct> & {
     /** The Stripe product the form sells, by reference or as a product. */
     product: ProductReference | TProduct;
     /** Stripe's options for the form's elements. Defaults to Stripe's own. */
-    options?: CheckoutElementsOptions;
+    options?: StripeCheckoutOptions;
     /** What happens after the purchase, as for `purchase()`. Defaults to the paywall's config. */
     postPurchase?: SuperwallPostPurchase;
     /** Metadata to set on the Stripe subscription. Defaults to none. */
     stripeMetadata?: Readonly<Record<string, string>>;
-    /** The form: Stripe's elements from `superwall/checkout`, a `<PurchaseButton>`, your own UI. */
+    /** The form: Stripe's elements from `superwall/checkout/stripe`, a `<PurchaseButton>`, your own UI. */
     children?: React.ReactNode;
   };
 
@@ -66,10 +65,10 @@ const MESSAGES: Record<CheckoutUnavailableReason, string> = {
     "The config's `checkout` sends shoppers to Superwall's hosted checkout. Set it to \"elements\".",
   missing_public_api_key: "The host supplied no public API key.",
   unknown_product: "The paywall has no product with this reference.",
-  not_stripe_product: "The product is not sold by Stripe. Buy it with usePurchase().purchase().",
+  unsupported_product: "The product is not sold by Stripe. Buy it with usePurchase().purchase().",
   session_failed: "Fetching the product's checkout failed.",
   session_unsupported: "The backend can't take this product's payment in a form.",
-  stripe_load_failed: "Stripe.js did not load.",
+  store_load_failed: "Stripe.js did not load.",
 };
 
 const DEFAULT_PAYMENT_METHOD_TYPES = ["card", "link"];
@@ -79,6 +78,11 @@ const subscribeToNothing = () => () => {};
 const NOT_PREPARED: ElementsQuote = { status: "unavailable", reason: "not_prepared" };
 
 type ReadyQuote = Extract<ElementsQuote, { status: "ready" }>;
+
+const storedReasonOf = (stored: ElementsQuote): CheckoutUnavailableReason | undefined => {
+  if (stored.status !== "unavailable" || stored.reason === "not_prepared") return undefined;
+  return stored.reason === "stripe_load_failed" ? "store_load_failed" : stored.reason;
+};
 
 const blockedReason = (
   snapshot: SuperwallRuntimeSnapshot,
@@ -95,7 +99,7 @@ const blockedReason = (
   }
   if (!snapshot.device.publicApiKey) return "missing_public_api_key";
   if (snapshot.productsByReference[reference] === undefined) return "unknown_product";
-  if (!isStripeProduct) return "not_stripe_product";
+  if (!isStripeProduct) return "unsupported_product";
   return undefined;
 };
 
@@ -117,14 +121,30 @@ export const amountsOf = (quote: ElementsCheckoutSession): CheckoutAmounts => {
 export const intentTypeOf = (quote: ElementsCheckoutSession): "SetupIntent" | "PaymentIntent" =>
   quote.intentType ?? (amountsOf(quote).dueNow === 0 ? "SetupIntent" : "PaymentIntent");
 
+type CheckoutPriceFields = {
+  mode?: unknown;
+  amount?: unknown;
+  currency?: unknown;
+  paymentMethodCreation?: unknown;
+  setupFutureUsage?: unknown;
+};
+
 export const elementsOptionsOf = (
   quote: ElementsCheckoutSession,
-  options: CheckoutElementsOptions = {},
+  options: StripeCheckoutOptions = {},
 ): StripeElementsOptionsMode => {
   const { currency, dueNow } = amountsOf(quote);
+  const {
+    mode: _mode,
+    amount: _amount,
+    currency: _currency,
+    paymentMethodCreation: _creation,
+    setupFutureUsage: _usage,
+    ...stripeOptions
+  } = options as CheckoutPriceFields & StripeCheckoutOptions;
   const base = {
     paymentMethodTypes: DEFAULT_PAYMENT_METHOD_TYPES,
-    ...options,
+    ...stripeOptions,
     currency,
     paymentMethodCreation: "manual" as const,
   };
@@ -163,7 +183,7 @@ type FormProps = {
   product: SuperwallProduct | undefined;
   blocked: CheckoutUnavailableReason | undefined;
   stored: ElementsQuote;
-  callbacks: React.RefObject<CheckoutProps>;
+  callbacks: React.RefObject<StripeCheckoutProps>;
   children?: React.ReactNode;
 };
 
@@ -184,12 +204,7 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
   const unavailable = (): CheckoutSubmitResult => {
     const now = live.current;
     const reason =
-      now.blocked ??
-      (now.stored.status === "unavailable" && now.stored.reason !== "not_prepared"
-        ? now.stored.reason
-        : busy.current
-          ? "paying"
-          : "preparing");
+      now.blocked ?? storedReasonOf(now.stored) ?? (busy.current ? "paying" : "preparing");
     return { status: "unavailable", reason, ...(now.product ? { product: now.product } : {}) };
   };
 
@@ -285,7 +300,7 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
   const quote = stored.status === "ready" ? stored.quote : undefined;
   const checkout: UseCheckoutResult = {
     status:
-      blocked !== undefined || (stored.status === "unavailable" && stored.reason !== "not_prepared")
+      blocked !== undefined || storedReasonOf(stored) !== undefined
         ? "unavailable"
         : paying
           ? "paying"
@@ -295,14 +310,10 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
     canSubmit,
     submit,
     ...(product ? { product } : {}),
-    ...(quote ? { amounts: amountsOf(quote), intentType: intentTypeOf(quote) } : {}),
+    ...(quote ? { amounts: amountsOf(quote) } : {}),
     ...(failure ? { failure } : {}),
   };
-  const reason =
-    blocked ??
-    (stored.status === "unavailable" && stored.reason !== "not_prepared"
-      ? stored.reason
-      : undefined);
+  const reason = blocked ?? storedReasonOf(stored);
   if (reason !== undefined) {
     checkout.reason = reason;
     checkout.message = MESSAGES[reason];
@@ -311,16 +322,20 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
     }
   }
 
-  const value: CheckoutContextValue = { checkout, express: handlers };
-  return <CheckoutContext.Provider value={value}>{children}</CheckoutContext.Provider>;
+  return (
+    <CheckoutContext.Provider value={checkout}>
+      <ExpressContext.Provider value={handlers}>{children}</ExpressContext.Provider>
+    </CheckoutContext.Provider>
+  );
 };
 
 /**
  * A checkout form for one Stripe product, built from Stripe's own elements:
  * superwall prices it, takes the payment, handles 3D Secure and free trials,
  * and completes the purchase exactly as Apple Pay and the sheet do. Put
- * `PaymentElement`, `ExpressCheckoutElement` and `<PurchaseButton>` from
- * `superwall/checkout` inside it, with any options Stripe gives them.
+ * `PaymentElement` and `ExpressCheckoutElement` from
+ * `superwall/checkout/stripe` and `<PurchaseButton>` from `superwall/checkout`
+ * inside it, with any options Stripe gives them.
  *
  * The form renders at once from the product's price; nothing is charged or
  * created in Stripe until the shopper pays. It needs the config's `checkout`
@@ -333,15 +348,15 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
  * `usePurchase`, which also fire for them.
  *
  * ```tsx
- * <Checkout product="annual" onComplete={() => router.push("welcome")}>
+ * <StripeCheckout product="annual" onComplete={() => router.push("welcome")}>
  *   <ExpressCheckoutElement />
  *   <PaymentElement options={{ layout: "accordion" }} />
  *   <PurchaseButton>Start my free trial</PurchaseButton>
- * </Checkout>
+ * </StripeCheckout>
  * ```
  */
-export const Checkout = <TProduct extends SuperwallProduct = SuperwallProduct>(
-  props: CheckoutProps<TProduct>,
+export const StripeCheckout = <TProduct extends SuperwallProduct = SuperwallProduct>(
+  props: StripeCheckoutProps<TProduct>,
 ) => {
   const { product: input, options, children } = props;
   const session = useSuperwallSession();
@@ -368,8 +383,8 @@ export const Checkout = <TProduct extends SuperwallProduct = SuperwallProduct>(
     }
   }, [stored, store, session, reference]);
 
-  const callbacks = React.useRef(props as CheckoutProps);
-  callbacks.current = props as CheckoutProps;
+  const callbacks = React.useRef(props as StripeCheckoutProps);
+  callbacks.current = props as StripeCheckoutProps;
 
   const lastReady = React.useRef<ReadyQuote | undefined>(undefined);
   if (stored.status === "ready") lastReady.current = stored;

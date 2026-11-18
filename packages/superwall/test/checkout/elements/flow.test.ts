@@ -33,7 +33,7 @@ const stripe = {
   confirmCardSetup: vi.fn(),
 };
 
-vi.mock("@stripe/stripe-js", () => ({ loadStripe: vi.fn(async () => stripe) }));
+vi.mock("@stripe/stripe-js/pure", () => ({ loadStripe: vi.fn(async () => stripe) }));
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 

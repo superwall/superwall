@@ -299,7 +299,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
         return;
       }
 
-      const loadStripe = options.loadStripe ?? (await import("@stripe/stripe-js")).loadStripe;
+      const loadStripe = options.loadStripe ?? (await import("@stripe/stripe-js/pure")).loadStripe;
       const stripe = await loadStripe(quote.publishableKey, {
         developerTools: { assistant: { enabled: false } },
       });

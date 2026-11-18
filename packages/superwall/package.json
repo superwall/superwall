@@ -44,6 +44,7 @@
       "types": "./src/assets.d.ts"
     },
     "./checkout": "./src/checkout/index.tsx",
+    "./checkout/stripe": "./src/checkout/stripe.tsx",
     "./config": "./src/config/index.ts",
     "./hooks": "./src/hooks/index.ts",
     "./internal": "./src/internal.ts",

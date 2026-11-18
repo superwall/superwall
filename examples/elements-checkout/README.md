@@ -22,38 +22,46 @@ checkout: { mode: "elements", prefetch: "trial" },
 ```
 
 ```tsx
-<Checkout product={selected} onComplete={...} onFailure={...} onAbandon={...}>
+import { PurchaseButton, useCheckout } from "superwall/checkout";
+import { ExpressCheckoutElement, PaymentElement, StripeCheckout } from "superwall/checkout/stripe";
+
+<StripeCheckout product={selected} onComplete={...} onFailure={...} onAbandon={...}>
   <ExpressCheckoutElement />
   <PaymentElement />
   <PurchaseButton>Subscribe</PurchaseButton>
-</Checkout>
+</StripeCheckout>
 ```
 
 **The form is Stripe's own.** `PaymentElement` and `ExpressCheckoutElement`
-come from `superwall/checkout`, with every option Stripe documents, so the
-project installs nothing from Stripe. `options` on `<Checkout>` styles them:
+come from `superwall/checkout/stripe`, with every option Stripe documents, so
+the project installs nothing from Stripe. `options` on `<StripeCheckout>` styles them:
 here the corner, accent, typeface and light or dark scheme follow the paywall.
 
-**superwall does the purchase.** `<Checkout>` prices the form from the
+**superwall does the purchase.** `<StripeCheckout>` prices the form from the
 product, so it renders at once and nothing is created in Stripe until the
 shopper pays. Paying runs 3D Secure and the free trial, then completes the
 purchase with entitlements and redemption, the same way Apple Pay and the
 sheet do. `usePurchase()`'s callbacks and the SDK's events fire for it too.
+
+**Only the form is Stripe's.** `superwall/checkout` holds what every store's
+form shares: `useCheckout()` and `<PurchaseButton>`. What is Stripe's own,
+`<StripeCheckout>` and Stripe's elements, lives in `superwall/checkout/stripe`.
+A paywall that never imports it never ships Stripe's React bindings.
 
 **A wallet pays without the button.** Apple Pay, Google Pay and Link in
 `ExpressCheckoutElement` complete the purchase on their own; closing the
 wallet reports `onAbandon`.
 
 **The form says what it is doing.** `useCheckout()` is read anywhere inside
-`<Checkout>`: `amounts` for the "due today" line, `intentType` to say "Start
-free trial" when nothing is charged today, `failure` for a declined card,
+`<StripeCheckout>`: `amounts` for the "due today" line and, when `dueNow` is
+`0`, "Start free trial", `failure` for a declined card,
 and `status` and `message` where the paywall can't take payment, such as
 inside the iOS app. Unlike a store purchase, a card payment opens no sheet,
 so `<PurchaseButton>` disables itself while it pays and the label says
 "Paying…": otherwise the shopper sees nothing for a few seconds and taps again.
 
 **Switching plans re-prices the form.** The plan rows only change `product`;
-`<Checkout>` loads that plan's price and Stripe's fields keep what the shopper
+`<StripeCheckout>` loads that plan's price and Stripe's fields keep what the shopper
 typed.
 
 ## Try it with a test card

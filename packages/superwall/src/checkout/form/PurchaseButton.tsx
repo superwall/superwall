@@ -10,7 +10,8 @@ export type PurchaseButtonProps = Omit<
 };
 
 /**
- * A button that pays with the nearest `<Checkout>`'s form. It is disabled
+ * A button that pays with the nearest checkout form, such as
+ * `<StripeCheckout>`. It is disabled
  * until the form can take payment and while a payment is in flight, and sets
  * `data-status` to `useCheckout().status` and `aria-busy` while paying, so it
  * can be styled for each state. Every other prop goes to the `<button>`.
@@ -20,7 +21,7 @@ export type PurchaseButtonProps = Omit<
  * ```
  */
 export const PurchaseButton = ({ disabled, onClick, children, ...props }: PurchaseButtonProps) => {
-  const { checkout } = useCheckoutContext("<PurchaseButton>");
+  const checkout = useCheckoutContext("<PurchaseButton>");
   return (
     <button
       {...props}

@@ -14,10 +14,10 @@ export default definePaywall({
 
   /**
    * `elements` lets the paywall build its own checkout form from Stripe's
-   * elements, with `<Checkout>` from `superwall/checkout`. superwall prices
+   * elements, with `<StripeCheckout>` from `superwall/checkout/stripe`. superwall prices
    * the form, takes the payment and completes the purchase, as it does for
    * Apple Pay and the sheet. `prefetch` loads the first plan's price as the
-   * paywall opens, so the form renders without a wait; `<Checkout>` loads
+   * paywall opens, so the form renders without a wait; `<StripeCheckout>` loads
    * any other plan's price when the shopper picks it.
    */
   checkout: { mode: "elements", prefetch: "trial" },

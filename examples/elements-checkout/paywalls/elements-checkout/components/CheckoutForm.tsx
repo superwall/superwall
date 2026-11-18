@@ -1,12 +1,8 @@
 import { useMemo } from "react";
-import {
-  Checkout,
-  ExpressCheckoutElement,
-  PaymentElement,
-  PurchaseButton,
-  useCheckout,
-} from "superwall/checkout";
-import type { CheckoutAmounts, CheckoutElementsOptions } from "superwall/checkout";
+import { PurchaseButton, useCheckout } from "superwall/checkout";
+import type { CheckoutAmounts } from "superwall/checkout";
+import { ExpressCheckoutElement, PaymentElement, StripeCheckout } from "superwall/checkout/stripe";
+import type { StripeCheckoutOptions } from "superwall/checkout/stripe";
 import { useColorScheme, useHaptics, useTranslation } from "superwall/hooks";
 
 type Props = {
@@ -19,7 +15,7 @@ type Props = {
  * typeface and light or dark scheme as the rest of the page. Kept stable
  * with `useMemo`, since a new object re-renders every element.
  */
-const useStripeAppearance = (): CheckoutElementsOptions => {
+const useStripeAppearance = (): StripeCheckoutOptions => {
   const scheme = useColorScheme();
   return useMemo(
     () => ({
@@ -69,10 +65,14 @@ const Fields = () => {
   );
 };
 
-/** Everything inside `<Checkout>` reads the form's state from `useCheckout()`. */
+/**
+ * Everything inside `<StripeCheckout>` reads the form's state from
+ * `useCheckout()`, which reads the same for any store, so this summary and
+ * its button would work unchanged in another store's form.
+ */
 const Summary = () => {
   const { t } = useTranslation();
-  const { status, amounts, intentType, failure, message } = useCheckout();
+  const { status, amounts, failure, message } = useCheckout();
 
   return (
     <>
@@ -102,7 +102,7 @@ const Summary = () => {
       <PurchaseButton className="button button--primary">
         {status === "paying"
           ? t("purchase.paying")
-          : intentType === "SetupIntent"
+          : amounts?.dueNow === 0
             ? t("purchase.startTrial")
             : t("purchase.subscribe")}
       </PurchaseButton>
@@ -120,7 +120,7 @@ export function CheckoutForm({ product, onCompleted }: Props) {
   const options = useStripeAppearance();
 
   return (
-    <Checkout
+    <StripeCheckout
       product={product}
       options={options}
       onComplete={() => {
@@ -134,6 +134,6 @@ export function CheckoutForm({ product, onCompleted }: Props) {
       <div className="actions">
         <Summary />
       </div>
-    </Checkout>
+    </StripeCheckout>
   );
 }

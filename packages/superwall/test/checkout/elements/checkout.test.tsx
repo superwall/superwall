@@ -34,7 +34,7 @@ const stripe = vi.hoisted(() => {
 
 const host = vi.hoisted(() => ({ current: "web-paywall" as SuperwallHost }));
 
-vi.mock("@stripe/stripe-js", () => ({ loadStripe: stripe.loadStripe }));
+vi.mock("@stripe/stripe-js/pure", () => ({ loadStripe: stripe.loadStripe }));
 vi.mock("@stripe/react-stripe-js", async () => {
   const React = await import("react");
   const Context = React.createContext<unknown>(null);
@@ -64,14 +64,15 @@ vi.mock("../../../src/host", async (importOriginal) => ({
   hostOf: () => host.current,
 }));
 
-const { Checkout, ExpressCheckoutElement, PurchaseButton, useCheckout } =
-  await import("../../../src/checkout");
+const { PurchaseButton, useCheckout } = await import("../../../src/checkout");
+const { StripeCheckout: Checkout, ExpressCheckoutElement } =
+  await import("../../../src/checkout/stripe");
 const { SuperwallProvider } = await import("../../../src");
 const { useSuperwallSession, usePurchase } = await import("../../../src/hooks");
 const { elementsFor, sessionsFor, watchCompletedCheckouts } =
   await import("../../../src/checkout/flow");
 const { amountsOf, elementsOptionsOf, intentTypeOf } =
-  await import("../../../src/checkout/elements/Checkout");
+  await import("../../../src/checkout/elements/StripeCheckout");
 const { createHost, testConfig } = await import("../../helpers");
 
 type Session = ReturnType<typeof useSuperwallSession>;
@@ -215,7 +216,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("<Checkout> before it can take payment", () => {
+describe("<StripeCheckout> before it can take payment", () => {
   it.each<[SuperwallHost, string]>([
     ["studio", "web"],
     ["ios-sdk", "iOS"],
@@ -253,7 +254,7 @@ describe("<Checkout> before it can take payment", () => {
     });
     expect(result).toEqual({ status: "unavailable", reason: "unknown_product" });
     expect((await mount({ product: "store" })).checkout()).toMatchObject({
-      reason: "not_stripe_product",
+      reason: "unsupported_product",
       product: { reference: "store" },
     });
   });
@@ -291,23 +292,24 @@ describe("<Checkout> before it can take payment", () => {
     expect(result).toMatchObject({ status: "unavailable", reason: "session_failed" });
   });
 
-  it("throws a clear error when used outside <Checkout>", () => {
+  it("throws a clear error when used outside a checkout form", () => {
     const Lonely = () => {
       useCheckout();
       return null;
     };
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    expect(() => render(<Lonely />)).toThrow("useCheckout() must be rendered inside <Checkout>.");
+    expect(() => render(<Lonely />)).toThrow(
+      "useCheckout() must be rendered inside a checkout form, such as <StripeCheckout>.",
+    );
   });
 });
 
-describe("<Checkout> once the price has loaded", () => {
+describe("<StripeCheckout> once the price has loaded", () => {
   it("renders Stripe's elements in deferred mode with the product's price", async () => {
     const { checkout } = await mount({ props: { options: { appearance: { theme: "night" } } } });
     expect(checkout()).toMatchObject({
       status: "ready",
       canSubmit: true,
-      intentType: "PaymentIntent",
       amounts: { currency: "usd", dueNow: 1999, recurring: 1999, interval: "month" },
     });
     expect(stripe.elements.at(-1)).toEqual({

@@ -42,7 +42,7 @@ describe("the dev server's JSX runtime", () => {
         "react",
         "react-dom",
         "superwall > @stripe/react-stripe-js",
-        "superwall > @stripe/stripe-js",
+        "superwall > @stripe/stripe-js/pure",
       ]),
     );
   });
