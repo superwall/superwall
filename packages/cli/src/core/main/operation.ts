@@ -72,6 +72,32 @@ const HANDLERS: Record<string, Handler> = {
     }
     if (bound.json) bound.output.data({ application_id: app.id, revenue_provider: change });
   },
+  "products.update": async (ctx, resource, op, args, flags) => {
+    const { period, periodCount, trialDays, ...fields } = flags.fields;
+    const given = { period, periodCount, trialDays };
+    const named = Object.entries(given).filter(([, value]) => value !== undefined);
+    if (named.length === 0 || !args[0]) return callOperation(ctx, resource, resource, op, args, flags);
+    const used = named.map(([flag]) => toFlag(fieldName(flag))).join(", ");
+    if (fields.subscription !== undefined) {
+      throw new Error(`Pass --subscription or ${used}, not both.`);
+    }
+    const id = args[0];
+    const product = await apiCall(ctx, `GET /v2/products/${id}`, () =>
+      ctx.api.get(`/v2/products/${encodeURIComponent(id)}`),
+    );
+    const stored = Reflect.get(Object(product), "subscription");
+    const current = stored !== null && typeof stored === "object" ? (stored as Record<string, unknown>) : undefined;
+    if (!current && period === undefined) {
+      throw new Error(`Product ${id} is a one-time purchase, so ${used} needs --period to make it a subscription.`);
+    }
+    const subscription = {
+      ...(current ?? { period_count: 1 }),
+      ...(period !== undefined ? { period: String(period) } : {}),
+      ...(periodCount !== undefined ? { period_count: count(periodCount, "--period-count", 1) } : {}),
+      ...(trialDays !== undefined ? { trial_period_days: count(trialDays, "--trial-days", 0) } : {}),
+    };
+    return callOperation(ctx, resource, resource, op, args, { ...flags, fields: { ...fields, subscription } });
+  },
   resource: async (ctx, resource, op, args, flags) => {
     const [value, value2] = op.name === "create" ? createValues(resource, op, args, flags) : args;
     if (!isResourceName(resource.name)) throw new Error(`Unknown resource "${resource.name}".`);
@@ -151,6 +177,14 @@ export async function runOperation(
       : `${owner.name} ${resource.name} ${op.name}`;
   if (!handler) throw new Error(`${name} has no handler "${op.handler}".`);
   return handler(ctx, resource, op, args, flags);
+}
+
+function count(value: unknown, flag: string, least: number): number {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < least) {
+    throw new Error(`${flag} is a whole number of at least ${least}, not "${String(value)}".`);
+  }
+  return number;
 }
 
 const toFlag = (field: string): string => `--${field.replace(/_/g, "-")}`;
