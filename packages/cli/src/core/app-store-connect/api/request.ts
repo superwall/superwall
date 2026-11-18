@@ -3,6 +3,8 @@ import { pickOrganization } from "@/core/account/scope";
 import type { SuperwallApi } from "@/core/api/client";
 import { parseParams } from "@/core/api/params";
 import { apiCall } from "@/ui/spinner";
+import { printAscPlan } from "@/core/app-store-connect/resources/print";
+import type { PlannedRequest } from "@/core/app-store-connect/resources/session";
 import { ascProxy, listAscConfigs } from "./client";
 import { withAppleErrors } from "./errors";
 import { formatReplacement, selectReplacement } from "./replaced";
@@ -53,27 +55,47 @@ export async function sendAscRequest(
   options: { data: string[]; team?: string; force: boolean },
 ): Promise<unknown> {
   const api = await resolveAscOrgApi(ctx);
+  const body = await buildAscRequestBody(ctx, verb, path, options);
+  const teamId = await resolveAscTeam(ctx, api, options.team);
+  const response = await apiCall(ctx, `${verb.toUpperCase()} ${path}`, () => withAppleErrors(() => ascProxy(api, teamId, verb, path, body)));
+  return response ?? { ok: true };
+}
+
+export async function runAscWrite(
+  ctx: CommandContext<"required">,
+  verb: Exclude<AscVerb, "get">,
+  path: string,
+  options: { data: string[]; team?: string; force: boolean; dryRun: boolean },
+): Promise<void> {
+  if (!options.dryRun) return ctx.output.data(await sendAscRequest(ctx, verb, path, options));
+  const body = await buildAscRequestBody(ctx, verb, path, options);
+  const planned: PlannedRequest = { method: verb.toUpperCase(), path };
+  if (Object.keys(body).length) planned.body = body;
+  printAscPlan(ctx, [planned]);
+}
+
+async function buildAscRequestBody(
+  ctx: CommandContext,
+  verb: AscVerb,
+  path: string,
+  options: { data: string[]; force: boolean },
+): Promise<Record<string, unknown>> {
   if (!path.startsWith("/")) throw new Error(`Path must start with "/", e.g. /v1/apps`);
   const replaced = selectReplacement(verb, path);
   if (replaced) ctx.ui.warn(formatReplacement(replaced));
   let body = parseParams(options.data);
+  if (verb !== "post" && verb !== "patch") return body;
 
-  if (verb === "post" || verb === "patch") {
-    await ensureAscIndex(ctx);
-    const found = lookupAscOp(verb, path);
-    if (found) {
-      body = buildAscBody(found.op, verb, path, body);
-      const problems = validateAscBody(found.op, verb, body);
-      if (problems.length && !options.force)
-        throw new Error(
-          `Invalid ${verb.toUpperCase()} ${path} body:\n` +
-            problems.map((p) => `  • ${p}`).join("\n") +
-            `\nFix and retry, run \`superwall asc docs ${path} ${verb}\`, or pass --force to send as-is.`,
-        );
-    }
-  }
-
-  const teamId = await resolveAscTeam(ctx, api, options.team);
-  const response = await apiCall(ctx, `${verb.toUpperCase()} ${path}`, () => withAppleErrors(() => ascProxy(api, teamId, verb, path, body)));
-  return response ?? { ok: true };
+  await ensureAscIndex(ctx);
+  const found = lookupAscOp(verb, path);
+  if (!found) return body;
+  body = buildAscBody(found.op, verb, path, body);
+  const problems = validateAscBody(found.op, verb, body);
+  if (problems.length && !options.force)
+    throw new Error(
+      `Invalid ${verb.toUpperCase()} ${path} body:\n` +
+        problems.map((p) => `  • ${p}`).join("\n") +
+        `\nFix and retry, run \`superwall asc docs ${path} ${verb}\`, or pass --force to send as-is.`,
+    );
+  return body;
 }

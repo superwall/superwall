@@ -4,12 +4,14 @@ import { afterEach, test } from "node:test";
 process.env.SW_ASC_REFRESH = "1";
 
 import { command as get } from "@/commands/app-store-connect/api/get";
+import { command as del } from "@/commands/app-store-connect/api/delete";
+import { command as patch } from "@/commands/app-store-connect/api/patch";
 import { command as post } from "@/commands/app-store-connect/api/post";
 import { ApiError } from "@/core/api/client";
-import { readCachedIndex } from "@/core/app-store-connect/api/spec";
+import { readCachedIndex, writeCachedIndex } from "@/core/app-store-connect/api/spec";
 import { buildZip, serveZip } from "../../../helpers/asc-spec";
 import { ascRoutes, fakeAscApi } from "../../../helpers/asc-proxy";
-import { runCommand } from "../../../helpers/command";
+import { helpLine, runCommand, runLine } from "../../../helpers/command";
 import { restoreFetch } from "../../../helpers/fetch";
 
 afterEach(() => {
@@ -171,4 +173,74 @@ test("a body that isn't an Apple error document still shows the HTTP snippet", a
   });
   const result = await runCommand(get, { api, args: { path: "/v1/apps" }, json: true });
   assert.deepEqual(result.json, { error: { code: "api_error", status: 502, message: "HTTP 502 — <html>Bad gateway</html>" } });
+});
+
+const proxied = (requests: { path: string }[]) => requests.filter((request) => request.path.includes("/proxy/"));
+
+function seedInvitationSchema() {
+  writeCachedIndex({
+    specVersion: "4.5",
+    openapi: "3.0.1",
+    fetchedAt: Date.now(),
+    paths: {
+      "/v1/userInvitations": {
+        post: {
+          dataType: "userInvitations",
+          attributes: { email: { required: true, type: "string" }, roles: { required: true, enum: ["ADMIN", "DEVELOPER"] } },
+        },
+      },
+      "/v1/userInvitations/{id}": { patch: { dataType: "userInvitations", attributes: { roles: { required: false, enum: ["ADMIN", "DEVELOPER"] } } } },
+    },
+  });
+}
+
+test("asc post --dry-run prints the schema-built request and sends nothing", async () => {
+  seedInvitationSchema();
+  const { api, requests } = fakeAscApi();
+  const result = await runLine("asc post /v1/userInvitations -d email=a@b.co -d roles=ADMIN --dry-run", { api });
+  assert.equal(process.exitCode, undefined);
+  assert.deepEqual(result.said("success"), ["Dry run: nothing was changed. 1 request:"]);
+  assert.deepEqual(result.said("step"), ["POST /v1/userInvitations"]);
+  assert.deepEqual(JSON.parse(result.said("report")[0] ?? ""), {
+    data: { type: "userInvitations", attributes: { email: "a@b.co", roles: "ADMIN" } },
+  });
+  assert.deepEqual(proxied(requests), []);
+});
+
+test("asc patch --dry-run --json prints the plan in the resource commands' shape", async () => {
+  seedInvitationSchema();
+  const { api, requests } = fakeAscApi();
+  const result = await runCommand(patch, { api, args: { path: "/v1/userInvitations/U1" }, flags: { d: ["roles=DEVELOPER"], dryRun: true }, json: true });
+  assert.deepEqual(result.json, {
+    dryRun: true,
+    requests: [{ method: "PATCH", path: "/v1/userInvitations/U1", body: { data: { type: "userInvitations", id: "U1", attributes: { roles: "DEVELOPER" } } } }],
+  });
+  assert.deepEqual(proxied(requests), []);
+});
+
+test("a dry run still stops a body Apple's schema refuses, unless --force", async () => {
+  seedInvitationSchema();
+  const { api, requests } = fakeAscApi();
+  const refused = await runCommand(post, { api, args: { path: "/v1/userInvitations" }, flags: { d: ["roles=OWNER"], dryRun: true } });
+  assert.match(errorOf(refused) ?? "", /^Invalid POST \/v1\/userInvitations body:/);
+  assert.equal(process.exitCode, 1);
+
+  process.exitCode = undefined;
+  const forced = await runCommand(post, { api, args: { path: "/v1/userInvitations" }, flags: { d: ["roles=OWNER"], dryRun: true, force: true }, json: true });
+  assert.deepEqual(forced.json, {
+    dryRun: true,
+    requests: [{ method: "POST", path: "/v1/userInvitations", body: { data: { type: "userInvitations", attributes: { roles: "OWNER" } } } }],
+  });
+  assert.deepEqual(proxied(requests), []);
+});
+
+test("asc delete --dry-run names the request with no body and sends nothing", async () => {
+  const { api, requests } = fakeAscApi();
+  const result = await runCommand(del, { api, args: { path: "/v1/subscriptionGroups/G1" }, flags: { dryRun: true }, json: true });
+  assert.deepEqual(result.json, { dryRun: true, requests: [{ method: "DELETE", path: "/v1/subscriptionGroups/G1" }] });
+  assert.deepEqual(proxied(requests), []);
+});
+
+test("asc post, patch and delete list --dry-run in their help", async () => {
+  for (const verb of ["post", "patch", "delete"]) assert.match(await helpLine(`asc ${verb} --help`), /--dry-run/);
 });
