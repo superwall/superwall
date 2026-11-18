@@ -23,10 +23,16 @@ checkout: { mode: "elements", prefetch: "trial" },
 
 ```tsx
 import { PurchaseButton, useCheckout } from "superwall/checkout";
-import { ExpressCheckoutElement, PaymentElement, StripeCheckout } from "superwall/checkout/stripe";
+import {
+  ExpressCheckoutElement,
+  LinkAuthenticationElement,
+  PaymentElement,
+  StripeCheckout,
+} from "superwall/checkout/stripe";
 
 <StripeCheckout product={selected} onComplete={...} onFailure={...} onAbandon={...}>
   <ExpressCheckoutElement />
+  <LinkAuthenticationElement />
   <PaymentElement />
   <PurchaseButton>Subscribe</PurchaseButton>
 </StripeCheckout>
@@ -36,6 +42,13 @@ import { ExpressCheckoutElement, PaymentElement, StripeCheckout } from "superwal
 come from `superwall/checkout/stripe`, with every option Stripe documents, so
 the project installs nothing from Stripe. `options` on `<StripeCheckout>` styles them:
 here the corner, accent, typeface and light or dark scheme follow the paywall.
+
+**The shopper's email is required.** The subscription's Stripe customer
+needs it for the receipt, redemption and the billing portal.
+`LinkAuthenticationElement` collects it (and signs Link shoppers in), filled
+in when the paywall already knows the user's `email` attribute; a wallet in
+`ExpressCheckoutElement` always asks for it. Without either, `submit()`
+returns `incomplete` with an `email_required` error and charges nothing.
 
 **superwall does the purchase.** `<StripeCheckout>` prices the form from the
 product, so it renders at once and nothing is created in Stripe until the

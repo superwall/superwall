@@ -58,7 +58,10 @@ export type CheckoutAmounts = {
  * no purchase started: the form is not filled in, and its fields already
  * show the shopper what is missing, or the store refused to read the form,
  * such as when Stripe's `PaymentElement` is not mounted, and `error` says
- * why. `unavailable` means the form cannot take payment; see `reason`.
+ * why. An `error` named `"email_required"` means the form has no email for
+ * the shopper: render the store's email field, such as Stripe's
+ * `LinkAuthenticationElement`, or set the user's `email` attribute.
+ * `unavailable` means the form cannot take payment; see `reason`.
  */
 export type CheckoutSubmitResult<TProduct extends SuperwallProduct = SuperwallProduct> =
   | WebCheckoutResult<TProduct>

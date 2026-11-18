@@ -2,9 +2,9 @@ export { StripeCheckout } from "./elements/StripeCheckout";
 export type { StripeCheckoutOptions, StripeCheckoutProps } from "./elements/StripeCheckout";
 export { ExpressCheckoutElement } from "./elements/ExpressCheckoutElement";
 export type { ExpressCheckoutElementProps } from "./elements/ExpressCheckoutElement";
+export { LinkAuthenticationElement } from "./elements/LinkAuthenticationElement";
 export {
   AddressElement,
-  LinkAuthenticationElement,
   PaymentElement,
   PaymentMethodMessagingElement,
   useElements,

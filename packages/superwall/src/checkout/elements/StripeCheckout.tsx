@@ -32,6 +32,7 @@ import {
   type UseCheckoutResult,
 } from "../form/useCheckout";
 import { ExpressContext, type ExpressHandlers } from "./ExpressCheckoutElement";
+import { EmailContext } from "./LinkAuthenticationElement";
 
 /**
  * Stripe's options for the form's elements, such as `appearance`, `fonts`,
@@ -187,8 +188,30 @@ type FormProps = {
   children?: React.ReactNode;
 };
 
+const EMAIL_REQUIRED: CheckoutError = {
+  name: "email_required",
+  message: "Enter an email address. Render LinkAuthenticationElement to collect one.",
+};
+
+const knownEmailOf = (snapshot: SuperwallRuntimeSnapshot): string | undefined => {
+  const email = snapshot.user.email;
+  return typeof email === "string" && email.length > 0 ? email : undefined;
+};
+
 const Form = ({ reference, product, blocked, stored, callbacks, children }: FormProps) => {
   const session = useSuperwallSession();
+  const snapshot = useSuperwallSnapshot();
+  const knownEmail = knownEmailOf(snapshot);
+  const entered = React.useRef<string | undefined>(undefined);
+  const emailHandlers = React.useMemo(
+    () => ({
+      knownEmail,
+      setEmail: (email: string | undefined) => {
+        entered.current = email || undefined;
+      },
+    }),
+    [knownEmail],
+  );
   const stripe = useStripe();
   const elements = useElements();
   const [paying, setPaying] = React.useState(false);
@@ -198,8 +221,19 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
 
   const ready = blocked === undefined && stored.status === "ready";
   const canSubmit = ready && !paying && stripe !== null && elements !== null;
-  const live = React.useRef({ canSubmit, stripe, elements, product, ready, blocked, stored });
-  live.current = { canSubmit, stripe, elements, product, ready, blocked, stored };
+  const live = React.useRef({
+    canSubmit,
+    stripe,
+    elements,
+    product,
+    ready,
+    blocked,
+    stored,
+    knownEmail,
+  });
+  live.current = { canSubmit, stripe, elements, product, ready, blocked, stored, knownEmail };
+  const emailOf = (payment: CollectedPayment, wallet?: string | null): string | undefined =>
+    payment.email || wallet || entered.current || live.current.knownEmail;
 
   const unavailable = (): CheckoutSubmitResult => {
     const now = live.current;
@@ -256,7 +290,15 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
     if (checked.error) {
       return incomplete({ name: checked.error.type, message: checked.error.message ?? "" });
     }
-    return run(collectWith(client, form));
+    let payment: CollectedPayment;
+    try {
+      payment = await collectWith(client, form)();
+    } catch (error) {
+      return run(() => Promise.reject(error));
+    }
+    const email = emailOf(payment);
+    if (email === undefined) return incomplete(EMAIL_REQUIRED);
+    return run(() => Promise.resolve({ ...payment, email }));
   };
 
   const handlers: ExpressHandlers = {
@@ -265,7 +307,7 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
         event.reject();
         return;
       }
-      event.resolve();
+      event.resolve({ emailRequired: true });
       const { promise, resolve, reject } = deferredPayment();
       const outcome = run(() => promise);
       express.current = { resolve, reject, outcome };
@@ -285,7 +327,9 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
             "Collecting payment failed",
           );
         }
-        pending.resolve(await collectWith(client, form)());
+        const payment = await collectWith(client, form)();
+        const email = emailOf(payment, event.billingDetails?.email);
+        pending.resolve(email === undefined ? payment : { ...payment, email });
       } catch (error) {
         pending.reject(error);
       }
@@ -324,7 +368,9 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
 
   return (
     <CheckoutContext.Provider value={checkout}>
-      <ExpressContext.Provider value={handlers}>{children}</ExpressContext.Provider>
+      <ExpressContext.Provider value={handlers}>
+        <EmailContext.Provider value={emailHandlers}>{children}</EmailContext.Provider>
+      </ExpressContext.Provider>
     </CheckoutContext.Provider>
   );
 };

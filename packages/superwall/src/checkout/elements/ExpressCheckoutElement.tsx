@@ -5,8 +5,14 @@ import {
 } from "@stripe/react-stripe-js";
 
 export type ExpressHandlers = {
-  onClick: (event: { resolve: () => void; reject: () => void }) => void;
-  onConfirm: (event: { paymentFailed: (payload?: { reason?: "fail" }) => void }) => Promise<void>;
+  onClick: (event: {
+    resolve: (details?: { emailRequired?: boolean }) => void;
+    reject: () => void;
+  }) => void;
+  onConfirm: (event: {
+    paymentFailed: (payload?: { reason?: "fail" }) => void;
+    billingDetails?: { email?: string | null };
+  }) => Promise<void>;
   onCancel: () => void;
 };
 
@@ -27,7 +33,8 @@ export type ExpressCheckoutElementProps = Omit<
  * `<StripeCheckout>`: one-tap buttons for Apple Pay, Google Pay and Link,
  * each shown where the shopper's device and browser offer it. A wallet
  * payment completes the purchase without a `<PurchaseButton>`; closing the
- * wallet reports an abandon.
+ * wallet reports an abandon. The wallet always asks for the shopper's email,
+ * which superwall sets on the subscription's customer.
  */
 export const ExpressCheckoutElement = (props: ExpressCheckoutElementProps) => {
   const express = React.useContext(ExpressContext);

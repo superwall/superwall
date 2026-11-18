@@ -21,11 +21,20 @@ const stripe = vi.hoisted(() => {
     client,
     loadStripe: vi.fn(async () => client),
     elements: [] as { stripe: unknown; options: unknown }[],
+    link: undefined as
+      | undefined
+      | {
+          options?: { defaultValues?: { email?: string } };
+          onChange: (event: { complete: boolean; value: { email: string } }) => void;
+        },
     express: undefined as
       | undefined
       | {
-          onClick: (event: { resolve: () => void; reject: () => void }) => void;
-          onConfirm: (event: { paymentFailed: (payload?: unknown) => void }) => Promise<void>;
+          onClick: (event: { resolve: (details?: unknown) => void; reject: () => void }) => void;
+          onConfirm: (event: {
+            paymentFailed: (payload?: unknown) => void;
+            billingDetails?: { email?: string | null };
+          }) => Promise<void>;
           onCancel: () => void;
           options?: unknown;
         },
@@ -55,7 +64,10 @@ vi.mock("@stripe/react-stripe-js", async () => {
     },
     PaymentElement: () => null,
     AddressElement: () => null,
-    LinkAuthenticationElement: () => null,
+    LinkAuthenticationElement: (props: NonNullable<typeof stripe.link>) => {
+      stripe.link = props;
+      return null;
+    },
     PaymentMethodMessagingElement: () => null,
   };
 });
@@ -65,8 +77,11 @@ vi.mock("../../../src/host", async (importOriginal) => ({
 }));
 
 const { PurchaseButton, useCheckout } = await import("../../../src/checkout");
-const { StripeCheckout: Checkout, ExpressCheckoutElement } =
-  await import("../../../src/checkout/stripe");
+const {
+  StripeCheckout: Checkout,
+  ExpressCheckoutElement,
+  LinkAuthenticationElement,
+} = await import("../../../src/checkout/stripe");
 const { SuperwallProvider } = await import("../../../src");
 const { useSuperwallSession, usePurchase } = await import("../../../src/hooks");
 const { elementsFor, sessionsFor, watchCompletedCheckouts } =
@@ -204,6 +219,7 @@ beforeEach(() => {
   host.current = "web-paywall";
   stripe.elements.length = 0;
   stripe.express = undefined;
+  stripe.link = undefined;
   stripe.form.submit.mockResolvedValue({});
   stripe.client.createPaymentMethod.mockResolvedValue({
     paymentMethod: { id: "pm_1", billing_details: { email: "shopper@example.com" } },
@@ -767,5 +783,124 @@ describe("<PurchaseButton>", () => {
     expect(onStart).not.toHaveBeenCalled();
     expect(stripe.form.submit).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Off" })).toHaveProperty("disabled", true);
+  });
+});
+
+describe("<StripeCheckout> and the shopper's email", () => {
+  const withoutEmail = () =>
+    stripe.client.createPaymentMethod.mockResolvedValue({
+      paymentMethod: { id: "pm_2", billing_details: { email: null } },
+    });
+  const sentBody = () =>
+    JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+
+  it("starts no purchase from a card with no email anywhere", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    withoutEmail();
+    const onStart = vi.fn();
+    const { checkout, names } = await mount({ props: { onStart } });
+    let result: unknown;
+    await act(async () => {
+      result = await checkout().submit();
+    });
+    expect(result).toEqual({
+      status: "incomplete",
+      product: expect.objectContaining({ reference: "primary" }),
+      error: {
+        name: "email_required",
+        message: expect.stringContaining("LinkAuthenticationElement"),
+      },
+    });
+    expect(onStart).not.toHaveBeenCalled();
+    expect(names()).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(checkout().canSubmit).toBe(true);
+  });
+
+  it("pays a card with the email typed into LinkAuthenticationElement", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    withoutEmail();
+    const onChange = vi.fn();
+    const { checkout } = await mount({
+      children: <LinkAuthenticationElement onChange={onChange} />,
+    });
+    const link = stripe.link as NonNullable<typeof stripe.link>;
+    act(() => link.onChange({ complete: false, value: { email: "typ" } }));
+    let result: unknown;
+    await act(async () => {
+      result = await checkout().submit();
+    });
+    expect(result).toMatchObject({ status: "incomplete", error: { name: "email_required" } });
+    act(() => link.onChange({ complete: true, value: { email: "typed@example.com" } }));
+    await act(async () => {
+      result = await checkout().submit();
+    });
+    await settle();
+    expect(result).toMatchObject({ status: "completed" });
+    expect(sentBody()).toMatchObject({ paymentMethodId: "pm_2", email: "typed@example.com" });
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
+  it("pays with the user's email attribute, and fills the email field with it", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    withoutEmail();
+    const { checkout, session } = await mount({ children: <LinkAuthenticationElement /> });
+    act(() => session.setUserAttributes({ email: "known@example.com" }));
+    await settle();
+    expect(stripe.link?.options).toEqual({ defaultValues: { email: "known@example.com" } });
+    await act(async () => {
+      await checkout().submit();
+    });
+    await settle();
+    expect(sentBody()).toMatchObject({ email: "known@example.com" });
+  });
+
+  it("keeps an email the paywall passes to LinkAuthenticationElement itself", async () => {
+    const { session } = await mount({
+      children: (
+        <LinkAuthenticationElement options={{ defaultValues: { email: "own@example.com" } }} />
+      ),
+    });
+    act(() => session.setUserAttributes({ email: "known@example.com" }));
+    await settle();
+    expect(stripe.link?.options).toEqual({ defaultValues: { email: "own@example.com" } });
+  });
+
+  it("refuses LinkAuthenticationElement outside <StripeCheckout>", () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(() => render(<LinkAuthenticationElement />)).toThrow("inside <StripeCheckout>");
+  });
+
+  it("asks the wallet for the email and pays with the one it returns", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    withoutEmail();
+    await mount({ children: <ExpressCheckoutElement /> });
+    const wallet = stripe.express as NonNullable<typeof stripe.express>;
+    const click = { resolve: vi.fn(), reject: vi.fn() };
+    await act(async () => {
+      wallet.onClick(click);
+      await wallet.onConfirm({
+        paymentFailed: vi.fn(),
+        billingDetails: { email: "wallet@example.com" },
+      });
+    });
+    await settle();
+    expect(click.resolve).toHaveBeenCalledWith({ emailRequired: true });
+    expect(sentBody()).toMatchObject({ paymentMethodId: "pm_2", email: "wallet@example.com" });
+  });
+
+  it("lets a wallet that returns no email pay anyway", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    withoutEmail();
+    const onComplete = vi.fn();
+    await mount({ props: { onComplete }, children: <ExpressCheckoutElement /> });
+    const wallet = stripe.express as NonNullable<typeof stripe.express>;
+    await act(async () => {
+      wallet.onClick({ resolve: vi.fn(), reject: vi.fn() });
+      await wallet.onConfirm({ paymentFailed: vi.fn() });
+    });
+    await settle();
+    expect(onComplete).toHaveBeenCalled();
+    expect(sentBody().email).toBeUndefined();
   });
 });

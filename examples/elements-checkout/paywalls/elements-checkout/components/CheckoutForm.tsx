@@ -1,7 +1,12 @@
 import { useMemo } from "react";
 import { PurchaseButton, useCheckout } from "superwall/checkout";
 import type { CheckoutAmounts } from "superwall/checkout";
-import { ExpressCheckoutElement, PaymentElement, StripeCheckout } from "superwall/checkout/stripe";
+import {
+  ExpressCheckoutElement,
+  LinkAuthenticationElement,
+  PaymentElement,
+  StripeCheckout,
+} from "superwall/checkout/stripe";
 import type { StripeCheckoutOptions } from "superwall/checkout/stripe";
 import { useColorScheme, useHaptics, useTranslation } from "superwall/hooks";
 
@@ -46,9 +51,11 @@ const intervalOf = ({ interval, intervalCount }: CheckoutAmounts) =>
   intervalCount === 1 ? interval : `${intervalCount} ${interval}s`;
 
 /**
- * Stripe's wallet buttons and card form. Where the paywall can't take
- * payment, such as inside the iOS app, they render nothing, so the divider
- * between them goes too.
+ * Stripe's wallet buttons, then the email and card form. A card payment
+ * needs the shopper's email for their receipt and the billing portal, so
+ * the email field comes first; it is filled in when the paywall already
+ * knows the email. Where the paywall can't take payment, such as inside the
+ * iOS app, they render nothing, so the divider between them goes too.
  */
 const Fields = () => {
   const { t } = useTranslation();
@@ -60,6 +67,7 @@ const Fields = () => {
         options={{ buttonHeight: 52, buttonType: { applePay: "subscribe" } }}
       />
       <p className="divider">{t("form.or")}</p>
+      <LinkAuthenticationElement />
       <PaymentElement options={{ layout: "tabs" }} />
     </div>
   );

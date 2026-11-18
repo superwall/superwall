@@ -327,7 +327,11 @@ The stack, bottom to top — each layer depends only on the one below it:
       submit, wallet included, goes through `flow.purchaseWithElements`, so a
       form purchase reports the same `usePurchase` callbacks and
       `stripe_checkout_*` messages as Apple Pay and the sheet. A project never
-      installs Stripe.
+      installs Stripe. Every form purchase carries the shopper's email, as
+      the sheet and Apple Pay do: the payment method's, the wired
+      `LinkAuthenticationElement.tsx`'s, the wallet's (`emailRequired`) or
+      the user's `email` attribute; a card with none is `incomplete`
+      (`email_required`) before any purchase starts.
     - `form/` is what every store's form shares, exported from
       `superwall/checkout`: `useCheckout()` and `<PurchaseButton>` read one
       context (`CheckoutContext`, a `UseCheckoutResult`) that a store's form
