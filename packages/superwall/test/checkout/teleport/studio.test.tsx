@@ -275,6 +275,25 @@ const phone = {
 const root = () => document.documentElement;
 const floor = (edge: string) => root().style.getPropertyValue(`--sw-safe-area-floor-${edge}`);
 
+const stubOrientation = (landscape: boolean) => {
+  const listeners = new Set<() => void>();
+  let matches = landscape;
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    media: query,
+    get matches() {
+      return query === "(orientation: landscape)" && matches;
+    },
+    addEventListener: (_event: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_event: string, listener: () => void) => listeners.delete(listener),
+  }));
+  return {
+    rotate: (next: boolean) => {
+      matches = next;
+      for (const listener of listeners) listener();
+    },
+  };
+};
+
 describe("the document on the studio's web half", () => {
   it("describes the browser after a teleport, without the app's floors", async () => {
     await mount({ device: phone });
@@ -316,6 +335,65 @@ describe("the document on the studio's web half", () => {
     expect(floor("top")).toBe("59px");
     expect(floor("bottom")).toBe("34px");
     expect(document.body.classList.contains("web2app")).toBe(false);
+  });
+
+  it("describes the app again after a reset leaves the web half", async () => {
+    await mount({ device: phone });
+    await act(async () => captured.router?.push("checkout"));
+    await act(async () => captured.router?.reset([]));
+
+    expect(root().getAttribute("data-sw-platform")).toBe("ios");
+    expect(root().getAttribute("data-sw-cutout")).toBe("island");
+    expect(floor("top")).toBe("59px");
+    expect(floor("bottom")).toBe("34px");
+  });
+
+  it("describes the app again once the paywall closes on the web half", async () => {
+    await mount({ device: phone });
+    await act(async () => captured.router?.push("checkout"));
+    expect(root().getAttribute("data-sw-platform")).toBe("web");
+
+    await act(async () => {
+      captured.session?.close();
+      await flush();
+    });
+
+    expect(statusNow()).toEqual({ status: "idle" });
+    expect(root().getAttribute("data-sw-platform")).toBe("ios");
+    expect(floor("top")).toBe("59px");
+    expect(floor("bottom")).toBe("34px");
+  });
+
+  it("keeps the app's insets on a phone in landscape, where the studio floats Safari's bar over the page", async () => {
+    const orientation = stubOrientation(true);
+    const landscapePhone = {
+      ...phone,
+      safeAreaInsets: { top: 0, right: 59, bottom: 21, left: 59 },
+    };
+    await mount({ device: landscapePhone });
+    await act(async () => captured.router?.push("checkout"));
+
+    expect(statusNow()).toEqual({ status: "arrived" });
+    expect(root().getAttribute("data-sw-platform")).toBe("ios");
+    expect(root().getAttribute("data-sw-cutout")).toBe("island");
+    expect(floor("left")).toBe("59px");
+    expect(floor("bottom")).toBe("21px");
+
+    act(() => orientation.rotate(false));
+
+    expect(root().getAttribute("data-sw-platform")).toBe("web");
+    expect(floor("left")).toBe("");
+  });
+
+  it("describes the browser on a tablet in landscape, where the studio draws Safari's bounds", async () => {
+    stubOrientation(true);
+    await mount({
+      device: { platform: "iOS", deviceModel: "iPad16,3", safeAreaInsets: { top: 24, bottom: 20 } },
+    });
+    await act(async () => captured.router?.push("checkout"));
+
+    expect(root().getAttribute("data-sw-platform")).toBe("web");
+    expect(floor("top")).toBe("");
   });
 
   it("keeps the app's attributes when the push does not teleport", async () => {

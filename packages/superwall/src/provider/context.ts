@@ -9,6 +9,7 @@ import {
   pendingHostMessages,
   type ITransport,
   type SuperwallConfig,
+  type SuperwallDeviceVariables,
   type SuperwallProduct,
   type SuperwallProductVariables,
   type SuperwallSession,
@@ -17,7 +18,9 @@ import {
 import { readTeleportBoot } from "../checkout/teleport/boot";
 import { teleportFor } from "../checkout/teleport/flow";
 import { documentAttributes, HOST_ATTRIBUTE_NAMES, hostAttributes } from "../document";
+import { idiomOf } from "../device";
 import { hostOf, type SuperwallHost } from "../host";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSuperwallSnapshot } from "../hooks/useSuperwallSnapshot";
 import "./insets.css";
 
@@ -168,16 +171,22 @@ const Insets = ({ insets }: { insets: SuperwallConfig["insets"] }): null => {
 const notOnWebHalf = () => false;
 const noSubscription = () => () => {};
 
-const useStudioWebHalf = (): boolean => {
+const useStudioWebHalf = (device: SuperwallDeviceVariables): boolean => {
   const session = React.useContext(SuperwallContext);
+  const landscape = useMediaQuery("(orientation: landscape)");
   const teleporter = session !== null && hostOf() === "studio" ? teleportFor(session) : undefined;
   const onWebHalf = teleporter?.kind === "app" ? () => teleporter.inFlight() : notOnWebHalf;
-  return React.useSyncExternalStore(teleporter?.subscribe ?? noSubscription, onWebHalf, onWebHalf);
+  const webHalf = React.useSyncExternalStore(
+    teleporter?.subscribe ?? noSubscription,
+    onWebHalf,
+    onWebHalf,
+  );
+  return webHalf && !(landscape && idiomOf(device) === "phone");
 };
 
 const HostAttributes = (): null => {
   const { device } = useSuperwallSnapshot();
-  const webHalf = useStudioWebHalf();
+  const webHalf = useStudioWebHalf(device);
 
   React.useEffect(() => {
     const root = document.documentElement;
