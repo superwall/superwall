@@ -16,6 +16,7 @@ export const command = defineResource({
     {
       name: "create",
       summary: "Create a campaign that a placement triggers",
+      details: "Creates one audience whose only variant is a holdout at 100%, so the placement shows no paywall until a treatment gets traffic: `campaigns variants create <campaign> <audience> --type treatment --paywall <paywall>`. The output warns about every audience that shows no paywall.",
       effect: "write",
       handler: "resource",
       usage: "--description <text> --placement <placement>",

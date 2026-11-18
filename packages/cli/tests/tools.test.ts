@@ -241,6 +241,10 @@ test("publish and manual grants describe their live effects", () => {
   assert.match(tool("entitlements_grants_create").description, /error when an active grant already exists/);
 });
 
+test("campaigns_create says its audience starts as a holdout that shows no paywall", () => {
+  assert.match(tool("campaigns_create").description, /only variant is a holdout at 100%, so the placement shows no paywall/);
+});
+
 test("the MCP retains generic API and schema tools with fallback guidance", () => {
   for (const name of ["get", "post", "put", "patch", "delete", "api_docs", "asc_get", "asc_post", "asc_patch", "asc_delete", "asc_docs", "asa_get", "asa_post", "asa_put", "asa_delete", "asa_docs"]) {
     assert.ok(tools.some((candidate) => candidate.name === name), name);
