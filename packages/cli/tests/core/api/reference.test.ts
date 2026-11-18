@@ -262,6 +262,102 @@ test("the index fills in defaults and describes loosely typed schemas", () => {
   assert.deepEqual(deriveApiIndex({}).operations, []);
 });
 
+const frequencySpec = {
+  paths: {
+    "/v2/campaigns/{id}/audiences/{audience_id}": {
+      patch: {
+        summary: "Update Audience",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  frequency_limit: {
+                    anyOf: [
+                      {
+                        type: "object",
+                        required: ["occurrences", "interval"],
+                        properties: {
+                          occurrences: { type: "integer" },
+                          interval: {
+                            anyOf: [
+                              {
+                                type: "object",
+                                required: ["type"],
+                                properties: { type: { type: "string", enum: ["infinity"] } },
+                              },
+                              {
+                                type: "object",
+                                required: ["type", "minutes"],
+                                properties: {
+                                  type: { type: "string", enum: ["minutes"] },
+                                  minutes: { type: "integer", description: "Length of the rolling window in minutes" },
+                                },
+                              },
+                            ],
+                            description: "Time window for a frequency limit",
+                          },
+                        },
+                      },
+                      { type: "null" },
+                    ],
+                    description: "Set the per-user frequency limit, or null to remove it.",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { type: "object", properties: { id: { type: "string" }, frequency_limit: {} } },
+                    { type: "object", properties: { id: { type: "string" }, deleted: { type: "boolean" } } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+test("a union body field shows the fields of every branch, required only where every branch requires them", () => {
+  const [update] = deriveApiIndex(frequencySpec).operations;
+  assert.deepEqual(update?.body, [
+    {
+      name: "frequency_limit",
+      type: "object | null",
+      required: false,
+      description: "Set the per-user frequency limit, or null to remove it.",
+      fields: [
+        { name: "occurrences", type: "integer", required: true },
+        {
+          name: "interval",
+          type: "object",
+          required: true,
+          description: "Time window for a frequency limit",
+          fields: [
+            { name: "type", type: '"infinity" | "minutes"', required: true },
+            { name: "minutes", type: "integer", required: false, description: "Length of the rolling window in minutes" },
+          ],
+        },
+      ],
+    },
+  ]);
+  assert.deepEqual(update?.returns, ["id", "frequency_limit", "deleted"]);
+  assert.match(
+    renderApiDocs(deriveApiIndex(frequencySpec), "/v2/campaigns/1/audiences/2", "patch"),
+    /interval: object .*\n {6}type: "infinity" \| "minutes"\n {6}minutes\?: integer/,
+  );
+});
+
 test("one search hit shows the endpoint in full, and an empty body says so", () => {
   const derived = deriveApiIndex(edgeSpec);
   assert.equal(
