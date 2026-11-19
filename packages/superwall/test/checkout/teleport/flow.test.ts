@@ -2467,6 +2467,56 @@ describe("the teleport page's presentation", () => {
     detach();
   });
 
+  it("reloads a page from its lookup when it comes back into view after its teleport expired", async () => {
+    boot();
+    window.history.replaceState(null, "", "/sw-teleport/v1:tp?sw_boot=a&sw_sig=b&x=1#ref=card");
+    const calls = api({ "checkout/teleport/status": { status: "expired" } });
+    const replace = vi.spyOn(pageNavigation, "replace").mockImplementation(() => undefined);
+    const { session } = fakeSession();
+    const teleporter = teleportPage(session);
+    attach(session);
+    await settle();
+    expect(calls).toHaveLength(0);
+    setVisibility("hidden");
+    setVisibility("visible");
+    await settle();
+    expect(replace).toHaveBeenCalledExactlyOnceWith("http://localhost:3000/sw-teleport/v1:tp?x=1");
+    expect(teleporter.getStatus().status).toBe("arrived");
+    await expect(teleporter.whenUnsettled()).resolves.toBe(false);
+    setVisibility("visible");
+    await settle();
+    expect(calls).toHaveLength(1);
+    expect(replace).toHaveBeenCalledOnce();
+  });
+
+  it("reloads a shared page from its lookup once its watch sees the teleport expire", async () => {
+    boot({ shared: true });
+    window.history.replaceState(null, "", "/sw-teleport/v1:tp?sw_boot=a&sw_sig=b&x=1");
+    const calls = api({
+      "checkout/teleport/status": [{ status: "claimed" }, { status: "expired" }],
+    });
+    const replace = vi.spyOn(pageNavigation, "replace").mockImplementation(() => undefined);
+    const { session } = fakeSession();
+    attach(session);
+    await settle();
+    expect(replace).not.toHaveBeenCalled();
+    await settle(5_000);
+    expect(replace).toHaveBeenCalledExactlyOnceWith("http://localhost:3000/sw-teleport/v1:tp?x=1");
+    await settle(20_000);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("stops a tap on a shared page whose teleport expired and reloads it from its lookup", async () => {
+    boot({ shared: true });
+    window.history.replaceState(null, "", "/sw-teleport/v1:tp?sw_boot=a&sw_sig=b&x=1");
+    api({ "checkout/teleport/status": { status: "expired" } });
+    const replace = vi.spyOn(pageNavigation, "replace").mockImplementation(() => undefined);
+    const teleporter = teleportPage(fakeSession().session);
+    await expect(teleporter.whenUnsettled()).resolves.toBe(false);
+    expect(replace).toHaveBeenCalledExactlyOnceWith("http://localhost:3000/sw-teleport/v1:tp?x=1");
+    expect(teleporter.getStatus().status).toBe("arrived");
+  });
+
   it("watches a shared presentation and switches to the paid screen once paid elsewhere", async () => {
     boot({ shared: true });
     const calls = api({
