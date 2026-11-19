@@ -6,6 +6,7 @@ import { checkoutEvents } from "../../src/checkout/events";
 import { isLoading } from "../../src/checkout/loading";
 import {
   applePayFor,
+  elementsFor,
   autoPrefetchTargets,
   clearWebFailure,
   lastWebFailure,
@@ -295,6 +296,35 @@ describe("prefetchSession", () => {
     await prefetchSession(session, "primary", "applePay");
 
     expect(prepare).toHaveBeenCalledWith(quote, {});
+  });
+
+  it("prepares the wallet from the same quote in elements mode, so a custom button can open it", async () => {
+    const { session } = fakeSession();
+    vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(quote);
+    const form = vi.spyOn(elementsFor(session), "prepare").mockResolvedValue(undefined);
+    const wallet = vi.spyOn(applePayFor(session), "prepare").mockResolvedValue(undefined);
+
+    await prefetchSession(session, "primary", "elements");
+
+    expect(form).toHaveBeenCalledWith(quote, {});
+    expect(wallet).toHaveBeenCalledWith(quote, {});
+  });
+
+  it("keeps the form ready in elements mode when the wallet cannot be prepared", async () => {
+    const { session } = fakeSession();
+    vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(quote);
+    vi.spyOn(elementsFor(session), "prepare").mockResolvedValue(undefined);
+    const wallet = applePayFor(session);
+    vi.spyOn(wallet, "prepare").mockRejectedValue(new Error("no wallet"));
+    const markForm = vi.spyOn(elementsFor(session), "markUnavailable");
+
+    await prefetchSession(session, "primary", "elements");
+
+    expect(markForm).not.toHaveBeenCalled();
+    expect(wallet.availability("primary")).toMatchObject({
+      status: "unavailable",
+      reason: "stripe_load_failed",
+    });
   });
 
   it("marks the wallet unavailable when preparing it throws", async () => {
@@ -715,7 +745,7 @@ describe("purchaseOnWeb", () => {
       status: "unavailable",
       reason: "session_unsupported",
     });
-    sessionsFor(session).cache.set("primary", embedded, "apple-pay");
+    sessionsFor(session).cache.set("primary", embedded, "elements");
     const begin = vi.spyOn(sessionsFor(session), "begin");
 
     const outcome = purchaseOnWeb(session, "primary", "applePay");

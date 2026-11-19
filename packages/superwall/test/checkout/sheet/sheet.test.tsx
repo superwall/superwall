@@ -10,7 +10,7 @@ type StripeOptions = {
 };
 const stripe: { options?: StripeOptions; started: string[]; refuse?: Error } = { started: [] };
 
-vi.mock("@stripe/stripe-js", () => ({
+vi.mock("@stripe/stripe-js/pure", () => ({
   loadStripe: () =>
     Promise.resolve({
       initEmbeddedCheckout: (options: StripeOptions & { clientSecret: string }) => {

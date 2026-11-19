@@ -66,6 +66,8 @@ const makeController = ({
   canMakePayment = { applePay: true } as Record<string, boolean> | null,
   confirmCardPayment = { paymentIntent: { id: "pi_1", status: "succeeded" } } as unknown,
   confirmCardSetup = { setupIntent: { id: "seti_1", status: "succeeded" } } as unknown,
+  handleNextAction = undefined as unknown,
+  confirmPayment = { paymentIntent: { id: "pi_1", status: "succeeded" } } as unknown,
   confirmResponse = { customerId: "cus_1", subscriptionId: "sub_1" } as Record<string, unknown>,
   confirmStatus = 200,
   realFetch = false,
@@ -83,6 +85,10 @@ const makeController = ({
     paymentRequest: vi.fn((_options: PaymentRequestOptions) => paymentRequest),
     confirmCardPayment: vi.fn().mockResolvedValue(confirmCardPayment),
     confirmCardSetup: vi.fn().mockResolvedValue(confirmCardSetup),
+    handleNextAction: vi.fn(async () =>
+      handleNextAction !== undefined ? handleNextAction : confirmCardSetup,
+    ),
+    confirmPayment: vi.fn().mockResolvedValue(confirmPayment),
   };
   const post = vi.fn();
   const fetchWithRetry = vi
@@ -314,7 +320,7 @@ describe("createApplePay", () => {
           email: "shopper@example.com",
         }),
       }),
-      { retries: 0, returnClientErrors: true },
+      { retries: 0, returnErrors: true },
     );
     expect(posted("stripe_checkout_submit")).toHaveLength(1);
     // Reporting the completion is the flow's job; the wallet says it happened
@@ -322,6 +328,31 @@ describe("createApplePay", () => {
     expect(posted("stripe_checkout_complete")).toHaveLength(0);
     const [{ session }] = success.mock.calls[0] as [{ session: ApplePaySession }];
     expect(session).toMatchObject({ directive: "applePay", referenceName: "primary" });
+    expect(decodeCheckoutSessionId(String(session.checkoutSessionId))).toBe("sub_1");
+  });
+
+  it("keeps the first subscription when the shopper pays again after 3D Secure fails", async () => {
+    const { controller, fetchWithRetry, stripe, authorize } = makeController({
+      confirmResponse: { requiresAction: true, clientSecret: "pi_secret", subscriptionId: "sub_1" },
+      confirmPayment: { error: {} },
+    });
+    const success = vi.fn();
+    const off = checkoutEvents.subscribe("PAYMENT_SUCCESS", success);
+    await controller.prepare(quote());
+    const first = controller.purchase("primary", context);
+    await authorize();
+    await expect(first).resolves.toMatchObject({ status: "failed" });
+
+    fetchWithRetry.mockResolvedValue(
+      new Response(JSON.stringify({ subscriptionId: "sub_2" }), { status: 200 }),
+    );
+    stripe.confirmPayment.mockResolvedValue({ paymentIntent: { id: "pi_1", status: "succeeded" } });
+    const second = controller.purchase("primary", context);
+    await authorize();
+    await expect(second).resolves.toEqual({ status: "completed" });
+    off();
+
+    const [{ session }] = success.mock.calls[0] as [{ session: ApplePaySession }];
     expect(decodeCheckoutSessionId(String(session.checkoutSessionId))).toBe("sub_1");
   });
 
@@ -349,9 +380,12 @@ describe("createApplePay", () => {
     const outcome = controller.purchase("primary", context);
     await authorize();
     await expect(outcome).resolves.toEqual({ status: "completed" });
-    expect(stripe.confirmCardPayment).toHaveBeenCalledWith("pi_secret", {
-      payment_method: "pm_1",
+    expect(stripe.confirmPayment).toHaveBeenCalledWith({
+      clientSecret: "pi_secret",
+      confirmParams: { payment_method: "pm_1" },
+      redirect: "if_required",
     });
+    expect(stripe.confirmCardPayment).not.toHaveBeenCalled();
   });
 
   it("confirms a quote that already carries a SetupIntent on the client first", async () => {
@@ -564,7 +598,7 @@ describe("createApplePay deferred authentication", () => {
     await authorize();
     await expect(outcome).resolves.toEqual({ status: "completed" });
 
-    expect(stripe.confirmCardSetup).toHaveBeenCalledWith("seti_secret");
+    expect(stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: "seti_secret" });
     expect(JSON.parse(fetchWithRetry.mock.calls[1]![1].body as string)).toMatchObject({
       setupIntentId: "seti_1",
     });
@@ -622,7 +656,7 @@ describe("createApplePay deferred authentication", () => {
   it("fails when authenticating a deferred PaymentIntent is refused", async () => {
     const { controller, authorize } = makeController({
       confirmResponse: { requiresAction: true, clientSecret: "pi_secret" },
-      confirmCardPayment: { error: {} },
+      confirmPayment: { error: {} },
     });
     await controller.prepare(quote());
     const outcome = controller.purchase("primary", context);
@@ -640,6 +674,7 @@ describe("createApplePay deferred authentication", () => {
     await expect(outcome).resolves.toEqual({ status: "completed" });
     expect(stripe.confirmCardSetup).not.toHaveBeenCalled();
     expect(stripe.confirmCardPayment).not.toHaveBeenCalled();
+    expect(stripe.handleNextAction).not.toHaveBeenCalled();
   });
 
   it("survives a wallet whose complete() throws, and an unreadable confirm body", async () => {
@@ -910,7 +945,7 @@ describe("why the wallet's payment failed", () => {
       setup: () => ({
         made: makeController({
           confirmResponse: { requiresAction: true, clientSecret: "pi_secret" },
-          confirmCardPayment: decline,
+          confirmPayment: decline,
         }),
         quoted: quote(),
       }),

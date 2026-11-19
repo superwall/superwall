@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@stripe/stripe-js", () => ({
+vi.mock("@stripe/stripe-js/pure", () => ({
   loadStripe: vi.fn(async () => null),
 }));
 
-const { loadStripe } = await import("@stripe/stripe-js");
+const { loadStripe } = await import("@stripe/stripe-js/pure");
 const { createApplePay } = await import("../../../src/checkout/applePay");
 const { hostEvents } = await import("../../../src/checkout/host");
 

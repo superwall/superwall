@@ -46,6 +46,10 @@ paywall has, even where the demo does not strictly need them:
   paywall does not grey its own button out, and a paywall that does is lying
   about what it controls. `usePurchase()` exposes `isPurchasing` for the cases
   that genuinely need it; a buy button is not one of them.
+  The one exception is the `<PurchaseButton>` of an `elements` checkout form.
+  A card payment opens no sheet, so the paywall is the only feedback the
+  shopper gets: the button disables itself while it pays, and its label says
+  so (`useCheckout().status === "paying"`), or a shopper taps it twice.
 - **Every control is reachable.** Icon-only buttons carry an `aria-label`; a
   tap target is at least 44px.
 - **Prices come from `useProducts()`**, never from the file.
