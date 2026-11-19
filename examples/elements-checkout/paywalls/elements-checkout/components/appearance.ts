@@ -109,7 +109,7 @@ export const useStripeOptions = (): StripeCheckoutOptions => {
           colorIcon: p.fgMuted,
           colorDanger: p.danger,
           fontFamily: FONT,
-          fontSizeBase: "15px",
+          fontSizeBase: "16px",
           borderRadius: "3px",
           spacingUnit: "4px",
           gridRowSpacing: "16px",
@@ -117,7 +117,13 @@ export const useStripeOptions = (): StripeCheckoutOptions => {
           focusOutline: "none",
         },
         rules: {
-          ".Input": { ...flat, border: hairline, backgroundColor: p.surface, padding: "12px" },
+          ".Input": {
+            ...flat,
+            border: hairline,
+            backgroundColor: p.surface,
+            padding: "12px",
+            fontSize: "16px",
+          },
           ".Input:focus": { ...flat, borderColor: p.accent },
           ".Input--invalid": { ...flat, borderColor: p.danger },
           ".Label": { color: p.fgSecondary, fontWeight: "500", fontSize: "14px" },
