@@ -318,6 +318,12 @@ describe("<StripeCheckout> before it can take payment", () => {
     expect(result).toMatchObject({ status: "unavailable", reason: "session_failed" });
   });
 
+  it("names a Stripe.js that failed to load as the store failing to load", async () => {
+    const { checkout, session } = await mount({ prepare: null });
+    act(() => elementsFor(session).markUnavailable("primary", "stripe_load_failed"));
+    expect(checkout()).toMatchObject({ status: "unavailable", reason: "store_load_failed" });
+  });
+
   it("throws a clear error when used outside a checkout form", () => {
     const Lonely = () => {
       useCheckout();
@@ -1120,6 +1126,20 @@ describe("<StripeCheckout> with Stripe's separate card fields", () => {
     });
     expect(onStart).not.toHaveBeenCalled();
     expect(checkout().canSubmit).toBe(true);
+  });
+
+  it("reports an incomplete card that Stripe gives no message for", async () => {
+    useCardFields("cardNumber");
+    stripe.client.createPaymentMethod.mockResolvedValue({ error: { type: "validation_error" } });
+    const { checkout } = await mount({ props: { email: "a@b.co" } });
+    let result: unknown;
+    await act(async () => {
+      result = await checkout().submit();
+    });
+    expect(result).toMatchObject({
+      status: "incomplete",
+      error: { name: "validation_error", message: "" },
+    });
   });
 
   it("reports Stripe throwing on the card fields as incomplete", async () => {

@@ -194,36 +194,37 @@ export const createElementsCheckout = (options: ElementsCheckoutOptions): Elemen
       onSubmit?.();
       options.host.submitted(context);
 
-      try {
-        await confirmation.confirm({
-          name: "Elements",
-          stripe,
-          quote,
-          paymentMethodId: payment.paymentMethodId,
-          stripeCustomerId: identity.stripeCustomerId,
-          email: payment.email || identity.email,
-          onAuthorized: () => undefined,
-          onSubscription: (subscriptionId) => {
-            session.checkoutSessionId ??= buildCheckoutSessionId({
-              stripeCheckoutSessionId: subscriptionId,
-              environment: stripeEnvironmentOf(context.productIdentifier),
-            });
-          },
-        });
-        checkoutEvents.dispatch("PAYMENT_SUCCESS", { session });
-        return { status: "completed" };
-      } catch (error) {
-        const failure = failureOfError(error);
-        checkoutEvents.dispatch("PAYMENT_ERROR", {
-          error: error instanceof Error ? error : new Error("Payment failed"),
-          session,
-          failure,
-        });
-        options.host.failed(context);
-        return { status: "failed", failure };
-      } finally {
-        paying.delete(referenceName);
-      }
+      const attempt = async (): Promise<WebPurchaseOutcome> => {
+        try {
+          await confirmation.confirm({
+            name: "Elements",
+            stripe,
+            quote,
+            paymentMethodId: payment.paymentMethodId,
+            stripeCustomerId: identity.stripeCustomerId,
+            email: payment.email || identity.email,
+            onAuthorized: () => undefined,
+            onSubscription: (subscriptionId) => {
+              session.checkoutSessionId = buildCheckoutSessionId({
+                stripeCheckoutSessionId: subscriptionId,
+                environment: stripeEnvironmentOf(context.productIdentifier),
+              });
+            },
+          });
+          checkoutEvents.dispatch("PAYMENT_SUCCESS", { session });
+          return { status: "completed" };
+        } catch (error) {
+          const failure = failureOfError(error);
+          checkoutEvents.dispatch("PAYMENT_ERROR", {
+            error: error instanceof Error ? error : new Error("Payment failed"),
+            session,
+            failure,
+          });
+          options.host.failed(context);
+          return { status: "failed", failure };
+        }
+      };
+      return attempt().finally(() => paying.delete(referenceName));
     },
 
     clear: () => {

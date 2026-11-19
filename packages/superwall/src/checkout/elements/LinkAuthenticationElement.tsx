@@ -28,13 +28,12 @@ export const LinkAuthenticationElement = (props: LinkAuthenticationElementProps)
   const known = email.knownEmail;
   const { register } = email;
   React.useEffect(() => register(), [register]);
-  const merged = React.useMemo(
-    () =>
-      known === undefined || options?.defaultValues?.email
-        ? options
-        : { ...options, defaultValues: { ...options?.defaultValues, email: known } },
-    [options, known],
-  );
+  const merged = React.useMemo(() => {
+    const defaults = options?.defaultValues;
+    return known === undefined || defaults?.email
+      ? options
+      : { ...options, defaultValues: { ...defaults, email: known } };
+  }, [options, known]);
   return (
     <StripeLinkAuthenticationElement
       {...props}

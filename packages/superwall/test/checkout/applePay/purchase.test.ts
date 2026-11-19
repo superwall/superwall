@@ -331,6 +331,31 @@ describe("createApplePay", () => {
     expect(decodeCheckoutSessionId(String(session.checkoutSessionId))).toBe("sub_1");
   });
 
+  it("keeps the first subscription when the shopper pays again after 3D Secure fails", async () => {
+    const { controller, fetchWithRetry, stripe, authorize } = makeController({
+      confirmResponse: { requiresAction: true, clientSecret: "pi_secret", subscriptionId: "sub_1" },
+      confirmPayment: { error: {} },
+    });
+    const success = vi.fn();
+    const off = checkoutEvents.subscribe("PAYMENT_SUCCESS", success);
+    await controller.prepare(quote());
+    const first = controller.purchase("primary", context);
+    await authorize();
+    await expect(first).resolves.toMatchObject({ status: "failed" });
+
+    fetchWithRetry.mockResolvedValue(
+      new Response(JSON.stringify({ subscriptionId: "sub_2" }), { status: 200 }),
+    );
+    stripe.confirmPayment.mockResolvedValue({ paymentIntent: { id: "pi_1", status: "succeeded" } });
+    const second = controller.purchase("primary", context);
+    await authorize();
+    await expect(second).resolves.toEqual({ status: "completed" });
+    off();
+
+    const [{ session }] = success.mock.calls[0] as [{ session: ApplePaySession }];
+    expect(decodeCheckoutSessionId(String(session.checkoutSessionId))).toBe("sub_1");
+  });
+
   it("prefers the wallet's payer email over the paywall's", async () => {
     const { controller, fetchWithRetry, authorize } = makeController();
     await controller.prepare(quote(), { email: "paywall@example.com" });

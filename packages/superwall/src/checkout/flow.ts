@@ -120,11 +120,14 @@ export const sessionsFor = (paywall: PaywallSession): CheckoutSessions => {
 export const hostFor = (paywall: PaywallSession): HostEvents =>
   hostEvents((message) => paywall.postMessage(message));
 
+const publicApiKeyOf = (paywall: PaywallSession) =>
+  String(paywall.getSnapshot().device.publicApiKey ?? "");
+
 export const applePayFor = (paywall: PaywallSession): ApplePay => {
   const existing = applePayByPaywall.get(paywall);
   if (existing) return existing;
   const applePay = createApplePay({
-    publicApiKey: () => String(paywall.getSnapshot().device.publicApiKey ?? ""),
+    publicApiKey: () => publicApiKeyOf(paywall),
     host: hostFor(paywall),
   });
   applePayByPaywall.set(paywall, applePay);
@@ -135,7 +138,7 @@ export const elementsFor = (paywall: PaywallSession): ElementsCheckout => {
   const existing = elementsByPaywall.get(paywall);
   if (existing) return existing;
   const elements = createElementsCheckout({
-    publicApiKey: () => String(paywall.getSnapshot().device.publicApiKey ?? ""),
+    publicApiKey: () => publicApiKeyOf(paywall),
     host: hostFor(paywall),
   });
   elementsByPaywall.set(paywall, elements);
