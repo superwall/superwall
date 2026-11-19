@@ -101,6 +101,7 @@ const stubApi = () => {
 };
 
 afterEach(() => {
+  window.dispatchEvent(new Event("pagehide"));
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   Reflect.deleteProperty(window, "__SW_TELEPORT__");

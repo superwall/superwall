@@ -23,18 +23,15 @@ export const markTeleportPage = (mark: TeleportMark): void => {
 export const PAINT_FALLBACK_MS = 100;
 
 export const afterPaint = (callback: () => void): (() => void) => {
-  let pending = true;
   let frame: number | undefined;
   let task: ReturnType<typeof setTimeout> | undefined;
   let fallback: ReturnType<typeof setTimeout> | undefined;
   const stop = () => {
-    pending = false;
     if (frame !== undefined) cancelAnimationFrame(frame);
     clearTimeout(task);
     clearTimeout(fallback);
   };
   const run = () => {
-    if (!pending) return;
     stop();
     callback();
   };
