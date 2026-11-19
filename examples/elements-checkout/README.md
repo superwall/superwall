@@ -93,7 +93,7 @@ page what it shows.
 | Apple Pay + card fields | `ExpressCheckoutElement` (Apple Pay only), `CardNumberElement`, `CardExpiryElement`, `CardCvcElement`                          | `paymentMethods` turns off every other wallet; the paywall's own email box and button. Without Apple Pay, the card fields stand alone         |
 | Card first              | `LinkAuthenticationElement`, `PaymentElement` (accordion), `ExpressCheckoutElement`                                            | Any order: the card form first, the wallets below it                                                                                          |
 | Card fields             | `CardNumberElement`, `CardExpiryElement`, `CardCvcElement`                                                                     | Separate card fields, the paywall's own email `<input>` passed as `<StripeCheckout email>`, and its own button on `useCheckout().submit()`    |
-| Single card line        | `CardElement`                                                                                                                  | Stripe's one-line card field with an email box and `<PurchaseButton>`                                                                         |
+| Single card line        | `CardElement`                                                                                                                  | Stripe's one-line card field with the paywall's own email box and button                                                                      |
 | Wallets only            | `ExpressCheckoutElement`                                                                                                       | No CTA: the wallet pays and asks for the email itself                                                                                         |
 | With address            | `LinkAuthenticationElement`, `AddressElement` (billing), `PaymentElement` (accordion)                                          | The billing address goes onto the payment method; `stripeMetadata` goes onto the subscription                                                 |
 | Promo code              | `LinkAuthenticationElement`, `PaymentElement`, `useDiscount()`                                                                 | A redeemed code re-prices the form: the due amount and the charge follow the discounted price                                                 |
@@ -215,6 +215,10 @@ With superwall:
 `LinkAuthenticationElement`, a wallet, the `email` prop or the user's `email`
 attribute, the form logs a warning when it is ready, and `submit()` returns
 `incomplete` with `email_required` and charges nothing.
+`<PurchaseButton>` shows nothing for that, so a paywall with its own email
+box pays from its own button on `useCheckout().submit()` and shows the
+`incomplete` result's message, as the Card fields and Single card line
+layouts do.
 
 ## Try it with a test card
 

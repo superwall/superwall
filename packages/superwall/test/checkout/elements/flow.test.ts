@@ -293,6 +293,29 @@ describe("purchaseWithElements", () => {
     ]);
   });
 
+  it("pays nothing when the quote is replaced while the shopper is paying", async () => {
+    const { session, messages } = fakeSession();
+    await elementsFor(session).prepare(quote());
+    answerConfirm({ subscriptionId: "sub_1" });
+    const confirm = vi.mocked(globalThis.fetch);
+    const { heard, stop } = recordPurchaseEvents(session);
+
+    const outcome = await purchaseWithElements(session, "primary", async () => {
+      await elementsFor(session).prepare(quote({ checkoutContextId: "ctx_discounted" }));
+      return { paymentMethodId: "pm_1" };
+    });
+    stop();
+
+    expect(outcome).toMatchObject({ status: "failed", failure: { code: "quote_changed" } });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(heard).toEqual(["start", "failure"]);
+    expect(messages()).toEqual([
+      "initiate_web_checkout",
+      "stripe_checkout_start",
+      "stripe_checkout_fail",
+    ]);
+  });
+
   it("reports an abandon when the shopper backs out before paying", async () => {
     const { session, messages } = fakeSession();
     await elementsFor(session).prepare(quote());

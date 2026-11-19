@@ -637,7 +637,7 @@ export const purchaseWithElements = (
       host.abandoned(context);
       return { status: "abandoned" };
     }
-    return elements.pay(referenceName, collected, context, report.onSubmit);
+    return elements.pay(referenceName, collected, context, report.onSubmit, state.quote);
   });
 
 const runWebPurchase = async (

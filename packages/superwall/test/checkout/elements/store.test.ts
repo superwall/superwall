@@ -311,6 +311,60 @@ describe("paying with a collected payment method", () => {
     expect(errored.mock.calls[0]?.[0].error).toEqual(new Error("Payment failed"));
   });
 
+  it("refuses to pay when the quote changed after the shopper started paying", async () => {
+    const { store, posted, fetchWithRetry } = makeStore();
+    const original = quote();
+    await store.prepare(original);
+    await store.prepare(quote({ checkoutContextId: "ctx_2" }));
+
+    const outcome = await store.pay(
+      "primary",
+      { paymentMethodId: "pm_1" },
+      context,
+      undefined,
+      original,
+    );
+
+    expect(outcome).toEqual({
+      status: "failed",
+      failure: expect.objectContaining({ reason: "unknown", code: "quote_changed" }),
+    });
+    expect(fetchWithRetry).not.toHaveBeenCalled();
+    expect(posted()).toEqual(["stripe_checkout_fail"]);
+  });
+
+  it("refuses to pay when the quote was cleared after the shopper started paying", async () => {
+    const { store, fetchWithRetry } = makeStore();
+    const original = quote();
+    await store.prepare(original);
+    store.clear();
+
+    const outcome = await store.pay(
+      "primary",
+      { paymentMethodId: "pm_1" },
+      context,
+      undefined,
+      original,
+    );
+
+    expect(outcome).toMatchObject({ status: "failed", failure: { code: "quote_changed" } });
+    expect(fetchWithRetry).not.toHaveBeenCalled();
+  });
+
+  it("pays the quote the shopper started with when it is still current", async () => {
+    const { store } = makeStore();
+    const original = quote();
+    await store.prepare(original);
+    const outcome = await store.pay(
+      "primary",
+      { paymentMethodId: "pm_1" },
+      context,
+      undefined,
+      original,
+    );
+    expect(outcome).toEqual({ status: "completed" });
+  });
+
   it("refuses a product that is not ready, and a second tap while one is paying", async () => {
     const { store, fetchWithRetry } = makeStore();
     await expect(store.pay("primary", { paymentMethodId: "pm_1" }, context)).resolves.toEqual({

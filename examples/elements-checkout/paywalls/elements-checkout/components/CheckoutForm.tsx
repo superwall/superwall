@@ -396,7 +396,7 @@ const NO_BUTTON: readonly Scenario[] = ["wallets", "applePayOnly"];
 const OWN_EMAIL: readonly Scenario[] = ["applePayCard", "cardFields", "singleLine"];
 
 /** The layouts paid with a button of the paywall's own instead of `<PurchaseButton>`. */
-const OWN_BUTTON: readonly Scenario[] = ["applePayCard", "cardFields"];
+const OWN_BUTTON: readonly Scenario[] = ["applePayCard", "cardFields", "singleLine"];
 
 /**
  * A purchase button built on `useCheckout().submit()` instead of

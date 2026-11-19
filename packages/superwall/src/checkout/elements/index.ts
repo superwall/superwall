@@ -1,7 +1,7 @@
 import type { loadStripe as loadStripeFn, Stripe } from "@stripe/stripe-js";
 import { fetchWithRetry as defaultFetchWithRetry } from "../api/fetch";
 import { createConfirmation } from "./confirm";
-import { failureOfError, unknownFailure } from "../failure";
+import { failureOfError, unknownFailure, type CheckoutFailure } from "../failure";
 import { checkoutEvents } from "../events";
 import type { HostContext, HostEvents } from "../host";
 import { buildCheckoutSessionId, stripeEnvironmentOf } from "../session/id";
@@ -80,6 +80,7 @@ export type ElementsCheckout = {
     payment: CollectedPayment,
     context: HostContext,
     onSubmit?: () => void,
+    expected?: ElementsCheckoutSession,
   ): Promise<WebPurchaseOutcome>;
   clear(): void;
   subscribe(listener: () => void): () => void;
@@ -90,6 +91,13 @@ type Ready = Extract<ElementsQuote, { status: "ready" }> & { identity: CustomerI
 type Stored = Ready | ElementsUnavailable | { status: "preparing" };
 
 const NOT_PREPARED: ElementsUnavailable = { status: "unavailable", reason: "not_prepared" };
+
+const QUOTE_CHANGED: CheckoutFailure = {
+  reason: "unknown",
+  store: "stripe",
+  code: "quote_changed",
+  message: "The price changed while you were paying. Check it and pay again.",
+};
 
 export const createElementsCheckout = (options: ElementsCheckoutOptions): ElementsCheckout => {
   const quotes = new Map<string, Stored>();
@@ -163,8 +171,12 @@ export const createElementsCheckout = (options: ElementsCheckoutOptions): Elemen
       set(referenceName, { status: "ready", quote, stripe, identity });
     },
 
-    pay: async (referenceName, payment, context, onSubmit) => {
+    pay: async (referenceName, payment, context, onSubmit, expected) => {
       const state = quotes.get(referenceName);
+      if (expected !== undefined && (state?.status !== "ready" || state.quote !== expected)) {
+        options.host.failed(context);
+        return { status: "failed", failure: QUOTE_CHANGED };
+      }
       if (state?.status !== "ready" || paying.has(referenceName)) {
         return { status: "failed", failure: unknownFailure() };
       }

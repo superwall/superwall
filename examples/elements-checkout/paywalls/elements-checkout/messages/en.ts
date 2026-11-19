@@ -34,7 +34,7 @@ export default {
       cardFields:
         "Separate card number, expiry and CVC fields, with the paywall's own email box and its own button.",
       singleLine:
-        "Stripe's one-line card field with the paywall's own email box, paid with the built-in purchase button.",
+        "Stripe's one-line card field with the paywall's own email box and its own button.",
       wallets:
         "Only the wallet buttons, with no purchase button: the wallet pays and asks for the email itself.",
       billing:
