@@ -16,8 +16,8 @@ const FLAGS = {
   yes,
   dryRun: { ...dryRun, describe: "Print the request; send nothing" },
   price: { type: "number", value: "amount", describe: "products create: price in major units" },
-  periodCount: { type: "number", describe: "products create: periods per cycle" },
-  trialDays: { type: "number", describe: "products create: free-trial days" },
+  periodCount: { type: "number", describe: "products create|update: periods per cycle" },
+  trialDays: { type: "number", describe: "products create|update: free-trial days" },
   entitlement: { type: "list", value: "id", describe: "products create: entitlement ids or identifiers to grant" },
 } as const satisfies Record<string, FlagSpec>;
 

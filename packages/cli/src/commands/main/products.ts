@@ -28,7 +28,20 @@ export const command = defineResource({
         ["--entitlement <id>", "Entitlement to grant, by id or identifier (repeatable); it must be on the product's app"],
       ],
     },
-    { name: "update", summary: "Change a product", effect: "destructive", method: "PATCH", path: "/v2/products/{id}", destructive: true },
+    {
+      name: "update",
+      summary: "Change a product",
+      effect: "destructive",
+      handler: "products.update",
+      method: "PATCH",
+      path: "/v2/products/{id}",
+      destructive: true,
+      flags: [
+        ["--period <p>", "day | week | month | year; merged into its current subscription"],
+        ["--period-count <n>", "Periods per cycle; merged into its current subscription"],
+        ["--trial-days <n>", "Free-trial length in days; merged into its current subscription"],
+      ],
+    },
     {
       name: "delete",
       summary: "Delete a product",
@@ -56,6 +69,7 @@ export const command = defineResource({
   examples: [
     ["products list --app <app>", "Products of an app's project"],
     ["products create --identifier <id> --price 9.99 --period month", "A monthly subscription"],
+    ["products update <id> --trial-days 3", "Give a subscription a 3-day free trial"],
     ["products create --identifier <id> --price 9.99 --period month --entitlement pro", "One that grants pro"],
     ["products create --identifier <id> --app <custom store> --price 9.99 --period month", "One in a custom store"],
   ],
