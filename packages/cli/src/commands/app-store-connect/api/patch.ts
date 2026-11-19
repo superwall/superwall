@@ -1,6 +1,6 @@
-import { app, project, team } from "@/program/flags";
+import { app, dryRun, project, team } from "@/program/flags";
 import { defineCommand } from "@/program/command";
-import { sendAscRequest } from "@/core/app-store-connect/api/request";
+import { runAscWrite } from "@/core/app-store-connect/api/request";
 
 export const command = defineCommand({
   name: "asc patch",
@@ -20,6 +20,7 @@ Executes an arbitrary App Store Connect PATCH through the signed proxy, with sch
       describe: "Request param, Stripe-style: -d key=value (string) or key:=value (number/bool/json); nesting via key[sub]",
     },
     force: { type: "boolean", describe: "Send the body as-is, without checking it against Apple's schema" },
+    dryRun: { ...dryRun, describe: "Print the request it would send, its body checked; send nothing" },
     team: { ...team, describe: "Apple team id, when your organization has several" },
     app: { ...app, describe: "An app of the organization whose App Store Connect key signs it: id, name or dashboard link" },
     project,
@@ -32,7 +33,6 @@ Executes an arbitrary App Store Connect PATCH through the signed proxy, with sch
   prompts: true,
   mcp: "destructive",
   async run(ctx, { args, flags }) {
-    const response = await sendAscRequest(ctx, "patch", args.path, { data: flags.d, team: flags.team, force: flags.force });
-    ctx.output.data(response);
+    await runAscWrite(ctx, "patch", args.path, { data: flags.d, team: flags.team, force: flags.force, dryRun: flags.dryRun });
   },
 });
