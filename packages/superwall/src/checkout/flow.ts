@@ -319,7 +319,10 @@ export const reportCompletedCheckout = async (
 
   const teleporter = teleportFor(paywall);
   if (teleporter.kind === "page") {
-    await teleporter.completePurchase(session.checkoutContextId);
+    await teleporter.completePurchase(session.checkoutContextId, {
+      productIdentifier: context.productIdentifier,
+      ...(options.postPurchase === undefined ? {} : { postPurchase: options.postPurchase }),
+    });
     return;
   }
   if (sdkRedeemsCheckout(paywall.getSnapshot())) return;

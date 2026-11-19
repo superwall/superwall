@@ -1509,7 +1509,10 @@ describe("the web half of a teleport", () => {
     const loading: boolean[] = [];
     const unsubscribe = subscribeLoading((value) => loading.push(value));
 
-    await teleporter.completePurchase("ctx_9");
+    await teleporter.completePurchase("ctx_9", {
+      productIdentifier: "com.acme.pro",
+      postPurchase: "stay",
+    });
 
     expect(loading).toEqual([true, false]);
     expect(calls[0]).toMatchObject({
@@ -1527,7 +1530,7 @@ describe("the web half of a teleport", () => {
     expect(screen?.querySelector(".sw-teleport-title")?.textContent).toBe("You're all set");
     const back = screen?.querySelector<HTMLAnchorElement>("a.sw-teleport-primary");
     expect(back?.href).toBe(
-      "https://acme.superwall.link/app-link/superwall/return?reason=purchased",
+      "https://acme.superwall.link/app-link/superwall/return?reason=purchased&checkout_context_id=ctx_9&product_identifier=com.acme.pro&should_dismiss=false",
     );
     const footer = screen?.querySelector<HTMLAnchorElement>(".sw-teleport-footer");
     expect(new URL(String(footer?.href)).searchParams.get("ref")).toBe("teleport");
@@ -1566,10 +1569,12 @@ describe("the web half of a teleport", () => {
     expect(teleporter.getStatus()).toEqual({ status: "completed", paidElsewhere: false });
     expect(document.querySelector(".sw-teleport")).toBeNull();
     expect(go).toHaveBeenLastCalledWith(
-      "https://acme.superwall.link/app-link/superwall/return?reason=purchased",
+      "https://acme.superwall.link/app-link/superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
     );
     await settle(APP_OPEN_WAIT_MS);
-    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
+    expect(go).toHaveBeenLastCalledWith(
+      "myapp://superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
+    );
   });
 
   it("logs a completion that never reaches the backend and still finishes", async () => {
@@ -1852,7 +1857,9 @@ describe("the web half of a teleport", () => {
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     await teleportPage(fakeSession().session).completePurchase("ctx");
     const back = document.querySelector<HTMLAnchorElement>("a.sw-teleport-primary");
-    expect(back?.getAttribute("href")).toBe("myapp://superwall/return?reason=purchased");
+    expect(back?.getAttribute("href")).toBe(
+      "myapp://superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
+    );
     back?.addEventListener("click", (event) => event.preventDefault());
     back?.click();
     expect(go).not.toHaveBeenCalled();
@@ -1872,7 +1879,9 @@ describe("the web half of a teleport", () => {
     back?.click();
     expect(document.querySelector(".sw-teleport-dim")).toBeNull();
     await settle(APP_OPEN_WAIT_MS);
-    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
+    expect(go).toHaveBeenLastCalledWith(
+      "myapp://superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
+    );
     window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
   });
@@ -2595,7 +2604,7 @@ describe("the teleport page's presentation", () => {
     go.mockClear();
     await expect(direct.whenUnsettled()).resolves.toBe(false);
     expect(go).toHaveBeenCalledWith(
-      "https://acme.superwall.link/app-link/superwall/return?reason=purchased",
+      "https://acme.superwall.link/app-link/superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
     );
   });
 
@@ -2823,7 +2832,9 @@ describe("teleport races, as paywall.js settles them", () => {
     link?.addEventListener("click", (event) => event.preventDefault());
     link?.click();
     await settle(APP_OPEN_WAIT_MS);
-    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
+    expect(go).toHaveBeenLastCalledWith(
+      "myapp://superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
+    );
   });
 });
 

@@ -4,6 +4,7 @@ import { checkoutDiagnostics } from "../../src/checkout/diagnostics";
 import { RETURN_KEY_PREFIX } from "../../src/checkout/customStore";
 import { checkoutEvents } from "../../src/checkout/events";
 import { isLoading } from "../../src/checkout/loading";
+import { pageNavigation } from "../../src/checkout/teleport/page";
 import {
   applePayFor,
   autoPrefetchTargets,
@@ -883,6 +884,36 @@ describe("reporting a completed purchase", () => {
         "stripe_checkout_complete",
       ]);
     } finally {
+      Reflect.deleteProperty(window, "__SW_TELEPORT__");
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("opens the app with the checkout, the product and the paywall's dismissal after a teleport purchase", async () => {
+    Reflect.set(window, "__SW_TELEPORT__", {
+      id: "v1:tp",
+      route: "checkout",
+      appLinkUrl: "https://acme.superwall.link/app-link/superwall/return",
+    });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    try {
+      const { session } = fakeSession({
+        sdkVersionPadded: "004.018.000",
+        teleport: { route: "checkout", completion: "direct" },
+        postPurchase: "stay",
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response("{}")),
+      );
+
+      await reportCompletedCheckout(session, paid);
+
+      expect(go).toHaveBeenLastCalledWith(
+        "https://acme.superwall.link/app-link/superwall/return?reason=purchased&checkout_context_id=ctx_1&product_identifier=test%3Aprice_1%3Ano-trial&should_dismiss=false",
+      );
+    } finally {
+      go.mockRestore();
       Reflect.deleteProperty(window, "__SW_TELEPORT__");
       vi.unstubAllGlobals();
     }

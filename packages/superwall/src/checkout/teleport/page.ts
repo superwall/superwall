@@ -1,4 +1,4 @@
-import { teleportOf } from "@superwall/runtime";
+import { dismissesOnPurchase, teleportOf } from "@superwall/runtime";
 import { asString } from "../api/decode";
 import { checkoutEvents } from "../events";
 import { startLoading, stopLoading } from "../loading";
@@ -52,10 +52,17 @@ export const restoreTeleportQuery = async (
   if (missing.length > 0) store.set(Object.fromEntries(missing), "replace");
 };
 
-const withReason = (link: string, reason: ReturnReason | undefined): string => {
+type ReturnQuery = Readonly<Record<string, string>>;
+
+const withReason = (
+  link: string,
+  reason: ReturnReason | undefined,
+  query: ReturnQuery = {},
+): string => {
   if (reason === undefined) return link;
   const url = new URL(link);
   url.searchParams.set("reason", reason);
+  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
   return url.toString();
 };
 
@@ -135,6 +142,7 @@ const fallBackToScheme = (
   boot: TeleportBoot,
   reason?: ReturnReason,
   hint?: ReturnHint,
+  query?: ReturnQuery,
 ): Promise<ReturnResult> =>
   new Promise((resolve) => {
     let opened = false;
@@ -153,7 +161,7 @@ const fallBackToScheme = (
         resolve("opened");
       } else if (boot.returnUrl === undefined) {
         resolve("no_app");
-      } else resolve(assignScheme(withReason(boot.returnUrl, reason), hint));
+      } else resolve(assignScheme(withReason(boot.returnUrl, reason, query), hint));
     }, APP_OPEN_WAIT_MS);
   });
 
@@ -161,23 +169,25 @@ const followTappedLink = (
   boot: TeleportBoot,
   reason: ReturnReason,
   hint: ReturnHint,
+  query?: ReturnQuery,
 ): Promise<ReturnResult> =>
   universalLink(boot) === undefined
     ? watchPrompt(() => {}, hint)
-    : fallBackToScheme(boot, reason, hint);
+    : fallBackToScheme(boot, reason, hint, query);
 
 export const openApp = (
   boot: TeleportBoot,
   reason?: ReturnReason,
   hint?: ReturnHint,
+  query?: ReturnQuery,
 ): Promise<ReturnResult> | undefined => {
   const link = universalLink(boot);
   if (link !== undefined) {
-    pageNavigation.assign(withReason(link, reason));
-    return fallBackToScheme(boot, reason, hint);
+    pageNavigation.assign(withReason(link, reason, query));
+    return fallBackToScheme(boot, reason, hint, query);
   }
   if (boot.returnUrl === undefined) return undefined;
-  return assignScheme(withReason(boot.returnUrl, reason), hint);
+  return assignScheme(withReason(boot.returnUrl, reason, query), hint);
 };
 
 export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot): TeleportPage => {
@@ -192,6 +202,10 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
   let pageCheckedAt = 0;
   let returns = 0;
   let successShown = false;
+  let purchased: ReturnQuery | undefined;
+
+  const queryFor = (reason: ReturnReason | undefined): ReturnQuery | undefined =>
+    reason === "purchased" ? purchased : undefined;
 
   const settings = () => teleportOf(paywall.getSnapshot().config?.teleport);
   const publicApiKey = () => asString(paywall.getSnapshot().device.publicApiKey);
@@ -220,7 +234,8 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     successShown = true;
     const copy = copyFor();
     const link = boot.appLinkUrl ?? boot.returnUrl;
-    const returnUrl = link === undefined ? undefined : withReason(link, "purchased");
+    const returnUrl =
+      link === undefined ? undefined : withReason(link, "purchased", queryFor("purchased"));
     createTeleportScreen({
       surface: "page",
       role: "status",
@@ -242,7 +257,14 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
                 kind: "primary",
                 href: returnUrl,
                 onClick: () =>
-                  void track(followTappedLink(boot, "purchased", hintFor("purchased"))),
+                  void track(
+                    followTappedLink(
+                      boot,
+                      "purchased",
+                      hintFor("purchased"),
+                      queryFor("purchased"),
+                    ),
+                  ),
               },
             ],
     });
@@ -260,10 +282,12 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
 
   const returnAfterPurchase = (): boolean => {
     if (settings()?.completion !== "direct") return false;
-    const attempt = openApp(boot, "purchased", {
-      ...hintFor("purchased"),
-      answered: () => showSuccess(false),
-    });
+    const attempt = openApp(
+      boot,
+      "purchased",
+      { ...hintFor("purchased"), answered: () => showSuccess(false) },
+      queryFor("purchased"),
+    );
     if (attempt === undefined) return false;
     void track(attempt).then((result) => {
       if (result !== "opened") showSuccess(false);
@@ -368,9 +392,18 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
         clearInterval(interval);
       };
     },
-    completePurchase: async (checkoutContextId) => {
+    completePurchase: async (checkoutContextId, purchase = {}) => {
       if (settings() === undefined) return;
       settled = true;
+      const productIdentifier = purchase.productIdentifier;
+      const dismiss = dismissesOnPurchase(
+        purchase.postPurchase ?? paywall.getSnapshot().config?.postPurchase,
+      );
+      purchased = {
+        checkout_context_id: checkoutContextId,
+        ...(productIdentifier ? { product_identifier: productIdentifier } : {}),
+        should_dismiss: String(dismiss ?? true),
+      };
       startLoading();
       const key = publicApiKey();
       if (key !== "") {
@@ -396,7 +429,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     returnToApp: async (reason, left) => {
       if (settings() === undefined) return "no_app";
       if (left !== undefined) leaveForApp(left.query, left.returned);
-      return track(openApp(boot, reason, hintFor(reason)));
+      return track(openApp(boot, reason, hintFor(reason), queryFor(reason)));
     },
     returning: () => returns > 0,
     attach: () => {

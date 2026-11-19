@@ -54,6 +54,11 @@ export type TeleportRequest = {
 
 export type ReturnReason = "purchased" | "closed" | "failed";
 
+export type CompletedPurchase = {
+  productIdentifier?: string;
+  postPurchase?: SuperwallPostPurchase;
+};
+
 export type ReturnResult = "opened" | "cancelled" | "no_app";
 
 type TeleportBase = {
@@ -92,7 +97,7 @@ export type TeleportPage = TeleportBase & {
   whenUnsettled(): Promise<boolean>;
   checkSettled(atBoot?: boolean): Promise<boolean>;
   watchPresentation(): () => void;
-  completePurchase(checkoutContextId: string): Promise<void>;
+  completePurchase(checkoutContextId: string, purchase?: CompletedPurchase): Promise<void>;
   followFragment(): void;
   returnToApp(
     reason?: ReturnReason,
