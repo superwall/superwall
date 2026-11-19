@@ -1,4 +1,4 @@
-import { dismissesOnPurchase, teleportOf } from "@superwall/runtime";
+import { dismissesOnPurchase, teleportOf, type SuperwallPostPurchase } from "@superwall/runtime";
 import { asString } from "../api/decode";
 import { checkoutEvents } from "../events";
 import { startLoading, stopLoading } from "../loading";
@@ -175,6 +175,16 @@ const followTappedLink = (
     ? watchPrompt(() => {}, hint)
     : fallBackToScheme(boot, reason, hint, query);
 
+const purchasedQuery = (
+  checkoutContextId: string,
+  productIdentifier: string | undefined,
+  postPurchase: SuperwallPostPurchase | undefined,
+): ReturnQuery => ({
+  checkout_context_id: checkoutContextId,
+  ...(productIdentifier ? { product_identifier: productIdentifier } : {}),
+  should_dismiss: String(dismissesOnPurchase(postPurchase) ?? true),
+});
+
 export const openApp = (
   boot: TeleportBoot,
   reason?: ReturnReason,
@@ -315,6 +325,13 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
           pageCheckedAt = Date.now();
           return false;
         }
+        if (purchased === undefined && teleport.checkoutContextId) {
+          purchased = purchasedQuery(
+            teleport.checkoutContextId,
+            teleport.checkoutProductIdentifier,
+            paywall.getSnapshot().config?.postPurchase,
+          );
+        }
         checkoutEvents.dispatch("SHEET_CLOSE", undefined);
         stopLoading();
         settle(!atBoot);
@@ -395,15 +412,11 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
     completePurchase: async (checkoutContextId, purchase = {}) => {
       if (settings() === undefined) return;
       settled = true;
-      const productIdentifier = purchase.productIdentifier;
-      const dismiss = dismissesOnPurchase(
+      purchased = purchasedQuery(
+        checkoutContextId,
+        purchase.productIdentifier,
         purchase.postPurchase ?? paywall.getSnapshot().config?.postPurchase,
       );
-      purchased = {
-        checkout_context_id: checkoutContextId,
-        ...(productIdentifier ? { product_identifier: productIdentifier } : {}),
-        should_dismiss: String(dismiss ?? true),
-      };
       startLoading();
       const key = publicApiKey();
       if (key !== "") {

@@ -2951,3 +2951,173 @@ describe("a parked teleport on the next tap", () => {
     await expect(closing).resolves.toBe("abandoned");
   });
 });
+
+const screenLink = () =>
+  document.querySelector<HTMLAnchorElement>("a.sw-teleport-primary")?.getAttribute("href");
+
+const query = (link: string | null | undefined) =>
+  Object.fromEntries(new URL(String(link)).searchParams);
+
+describe("every way the teleport page sends a buyer back to the app", () => {
+  const UNIVERSAL = "https://acme.superwall.link/app-link/superwall/return";
+  const SCHEME = "myapp://superwall/return";
+  const direct = { route: "checkout", completion: "direct" } as const;
+
+  it("pays with a direct completion: the universal link, then the scheme, carry the checkout", async () => {
+    boot();
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession({ teleport: direct }).session).completePurchase("ctx_1", {
+      productIdentifier: "live:price_1:14days-free",
+    });
+    const paid = {
+      reason: "purchased",
+      checkout_context_id: "ctx_1",
+      product_identifier: "live:price_1:14days-free",
+      should_dismiss: "true",
+    };
+    expect(go).toHaveBeenCalledTimes(1);
+    expect(go.mock.calls[0]?.[0].startsWith(`${UNIVERSAL}?`)).toBe(true);
+    expect(query(go.mock.calls[0]?.[0])).toEqual(paid);
+    await settle(APP_OPEN_WAIT_MS);
+    expect(go.mock.calls[1]?.[0].startsWith(`${SCHEME}?`)).toBe(true);
+    expect(query(go.mock.calls[1]?.[0])).toEqual(paid);
+  });
+
+  it.each([
+    ["stay", undefined, "false"],
+    ["dismiss", undefined, "true"],
+    [undefined, undefined, "true"],
+    ["stay", "dismiss", "true"],
+    ["dismiss", "stay", "false"],
+  ] as const)(
+    "with the paywall set to %s and the purchase to %s, says should_dismiss=%s",
+    async (paywallSetting, purchaseSetting, expected) => {
+      boot();
+      api({ "checkout/session/complete": {} });
+      const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+      await teleportPage(
+        fakeSession({ teleport: direct, postPurchase: paywallSetting }).session,
+      ).completePurchase("ctx_1", {
+        productIdentifier: "pro",
+        ...(purchaseSetting === undefined ? {} : { postPurchase: purchaseSetting }),
+      });
+      expect(query(go.mock.calls[0]?.[0]).should_dismiss).toBe(expected);
+    },
+  );
+
+  it("pays with the success screen: nothing opens by itself, and its button carries the checkout", async () => {
+    boot();
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession().session).completePurchase("ctx_2", {
+      productIdentifier: "pro_year",
+    });
+    expect(go).not.toHaveBeenCalled();
+    expect(query(screenLink())).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_2",
+      product_identifier: "pro_year",
+      should_dismiss: "true",
+    });
+  });
+
+  it("pays on a page that only knows the app's scheme", async () => {
+    boot({ appLinkUrl: undefined });
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession({ teleport: direct }).session).completePurchase("ctx_3", {
+      productIdentifier: "pro",
+    });
+    expect(go).toHaveBeenCalledExactlyOnceWith(
+      `${SCHEME}?reason=purchased&checkout_context_id=ctx_3&product_identifier=pro&should_dismiss=true`,
+    );
+  });
+
+  it("leaves the product off when the page doesn't know it", async () => {
+    boot();
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession({ teleport: direct }).session).completePurchase("ctx_4", {
+      productIdentifier: "",
+    });
+    expect(query(go.mock.calls[0]?.[0])).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_4",
+      should_dismiss: "true",
+    });
+  });
+
+  it("still names the checkout when the backend never hears the page complete it", async () => {
+    boot();
+    api({ "checkout/session/complete": new Error("offline") });
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const done = teleportPage(fakeSession({ teleport: direct }).session).completePurchase("ctx_5");
+    await settle(10_000);
+    await done;
+    expect(query(go.mock.calls[0]?.[0])).toMatchObject({
+      reason: "purchased",
+      checkout_context_id: "ctx_5",
+    });
+  });
+
+  it("reloaded after paying, names the checkout the teleport's status reports", async () => {
+    boot();
+    api({
+      "checkout/teleport/status": {
+        status: "completed",
+        checkoutContextId: "ctx_6",
+        checkoutProductIdentifier: "pro_year",
+      },
+    });
+    const teleporter = teleportPage(fakeSession({ postPurchase: "stay" }).session);
+    await expect(teleporter.checkSettled(true)).resolves.toBe(true);
+    expect(query(screenLink())).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_6",
+      product_identifier: "pro_year",
+      should_dismiss: "false",
+    });
+  });
+
+  it("paid in another tab, a tap on a direct page goes back with that checkout", async () => {
+    boot({ shared: true });
+    api({ "checkout/teleport/status": { status: "completed", checkoutContextId: "ctx_7" } });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const teleporter = teleportPage(fakeSession({ teleport: direct }).session);
+    await expect(teleporter.checkSettled()).resolves.toBe(true);
+    go.mockClear();
+    await expect(teleporter.whenUnsettled()).resolves.toBe(false);
+    expect(query(go.mock.calls[0]?.[0])).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_7",
+      should_dismiss: "true",
+    });
+  });
+
+  it("paid, with a status that names no checkout, goes back with the reason alone", async () => {
+    boot();
+    api({ "checkout/teleport/status": { status: "completed" } });
+    const teleporter = teleportPage(fakeSession().session);
+    await teleporter.checkSettled(true);
+    expect(screenLink()).toBe(`${UNIVERSAL}?reason=purchased`);
+  });
+
+  it.each(["closed", "failed"] as const)("goes back %s without any checkout", async (reason) => {
+    boot();
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    void teleportPage(fakeSession().session).returnToApp(reason);
+    expect(go).toHaveBeenCalledExactlyOnceWith(`${UNIVERSAL}?reason=${reason}`);
+  });
+
+  it("never pays: a status that stays pending adds nothing to a later return", async () => {
+    boot();
+    api({ "checkout/teleport/status": { status: "pending" } });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const teleporter = teleportPage(fakeSession().session);
+    await expect(teleporter.checkSettled(true)).resolves.toBe(false);
+    void teleporter.returnToApp("closed");
+    expect(go).toHaveBeenCalledExactlyOnceWith(`${UNIVERSAL}?reason=closed`);
+  });
+});
