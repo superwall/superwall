@@ -13,6 +13,7 @@ import {
 } from "../../../src/hooks";
 import { isLoading, startLoading } from "../../../src/checkout/loading";
 import { followTeleportPage } from "../../../src/checkout/flow";
+import { TELEPORT_MARKS } from "../../../src/checkout/teleport/timing";
 import { createWrapper, flush } from "../../helpers";
 import { appTeleport, teleportPage } from "./halves";
 
@@ -92,7 +93,23 @@ afterEach(() => {
   document.documentElement.style.overflow = "";
   document.documentElement.style.overscrollBehavior = "";
   for (const node of document.body.children) node.removeAttribute("inert");
+  performance.clearMarks();
 });
+
+const holdFrames = () => {
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  vi.stubGlobal("cancelAnimationFrame", () => {});
+  return async () => {
+    await act(async () => {
+      for (const frame of frames.splice(0)) frame(performance.now());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  };
+};
 
 describe("preparing the teleport", () => {
   it("prepares the paywall's route once it opens, and any route the paywall asks for", async () => {
@@ -127,18 +144,65 @@ describe("preparing the teleport", () => {
 describe("checking for Apple Pay", () => {
   it("asks Apple once as the paywall opens, so the answer is there before the tap", async () => {
     stubApi();
+    const paint = holdFrames();
     const canMakePaymentsWithActiveCard = vi.fn(async () => true);
     vi.stubGlobal("ApplePaySession", { canMakePaymentsWithActiveCard });
     await mount({
       products: { card: "live:price_1:14days-free" },
       teleport: { route: "checkout" },
     });
+    await paint();
     expect(canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(1);
     expect(canMakePaymentsWithActiveCard).toHaveBeenCalledWith(
       `merchant.${window.location.hostname}.stripe`,
     );
     expect(await checkApplePay()).toEqual({ available: true });
     expect(canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks first-render, then asks Apple only once the first frame is painted", async () => {
+    stubApi();
+    Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout" });
+    const paint = holdFrames();
+    const asked: string[] = [];
+    const canMakePaymentsWithActiveCard = vi.fn(() => {
+      asked.push(...performance.getEntriesByType("mark").map((mark) => mark.name));
+      return true;
+    });
+    vi.stubGlobal("ApplePaySession", { canMakePaymentsWithActiveCard });
+    await mount({
+      products: { card: "live:price_1:14days-free" },
+      teleport: { route: "checkout" },
+    });
+    expect(canMakePaymentsWithActiveCard).not.toHaveBeenCalled();
+    expect(performance.getEntriesByName(TELEPORT_MARKS.firstRender, "mark")).toHaveLength(1);
+
+    await paint();
+    expect(canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(1);
+    expect(asked).toEqual([TELEPORT_MARKS.firstRender, TELEPORT_MARKS.applePayAsked]);
+    const names = performance.getEntriesByType("mark").map((mark) => mark.name);
+    expect(names.slice(-2)).toEqual([
+      TELEPORT_MARKS.applePayAsked,
+      TELEPORT_MARKS.applePayReturned,
+    ]);
+  });
+
+  it("marks the Apple call as returned even when it throws", async () => {
+    stubApi();
+    Reflect.set(window, "__SW_TELEPORT__", { id: "v1:tp", route: "checkout" });
+    const paint = holdFrames();
+    vi.stubGlobal("ApplePaySession", {
+      canMakePaymentsWithActiveCard: () => {
+        throw new Error("blocked");
+      },
+    });
+    await mount({
+      products: { card: "live:price_1:14days-free" },
+      teleport: { route: "checkout" },
+    });
+    await paint();
+    expect(performance.getEntriesByName(TELEPORT_MARKS.applePayReturned, "mark")).toHaveLength(1);
+    expect(await checkApplePay()).toMatchObject({ available: false, reason: "check_failed" });
   });
 });
 

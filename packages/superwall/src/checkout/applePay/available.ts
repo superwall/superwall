@@ -1,3 +1,4 @@
+import { TELEPORT_MARKS, markTeleportPage } from "../teleport/timing";
 import { applePayErrorOf, type ApplePayError } from "./index";
 
 /**
@@ -168,7 +169,14 @@ const ask = (global: ApplePaySessionGlobal, check: Check) => {
     if (check.asking) settle(check, TIMED_OUT);
   }, APPLE_PAY_TIMEOUT_MS);
   new Promise<unknown>((resolve) => {
-    resolve(global.canMakePaymentsWithActiveCard?.(`merchant.${window.location.hostname}.stripe`));
+    markTeleportPage(TELEPORT_MARKS.applePayAsked);
+    try {
+      resolve(
+        global.canMakePaymentsWithActiveCard?.(`merchant.${window.location.hostname}.stripe`),
+      );
+    } finally {
+      markTeleportPage(TELEPORT_MARKS.applePayReturned);
+    }
   }).then(
     (value) => answered(check, value === true ? AVAILABLE : NO_ACTIVE_CARD),
     (error: unknown) => answered(check, thrown(error)),

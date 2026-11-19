@@ -6,6 +6,8 @@ export const TELEPORT_MARKS = {
   firstPaint: "superwall:teleport:first-paint",
   firstRender: "superwall:teleport:first-render",
   paymentReady: "superwall:teleport:payment-ready",
+  applePayAsked: "superwall:teleport:apple-pay-asked",
+  applePayReturned: "superwall:teleport:apple-pay-returned",
 } as const;
 
 export type TeleportMark = (typeof TELEPORT_MARKS)[keyof typeof TELEPORT_MARKS];
