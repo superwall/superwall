@@ -40,11 +40,11 @@ describe("the checkout session cache", () => {
     vi.useFakeTimers();
     sessionCache.set("old", session);
     vi.advanceTimersByTime(SESSION_CACHE_TTL + 1);
-    sessionCache.set("fresh", session, "apple-pay");
+    sessionCache.set("fresh", session, "elements");
 
     sessionCache.cleanupExpired();
 
-    expect(sessionCache.get("fresh", "apple-pay")).toEqual(session);
+    expect(sessionCache.get("fresh", "elements")).toEqual(session);
     vi.advanceTimersByTime(1);
     expect(sessionCache.get("old")).toBeNull();
   });

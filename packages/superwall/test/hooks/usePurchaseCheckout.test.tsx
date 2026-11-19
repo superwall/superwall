@@ -342,7 +342,7 @@ describe("a purchase that sets its own prepaid-card rule", () => {
       status: "unavailable",
       reason: "session_unsupported",
     });
-    sessions.cache.set("primary", embedded, "apple-pay");
+    sessions.cache.set("primary", embedded, "elements");
     const begin = vi.spyOn(sessions, "begin").mockResolvedValue(redirect);
 
     await act(async () => {
@@ -488,7 +488,7 @@ describe("usePurchase prefetch", () => {
     expect(warm).toHaveBeenLastCalledWith({
       referenceName: "primary",
       mode: "applePay",
-      scope: "apple-pay",
+      scope: "elements",
       silent: true,
     });
     expect(pooled).toEqual([embedded.clientSecret, embedded.clientSecret]);
@@ -561,7 +561,7 @@ describe("usePurchase with Apple Pay", () => {
       status: "unavailable",
       reason: "session_unsupported",
     });
-    sessions.cache.set("primary", embedded, "apple-pay");
+    sessions.cache.set("primary", embedded, "elements");
     const begin = vi.spyOn(sessions, "begin");
 
     let outcome: Promise<{ status: string }> | undefined;

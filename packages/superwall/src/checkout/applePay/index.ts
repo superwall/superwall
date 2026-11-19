@@ -1,35 +1,18 @@
 import type {
   loadStripe as loadStripeFn,
-  PaymentIntent,
   PaymentRequest,
   PaymentRequestPaymentMethodEvent,
-  SetupIntent,
   Stripe,
 } from "@stripe/stripe-js";
 import { buildApplePayConfig, buildApplePayLineItems } from "./request";
 import { fetchWithRetry as defaultFetchWithRetry } from "../api/fetch";
-import {
-  errorFailureOf,
-  errorMessageOf,
-  field,
-  intentTypeOf,
-  readStripeError,
-} from "../api/decode";
-import {
-  CheckoutFailureError,
-  failureOfError,
-  unknownFailure,
-  type CheckoutFailure,
-} from "../failure";
-import { subscriptionsApiUrl } from "../api/url";
+import { createConfirmation } from "../elements/confirm";
+import { checkoutErrorOf, type CheckoutError } from "../elements";
+import { failureOfError, unknownFailure, type CheckoutFailure } from "../failure";
 import { checkoutEvents } from "../events";
 import type { HostEvents, HostContext } from "../host";
 import { startLoading, stopLoading } from "../loading";
-import {
-  buildCheckoutSessionId,
-  decodeCheckoutSessionId,
-  stripeEnvironmentOf,
-} from "../session/id";
+import { buildCheckoutSessionId, stripeEnvironmentOf } from "../session/id";
 import type { ApplePaySession, CustomerIdentity, ElementsCheckoutSession } from "../types";
 
 /**
@@ -66,17 +49,9 @@ export type ApplePayWalletReason =
   | "show_failed";
 
 /** An error a browser or Stripe threw, as its name and message. */
-export type ApplePayError = {
-  /** The error's name, such as `"InvalidAccessError"`. */
-  name: string;
-  /** The error's message, as the browser or Stripe wrote it. */
-  message: string;
-};
+export type ApplePayError = CheckoutError;
 
-export const applePayErrorOf = (error: unknown): ApplePayError =>
-  error instanceof Error
-    ? { name: error.name, message: error.message }
-    : { name: "Error", message: String(error) };
+export const applePayErrorOf = checkoutErrorOf;
 
 type Unavailable = { status: "unavailable"; reason: ApplePayWalletReason; error?: ApplePayError };
 
@@ -109,34 +84,11 @@ export type ApplePay = {
   subscribe(listener: () => void): () => void;
 };
 
-type ConfirmResponse = {
-  subscriptionId?: string;
-  requiresAction: boolean;
-  clientSecret?: string;
-  intentType?: "SetupIntent" | "PaymentIntent";
-  setupIntentId?: string;
-};
-
-const readConfirmResponse = (body: unknown): ConfirmResponse => {
-  const subscriptionId = field(body, "subscriptionId");
-  const clientSecret = field(body, "clientSecret");
-  const setupIntentId = field(body, "setupIntentId");
-  const intentType = intentTypeOf(field(body, "intentType"));
-  return {
-    requiresAction: field(body, "requiresAction") === true,
-    ...(typeof subscriptionId === "string" ? { subscriptionId } : {}),
-    ...(typeof clientSecret === "string" ? { clientSecret } : {}),
-    ...(typeof setupIntentId === "string" ? { setupIntentId } : {}),
-    ...(intentType ? { intentType } : {}),
-  };
-};
-
 type Prepared = {
   quote: ElementsCheckoutSession;
   identity: CustomerIdentity;
   stripe: Stripe;
   paymentRequest: PaymentRequest;
-  clientSecret: string | null;
   session: ApplePaySession;
   context: HostContext | null;
   onSubmit?: () => void;
@@ -154,15 +106,10 @@ type Pending = {
 
 type WalletState = { status: "ready"; prepared: Prepared } | { status: "preparing" } | Unavailable;
 
-type Complete = (status: "success" | "fail") => void;
-
-const stripeDecline = (error: unknown, fallback: string): CheckoutFailureError =>
-  new CheckoutFailureError(readStripeError(error), fallback);
-
-const recordConfirmation = (ready: Prepared, response: ConfirmResponse) => {
-  if (!response.subscriptionId || ready.session.checkoutSessionId) return;
+const recordSubscription = (ready: Prepared, subscriptionId: string) => {
+  if (ready.session.checkoutSessionId) return;
   ready.session.checkoutSessionId = buildCheckoutSessionId({
-    stripeCheckoutSessionId: response.subscriptionId,
+    stripeCheckoutSessionId: subscriptionId,
     environment: stripeEnvironmentOf(ready.context?.productIdentifier),
   });
 };
@@ -218,116 +165,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
     waiting.resolve(state);
   };
 
-  const confirm = async (
-    ready: Prepared,
-    payload: {
-      setupIntentId?: string;
-      paymentMethodId?: string;
-      stripeCustomerId?: string;
-      email?: string;
-    },
-  ): Promise<ConfirmResponse> => {
-    const request = options.fetchWithRetry ?? defaultFetchWithRetry;
-    const url = options.confirmUrl?.() ?? subscriptionsApiUrl("checkout/session/confirm");
-    const response = await request(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${options.publicApiKey()}`,
-        },
-        body: JSON.stringify({ checkoutContextId: ready.quote.checkoutContextId, ...payload }),
-      },
-      { retries: 0, returnClientErrors: true },
-    );
-    const body: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      const message = errorMessageOf(body, `Checkout confirmation failed (${response.status})`);
-      throw new CheckoutFailureError(errorFailureOf(body) ?? unknownFailure(), message);
-    }
-    return readConfirmResponse(body);
-  };
-
-  const confirmDeferred = async (
-    ready: Prepared,
-    event: PaymentRequestPaymentMethodEvent,
-    email: string | undefined,
-    complete: Complete,
-  ) => {
-    const response = await confirm(ready, {
-      paymentMethodId: event.paymentMethod.id,
-      stripeCustomerId: ready.identity.stripeCustomerId,
-      email,
-    });
-    recordConfirmation(ready, response);
-    complete("success");
-
-    if (!response.requiresAction || !response.clientSecret) return;
-
-    if (response.intentType === "SetupIntent") {
-      const result = await ready.stripe.confirmCardSetup(response.clientSecret);
-      if (result.error) throw stripeDecline(result.error, "Setup authentication failed");
-      const setupIntentId = result.setupIntent?.id || response.setupIntentId;
-      if (!setupIntentId) throw new Error("No SetupIntent returned");
-      recordConfirmation(ready, await confirm(ready, { setupIntentId, email }));
-      return;
-    }
-
-    const result = await ready.stripe.confirmCardPayment(response.clientSecret, {
-      payment_method: event.paymentMethod.id,
-    });
-    if (result.error) throw stripeDecline(result.error, "Payment authentication failed");
-  };
-
-  const confirmSetupIntent = async (
-    ready: Prepared,
-    clientSecret: string,
-    event: PaymentRequestPaymentMethodEvent,
-    email: string | undefined,
-  ) => {
-    const first = await ready.stripe.confirmCardSetup(
-      clientSecret,
-      { payment_method: event.paymentMethod.id },
-      { handleActions: false },
-    );
-    if (first.error) throw stripeDecline(first.error, "Setup failed");
-    let setupIntent: SetupIntent | undefined = first.setupIntent;
-    if (setupIntent?.status === "requires_action") {
-      const next = await ready.stripe.confirmCardSetup(clientSecret);
-      if (next.error) throw stripeDecline(next.error, "Setup authentication failed");
-      setupIntent = next.setupIntent;
-    }
-    if (!setupIntent) throw new Error("No SetupIntent returned");
-    recordConfirmation(ready, await confirm(ready, { setupIntentId: setupIntent.id, email }));
-  };
-
-  const confirmPaymentIntent = async (
-    ready: Prepared,
-    clientSecret: string,
-    event: PaymentRequestPaymentMethodEvent,
-    email: string | undefined,
-    complete: Complete,
-  ) => {
-    const first = await ready.stripe.confirmCardPayment(
-      clientSecret,
-      { payment_method: event.paymentMethod.id },
-      { handleActions: false },
-    );
-    if (first.error) throw stripeDecline(first.error, "Payment failed");
-    complete("success");
-    let paymentIntent: PaymentIntent | undefined = first.paymentIntent;
-    if (paymentIntent?.status === "requires_action") {
-      const next = await ready.stripe.confirmCardPayment(clientSecret);
-      if (next.error) throw stripeDecline(next.error, "Payment authentication failed");
-      paymentIntent = next.paymentIntent;
-    }
-    try {
-      recordConfirmation(ready, await confirm(ready, { email }));
-    } catch (error) {
-      console.error("[Apple Pay] Post-payment confirm failed (non-fatal):", error);
-    }
-  };
+  const confirmation = createConfirmation(options);
 
   const onPaymentMethod = async (ready: Prepared, event: PaymentRequestPaymentMethodEvent) => {
     ready.authorized = true;
@@ -336,7 +174,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
     if (ready.context) options.host.submitted(ready.context);
 
     let completed = false;
-    const complete: Complete = (status) => {
+    const complete = (status: "success" | "fail") => {
       if (completed) return;
       completed = true;
       try {
@@ -345,15 +183,16 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
     };
 
     try {
-      const email = event.payerEmail || ready.identity.email;
-      if (ready.clientSecret === null) {
-        await confirmDeferred(ready, event, email, complete);
-      } else if (ready.quote.intentType === "SetupIntent") {
-        await confirmSetupIntent(ready, ready.clientSecret, event, email);
-        complete("success");
-      } else {
-        await confirmPaymentIntent(ready, ready.clientSecret, event, email, complete);
-      }
+      await confirmation.confirm({
+        name: "Apple Pay",
+        stripe: ready.stripe,
+        quote: ready.quote,
+        paymentMethodId: event.paymentMethod.id,
+        stripeCustomerId: ready.identity.stripeCustomerId,
+        email: event.payerEmail || ready.identity.email,
+        onAuthorized: () => complete("success"),
+        onSubscription: (subscriptionId) => recordSubscription(ready, subscriptionId),
+      });
 
       checkoutEvents.dispatch("PAYMENT_SUCCESS", { session: ready.session });
       ready.settle?.({ status: "completed" });
@@ -460,7 +299,7 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
         return;
       }
 
-      const loadStripe = options.loadStripe ?? (await import("@stripe/stripe-js")).loadStripe;
+      const loadStripe = options.loadStripe ?? (await import("@stripe/stripe-js/pure")).loadStripe;
       const stripe = await loadStripe(quote.publishableKey, {
         developerTools: { assistant: { enabled: false } },
       });
@@ -487,9 +326,6 @@ export const createApplePay = (options: ApplePayOptions): ApplePay => {
         identity,
         stripe,
         paymentRequest,
-        clientSecret: quote.checkoutSessionId
-          ? decodeCheckoutSessionId(quote.checkoutSessionId)
-          : null,
         session: {
           directive: "applePay",
           referenceName,

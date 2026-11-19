@@ -35,7 +35,7 @@ export type ApplePayProductReason =
 /**
  * Whether the wallet is ready to open for one product. The wallet opens only
  * for a product prepared before the tap: the paywall prepares it on its own
- * when the config's `checkout` is `"applePay"`, and
+ * when the config's `checkout` is `"applePay"` or `"elements"`, and
  * `prefetch(product, { checkout: "applePay" })` prepares it when the config's
  * `checkout` is `"sheet"`. A `purchase()` with `checkout: "applePay"` of a
  * product that is not ready opens the sheet instead.

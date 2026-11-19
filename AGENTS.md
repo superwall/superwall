@@ -211,10 +211,11 @@ The stack, bottom to top — each layer depends only on the one below it:
     | `products.ts` | the Stripe and custom store product-identifier vocabulary                 |
     | `events.ts`   | the in-page buses: flow ↔ sheet (`checkoutEvents`) and purchase callbacks |
     | `loading.ts`  | the loading-overlay flag                                                  |
-    - `flow.ts` is the only orchestrator: it holds one `session` source and one
-      `applePay` per paywall (`sessionsFor`, `applePayFor`, keyed by the runtime
-      session in a `WeakMap`) and owns every sequence a purchase can take —
-      `prefetchSession`, `purchaseOnWeb`, `purchaseCustomStoreOnWeb`, `purchaseWithApplePay`,
+    - `flow.ts` is the only orchestrator: it holds one `session` source, one
+      `applePay` and one form store per paywall (`sessionsFor`, `applePayFor`,
+      `elementsFor`, keyed by the runtime session in a `WeakMap`) and owns
+      every sequence a purchase can take — `prefetchSession`, `purchaseOnWeb`,
+      `purchaseCustomStoreOnWeb`, `purchaseWithApplePay`, `purchaseWithElements`,
       `openEmbeddedSheet`, `openHostedCheckout`/`watchHostedCheckout`,
       `reportCompletedCheckout`/`watchCompletedCheckouts`,
       `redeemDiscount`, `clearDiscount`, `invalidateSessions`, `reprefetch`. A
@@ -310,13 +311,66 @@ The stack, bottom to top — each layer depends only on the one below it:
       `duration`, `durationInMonths`) plus the amounts that had to be computed;
       it invents no summary of its own. The host's `redeem_discount` reaches
       the same `flow.redeemDiscount`.
+    - `elements/` is paying with a Stripe payment method the page collected,
+      for the wallet and for a paywall's own form alike. `confirm.ts`
+      (`createConfirmation`) is the **one confirmation core**: it sends the
+      payment method to `checkout/session/confirm` (which creates the
+      subscription from the deferred quote), runs 3D Secure or the
+      SetupIntent the backend hands back, and maps every decline to a
+      `CheckoutFailure`. `index.ts` (`createElementsCheckout`) is the
+      per-paywall store of deferred quotes a form renders from.
+      `StripeCheckout.tsx` and `ExpressCheckoutElement.tsx` are Stripe's
+      form, exported with Stripe's own elements from `superwall/checkout/stripe`
+      (`src/checkout/stripe.tsx`; `checkout: "elements"`): `<StripeCheckout>`
+      wraps Stripe's `<Elements>` in deferred mode, so it renders from the
+      quote and nothing exists in Stripe until the shopper pays, and every
+      submit, wallet included, goes through `flow.purchaseWithElements`, so a
+      form purchase reports the same `usePurchase` callbacks and
+      `stripe_checkout_*` messages as Apple Pay and the sheet. A project never
+      installs Stripe. Every form purchase carries the shopper's email, as
+      the sheet and Apple Pay do: the `email` prop, the payment method's,
+      the wired `LinkAuthenticationElement.tsx`'s, the wallet's
+      (`emailRequired`) or the user's `email` attribute; a card with none is
+      `incomplete` (`email_required`) before any purchase starts, and a form
+      with no email source at all warns once when it is ready. Stripe's
+      separate card fields (`CardElement`, `CardNumberElement`…) pay through
+      `createPaymentMethod({ type: "card" })` without `elements.submit()`;
+      when a Payment Element is mounted it always wins. Re-export a Stripe
+      element only when its data reaches the purchase: redirect methods,
+      `IbanElement`, `TaxIdElement`, `ShippingAddressElement` and
+      `PaymentMethodMessagingElement` (it advertises the redirect methods)
+      stay out, and `test/checkout/form/generic.test.tsx` holds that list.
+      Stripe's `locale` defaults to the paywall's. The example's README
+      (`examples/elements-checkout`) is the support table, the styling
+      guide and the migration guide; keep it in step with this file.
+    - `form/` is what every store's form shares, exported from
+      `superwall/checkout`: `useCheckout()` and `<PurchaseButton>` read one
+      context (`CheckoutContext`, a `UseCheckoutResult`) that a store's form
+      provides. **No Stripe name or type enters `form/` or the root
+      `superwall/checkout` entry**: a reason or field only one store has
+      belongs in that store's entry (`superwall/checkout/<store>`), so a
+      second store's form (Paddle, a custom store's inline checkout) provides
+      the same context and every CTA built on `useCheckout()` works in it
+      unchanged. Runtime code loads Stripe only from `@stripe/stripe-js/pure`
+      (types may come from `@stripe/stripe-js`): the package's main entry
+      starts downloading Stripe.js, its fraud frame and telemetry the moment
+      it is imported, and a single-file build evaluates every inlined
+      dynamic import at load, so one main-entry import makes every paywall,
+      a pure iOS one included, call Stripe. `test/checkout/stripe/lazy.test.ts`
+      holds that line. **Apple Pay may use nothing
+      here that the public API can't**: a step the wallet needs goes into
+      the core, so whatever the wallet can do a paywall's own form can too.
+      `elements` mode sends `web_checkout_destination: PAYWALL_APPLE_PAY`,
+      the destination that already gets deferred quotes, so no backend or
+      SDK needed a change.
     - `applePay/` is the wallet: `index.ts` (`createApplePay`) opens the native
       sheet through Stripe's PaymentRequest and falls back to the embedded
-      sheet where the device cannot pay. It is built from the backend's
-      deferred `elements` quote (no Stripe object until the wallet authorizes;
-      `checkout/session/confirm` creates the subscription), so `session/`
-      asks for `elements` with `deferElementsIntentCreation` only in
-      `applePay` mode. `request.ts` quotes trials and intro offers as Apple's
+      sheet where the device cannot pay. It only drives the wallet: the
+      payment method it authorizes is paid by the `elements/` core. It is
+      built from the backend's deferred `elements` quote (no Stripe object
+      until the wallet authorizes; `checkout/session/confirm` creates the
+      subscription), so `session/` asks for `elements` with
+      `deferElementsIntentCreation` in `applePay` and `elements` mode. `request.ts` quotes trials and intro offers as Apple's
       `recurringPaymentRequest` with a `trialBilling` line — that is what makes
       the sheet say "Free Trial" — and shows an applied code as line items.
     - `sheet/` is the payment UI and its stylesheet: `Sheet.tsx` (root),

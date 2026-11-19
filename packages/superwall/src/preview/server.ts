@@ -497,6 +497,8 @@ export const startPreviewServer = async (
         "react-dom",
         "react-dom/client",
         "superwall > @superwall/runtime > @superwall/protocol > zod",
+        "superwall > @stripe/react-stripe-js",
+        "superwall > @stripe/stripe-js/pure",
         ...projects
           .flatMap((one) => projectDependencies(one.project.superwallDir))
           .filter(resolvable),

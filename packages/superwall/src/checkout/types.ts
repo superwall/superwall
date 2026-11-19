@@ -1,7 +1,7 @@
 import type { SuperwallPostPurchase, SuperwallPrepaidCards } from "@superwall/runtime";
 import type { CheckoutFailure } from "./failure";
 
-export type CheckoutMode = "sheet" | "external" | "applePay";
+export type CheckoutMode = "sheet" | "external" | "applePay" | "elements";
 
 export type RedemptionCode = { code: string; claimed: boolean };
 
@@ -25,7 +25,7 @@ export type WebPurchaseOptions = {
   prepaidCards?: SuperwallPrepaidCards;
 };
 
-export type SessionScope = "default" | "apple-pay" | "external";
+export type SessionScope = "default" | "elements" | "external";
 
 export type SubscriptionDetails = {
   amount: number;
@@ -87,7 +87,15 @@ export type ApplePaySession = {
   postPurchaseBehavior?: PostPurchaseBehavior;
 };
 
-export type PaymentSession = EmbeddedCheckoutSession | ApplePaySession;
+export type ElementsPaymentSession = {
+  directive: "elements";
+  referenceName: string;
+  checkoutContextId: string;
+  checkoutSessionId: string | null;
+  postPurchaseBehavior?: PostPurchaseBehavior;
+};
+
+export type PaymentSession = EmbeddedCheckoutSession | ApplePaySession | ElementsPaymentSession;
 
 export type AppliedDiscount = {
   code: string;

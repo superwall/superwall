@@ -143,8 +143,10 @@ export type SuperwallPurchaseOptions = {
    * How this purchase checks out on the web when the product is a Stripe
    * product, overriding the config's `checkout` mode for this call — a
    * button that always opens the sheet on a paywall whose default is
-   * `"applePay"`. Inside an iOS app a Stripe purchase always opens the
-   * hosted checkout whatever this says. Ignored by store purchases.
+   * `"applePay"`. `"elements"` opens the sheet here: an `elements` form
+   * pays through its own `useCheckout().submit()`. Inside an iOS app a
+   * Stripe purchase always opens the hosted checkout whatever this says.
+   * Ignored by store purchases.
    * Default: the config's `checkout` mode.
    */
   checkout?: SuperwallCheckoutMode;
