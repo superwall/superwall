@@ -8,6 +8,7 @@ import {
 } from "@superwall/runtime";
 import { PRERENDER_ATTRIBUTE } from "../../document";
 import { NAV_QUERY_KEY, readTeleportBoot, type TeleportBoot } from "./boot";
+import { afterPaint, markTeleportPage, TELEPORT_MARKS } from "./timing";
 
 export const NO_PRODUCT = "__none__";
 
@@ -58,7 +59,9 @@ export const expectedTeleportPageKey = (
   );
 };
 
-export type MountedApp = { root: Root; hydrated: boolean };
+export type MountedApp = { root: Promise<Root>; hydrated: boolean };
+
+const markFirstPaint = (): void => markTeleportPage(TELEPORT_MARKS.firstPaint);
 
 export const mountApp = (
   element: HTMLElement,
@@ -69,10 +72,17 @@ export const mountApp = (
   element.removeAttribute(PRERENDER_ATTRIBUTE);
   const expected = expectedTeleportPageKey(readTeleportBoot(), config);
   if (page !== null && page === expected && element.firstChild !== null) {
-    return { root: hydrateRoot(element, app), hydrated: true };
+    const root = new Promise<Root>((resolve) =>
+      afterPaint(() => {
+        markFirstPaint();
+        resolve(hydrateRoot(element, app));
+      }),
+    );
+    return { root, hydrated: true };
   }
   element.replaceChildren();
   const root = createRoot(element);
   root.render(app);
-  return { root, hydrated: false };
+  afterPaint(markFirstPaint);
+  return { root: Promise.resolve(root), hydrated: false };
 };

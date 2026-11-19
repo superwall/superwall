@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { checkoutEvents } from "../../../src/checkout/events";
 import {
+  PAINT_FALLBACK_MS,
   TELEPORT_MARKS,
+  afterPaint,
   markTeleportPage,
   markTeleportScriptStart,
   watchTeleportPageTiming,
@@ -78,5 +80,70 @@ describe("teleport page timing", () => {
       throw new Error("blocked");
     });
     expect(() => markTeleportPage(TELEPORT_MARKS.scriptStart)).not.toThrow();
+  });
+});
+
+const fake = () =>
+  vi.useFakeTimers({
+    toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"],
+  });
+
+describe("afterPaint", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("runs in the task after the next frame, not in the frame itself", () => {
+    fake();
+    const callback = vi.fn();
+    let inFrame = false;
+    afterPaint(callback);
+    requestAnimationFrame(() => {
+      inFrame = callback.mock.calls.length === 0;
+    });
+    vi.advanceTimersToNextFrame();
+    expect(inFrame).toBe(true);
+    expect(callback).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(callback).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(PAINT_FALLBACK_MS);
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs on the fallback timer when no frame comes", () => {
+    fake();
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 0);
+    const callback = vi.fn();
+    afterPaint(callback);
+    vi.advanceTimersByTime(PAINT_FALLBACK_MS - 1);
+    expect(callback).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs on the fallback timer where the browser has no requestAnimationFrame", () => {
+    fake();
+    vi.stubGlobal("requestAnimationFrame", undefined);
+    try {
+      const callback = vi.fn();
+      afterPaint(callback);
+      vi.advanceTimersByTime(PAINT_FALLBACK_MS);
+      expect(callback).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("never runs once cancelled, before or after the frame", () => {
+    fake();
+    const early = vi.fn();
+    afterPaint(early)();
+    const late = vi.fn();
+    const stop = afterPaint(late);
+    vi.advanceTimersToNextFrame();
+    stop();
+    vi.advanceTimersByTime(PAINT_FALLBACK_MS);
+    expect(early).not.toHaveBeenCalled();
+    expect(late).not.toHaveBeenCalled();
   });
 });
