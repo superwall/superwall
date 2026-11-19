@@ -592,6 +592,8 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
         record.prepaidCards,
       ),
       teleport: true,
+      teleport_id: record.teleportId,
+      ...(record.productIdentifier === "" ? {} : { product_identifier: record.productIdentifier }),
       ...(settings()?.overlay && overlay === undefined ? { waiting_screen: true } : {}),
     });
     publish();

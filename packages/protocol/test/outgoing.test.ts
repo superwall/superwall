@@ -124,9 +124,12 @@ describe("OutgoingMessageSchema", () => {
       event_name: "open_url_external",
       url: "https://x",
       teleport: true,
+      teleport_id: "v1:abc",
+      product_identifier: "prod_1",
       waiting_screen: true,
     });
     rejects({ event_name: "open_url_external", url: "https://x", teleport: "yes" });
+    rejects({ event_name: "open_url_external", url: "https://x", teleport_id: 1 });
     accepts({
       event_name: "teleport_watch_start",
       teleport_id: "v1:abc",

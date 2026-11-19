@@ -330,7 +330,12 @@ describe("a teleport from the app", () => {
     const opened = new URL(String(posted[1]?.url));
     expect(opened.searchParams.get("sw_ref")).toBe("card");
     expect(new URLSearchParams(opened.hash.slice(1)).get("ref")).toBe("card");
-    expect(posted[1]).toMatchObject({ teleport: true, waiting_screen: true });
+    expect(posted[1]).toMatchObject({
+      teleport: true,
+      teleport_id: "v1:tp",
+      product_identifier: "live:price_1:14days-free",
+      waiting_screen: true,
+    });
     expect(teleporter.getStatus()).toEqual({ status: "idle" });
 
     setVisibility("hidden");
@@ -386,6 +391,8 @@ describe("a teleport from the app", () => {
     });
     expect(events()).toEqual(["open_url_external", "teleport_watch_start"]);
     expect(posted[0]).not.toHaveProperty("waiting_screen");
+    expect(posted[0]).toMatchObject({ teleport: true, teleport_id: "v1:tp" });
+    expect(posted[0]).not.toHaveProperty("product_identifier");
     expect(new URL(String(posted[0]?.url)).searchParams.has("sw_ref")).toBe(false);
     expect(teleporter.getStatus()).toEqual({ status: "waiting", returned: false });
     expect(document.querySelector(".sw-teleport")).toBeNull();
@@ -424,10 +431,12 @@ describe("a teleport from the app", () => {
 
   it("names no product to the SDK for a reference the store never delivered", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
-    const { session, events } = fakeSession();
+    const { session, events, posted } = fakeSession();
     void appTeleport(session).begin({ productReference: "missing", query: {} });
     await settle();
     expect(events()).toEqual(["open_url_external"]);
+    expect(posted[0]).toMatchObject({ teleport_id: "v1:tp" });
+    expect(posted[0]).not.toHaveProperty("product_identifier");
   });
 
   it("is a failed purchase when the teleport cannot be created, and nothing without a route", async () => {
@@ -854,6 +863,10 @@ describe("a teleport from the app", () => {
     await settle(1_500);
     teleporter.open();
     expect(posted.at(-1)).not.toHaveProperty("waiting_screen");
+    expect(posted.at(-1)).toMatchObject({
+      teleport_id: "v1:tp",
+      product_identifier: "live:price_1:14days-free",
+    });
     expect(opened).toHaveBeenCalledTimes(3);
 
     const second = teleporter.begin({ productReference: "annual", query: {} });
@@ -2290,7 +2303,7 @@ describe("a trial offer that changes while the browser is open", () => {
     });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const trial = { eligible: false };
-    const { session, events } = fakeSession({ trial });
+    const { session, events, posted } = fakeSession({ trial });
     const teleporter = appTeleport(session);
     const first = teleporter.begin({ productReference: "card", query: {} });
     await settle();
@@ -2301,6 +2314,11 @@ describe("a trial offer that changes while the browser is open", () => {
     await expect(first).resolves.toBe("abandoned");
     expect(calls.filter((call) => call.path === "checkout/teleport")).toHaveLength(2);
     expect(events().filter((name) => name === "open_url_external")).toHaveLength(2);
+    expect(
+      posted
+        .filter((message) => message.event_name === "open_url_external")
+        .map((message) => message.teleport_id),
+    ).toEqual(["v1:tp", "v1:tp2"]);
 
     trial.eligible = false;
     void teleporter.begin({ productReference: "card", query: {} });

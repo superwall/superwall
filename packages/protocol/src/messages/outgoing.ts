@@ -24,6 +24,8 @@ const openUrlExternal = z.object({
   event_name: z.literal("open_url_external"),
   url: z.string(),
   teleport: z.boolean().optional(),
+  teleport_id: z.string().optional(),
+  product_identifier: z.string().optional(),
   waiting_screen: z.boolean().optional(),
 });
 

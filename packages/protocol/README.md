@@ -78,7 +78,8 @@ the schemas strip what they do not declare.
 | `close`, `restore`                                                     | none                                                                                      |
 | `purchase`                                                             | `product` (reference), optional `product_identifier`, `should_dismiss`                    |
 | `open_url`                                                             | `url`, optional `browser_type: "payment_sheet"`                                           |
-| `open_url_external`, `open_payment_sheet`                              | `url`                                                                                     |
+| `open_url_external`                                                    | `url`, optional `teleport`, `teleport_id`, `product_identifier`, `waiting_screen`         |
+| `open_payment_sheet`                                                   | `url`                                                                                     |
 | `open_deep_link`                                                       | `link`                                                                                    |
 | `custom`                                                               | `data`                                                                                    |
 | `custom_placement`                                                     | `name`, `params`                                                                          |
