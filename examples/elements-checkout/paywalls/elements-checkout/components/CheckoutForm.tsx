@@ -43,9 +43,15 @@ type Props = {
   callbacks: PurchaseCallbacks;
 };
 
-/** Minor units (cents) to a price in the shopper's language. */
-const formatAmount = (amount: number, currency: string) =>
-  new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount / 100);
+/**
+ * Minor units to a price in the shopper's language, using the currency's own
+ * number of decimals: 1000 is ¥1,000, $10.00 and KWD 1.000.
+ */
+const formatAmount = (amount: number, currency: string) => {
+  const format = new Intl.NumberFormat(undefined, { style: "currency", currency });
+  const decimals = format.resolvedOptions().maximumFractionDigits ?? 2;
+  return format.format(amount / 10 ** decimals);
+};
 
 const intervalOf = ({ interval, intervalCount }: CheckoutAmounts) =>
   intervalCount === 1 ? interval : `${intervalCount} ${interval}s`;
@@ -434,7 +440,7 @@ const OwnButton = ({ label }: { label: string }) => {
 const Summary = ({ scenario }: { scenario: Scenario }) => {
   const { t } = useTranslation();
   const { status, amounts, failure, message } = useCheckout();
-  const label = amounts?.dueNow === 0 ? t("purchase.startTrial") : t("purchase.subscribe");
+  const label = amounts?.trialDays ? t("purchase.startTrial") : t("purchase.subscribe");
 
   return (
     <>

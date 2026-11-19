@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  amountsOf,
   elementsOptionsOf,
   type StripeCheckoutOptions,
 } from "../../../src/checkout/elements/StripeCheckout";
 import { quote } from "./harness";
+
+type Expected = { currency: string; mode: "subscription" | "setup"; amount?: number };
 
 const QUOTES = {
   "a paid USD month": quote(),
@@ -59,6 +60,14 @@ const OPTIONS: Record<string, StripeCheckoutOptions> = {
   } as unknown as StripeCheckoutOptions,
 };
 
+const EXPECTED: Record<keyof typeof QUOTES, Expected> = {
+  "a paid USD month": { currency: "usd", mode: "subscription", amount: 1999 },
+  "a free-trial EUR year": { currency: "eur", mode: "setup" },
+  "a discounted GBP quarter": { currency: "gbp", mode: "subscription", amount: 1499 },
+  "a zero-decimal JPY week": { currency: "jpy", mode: "subscription", amount: 500 },
+  "a trial the backend names no intent for": { currency: "usd", mode: "setup" },
+};
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -69,18 +78,16 @@ describe("Stripe's options for every price and every option set", () => {
       it(`${priceName}, with ${optionsName}`, () => {
         vi.spyOn(console, "warn").mockImplementation(() => undefined);
         const built = elementsOptionsOf(priced, options) as unknown as Record<string, unknown>;
-        const { currency, dueNow } = amountsOf(priced);
-        const free = dueNow === 0;
+        const expected = EXPECTED[priceName as keyof typeof QUOTES];
 
-        expect(built.currency).toBe(priced.subscriptionDetails.currency.toLowerCase());
+        expect(built.currency).toBe(expected.currency);
+        expect(built.mode).toBe(expected.mode);
         expect(built.paymentMethodCreation).toBe("manual");
-        if (free) {
-          expect(built.mode).toBe("setup");
+        if (expected.mode === "setup") {
           expect(built.setupFutureUsage).toBe("off_session");
           expect(built).not.toHaveProperty("amount");
         } else {
-          expect(built.mode).toBe("subscription");
-          expect(built.amount).toBe(dueNow);
+          expect(built.amount).toBe(expected.amount);
           expect(built).not.toHaveProperty("setupFutureUsage");
         }
         const asked = (options as { paymentMethodTypes?: string[] }).paymentMethodTypes;
@@ -89,7 +96,6 @@ describe("Stripe's options for every price and every option set", () => {
         for (const key of ["appearance", "locale", "fonts"] as const) {
           if (key in options) expect(built[key]).toEqual(options[key]);
         }
-        expect(currency).toBe(built.currency);
       });
     }
   }

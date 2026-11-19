@@ -373,6 +373,31 @@ describe("<StripeCheckout> once the price has loaded", () => {
     expect(stripe.elements.at(-1)?.stripe).toBe(stripe.client);
   });
 
+  it("reports the product it paid for when the form switches product mid-payment", async () => {
+    const gate = held();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        await gate.promise;
+        return new Response(JSON.stringify({ subscriptionId: "sub_1" }), { status: 200 });
+      }),
+    );
+    const { checkout, switchTo, prefetch } = await mount();
+    let pending: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      pending = checkout().submit();
+      await Promise.resolve();
+    });
+    prefetch.mockReturnValue(new Promise(() => undefined));
+    await switchTo("secondary");
+    let result: unknown;
+    await act(async () => {
+      gate.release();
+      result = await pending;
+    });
+    expect(result).toMatchObject({ status: "completed", product: { reference: "primary" } });
+  });
+
   it("pays with the card, reports every callback and the SDK's messages, and passes the options on", async () => {
     answerConfirm({ subscriptionId: "sub_1" });
     const own = {
@@ -915,6 +940,43 @@ describe("<StripeCheckout> and the shopper's email", () => {
     act(() => session.setUserAttributes({ email: "known@example.com" }));
     await settle();
     expect(stripe.link?.options).toEqual({ defaultValues: { email: "own@example.com" } });
+  });
+
+  it("pays with the email typed into LinkAuthenticationElement over the card's own", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    const { checkout } = await mount({ children: <LinkAuthenticationElement /> });
+    const link = stripe.link as NonNullable<typeof stripe.link>;
+    act(() => link.onChange({ complete: true, value: { email: "typed@example.com" } }));
+    await act(async () => {
+      await checkout().submit();
+    });
+    await settle();
+    expect(sentBody()).toMatchObject({ paymentMethodId: "pm_1", email: "typed@example.com" });
+  });
+
+  it("pays with the email typed into LinkAuthenticationElement over the wallet's", async () => {
+    answerConfirm({ subscriptionId: "sub_1" });
+    withoutEmail();
+    await mount({
+      children: (
+        <>
+          <LinkAuthenticationElement />
+          <ExpressCheckoutElement />
+        </>
+      ),
+    });
+    const link = stripe.link as NonNullable<typeof stripe.link>;
+    act(() => link.onChange({ complete: true, value: { email: "typed@example.com" } }));
+    const wallet = stripe.express as NonNullable<typeof stripe.express>;
+    await act(async () => {
+      wallet.onClick({ resolve: vi.fn(), reject: vi.fn() });
+      await wallet.onConfirm({
+        paymentFailed: vi.fn(),
+        billingDetails: { email: "wallet@example.com" },
+      });
+    });
+    await settle();
+    expect(sentBody()).toMatchObject({ email: "typed@example.com" });
   });
 
   it("refuses LinkAuthenticationElement outside <StripeCheckout>", () => {

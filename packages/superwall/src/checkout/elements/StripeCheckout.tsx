@@ -297,18 +297,29 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
     canSubmit,
     stripe,
     elements,
+    reference,
     product,
     ready,
     blocked,
     stored,
     knownEmail,
   });
-  live.current = { canSubmit, stripe, elements, product, ready, blocked, stored, knownEmail };
+  live.current = {
+    canSubmit,
+    stripe,
+    elements,
+    reference,
+    product,
+    ready,
+    blocked,
+    stored,
+    knownEmail,
+  };
   const emailOf = (payment: CollectedPayment, wallet?: string | null): string | undefined =>
     callbacks.current.email ||
+    entered.current ||
     payment.email ||
     wallet ||
-    entered.current ||
     live.current.knownEmail;
 
   const warned = React.useRef(false);
@@ -327,7 +338,11 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
     return { status: "unavailable", reason, ...(now.product ? { product: now.product } : {}) };
   };
 
-  const run = (collect: () => Promise<CollectedPayment | null>): Promise<CheckoutSubmitResult> => {
+  const run = (
+    collect: () => Promise<CollectedPayment | null>,
+    purchased: { reference: string; product: SuperwallProduct | undefined } = live.current,
+  ): Promise<CheckoutSubmitResult> => {
+    const { reference: bought, product: sold } = purchased;
     const { postPurchase, stripeMetadata } = callbacks.current;
     const attempt: PurchaseAttempt = {};
     const stop = listenToPurchases(session, () => callbacks.current, attempt);
@@ -336,7 +351,7 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
     setFailure(undefined);
     return purchaseWithElements(
       session,
-      reference,
+      bought,
       collect,
       {
         ...(postPurchase === undefined ? {} : { postPurchase }),
@@ -346,7 +361,7 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
     )
       .then((outcome): CheckoutSubmitResult => {
         if (outcome.status === "failed") setFailure(outcome.failure);
-        return { ...outcome, product: live.current.product as SuperwallProduct };
+        return { ...outcome, product: sold as SuperwallProduct };
       })
       .finally(() => {
         stop();
@@ -357,7 +372,14 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
   };
 
   const submit = async (): Promise<CheckoutSubmitResult> => {
-    const { canSubmit: can, stripe: client, elements: form, product: sold } = live.current;
+    const {
+      canSubmit: can,
+      stripe: client,
+      elements: form,
+      reference: bought,
+      product: sold,
+    } = live.current;
+    const purchased = { reference: bought, product: sold };
     if (!can || busy.current || client === null || form === null) {
       return unavailable();
     }
@@ -386,11 +408,11 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
       try {
         collected = collectedOf(result);
       } catch (error) {
-        return run(() => Promise.reject(error));
+        return run(() => Promise.reject(error), purchased);
       }
       const email = emailOf(collected);
       if (email === undefined) return incomplete(EMAIL_REQUIRED);
-      return run(() => Promise.resolve({ ...collected, email }));
+      return run(() => Promise.resolve({ ...collected, email }), purchased);
     }
     let checked: Awaited<ReturnType<StripeElements["submit"]>>;
     try {
@@ -405,11 +427,11 @@ const Form = ({ reference, product, blocked, stored, callbacks, children }: Form
     try {
       payment = await collectWith(client, form)();
     } catch (error) {
-      return run(() => Promise.reject(error));
+      return run(() => Promise.reject(error), purchased);
     }
     const email = emailOf(payment);
     if (email === undefined) return incomplete(EMAIL_REQUIRED);
-    return run(() => Promise.resolve({ ...payment, email }));
+    return run(() => Promise.resolve({ ...payment, email }), purchased);
   };
 
   const handlers: ExpressHandlers = {

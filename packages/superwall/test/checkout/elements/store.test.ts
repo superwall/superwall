@@ -99,6 +99,58 @@ describe("a product's quote for a form", () => {
     expect(store.quoteOf("primary")).toEqual({ status: "unavailable", reason: "not_prepared" });
   });
 
+  it("drops a quote that finishes loading after the store was cleared", async () => {
+    const latch: { finish?: (stripe: unknown) => void } = {};
+    const stripe = { confirmCardPayment: vi.fn() };
+    const loadStripe = vi.fn(() => new Promise((resolve) => (latch.finish = resolve)));
+    const late = createElementsCheckout({
+      publicApiKey: () => "pk_public",
+      host: hostEvents(vi.fn()),
+      loadStripe: loadStripe as never,
+    });
+    const preparing = late.prepare(quote(), { stripeCustomerId: "cus_old" });
+    late.clear();
+    latch.finish?.(stripe);
+    await preparing;
+    expect(late.quoteOf("primary")).toEqual({ status: "unavailable", reason: "not_prepared" });
+  });
+
+  it("keeps the newer quote when an older preparation finishes last", async () => {
+    const finishes: Array<(stripe: unknown) => void> = [];
+    const stripe = { confirmCardPayment: vi.fn() };
+    const loadStripe = vi.fn(() => new Promise((resolve) => finishes.push(resolve)));
+    const store = createElementsCheckout({
+      publicApiKey: () => "pk_public",
+      host: hostEvents(vi.fn()),
+      loadStripe: loadStripe as never,
+    });
+    const older = store.prepare(quote({ publishableKey: "pk_a", checkoutContextId: "ctx_old" }));
+    const newer = store.prepare(quote({ publishableKey: "pk_b", checkoutContextId: "ctx_new" }));
+    finishes[1]?.(stripe);
+    await newer;
+    finishes[0]?.(stripe);
+    await older;
+    expect(store.quoteOf("primary")).toMatchObject({
+      status: "ready",
+      quote: { checkoutContextId: "ctx_new" },
+    });
+  });
+
+  it("drops a quote that finishes loading after the product was marked unavailable", async () => {
+    const latch: { finish?: (stripe: unknown) => void } = {};
+    const loadStripe = vi.fn(() => new Promise((resolve) => (latch.finish = resolve)));
+    const store = createElementsCheckout({
+      publicApiKey: () => "pk_public",
+      host: hostEvents(vi.fn()),
+      loadStripe: loadStripe as never,
+    });
+    const preparing = store.prepare(quote());
+    store.markUnavailable("primary", "session_failed");
+    latch.finish?.({});
+    await preparing;
+    expect(store.quoteOf("primary")).toEqual({ status: "unavailable", reason: "session_failed" });
+  });
+
   it("is unavailable without a public API key, before loading Stripe", async () => {
     const { store, loadStripe } = makeStore({ publicApiKey: "" });
     await store.prepare(quote());

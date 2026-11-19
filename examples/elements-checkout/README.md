@@ -68,8 +68,8 @@ A paywall that never imports it never ships Stripe's React bindings.
 wallet reports `onAbandon`.
 
 **The form says what it is doing.** `useCheckout()` is read anywhere inside
-`<StripeCheckout>`: `amounts` for the "due today" line and, when `dueNow` is
-`0`, "Start free trial", `failure` for a declined card,
+`<StripeCheckout>`: `amounts` for the "due today" line and, when `trialDays` is
+set, "Start free trial" (a 100% discount makes `dueNow` `0` with no trial), `failure` for a declined card,
 and `status` and `message` where the paywall can't take payment, such as
 inside the iOS app. Unlike a store purchase, a card payment opens no sheet,
 so `<PurchaseButton>` disables itself while it pays and the label says

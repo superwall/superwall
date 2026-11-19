@@ -93,6 +93,7 @@ const NOT_PREPARED: ElementsUnavailable = { status: "unavailable", reason: "not_
 
 export const createElementsCheckout = (options: ElementsCheckoutOptions): ElementsCheckout => {
   const quotes = new Map<string, Stored>();
+  const tokens = new Map<string, object>();
   const paying = new Set<string>();
   const listeners = new Set<() => void>();
   const confirmation = createConfirmation(options);
@@ -102,6 +103,7 @@ export const createElementsCheckout = (options: ElementsCheckoutOptions): Elemen
   };
 
   const set = (referenceName: string, state: Stored) => {
+    tokens.delete(referenceName);
     quotes.set(referenceName, state);
     notify();
   };
@@ -150,7 +152,10 @@ export const createElementsCheckout = (options: ElementsCheckoutOptions): Elemen
         markUnavailable(referenceName, "missing_public_api_key");
         return;
       }
+      const token = {};
+      tokens.set(referenceName, token);
       const stripe = await stripeFor(quote.publishableKey);
+      if (tokens.get(referenceName) !== token) return;
       if (!stripe) {
         markUnavailable(referenceName, "stripe_load_failed");
         return;
@@ -211,6 +216,7 @@ export const createElementsCheckout = (options: ElementsCheckoutOptions): Elemen
 
     clear: () => {
       quotes.clear();
+      tokens.clear();
       notify();
     },
 

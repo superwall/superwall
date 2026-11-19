@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CardElementProps, StripeCheckoutOptions } from "superwall/checkout/stripe";
 import { useColorScheme } from "superwall/hooks";
 
@@ -61,11 +61,20 @@ const readPalette = (): Palette => {
   return palette;
 };
 
-/** The palette for the current light or dark scheme, read again when it changes. */
+/**
+ * The palette for the current light or dark scheme. The provider switches the
+ * root's `light`/`dark` class in its own effect, so the palette is read again
+ * once that class changes, never before.
+ */
 const usePalette = (): Palette => {
   const scheme = useColorScheme();
   const [palette, setPalette] = useState<Palette>(readPalette);
-  useLayoutEffect(() => setPalette(readPalette()), [scheme]);
+  useEffect(() => {
+    setPalette(readPalette());
+    const observer = new MutationObserver(() => setPalette(readPalette()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [scheme]);
   return palette;
 };
 
