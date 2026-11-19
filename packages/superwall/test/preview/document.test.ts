@@ -7,6 +7,7 @@ import {
   PLATFORM_STYLESHEET_URL,
   renderDocument,
   TELEPORT_BOOT_META,
+  VIEWPORT,
   VIEWPORT_FIT_GUARD,
   withModuleScriptsLast,
 } from "../../src/document";
@@ -49,6 +50,15 @@ describe("renderDocument", () => {
     expect(html).toContain('<div id="root">');
     // Any <style> here would silently diverge preview from production.
     expect(html).not.toContain("<style");
+  });
+});
+
+describe("VIEWPORT", () => {
+  it("locks zoom on every served page, so focusing a field never zooms it", () => {
+    expect(doc()).toContain(`<meta name="viewport" content="${VIEWPORT}" />`);
+    expect(VIEWPORT).toContain("maximum-scale=1");
+    expect(VIEWPORT).toContain("user-scalable=no");
+    expect(VIEWPORT).toContain("viewport-fit=cover");
   });
 });
 
@@ -187,15 +197,13 @@ describe("preview parity", () => {
     const served = injectPlatformLayer(doc(), PLATFORM_STYLESHEET_URL);
     const preview = injectWebviewSimulation(served);
 
-    const withoutSimulation = preview
-      .replace(/<style data-superwall-preview="webview">[\s\S]*?<\/style>/, "")
-      .replace(", maximum-scale=1", "");
+    const withoutSimulation = preview.replace(
+      /<style data-superwall-preview="webview">[\s\S]*?<\/style>/,
+      "",
+    );
     expect(withoutSimulation).toBe(served);
     // The simulation is scoped to browser chrome, never paywall styling.
     expect(preview).toContain("scrollbar-width: none");
-    // Pinch-zoom is disabled in previews only; the served document keeps its viewport.
-    expect(preview).toContain("maximum-scale=1");
-    expect(served).not.toContain("maximum-scale");
   });
 });
 

@@ -72,6 +72,9 @@ export const withModuleScriptsLast = (html: string): string => {
   return `${rest.slice(0, end)}${scripts.join("")}${rest.slice(end)}`;
 };
 
+export const VIEWPORT =
+  "width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
+
 export const VIEWPORT_FIT_GUARD = `new MutationObserver((records) => records.forEach((record) => record.addedNodes.forEach((node) => { if (node.nodeName === "META" && node.name === "viewport" && !/viewport-fit/.test(node.content)) node.content += ", viewport-fit=cover"; }))).observe(document.head, { childList: true });`;
 
 export const colorSchemeScript = (background: ResolvedBackground | undefined): string => {
@@ -98,7 +101,7 @@ export const renderDocument = ({ title, config, entry }: DocumentOptions): strin
 <html${attributes}${style}>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="${VIEWPORT}" />
     <meta name="${TELEPORT_BOOT_META}" content="1" />
     <script>${VIEWPORT_FIT_GUARD}</script>
     <script>${colorSchemeScript(background)}</script>
