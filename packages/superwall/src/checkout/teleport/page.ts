@@ -187,6 +187,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
   });
   let tapped = boot.productReference;
   let settled = false;
+  let expired = false;
   let pageCheck: Promise<boolean> | undefined;
   let pageCheckedAt = 0;
   let returns = 0;
@@ -271,19 +272,20 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
   };
 
   const checkSettled = (atBoot = false): Promise<boolean> => {
-    if (settled) return Promise.resolve(true);
+    if (settled || expired) return Promise.resolve(true);
     const key = publicApiKey();
     if (key === "") return Promise.resolve(false);
     pageCheck ??= readTeleportStatus(key, boot.id)
       .then((teleport) => {
-        if (settled) return true;
-        if (teleport.status === "expired" && atBoot) {
+        if (settled || expired) return true;
+        if (teleport.status === "expired") {
+          expired = true;
           const url = new URL(window.location.href);
           url.searchParams.delete("sw_boot");
           url.searchParams.delete("sw_sig");
           url.hash = "";
           pageNavigation.replace(url.toString());
-          return false;
+          return true;
         }
         if (teleport.status !== "completed") {
           pageCheckedAt = Date.now();
@@ -335,6 +337,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
         returnAfterPurchase();
         return false;
       }
+      if (expired) return false;
       const fresh = Date.now() - pageCheckedAt < PAGE_WATCH_MS + 1_000;
       if (!boot.shared || fresh) return true;
       let loaderShown = false;
