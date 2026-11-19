@@ -72,6 +72,37 @@ const HANDLERS: Record<string, Handler> = {
     }
     if (bound.json) bound.output.data({ application_id: app.id, revenue_provider: change });
   },
+  "products.update": async (ctx, resource, op, args, flags) => {
+    const { period, periodCount, trialDays, ...fields } = flags.fields;
+    const given = { period, periodCount, trialDays };
+    const named = Object.entries(given).filter(([, value]) => value !== undefined);
+    if (named.length === 0 || !args[0]) return callOperation(ctx, resource, resource, op, args, flags);
+    const used = named.map(([flag]) => toFlag(fieldName(flag))).join(", ");
+    if (fields.subscription !== undefined) {
+      throw new Error(`Pass --subscription or ${used}, not both.`);
+    }
+    const id = args[0];
+    const product = await apiCall(ctx, `GET /v2/products/${id}`, () =>
+      ctx.api.get(`/v2/products/${encodeURIComponent(id)}`),
+    );
+    const stored = Reflect.get(Object(product), "subscription");
+    const current = stored !== null && typeof stored === "object" ? (stored as Record<string, unknown>) : undefined;
+    if (!current && period === undefined) {
+      throw new Error(`Product ${id} is a one-time purchase, so ${used} needs --period to make it a subscription.`);
+    }
+    const kept = Object.fromEntries(
+      ["period", "period_count", "trial_period_days"].flatMap((key) =>
+        current?.[key] === undefined || current[key] === null ? [] : [[key, current[key]]],
+      ),
+    );
+    const subscription = {
+      ...(current ? kept : { period_count: 1 }),
+      ...(period !== undefined ? { period: String(period) } : {}),
+      ...(periodCount !== undefined ? { period_count: count(periodCount, "--period-count", 1) } : {}),
+      ...(trialDays !== undefined ? { trial_period_days: count(trialDays, "--trial-days", 0) } : {}),
+    };
+    return callOperation(ctx, resource, resource, op, args, { ...flags, fields: { ...fields, subscription } });
+  },
   resource: async (ctx, resource, op, args, flags) => {
     const [value, value2] = op.name === "create" ? createValues(resource, op, args, flags) : args;
     if (!isResourceName(resource.name)) throw new Error(`Unknown resource "${resource.name}".`);
@@ -151,6 +182,14 @@ export async function runOperation(
       : `${owner.name} ${resource.name} ${op.name}`;
   if (!handler) throw new Error(`${name} has no handler "${op.handler}".`);
   return handler(ctx, resource, op, args, flags);
+}
+
+function count(value: unknown, flag: string, least: number): number {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < least) {
+    throw new Error(`${flag} is a whole number of at least ${least}, not "${String(value)}".`);
+  }
+  return number;
 }
 
 const toFlag = (field: string): string => `--${field.replace(/_/g, "-")}`;
@@ -306,22 +345,25 @@ async function fillScope(
 }
 
 function coerce(raw: unknown, type: string): unknown {
-  if (Array.isArray(raw)) return raw.map((item) => coerce(item, type.replace(/\[\]$/, "")));
+  const parts = type.split("|").map((part) => part.trim());
+  const nullable = parts.includes("null");
+  const values = parts.filter((part) => part !== "null");
+  const item = values.length && values.every((part) => part.endsWith("[]")) ? values[0]!.slice(0, -2) : undefined;
+  const takesJson = (types: string[]) => types.some((part) => part === "object" || part === "any");
+  if (Array.isArray(raw)) return raw.map((value) => coerce(value, item ?? type));
   if (raw !== null && typeof raw === "object") return raw;
-  if (type.endsWith("[]")) {
-    const item = type.slice(0, -2);
-    const parsed = item === "object" || item === "any" ? coerce(raw, "any") : raw;
-    if (parsed !== raw) return Array.isArray(parsed) ? parsed : [parsed];
-    return String(raw)
-      .split(",")
-      .map((part) => coerce(part.trim(), item));
-  }
   const text = String(raw);
+  if (nullable && text === "null") return null;
+  if (item !== undefined) {
+    const parsed = takesJson([item]) ? coerce(raw, "any") : raw;
+    if (parsed !== raw) return Array.isArray(parsed) ? parsed : [parsed];
+    return text.split(",").map((part) => coerce(part.trim(), item));
+  }
   if (/\bboolean\b/.test(type) && /^(true|false)$/.test(text)) return text === "true";
   if (/\b(number|integer)\b/.test(type) && text.trim() !== "" && !Number.isNaN(Number(text))) {
     return Number(text);
   }
-  if ((type === "object" || type === "any") && /^[[{]/.test(text)) {
+  if (takesJson(parts) && /^[[{]/.test(text)) {
     try {
       return JSON.parse(text);
     } catch {
@@ -329,8 +371,6 @@ function coerce(raw: unknown, type: string): unknown {
     }
   }
   if (type === "null") return null;
-  // A nullable field takes the literal null to clear it (`--end-at null`).
-  if (text === "null" && type.split("|").some((part) => part.trim() === "null")) return null;
   return typeof raw === "number" && !/\b(number|integer)\b/.test(type) ? text : raw;
 }
 

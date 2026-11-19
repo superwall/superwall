@@ -61,6 +61,9 @@ const SPEC: DocOperation[] = [
       { name: "enabled", type: "boolean", required: false },
       { name: "project_id", type: "integer", required: false },
       { name: "rules", type: "object[]", required: false },
+      { name: "plan", type: "object | null", required: false },
+      { name: "windows", type: "object[] | null", required: false },
+      { name: "aliases", type: "string[] | null", required: false },
     ],
   }),
   op("GET", "/v2/projects/{project_id}/webhook_endpoints", {
@@ -705,6 +708,20 @@ test("a list of objects given once is one JSON object or a JSON array, never spl
   const array: Call[] = [];
   await gadget(["create"], { rules: '[{"a":1},{"b":2}]' }, array);
   assert.deepEqual(array[0]?.body, { rules: [{ a: 1 }, { b: 2 }], project_id: 282 });
+});
+
+test("a nullable object or list takes JSON, and the literal null clears it", async () => {
+  const parsed: Call[] = [];
+  await gadget(["create"], { plan: '{"period":"year","trial_period_days":3}', windows: '[{"a":1}]', aliases: "x, y" }, parsed);
+  assert.deepEqual(parsed[0]?.body, {
+    plan: { period: "year", trial_period_days: 3 },
+    windows: [{ a: 1 }],
+    aliases: ["x", "y"],
+    project_id: 282,
+  });
+  const cleared: Call[] = [];
+  await gadget(["create"], { plan: "null", windows: "null", aliases: "null" }, cleared);
+  assert.deepEqual(cleared[0]?.body, { plan: null, windows: null, aliases: null, project_id: 282 });
 });
 
 test("an organization's operation takes the organization of the app it is about", async () => {
