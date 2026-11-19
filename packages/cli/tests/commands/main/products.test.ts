@@ -3,6 +3,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { helpLine, runLine } from "../../helpers/command";
 import { restoreFetch, useFetch } from "../../helpers/fetch";
 import { fakeResourceApi, op, writeApiIndex, type ApiCall } from "../../helpers/resources";
+import { describeSkipped } from "@/core/main/storekit";
 
 beforeEach(() => {
   useFetch([]);
@@ -12,6 +13,7 @@ beforeEach(() => {
       body: [
         { name: "name", type: "string", required: false, description: "Display name" },
         { name: "subscription", type: "object | null", required: false },
+        { name: "price", type: "object | null", required: false },
       ],
     }),
     op("DELETE", "/v2/products/{id}"),
@@ -198,4 +200,17 @@ test("products --help lists create's flags, and impact --help the API's descript
 
   const page = await helpLine("products --help");
   assert.match(page, /storekit +Write a StoreKit configuration file for Xcode/);
+});
+
+test("the command storekit prints for a product with no price sends the price as an object", async () => {
+  const calls: ApiCall[] = [];
+  const hint = describeSkipped([{ id: "n1", identifier: "pro_monthly", reason: "no_price" }]).find((line) =>
+    line.startsWith("Price "),
+  );
+  const command = hint?.match(/`superwall (products update [^`]+)`/)?.[1];
+  assert.ok(command, `no command in ${hint}`);
+
+  await runLine(`${command.replace("<amount>", "399").replaceAll("'", "")} --yes --json`, { api: fakeResourceApi(calls) });
+
+  assert.deepEqual(calls, [{ method: "PATCH", path: "/v2/products/n1", body: { price: { amount: 399, currency: "USD" } } }]);
 });
