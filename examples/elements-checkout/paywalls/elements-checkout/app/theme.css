@@ -565,7 +565,7 @@ form.promo {
   border-radius: var(--radius);
   cursor: pointer;
   -webkit-appearance: -apple-pay-button;
-  -apple-pay-button-type: subscribe;
+  -apple-pay-button-type: plain;
   -apple-pay-button-style: black;
 }
 

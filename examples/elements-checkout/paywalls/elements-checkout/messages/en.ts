@@ -45,7 +45,7 @@ export default {
   },
   form: {
     or: "or pay with card",
-    applePay: "Subscribe with Apple Pay",
+    applePay: "Pay with Apple Pay",
     applePayPreparing: "Getting Apple Pay ready…",
     applePayUnavailable: "Apple Pay isn't available here: {message}",
     orWallet: "or pay in one tap",

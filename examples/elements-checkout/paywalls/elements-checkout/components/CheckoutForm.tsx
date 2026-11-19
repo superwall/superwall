@@ -53,7 +53,7 @@ const intervalOf = ({ interval, intervalCount }: CheckoutAmounts) =>
 type EmailProps = { email: string; onEmail: (email: string) => void };
 
 /** Wallet buttons sized and labelled for a subscription. */
-const WALLET_OPTIONS = { buttonHeight: 52, buttonType: { applePay: "subscribe" } } as const;
+const WALLET_OPTIONS = { buttonHeight: 52, buttonType: { applePay: "plain" } } as const;
 
 /**
  * Stripe's wallet row with a divider beside it. The row renders nothing on a
