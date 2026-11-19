@@ -5,6 +5,7 @@ import { TeleportScreen } from "../../../src/checkout";
 import { pageNavigation } from "../../../src/checkout/teleport/page";
 import {
   checkApplePay,
+  useApplePay,
   usePurchase,
   useSuperwallSession,
   useTeleport,
@@ -203,6 +204,38 @@ describe("checking for Apple Pay", () => {
     await paint();
     expect(performance.getEntriesByName(TELEPORT_MARKS.applePayReturned, "mark")).toHaveLength(1);
     expect(await checkApplePay()).toMatchObject({ available: false, reason: "check_failed" });
+  });
+
+  it("still answers a paywall's own useApplePay in the app before any frame, asking Apple once", async () => {
+    stubApi();
+    const paint = holdFrames();
+    const canMakePaymentsWithActiveCard = vi.fn(async () => true);
+    vi.stubGlobal("ApplePaySession", { canMakePaymentsWithActiveCard });
+    const seen: boolean[] = [];
+    const Button = () => {
+      seen.push(useApplePay().available);
+      return null;
+    };
+    const Wrapper = createWrapper({
+      config: { products: { card: "live:price_1:14days-free" }, teleport: { route: "checkout" } },
+      host: {
+        products,
+        device: { platform: "iOS", publicApiKey: "pk_test", sdkVersionPadded: "004.018.000" },
+      },
+    });
+    render(
+      <Wrapper>
+        <Button />
+        <TeleportScreen />
+      </Wrapper>,
+    );
+    await flush();
+    expect(canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(1);
+    expect(seen.at(-1)).toBe(true);
+    await paint();
+    expect(canMakePaymentsWithActiveCard).toHaveBeenCalledTimes(1);
+    expect(seen.at(-1)).toBe(true);
+    expect(performance.getEntriesByType("mark")).toEqual([]);
   });
 });
 
