@@ -575,7 +575,7 @@ const Router = ({
   const [movement, setMovement] = React.useState(0);
   const [settled, setSettled] = React.useState(true);
   const animated = React.useRef(top.key);
-  
+
   inTransition.current = !settled || animated.current !== top.key;
 
   React.useLayoutEffect(() => {
