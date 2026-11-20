@@ -117,6 +117,7 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
         link: { commit_sha: "linked" },
         promote: { version: 7, url: "u" },
         live: { id: "2080" },
+        rename: { id: "2080" },
         history: { object: "list", data: [] },
         paywalls: { data: [] },
         create: { id: 9 },
