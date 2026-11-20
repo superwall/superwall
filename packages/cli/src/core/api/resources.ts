@@ -321,6 +321,7 @@ export async function findPaywall(api: SuperwallApi, paywallId: string): Promise
 interface LivePaywall {
   version?: number;
   snapshotId?: string;
+  name?: string;
 }
 
 const SNAPSHOT_IN_URL = /([a-f0-9]{64})\.html/;
@@ -330,6 +331,7 @@ export async function livePaywall(api: SuperwallApi, paywallId: string): Promise
     (paywall) => ({
       version: paywall.version,
       snapshotId: paywall.url?.match(SNAPSHOT_IN_URL)?.[1],
+      name: paywall.name,
     }),
     (error: unknown) => {
       if (error instanceof ApiUnreachableError) return {};
@@ -359,6 +361,10 @@ export async function livePaywallVersion(
   paywallId: string,
 ): Promise<number | undefined> {
   return livePaywall(api, paywallId).then((live) => live.version);
+}
+
+export async function renamePaywall(api: SuperwallApi, paywallId: string, name: string): Promise<void> {
+  await api.patch(`/v2/paywalls/${encodeURIComponent(paywallId)}`, { name });
 }
 
 export async function createHeadlessPaywall(

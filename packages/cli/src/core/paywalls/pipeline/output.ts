@@ -34,6 +34,12 @@ export function transition(before: number | undefined, after: number): string {
   return `Promoted ${pc.green(`version ${before} → ${after}`)}`;
 }
 
+export function renamedLine(rename: { from?: string; to: string }): string {
+  return rename.from === undefined
+    ? `Named \`${rename.to}\``
+    : `Renamed \`${rename.from}\` → \`${rename.to}\``;
+}
+
 export const BIND_VERB: Record<ResolvedBinding["source"], string> = {
   lock: "Linked to",
   matched: "Linked to",
