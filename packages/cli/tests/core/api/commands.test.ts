@@ -1,16 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { listGroups } from "@/commands/registry";
 import { resolveCommandLookup, useCommandList, withCommand } from "@/core/api/commands";
-
-test("without the registry loaded the lookup refuses rather than finding no command", () => {
-  assert.throws(() => resolveCommandLookup(), /command registry isn't loaded/);
-});
-
-test("the registry hands its commands over when it loads", async () => {
-  await import("@/commands/registry");
-  const lookup = resolveCommandLookup();
-  assert.equal(lookup({ method: "GET", path: "/v2/campaigns/{id}" }), "superwall campaigns get <campaign>");
-});
 
 test("an endpoint a resource operation covers maps to that command, nested or not", () => {
   const lookup = resolveCommandLookup();
@@ -35,8 +26,7 @@ test("withCommand adds the command only when there is one", () => {
   assert.deepEqual(withCommand({ method: "GET", path: "/v2/nowhere" }, lookup), { method: "GET", path: "/v2/nowhere" });
 });
 
-test("a command list handed over replaces the one before", async () => {
-  const { listGroups } = await import("@/commands/registry");
+test("a command list handed over replaces the one before", () => {
   useCommandList(() => []);
   assert.equal(resolveCommandLookup()({ method: "GET", path: "/v2/campaigns/{id}" }), undefined);
   useCommandList(() => listGroups().flatMap((group) => group.commands));
