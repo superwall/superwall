@@ -96,7 +96,9 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
                           ? "versions"
                         : /^\/v2\/paywalls\/[^/]+$/.test(url) && req.method === "GET"
                           ? "live"
-                          : "other";
+                          : /^\/v2\/paywalls\/[^/]+$/.test(url) && req.method === "PATCH"
+                            ? "rename"
+                            : "other";
       fake.calls.push(kind);
       fake.paths.push(url);
       fake.bodies[kind] = raw;
@@ -115,6 +117,7 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
         link: { commit_sha: "linked" },
         promote: { version: 7, url: "u" },
         live: { id: "2080" },
+        rename: { id: "2080" },
         history: { object: "list", data: [] },
         paywalls: { data: [] },
         create: { id: 9 },
@@ -127,8 +130,13 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
         },
         other: {},
       };
+      const body = route.body ?? fallback[kind];
+      const named =
+        kind === "live" && (route.status ?? 200) < 300 && typeof body === "object" && body !== null
+          ? { name: "Pro", ...body }
+          : body;
       res.writeHead(route.status ?? 200, { "content-type": "application/json" });
-      res.end(JSON.stringify(route.body ?? fallback[kind]));
+      res.end(JSON.stringify(named));
     });
   });
   servers.push(server);
@@ -444,7 +452,9 @@ test("a failed live-version lookup never fails the push — the version is what 
     "access",
     "link",
     "promote",
+    "rename",
   ]);
+  assert.deepEqual(JSON.parse(fake.bodies.rename ?? "{}"), { name: "Pro" });
 });
 
 test("a source failure blocks promote — production keeps the old version", async () => {
@@ -2022,4 +2032,132 @@ test("push sends no teleport_pages for a build without them", async () => {
 
   const body: unknown = JSON.parse(fake.bodies.versions ?? "{}");
   assert.equal(Reflect.has(Object(body), "teleport_pages"), false);
+});
+
+test("a name changed in config.ts renames the paywall once the version is pushed", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ live: { body: { id: "2080", name: "Old label" } } });
+  const calls: RendererCall[] = [];
+
+  useRenderer(recordingRenderer(calls));
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: true,
+      load: async () => frameworkFor(project),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.deepEqual(fake.calls.slice(-3), ["link", "promote", "rename"]);
+  assert.equal(fake.paths.at(-1), "/v2/paywalls/2080");
+  assert.deepEqual(JSON.parse(fake.bodies.rename ?? "{}"), { name: "Pro" });
+  assert.match(JSON.stringify(calls), /Renamed `Old label` → `Pro`/);
+});
+
+test("a name that already matches sends no rename", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ live: { body: { id: "2080", name: "Pro" } } });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () => frameworkFor(project, { buildSnapshot: async () => built({ name: "  Pro " }) }),
+  });
+
+  assert.ok(!fake.calls.includes("rename"));
+});
+
+test("a name-only change renames the paywall even though the build is unchanged", async () => {
+  const project = scaffold();
+  const snapshot = "a".repeat(64);
+  const fake = await fakeApi({
+    live: {
+      body: {
+        id: "2080",
+        name: "Old label",
+        version: 7,
+        paywall_url: `https://r/x/headless/2080/${snapshot}.html`,
+      },
+    },
+  });
+  const calls: RendererCall[] = [];
+
+  useRenderer(recordingRenderer(calls));
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: true,
+      load: async () =>
+        frameworkFor(project, {
+          buildSnapshot: async () => built({ name: "New label", snapshotId: snapshot }),
+        }),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.deepEqual(fake.calls.slice(-3), ["live", "history", "rename"]);
+  assert.ok(!fake.calls.includes("versions"), "no new version for a name-only change");
+  assert.deepEqual(JSON.parse(fake.bodies.rename ?? "{}"), { name: "New label" });
+  const printed = JSON.stringify(calls);
+  assert.match(printed, /Renamed `Old label` → `New label`/);
+  assert.match(printed, /1 paywall renamed\./);
+});
+
+test("a blank name in the build leaves the paywall's name alone", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ live: { body: { id: "2080", name: "Old label" } } });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () => frameworkFor(project, { buildSnapshot: async () => built({ name: " " }) }),
+  });
+
+  assert.ok(!fake.calls.includes("rename"));
+});
+
+test("a paywall with no name on Superwall yet is named, not renamed", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ live: { body: { id: "2080", name: null } } });
+  const calls: RendererCall[] = [];
+
+  useRenderer(recordingRenderer(calls));
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      load: async () => frameworkFor(project),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.match(JSON.stringify(calls), /Named `Pro`/);
+});
+
+test("the summary counts a paywall renamed without a new version apart from the ones pushed", async () => {
+  const project = scaffold(["plus-upgrade", "winback"]);
+  const snapshot = "a".repeat(64);
+  const fake = await fakeApi({
+    live: {
+      body: { id: "2080", name: "Old label", version: 7, paywall_url: `https://r/x/headless/2080/${snapshot}.html` },
+    },
+  });
+  const calls: RendererCall[] = [];
+
+  useRenderer(recordingRenderer(calls));
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      load: async () =>
+        frameworkFor(project, {
+          buildSnapshot: async (_project, surface) =>
+            built({ snapshotId: surface.id === "plus-upgrade" ? snapshot : "b".repeat(64) }),
+        }),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.equal(fake.calls.filter((kind) => kind === "versions").length, 1);
+  assert.equal(fake.calls.filter((kind) => kind === "rename").length, 2);
+  assert.match(JSON.stringify(calls), /1 paywall pushed · 1 renamed · run/);
 });

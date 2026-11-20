@@ -536,8 +536,10 @@ studio loads: surfaces, routes, locales, products and diagnostics.
 `studio` is the CLI's side of the studio contract, typed in
 `@superwall/studio`: `run(action, surface, onProgress, { version? })` for
 push, promote and publish (a promote carries the version the studio picked,
-or none for the latest push), `status(surface)` for the bound paywall, `samples()` for the
-dashboard's device, user and product samples, and `appScheme()` for the
+or none for the latest push), `status(surface)` for the bound paywall, `samples(surface, platform)`
+for the dashboard's device, user and product samples of the app `surface` ships
+to on `platform` (its declared `platforms` and the apps in `superwall.lock`;
+iOS first when the device names none), and `appScheme()` for the
 "Open in app" button. Without it the studio previews only.
 
 ## Develop

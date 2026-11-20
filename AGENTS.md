@@ -568,7 +568,8 @@ state, delegate })` answers the handshake, streams variables as a patch, and
   - `src/lib/contract.ts` is the **dev-server ↔ studio contract**, exported as
     the types-only entry `@superwall/studio/contract` (a `types` field, no
     `default`): the shapes of `/__studio/action`, `/__studio/status`,
-    `/__studio/samples.json` and the app-scheme lookup. The CLI implements the
+    `/__studio/samples/<project>/<kind>/<id>?platform=` (samples of the app
+    that surface ships to on the device's platform) and the app-scheme lookup. The CLI implements the
     server side and the framework's `preview/server.ts` serves it, so both need
     the shapes without importing the studio's React code — hence types-only.
     `src/lib/surfaces.ts` is the studio's own domain (`StudioSurface`,

@@ -357,8 +357,43 @@ describe("fetchStatus and fetchSamples", () => {
     const status = await fetchStatus({ kind: "paywall", id: "plus", routes: [], locales: [] });
     expect(status).toEqual({ unreachable: "connection refused" });
 
-    const samples = await fetchSamples();
+    const samples = await fetchSamples(
+      { kind: "paywall", id: "plus", routes: [], locales: [] },
+      "android",
+    );
     expect(samples).toMatchObject({ unreachable: "connection refused" });
+  });
+
+  it("ask for the open surface's samples on the device's platform", async () => {
+    const { fetchSamples } = await import("../../src/lib/actions");
+    const fetcher = vi.fn(async (_input: unknown) =>
+      jsonResponse({ products: { pro_annual: { price: "$59.99" } } }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+
+    const samples = await fetchSamples(
+      { kind: "paywall", id: "plus", project: "app", routes: [], locales: [] },
+      "android",
+    );
+    expect(samples).toEqual({ products: { pro_annual: { price: "$59.99" } } });
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+      "/__studio/samples/app/paywall/plus?platform=android",
+    );
+
+    await fetchSamples({ kind: "funnel", id: "onboarding", routes: [], locales: [] }, undefined);
+    expect(String(fetcher.mock.calls[1]?.[0])).toBe("/__studio/samples/funnel/onboarding");
+  });
+
+  it("read a body that is not an object as no samples", async () => {
+    const { fetchSamples } = await import("../../src/lib/actions");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(null)),
+    );
+
+    expect(
+      await fetchSamples({ kind: "paywall", id: "plus", routes: [], locales: [] }, "ios"),
+    ).toEqual({});
   });
 
   it("read what the dev server answers", async () => {

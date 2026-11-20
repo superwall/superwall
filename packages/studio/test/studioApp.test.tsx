@@ -14,7 +14,7 @@ const withCatalogue = async (
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: unknown) =>
-      String(input).includes("samples.json")
+      String(input).startsWith("/__studio/samples/")
         ? { json: async () => ({ products: catalogue }) }
         : { json: async () => ({}) },
     ),
@@ -406,6 +406,49 @@ describe("StudioApp", () => {
         variables: expect.objectContaining({ products: [{ annual: { price: "$19.99" } }] }),
       }),
     ]);
+  });
+});
+
+describe("samples per platform", () => {
+  it("loads the open paywall's samples for the selected device's platform, and again on a new one", async () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    const prices: Record<string, string> = { ios: "$59.99", android: "€54,99" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown) => {
+        const url = new URL(String(input), "http://studio");
+        const price = prices[url.searchParams.get("platform") ?? ""];
+        return url.pathname.startsWith("/__studio/samples/")
+          ? { json: async () => ({ products: price ? { pro_5999_year: { price } } : {} }) }
+          : { json: async () => ({}) };
+      }),
+    );
+    render(<StudioApp source={shippable} />);
+    await act(async () => {});
+    const samplesCalls = () =>
+      vi
+        .mocked(fetch)
+        .mock.calls.map(([input]) => String(input))
+        .filter((url) => url.startsWith("/__studio/samples/"));
+
+    expect(samplesCalls()).toEqual(["/__studio/samples/paywall/plus-upgrade?platform=ios"]);
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    fireEvent.click(panel.getByRole("button", { name: /^Products/ }));
+    const annual = () => screen.getByRole("textbox", { name: "products.annual.price" });
+    expect((annual() as HTMLInputElement).placeholder || annual().getAttribute("value")).toContain(
+      "$59.99",
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Device" }), {
+      target: { value: "pixel-10" },
+    });
+    await act(async () => {});
+
+    expect(samplesCalls().at(-1)).toBe("/__studio/samples/paywall/plus-upgrade?platform=android");
+    expect((annual() as HTMLInputElement).placeholder || annual().getAttribute("value")).toContain(
+      "€54,99",
+    );
   });
 });
 
