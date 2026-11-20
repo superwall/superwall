@@ -62,8 +62,14 @@ Everything renders from a `StudioSource` — `{ title, surfaces, diagnostics?,
 samples?, previewUrl, actions? }`. Locally that's
 `/__studio/project.json` (the dev server evaluates configs server-side and
 ships sample device/user/params/product data alongside) plus
-`devServerActions`, the `/__studio/action` and `/__studio/status`
-implementation of the shipping seam. A hosted studio swaps the fetch and the
+`devServerActions`, the `/__studio/action`, `/__studio/status` and
+`/__studio/samples/<project>/<kind>/<id>?platform=` implementation of the
+shipping seam. `SurfaceEditor` asks `actions.samples(surface, platform)` for
+the open surface and the selected device's platform (`ios`, `android`, none
+for Responsive and Desktop) and asks again when the device changes, so the
+catalogue comes from the app that surface ships to on that platform. Until
+the answer arrives the samples stay empty and pending, never another app's.
+A host without `samples` passes them in `StudioSource.samples` instead. A hosted studio swaps the fetch and the
 seam, nothing else. `previewUrl(surface)` decides what the preview
 iframes load: `/preview/<kind>/<id>` mounts locally, published snapshot URLs
 in the dashboard. Both carry `?transport=editor`, which makes the paywall
@@ -136,7 +142,7 @@ version? }, onStep)` performs one and streams its steps, `status(surface)`
   own minor units. `superwall dev` uses it; the dashboard builds its samples
   with its own pricing engine, so the two must be kept in step by hand.
 - `@superwall/studio/contract` is a types-only entry: the action, status,
-  samples and app-scheme shapes the CLI implements for the framework's
+  per-surface samples and app-scheme shapes the CLI implements for the framework's
   preview server, importable from node without DOM types.
   `@superwall/studio/styles.css` is the Tailwind source for hosts that run
   their own v4 pipeline.
