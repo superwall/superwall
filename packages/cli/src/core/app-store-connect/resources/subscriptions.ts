@@ -131,11 +131,32 @@ function freeTrialEntries(subscription: string, territories: readonly string[], 
   return introductoryOfferEntries(subscription, territories, { duration: trial, offerMode: "FREE_TRIAL", numberOfPeriods: 1 });
 }
 
+async function firstSubscriptionOf(session: AscSession, group: string): Promise<string | undefined> {
+  const document = await session.get(`/v1/subscriptionGroups/${group}/subscriptions?limit=1&fields[subscriptions]=productId`);
+  return document?.data[0]?.id;
+}
+
+async function findReferenceSubscription(session: AscSession, groupId: string, ascApp: string | undefined): Promise<string | undefined> {
+  const inGroup = await firstSubscriptionOf(session, groupId);
+  if (inGroup || !ascApp) return inGroup;
+  const app = await resolveAscAppId(session, ascApp);
+  const groups = await session.list(`/v1/apps/${app}/subscriptionGroups?limit=200`);
+  for (const group of groups?.data ?? []) {
+    if (group.id === groupId) continue;
+    const found = await firstSubscriptionOf(session, group.id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 export async function runSubscriptionsCreate(session: AscSession, input: AscInput): Promise<AscOutput> {
-  const groupId = await resolveGroupId(session, requireText(input, "group"), textOf(input, "ascApp"));
+  const ascApp = textOf(input, "ascApp");
+  const groupId = await resolveGroupId(session, requireText(input, "group"), ascApp);
   const productId = requireText(input, "productId");
   const price = requireNumber(input, "price");
   const territory = textOf(input, "territory") ?? DEFAULT_TERRITORY;
+  const reference = await findReferenceSubscription(session, groupId, ascApp);
+  if (reference) await findPricePoint(session, "subscription", reference, territory, price);
   const subscription = await session.send(
     "post",
     "/v1/subscriptions",
@@ -150,6 +171,7 @@ export async function runSubscriptionsCreate(session: AscSession, input: AscInpu
   );
   if (!subscription) throw new Error("Apple created no subscription.");
   const id = subscription.id;
+  const point = await findPricePoint(session, "subscription", id, territory, price);
 
   const displayName = textOf(input, "displayName");
   if (displayName) {
@@ -166,7 +188,6 @@ export async function runSubscriptionsCreate(session: AscSession, input: AscInpu
   const territories = await resolveTerritories(session, available);
   const newTerritories = booleanOf(input, "availableInNewTerritories") ?? available.toLowerCase() === "all";
   await upsertAvailability(session, "subscription", id, territories, newTerritories, undefined);
-  const point = await findPricePoint(session, "subscription", id, territory, price);
   const { points, skipped } = await resolveTerritoryPoints(session, { territory, point }, territories);
   await session.send(
     "patch",
