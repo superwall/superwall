@@ -60,6 +60,13 @@ const trackImages = () => {
   vi.stubGlobal("Image", TrackedImage);
 };
 
+const teleportTo = (route: string) => {
+  (window as typeof window & { __SW_TELEPORT__?: unknown }).__SW_TELEPORT__ = {
+    id: "tp_1",
+    route,
+  };
+};
+
 const idle = () => act(() => vi.advanceTimersByTime(500));
 
 beforeEach(() => {
@@ -69,6 +76,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete (window as typeof window & { __SW_TELEPORT__?: unknown }).__SW_TELEPORT__;
   vi.useRealTimers();
   vi.unstubAllGlobals();
   document.head.querySelectorAll("#sw-route-assets, link[rel=preload]").forEach((n) => n.remove());
@@ -197,6 +205,36 @@ describe("the stack the paywall opens on", () => {
     idle();
 
     expect(images).toEqual([terms, hero]);
+  });
+});
+
+describe("a teleported page", () => {
+  it("warms only the route it boots on, without the shared bucket or the idle pass", () => {
+    trackImages();
+    withMap(MAP);
+    teleportTo("terms");
+    mount();
+
+    expect(window.location.search).toContain("sw_nav=terms");
+    expect(images).toEqual([terms]);
+    expect(preloaded()).toEqual([]);
+
+    idle();
+
+    expect(images).toEqual([terms]);
+    expect(preloaded()).toEqual([]);
+  });
+
+  it("warms every route of the stack it boots on", () => {
+    trackImages();
+    withMap(MAP);
+    teleportTo("offer");
+    window.history.replaceState({}, "", "/?sw_nav=index,offer");
+    mount();
+    idle();
+
+    expect(images).toEqual([hero]);
+    expect(preloaded().map((link) => link.href)).toEqual([clip]);
   });
 });
 

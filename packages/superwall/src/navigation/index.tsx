@@ -562,6 +562,10 @@ const Router = ({
   React.useEffect(() => {
     const map = readRouteAssets();
     const openedAssets = opened.current.flatMap((route) => map[route] ?? []);
+    if (readTeleportBoot() !== undefined) {
+      warmAssets(openedAssets, warmed.current);
+      return;
+    }
     warmAssets([...(map["*"] ?? []), ...openedAssets], warmed.current);
     return whenIdle(() => {
       for (const list of Object.values(map)) warmAssets(list, warmed.current);
