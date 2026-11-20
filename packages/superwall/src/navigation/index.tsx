@@ -451,6 +451,21 @@ const Router = ({
     };
   }, [session]);
 
+  const inTransition = React.useRef(false);
+  React.useEffect(
+    () =>
+      session.on("back_button_input", () => {
+        if (inTransition.current) return;
+        if (!current.current.canGoBack()) {
+          session.close();
+          return;
+        }
+        inTransition.current = true;
+        current.current.back();
+      }),
+    [session],
+  );
+
   React.useEffect(() => {
     const teleporter = teleportFor(session);
     if (teleporter.kind === "app") teleporter.landed(top.name, entries.length - 1);
@@ -560,6 +575,7 @@ const Router = ({
   const [movement, setMovement] = React.useState(0);
   const [settled, setSettled] = React.useState(true);
   const animated = React.useRef(top.key);
+  inTransition.current = !settled || animated.current !== top.key;
 
   React.useLayoutEffect(() => {
     if (animated.current === top.key) return;
