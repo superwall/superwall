@@ -443,7 +443,6 @@ test("a failed live-version lookup never fails the push — the version is what 
     load: async () => frameworkFor(project),
   });
 
-  // a name it could not read is not a name that already matches
   assert.deepEqual(fake.calls, [
     "projects",
     "products",
