@@ -54,7 +54,7 @@ import {
 } from "../lib/devices";
 import { hostStateFor, previewDevice, studioDefaults } from "../lib/host";
 import { percent } from "../lib/canvas";
-import { hostedUrl, originalUrl } from "../lib/preview";
+import { hostedUrl, originalUrl, surfacePath } from "../lib/preview";
 import { latestVersion, liveVersion } from "../lib/promotion";
 import { ACTION_STEPS, type StudioActionStep, type StudioStepState } from "../lib/steps";
 import {
@@ -235,18 +235,20 @@ const compareKeyOf = (target: CompareTarget | undefined): string => {
   return `surface:${target.surface.kind}/${target.surface.id}`;
 };
 
+const NO_SAMPLES: Samples = {};
+
 const nameOf = (surface: StudioSurface): string => surface.label ?? `${surface.kind}/${surface.id}`;
 
 export const SurfaceEditor = ({
   source,
   surface,
-  samples,
-  samplesPending = false,
+  samples: givenSamples = NO_SAMPLES,
+  samplesPending: givenPending = false,
   actions,
 }: {
   source: StudioSource;
   surface: StudioSurface;
-  samples: Samples;
+  samples?: Samples;
   samplesPending?: boolean;
   actions?: React.ReactNode;
 }) => {
@@ -332,6 +334,27 @@ export const SurfaceEditor = ({
     () => deviceVariablesFor(device, web, landscape),
     [device, web, landscape],
   );
+  const samplesPlatform = web
+    ? "web"
+    : responsive
+      ? undefined
+      : device.device?.platform.toLowerCase();
+  const loadSamples = shipping?.samples;
+  const samplesKey = `${surfacePath(surface)}?${samplesPlatform ?? ""}`;
+  const [loaded, setLoaded] = React.useState<{ key: string; samples: Samples } | undefined>();
+  React.useEffect(() => {
+    if (!loadSamples) return;
+    let cancelled = false;
+    loadSamples(surface, samplesPlatform).then((value) => {
+      if (!cancelled) setLoaded({ key: samplesKey, samples: value });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadSamples, surface, samplesPlatform, samplesKey]);
+  const current = loaded?.key === samplesKey ? loaded.samples : undefined;
+  const samples = loadSamples ? (current ?? NO_SAMPLES) : givenSamples;
+  const samplesPending = loadSamples ? current === undefined : givenPending;
   const webBrowser =
     web && !responsive ? browserLayoutFor(device, { teleported: false, landscape }) : undefined;
   const upright = responsive

@@ -242,7 +242,10 @@ test("push sends the project's installed superwall version, and leaves it out wh
 
   const installed = path.join(project.root, "node_modules", "superwall");
   fs.mkdirSync(installed, { recursive: true });
-  fs.writeFileSync(path.join(installed, "package.json"), JSON.stringify({ name: "superwall", version: "2.5.2" }));
+  fs.writeFileSync(
+    path.join(installed, "package.json"),
+    JSON.stringify({ name: "superwall", version: "2.5.2" }),
+  );
 
   await createStudioActions(framework, project).run("push", surface);
   const read: unknown = JSON.parse(api.bodies["/v2/paywalls/208540/versions"] ?? "{}");
@@ -579,13 +582,15 @@ test("samples are fetched for the project's first app, and a missing catalogue i
   );
 });
 
-test("samples explain an unbound project instead of throwing", async () => {
-  await startApi();
+test("samples explain an unbound project instead of throwing, and never bind one", async () => {
+  const api = await startApi();
   const project = scaffold();
 
-  const samples = await createStudioActions(framework, project).samples?.();
+  const samples = await createStudioActions(framework, project).samples?.(surface, "Android");
 
-  assert.match(samples?.unreachable ?? "", /has no apps yet/);
+  assert.match(samples?.unreachable ?? "", /not bound to an app yet/);
+  assert.deepEqual(readLock(project.superwallDir).apps, {});
+  assert.deepEqual(api.calls, []);
 });
 
 test("appScheme asks the dashboard for the ios app's scheme when the project binds one", async () => {
@@ -1076,7 +1081,9 @@ test("update compares the project's own superwall, not the CLI that serves it", 
   const home = useHome();
   const dir = scaffold().root;
   for (const [file, content] of Object.entries({
-    [path.join("superwall", "package.json")]: JSON.stringify({ dependencies: { superwall: "2.0.0" } }),
+    [path.join("superwall", "package.json")]: JSON.stringify({
+      dependencies: { superwall: "2.0.0" },
+    }),
     [path.join("superwall", "node_modules", "superwall", "package.json")]: JSON.stringify({
       name: "superwall",
       version: "2.0.0",
@@ -1092,7 +1099,9 @@ test("update compares the project's own superwall, not the CLI that serves it", 
   };
   fs.writeFileSync(
     path.join(home, "config.json"),
-    JSON.stringify({ updateCheck: { latest: VERSION, tag: "latest", checkedAt: new Date().toISOString() } }),
+    JSON.stringify({
+      updateCheck: { latest: VERSION, tag: "latest", checkedAt: new Date().toISOString() },
+    }),
   );
   assert.deepEqual(createStudioActions(framework, project, dir).update?.(), {
     current: "2.0.0",
@@ -1140,4 +1149,126 @@ test("update hands the studio the cached release and the project's own update co
     command: "cd superwall && pnpm add superwall@latest",
     notes: "https://github.com/superwall/superwall/releases/tag/v999.0.0",
   });
+});
+
+const TWO_APPS = {
+  data: [
+    { id: "9", applications: [{ id: 42, platform: "ios" }] },
+    { id: "10", applications: [{ id: 43, platform: "android" }] },
+  ],
+  has_more: false,
+};
+
+function twoAppProject(): FrameworkProject {
+  const project = boundProject();
+  writeApp(project.superwallDir, "android", "43");
+  return project;
+}
+
+const declaringPlatforms = (platforms?: string[]): Framework => ({
+  ...framework,
+  studioProject: async () => ({
+    surfaces: [{ kind: "paywall", id: "plus-upgrade", products: {}, platforms }],
+  }),
+});
+
+const catalogueApi = async (): Promise<FakeApi> => {
+  const api = await startApi();
+  api.gate = (url) =>
+    url.startsWith("/v2/projects")
+      ? { status: 200, body: TWO_APPS }
+      : url.startsWith("/v2/products?project_id=9")
+        ? { status: 200, body: { data: [{ identifier: "ios_annual", platform: "ios" }] } }
+        : url.startsWith("/v2/products?project_id=10")
+          ? {
+              status: 200,
+              body: {
+                data: [
+                  {
+                    identifier: "android_annual",
+                    platform: "android",
+                    store: "play_store",
+                    price: { amount: 4999, currency: "USD" },
+                  },
+                ],
+              },
+            }
+          : undefined;
+  return api;
+};
+
+const sampledApp = (api: FakeApi): string | undefined =>
+  api.calls
+    .find((call) => call.includes("/v2/users/properties-sample"))
+    ?.match(/application_id=(\d+)/)?.[1];
+
+test("an android-only surface reads the android app's samples and catalogue, not the first app's", async () => {
+  const api = await catalogueApi();
+  const project = twoAppProject();
+
+  const samples = await createStudioActions(declaringPlatforms(["android"]), project).samples?.(
+    surface,
+    "iOS",
+  );
+
+  assert.equal(sampledApp(api), "43");
+  assert.deepEqual(Object.keys(samples?.products ?? {}), ["android_annual"]);
+  assert.equal(samples?.products?.android_annual?.price, "$49.99");
+  assert.equal(samples?.unreachable, undefined);
+});
+
+test("a surface on both platforms follows the device's platform, and iOS without one", async () => {
+  const api = await catalogueApi();
+  const project = twoAppProject();
+  const actions = createStudioActions(declaringPlatforms(["android", "ios"]), project);
+
+  const pixel = await actions.samples?.(surface, "Android");
+  assert.equal(sampledApp(api), "43");
+  assert.deepEqual(Object.keys(pixel?.products ?? {}), ["android_annual"]);
+
+  api.calls.length = 0;
+  const iphone = await actions.samples?.(surface, "iOS");
+  assert.equal(sampledApp(api), "42");
+  assert.deepEqual(Object.keys(iphone?.products ?? {}), ["ios_annual"]);
+
+  api.calls.length = 0;
+  await actions.samples?.(surface);
+  assert.equal(sampledApp(api), "42");
+});
+
+test("a surface on platforms the device is not falls back to its first declared platform", async () => {
+  const api = await catalogueApi();
+  const project = twoAppProject();
+  writeApp(project.superwallDir, "web", "44");
+
+  await createStudioActions(declaringPlatforms(["web", "android"]), project).samples?.(
+    surface,
+    "iOS",
+  );
+
+  assert.equal(sampledApp(api), "44");
+});
+
+test("a surface that declares no platforms keeps the first app", async () => {
+  const api = await catalogueApi();
+  const project = twoAppProject();
+
+  await createStudioActions(declaringPlatforms(undefined), project).samples?.(surface, "Android");
+
+  assert.equal(sampledApp(api), "42");
+});
+
+test("a surface whose platform has no app says so instead of borrowing another app's catalogue", async () => {
+  const api = await catalogueApi();
+  const project = boundProject();
+
+  const samples = await createStudioActions(declaringPlatforms(["android"]), project).samples?.(
+    surface,
+    "Android",
+  );
+
+  assert.match(samples?.unreachable ?? "", /targets `android`, which superwall.lock does not bind/);
+  assert.equal(samples?.products, undefined);
+  assert.deepEqual(readLock(project.superwallDir).apps, { ios: "42" });
+  assert.deepEqual(api.calls, []);
 });

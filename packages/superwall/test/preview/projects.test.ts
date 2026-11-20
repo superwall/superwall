@@ -6,12 +6,14 @@ import type { DiscoveredSurface, Project } from "../../src/discover";
 import {
   findSurface,
   listScreenshots,
+  loadSamples,
   moduleUrl,
   postcssSearchDir,
   projectDependencies,
   projectModule,
   readActionRequest,
   readProjects,
+  readSamplesPlatform,
   readScreenshotPage,
   resolvableFrom,
   slugFor,
@@ -194,6 +196,72 @@ describe("listScreenshots", () => {
     ).toEqual([{ label: "Screenshot", url: "https://img.test/review.png" }]);
     expect(await listScreenshots({ screenshot: async () => undefined }, pro)).toBeUndefined();
     expect(await listScreenshots({}, pro)).toBeUndefined();
+  });
+});
+
+describe("loadSamples", () => {
+  const pro = surface("/tmp/app", "pro");
+
+  it("asks the CLI for the open surface's samples on the device's platform", async () => {
+    const calls: unknown[][] = [];
+    const samples = await loadSamples(
+      {
+        samples: async (...args) => {
+          calls.push(args);
+          return { products: { pro_annual: { price: "$59.99" } } };
+        },
+      },
+      pro,
+      "android",
+    );
+    expect(calls).toEqual([[pro, "android"]]);
+    expect(samples).toEqual({ products: { pro_annual: { price: "$59.99" } } });
+  });
+
+  it("answers nothing for an unknown surface or a CLI without samples", async () => {
+    let called = false;
+    const studio = {
+      samples: async () => {
+        called = true;
+        return {};
+      },
+    };
+    expect(await loadSamples(studio, undefined, "ios")).toEqual({});
+    expect(called).toBe(false);
+    expect(await loadSamples({}, pro, "ios")).toEqual({});
+    expect(await loadSamples(undefined, pro, "ios")).toEqual({});
+  });
+
+  it("reports a failing CLI as unreachable instead of throwing", async () => {
+    expect(
+      await loadSamples(
+        {
+          samples: async () => {
+            throw new Error("the API is down");
+          },
+        },
+        pro,
+        undefined,
+      ),
+    ).toEqual({ unreachable: "the API is down" });
+    expect(
+      await loadSamples(
+        {
+          samples: () => Promise.reject("offline"),
+        },
+        pro,
+        undefined,
+      ),
+    ).toEqual({ unreachable: "offline" });
+  });
+});
+
+describe("readSamplesPlatform", () => {
+  it("reads the device platform from the query, and nothing when it is absent", () => {
+    expect(readSamplesPlatform("/__studio/samples/paywall/pro?platform=android")).toBe("android");
+    expect(readSamplesPlatform("/__studio/samples/app/paywall/pro?platform=ios")).toBe("ios");
+    expect(readSamplesPlatform("/__studio/samples/paywall/pro")).toBeUndefined();
+    expect(readSamplesPlatform("/__studio/samples/paywall/pro?platform=")).toBeUndefined();
   });
 });
 

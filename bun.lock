@@ -315,7 +315,7 @@
     },
     "packages/cli": {
       "name": "@superwall/cli",
-      "version": "2.6.1",
+      "version": "2.7.0",
       "dependencies": {
         "@superwall/studio": "workspace:*",
         "ansi-escapes": "^7.3.0",
@@ -349,7 +349,7 @@
     },
     "packages/host": {
       "name": "@superwall/host",
-      "version": "2.6.1",
+      "version": "2.7.0",
       "dependencies": {
         "@superwall/protocol": "workspace:*",
       },
@@ -362,7 +362,7 @@
     },
     "packages/protocol": {
       "name": "@superwall/protocol",
-      "version": "2.6.1",
+      "version": "2.7.0",
       "dependencies": {
         "zod": "4.6.7",
       },
@@ -375,7 +375,7 @@
     },
     "packages/runtime": {
       "name": "@superwall/runtime",
-      "version": "2.6.1",
+      "version": "2.7.0",
       "dependencies": {
         "@superwall/protocol": "workspace:*",
       },
@@ -390,7 +390,7 @@
     },
     "packages/studio": {
       "name": "@superwall/studio",
-      "version": "2.6.1",
+      "version": "2.7.0",
       "dependencies": {
         "@superwall/host": "workspace:*",
         "qrcode.react": "^4.2.0",
@@ -418,7 +418,7 @@
     },
     "packages/superwall": {
       "name": "superwall",
-      "version": "2.6.1",
+      "version": "2.7.0",
       "bin": {
         "superwall": "./bin/superwall.js",
         "sw": "./bin/superwall.js",
