@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
-import type { StudioScreenshot } from "@superwall/studio/contract";
+import type { Samples, StudioScreenshot } from "@superwall/studio/contract";
 import { discoverProject, type DiscoveredSurface, type Project } from "../discover";
 
 export type PreviewProject = { slug: string; root: string; project: Project };
@@ -155,6 +155,26 @@ const versionField = (value: unknown, key: string): number | undefined => {
 export const readScreenshotPage = (rawUrl: string): number | undefined => {
   const query = new URL(rawUrl, "http://studio").searchParams;
   return query.get("download") === "1" ? Number(query.get("page") ?? "0") : undefined;
+};
+
+export const readSamplesPlatform = (rawUrl: string): string | undefined =>
+  new URL(rawUrl, "http://studio").searchParams.get("platform") || undefined;
+
+export type SamplesSource = {
+  samples?(surface?: DiscoveredSurface, platform?: string): Promise<Samples>;
+};
+
+export const loadSamples = async (
+  studio: SamplesSource | undefined,
+  surface: DiscoveredSurface | undefined,
+  platform: string | undefined,
+): Promise<Samples> => {
+  if (!studio?.samples || !surface) return {};
+  try {
+    return await studio.samples(surface, platform);
+  } catch (error) {
+    return { unreachable: error instanceof Error ? error.message : String(error) };
+  }
 };
 
 export type ScreenshotSource = {

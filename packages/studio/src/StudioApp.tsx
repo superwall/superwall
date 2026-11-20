@@ -3,9 +3,8 @@ import { StudioShell } from "./components/chrome/StudioShell";
 import { SurfaceEditor } from "./screens/SurfaceEditor";
 import { SurfaceList } from "./screens/SurfaceList";
 import { surfacePath } from "./lib/preview";
-import { fetchSamples } from "./lib/actions";
 import { StudioHostProvider, type StudioMode } from "./lib/studio-host";
-import type { Samples, StudioSource, StudioSurface } from "./lib/surfaces";
+import type { StudioSource, StudioSurface } from "./lib/surfaces";
 
 const surfaceFromPath = (
   surfaces: StudioSurface[],
@@ -29,28 +28,12 @@ export const StudioApp = ({
   mode?: StudioMode;
 }) => {
   const [pathname, setPathname] = React.useState(() => window.location.pathname);
-  const [samples, setSamples] = React.useState<Samples>({});
 
   React.useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname);
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
-
-  const shipping = source.actions !== undefined;
-  const [samplesPending, setSamplesPending] = React.useState(shipping);
-  React.useEffect(() => {
-    if (!shipping) return;
-    let cancelled = false;
-    fetchSamples().then((value) => {
-      if (cancelled) return;
-      setSamples(value);
-      setSamplesPending(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [shipping]);
 
   const homePath = mode === "device" ? "/device" : "/";
 
@@ -70,12 +53,7 @@ export const StudioApp = ({
     <StudioHostProvider mode={mode} home={home}>
       <StudioShell>
         {active ? (
-          <SurfaceEditor
-            source={source}
-            surface={active}
-            samples={samples}
-            samplesPending={samplesPending}
-          />
+          <SurfaceEditor source={source} surface={active} />
         ) : (
           <SurfaceList source={source} onOpen={(surface) => navigate(surfacePath(surface))} />
         )}

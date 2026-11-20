@@ -1,4 +1,5 @@
 import type {
+  Samples,
   StudioActionName,
   StudioActionProgress,
   StudioActionRequest,
@@ -88,6 +89,7 @@ export type StudioActions = {
     onStep?: StudioActionProgress,
   ): Promise<StudioActionResult>;
   status(surface: StudioSurface): Promise<StudioStatus>;
+  samples?(surface: StudioSurface, platform: string | undefined): Promise<Samples>;
   pick?(version: number): void;
 };
 
