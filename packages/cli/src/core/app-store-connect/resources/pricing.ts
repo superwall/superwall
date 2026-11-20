@@ -27,6 +27,8 @@ export async function listPricePoints(session: AscSession, kind: PricedKind, id:
   return (document?.data ?? []).map(pointOf);
 }
 
+export class NoPricePointError extends Error {}
+
 function closest(prices: number[], price: number): string {
   return [...prices]
     .sort((a, b) => Math.abs(a - price) - Math.abs(b - price))
@@ -50,7 +52,7 @@ export async function findPricePoint(session: AscSession, kind: PricedKind, id: 
     document = await session.next(document.next);
   }
   const near = seen.length ? ` The closest: ${closest(seen, price)}.` : "";
-  throw new Error(`Apple has no ${territory} price point at ${price}.${near}`);
+  throw new NoPricePointError(`Apple has no ${territory} price point at ${price}.${near}`);
 }
 
 async function listEqualizations(session: AscSession, point: string): Promise<Map<string, string> | undefined> {

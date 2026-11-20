@@ -5,6 +5,10 @@ import { ascRoutes, link, one, page } from "../../../helpers/asc-proxy";
 import { APP_BY_BUNDLE, EQUALIZATIONS, GROUPS_OF_APP, subscriptionView, USA_POINTS, versionMadeOnPost } from "../../../helpers/asc-store";
 import { runCommand } from "../../../helpers/command";
 
+const FIRST_OF_GROUP = (group: string) => `GET /v1/subscriptionGroups/${group}/subscriptions?limit=1&fields[subscriptions]=productId`;
+const NO_SUBSCRIPTION = (group = "201") => ({ [FIRST_OF_GROUP(group)]: page([]) });
+const POINT_AT = (id: string, customerPrice: string) => ({ [USA_POINTS(id)]: page([one("subscriptionPricePoints", `P-${id}`, { customerPrice })]) });
+
 afterEach(() => {
   process.exitCode = 0;
 });
@@ -24,7 +28,10 @@ const CREATE_FLAGS = {
 
 const CREATE_ROUTES = {
   [APP_BY_BUNDLE]: page([one("apps", "555")]),
-  [GROUPS_OF_APP]: page([one("subscriptionGroups", "G0", { referenceName: "Basic" }), one("subscriptionGroups", "G1", { referenceName: "Pro" })]),
+  [GROUPS_OF_APP]: page([one("subscriptionGroups", "G1", { referenceName: "Pro" }), one("subscriptionGroups", "G0", { referenceName: "Basic" })]),
+  ...NO_SUBSCRIPTION("G1"),
+  [FIRST_OF_GROUP("G0")]: page([one("subscriptions", "S0")]),
+  ...POINT_AT("S0", "9.99"),
   "POST /v1/subscriptions": { data: one("subscriptions", "S1", { productId: "pro.monthly" }) },
   "POST /v2/subscriptionLocalizations": { data: one("subscriptionLocalizations", "L1") },
   "POST /v1/subscriptionPlanAvailabilities": { data: one("subscriptionPlanAvailabilities", "A1") },
@@ -134,9 +141,12 @@ test("create runs every step in order: subscription, its first version, localiza
 test("create priced in a territory outside --available-territories prices and gives a trial only where it is sold", async () => {
   const { api, writes } = ascRoutes({
     ...CREATE_ROUTES,
-    "GET /v1/subscriptions/S1/pricePoints?filter[territory]=GBR&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds": page([
-      one("subscriptionPricePoints", "P-GBR", { customerPrice: "9.99" }),
-    ]),
+    ...Object.fromEntries(
+      ["S0", "S1"].map((id) => [
+        `GET /v1/subscriptions/${id}/pricePoints?filter[territory]=GBR&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds`,
+        page([one("subscriptionPricePoints", "P-GBR", { customerPrice: "9.99" })]),
+      ]),
+    ),
     [EQUALIZATIONS("P-GBR")]: page([
       one("subscriptionPricePoints", "P-USA", {}, { territory: link("territories", "USA") }),
       one("subscriptionPricePoints", "P-CAN", {}, { territory: link("territories", "CAN") }),
@@ -156,6 +166,7 @@ test("create says what is still missing in its heading", async () => {
 
 test("a dry run reads what it can, plans the rest with placeholders and changes nothing", async () => {
   const { api, writes } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
     "GET /v1/territories?limit=200&fields[territories]=currency": page([one("territories", "USA"), one("territories", "CAN")]),
   });
   const result = await runCommand(subscriptions, {
@@ -170,10 +181,11 @@ test("a dry run reads what it can, plans the rest with placeholders and changes 
   assert.deepEqual(
     requests.map((request) => `${request.method} ${request.path}`),
     [
+      "GET /v1/subscriptionGroups/201/subscriptions?limit=1&fields[subscriptions]=productId",
       "POST /v1/subscriptions",
+      "GET /v1/subscriptions/${subscription}/pricePoints?filter[territory]=USA&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds",
       "GET /v1/territories?limit=200&fields[territories]=currency",
       "POST /v1/subscriptionPlanAvailabilities",
-      "GET /v1/subscriptions/${subscription}/pricePoints?filter[territory]=USA&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds",
       "GET /v1/subscriptionPricePoints/${price-point-USA}/equalizations?include=territory&limit=200&fields[subscriptionPricePoints]=customerPrice,territory",
       "PATCH /v1/subscriptions/${subscription}",
     ],
@@ -183,26 +195,26 @@ test("a dry run reads what it can, plans the rest with placeholders and changes 
     patch.included.map((entry) => entry.relationships.subscriptionPricePoint),
     [link("subscriptionPricePoints", "${price-point-USA}"), link("subscriptionPricePoints", "${price-point-CAN}")],
   );
-  const availability = requests[2]?.body as { data: { attributes: unknown } };
+  const availability = requests[4]?.body as { data: { attributes: unknown } };
   assert.deepEqual(availability.data.attributes, { planType: "UPFRONT", availableInNewTerritories: true });
 });
 
 test("a dry run in the terminal prints each request and its body", async () => {
-  const { api } = ascRoutes({});
+  const { api } = ascRoutes(NO_SUBSCRIPTION());
   const human = await runCommand(subscriptions, {
     api,
     words: ["create"],
     flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", availableTerritories: "USA", dryRun: true },
   });
-  assert.deepEqual(human.said("success"), ["Dry run: nothing was changed. 5 requests:"]);
-  assert.equal(human.said("step")[0], "POST /v1/subscriptions");
+  assert.deepEqual(human.said("success"), ["Dry run: nothing was changed. 6 requests:"]);
+  assert.equal(human.said("step")[1], "POST /v1/subscriptions");
   assert.match(human.said("report")[0] ?? "", /"productId": "p"/);
 });
 
-test("a price Apple has no point for names the closest ones, after creating only the subscription", async () => {
-  const { api } = ascRoutes({
+test("the first subscription of an app checks its price before anything else is written to it", async () => {
+  const { api, writes } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
     "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
-    "POST /v1/subscriptionPlanAvailabilities": { data: one("subscriptionPlanAvailabilities", "A1") },
     [USA_POINTS("S1")]: page(["9.49", "9.95", "10.00", "10.49", "x"].map((customerPrice, index) => one("subscriptionPricePoints", `P${index}`, { customerPrice }))),
   });
   const result = await runCommand(subscriptions, {
@@ -210,7 +222,121 @@ test("a price Apple has no point for names the closest ones, after creating only
     words: ["create"],
     flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "9.98", availableTerritories: "USA" },
   });
-  assert.deepEqual(result.said("error"), ["Apple has no USA price point at 9.98. The closest: 9.49, 9.95, 10.00."]);
+  assert.deepEqual(result.said("error"), [
+    [
+      "Apple has no USA price point at 9.98. The closest: 9.49, 9.95, 10.00.",
+      ...UNFINISHED(
+        "S1",
+        "p",
+        "asc availability set --subscription S1 --available-territories USA",
+        "asc prices points --subscription S1 --territory USA",
+        "asc prices set --subscription S1 --price <price> --territory USA",
+      ),
+      "9.98 is not a USA price, so pick one from asc prices points for <price>.",
+    ].join("\n"),
+  ]);
+  assert.deepEqual(
+    writes().map((request) => request.path),
+    ["/v1/subscriptions"],
+  );
+});
+
+const UNFINISHED = (id: string, productId: string, ...commands: string[]) => [
+  `Already created: subscriptions ${id} (${productId}).`,
+  "Apple keeps a product ID once used, so running create again fails. Finish this subscription with what is still missing:",
+  ...commands.map((command) => `  superwall ${command}`),
+];
+
+const DEU_POINTS = (id: string) =>
+  `GET /v1/subscriptions/${id}/pricePoints?filter[territory]=DEU&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds`;
+const DEU_GRID = page(["129.99", "139.00", "139.99", "140.99", "149.99"].map((customerPrice, index) => one("subscriptionPricePoints", `D${index}`, { customerPrice })));
+const DEU_FLAGS = { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_MONTH", price: "140", territory: "DEU" };
+
+test("a price Apple has no point for is refused before anything is created, checked on a subscription the group already has", async () => {
+  const { api, sent, writes } = ascRoutes({ [FIRST_OF_GROUP("201")]: page([one("subscriptions", "S0")]), [DEU_POINTS("S0")]: DEU_GRID });
+  const result = await runCommand(subscriptions, { api, words: ["create"], flags: DEU_FLAGS });
+  assert.deepEqual(result.said("error"), ["Apple has no DEU price point at 140. The closest: 139.00, 139.99, 140.99."]);
+  assert.deepEqual(writes(), []);
+  assert.deepEqual(
+    sent.map((request) => request.path),
+    ["/v1/subscriptionGroups/201/subscriptions?limit=1&fields[subscriptions]=productId", DEU_POINTS("S0").slice(4)],
+  );
+});
+
+test("an empty group checks the price on a subscription in another group of the app", async () => {
+  const { api, writes } = ascRoutes({
+    [APP_BY_BUNDLE]: page([one("apps", "555")]),
+    [GROUPS_OF_APP]: page([one("subscriptionGroups", "201"), one("subscriptionGroups", "G2"), one("subscriptionGroups", "G3")]),
+    ...NO_SUBSCRIPTION("201"),
+    ...NO_SUBSCRIPTION("G2"),
+    [FIRST_OF_GROUP("G3")]: page([one("subscriptions", "S3")]),
+    [DEU_POINTS("S3")]: DEU_GRID,
+  });
+  const result = await runCommand(subscriptions, { api, words: ["create"], flags: { ...DEU_FLAGS, ascApp: "com.acme.app" } });
+  assert.deepEqual(result.said("error"), ["Apple has no DEU price point at 140. The closest: 139.00, 139.99, 140.99."]);
+  assert.deepEqual(writes(), []);
+});
+
+test("an app with no subscription yet has nothing to check the price on up front", async () => {
+  const { api, writes } = ascRoutes({
+    [APP_BY_BUNDLE]: page([one("apps", "555")]),
+    [GROUPS_OF_APP]: page([one("subscriptionGroups", "201"), one("subscriptionGroups", "G2")]),
+    ...NO_SUBSCRIPTION("201"),
+    ...NO_SUBSCRIPTION("G2"),
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    [DEU_POINTS("S1")]: DEU_GRID,
+  });
+  const result = await runCommand(subscriptions, { api, words: ["create"], flags: { ...DEU_FLAGS, ascApp: "com.acme.app" } });
+  assert.deepEqual(result.said("error"), [
+    [
+      "Apple has no DEU price point at 140. The closest: 139.00, 139.99, 140.99.",
+      ...UNFINISHED(
+        "S1",
+        "p",
+        "asc availability set --subscription S1 --available-territories all",
+        "asc prices points --subscription S1 --territory DEU",
+        "asc prices set --subscription S1 --price <price> --territory DEU",
+      ),
+      "140 is not a DEU price, so pick one from asc prices points for <price>.",
+    ].join("\n"),
+  ]);
+  assert.deepEqual(
+    writes().map((request) => request.path),
+    ["/v1/subscriptions"],
+  );
+});
+
+test("a price-point lookup Apple fails keeps its status and message, and never calls the price wrong", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api, writes } = ascRoutes({
+    [APP_BY_BUNDLE]: page([one("apps", "555")]),
+    [GROUPS_OF_APP]: page([one("subscriptionGroups", "201")]),
+    ...NO_SUBSCRIPTION("201"),
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    [DEU_POINTS("S1")]: new ApiError("GET x", 503, JSON.stringify({ errors: [{ detail: "Service unavailable" }] })),
+  });
+  const result = await runCommand(subscriptions, { api, words: ["create"], flags: { ...DEU_FLAGS, ascApp: "com.acme.app" }, json: true });
+  const message = [
+    "App Store Connect refused GET x (503):\n  • Service unavailable",
+    ...UNFINISHED(
+      "S1",
+      "p",
+      "asc availability set --subscription S1 --available-territories all",
+      "asc prices set --subscription S1 --price 140 --territory DEU",
+    ),
+  ].join("\n");
+  assert.deepEqual(result.json, { error: { code: "api_error", status: 503, message } });
+  assert.doesNotMatch(message, /no DEU price point|is not a DEU price/);
+  assert.deepEqual(
+    writes().map((request) => request.path),
+    ["/v1/subscriptions"],
+  );
+});
+
+test("a dry run refuses a price Apple has no point for too", async () => {
+  const { api } = ascRoutes({ [FIRST_OF_GROUP("201")]: page([one("subscriptions", "S0")]), [DEU_POINTS("S0")]: DEU_GRID });
+  const result = await runCommand(subscriptions, { api, words: ["create"], flags: { ...DEU_FLAGS, dryRun: true } });
+  assert.deepEqual(result.said("error"), ["Apple has no DEU price point at 140. The closest: 139.00, 139.99, 140.99."]);
 });
 
 test("Apple's refusal is spelled out with what was already created", async () => {
@@ -221,7 +347,9 @@ test("Apple's refusal is spelled out with what was already created", async () =>
     JSON.stringify({ errors: [{ title: "Conflict", detail: "A territory is not valid", source: { pointer: "/data/relationships" } }, { code: "ENTITY_ERROR" }] }),
   );
   const { api } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
     "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    ...POINT_AT("S1", "1"),
     "POST /v1/subscriptionPlanAvailabilities": refusal,
   });
   const result = await runCommand(subscriptions, {
@@ -230,8 +358,108 @@ test("Apple's refusal is spelled out with what was already created", async () =>
     flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", availableTerritories: "XXX" },
   });
   assert.deepEqual(result.said("error"), [
-    "App Store Connect refused POST /v1/subscriptionPlanAvailabilities (409):\n  • A territory is not valid (/data/relationships)\n  • ENTITY_ERROR\nAlready created: subscriptions S1.",
+    [
+      "App Store Connect refused POST /v1/subscriptionPlanAvailabilities (409):\n  • A territory is not valid (/data/relationships)\n  • ENTITY_ERROR",
+      ...UNFINISHED("S1", "p", "asc availability set --subscription S1 --available-territories XXX", "asc prices set --subscription S1 --price 1 --territory USA"),
+    ].join("\n"),
   ]);
+});
+
+test("a refused price PATCH keeps Apple's status and lists every command that finishes the subscription", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api } = ascRoutes({
+    ...CREATE_ROUTES,
+    "PATCH /v1/subscriptions/S1": new ApiError("PATCH x", 409, JSON.stringify({ errors: [{ detail: "Price not allowed" }] })),
+  });
+  const result = await runCommand(subscriptions, { api, words: ["create"], flags: { ...CREATE_FLAGS, displayName: "Pro's" }, json: true });
+  assert.deepEqual(result.json, {
+    error: {
+      code: "api_error",
+      status: 409,
+      message: [
+        "App Store Connect refused PATCH x (409):\n  • Price not allowed",
+        ...UNFINISHED(
+          "S1",
+          "pro.monthly",
+          "asc localizations add --subscription S1 --locale en-US --name 'Pro'\\''s' --description 'Everything'",
+          "asc availability set --subscription S1 --available-territories USA,CAN,MEX",
+          "asc prices set --subscription S1 --price 9.99 --territory USA",
+          "asc offers create --subscription S1 --offer-mode FREE_TRIAL --duration ONE_WEEK",
+        ),
+      ].join("\n"),
+    },
+  });
+});
+
+test("every finishing command carries --app, --team and --available-in-new-territories as they were given", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    ...POINT_AT("S1", "1"),
+    "POST /v1/subscriptionPlanAvailabilities": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
+  });
+  const result = await runCommand(subscriptions, {
+    api,
+    words: ["create"],
+    flags: {
+      group: "201",
+      productId: "p",
+      name: "P",
+      subscriptionPeriod: "ONE_YEAR",
+      price: "1",
+      availableTerritories: "USA",
+      availableInNewTerritories: false,
+      trial: "ONE_WEEK",
+      app: "20",
+      team: "T1",
+    },
+  });
+  const scope = " --app '20' --team 'T1'";
+  assert.deepEqual(result.said("error"), [
+    [
+      "App Store Connect refused POST x (409):\n  • Not allowed",
+      ...UNFINISHED(
+        "S1",
+        "p",
+        `asc availability set --subscription S1 --available-territories USA --available-in-new-territories=false${scope}`,
+        `asc prices set --subscription S1 --price 1 --territory USA${scope}`,
+        `asc offers create --subscription S1 --offer-mode FREE_TRIAL --duration ONE_WEEK${scope}`,
+      ),
+    ].join("\n"),
+  ]);
+});
+
+test("--available-in-new-territories given as true is carried as true", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    ...POINT_AT("S1", "1"),
+    "POST /v1/subscriptionPlanAvailabilities": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
+  });
+  const result = await runCommand(subscriptions, {
+    api,
+    words: ["create"],
+    flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", availableTerritories: "USA", availableInNewTerritories: true },
+  });
+  assert.match(result.said("error")[0] ?? "", /asc availability set --subscription S1 --available-territories USA --available-in-new-territories=true\n/);
+});
+
+test("a territory list with spaces is quoted in the availability command so it pastes as one argument", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    ...POINT_AT("S1", "1"),
+    "POST /v1/subscriptionPlanAvailabilities": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
+  });
+  const result = await runCommand(subscriptions, {
+    api,
+    words: ["create"],
+    flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", availableTerritories: "USA, CAN" },
+  });
+  assert.match(result.said("error")[0] ?? "", /asc availability set --subscription S1 --available-territories 'USA, CAN'\n/);
 });
 
 test("a group named without its app is refused before anything is sent", async () => {
@@ -254,7 +482,7 @@ test("a group name the app doesn't have, and an app Apple doesn't know, say so",
 });
 
 test("Apple answering a create without the subscription stops there", async () => {
-  const { api } = ascRoutes({ "POST /v1/subscriptions": {} });
+  const { api } = ascRoutes({ ...NO_SUBSCRIPTION(), "POST /v1/subscriptions": {} });
   const result = await runCommand(subscriptions, {
     api,
     words: ["create"],
@@ -265,7 +493,9 @@ test("Apple answering a create without the subscription stops there", async () =
 
 test("a new subscription keeps the editable version Apple already has instead of making another", async () => {
   const { api, writes } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
     "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    ...POINT_AT("S1", "1"),
     "GET /v1/subscriptions/S1/versions": page([one("subscriptionVersions", "V7", { version: 1, state: "PREPARE_FOR_SUBMISSION" })]),
     "POST /v2/subscriptionLocalizations": new Error("stop after the localization"),
   });
@@ -285,7 +515,9 @@ test("a new subscription keeps the editable version Apple already has instead of
 test("a refused version names the subscription already created", async () => {
   const { ApiError } = await import("@/core/api/client");
   const { api, writes } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
     "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    ...POINT_AT("S1", "1"),
     "GET /v1/subscriptions/S1/versions": page([]),
     "POST /v1/subscriptionVersions": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
   });
@@ -294,7 +526,18 @@ test("a refused version names the subscription already created", async () => {
     words: ["create"],
     flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", displayName: "P" },
   });
-  assert.deepEqual(result.said("error"), ["App Store Connect refused POST x (409):\n  • Not allowed\nAlready created: subscriptions S1."]);
+  assert.deepEqual(result.said("error"), [
+    [
+      "App Store Connect refused POST x (409):\n  • Not allowed",
+      ...UNFINISHED(
+        "S1",
+        "p",
+        "asc localizations add --subscription S1 --locale en-US --name 'P'",
+        "asc availability set --subscription S1 --available-territories all",
+        "asc prices set --subscription S1 --price 1 --territory USA",
+      ),
+    ].join("\n"),
+  ]);
   assert.deepEqual(
     writes().map((request) => request.path),
     ["/v1/subscriptions", "/v1/subscriptionVersions"],
@@ -302,7 +545,7 @@ test("a refused version names the subscription already created", async () => {
 });
 
 test("a dry run with a display name plans the new version before the localization on it", async () => {
-  const { api } = ascRoutes({});
+  const { api } = ascRoutes(NO_SUBSCRIPTION());
   const result = await runCommand(subscriptions, {
     api,
     words: ["create"],
@@ -311,11 +554,17 @@ test("a dry run with a display name plans the new version before the localizatio
   });
   const { requests } = result.json as { requests: { method: string; path: string; body?: unknown }[] };
   assert.deepEqual(
-    requests.slice(0, 4).map((request) => `${request.method} ${request.path}`),
-    ["POST /v1/subscriptions", "GET /v1/subscriptions/${subscription}/versions", "POST /v1/subscriptionVersions", "POST /v2/subscriptionLocalizations"],
+    requests.slice(1, 6).map((request) => `${request.method} ${request.path}`),
+    [
+      "POST /v1/subscriptions",
+      "GET /v1/subscriptions/${subscription}/pricePoints?filter[territory]=USA&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds",
+      "GET /v1/subscriptions/${subscription}/versions",
+      "POST /v1/subscriptionVersions",
+      "POST /v2/subscriptionLocalizations",
+    ],
   );
-  assert.deepEqual(requests[2]?.body, { data: { type: "subscriptionVersions", relationships: { subscription: link("subscriptions", "${subscription}") } } });
-  const localization = requests[3]?.body as { data: { relationships: unknown } };
+  assert.deepEqual(requests[4]?.body, { data: { type: "subscriptionVersions", relationships: { subscription: link("subscriptions", "${subscription}") } } });
+  const localization = requests[5]?.body as { data: { relationships: unknown } };
   assert.deepEqual(localization.data.relationships, { version: link("subscriptionVersions", "${version}") });
 });
 
