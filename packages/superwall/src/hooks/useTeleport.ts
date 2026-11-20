@@ -245,7 +245,7 @@ export const useTeleport = (options: UseTeleportOptions = {}): UseTeleportResult
             },
           });
         }
-        teleporter.returnToApp();
+        teleporter.returnToApp(returnOptions?.data);
         return "opened";
       },
     }),
