@@ -34,7 +34,9 @@ export type PaywallDefinition = Omit<
    * What this paywall is called on Superwall. Directory names carry the
    * restrictions of a URL segment, so they make poor labels once a dashboard
    * holds dozens of them — set a real name here and the directory stays an
-   * identifier. Defaults to the directory name, title-cased.
+   * identifier. Every `superwall push` renames the paywall on Superwall to
+   * match, so a name changed in the dashboard is overwritten by the next push.
+   * Defaults to the directory name, title-cased.
    */
   name?: string;
   /**
