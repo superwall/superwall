@@ -181,6 +181,24 @@ test("a call runs the command and answers with its --json output", async () => {
   assert.deepEqual(calls, [{ method: "PATCH", path: "/v2/products/42", body: { name: "Pro", price: 9.99 } }]);
 });
 
+test("apps_create with org makes the new project in that organization, without asking", async () => {
+  const calls: ApiCall[] = [];
+  const api = fakeResourceApi(calls, {
+    "GET /v2/me/organizations": { data: [{ id: 9, name: "Acme Inc" }, { id: 29086, name: "Side Co" }] },
+    "POST /v2/projects": { id: 77, name: "Numa" },
+    "POST /v2/projects/77/applications": { id: 77, name: "Numa", applications: [{ id: 501, name: "Numa", platform: "ios" }] },
+  });
+  const result = await tool("apps_create").run({ name: "Numa", platform: "ios", org: "29086" }, api);
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    calls.filter((call) => call.method === "POST").map((call) => [call.path, call.body]),
+    [
+      ["/v2/projects", { name: "Numa", organization_id: 29086 }],
+      ["/v2/projects/77/applications", { name: "Numa", platform: "ios" }],
+    ],
+  );
+});
+
 test("a destructive call goes ahead: the client asked the user before calling", async () => {
   const calls: ApiCall[] = [];
   const result = await tool("products_delete").run({ id: "42" }, fakeResourceApi(calls));

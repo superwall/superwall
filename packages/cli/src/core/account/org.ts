@@ -4,19 +4,32 @@ import { rowName, titleCase, type Row } from "@/core/api/resources";
 import { ui } from "@/ui";
 import { withSpinner } from "@/ui/spinner";
 
-export async function orgForNewProject(api: SuperwallApi, interactive: boolean): Promise<string> {
+export async function orgForNewProject(
+  api: SuperwallApi,
+  interactive: boolean,
+  { org, orgFlag = false }: { org?: string; orgFlag?: boolean } = {},
+): Promise<string> {
   const orgs = await withSpinner("Loading your account", () => listOrganizations(api));
   const [first] = orgs;
   if (!first) {
     throw new Error("Your account has no organization yet - run `superwall login` to create one.");
   }
+  if (org !== undefined) {
+    if (orgs.some((o) => String(o.id) === org)) return org;
+    throw new Error(`You don't belong to organization ${org} - yours are ${orgList(orgs)}.`);
+  }
   if (orgs.length === 1) return String(first.id);
   if (!interactive) {
+    const pick = orgFlag ? "pass --org <id> for one of them, " : "run this interactively to choose, ";
     throw new Error(
-      `You belong to ${orgs.length} organizations, so a new project needs a home: run this interactively to choose, or pass --project <id> to add the app to an existing project.`,
+      `You belong to ${orgs.length} organizations (${orgList(orgs)}), so a new project needs a home: ${pick}or pass --project <id> to add the app to an existing project.`,
     );
   }
   return chooseOrg(orgs, "Which organization should own the new project?");
+}
+
+function orgList(orgs: Row[]): string {
+  return orgs.map((o) => `${rowName(o)} (${o.id})`).join(", ");
 }
 
 async function chooseOrg(orgs: Row[], message: string): Promise<string> {

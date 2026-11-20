@@ -58,7 +58,7 @@ test(
     ]);
     await assert.rejects(
       () => orgForNewProject(api, false),
-      /belong to 2 organizations[\s\S]*run this interactively[\s\S]*--project <id>/,
+      /belong to 2 organizations \(A \(1\), B \(2\)\)[\s\S]*run this interactively[\s\S]*--project <id>/,
     );
   }),
 );

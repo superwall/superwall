@@ -40,6 +40,8 @@ create its first app too. `BROWSER=none` stops the CLI from opening a browser
 itself.
 There are no organizations to pick: `superwall apps list` shows every app you
 can open, grouped by organization, and commands take `--app <id|dashboard link>`.
+`apps create` adds a new project: when you belong to several organizations, pass
+`--org <id>` to say which, or `--project <id>` to add the app to one you have.
 Upgrade any time with `superwall upgrade`. When a newer release is out, the CLI
 says so on stderr after each command (and when `superwall dev` starts), with
 the exact command to run: `superwall upgrade`, or the project's own bump such as
@@ -284,6 +286,7 @@ Stripe-style: `superwall <resource> <operation> [ids] [--field value]`.
 superwall apps get <app>                  # everything about one app: bundle ID, Apple team, keys
 superwall apps <app>                      # the same: an id where the operation goes means get
 superwall apps update <app> --team-id <team-id>
+superwall apps create --name "My App" --platform ios --org <org-id>   # a new project in that organization
 superwall entitlements create --identifier pro --app <app>
 superwall products create --identifier pro_monthly --price 9.99 --period month --entitlement pro
 superwall products storekit               # generate a local .storekit file
