@@ -26,7 +26,7 @@ export const command = defineCommand({
     const method = found?.toUpperCase();
 
     const index = await apiCall(ctx, "Loading the API reference", () => resolveApiIndex({ refresh: flags.refresh }));
-    const lookup = await resolveCommandLookup();
+    const lookup = resolveCommandLookup();
     if (ctx.json) {
       return ctx.output.data({ version: index.version, operations: listMatchingOperations(index, query, method).map((op) => withCommand(op, lookup)) });
     }

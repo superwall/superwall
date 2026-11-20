@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { downloadAscIndex } from "@/core/app-store-connect/api/spec";
 import { API_CACHE_FILE, downloadApiIndex } from "@/core/api/reference";
 
@@ -91,6 +92,17 @@ const reached = [...bundle.matchAll(/^import\s.*?from\s*["']([^"']+)["']/gm)].ma
 if (reached.length > 0) {
   console.error(`dist/tools.js imports ${reached.join(", ")}; the MCP bundle must stand alone.`);
   process.exit(1);
+}
+const built: typeof import("@/tools") = await import(pathToFileURL(resolve("dist/tools.js")).href);
+const apiDocs = (await built.listTools()).find((tool) => tool.name === "api_docs");
+const offline = built.apiFor({ token: "build-check", host: "http://127.0.0.1:9" });
+for (const query of [["/v2/paywalls/{id}", "patch"], ["paywall", "products"]]) {
+  const answer = await apiDocs?.run({ query }, offline);
+  const text = JSON.stringify(answer?.data ?? null);
+  if (!answer?.ok || !text.includes("/v2/paywalls")) {
+    console.error(`api_docs ${query.join(" ")} in dist/tools.js answered ${text}; the MCP bundle can't look up the API reference.`);
+    process.exit(1);
+  }
 }
 console.log(
   `dist/tools.js: ${(bundle.length / 1024).toFixed(0)} kB, self-contained, API reference ${api.version} and App Store Connect spec ${asc.specVersion} and ${Object.keys(skills).length} skill files built in`,

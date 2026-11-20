@@ -1,10 +1,16 @@
-import type { Endpoint } from "@/program/command";
+import type { AnyCommand, Endpoint } from "@/program/command";
 
 export type CommandLookup = (endpoint: Endpoint) => string | undefined;
 
-export async function resolveCommandLookup(): Promise<CommandLookup> {
-  const { listGroups } = await import("@/commands/registry");
-  const catalogs = listGroups().flatMap((group) => group.commands.flatMap((command) => (command.kind === "catalog" && command.commandFor ? [command.commandFor] : [])));
+let listCommands: (() => readonly AnyCommand[]) | undefined;
+
+export function useCommandList(list: () => readonly AnyCommand[]): void {
+  listCommands = list;
+}
+
+export function resolveCommandLookup(): CommandLookup {
+  if (!listCommands) throw new Error("The command registry isn't loaded, so no endpoint can be matched to a command.");
+  const catalogs = listCommands().flatMap((command) => (command.kind === "catalog" && command.commandFor ? [command.commandFor] : []));
   return (endpoint) => {
     for (const commandFor of catalogs) {
       const found = commandFor(endpoint);

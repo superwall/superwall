@@ -1,5 +1,6 @@
 import type { AnyCommand, Channel } from "@/program/command";
 import { CHANNEL } from "@/environment";
+import { useCommandList } from "@/core/api/commands";
 import { command as login } from "./account/login";
 import { command as logout } from "./account/logout";
 import { command as whoami } from "./account/whoami";
@@ -289,3 +290,5 @@ export function listGroups(): Group[] {
     commands: group.commands.filter((command) => visible(command.channel)),
   }));
 }
+
+useCommandList(() => listGroups().flatMap((group) => group.commands));
