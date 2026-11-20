@@ -558,9 +558,11 @@ const Router = ({
   }, [top.key, nav.reset, name, depth, direction, navigationId, session, presentation]);
 
   const warmed = React.useRef<Set<string>>(new Set());
+  const opened = React.useRef(entries.map((entry) => entry.name));
   React.useEffect(() => {
     const map = readRouteAssets();
-    warmAssets([...(map["*"] ?? []), ...(map[INITIAL_ROUTE] ?? [])], warmed.current);
+    const openedAssets = opened.current.flatMap((route) => map[route] ?? []);
+    warmAssets([...(map["*"] ?? []), ...openedAssets], warmed.current);
     return whenIdle(() => {
       for (const list of Object.values(map)) warmAssets(list, warmed.current);
     });
