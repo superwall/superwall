@@ -554,8 +554,9 @@ reading the subscription back and saying what's still missing. It checks
 `--price` against a subscription the app already has before it creates anything,
 so a price Apple has no point for is refused with the closest ones. If a step
 still fails after the subscription exists, the error names it and prints the
-commands that finish it: Apple keeps a product ID once used, so running create
-again would fail.
+commands that finish it, with the same `--app` and `--team`: Apple keeps a
+product ID once used, so running create again would fail. When the price was the
+problem, those commands list the price points to pick a new one from.
 
 
 ```bash

@@ -171,11 +171,11 @@ export async function runSubscriptionsCreate(session: AscSession, input: AscInpu
     "subscription",
   );
   if (!subscription) throw new Error("Apple created no subscription.");
-  const id = subscription.id;
+  const made: CreatedSubscription = { id: subscription.id, productId, price, territory, priceFound: false };
   try {
-    return await finishSubscription(session, input, { id, productId, price, territory });
+    return await finishSubscription(session, input, made);
   } catch (error) {
-    throw unfinishedError(error, input, { id, productId, price, territory });
+    throw unfinishedError(error, input, made);
   }
 }
 
@@ -184,10 +184,31 @@ interface CreatedSubscription {
   productId: string;
   price: number;
   territory: string;
+  priceFound: boolean;
 }
 
 function quoted(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function scopeFlags(input: AscInput): string {
+  const scope = input.scope ?? {};
+  return [
+    ...(scope.app ? [` --app ${quoted(scope.app)}`] : []),
+    ...(scope.project ? [` --project ${quoted(scope.project)}`] : []),
+    ...(scope.team ? [` --team ${quoted(scope.team)}`] : []),
+  ].join("");
+}
+
+function availabilityCommand(input: AscInput, target: string): string {
+  const newTerritories = booleanOf(input, "availableInNewTerritories");
+  const choice = newTerritories === undefined ? "" : ` --available-in-new-territories=${newTerritories}`;
+  return `asc availability set ${target} --available-territories ${textOf(input, "availableTerritories") ?? "all"}${choice}`;
+}
+
+function priceCommands(made: CreatedSubscription, target: string): string[] {
+  if (made.priceFound) return [`asc prices set ${target} --price ${made.price} --territory ${made.territory}`];
+  return [`asc prices points ${target} --territory ${made.territory}`, `asc prices set ${target} --price <price> --territory ${made.territory}`];
 }
 
 function finishingCommands(input: AscInput, made: CreatedSubscription): string[] {
@@ -195,14 +216,15 @@ function finishingCommands(input: AscInput, made: CreatedSubscription): string[]
   const displayName = textOf(input, "displayName");
   const description = textOf(input, "description");
   const trial = textOf(input, "trial");
+  const scope = scopeFlags(input);
   return [
     ...(displayName
       ? [`asc localizations add ${target} --locale ${textOf(input, "locale") ?? DEFAULT_LOCALE} --name ${quoted(displayName)}${description ? ` --description ${quoted(description)}` : ""}`]
       : []),
-    `asc availability set ${target} --available-territories ${textOf(input, "availableTerritories") ?? "all"}`,
-    `asc prices set ${target} --price ${made.price} --territory ${made.territory}`,
+    availabilityCommand(input, target),
+    ...priceCommands(made, target),
     ...(trial ? [`asc offers create ${target} --offer-mode FREE_TRIAL --duration ${trial}`] : []),
-  ];
+  ].map((command) => `${command}${scope}`);
 }
 
 function unfinishedError(error: unknown, input: AscInput, made: CreatedSubscription): Error {
@@ -212,6 +234,7 @@ function unfinishedError(error: unknown, input: AscInput, made: CreatedSubscript
     `Already created: subscriptions ${made.id} (${made.productId}).`,
     "Apple keeps a product ID once used, so running create again fails. Finish this subscription with what is still missing:",
     ...finishingCommands(input, made).map((command) => `  superwall ${command}`),
+    ...(made.priceFound ? [] : [`${made.price} is not a ${made.territory} price, so pick one from asc prices points for <price>.`]),
   ].join("\n");
   const status = statusOf(error);
   return status === undefined ? new Error(message) : new AscRequestError(message, status);
@@ -220,6 +243,7 @@ function unfinishedError(error: unknown, input: AscInput, made: CreatedSubscript
 async function finishSubscription(session: AscSession, input: AscInput, made: CreatedSubscription): Promise<AscOutput> {
   const { id, productId, territory } = made;
   const point = await findPricePoint(session, "subscription", id, territory, made.price);
+  made.priceFound = true;
 
   const displayName = textOf(input, "displayName");
   if (displayName) {

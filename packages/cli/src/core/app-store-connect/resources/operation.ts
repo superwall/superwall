@@ -20,6 +20,13 @@ export interface AscInput {
   args: Record<string, string | undefined>;
   flags: Record<string, unknown>;
   yes: boolean;
+  scope?: AscScope;
+}
+
+export interface AscScope {
+  app?: string;
+  project?: string;
+  team?: string;
 }
 
 export interface AscRow {

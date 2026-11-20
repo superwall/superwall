@@ -225,7 +225,14 @@ test("the first subscription of an app checks its price before anything else is 
   assert.deepEqual(result.said("error"), [
     [
       "Apple has no USA price point at 9.98. The closest: 9.49, 9.95, 10.00.",
-      ...UNFINISHED("S1", "p", "asc availability set --subscription S1 --available-territories USA", "asc prices set --subscription S1 --price 9.98 --territory USA"),
+      ...UNFINISHED(
+        "S1",
+        "p",
+        "asc availability set --subscription S1 --available-territories USA",
+        "asc prices points --subscription S1 --territory USA",
+        "asc prices set --subscription S1 --price <price> --territory USA",
+      ),
+      "9.98 is not a USA price, so pick one from asc prices points for <price>.",
     ].join("\n"),
   ]);
   assert.deepEqual(
@@ -283,7 +290,14 @@ test("an app with no subscription yet has nothing to check the price on up front
   assert.deepEqual(result.said("error"), [
     [
       "Apple has no DEU price point at 140. The closest: 139.00, 139.99, 140.99.",
-      ...UNFINISHED("S1", "p", "asc availability set --subscription S1 --available-territories all", "asc prices set --subscription S1 --price 140 --territory DEU"),
+      ...UNFINISHED(
+        "S1",
+        "p",
+        "asc availability set --subscription S1 --available-territories all",
+        "asc prices points --subscription S1 --territory DEU",
+        "asc prices set --subscription S1 --price <price> --territory DEU",
+      ),
+      "140 is not a DEU price, so pick one from asc prices points for <price>.",
     ].join("\n"),
   ]);
   assert.deepEqual(
@@ -348,6 +362,61 @@ test("a refused price PATCH keeps Apple's status and lists every command that fi
       ].join("\n"),
     },
   });
+});
+
+test("every finishing command carries --app, --team and --available-in-new-territories as they were given", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    ...POINT_AT("S1", "1"),
+    "POST /v1/subscriptionPlanAvailabilities": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
+  });
+  const result = await runCommand(subscriptions, {
+    api,
+    words: ["create"],
+    flags: {
+      group: "201",
+      productId: "p",
+      name: "P",
+      subscriptionPeriod: "ONE_YEAR",
+      price: "1",
+      availableTerritories: "USA",
+      availableInNewTerritories: false,
+      trial: "ONE_WEEK",
+      app: "20",
+      team: "T1",
+    },
+  });
+  const scope = " --app '20' --team 'T1'";
+  assert.deepEqual(result.said("error"), [
+    [
+      "App Store Connect refused POST x (409):\n  • Not allowed",
+      ...UNFINISHED(
+        "S1",
+        "p",
+        `asc availability set --subscription S1 --available-territories USA --available-in-new-territories=false${scope}`,
+        `asc prices set --subscription S1 --price 1 --territory USA${scope}`,
+        `asc offers create --subscription S1 --offer-mode FREE_TRIAL --duration ONE_WEEK${scope}`,
+      ),
+    ].join("\n"),
+  ]);
+});
+
+test("--available-in-new-territories given as true is carried as true", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    ...POINT_AT("S1", "1"),
+    "POST /v1/subscriptionPlanAvailabilities": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
+  });
+  const result = await runCommand(subscriptions, {
+    api,
+    words: ["create"],
+    flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", availableTerritories: "USA", availableInNewTerritories: true },
+  });
+  assert.match(result.said("error")[0] ?? "", /asc availability set --subscription S1 --available-territories USA --available-in-new-territories=true\n/);
 });
 
 test("a group named without its app is refused before anything is sent", async () => {
