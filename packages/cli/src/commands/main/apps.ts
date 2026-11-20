@@ -34,6 +34,7 @@ export const command = defineResource({
         ["--platform <p>", "ios | android | flutter | react_native | web"],
         ["--bundle-id <id>", "Bundle ID or package name"],
         ["--project <id>", "The project to add it to; a new one when left out"],
+        ["--org <id>", "The organization that owns the new project, when you belong to several"],
       ],
     },
     {
@@ -105,5 +106,6 @@ To count, group or filter transactions, run SQL with \`superwall query\`.`,
     ["apps get <app>", "Everything about one app"],
     ["apps list --search <text>", "Find an app by id, name or bundle ID"],
     ["apps update <app> --team-id <team-id>", "Change one field"],
+    ["apps create --name <name> --platform ios --org <org-id>", "A new app in a new project of one organization"],
   ],
 });

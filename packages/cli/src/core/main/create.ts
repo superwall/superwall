@@ -173,12 +173,16 @@ async function createApp(
 
   if (!name || !platform) {
     throw new Error(
-      "Usage: superwall apps create --name <name> --platform <ios|android|flutter|react_native|web> [--bundle-id <id>] [--project <projectId>]",
+      "Usage: superwall apps create --name <name> --platform <ios|android|flutter|react_native|web> [--bundle-id <id>] [--project <projectId> | --org <orgId>]",
     );
   }
 
   const bundle = textOf(fields.bundleId);
+  const org = textOf(fields.org);
   const target = context.target.project;
+  if (org && target) {
+    throw new Error("Pass --org or --project, not both: --project adds the app to that project, which already has an organization.");
+  }
   if (dryRun) {
     const plan = {
       dryRun: true,
@@ -187,18 +191,20 @@ async function createApp(
       name,
       platform,
       project: target ?? null,
+      ...(org ? { org } : {}),
     };
     if (json) return context.output.data(plan);
-    ui.info(
-      `[dry-run] would add ${platformLabel(platform)} app "${name}" to ${target ? `project ${target}` : "a new project"}`,
-    );
+    const where = target ? `project ${target}` : org ? `a new project in organization ${org}` : "a new project";
+    ui.info(`[dry-run] would add ${platformLabel(platform)} app "${name}" to ${where}`);
     return;
   }
 
   let projectId = target;
   if (!projectId) {
-    const organizationId =
-      (await boundOrganization(context, api)) ?? (await orgForNewProject(api, context.interactive));
+    const organizationId = org
+      ? await orgForNewProject(api, context.interactive, { org })
+      : ((await boundOrganization(context, api)) ??
+        (await orgForNewProject(api, context.interactive, { orgFlag: true })));
     const created = await apiCall(context, `Creating project "${name}"`, () => {
       return createProject(api, name, organizationId);
     });
