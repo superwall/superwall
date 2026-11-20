@@ -306,6 +306,33 @@ test("an app with no subscription yet has nothing to check the price on up front
   );
 });
 
+test("a price-point lookup Apple fails keeps its status and message, and never calls the price wrong", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api, writes } = ascRoutes({
+    [APP_BY_BUNDLE]: page([one("apps", "555")]),
+    [GROUPS_OF_APP]: page([one("subscriptionGroups", "201")]),
+    ...NO_SUBSCRIPTION("201"),
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    [DEU_POINTS("S1")]: new ApiError("GET x", 503, JSON.stringify({ errors: [{ detail: "Service unavailable" }] })),
+  });
+  const result = await runCommand(subscriptions, { api, words: ["create"], flags: { ...DEU_FLAGS, ascApp: "com.acme.app" }, json: true });
+  const message = [
+    "App Store Connect refused GET x (503):\n  • Service unavailable",
+    ...UNFINISHED(
+      "S1",
+      "p",
+      "asc availability set --subscription S1 --available-territories all",
+      "asc prices set --subscription S1 --price 140 --territory DEU",
+    ),
+  ].join("\n");
+  assert.deepEqual(result.json, { error: { code: "api_error", status: 503, message } });
+  assert.doesNotMatch(message, /no DEU price point|is not a DEU price/);
+  assert.deepEqual(
+    writes().map((request) => request.path),
+    ["/v1/subscriptions"],
+  );
+});
+
 test("a dry run refuses a price Apple has no point for too", async () => {
   const { api } = ascRoutes({ [FIRST_OF_GROUP("201")]: page([one("subscriptions", "S0")]), [DEU_POINTS("S0")]: DEU_GRID });
   const result = await runCommand(subscriptions, { api, words: ["create"], flags: { ...DEU_FLAGS, dryRun: true } });
