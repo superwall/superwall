@@ -7,6 +7,7 @@ import { argOf, booleanOf, numberOf, requireNumber, requireText, textOf, type As
 import { listSubscriptionPrices, type PriceView } from "./prices";
 import { bulkSubscriptionPatch, findPricePoint, introductoryOfferEntries, resolveTerritoryPoints, subscriptionPriceEntries } from "./pricing";
 import { selectScreenshot, type ScreenshotView } from "./screenshots";
+import { AscRequestError, statusOf } from "../api/errors";
 import { assertConfirmed, type AscSession } from "./session";
 import { resolveDraftVersion, selectLatestVersion, resolveAscAppId, resolveGroupId, resolveTerritories, type VersionView } from "./targets";
 
@@ -171,7 +172,54 @@ export async function runSubscriptionsCreate(session: AscSession, input: AscInpu
   );
   if (!subscription) throw new Error("Apple created no subscription.");
   const id = subscription.id;
-  const point = await findPricePoint(session, "subscription", id, territory, price);
+  try {
+    return await finishSubscription(session, input, { id, productId, price, territory });
+  } catch (error) {
+    throw unfinishedError(error, input, { id, productId, price, territory });
+  }
+}
+
+interface CreatedSubscription {
+  id: string;
+  productId: string;
+  price: number;
+  territory: string;
+}
+
+function quoted(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function finishingCommands(input: AscInput, made: CreatedSubscription): string[] {
+  const target = `--subscription ${made.id}`;
+  const displayName = textOf(input, "displayName");
+  const description = textOf(input, "description");
+  const trial = textOf(input, "trial");
+  return [
+    ...(displayName
+      ? [`asc localizations add ${target} --locale ${textOf(input, "locale") ?? DEFAULT_LOCALE} --name ${quoted(displayName)}${description ? ` --description ${quoted(description)}` : ""}`]
+      : []),
+    `asc availability set ${target} --available-territories ${textOf(input, "availableTerritories") ?? "all"}`,
+    `asc prices set ${target} --price ${made.price} --territory ${made.territory}`,
+    ...(trial ? [`asc offers create ${target} --offer-mode FREE_TRIAL --duration ${trial}`] : []),
+  ];
+}
+
+function unfinishedError(error: unknown, input: AscInput, made: CreatedSubscription): Error {
+  const reason = (error instanceof Error ? error.message : String(error)).split("\n").filter((line) => !line.startsWith("Already created:"));
+  const message = [
+    ...reason,
+    `Already created: subscriptions ${made.id} (${made.productId}).`,
+    "Apple keeps a product ID once used, so running create again fails. Finish this subscription with what is still missing:",
+    ...finishingCommands(input, made).map((command) => `  superwall ${command}`),
+  ].join("\n");
+  const status = statusOf(error);
+  return status === undefined ? new Error(message) : new AscRequestError(message, status);
+}
+
+async function finishSubscription(session: AscSession, input: AscInput, made: CreatedSubscription): Promise<AscOutput> {
+  const { id, productId, territory } = made;
+  const point = await findPricePoint(session, "subscription", id, territory, made.price);
 
   const displayName = textOf(input, "displayName");
   if (displayName) {

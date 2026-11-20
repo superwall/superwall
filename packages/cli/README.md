@@ -550,7 +550,13 @@ superwall asc iaps create --asc-app com.acme.app --product-id coins.100 --name "
 `asc subscriptions create` does everything Apple asks for before review, in
 order: the subscription, its localization, where it's sold, its price in one
 territory equalized to every other, and a free trial if you want one. It ends by
-reading the subscription back and saying what's still missing:
+reading the subscription back and saying what's still missing. It checks
+`--price` against a subscription the app already has before it creates anything,
+so a price Apple has no point for is refused with the closest ones. If a step
+still fails after the subscription exists, the error names it and prints the
+commands that finish it: Apple keeps a product ID once used, so running create
+again would fail.
+
 
 ```bash
 superwall asc subscriptions create --group Pro --asc-app com.acme.app \

@@ -222,12 +222,23 @@ test("the first subscription of an app checks its price before anything else is 
     words: ["create"],
     flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "9.98", availableTerritories: "USA" },
   });
-  assert.deepEqual(result.said("error"), ["Apple has no USA price point at 9.98. The closest: 9.49, 9.95, 10.00."]);
+  assert.deepEqual(result.said("error"), [
+    [
+      "Apple has no USA price point at 9.98. The closest: 9.49, 9.95, 10.00.",
+      ...UNFINISHED("S1", "p", "asc availability set --subscription S1 --available-territories USA", "asc prices set --subscription S1 --price 9.98 --territory USA"),
+    ].join("\n"),
+  ]);
   assert.deepEqual(
     writes().map((request) => request.path),
     ["/v1/subscriptions"],
   );
 });
+
+const UNFINISHED = (id: string, productId: string, ...commands: string[]) => [
+  `Already created: subscriptions ${id} (${productId}).`,
+  "Apple keeps a product ID once used, so running create again fails. Finish this subscription with what is still missing:",
+  ...commands.map((command) => `  superwall ${command}`),
+];
 
 const DEU_POINTS = (id: string) =>
   `GET /v1/subscriptions/${id}/pricePoints?filter[territory]=DEU&limit=200&fields[subscriptionPricePoints]=customerPrice,proceeds`;
@@ -269,7 +280,12 @@ test("an app with no subscription yet has nothing to check the price on up front
     [DEU_POINTS("S1")]: DEU_GRID,
   });
   const result = await runCommand(subscriptions, { api, words: ["create"], flags: { ...DEU_FLAGS, ascApp: "com.acme.app" } });
-  assert.deepEqual(result.said("error"), ["Apple has no DEU price point at 140. The closest: 139.00, 139.99, 140.99."]);
+  assert.deepEqual(result.said("error"), [
+    [
+      "Apple has no DEU price point at 140. The closest: 139.00, 139.99, 140.99.",
+      ...UNFINISHED("S1", "p", "asc availability set --subscription S1 --available-territories all", "asc prices set --subscription S1 --price 140 --territory DEU"),
+    ].join("\n"),
+  ]);
   assert.deepEqual(
     writes().map((request) => request.path),
     ["/v1/subscriptions"],
@@ -301,8 +317,37 @@ test("Apple's refusal is spelled out with what was already created", async () =>
     flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", availableTerritories: "XXX" },
   });
   assert.deepEqual(result.said("error"), [
-    "App Store Connect refused POST /v1/subscriptionPlanAvailabilities (409):\n  • A territory is not valid (/data/relationships)\n  • ENTITY_ERROR\nAlready created: subscriptions S1.",
+    [
+      "App Store Connect refused POST /v1/subscriptionPlanAvailabilities (409):\n  • A territory is not valid (/data/relationships)\n  • ENTITY_ERROR",
+      ...UNFINISHED("S1", "p", "asc availability set --subscription S1 --available-territories XXX", "asc prices set --subscription S1 --price 1 --territory USA"),
+    ].join("\n"),
   ]);
+});
+
+test("a refused price PATCH keeps Apple's status and lists every command that finishes the subscription", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api } = ascRoutes({
+    ...CREATE_ROUTES,
+    "PATCH /v1/subscriptions/S1": new ApiError("PATCH x", 409, JSON.stringify({ errors: [{ detail: "Price not allowed" }] })),
+  });
+  const result = await runCommand(subscriptions, { api, words: ["create"], flags: { ...CREATE_FLAGS, displayName: "Pro's" }, json: true });
+  assert.deepEqual(result.json, {
+    error: {
+      code: "api_error",
+      status: 409,
+      message: [
+        "App Store Connect refused PATCH x (409):\n  • Price not allowed",
+        ...UNFINISHED(
+          "S1",
+          "pro.monthly",
+          "asc localizations add --subscription S1 --locale en-US --name 'Pro'\\''s' --description 'Everything'",
+          "asc availability set --subscription S1 --available-territories USA,CAN,MEX",
+          "asc prices set --subscription S1 --price 9.99 --territory USA",
+          "asc offers create --subscription S1 --offer-mode FREE_TRIAL --duration ONE_WEEK",
+        ),
+      ].join("\n"),
+    },
+  });
 });
 
 test("a group named without its app is refused before anything is sent", async () => {
@@ -369,7 +414,18 @@ test("a refused version names the subscription already created", async () => {
     words: ["create"],
     flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", displayName: "P" },
   });
-  assert.deepEqual(result.said("error"), ["App Store Connect refused POST x (409):\n  • Not allowed\nAlready created: subscriptions S1."]);
+  assert.deepEqual(result.said("error"), [
+    [
+      "App Store Connect refused POST x (409):\n  • Not allowed",
+      ...UNFINISHED(
+        "S1",
+        "p",
+        "asc localizations add --subscription S1 --locale en-US --name 'P'",
+        "asc availability set --subscription S1 --available-territories all",
+        "asc prices set --subscription S1 --price 1 --territory USA",
+      ),
+    ].join("\n"),
+  ]);
   assert.deepEqual(
     writes().map((request) => request.path),
     ["/v1/subscriptions", "/v1/subscriptionVersions"],

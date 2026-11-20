@@ -698,7 +698,13 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   reads whose path it knows (they make the plan exact) and plans every write
   and every read that depends on one, with `${name}` placeholders for ids Apple
   would return; Apple's own inline ids use the same `${…}` form. A failed step
-  names what was already created, because Apple has no transaction. The
+  names what was already created, because Apple has no transaction.
+  `subscriptions create` checks `--price` on a subscription the app already
+  has (the group's, then the app's other groups) before its POST, because
+  Apple lists price points only under a subscription and every subscription
+  of an app shares one grid. Once the subscription exists, any failure names
+  it with the commands that finish it: deleting it would not free its product
+  ID, so a rerun would hit a 409. The
   screenshot upload reads a local file and PUTs to Apple's signed URLs, so it
   is `mcp: false` and loads its file reader with `await import()`.
 - **Detection is best-effort on purpose:** manifests miss Tuist and vendored
