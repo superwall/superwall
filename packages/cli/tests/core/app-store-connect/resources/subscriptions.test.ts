@@ -446,6 +446,22 @@ test("--available-in-new-territories given as true is carried as true", async ()
   assert.match(result.said("error")[0] ?? "", /asc availability set --subscription S1 --available-territories USA --available-in-new-territories=true\n/);
 });
 
+test("a territory list with spaces is quoted in the availability command so it pastes as one argument", async () => {
+  const { ApiError } = await import("@/core/api/client");
+  const { api } = ascRoutes({
+    ...NO_SUBSCRIPTION(),
+    "POST /v1/subscriptions": { data: one("subscriptions", "S1") },
+    ...POINT_AT("S1", "1"),
+    "POST /v1/subscriptionPlanAvailabilities": new ApiError("POST x", 409, JSON.stringify({ errors: [{ detail: "Not allowed" }] })),
+  });
+  const result = await runCommand(subscriptions, {
+    api,
+    words: ["create"],
+    flags: { group: "201", productId: "p", name: "P", subscriptionPeriod: "ONE_YEAR", price: "1", availableTerritories: "USA, CAN" },
+  });
+  assert.match(result.said("error")[0] ?? "", /asc availability set --subscription S1 --available-territories 'USA, CAN'\n/);
+});
+
 test("a group named without its app is refused before anything is sent", async () => {
   const { api, sent } = ascRoutes({});
   const result = await runCommand(subscriptions, {

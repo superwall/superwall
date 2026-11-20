@@ -202,7 +202,9 @@ function scopeFlags(input: AscInput): string {
 function availabilityCommand(input: AscInput, target: string): string {
   const newTerritories = booleanOf(input, "availableInNewTerritories");
   const choice = newTerritories === undefined ? "" : ` --available-in-new-territories=${newTerritories}`;
-  return `asc availability set ${target} --available-territories ${textOf(input, "availableTerritories") ?? "all"}${choice}`;
+  const territories = textOf(input, "availableTerritories") ?? "all";
+  const listed = /^[A-Za-z0-9,]+$/.test(territories) ? territories : quoted(territories);
+  return `asc availability set ${target} --available-territories ${listed}${choice}`;
 }
 
 function priceCommands(made: CreatedSubscription, target: string, priceRefused: boolean): string[] {
