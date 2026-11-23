@@ -7,7 +7,7 @@ import {
   replaceAscConfig,
 } from "@/core/app-store-connect/api/client";
 import { resolveAscOrgApi } from "@/core/app-store-connect/api/request";
-import type { SuperwallApi } from "@/core/api/client";
+import { ApiError, type SuperwallApi } from "@/core/api/client";
 import type { AppKeyKind } from "@/core/api/integrations";
 import { testModeWarning } from "@/core/main/bundle-id";
 import { apiCall } from "@/ui/spinner";
@@ -52,9 +52,6 @@ export async function upsertHeldKey(ctx: CommandContext<"required">, request: He
   if (!app && action === "update" && !teamId) {
     throw new Error("Usage: superwall asc keys update --team <team id> --key-id <id> --issuer <id> --key-file <path.p8>");
   }
-  if (!app && action === "create" && teamId) {
-    throw new Error("To replace a team's key, run `superwall asc keys update --team <team id> ...`.");
-  }
   const input = await resolveKeyInput(ctx, request.key, app !== undefined, action);
   if (!input) return void ctx.ui.warn("Cancelled.");
   if (app) return upsertAppKey(ctx, input, action, request.kind ?? "api_key", app);
@@ -69,9 +66,16 @@ export async function upsertHeldKey(ctx: CommandContext<"required">, request: He
 
   const credentials = { keyId, issuerId, privateKey, accountName };
   const api = request.orgApi ?? (await resolveAscOrgApi(ctx));
-  const created = await apiCall(ctx, "Connecting App Store Connect", () => {
-    if (teamId) return replaceAscConfig(api, teamId, credentials);
-    return createAscConfig(api, { ...credentials, accountName: accountName ?? "App Store Connect" });
+  const created = await apiCall(ctx, "Connecting App Store Connect", async () => {
+    if (action === "update" && teamId) return replaceAscConfig(api, teamId, credentials);
+    try {
+      return await createAscConfig(api, { ...credentials, teamId, accountName: accountName ?? "App Store Connect" });
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 409) throw error;
+      throw new Error(
+        `Your organization already has a key for ${teamId ? `team ${teamId}` : "this team"}. To replace it, run \`superwall asc keys update --team ${teamId ?? "<team id>"} --key-id ${keyId} --issuer ${issuerId} --key-file ${keyFile}\`.`,
+      );
+    }
   });
   if (ctx.json) return ctx.output.data(created);
   ctx.ui.success(`App Store Connect connected ${created.team_id ?? created.id ?? ""}`);
@@ -213,7 +217,7 @@ async function resolveKeyInput(
     throw new Error(
       forApp
         ? `Usage: superwall asc keys ${action} [api_key | purchase_key] --app <id> --key-id <id> --issuer <id> --key-file <path.p8>`
-        : `Usage: superwall asc keys ${action} --key-id <id> --issuer <id> --key-file <path.p8>${action === "update" ? " --team <id>" : " [--name <name>]"}`,
+        : `Usage: superwall asc keys ${action} --key-id <id> --issuer <id> --key-file <path.p8>${action === "update" ? " --team <id>" : " [--team <id>] [--name <name>]"}`,
     );
   }
   const privateKey = readKeyFile(keyFile);

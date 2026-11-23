@@ -135,9 +135,56 @@ test("a held key without --app becomes the organization's key", async () => {
     account_name: "App Store Connect",
   });
   const team = await keys(create, { flags: { ...HELD, team: "TEAM1" } }, { routes });
+  assert.deepEqual(team.said("error"), []);
+  assert.deepEqual(team.said("success"), ["App Store Connect connected TEAM1"]);
+  assert.deepEqual(team.wrote("POST", "/app-store-connect")[0]?.body, {
+    key_id: "K1",
+    issuer_id: "I1",
+    private_key: "PEM",
+    team_id: "TEAM1",
+    account_name: "App Store Connect",
+  });
+  assert.equal(team.wrote("PATCH", "").length, 0);
+});
+
+test("a team that already has the organization's key is pointed at asc keys update", async () => {
+  const routes = (method: string, path: string) => {
+    if (method === "POST" && path.endsWith("/app-store-connect")) {
+      throw new ApiError(`POST ${path}`, 409, '{"message":"exists"}');
+    }
+    return undefined;
+  };
+  const team = await keys(create, { flags: { ...HELD, team: "TEAM1" } }, { routes });
+  assert.equal(process.exitCode, 1);
   assert.deepEqual(team.said("error"), [
-    "To replace a team's key, run `superwall asc keys update --team <team id> ...`.",
+    `Your organization already has a key for team TEAM1. To replace it, run \`superwall asc keys update --team TEAM1 --key-id K1 --issuer I1 --key-file ${KEY_FILE}\`.`,
   ]);
+  process.exitCode = undefined;
+  const resolved = await keys(create, { flags: HELD }, { routes });
+  assert.deepEqual(resolved.said("error"), [
+    `Your organization already has a key for this team. To replace it, run \`superwall asc keys update --team <team id> --key-id K1 --issuer I1 --key-file ${KEY_FILE}\`.`,
+  ]);
+  process.exitCode = undefined;
+  const other = await keys(create, { flags: HELD }, {
+    routes: (method: string, path: string) => {
+      if (method === "POST" && path.endsWith("/app-store-connect")) throw new ApiError(`POST ${path}`, 500, '{"message":"boom"}');
+      return undefined;
+    },
+  });
+  assert.doesNotMatch(other.said("error")[0] ?? "", /already has a key/);
+});
+
+test("--dry-run with --team plans the organization's key without a request", async () => {
+  const json = await keys(create, { json: true, flags: { ...HELD, team: "TEAM1", dryRun: true } });
+  assert.deepEqual(json.json(), {
+    dryRun: true,
+    action: "create",
+    keyId: "K1",
+    issuerId: "I1",
+    keyFile: KEY_FILE,
+    teamId: "TEAM1",
+  });
+  assert.equal(json.requests.length, 0);
 });
 
 const signIn = (kind: string | undefined, options: Scenario = {}) =>
