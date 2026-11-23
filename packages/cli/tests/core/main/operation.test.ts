@@ -42,6 +42,21 @@ const SPEC: DocOperation[] = [
   op("POST", "/v2/campaigns/{id}/placements", {
     body: [{ name: "event_name", type: "string", required: true, description: "Event name" }],
   }),
+  op("PUT", "/v2/campaigns/{id}/audiences/{audience_id}/weights", {
+    body: [
+      {
+        name: "weights",
+        type: "object[]",
+        required: true,
+        description: "Treatment-variant weights",
+        fields: [
+          { name: "variant_id", type: "string", required: true, description: "The variant's id" },
+          { name: "percentage", type: "number", required: true },
+          { name: "meta", type: "object", required: false, fields: [{ name: "note", type: "string", required: false }] },
+        ],
+      },
+    ],
+  }),
   op("DELETE", "/v2/products/{id}"),
   op("DELETE", "/v2/surveys/{id}/paywalls", {
     body: [
@@ -294,6 +309,16 @@ test("an operation's help takes its flags from the API reference", async () => {
   assert.match(help, /Apple team ID/);
   assert.match(help, /--redeemable-on-desktop/);
   assert.match(help, /<app>/);
+});
+
+test("an operation's help names the keys of its object flags", async () => {
+  const help = (await campaigns.help(["variants", "weights"])).replace(/\x1b\[[0-9;]*m/g, "");
+  assert.match(help, /--weights <object\[\]>\s+required Treatment-variant weights/);
+  assert.match(help, /\n\s+ {2}variant_id <string>\s+required The variant's id/);
+  assert.match(help, /\n\s+ {2}percentage <number>\s+required *\n/);
+  assert.match(help, /\n\s+ {2}meta <object> *\n/);
+  assert.match(help, /\n\s+ {4}note <string> *\n/);
+  assert.doesNotMatch(help, /--variant-id/);
 });
 
 test("apps update --bundle-id asks first when reported builds would run in test mode", async () => {

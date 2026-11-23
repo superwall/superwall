@@ -65,13 +65,16 @@ export function resourceHelp(resource: Resource): string {
   });
 }
 
-function formatFieldRows(fields: (DocField & { in?: string })[]): [string, string][] {
-  return fields.map((field) => {
-    const flag = `--${field.name.replace(/_/g, "-")}`;
+function formatFieldRows(fields: (DocField & { in?: string })[], depth = 0): [string, string][] {
+  return fields.flatMap((field): [string, string][] => {
+    const name = depth ? `${"  ".repeat(depth)}${field.name}` : cmd(`--${field.name.replace(/_/g, "-")}`);
     const bare = field.type.replace(/\s*\|\s*null\b/g, "").trim();
     const type = bare === "boolean" ? "" : ` ${pc.dim(`<${bare.length > 24 ? `${bare.slice(0, 23)}…` : bare}>`)}`;
     const required = field.required ? `${pc.yellow("required")} ` : "";
-    return [`${cmd(flag)}${type}`, `${required}${field.description ?? ""}`];
+    return [
+      [`${name}${type}`, `${required}${field.description ?? ""}`.trimEnd()],
+      ...formatFieldRows(field.fields ?? [], depth + 1),
+    ];
   });
 }
 
