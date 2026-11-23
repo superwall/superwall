@@ -45,8 +45,9 @@ import { describeBindings, readLock, writeSnapshot, type LockFile } from "@/core
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
 import { warnNotPortable } from "@/core/paywalls/source/portability";
-import { collectSourceFiles } from "@/core/paywalls/source/source";
-import { assertGit, pushProjectSource, pushSource } from "@/core/paywalls/source/source-push";
+import { paywallFor } from "@/core/paywalls/pull";
+import { collectSourceFiles, type CollectedFiles } from "@/core/paywalls/source/source";
+import { assertGit, checkSource, pushProjectSource, pushSource } from "@/core/paywalls/source/source-push";
 import { formatTokenFinding, lintDesignTokens } from "@/core/paywalls/project/design-lint";
 import { VERSION } from "@/environment";
 import type { CommandContext } from "@/program/command";
@@ -235,6 +236,52 @@ function boundScope(
   return { surfaces: scoped, declared: narrowed, apps, unbound };
 }
 
+async function checkBeforeCreate(
+  context: PushContext,
+  input: {
+    project: FrameworkProject;
+    lock: LockFile;
+    targets: readonly SurfaceTarget[];
+    source: CollectedFiles;
+    frameworkVersion: string;
+    overwriteSource: boolean;
+  },
+): Promise<void> {
+  if (input.targets.length === 0) return;
+  if (!input.source.ok) throw new Error(input.source.reason);
+  await assertGit();
+  if (input.overwriteSource) return;
+  const files = input.source.files;
+  const through = new Map<string, string | undefined>();
+  const checked = new Set<string>();
+  for (const target of input.targets) {
+    const key = `${target.applicationId}:${surfaceKey(target.surface)}`;
+    if (checked.has(key)) continue;
+    checked.add(key);
+    if (!through.has(target.applicationId)) {
+      const platforms = Object.entries(input.lock.apps)
+        .filter(([, applicationId]) => applicationId === target.applicationId)
+        .map(([platform]) => platform);
+      through.set(
+        target.applicationId,
+        await paywallFor(context.api, input.lock, { applicationId: target.applicationId, platforms }),
+      );
+    }
+    const paywallId = through.get(target.applicationId);
+    if (paywallId === undefined) continue;
+    await checkSource({
+      api: context.api,
+      superwallDir: input.project.superwallDir,
+      paywallId,
+      applicationId: target.applicationId,
+      files,
+      framework: input.frameworkVersion,
+      surface: target.surface.id,
+      kind: target.surface.kind,
+    });
+  }
+}
+
 async function prepare(
   context: PushContext,
   input: {
@@ -244,6 +291,9 @@ async function prepare(
     declared: DeclaredPlatforms;
     platforms: readonly string[];
     existing: boolean;
+    source: CollectedFiles;
+    frameworkVersion: string;
+    overwriteSource: boolean;
   },
 ): Promise<{ prepared: Prepared[]; multi: boolean; unbound: UnboundTarget[] }> {
   const { framework, project } = input;
@@ -318,6 +368,15 @@ async function prepare(
         ),
       );
     }
+
+    await checkBeforeCreate(context, {
+      project,
+      lock,
+      targets: targets.filter((target) => !isBound(lock, target)),
+      source: input.source,
+      frameworkVersion: input.frameworkVersion,
+      overwriteSource: input.overwriteSource,
+    });
 
     const bindings: ResolvedBinding[] = [];
     for (const [index, target] of targets.entries()) {
@@ -502,6 +561,9 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
     declared: declarations.platforms,
     platforms: options.platforms ?? [],
     existing: options.existing === true,
+    source,
+    frameworkVersion: installed,
+    overwriteSource: options.overwriteSource === true,
   });
   for (const target of unbound) {
     ui.step(

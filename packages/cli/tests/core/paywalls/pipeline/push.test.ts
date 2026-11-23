@@ -2161,3 +2161,136 @@ test("the summary counts a paywall renamed without a new version apart from the 
   assert.equal(fake.calls.filter((kind) => kind === "rename").length, 2);
   assert.match(JSON.stringify(calls), /1 paywall pushed · 1 renamed · run/);
 });
+
+function unboundProject(ids: string[], bound: Record<string, string> = {}): FrameworkProject {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pipeline-"));
+  dirs.push(dir);
+  writeApp(dir, "ios", "42");
+  for (const [id, paywallId] of Object.entries(bound)) {
+    writeBinding(dir, "paywall", id, "ios", { paywallId });
+  }
+  for (const id of ids) {
+    fs.mkdirSync(path.join(dir, "paywalls", id), { recursive: true });
+    fs.writeFileSync(path.join(dir, "paywalls", id, "config.ts"), `mine ${id}\n`);
+  }
+  return {
+    root: dir,
+    superwallDir: dir,
+    marker: "package.json",
+    packageName: "acme-paywalls",
+    surfaces: ids.map((id) => surfaceOf(id)),
+    diagnostics: [],
+  };
+}
+
+const headlessApp = { paywalls: { body: { data: [{ id: 555, identifier: "other", metadata: { headless: "true" } }] } } };
+const remoteHead = (bare: string): string =>
+  execFileSync("git", ["--git-dir", bare, "rev-parse", "main"], { encoding: "utf8" }).trim();
+
+test("a source repo that differs with no sync point refuses a new paywall before it is created", async () => {
+  const project = unboundProject(["b", "c"]);
+  const fake = await fakeApi(headlessApp);
+  teammateCommit(fake.bare, { "paywalls/b/config.ts": "theirs\n" });
+  const lockBefore = fs.readFileSync(path.join(project.superwallDir, "superwall.lock"), "utf8");
+  const head = remoteHead(fake.bare);
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) }),
+    /paywalls\/b\/config\.ts[\s\S]*records no sync point[\s\S]*--overwrite-source/,
+  );
+
+  assert.ok(!fake.calls.includes("create"), "no empty paywall is left on the dashboard");
+  assert.ok(!fake.calls.includes("versions"));
+  assert.ok(fake.paths.includes("/v2/paywalls/555/source-access"), "the check goes through the app's own paywall");
+  assert.equal(fs.readFileSync(path.join(project.superwallDir, "superwall.lock"), "utf8"), lockBefore);
+  assert.equal(remoteHead(fake.bare), head, "nothing lands in the source repo");
+});
+
+test("the check before creating goes through a paywall superwall.lock binds in the app", async () => {
+  const project = unboundProject(["a", "b"], { a: "2080" });
+  const fake = await fakeApi();
+  teammateCommit(fake.bare, { "paywalls/b/config.ts": "theirs\n" });
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: false, ids: ["b"], load: async () => frameworkFor(project) }),
+    /records no sync point/,
+  );
+
+  assert.ok(!fake.calls.includes("create"));
+  assert.ok(!fake.calls.includes("paywalls"), "a bound paywall needs no lookup");
+  assert.ok(fake.paths.includes("/v2/paywalls/2080/source-access"));
+  assert.equal(readLock(project.superwallDir).paywalls.b, undefined);
+});
+
+test("a source repo that agrees with the project lets a new paywall be created and pushed", async () => {
+  const project = unboundProject(["b"]);
+  const fake = await fakeApi(headlessApp);
+  teammateCommit(fake.bare, { "paywalls/other/config.ts": "other\n" });
+
+  await runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) });
+
+  const access = fake.paths.indexOf("/v2/paywalls/555/source-access");
+  assert.ok(access >= 0 && access < fake.calls.indexOf("create"), "the source is checked before the paywall exists");
+  assert.equal(readLock(project.superwallDir).paywalls.b?.ios?.paywallId, "9");
+  assert.equal(shownAt(fake.bare, "paywalls/b/config.ts"), "mine b\n");
+  assert.equal(shownAt(fake.bare, "paywalls/other/config.ts"), "other\n");
+});
+
+test("--overwrite-source skips the check and creates the new paywall", async () => {
+  const project = unboundProject(["b"]);
+  const fake = await fakeApi(headlessApp);
+  teammateCommit(fake.bare, { "paywalls/b/config.ts": "theirs\n" });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    overwriteSource: true,
+    load: async () => frameworkFor(project),
+  });
+
+  assert.ok(fake.calls.includes("create"));
+  assert.ok(!fake.paths.includes("/v2/paywalls/555/source-access"), "no check runs through another paywall");
+  assert.equal(shownAt(fake.bare, "paywalls/b/config.ts"), "mine b\n");
+});
+
+test("a first push into an app with no headless paywall creates it with no check", async () => {
+  const project = unboundProject(["b"]);
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) });
+
+  assert.ok(fake.calls.indexOf("create") < fake.calls.indexOf("access"));
+  assert.equal(readLock(project.superwallDir).paywalls.b?.ios?.sourcePending, undefined);
+});
+
+test("without git a new paywall is never created", async () => {
+  const project = unboundProject(["b"]);
+  const fake = await fakeApi();
+  const savedPath = process.env.PATH;
+  process.env.PATH = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-no-git-"));
+  dirs.push(process.env.PATH);
+
+  try {
+    await assert.rejects(
+      runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) }),
+      /requires git/,
+    );
+  } finally {
+    process.env.PATH = savedPath;
+  }
+  assert.ok(!fake.calls.includes("create"));
+});
+
+test("a source tree that cannot be sent stops a new paywall before it is created", async () => {
+  const project = unboundProject(["b"]);
+  const fd = fs.openSync(path.join(project.superwallDir, "dump.bin"), "w");
+  fs.ftruncateSync(fd, 300 * 1024 * 1024);
+  fs.closeSync(fd);
+  const fake = await fakeApi();
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) }),
+    /over the 250 MB limit/,
+  );
+  assert.ok(!fake.calls.includes("create"));
+  assert.equal(readLock(project.superwallDir).paywalls.b, undefined);
+});
