@@ -7,6 +7,7 @@ describe("languageCandidates", () => {
     expect(languageCandidates("pt_BR")).toEqual(["pt_BR", "pt"]);
     expect(languageCandidates("es")).toEqual(["es"]);
     expect(languageCandidates(undefined)).toEqual(["en"]);
+    expect(languageCandidates("_ID")).toEqual(["_ID"]);
   });
 
   it("adds the modern code after the raw one for legacy Android language codes", () => {

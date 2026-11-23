@@ -772,10 +772,9 @@ const getDynamicLocalizedPeriod = (value: string, languages: string[]): string |
 export const languageCandidates = (locale: string | undefined): string[] => {
   if (!locale) return ["en"];
   const normalized = locale.replace(/-/g, "_");
-  const [language, ...rest] = normalized.split("_");
+  const [language = "", ...rest] = normalized.split("_");
   const candidates =
     language && language !== normalized ? [normalized, language.toLowerCase()] : [normalized];
-  if (!language) return candidates;
   const canonical = canonicalLanguage(language);
   if (canonical === language.toLowerCase()) return candidates;
   if (rest.length > 0) candidates.push([canonical, ...rest].join("_"));
