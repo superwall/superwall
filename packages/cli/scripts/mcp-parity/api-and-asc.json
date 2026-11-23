@@ -346,6 +346,22 @@
       "ok": false
     }
   ],
+  "asc_keys_promote": [
+    {
+      "input": {
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
   "asc_keys_delete": [
     {
       "input": {

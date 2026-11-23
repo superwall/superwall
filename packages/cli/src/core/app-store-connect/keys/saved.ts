@@ -90,6 +90,7 @@ export async function listOrganizationKeys(ctx: CommandContext<"required">): Pro
       return;
     }
     ctx.ui.info("Add one: superwall asc keys create --key-id <id> --issuer <id> --key-file <path.p8>");
+    ctx.ui.info("Or use the key saved on an app: superwall asc keys promote --app <app>");
     return;
   }
 
