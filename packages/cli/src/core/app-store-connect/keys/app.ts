@@ -1,12 +1,14 @@
 import type { CommandContext } from "@/program/command";
 import type { AppRef } from "@/core/app-store-connect/api/client";
 import type { AppKeyKind, SavedAppKey } from "@/core/api/integrations";
+import { orgIdOf } from "@/core/api/orgs";
 import { chooseIosApp, savedBundleId, type AppFlags } from "../superwall-app";
 
 export interface KeyApp {
   app: AppRef;
   name: string;
   savedBundleId: string | null;
+  organizationId: string | undefined;
 }
 
 export async function chooseKeyApp(ctx: CommandContext<"required">, flags: AppFlags): Promise<KeyApp> {
@@ -15,6 +17,7 @@ export async function chooseKeyApp(ctx: CommandContext<"required">, flags: AppFl
     app: { projectId: String(chosen.project.id), applicationId: String(chosen.app.id) },
     name: chosen.app.name ?? String(chosen.app.id),
     savedBundleId: savedBundleId(chosen.app),
+    organizationId: orgIdOf(chosen.project),
   };
 }
 
