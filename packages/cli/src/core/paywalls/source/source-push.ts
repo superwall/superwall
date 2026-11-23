@@ -116,6 +116,35 @@ export async function pushProjectSource(input: ProjectSourcePushInput): Promise<
   return pushed;
 }
 
+export interface SourceCheckInput {
+  api: SuperwallApi;
+  superwallDir: string;
+  paywallId: string;
+  applicationId: string;
+  files: readonly SourceFile[];
+  framework: string;
+  surface: string;
+  kind: "paywall" | "funnel";
+}
+
+export async function checkSource(input: SourceCheckInput): Promise<void> {
+  const access = await mintSourceAccess(input.api, input.paywallId);
+  await pushSourceTree({
+    access,
+    base: readSourceBase(input.superwallDir, access.repo),
+    check: true,
+    files: withCurrentLock(input.superwallDir, input.files),
+    message: {
+      kind: input.kind,
+      surface: input.surface,
+      version: 0,
+      paywallId: input.paywallId,
+      applicationId: input.applicationId,
+      framework: input.framework,
+    },
+  });
+}
+
 const LINK_ATTEMPTS = 2;
 const LINK_RETRY_DELAY_MS = 300;
 

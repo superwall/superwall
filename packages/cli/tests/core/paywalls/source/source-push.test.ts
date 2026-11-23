@@ -10,8 +10,8 @@ import type { SuperwallApi } from "@/core/api/client";
 import type { SourceFile } from "@/core/paywalls/source/source";
 import { formatLock, readLock, writeLock, type LockFile } from "@/core/paywalls/project/lock";
 import { readSourceBase } from "@/core/paywalls/source/base";
-import { SourceConflictError } from "@/core/paywalls/source/git";
-import { assertGit, pushProjectSource, pushSource } from "@/core/paywalls/source/source-push";
+import { SourceConflictError, SourceDivergedError } from "@/core/paywalls/source/git";
+import { assertGit, checkSource, pushProjectSource, pushSource } from "@/core/paywalls/source/source-push";
 
 const dirs: string[] = [];
 const servers: http.Server[] = [];
@@ -687,4 +687,47 @@ test("a project source push commits the lock as it is on disk", async () => {
   });
 
   assert.deepEqual(repoLock(fake.bare).apps, { ios: "42", android: "43" });
+});
+
+const remoteHead = (bare: string): string =>
+  execFileSync("git", ["--git-dir", bare, "rev-parse", "main"], { encoding: "utf8" }).trim();
+
+const checkInput = (fake: Fake, superwallDir: string, files: SourceFile[]) => ({
+  api: fake.api,
+  superwallDir,
+  paywallId: "208540",
+  applicationId: "42",
+  files,
+  framework: "0.4.2",
+  surface: "new-one",
+  kind: "paywall" as const,
+});
+
+test("a source check mints access, refuses a repo that diverged with no sync point, and lands nothing", async () => {
+  const fake = await fakeApi();
+  await pushSource(input(fake, { files: [file("config.ts", "theirs\n")] }));
+  const before = remoteHead(fake.bare);
+  fake.calls.length = 0;
+
+  await assert.rejects(
+    checkSource(checkInput(fake, temp("superwall-project-"), [file("config.ts", "mine\n")])),
+    (error: unknown) => error instanceof SourceDivergedError && error.files.join() === "config.ts",
+  );
+  assert.deepEqual(fake.calls, ["access"]);
+  assert.equal(remoteHead(fake.bare), before);
+});
+
+test("a source check that passes links nothing, lands nothing and records no sync point", async () => {
+  const fake = await fakeApi();
+  const shared = file("config.ts", "export default {};\n");
+  await pushSource(input(fake, { files: [shared] }));
+  const before = remoteHead(fake.bare);
+  fake.calls.length = 0;
+  const superwallDir = temp("superwall-project-");
+
+  await checkSource(checkInput(fake, superwallDir, [shared, file("paywalls/new-one/app/index.tsx", "new\n")]));
+
+  assert.deepEqual(fake.calls, ["access"]);
+  assert.equal(remoteHead(fake.bare), before);
+  assert.equal(readSourceBase(superwallDir, "org1-app42"), undefined);
 });
