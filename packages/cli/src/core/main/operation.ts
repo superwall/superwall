@@ -3,6 +3,7 @@ import { boundOrganization, pickOrganization, pickScope } from "@/core/account/s
 import { parseParams } from "@/core/api/params";
 import type { DocOperation } from "@/core/api/reference";
 import { RESOURCES, type ResourceName } from "@/core/api/resources";
+import { parseJson } from "@/core/json";
 import { testModeWarning } from "@/core/main/bundle-id";
 import { apiCall } from "@/ui/spinner";
 import { showApp } from "./app-view";
@@ -242,8 +243,8 @@ async function callOperation(
     const field = fieldName(flag);
     const queryParam = spec?.params.find((param) => param.in === "query" && param.name === field);
     const bodyField = bodyFields.get(field);
-    if (queryParam) query[field] = coerce(raw, queryParam.type);
-    else if (bodyField) body[field] = coerce(raw, bodyField.type);
+    if (queryParam) query[field] = coerce(raw, queryParam.type, toFlag(field));
+    else if (bodyField) body[field] = coerce(raw, bodyField.type, toFlag(field));
     else if (!spec) (sendsBody ? body : query)[field] = raw;
     else
       throw new Error(
@@ -319,7 +320,7 @@ async function fillScope(
     const target = field.location === "query" ? query : body;
     if (target[field.name] !== undefined) continue;
     const typed = (value: string) =>
-      field.location === "query" ? value : coerce(value, field.type);
+      field.location === "query" ? value : coerce(value, field.type, toFlag(field.name));
     wanted.set(`${field.location}:${field.name}`, {
       kind: field.kind,
       assign: (value) => (target[field.name] = typed(value)),
@@ -344,20 +345,21 @@ async function fillScope(
   }
 }
 
-function coerce(raw: unknown, type: string): unknown {
+function coerce(raw: unknown, type: string, flag: string): unknown {
   const parts = type.split("|").map((part) => part.trim());
   const nullable = parts.includes("null");
   const values = parts.filter((part) => part !== "null");
   const item = values.length && values.every((part) => part.endsWith("[]")) ? values[0]!.slice(0, -2) : undefined;
   const takesJson = (types: string[]) => types.some((part) => part === "object" || part === "any");
-  if (Array.isArray(raw)) return raw.map((value) => coerce(value, item ?? type));
+  if (Array.isArray(raw)) return raw.map((value) => coerce(value, item ?? type, flag));
   if (raw !== null && typeof raw === "object") return raw;
   const text = String(raw);
   if (nullable && text === "null") return null;
   if (item !== undefined) {
-    const parsed = takesJson([item]) ? coerce(raw, "any") : raw;
+    const parsed = takesJson([item]) ? coerce(raw, "any", flag) : raw;
     if (parsed !== raw) return Array.isArray(parsed) ? parsed : [parsed];
-    return text.split(",").map((part) => coerce(part.trim(), item));
+    if (text.trimStart().startsWith("[")) return parseListJson(text, item, flag);
+    return text.split(",").map((part) => coerce(part.trim(), item, flag));
   }
   if (/\bboolean\b/.test(type) && /^(true|false)$/.test(text)) return text === "true";
   if (/\b(number|integer)\b/.test(type) && text.trim() !== "" && !Number.isNaN(Number(text))) {
@@ -372,6 +374,16 @@ function coerce(raw: unknown, type: string): unknown {
   }
   if (type === "null") return null;
   return typeof raw === "number" && !/\b(number|integer)\b/.test(type) ? text : raw;
+}
+
+function parseListJson(text: string, item: string, flag: string): unknown[] {
+  const list = parseJson(text);
+  if (!Array.isArray(list) || !list.every((value) => typeof value === "string" || typeof value === "number")) {
+    throw new Error(
+      `${flag} takes a comma list (a,b) or a JSON array of values (["a","b"]), not ${text}. Nothing was sent.`,
+    );
+  }
+  return list.map((value) => coerce(value, item, flag));
 }
 
 function withQuery(path: string, params: Record<string, unknown>): string {

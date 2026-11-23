@@ -57,6 +57,9 @@ const SPEC: DocOperation[] = [
       },
     ],
   }),
+  op("PUT", "/v2/campaigns/{id}/audiences/order", {
+    body: [{ name: "audience_ids", type: "string[]", required: true }],
+  }),
   op("DELETE", "/v2/products/{id}"),
   op("DELETE", "/v2/surveys/{id}/paywalls", {
     body: [
@@ -754,6 +757,34 @@ test("an organization's operation takes the organization of the app it is about"
   await gadget(["members"], { app: "5861" }, calls);
   await gadget(["members"], {}, calls);
   assert.deepEqual(calls.map((call) => call.path), ["/v2/organizations/3642/members", "/v2/organizations/3642/members"]);
+});
+
+test("a list flag takes a JSON array as well as a comma list, typed by the reference", async () => {
+  const calls: Call[] = [];
+  await gadget(["create"], { tags: '["a", "b"]', sizes: "[1, \"2\"]", aliases: ' ["x"]' }, calls);
+  assert.deepEqual(calls[0]?.body, { tags: ["a", "b"], sizes: [1, 2], aliases: ["x"], project_id: 282 });
+});
+
+test("a list flag that starts like a JSON array but isn't one of values is refused before anything is sent", async () => {
+  for (const tags of ['["a",', '[{"a":1}]', "[[1]]", "[true]", "[null]"]) {
+    const calls: Call[] = [];
+    const out = await gadget(["create"], { tags }, calls);
+    assert.equal(calls.length, 0, tags);
+    assert.equal(
+      out.error.message,
+      `--tags takes a comma list (a,b) or a JSON array of values (["a","b"]), not ${tags}. Nothing was sent.`,
+    );
+  }
+});
+
+test("campaigns audiences reorder sends the same order for a JSON array and a comma list", async () => {
+  for (const audienceIds of ['["207677","175889"]', "207677,175889", ["207677", "175889"]]) {
+    const calls: Call[] = [];
+    await run(["campaigns", "audiences", "reorder", "40075"], { audienceIds, yes: true }, fakeApi(calls));
+    assert.deepEqual(calls, [
+      { method: "PUT", path: "/v2/campaigns/40075/audiences/order", body: { audience_ids: ["207677", "175889"] } },
+    ]);
+  }
 });
 
 test("a hand-written operation of a resource the CLI doesn't know is refused", async () => {
