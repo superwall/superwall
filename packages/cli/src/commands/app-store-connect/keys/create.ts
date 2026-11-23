@@ -14,7 +14,8 @@ Superwall couldn't save is written to ./AuthKey_<id>.p8, since Apple releases it
 the warning names the command that saves it.
 With --key-file, --key-id and --issuer it saves a key you already hold, once Apple accepts
 it. Without --app that becomes your organization's key, the one the signed proxy uses,
-for the Apple team --team names (Superwall asks Apple when it's left out).
+for the Apple team --team names, once Apple confirms the key is that team's (Superwall
+asks Apple which team when it's left out).
 A purchase_key is for the app's bundle ID; an app with none gets --bundle-id saved with it.`,
   args: {
     kind: { describe: "api_key or purchase_key (with --key-file and --app, api_key when left out)", choices: KEY_KINDS },

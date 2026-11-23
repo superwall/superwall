@@ -12,6 +12,7 @@ import type { AppKeyKind } from "@/core/api/integrations";
 import { testModeWarning } from "@/core/main/bundle-id";
 import { apiCall } from "@/ui/spinner";
 import { chooseKeyApp, type KeyApp } from "./app";
+import { readAppleKeyTeam, type AppleKeyCredentials } from "./apple-team";
 import { KEY_LABEL } from "@/core/api/integrations";
 import { differentBundleId, type AppFlags } from "../superwall-app";
 
@@ -66,6 +67,7 @@ export async function upsertHeldKey(ctx: CommandContext<"required">, request: He
 
   const credentials = { keyId, issuerId, privateKey, accountName };
   const api = request.orgApi ?? (await resolveAscOrgApi(ctx));
+  if (action === "create" && teamId) await confirmKeyTeam(ctx, credentials, teamId);
   const created = await apiCall(ctx, "Connecting App Store Connect", async () => {
     if (action === "update" && teamId) return replaceAscConfig(api, teamId, credentials);
     try {
@@ -79,6 +81,37 @@ export async function upsertHeldKey(ctx: CommandContext<"required">, request: He
   });
   if (ctx.json) return ctx.output.data(created);
   ctx.ui.success(`App Store Connect connected ${created.team_id ?? created.id ?? ""}`);
+}
+
+async function confirmKeyTeam(
+  ctx: CommandContext<"required">,
+  credentials: AppleKeyCredentials,
+  teamId: string,
+): Promise<void> {
+  const { keyId } = credentials;
+  const team = await apiCall(ctx, "Checking the key's Apple team", () => readAppleKeyTeam(credentials));
+  const notSaved = "It wasn't saved.";
+  switch (team.status) {
+    case "ok":
+      if (team.teamId === teamId) return;
+      throw new Error(
+        `Key ${keyId} belongs to Apple team ${team.teamId}, not ${teamId}. ${notSaved} Pass --team ${team.teamId}, or leave --team out.`,
+      );
+    case "invalid_key":
+      throw new Error(`The --key-file isn't a .p8 private key Apple can sign with. ${notSaved}`);
+    case "rejected":
+      throw new Error(
+        team.httpStatus === 401
+          ? `Apple rejected key ${keyId}: check --key-id, --issuer and --key-file. ${notSaved}`
+          : `Apple answered ${team.httpStatus} when asked which team key ${keyId} belongs to, so it couldn't be checked against team ${teamId}. ${notSaved}`,
+      );
+    case "not_found":
+      throw new Error(
+        `Apple accepted key ${keyId}, but its team has no bundle IDs or apps to read a team ID from, so it couldn't be checked against team ${teamId}. ${notSaved} Leave --team out and Superwall finds the team itself.`,
+      );
+    case "unreachable":
+      throw new Error(`Apple couldn't be reached to check which team key ${keyId} belongs to (${team.reason}). ${notSaved} Try again.`);
+  }
 }
 
 function purchaseKeyBundleId(

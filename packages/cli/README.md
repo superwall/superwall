@@ -499,7 +499,9 @@ superwall asc keys create --key-id <id> --issuer <id> --key-file AuthKey.p8
 superwall asc keys create --team <team id> --key-id <id> --issuer <id> --key-file AuthKey.p8
 ```
 
-With `--team` the key is saved as the organization's key for that Apple team.
+With `--team` the key is saved as the organization's key for that Apple team,
+once Apple confirms the key belongs to it; a key from another team, or one
+Apple can't place on a team, is refused before anything is saved.
 The organization keeps one key per team: when it already has one, the command
 stops and names the `asc keys update --team` command that replaces it.
 

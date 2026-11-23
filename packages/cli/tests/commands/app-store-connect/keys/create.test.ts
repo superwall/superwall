@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync, verify } from "node:crypto";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,6 +16,31 @@ afterEach(() => {
 const KEY_FILE = join(mkdtempSync(join(tmpdir(), "superwall-keys-")), "AuthKey.p8");
 writeFileSync(KEY_FILE, "PEM");
 const HELD = { keyId: "K1", issuer: "I1", keyFile: KEY_FILE };
+
+const APPLE_KEY = generateKeyPairSync("ec", { namedCurve: "P-256" });
+const P8_FILE = join(mkdtempSync(join(tmpdir(), "superwall-keys-")), "AuthKey_K1.p8");
+writeFileSync(P8_FILE, APPLE_KEY.privateKey.export({ type: "pkcs8", format: "pem" }));
+const TEAM_HELD = { ...HELD, keyFile: P8_FILE, team: "TEAM1" };
+
+type AppleAnswer = { status?: number; body?: unknown } | Error;
+async function withApple<T>(answer: (path: string) => AppleAnswer, run: () => Promise<T>) {
+  const asked: { path: string; authorization: string }[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init: RequestInit = {}) => {
+    const { pathname, search } = new URL(url);
+    const path = decodeURIComponent(`${pathname}${search}`);
+    asked.push({ path, authorization: new Headers(init.headers).get("authorization") ?? "" });
+    const reply = answer(path);
+    if (reply instanceof Error) throw reply;
+    return new Response(JSON.stringify(reply.body ?? {}), { status: reply.status ?? 200 });
+  }) as typeof fetch;
+  try {
+    return { run: await run(), asked };
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+const bundleOf = (teamId: string) => ({ data: [{ type: "bundleIds", attributes: { seedId: teamId } }] });
 
 test("keys create --key-file --app saves a key file on the app, and a rejected key exits non-zero", async () => {
   const api = await keys(create, { json: true, flags: { app: "8", ...HELD } });
@@ -134,16 +160,27 @@ test("a held key without --app becomes the organization's key", async () => {
     private_key: "PEM",
     account_name: "App Store Connect",
   });
-  const team = await keys(create, { flags: { ...HELD, team: "TEAM1" } }, { routes });
+  const { run: team, asked } = await withApple(
+    () => ({ body: bundleOf("TEAM1") }),
+    () => keys(create, { flags: TEAM_HELD }, { routes }),
+  );
   assert.deepEqual(team.said("error"), []);
   assert.deepEqual(team.said("success"), ["App Store Connect connected TEAM1"]);
-  assert.deepEqual(team.wrote("POST", "/app-store-connect")[0]?.body, {
-    key_id: "K1",
-    issuer_id: "I1",
-    private_key: "PEM",
-    team_id: "TEAM1",
-    account_name: "App Store Connect",
-  });
+  assert.deepEqual(
+    asked.map((a) => a.path),
+    ["/v1/bundleIds?limit=1&fields[bundleIds]=seedId"],
+  );
+  const [header, payload, signature] = (asked[0]?.authorization ?? "").replace(/^Bearer /, "").split(".");
+  assert.deepEqual(JSON.parse(Buffer.from(header ?? "", "base64url").toString()), { alg: "ES256", kid: "K1", typ: "JWT" });
+  const claims = JSON.parse(Buffer.from(payload ?? "", "base64url").toString());
+  assert.equal(claims.iss, "I1");
+  assert.equal(claims.aud, "appstoreconnect-v1");
+  assert.ok(
+    verify("sha256", Buffer.from(`${header}.${payload}`), { key: APPLE_KEY.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(signature ?? "", "base64url")),
+  );
+  const body = team.wrote("POST", "/app-store-connect")[0]?.body as Record<string, unknown>;
+  assert.equal(body.team_id, "TEAM1");
+  assert.equal(body.key_id, "K1");
   assert.equal(team.wrote("PATCH", "").length, 0);
 });
 
@@ -154,10 +191,13 @@ test("a team that already has the organization's key is pointed at asc keys upda
     }
     return undefined;
   };
-  const team = await keys(create, { flags: { ...HELD, team: "TEAM1" } }, { routes });
+  const { run: team } = await withApple(
+    () => ({ body: bundleOf("TEAM1") }),
+    () => keys(create, { flags: TEAM_HELD }, { routes }),
+  );
   assert.equal(process.exitCode, 1);
   assert.deepEqual(team.said("error"), [
-    `Your organization already has a key for team TEAM1. To replace it, run \`superwall asc keys update --team TEAM1 --key-id K1 --issuer I1 --key-file ${KEY_FILE}\`.`,
+    `Your organization already has a key for team TEAM1. To replace it, run \`superwall asc keys update --team TEAM1 --key-id K1 --issuer I1 --key-file ${P8_FILE}\`.`,
   ]);
   process.exitCode = undefined;
   const resolved = await keys(create, { flags: HELD }, { routes });
@@ -172,6 +212,49 @@ test("a team that already has the organization's key is pointed at asc keys upda
     },
   });
   assert.doesNotMatch(other.said("error")[0] ?? "", /already has a key/);
+});
+
+test("--team is checked against the key's Apple team before anything is saved", async () => {
+  const refused = async (answer: (path: string) => AppleAnswer, flags: Record<string, unknown> = TEAM_HELD) => {
+    const { run } = await withApple(answer, () => keys(create, { flags }));
+    assert.equal(process.exitCode, 1);
+    process.exitCode = undefined;
+    assert.equal(run.wrote("POST", "").length, 0);
+    return run.said("error")[0];
+  };
+  const notSaved = "It wasn't saved.";
+  assert.equal(
+    await refused(() => ({ body: bundleOf("OTHER99") })),
+    `Key K1 belongs to Apple team OTHER99, not TEAM1. ${notSaved} Pass --team OTHER99, or leave --team out.`,
+  );
+  assert.equal(
+    await refused((path) =>
+      path.startsWith("/v1/bundleIds")
+        ? { body: { data: [] } }
+        : { body: { data: [{}], included: [{ type: "bundleIds", attributes: { seedId: "OTHER99" } }] } },
+    ),
+    `Key K1 belongs to Apple team OTHER99, not TEAM1. ${notSaved} Pass --team OTHER99, or leave --team out.`,
+  );
+  assert.equal(
+    await refused(() => ({ body: { data: [] } })),
+    `Apple accepted key K1, but its team has no bundle IDs or apps to read a team ID from, so it couldn't be checked against team TEAM1. ${notSaved} Leave --team out and Superwall finds the team itself.`,
+  );
+  assert.equal(
+    await refused(() => ({ status: 401 })),
+    `Apple rejected key K1: check --key-id, --issuer and --key-file. ${notSaved}`,
+  );
+  assert.equal(
+    await refused((path) => (path.startsWith("/v1/bundleIds") ? { body: { data: [] } } : { status: 403 })),
+    `Apple answered 403 when asked which team key K1 belongs to, so it couldn't be checked against team TEAM1. ${notSaved}`,
+  );
+  assert.equal(
+    await refused(() => new Error("network down")),
+    `Apple couldn't be reached to check which team key K1 belongs to (network down). ${notSaved} Try again.`,
+  );
+  assert.equal(
+    await refused(() => ({ body: bundleOf("TEAM1") }), { ...HELD, team: "TEAM1" }),
+    `The --key-file isn't a .p8 private key Apple can sign with. ${notSaved}`,
+  );
 });
 
 test("--dry-run with --team plans the organization's key without a request", async () => {
