@@ -570,8 +570,9 @@ from npm, pinned to one version.
   `await import()` inside `run`; a tool's core reads files and the machine only
   through the host. `build-tools.ts` turns every `await import()` in the bundle
   into "This needs the Superwall CLI on your machine", so a tool's own path
-  never uses one; the build runs `api_docs` from the built `dist/tools.js` and
-  fails if it errors.
+  never uses one; the build runs `api_docs` from the built `dist/tools.js`
+  (two matching queries, `mmp`, and a query that matches nothing, which must
+  answer an empty `operations` list) and fails if any errors.
 - **The MCP updates only when pwn's bump PR merges.** mcp.superwall.com serves
   the `@superwall/cli` version pinned in pwn's `apps/mcp/package.json`, and that
   pin moves only when a `bot/mcp-cli-<version>` PR merges. pwn's

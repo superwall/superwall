@@ -96,6 +96,22 @@
         ]
       },
       "ok": true
+    },
+    {
+      "input": {
+        "query": [
+          "mmp"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "query": [
+          "zzzznomatch"
+        ]
+      },
+      "ok": true
     }
   ],
   "get": [
