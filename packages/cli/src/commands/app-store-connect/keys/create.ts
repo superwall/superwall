@@ -10,7 +10,8 @@ that owns the app's bundle ID, and saves it. An app that already has one creates
 unless --replace; the old key stays valid. The password comes from a masked prompt,
 SUPERWALL_APPLE_PASSWORD or --apple-password, and goes only to Apple. Without prompts the
 first run stops for Apple's code: run it again with --code within 10 minutes. A key
-Superwall couldn't save is written to ./AuthKey_<id>.p8, since Apple releases it once.
+Superwall couldn't save is written to ./AuthKey_<id>.p8, since Apple releases it once, and
+the warning names the command that saves it.
 With --key-file, --key-id and --issuer it saves a key you already hold, once Apple accepts
 it. Without --app that becomes your organization's key, the one the signed proxy uses,
 for the Apple team --team names (Superwall asks Apple when it's left out).

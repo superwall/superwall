@@ -461,7 +461,10 @@ superwall asc notification-url set --app <id>         # set it where Apple has n
 
 `asc keys import` saves a key only when Apple confirms it for the app's bundle
 ID. `asc keys create` does nothing when the app already has that key; pass
-`--replace` to create another. `asc keys sources` lists the keys on your other
+`--replace` to create another. A key Apple created but Superwall couldn't save
+is written to `./AuthKey_<id>.p8` (or `SubscriptionKey_<id>.p8`), and the
+warning prints the `asc keys create <kind> --app <id> --key-file <path>`
+command that saves it. `asc keys sources` lists the keys on your other
 apps, `asc keys import <kind> --from <app>` reuses one of them, and
 `asc keys delete <kind> --app <id>` removes one from an app. `superwall asc --help` says what
 each command changes, what it never does, and its exit codes.
@@ -493,7 +496,12 @@ signed proxy:
 ```bash
 superwall asc keys create api_key --app <id> --key-id <id> --issuer <id> --key-file AuthKey.p8
 superwall asc keys create --key-id <id> --issuer <id> --key-file AuthKey.p8
+superwall asc keys create --team <team id> --key-id <id> --issuer <id> --key-file AuthKey.p8
 ```
+
+With `--team` the key is saved as the organization's key for that Apple team.
+The organization keeps one key per team: when it already has one, the command
+stops and names the `asc keys update --team` command that replaces it.
 
 Saving an API key on an app also gives the organization a key for that Apple
 team when it has none. An app whose key was saved before that, which the

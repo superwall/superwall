@@ -130,7 +130,7 @@ test("a key Superwall keeps refusing while Apple activates it is retried, then k
   assert.deepEqual(run.files, { "AuthKey_TEAMKEY001.p8": PEM });
   assert.match(
     (run.result.json as { detail: string }).detail,
-    /^Superwall couldn't save the key: Apple rejected the key\. Apple only releases a key once, so it was saved to \/tmp\/AuthKey_TEAMKEY001\.p8 \(issuer issuer-111\)\.$/,
+    /^Superwall couldn't save the key: Apple rejected the key\. Apple only releases a key once, so it was saved to \/tmp\/AuthKey_TEAMKEY001\.p8\. Save it on the app with `superwall asc keys create api_key --app 8 --key-id TEAMKEY001 --issuer issuer-111 --key-file \/tmp\/AuthKey_TEAMKEY001\.p8`\.$/,
   );
   assert.equal(process.exitCode, 1);
 });
@@ -183,6 +183,21 @@ test("creating an In-App Purchase key for an app without a bundle ID warns about
 
   assert.deepEqual(run.said("warn")[0], "Saving the bundle ID com.acme.app: 1 production device in the last 30 days used com.acme.beta, and would run in test mode.");
   assert.deepEqual(run.said("success"), ["In-App Purchase key IAPKEY0001 created and saved on `Acme`."]);
+});
+
+test("a kept In-App Purchase key names --bundle-id when the app has none saved", async () => {
+  const run = await scenario(create, {
+    args: { kind: "purchase_key" },
+    flags: { app: "8", bundleId: "com.acme.app" },
+    api: { ...NO_BUNDLE, purchaseVerdict: { valid: false, error: null } },
+    json: true,
+  });
+
+  assert.match(
+    (run.result.json as { detail: string }).detail,
+    /Save it on the app with `superwall asc keys create purchase_key --app 8 --key-id IAPKEY0001 --issuer issuer-111 --key-file \/tmp\/SubscriptionKey_IAPKEY0001\.p8 --bundle-id com\.acme\.app`\.$/,
+  );
+  assert.equal(process.exitCode, 1);
 });
 
 test("a new key is kept on disk when Superwall can't be reached to save it", async () => {
