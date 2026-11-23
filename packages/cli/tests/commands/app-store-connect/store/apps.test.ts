@@ -53,7 +53,7 @@ test("needs --team when the organization has several, and a connected one at all
   assert.match(several.requests.at(-1)?.path ?? "", /\/proxy\/T2\/v1\/apps/);
 
   const none = await runCommand(apps, { api: fakeAscApi({}, []).api });
-  assert.deepEqual(none.said("error"), ["App Store Connect isn't connected. Run `superwall asc keys create --help`."]);
+  assert.deepEqual(none.said("error"), ["App Store Connect isn't connected. Run `superwall asc keys promote --app <app>` to use an app's saved key, or `superwall asc keys create --help`."]);
 });
 
 test("an app Apple returns without a name or bundle ID is listed by its id, through the parser", async () => {

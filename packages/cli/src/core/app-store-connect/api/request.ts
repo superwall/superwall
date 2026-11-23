@@ -39,7 +39,7 @@ export async function resolveAscTeam(ctx: CommandContext, api: SuperwallApi, tea
   const configs = await apiCall(ctx, "Finding App Store Connect", () => listAscConfigs(api));
   const [first] = configs;
   if (!first) {
-    throw new Error("App Store Connect isn't connected. Run `superwall asc keys create --help`.");
+    throw new Error("App Store Connect isn't connected. Run `superwall asc keys promote --app <app>` to use an app's saved key, or `superwall asc keys create --help`.");
   }
   if (configs.length > 1) {
     const teams = configs.map((c) => String(c.team_id ?? c.id ?? "")).join(", ");

@@ -87,7 +87,7 @@ test("a team without a team_id is addressed by its id", async () => {
 test("no App Store Connect key, or several, stops before Apple is called", async () => {
   const none = fakeAscApi({}, []);
   const missing = await runCommand(get, { api: none.api, args: { path: "/v1/apps" } });
-  assert.equal(errorOf(missing), "App Store Connect isn't connected. Run `superwall asc keys create --help`.");
+  assert.equal(errorOf(missing), "App Store Connect isn't connected. Run `superwall asc keys promote --app <app>` to use an app's saved key, or `superwall asc keys create --help`.");
   assert.equal(process.exitCode, 1);
 
   process.exitCode = undefined;

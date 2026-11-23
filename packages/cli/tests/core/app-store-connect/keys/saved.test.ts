@@ -43,6 +43,7 @@ test("with no organization key it says how to add one, and offers to when it can
   assert.deepEqual(told.said("step"), ["No App Store Connect credentials yet"]);
   assert.deepEqual(told.said("info"), [
     "Add one: superwall asc keys create --key-id <id> --issuer <id> --key-file <path.p8>",
+    "Or use the key saved on an app: superwall asc keys promote --app <app>",
   ]);
 
   const declined = await keys(list, {}, { ...orgKeys([]), interactive: true, confirm: false });

@@ -38,6 +38,21 @@ export function replaceAscConfig(api: SuperwallApi, teamId: string, c: AscCreden
   });
 }
 
+export type AscKeyPromotionOutcome = "saved" | "exists" | "no_team_id" | "apple_unavailable" | "failed";
+
+export interface AscKeyPromotion {
+  object: "app_store_connect_key_promotion";
+  application_id: number | string;
+  organization_id: number | string;
+  key_id: string;
+  team_id: string | null;
+  outcome: AscKeyPromotionOutcome;
+}
+
+export function promoteAppAscKey(api: SuperwallApi, applicationId: string): Promise<AscKeyPromotion> {
+  return api.post<AscKeyPromotion>(`${ascBase(api)}/applications/${applicationId}/import`, {});
+}
+
 export interface AppRef {
   projectId: string;
   applicationId: string;

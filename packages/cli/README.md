@@ -452,6 +452,7 @@ time:
 ```bash
 superwall asc keys list --app <id>                    # which of the two keys the app has
 superwall asc keys import --app <id>                  # reuse a key your organization already has
+superwall asc keys promote --app <id>                 # copy the app's saved key to your organization
 superwall asc keys create api_key --app <id>          # sign in to Apple and create just this key
 superwall asc keys create purchase_key --app <id>
 superwall asc notification-url check --app <id>       # what Apple has, and whose it is
@@ -495,7 +496,11 @@ superwall asc keys create --key-id <id> --issuer <id> --key-file AuthKey.p8
 ```
 
 Saving an API key on an app also gives the organization a key for that Apple
-team when it has none. `asc keys update --team <team id>` replaces the
+team when it has none. An app whose key was saved before that, which the
+`asc_*` commands answer with "isn't connected", gets it with
+`superwall asc keys promote --app <id>`: it copies the app's saved API key to
+the organization for its Apple team, and changes nothing when the team already
+has one. `asc keys update --team <team id>` replaces the
 organization's key for a team, and is refused unless Apple confirms the new key
 belongs to the same team.
 
