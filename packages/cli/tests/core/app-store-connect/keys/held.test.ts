@@ -64,7 +64,7 @@ test("connecting an organization key names the team, or the credential when Appl
 test("without prompts an organization key needs every part, and the key file must exist", async () => {
   const createUsage = await keys(create, { flags: { keyFile: KEY_FILE } });
   assert.deepEqual(createUsage.said("error"), [
-    "Usage: superwall asc keys create --key-id <id> --issuer <id> --key-file <path.p8> [--name <name>]",
+    "Usage: superwall asc keys create --key-id <id> --issuer <id> --key-file <path.p8> [--team <id>] [--name <name>]",
   ]);
 
   const updateUsage = await keys(update, { flags: { team: "TEAM1", keyId: "K1" } });

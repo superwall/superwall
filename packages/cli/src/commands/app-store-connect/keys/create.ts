@@ -10,9 +10,12 @@ that owns the app's bundle ID, and saves it. An app that already has one creates
 unless --replace; the old key stays valid. The password comes from a masked prompt,
 SUPERWALL_APPLE_PASSWORD or --apple-password, and goes only to Apple. Without prompts the
 first run stops for Apple's code: run it again with --code within 10 minutes. A key
-Superwall couldn't save is written to ./AuthKey_<id>.p8, since Apple releases it once.
+Superwall couldn't save is written to ./AuthKey_<id>.p8, since Apple releases it once, and
+the warning names the command that saves it.
 With --key-file, --key-id and --issuer it saves a key you already hold, once Apple accepts
-it. Without --app that becomes your organization's key, the one the signed proxy uses.
+it. Without --app that becomes your organization's key, the one the signed proxy uses,
+for the Apple team --team names, once Apple confirms the key is that team's (Superwall
+asks Apple which team when it's left out).
 A purchase_key is for the app's bundle ID; an app with none gets --bundle-id saved with it.`,
   args: {
     kind: { describe: "api_key or purchase_key (with --key-file and --app, api_key when left out)", choices: KEY_KINDS },
@@ -33,7 +36,7 @@ A purchase_key is for the app's bundle ID; an app with none gets --bundle-id sav
     code: { type: "string", value: "code", describe: "Apple's verification code, to continue a sign-in started without prompts" },
     sms: { type: "boolean", describe: "Text the code instead of pushing it to trusted devices" },
     phone: { type: "string", value: "number", describe: "Which trusted phone number to text, when the account has several" },
-    team: { ...team, value: "id|name", describe: "Apple team id, or a team name when creating a key" },
+    team: { ...team, value: "id|name", describe: "Apple team id, or a team name when signing in to create a key" },
     keyRole: { type: "string", value: "role", describe: "Role of a new API key: app_manager (default) or admin" },
     replace: { type: "boolean", describe: "Create another key although the app has one; the old one stays valid at Apple" },
     app: { ...app, describe: "The iOS app: id, name or dashboard link" },
@@ -43,6 +46,7 @@ A purchase_key is for the app's bundle ID; an app with none gets --bundle-id sav
   examples: [
     ["asc keys create api_key --app <app>", "Sign in to Apple and create it"],
     ["asc keys create api_key --app <app> --key-id <id> --issuer <id> --key-file <path.p8>", "Save one you hold"],
+    ["asc keys create --team <id> --key-id <id> --issuer <id> --key-file <path.p8>", "Save your organization's key for a team"],
   ],
   auth: "required",
   json: true,
