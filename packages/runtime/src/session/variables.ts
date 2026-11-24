@@ -64,6 +64,16 @@ export type SuperwallDeviceVariables = {
   preferredRegionCode?: string;
   deviceCurrencyCode?: string;
   deviceCurrencySymbol?: string;
+  /**
+   * The App Store storefront's country, as ISO 3166-1 alpha-3 (`"USA"`), the
+   * key to switch a Stripe and an App Store slot on. Only the iOS SDK reports
+   * it; `undefined` elsewhere.
+   */
+  storeFrontCountryCode?: string;
+  /** The App Store storefront's identifier (`"143441"` for the US). iOS only. */
+  storeFrontId?: string;
+  /** The App Store storefront's currency, as ISO 4217 (`"USD"`). iOS 17 and later only. */
+  storeFrontCurrency?: string;
   interfaceType?: string;
   interfaceStyle?: string;
   interfaceStyleMode?: string;
