@@ -65,9 +65,10 @@ export type SuperwallDeviceVariables = {
   deviceCurrencyCode?: string;
   deviceCurrencySymbol?: string;
   /**
-   * The App Store storefront's country, as ISO 3166-1 alpha-3 (`"USA"`), the
-   * key to switch a Stripe and an App Store slot on. Only the iOS SDK reports
-   * it; `undefined` elsewhere.
+   * The store's country, the key to switch a Stripe and a store slot on. The
+   * iOS SDK reports the App Store storefront as ISO 3166-1 alpha-3 (`"USA"`);
+   * the Android SDK (2.7.20 and later) reports the Play billing country as
+   * alpha-2 (`"US"`). `undefined` on the web and on older SDKs.
    */
   storeFrontCountryCode?: string;
   /** The App Store storefront's identifier (`"143441"` for the US). iOS only. */
