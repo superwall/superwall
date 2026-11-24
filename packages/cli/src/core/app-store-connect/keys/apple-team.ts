@@ -1,5 +1,6 @@
 const ASC = "https://api.appstoreconnect.apple.com";
 const TOKEN_SECONDS = 300;
+const APPLE_TIMEOUT_MS = 30_000;
 
 export interface AppleKeyCredentials {
   keyId: string;
@@ -50,11 +51,17 @@ const seedId = (resource: BundleIdResource | undefined) => {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
-export async function readAppleKeyTeam(credentials: AppleKeyCredentials): Promise<AppleKeyTeam> {
+export async function readAppleKeyTeam(
+  credentials: AppleKeyCredentials,
+  timeoutMs = APPLE_TIMEOUT_MS,
+): Promise<AppleKeyTeam> {
   const token = await appleToken(credentials);
   if (!token) return { status: "invalid_key" };
   const get = async (path: string): Promise<{ status: number; body: unknown }> => {
-    const res = await fetch(`${ASC}${path}`, { headers: { authorization: `Bearer ${token}`, accept: "application/json" } });
+    const res = await fetch(`${ASC}${path}`, {
+      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
     return { status: res.status, body: res.ok ? await res.json() : undefined };
   };
   try {
@@ -68,6 +75,9 @@ export async function readAppleKeyTeam(credentials: AppleKeyCredentials): Promis
     const fromApps = seedId(included?.find((entry) => entry.type === "bundleIds"));
     return fromApps ? { status: "ok", teamId: fromApps } : { status: "not_found" };
   } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      return { status: "unreachable", reason: `no answer within ${timeoutMs / 1000}s` };
+    }
     return { status: "unreachable", reason: error instanceof Error ? error.message : String(error) };
   }
 }

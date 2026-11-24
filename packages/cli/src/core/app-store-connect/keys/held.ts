@@ -1,4 +1,5 @@
 import type { CommandContext } from "@/program/command";
+import { shellArg } from "@/core/shell-arg";
 import { readInput } from "@/program/host";
 import {
   createAscConfig,
@@ -75,7 +76,7 @@ export async function upsertHeldKey(ctx: CommandContext<"required">, request: He
     } catch (error) {
       if (!(error instanceof ApiError) || error.status !== 409) throw error;
       throw new Error(
-        `Your organization already has a key for ${teamId ? `team ${teamId}` : "this team"}. To replace it, run \`superwall asc keys update --team ${teamId ?? "<team id>"} --key-id ${keyId} --issuer ${issuerId} --key-file ${keyFile}\`.`,
+        `Your organization already has a key for ${teamId ? `team ${teamId}` : "this team"}. To replace it, run \`superwall asc keys update --team ${teamId ?? "<team id>"} --key-id ${keyId} --issuer ${issuerId} --key-file ${shellArg(keyFile)}\`.`,
       );
     }
   });

@@ -1,5 +1,6 @@
 
 import type { CommandContext } from "@/program/command";
+import { shellArg } from "@/core/shell-arg";
 import { replaceAppAscKey, replaceAppPurchaseKey, type AppRef, type KeyVerdict } from "@/core/app-store-connect/api/client";
 import { ApiError, type SuperwallApi } from "@/core/api/client";
 import { findIntegrations, type AppKeyKind, KEY_LABEL, keyKind } from "@/core/api/integrations";
@@ -108,7 +109,7 @@ function keepKey(
 ): string {
   const path = deps.writeKeyFile(`${KEY_FILE[kind]}_${key.id}.p8`, key.privateKey);
   const bundleId = kind === "purchase_key" && app.savedBundleId === null ? ` --bundle-id ${app.bundleId}` : "";
-  const finish = `superwall asc keys create ${kind} --app ${app.applicationId} --key-id ${key.id} --issuer ${key.issuerId} --key-file ${path}${bundleId}`;
+  const finish = `superwall asc keys create ${kind} --app ${app.applicationId} --key-id ${key.id} --issuer ${key.issuerId} --key-file ${shellArg(path)}${bundleId}`;
   const detail = `${reason} Apple only releases a key once, so it was saved to ${path}. Save it on the app with \`${finish}\`.`;
   ctx.output.render(blocks.warning(detail));
   return detail;

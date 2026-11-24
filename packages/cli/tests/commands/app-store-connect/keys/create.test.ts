@@ -212,6 +212,11 @@ test("a team that already has the organization's key is pointed at asc keys upda
     },
   });
   assert.doesNotMatch(other.said("error")[0] ?? "", /already has a key/);
+  process.exitCode = undefined;
+  const spaced = join(mkdtempSync(join(tmpdir(), "superwall keys ")), "AuthKey.p8");
+  writeFileSync(spaced, "PEM");
+  const quoted = await keys(create, { flags: { ...HELD, keyFile: spaced } }, { routes });
+  assert.ok(quoted.said("error")[0]?.endsWith(`--key-file '${spaced}'\`.`));
 });
 
 test("--team is checked against the key's Apple team before anything is saved", async () => {

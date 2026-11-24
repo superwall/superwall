@@ -195,6 +195,7 @@ export interface Scenario {
   flags?: Record<string, unknown>;
   json?: boolean;
   credentials?: { appleId?: string; password?: string };
+  keyDir?: string;
   stored?: PendingVerification;
   interactive?: boolean;
   answers?: {
@@ -241,7 +242,7 @@ export async function scenario(command: AnyCommand, options: Scenario = {}) {
     },
     writeKeyFile: (file, privateKey) => {
       files[file] = privateKey;
-      return `/tmp/${file}`;
+      return `${options.keyDir ?? "/tmp"}/${file}`;
     },
   };
   const { api, requests } = fakeApi(options.api);

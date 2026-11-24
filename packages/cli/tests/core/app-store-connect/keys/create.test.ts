@@ -147,6 +147,20 @@ test("a key Apple never accepts, without a reason, is kept on disk", async () =>
   assert.deepEqual(run.files, { "AuthKey_TEAMKEY001.p8": PEM });
 });
 
+test("a kept key in a folder with spaces or quotes is quoted in the command that saves it", async () => {
+  const run = await scenario(create, {
+    args: { kind: "api_key" },
+    api: { failAppSave: new TypeError("fetch failed") },
+    keyDir: "/tmp/Rodrigo's App",
+    json: true,
+  });
+
+  assert.match(
+    (run.result.json as { detail: string }).detail,
+    /--key-file '\/tmp\/Rodrigo'\\''s App\/AuthKey_TEAMKEY001\.p8'`\.$/,
+  );
+});
+
 test("an app without a name is called by its id", async () => {
   const saved = await scenario(create, {
     args: { kind: "api_key" },
