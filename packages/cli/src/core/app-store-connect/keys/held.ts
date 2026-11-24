@@ -1,4 +1,5 @@
 import type { CommandContext } from "@/program/command";
+import { shellArg } from "@/core/shell-arg";
 import { readInput } from "@/program/host";
 import {
   createAscConfig,
@@ -7,11 +8,12 @@ import {
   replaceAscConfig,
 } from "@/core/app-store-connect/api/client";
 import { resolveAscOrgApi } from "@/core/app-store-connect/api/request";
-import type { SuperwallApi } from "@/core/api/client";
+import { ApiError, type SuperwallApi } from "@/core/api/client";
 import type { AppKeyKind } from "@/core/api/integrations";
 import { testModeWarning } from "@/core/main/bundle-id";
 import { apiCall } from "@/ui/spinner";
 import { chooseKeyApp, type KeyApp } from "./app";
+import { readAppleKeyTeam, type AppleKeyCredentials } from "./apple-team";
 import { KEY_LABEL } from "@/core/api/integrations";
 import { differentBundleId, type AppFlags } from "../superwall-app";
 
@@ -52,9 +54,6 @@ export async function upsertHeldKey(ctx: CommandContext<"required">, request: He
   if (!app && action === "update" && !teamId) {
     throw new Error("Usage: superwall asc keys update --team <team id> --key-id <id> --issuer <id> --key-file <path.p8>");
   }
-  if (!app && action === "create" && teamId) {
-    throw new Error("To replace a team's key, run `superwall asc keys update --team <team id> ...`.");
-  }
   const input = await resolveKeyInput(ctx, request.key, app !== undefined, action);
   if (!input) return void ctx.ui.warn("Cancelled.");
   if (app) return upsertAppKey(ctx, input, action, request.kind ?? "api_key", app);
@@ -69,12 +68,51 @@ export async function upsertHeldKey(ctx: CommandContext<"required">, request: He
 
   const credentials = { keyId, issuerId, privateKey, accountName };
   const api = request.orgApi ?? (await resolveAscOrgApi(ctx));
-  const created = await apiCall(ctx, "Connecting App Store Connect", () => {
-    if (teamId) return replaceAscConfig(api, teamId, credentials);
-    return createAscConfig(api, { ...credentials, accountName: accountName ?? "App Store Connect" });
+  if (action === "create" && teamId) await confirmKeyTeam(ctx, credentials, teamId);
+  const created = await apiCall(ctx, "Connecting App Store Connect", async () => {
+    if (action === "update" && teamId) return replaceAscConfig(api, teamId, credentials);
+    try {
+      return await createAscConfig(api, { ...credentials, teamId, accountName: accountName ?? "App Store Connect" });
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 409) throw error;
+      throw new Error(
+        `Your organization already has a key for ${teamId ? `team ${teamId}` : "this team"}. To replace it, run \`superwall asc keys update --team ${teamId ?? "<team id>"} --key-id ${keyId} --issuer ${issuerId} --key-file ${shellArg(keyFile)}\`.`,
+      );
+    }
   });
   if (ctx.json) return ctx.output.data(created);
   ctx.ui.success(`App Store Connect connected ${created.team_id ?? created.id ?? ""}`);
+}
+
+async function confirmKeyTeam(
+  ctx: CommandContext<"required">,
+  credentials: AppleKeyCredentials,
+  teamId: string,
+): Promise<void> {
+  const { keyId } = credentials;
+  const team = await apiCall(ctx, "Checking the key's Apple team", () => readAppleKeyTeam(credentials));
+  const notSaved = "It wasn't saved.";
+  switch (team.status) {
+    case "ok":
+      if (team.teamId === teamId) return;
+      throw new Error(
+        `Key ${keyId} belongs to Apple team ${team.teamId}, not ${teamId}. ${notSaved} Pass --team ${team.teamId}, or leave --team out.`,
+      );
+    case "invalid_key":
+      throw new Error(`The --key-file isn't a .p8 private key Apple can sign with. ${notSaved}`);
+    case "rejected":
+      throw new Error(
+        team.httpStatus === 401
+          ? `Apple rejected key ${keyId}: check --key-id, --issuer and --key-file. ${notSaved}`
+          : `Apple answered ${team.httpStatus} when asked which team key ${keyId} belongs to, so it couldn't be checked against team ${teamId}. ${notSaved}`,
+      );
+    case "not_found":
+      throw new Error(
+        `Apple accepted key ${keyId}, but its team has no bundle IDs or apps to read a team ID from, so it couldn't be checked against team ${teamId}. ${notSaved} Leave --team out and Superwall finds the team itself.`,
+      );
+    case "unreachable":
+      throw new Error(`Apple couldn't be reached to check which team key ${keyId} belongs to (${team.reason}). ${notSaved} Try again.`);
+  }
 }
 
 function purchaseKeyBundleId(
@@ -213,7 +251,7 @@ async function resolveKeyInput(
     throw new Error(
       forApp
         ? `Usage: superwall asc keys ${action} [api_key | purchase_key] --app <id> --key-id <id> --issuer <id> --key-file <path.p8>`
-        : `Usage: superwall asc keys ${action} --key-id <id> --issuer <id> --key-file <path.p8>${action === "update" ? " --team <id>" : " [--name <name>]"}`,
+        : `Usage: superwall asc keys ${action} --key-id <id> --issuer <id> --key-file <path.p8>${action === "update" ? " --team <id>" : " [--team <id>] [--name <name>]"}`,
     );
   }
   const privateKey = readKeyFile(keyFile);

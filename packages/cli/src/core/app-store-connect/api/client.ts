@@ -6,6 +6,7 @@ interface AscCredentials {
   issuerId: string;
   privateKey: string;
   accountName?: string;
+  teamId?: string;
 }
 
 function ascBase(api: SuperwallApi): string {
@@ -24,6 +25,7 @@ export function createAscConfig(api: SuperwallApi, c: AscCredentials): Promise<R
     key_id: c.keyId,
     issuer_id: c.issuerId,
     private_key: c.privateKey,
+    ...(c.teamId ? { team_id: c.teamId } : {}),
     ...(c.accountName ? { account_name: c.accountName } : {}),
   });
 }
