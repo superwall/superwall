@@ -243,6 +243,23 @@ export const refreshIdentity = (paywall: PaywallSession, identity: string) => {
   reprefetch(paywall);
 };
 
+const attributionKeyOf = (snapshot: ReturnType<PaywallSession["getSnapshot"]>) =>
+  [
+    snapshot.paywall?.id ?? "0",
+    snapshot.experiment?.experimentId ?? "0",
+    snapshot.experiment?.variantId ?? "0",
+  ].join(" ");
+
+const warmedAttributions = new WeakMap<object, string>();
+
+export const refreshAttribution = (paywall: PaywallSession) => {
+  const warmed = warmedAttributions.get(paywall);
+  if (warmed === undefined || warmed === attributionKeyOf(paywall.getSnapshot())) return;
+  warmedAttributions.delete(paywall);
+  invalidateSessions(paywall, "paywall attribution changed");
+  reprefetch(paywall);
+};
+
 const warmedOpens = new WeakMap<object, object>();
 
 export const warmOnOpen = (paywall: PaywallSession, open: object) => {
@@ -262,6 +279,7 @@ export const prefetchSession = async (
   mode: CheckoutMode,
   prepaidCards?: SuperwallPrepaidCards,
 ): Promise<void> => {
+  warmedAttributions.set(paywall, attributionKeyOf(paywall.getSnapshot()));
   const sessions = sessionsFor(paywall);
   const elements = mode === "elements" ? elementsFor(paywall) : null;
   if (elements && elements.quoteOf(referenceName).status !== "ready") {

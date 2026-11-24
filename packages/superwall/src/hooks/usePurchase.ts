@@ -33,6 +33,7 @@ import {
 export type { CheckoutFailure, CheckoutFailureReason } from "../checkout/failure";
 import { isCustomStoreProductIdentifier } from "../checkout/products";
 import { hostOf } from "../host";
+import { useAttributionRefresh } from "../checkout/hooks/useAttributionRefresh";
 import { useAutoPrefetch } from "../checkout/hooks/useAutoPrefetch";
 import { useIdentityRefresh } from "../checkout/hooks/useIdentityRefresh";
 import { checkoutModeFor } from "../checkout/host/sdk";
@@ -203,6 +204,7 @@ export const usePurchase = <
     typeof snapshot.device.publicApiKey === "string" && snapshot.device.publicApiKey !== "";
 
   const webMode: CheckoutMode | undefined = hasApiKey ? mode : undefined;
+  useAttributionRefresh();
   useAutoPrefetch();
   useIdentityRefresh();
 
