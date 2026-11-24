@@ -16,7 +16,7 @@ Starts Apple review for products/groups and submits the review submission. This 
     group: { type: "list", value: "id", describe: "A subscription group to submit (repeatable)" },
     iap: { type: "list", value: "id", describe: "An in-app purchase to submit (repeatable)" },
     team: { ...team, describe: "Apple team id, when your organization has several" },
-    app: { ...app, describe: "A Superwall app of the organization whose App Store Connect key to use: id, name or dashboard link" },
+    app: { ...app, describe: "An app of the organization to use: its App Store Connect key signs, not a key saved on the app. Id, name or dashboard link" },
     project,
     dryRun: { ...dryRun, describe: "Print every request it would send; send no change" },
   },

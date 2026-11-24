@@ -35,7 +35,7 @@ function renderOperationHelp(spec: AscResourceSpec, operation: AscOperation): st
     return [cmd(formatFlagUsage(key, flag)), `${flag.required ? `${pc.yellow("required")} ` : ""}${flag.describe}${choices}`];
   });
   const common: [string, string][] = [
-    [cmd("--app <app>"), "A Superwall app of the organization whose App Store Connect key to use"],
+    [cmd("--app <app>"), "An app of the organization to use: its App Store Connect key signs, not a key saved on the app"],
     [cmd("--team <id>"), "Apple team id, when your organization has several"],
   ];
   if (operation.effect !== "read") common.push([cmd("--dry-run"), "Print every request it would send; send no change"]);

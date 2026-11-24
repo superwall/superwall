@@ -10,7 +10,7 @@ export const command = defineCommand({
   },
   flags: {
     team: { ...team, describe: "Apple team id, when your organization has several" },
-    app: { ...app, describe: "An app of the organization whose App Store Connect key to use: id, name or dashboard link" },
+    app: { ...app, describe: "An app of the organization to use: its App Store Connect key signs, not a key saved on the app. Id, name or dashboard link" },
     project,
   },
   examples: [["asc products com.example.app", "Everything the app sells"]],

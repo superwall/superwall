@@ -22,7 +22,7 @@ Executes an arbitrary App Store Connect POST through the signed proxy, with sche
     force: { type: "boolean", describe: "Send the body as-is, without checking it against Apple's schema" },
     dryRun: { ...dryRun, describe: "Print the request it would send, its body checked; send nothing" },
     team: { ...team, describe: "Apple team id, when your organization has several" },
-    app: { ...app, describe: "An app of the organization whose App Store Connect key signs it: id, name or dashboard link" },
+    app: { ...app, describe: "An app of the organization to use: its App Store Connect key signs, not a key saved on the app. Id, name or dashboard link" },
     project,
   },
   examples: [
