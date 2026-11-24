@@ -163,7 +163,14 @@ skill.
   with `sourcePending: <version>` until then, so a rerun finishes that
   version's source instead of skipping it, and neither `publish` nor
   `promote` ever promotes a source-less version. Git and a collectable tree
-  are checked before any version exists. The commit each app's source repo
+  are checked before any version exists, and before any paywall is created:
+  for each surface `superwall.lock` does not bind yet, `checkSource` runs the
+  source push in check mode (clone, divergence check, upstream merge, never
+  the final push) through a paywall the app already has (a lock-bound one,
+  else its first headless paywall), so a refused push never leaves an empty
+  paywall on the dashboard or a binding in the lock. An app with no headless
+  paywall has no source to differ from and skips it, as does
+  `--overwrite-source`. The commit each app's source repo
   was last synced to lives in the lock's `sources` (committed, so CI has it;
   the old `.superwall/source.json` is still read and moved there) and
   advances as soon as the git push lands, before the link call, which alone
