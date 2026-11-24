@@ -1,5 +1,6 @@
 import type { CommandContext } from "@/program/command";
-import { pickOrganization } from "@/core/account/scope";
+import { pickOrganization, pickScope } from "@/core/account/scope";
+import { findIntegrations } from "@/core/api/integrations";
 import type { SuperwallApi } from "@/core/api/client";
 import { parseParams } from "@/core/api/params";
 import { apiCall } from "@/ui/spinner";
@@ -38,14 +39,31 @@ export async function resolveAscTeam(ctx: CommandContext, api: SuperwallApi, tea
   if (team) return team;
   const configs = await apiCall(ctx, "Finding App Store Connect", () => listAscConfigs(api));
   const [first] = configs;
-  if (!first) {
-    throw new Error("App Store Connect isn't connected. Run `superwall asc keys promote --app <app>` to use an app's saved key, or `superwall asc keys create --help`.");
-  }
+  if (!first) throw await resolveNotConnected(ctx, api);
   if (configs.length > 1) {
     const teams = configs.map((c) => String(c.team_id ?? c.id ?? "")).join(", ");
     throw new Error(`Multiple App Store Connect teams (${teams}). Pass --team <id>.`);
   }
   return String(first.team_id ?? first.id ?? "");
+}
+
+async function resolveNotConnected(ctx: CommandContext, api: SuperwallApi): Promise<Error> {
+  if (!ctx.target.app) {
+    return new Error("App Store Connect isn't connected. Run `superwall asc keys promote --app <app>` to use an app's saved key, or `superwall asc keys create --help`.");
+  }
+  const scope = await pickScope(ctx, api, true);
+  const appId = scope.applicationId ?? ctx.target.app;
+  const name = scope.appName ?? appId;
+  const saved = await apiCall(ctx, "Loading the app's keys", () => findIntegrations(api, appId));
+  const key = saved.app_store_connect_configuration;
+  if (key) {
+    return new Error(
+      `App Store Connect isn't connected for this organization. The asc commands sign with the organization's key, not the one saved on an app: run \`superwall asc keys promote --app ${appId}\` to give the organization the API key ${key.key_id} saved on \`${name}\`.`,
+    );
+  }
+  return new Error(
+    `App Store Connect isn't connected, and \`${name}\` has no API key saved. Run \`superwall asc keys create api_key --app ${appId} --help\`.`,
+  );
 }
 
 export async function sendAscRequest(
