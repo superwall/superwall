@@ -345,6 +345,36 @@ describe("StudioApp", () => {
     ]);
   });
 
+  it("previews another storefront by editing device.storeFrontCountryCode", () => {
+    window.history.replaceState({}, "", "/paywall/plus-upgrade");
+    render(<StudioApp source={source} />);
+    fireEvent.click(screen.getByRole("button", { name: /Variables/ }));
+
+    const panel = within(document.querySelector("aside") as HTMLElement);
+    fireEvent.click(panel.getByRole("button", { name: /^Device/ }));
+    const field = panel.getByRole("textbox", { name: "device.storeFrontCountryCode" });
+    expect((field as HTMLInputElement).value).toBe("USA");
+    expect(panel.getByRole("textbox", { name: "device.storeFrontId" })).toBeDefined();
+    expect(panel.getByRole("textbox", { name: "device.storeFrontCurrency" })).toBeDefined();
+
+    const sent = hostOf(screen.getAllByTitle("plus-upgrade preview").at(-1));
+    fireEvent.change(field, { target: { value: "GBR" } });
+    expect(sent().at(-1)).toEqual([
+      expect.objectContaining({
+        event_name: "template_variables",
+        variables: expect.objectContaining({
+          device: expect.objectContaining({ storeFrontCountryCode: "GBR" }),
+        }),
+      }),
+    ]);
+
+    fireEvent.click(panel.getByRole("button", { name: "Reset device.storeFrontCountryCode" }));
+    expect(
+      (panel.getByRole("textbox", { name: "device.storeFrontCountryCode" }) as HTMLInputElement)
+        .value,
+    ).toBe("USA");
+  });
+
   it("shows a variable with no value as empty, never as the word undefined", () => {
     window.history.replaceState({}, "", "/paywall/plus-upgrade");
     render(
