@@ -141,6 +141,7 @@ describe("sessionBody", () => {
     expect(body.context.paywall).toMatchObject({
       paywallId: "42",
       paywallIdentifier: "pw_42",
+      paywallName: "",
       paywallProductIds: "test:price_1:no-trial",
     });
     expect(body.context.experiment).toEqual({ experimentId: "e1", variantId: "v1" });
@@ -152,6 +153,11 @@ describe("sessionBody", () => {
     expect(body.context.device).toMatchObject({ platform: "iOS", deviceModel: "iPhone17,1" });
     expect(body.isPrefetch).toBe(false);
     expect(body.deferElementsIntentCreation).toBe(false);
+  });
+
+  it("names the paywall the host named on paywall_open", () => {
+    const body = bodyOf({ paywall: { id: "42", identifier: "pw_42", name: "Main Paywall" } });
+    expect(body.context.paywall).toMatchObject({ paywallId: "42", paywallName: "Main Paywall" });
   });
 
   it("attributes to the presentation the SDK reported on paywall_open, as paywall.js does", () => {
@@ -188,7 +194,11 @@ describe("sessionBody", () => {
     vi.spyOn(crypto, "randomUUID").mockReturnValue("11111111-2222-3333-4444-555555555555");
     const body = bodyOf();
 
-    expect(body.context.paywall).toMatchObject({ paywallId: "0", paywallIdentifier: "" });
+    expect(body.context.paywall).toMatchObject({
+      paywallId: "0",
+      paywallIdentifier: "",
+      paywallName: "",
+    });
     expect(body.context.experiment).toEqual({ experimentId: "0", variantId: "0" });
     expect(body.context.presentment).toEqual({
       isFreeTrialAvailable: false,

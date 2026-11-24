@@ -34,6 +34,18 @@ describe("IncomingMessageSchema", () => {
       event_name: "paywall_open",
       paywall_id: "123",
       paywall_identifier: "my_paywall",
+      paywall_name: "My Paywall",
+    });
+    rejects({
+      event_name: "paywall_open",
+      paywall_id: "123",
+      paywall_identifier: "my_paywall",
+      paywall_name: 7,
+    });
+    accepts({
+      event_name: "paywall_open",
+      paywall_id: "123",
+      paywall_identifier: "my_paywall",
       presentation_id: "p-1",
       presented_by: "event",
       presentation_source_type: "getPaywall",

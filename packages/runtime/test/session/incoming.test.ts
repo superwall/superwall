@@ -59,6 +59,24 @@ describe("snapshotPatchFor", () => {
     expect(unknown?.paywall).toEqual({ id: "1", identifier: "pw" });
   });
 
+  it("keeps the paywall name the host sends, and none when it is empty", () => {
+    const named = snapshotPatchFor(snapshotWith(), {
+      event_name: "paywall_open",
+      paywall_id: "1",
+      paywall_identifier: "pw",
+      paywall_name: "Main Paywall",
+    });
+    expect(named?.paywall).toEqual({ id: "1", identifier: "pw", name: "Main Paywall" });
+
+    const empty = snapshotPatchFor(snapshotWith(), {
+      event_name: "paywall_open",
+      paywall_id: "1",
+      paywall_identifier: "pw",
+      paywall_name: "",
+    });
+    expect(empty?.paywall).toEqual({ id: "1", identifier: "pw" });
+  });
+
   it("splits template variables into device, user and params", () => {
     const variables = { device: { platform: "iOS" }, user: { firstName: "Ada" }, params: 3 };
     expect(

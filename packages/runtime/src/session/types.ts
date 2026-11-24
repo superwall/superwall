@@ -49,6 +49,7 @@ export type SuperwallPresentation = {
 export type SuperwallPaywallIdentity = {
   id: string;
   identifier: string;
+  name?: string;
   presentation?: SuperwallPresentation;
 };
 
