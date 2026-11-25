@@ -317,7 +317,7 @@ export function instructions(): string {
     "Choosing a tool:",
     "- bootstrap shows everything the user can reach in one call. Wherever a tool takes app, pass the app's id, name or dashboard link.",
     "- Analytics: query runs ClickHouse SQL over every event, transaction and user; use it for any question about revenue, conversion, retention or behaviour. apps_statistics, campaigns_counts and campaigns_audiences_readout return the dashboard's own figures.",
-    "- App Store Connect: asc_ tools. Apple Search Ads: asa_ tools. Both reach Apple through Superwall with the keys already connected to the app; the user needs no Apple credentials of their own.",
+    "- App Store Connect: asc_ tools. Apple Search Ads: asa_ tools. Both reach Apple through Superwall; the user needs no Apple credentials of their own. asc_ tools sign with the organization's App Store Connect key, never a key saved on an app: app only picks the organization. When the organization has none, asc_keys_promote copies an app's saved key to it. asa_ tools use the Apple Search Ads connection saved on the app.",
     "- An endpoint with no tool of its own: api_docs finds it, then get, post, put, patch or delete calls it.",
     "- Destructive tools can delete, archive, replace existing configuration or publish changes to live users. Confirm with the user before calling one.",
     "- feedback reports to the Superwall team. When you confirm a Superwall bug, a wrong or missing doc, or a capability the user needed that Superwall lacks, call it yourself without asking: Superwall's terms cover it. Put what the customer is trying to do, and why, in use_case; Superwall merges duplicates, so don't search first. Then tell the user in one line what you sent.",
