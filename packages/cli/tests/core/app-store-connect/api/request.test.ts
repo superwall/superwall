@@ -112,6 +112,19 @@ test("with --app and no organization key, the error names the key saved on that 
   assert.ok(!saved.requests.some((request) => request.path.includes("/proxy/")));
 });
 
+test("with --app and a key saved on that app without its private key, the error asks for the .p8 before promoting", async () => {
+  const partial = fakeAscApi(
+    { [OVERVIEW]: { app_store_connect_configuration: { key_id: "RQB94UUB77", issuer_id: "I1", has_private_key: false }, in_app_purchase_configuration: null } },
+    [],
+  );
+  const result = await runLine("asc get /v1/apps --app 20", { api: partial.api });
+  assert.equal(
+    errorOf(result),
+    "App Store Connect isn't connected for this organization, and the API key RQB94UUB77 saved on `20` has no private key, so it can't sign. Save its .p8 with `superwall asc keys update api_key --app 20 --key-id RQB94UUB77 --issuer I1 --key-file <path.p8>`, then run `superwall asc keys promote --app 20`.",
+  );
+  assert.doesNotMatch(errorOf(result) ?? "", /to give the organization the API key/);
+});
+
 test("with --app and no key saved on that app either, the error says so and points to creating one", async () => {
   const none = fakeAscApi({ [OVERVIEW]: { app_store_connect_configuration: null, in_app_purchase_configuration: null } }, []);
   const result = await runLine("asc get /v1/apps --app 20", { api: none.api });

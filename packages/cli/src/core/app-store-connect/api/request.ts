@@ -56,6 +56,11 @@ async function resolveNotConnected(ctx: CommandContext, api: SuperwallApi): Prom
   const name = scope.appName ?? appId;
   const saved = await apiCall(ctx, "Loading the app's keys", () => findIntegrations(api, appId));
   const key = saved.app_store_connect_configuration;
+  if (key && !key.has_private_key) {
+    return new Error(
+      `App Store Connect isn't connected for this organization, and the API key ${key.key_id} saved on \`${name}\` has no private key, so it can't sign. Save its .p8 with \`superwall asc keys update api_key --app ${appId} --key-id ${key.key_id} --issuer ${key.issuer_id} --key-file <path.p8>\`, then run \`superwall asc keys promote --app ${appId}\`.`,
+    );
+  }
   if (key) {
     return new Error(
       `App Store Connect isn't connected for this organization. The asc commands sign with the organization's key, not the one saved on an app: run \`superwall asc keys promote --app ${appId}\` to give the organization the API key ${key.key_id} saved on \`${name}\`.`,
