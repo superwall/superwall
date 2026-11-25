@@ -3120,6 +3120,27 @@ describe("every way the teleport page sends a buyer back to the app", () => {
     expect(query(screenLink()).should_dismiss).toBe("false");
   });
 
+  it("paying where storage refuses the save still goes back with the purchase's dismissal", async () => {
+    boot();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    api({ "checkout/session/complete": {} });
+    await teleportPage(fakeSession({ postPurchase: "dismiss" }).session).completePurchase(
+      "ctx_10",
+      {
+        productIdentifier: "pro",
+        postPurchase: "stay",
+      },
+    );
+    expect(query(screenLink())).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_10",
+      product_identifier: "pro",
+      should_dismiss: "false",
+    });
+  });
+
   it("paid in another tab, a tap on a direct page goes back with that checkout", async () => {
     boot({ shared: true });
     api({ "checkout/teleport/status": { status: "completed", checkoutContextId: "ctx_7" } });
