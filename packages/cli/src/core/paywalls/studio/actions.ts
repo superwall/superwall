@@ -8,7 +8,12 @@ import {
 import { assetBaseUrl, requireAssets, syncAssets } from "@/core/paywalls/assets";
 import { resolveApps } from "@/core/paywalls/binding/apps";
 import { resolveBinding } from "@/core/paywalls/binding/binding";
-import { planTargets, wantedPlatforms, type SurfaceTarget } from "@/core/paywalls/binding/targets";
+import {
+  planTargets,
+  surfaceKey,
+  wantedPlatforms,
+  type SurfaceTarget,
+} from "@/core/paywalls/binding/targets";
 import {
   listApplicationCatalogue,
   listProjectCatalogue,
@@ -97,6 +102,38 @@ const reason = (error: unknown): string => (error instanceof Error ? error.messa
 const firstApp = (apps: Record<string, string>): string | undefined =>
   apps.ios ?? Object.values(apps)[0];
 
+type SampleApp = { applicationId: string } | { unreachable: string };
+
+function sampleApp(
+  apps: Record<string, string>,
+  surface?: { kind: string; id: string; platforms?: readonly string[] },
+  platform?: string,
+): SampleApp {
+  const declared = [...new Set(surface?.platforms ?? [])];
+  if (surface === undefined || declared.length === 0) {
+    const applicationId = firstApp(apps);
+    return applicationId === undefined
+      ? {
+          unreachable:
+            "This project is not bound to an app yet — run `superwall push` once to pick one.",
+        }
+      : { applicationId };
+  }
+  const device = platform?.toLowerCase();
+  const chosen =
+    declared.find((entry) => entry === device) ??
+    declared.find((entry) => entry === "ios") ??
+    declared[0];
+  const applicationId = chosen === undefined ? undefined : apps[chosen];
+  return applicationId === undefined
+    ? {
+        unreachable:
+          `${surface.kind} \`${surface.id}\` targets \`${chosen}\`, which superwall.lock does not bind to an app yet — ` +
+          "run `superwall push` once to bind one.",
+      }
+    : { applicationId };
+}
+
 export function selectServedVersion(dir: string): string {
   const served = frameworkVersion(dir);
   return served === "unknown" ? VERSION : served;
@@ -155,13 +192,22 @@ export function createStudioActions(
         : { ...resolved, blocksLocalNetworking: transport.plist };
     },
 
-    async samples() {
+    async samples(surface, platform) {
       try {
+        const platforms =
+          surface === undefined
+            ? undefined
+            : (await collectProjectDeclarations(framework, project.root)).platforms[
+                surfaceKey(surface)
+              ];
+        const picked = sampleApp(
+          readLock(project.superwallDir).apps,
+          surface && { ...surface, platforms },
+          platform,
+        );
+        if ("unreachable" in picked) return { unreachable: picked.unreachable };
+        const { applicationId } = picked;
         const client = await ensureApi();
-        const apps = await resolveApps({ api: client, superwallDir: project.superwallDir });
-        const applicationId = firstApp(apps);
-        if (applicationId === undefined)
-          return { unreachable: "This project is not bound to an app yet." };
         const query = `?application_id=${encodeURIComponent(applicationId)}`;
         let unreachable: string | undefined;
         const [device, user, catalogue] = await Promise.all([

@@ -351,7 +351,7 @@ export function applyPulledChanges(
   return { written: written.sort(), skipped: skipped.sort() };
 }
 
-async function paywallFor(
+export async function paywallFor(
   api: SuperwallApi,
   lock: LockFile,
   app: PulledApp,

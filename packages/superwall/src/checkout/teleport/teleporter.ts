@@ -89,7 +89,7 @@ export type AppTeleport = TeleportBase & {
   fallback(): string | undefined;
   showWaitingScreen(): Promise<boolean>;
   handleReturn(reason?: string): Promise<boolean>;
-  returnToApp(): void;
+  returnToApp(data?: TeleportData): void;
 };
 
 export type TeleportPage = TeleportBase & {

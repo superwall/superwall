@@ -30,11 +30,7 @@ describe("fetchWithRetry", () => {
 
   it("hands back a client error's response unread when asked, without retrying", async () => {
     const fetchMock = respond(402, 200);
-    const response = await fetchWithRetry(
-      "https://x",
-      {},
-      { backoffMs: 0, returnClientErrors: true },
-    );
+    const response = await fetchWithRetry("https://x", {}, { backoffMs: 0, returnErrors: true });
     expect(response.status).toBe(402);
     await expect(response.text()).resolves.toBe("body");
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -45,9 +41,21 @@ describe("fetchWithRetry", () => {
     const response = await fetchWithRetry(
       "https://x",
       {},
-      { retries: 1, backoffMs: 0, returnClientErrors: true },
+      { retries: 1, backoffMs: 0, returnErrors: true },
     );
     expect(response.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("hands back the last server error's response when asked and retries run out", async () => {
+    const fetchMock = respond(503, 500);
+    const response = await fetchWithRetry(
+      "https://x",
+      {},
+      { retries: 1, backoffMs: 0, returnErrors: true },
+    );
+    expect(response.status).toBe(500);
+    await expect(response.text()).resolves.toBe("body");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

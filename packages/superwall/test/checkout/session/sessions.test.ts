@@ -257,7 +257,7 @@ describe("createCheckoutSessions.createSession", () => {
     expect(bodies.map((body) => body.context.blockPrepaidCards)).toEqual([true, undefined]);
     expect(sessions.warmed("monthly", "default")?.checkoutContextId).toBe("ctx_4");
     expect(sessions.warmed("monthly", "default", "allow")?.checkoutContextId).toBe("ctx_4");
-    expect(sessions.warmed("monthly", "apple-pay")).toBeNull();
+    expect(sessions.warmed("monthly", "elements")).toBeNull();
   });
 });
 

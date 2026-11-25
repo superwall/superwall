@@ -1,6 +1,6 @@
 {
   "name": "superwall",
-  "version": "2.6.1",
+  "version": "2.7.2",
   "description": "Superwall for Agents — build paywalls and web funnels as mini React apps with file-based routing, preview them against real product data, and ship them through Superwall.",
   "keywords": [
     "agents",
@@ -44,6 +44,7 @@
       "types": "./src/assets.d.ts"
     },
     "./checkout": "./src/checkout/index.tsx",
+    "./checkout/stripe": "./src/checkout/stripe.tsx",
     "./config": "./src/config/index.ts",
     "./hooks": "./src/hooks/index.ts",
     "./internal": "./src/internal.ts",
@@ -64,6 +65,7 @@
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^5.6.1",
     "@stripe/stripe-js": "^8.5.2",
     "@superwall/cli": "workspace:*",
     "@superwall/host": "workspace:*",

@@ -539,6 +539,70 @@ test("apps create without a project makes one in the only organization first", a
   ]);
 });
 
+const TWO_ORGS: Reply = { data: [{ id: 9, name: "Acme Inc" }, { id: 29086, name: "Side Co" }] };
+
+test("apps create --org makes the new project in that organization without asking", async () => {
+  const { writes } = await create(
+    apps,
+    { name: "Acme", platform: "ios", org: 29086 },
+    {
+      "GET /v2/me/organizations": TWO_ORGS,
+      "POST /v2/projects": { id: 71, name: "Acme" },
+      "POST /v2/projects/71/applications": { id: 71, applications: [] },
+    },
+  );
+  assert.deepEqual(writes, [
+    { method: "POST", path: "/v2/projects", body: { name: "Acme", organization_id: 29086 } },
+    { method: "POST", path: "/v2/projects/71/applications", body: { name: "Acme", platform: "ios" } },
+  ]);
+});
+
+test("apps create --org naming an organization you aren't in is refused before anything is sent", async () => {
+  const { error, writes } = await create(
+    apps,
+    { name: "Acme", platform: "ios", org: "5" },
+    { "GET /v2/me/organizations": TWO_ORGS },
+  );
+  assert.equal(error, "You don't belong to organization 5 - yours are Acme Inc (9), Side Co (29086).");
+  assert.deepEqual(writes, []);
+});
+
+test("apps create with --org and --project is refused, since the project already has an organization", async () => {
+  const { error, writes } = await create(apps, { name: "Acme", platform: "ios", org: "9", project: "1" });
+  assert.match(error, /Pass --org or --project, not both/);
+  assert.deepEqual(writes, []);
+});
+
+test("apps create outside a terminal in several organizations lists them and offers --org", async () => {
+  const { error, writes } = await create(
+    apps,
+    { name: "Acme", platform: "ios" },
+    { "GET /v2/me/organizations": TWO_ORGS },
+  );
+  assert.equal(
+    error,
+    "You belong to 2 organizations (Acme Inc (9), Side Co (29086)), so a new project needs a home: pass --org <id> for one of them, or pass --project <id> to add the app to an existing project.",
+  );
+  assert.deepEqual(writes, []);
+});
+
+test("apps create --org --dry-run names the organization the new project would go to", async () => {
+  const text = await create(apps, { name: "Acme", platform: "ios", org: "29086", dryRun: true });
+  assert.deepEqual(said(text.calls, "info"), ['[dry-run] would add iOS app "Acme" to a new project in organization 29086']);
+
+  const plan = await create(apps, { name: "Acme", platform: "ios", org: "29086", dryRun: true }, {}, { json: true });
+  assert.deepEqual(plan.result.json, {
+    dryRun: true,
+    action: "create",
+    resource: "apps",
+    name: "Acme",
+    platform: "ios",
+    project: null,
+    org: "29086",
+  });
+  assert.deepEqual([...text.writes, ...plan.writes], []);
+});
+
 test("a second app of one platform in a project is refused in plain words", async () => {
   const { error } = await create(
     apps,

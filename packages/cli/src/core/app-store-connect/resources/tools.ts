@@ -4,7 +4,7 @@ import type { AscFlag, AscOperation } from "./operation";
 const snake = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`).replace(/-/g, "_");
 
 const COMMON: Record<string, JsonSchema> = {
-  app: { type: "string", description: "A Superwall app of the organization whose App Store Connect key to use: id, name or dashboard link" },
+  app: { type: "string", description: "Picks the organization: id, name or dashboard link of one of its apps. The organization's key signs the request, not a key saved on the app" },
   team: { type: "string", description: "Apple team id, when the organization has several" },
 };
 

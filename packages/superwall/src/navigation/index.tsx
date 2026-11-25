@@ -451,6 +451,21 @@ const Router = ({
     };
   }, [session]);
 
+  const inTransition = React.useRef(false);
+  React.useEffect(
+    () =>
+      session.on("back_button_input", () => {
+        if (inTransition.current) return;
+        if (!current.current.canGoBack()) {
+          session.close();
+          return;
+        }
+        inTransition.current = true;
+        current.current.back();
+      }),
+    [session],
+  );
+
   React.useEffect(() => {
     const teleporter = teleportFor(session);
     if (teleporter.kind === "app") teleporter.landed(top.name, entries.length - 1);
@@ -543,9 +558,15 @@ const Router = ({
   }, [top.key, nav.reset, name, depth, direction, navigationId, session, presentation]);
 
   const warmed = React.useRef<Set<string>>(new Set());
+  const opened = React.useRef(entries.map((entry) => entry.name));
   React.useEffect(() => {
     const map = readRouteAssets();
-    warmAssets([...(map["*"] ?? []), ...(map[INITIAL_ROUTE] ?? [])], warmed.current);
+    const openedAssets = opened.current.flatMap((route) => map[route] ?? []);
+    if (readTeleportBoot() !== undefined) {
+      warmAssets(openedAssets, warmed.current);
+      return;
+    }
+    warmAssets([...(map["*"] ?? []), ...openedAssets], warmed.current);
     return whenIdle(() => {
       for (const list of Object.values(map)) warmAssets(list, warmed.current);
     });
@@ -560,6 +581,8 @@ const Router = ({
   const [movement, setMovement] = React.useState(0);
   const [settled, setSettled] = React.useState(true);
   const animated = React.useRef(top.key);
+
+  inTransition.current = !settled || animated.current !== top.key;
 
   React.useLayoutEffect(() => {
     if (animated.current === top.key) return;

@@ -6,6 +6,7 @@ interface AscCredentials {
   issuerId: string;
   privateKey: string;
   accountName?: string;
+  teamId?: string;
 }
 
 function ascBase(api: SuperwallApi): string {
@@ -24,6 +25,7 @@ export function createAscConfig(api: SuperwallApi, c: AscCredentials): Promise<R
     key_id: c.keyId,
     issuer_id: c.issuerId,
     private_key: c.privateKey,
+    ...(c.teamId ? { team_id: c.teamId } : {}),
     ...(c.accountName ? { account_name: c.accountName } : {}),
   });
 }
@@ -36,6 +38,21 @@ export function replaceAscConfig(api: SuperwallApi, teamId: string, c: AscCreden
     validate: true,
     ...(c.accountName ? { account_name: c.accountName } : {}),
   });
+}
+
+export type AscKeyPromotionOutcome = "saved" | "exists" | "no_team_id" | "apple_unavailable" | "failed";
+
+export interface AscKeyPromotion {
+  object: "app_store_connect_key_promotion";
+  application_id: number | string;
+  organization_id: number | string;
+  key_id: string;
+  team_id: string | null;
+  outcome: AscKeyPromotionOutcome;
+}
+
+export function promoteAppAscKey(api: SuperwallApi, applicationId: string): Promise<AscKeyPromotion> {
+  return api.post<AscKeyPromotion>(`${ascBase(api)}/applications/${applicationId}/import`, {});
 }
 
 export interface AppRef {

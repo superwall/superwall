@@ -915,10 +915,13 @@ describe("SurfaceEditor's smaller states", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
-        async () =>
+        async (input: unknown) =>
           ({
             ok: true,
-            json: async () => ({ paywallId: "208540", unreachable: "not logged in" }),
+            json: async () =>
+              String(input).startsWith("/__studio/status/")
+                ? { paywallId: "208540", unreachable: "not logged in" }
+                : {},
           }) as Response,
       ),
     );

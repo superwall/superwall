@@ -42,6 +42,24 @@ const SPEC: DocOperation[] = [
   op("POST", "/v2/campaigns/{id}/placements", {
     body: [{ name: "event_name", type: "string", required: true, description: "Event name" }],
   }),
+  op("PUT", "/v2/campaigns/{id}/audiences/{audience_id}/weights", {
+    body: [
+      {
+        name: "weights",
+        type: "object[]",
+        required: true,
+        description: "Treatment-variant weights",
+        fields: [
+          { name: "variant_id", type: "string", required: true, description: "The variant's id" },
+          { name: "percentage", type: "number", required: true },
+          { name: "meta", type: "object", required: false, fields: [{ name: "note", type: "string", required: false }] },
+        ],
+      },
+    ],
+  }),
+  op("PUT", "/v2/campaigns/{id}/audiences/order", {
+    body: [{ name: "audience_ids", type: "string[]", required: true }],
+  }),
   op("DELETE", "/v2/products/{id}"),
   op("DELETE", "/v2/surveys/{id}/paywalls", {
     body: [
@@ -294,6 +312,16 @@ test("an operation's help takes its flags from the API reference", async () => {
   assert.match(help, /Apple team ID/);
   assert.match(help, /--redeemable-on-desktop/);
   assert.match(help, /<app>/);
+});
+
+test("an operation's help names the keys of its object flags", async () => {
+  const help = (await campaigns.help(["variants", "weights"])).replace(/\x1b\[[0-9;]*m/g, "");
+  assert.match(help, /--weights <object\[\]>\s+required Treatment-variant weights/);
+  assert.match(help, /\n\s+ {2}variant_id <string>\s+required The variant's id/);
+  assert.match(help, /\n\s+ {2}percentage <number>\s+required *\n/);
+  assert.match(help, /\n\s+ {2}meta <object> *\n/);
+  assert.match(help, /\n\s+ {4}note <string> *\n/);
+  assert.doesNotMatch(help, /--variant-id/);
 });
 
 test("apps update --bundle-id asks first when reported builds would run in test mode", async () => {
@@ -729,6 +757,34 @@ test("an organization's operation takes the organization of the app it is about"
   await gadget(["members"], { app: "5861" }, calls);
   await gadget(["members"], {}, calls);
   assert.deepEqual(calls.map((call) => call.path), ["/v2/organizations/3642/members", "/v2/organizations/3642/members"]);
+});
+
+test("a list flag takes a JSON array as well as a comma list, typed by the reference", async () => {
+  const calls: Call[] = [];
+  await gadget(["create"], { tags: '["a", "b"]', sizes: "[1, \"2\"]", aliases: ' ["x"]' }, calls);
+  assert.deepEqual(calls[0]?.body, { tags: ["a", "b"], sizes: [1, 2], aliases: ["x"], project_id: 282 });
+});
+
+test("a list flag that starts like a JSON array but isn't one of values is refused before anything is sent", async () => {
+  for (const tags of ['["a",', '[{"a":1}]', "[[1]]", "[true]", "[null]"]) {
+    const calls: Call[] = [];
+    const out = await gadget(["create"], { tags }, calls);
+    assert.equal(calls.length, 0, tags);
+    assert.equal(
+      out.error.message,
+      `--tags takes a comma list (a,b) or a JSON array of values (["a","b"]), not ${tags}. Nothing was sent.`,
+    );
+  }
+});
+
+test("campaigns audiences reorder sends the same order for a JSON array and a comma list", async () => {
+  for (const audienceIds of ['["207677","175889"]', "207677,175889", ["207677", "175889"]]) {
+    const calls: Call[] = [];
+    await run(["campaigns", "audiences", "reorder", "40075"], { audienceIds, yes: true }, fakeApi(calls));
+    assert.deepEqual(calls, [
+      { method: "PUT", path: "/v2/campaigns/40075/audiences/order", body: { audience_ids: ["207677", "175889"] } },
+    ]);
+  }
 });
 
 test("a hand-written operation of a resource the CLI doesn't know is refused", async () => {

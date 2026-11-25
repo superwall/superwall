@@ -28,6 +28,16 @@ type Captured = {
 
 const captured: Captured = {};
 
+const returns: unknown[] = [];
+
+const ReturnListener = () => {
+  useTeleport({
+    onReturn: () => returns.push("return"),
+    onReturnData: (data) => returns.push({ data }),
+  });
+  return null;
+};
+
 const Page = ({ name }: { name: string }) => {
   captured.router = useRouter();
   captured.purchase = usePurchase().purchase;
@@ -58,6 +68,7 @@ const mount = async ({
   });
   render(
     <Wrapper>
+      <ReturnListener />
       <PaywallRouter routes={routes} transition="none" />
     </Wrapper>,
   );
@@ -79,6 +90,7 @@ const settle = async () => {
 };
 
 beforeEach(() => {
+  returns.length = 0;
   window.history.replaceState(null, "", "/?transport=editor");
   vi.stubGlobal(
     "fetch",
@@ -236,6 +248,40 @@ describe("teleporting in the studio", () => {
     expect(teleports(outgoing)).toHaveLength(1);
     expect(captured.router?.name).toBe("index");
     expect(statusNow()).toEqual({ status: "idle" });
+  });
+
+  it("hands the app the data the web half passed to returnToApp() once it is back", async () => {
+    await mount();
+    await act(async () => captured.router?.push("checkout"));
+    await act(async () => captured.teleport?.returnToApp({ data: { to: "app-store" } }));
+    await flush();
+
+    expect(captured.router?.name).toBe("index");
+    expect(returns).toEqual(["return", { data: { to: "app-store" } }]);
+
+    await act(async () => captured.router?.push("checkout"));
+    await act(async () => captured.router?.back());
+    expect(returns).toEqual(["return", { data: { to: "app-store" } }, "return"]);
+  });
+
+  it("hands the app no data when the web half returns without any", async () => {
+    await mount();
+    await act(async () => captured.router?.push("checkout"));
+    await act(async () => captured.teleport?.returnToApp());
+    await flush();
+
+    expect(captured.router?.name).toBe("index");
+    expect(returns).toEqual(["return"]);
+  });
+
+  it("hands the app no data when the web half is left by the router", async () => {
+    await mount();
+    await act(async () => captured.router?.push("checkout"));
+    await act(async () => captured.router?.back());
+    await act(async () => captured.router?.push("checkout"));
+    await act(async () => captured.router?.reset([]));
+
+    expect(returns).toEqual(["return", "return"]);
   });
 
   it("buys store products in the app without teleporting", async () => {

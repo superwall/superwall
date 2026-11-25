@@ -7,6 +7,20 @@ describe("languageCandidates", () => {
     expect(languageCandidates("pt_BR")).toEqual(["pt_BR", "pt"]);
     expect(languageCandidates("es")).toEqual(["es"]);
     expect(languageCandidates(undefined)).toEqual(["en"]);
+    expect(languageCandidates("_ID")).toEqual(["_ID"]);
+  });
+
+  it("adds the modern code after the raw one for legacy Android language codes", () => {
+    expect(languageCandidates("in_ID")).toEqual(["in_ID", "in", "id_ID", "id"]);
+    expect(languageCandidates("in-ID")).toEqual(["in_ID", "in", "id_ID", "id"]);
+    expect(languageCandidates("iw_IL")).toEqual(["iw_IL", "iw", "he_IL", "he"]);
+    expect(languageCandidates("ji")).toEqual(["ji", "yi"]);
+    expect(languageCandidates("id_ID")).toEqual(["id_ID", "id"]);
+  });
+
+  it("translates periods in Indonesian and Hebrew for legacy-coded devices", () => {
+    expect(getLocalizedPeriod("year", languageCandidates("in_ID"))).toBe("tahun");
+    expect(getLocalizedPeriod("year", languageCandidates("iw_IL"))).toBe("שנה");
   });
 });
 

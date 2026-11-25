@@ -1,7 +1,9 @@
 import { act } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import type { Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readTeleportBoot } from "../../../src/checkout/teleport/boot";
 import { expectedTeleportPageKey, mountApp } from "../../../src/checkout/teleport/pages";
+import { TELEPORT_MARKS } from "../../../src/checkout/teleport/timing";
 import { PRERENDER_ATTRIBUTE } from "../../../src/document";
 
 const localization = { defaultLocale: "en", messages: { en: {}, de: {}, "pt-BR": {} } };
@@ -15,6 +17,7 @@ const device = (properties: Record<string, unknown>) => ({
 });
 
 afterEach(() => {
+  performance.clearMarks();
   Reflect.deleteProperty(window, "__SW_TELEPORT__");
   window.history.replaceState(null, "", "/");
   document.body.replaceChildren();
@@ -85,39 +88,95 @@ describe("the route a page opens on", () => {
   });
 });
 
-describe("mountApp", () => {
-  const container = (attribute: string | undefined, html: string) => {
-    const element = document.createElement("div");
-    if (attribute !== undefined) element.setAttribute(PRERENDER_ATTRIBUTE, attribute);
-    element.innerHTML = html;
-    document.body.append(element);
-    return element;
-  };
+const container = (attribute: string | undefined, html: string) => {
+  const element = document.createElement("div");
+  if (attribute !== undefined) element.setAttribute(PRERENDER_ATTRIBUTE, attribute);
+  element.innerHTML = html;
+  document.body.append(element);
+  return element;
+};
 
-  it("hydrates the matching page, keeping its nodes", () => {
-    boot({
-      hasIntroductoryOffer: true,
-      productReference: "annual",
-      ...device({ deviceLocale: "de" }),
-    });
-    const element = container("de/annual/1", "<p>Jetzt</p>");
-    const paragraph = element.firstChild;
-    let mounted: ReturnType<typeof mountApp> | undefined;
-    act(() => {
-      mounted = mountApp(element, <p>Jetzt</p>, config);
-    });
-    expect(mounted?.hydrated).toBe(true);
-    expect(element.firstChild).toBe(paragraph);
-    expect(element.hasAttribute(PRERENDER_ATTRIBUTE)).toBe(false);
-    act(() => mounted?.root.unmount());
+const firstPaint = () => performance.getEntriesByName(TELEPORT_MARKS.firstPaint, "mark");
+
+const paint = async (): Promise<void> => {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(20);
+  });
+};
+
+const unmount = async (root: Promise<Root> | undefined) => {
+  const resolved = await root;
+  act(() => resolved?.unmount());
+};
+
+const trialInGerman = () =>
+  boot({
+    hasIntroductoryOffer: true,
+    productReference: "annual",
+    ...device({ deviceLocale: "de" }),
   });
 
-  it("renders from scratch when the page is for another state, empty, or not marked", () => {
-    boot({
-      hasIntroductoryOffer: true,
-      productReference: "annual",
-      ...device({ deviceLocale: "de" }),
+describe("mountApp", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame", "cancelAnimationFrame"],
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("leaves the matching page on screen for a frame, then hydrates it, keeping its nodes", async () => {
+    trialInGerman();
+    const element = container("de/annual/1", "<p>Jetzt</p>");
+    const paragraph = element.firstChild;
+    const rendered = vi.fn();
+    const Page = () => {
+      rendered();
+      return <p>Jetzt</p>;
+    };
+    let mounted: ReturnType<typeof mountApp> | undefined;
+    act(() => {
+      mounted = mountApp(element, <Page />, config);
+    });
+    expect(mounted?.hydrated).toBe(true);
+    expect(rendered).not.toHaveBeenCalled();
+    expect(firstPaint()).toEqual([]);
+    expect(element.innerHTML).toBe("<p>Jetzt</p>");
+    expect(element.hasAttribute(PRERENDER_ATTRIBUTE)).toBe(false);
+    await paint();
+    expect(rendered).toHaveBeenCalled();
+    expect(firstPaint()).toHaveLength(1);
+    expect(element.firstChild).toBe(paragraph);
+    await unmount(mounted?.root);
+  });
+
+  it("hydrates on the fallback timer when the page gets no frames, as in a background tab", async () => {
+    trialInGerman();
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 0);
+    const element = container("de/annual/1", "<p>Jetzt</p>");
+    const rendered = vi.fn();
+    const Page = () => {
+      rendered();
+      return <p>Jetzt</p>;
+    };
+    let mounted: ReturnType<typeof mountApp> | undefined;
+    act(() => {
+      mounted = mountApp(element, <Page />, config);
+    });
+    await paint();
+    expect(rendered).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(rendered).toHaveBeenCalled();
+    await unmount(mounted?.root);
+  });
+
+  it("renders from scratch at once when the page is for another state, empty, or not marked", async () => {
+    trialInGerman();
     for (const [attribute, html] of [
       ["de/annual/0", "<p>stale</p>"],
       ["de/annual/1", ""],
@@ -133,16 +192,25 @@ describe("mountApp", () => {
       expect(element.innerHTML).toBe("<p>Jetzt</p>");
       if (before !== null) expect(element.firstChild).not.toBe(before);
       expect(element.hasAttribute(PRERENDER_ATTRIBUTE)).toBe(false);
-      act(() => mounted?.root.unmount());
+      await unmount(mounted?.root);
     }
   });
 
-  it("renders from scratch when sw_nav reopens another route", () => {
-    boot({
-      hasIntroductoryOffer: true,
-      productReference: "annual",
-      ...device({ deviceLocale: "de" }),
+  it("marks first-paint a frame after rendering from scratch", async () => {
+    trialInGerman();
+    const element = container(undefined, "");
+    let mounted: ReturnType<typeof mountApp> | undefined;
+    act(() => {
+      mounted = mountApp(element, <p>Jetzt</p>, config);
     });
+    expect(firstPaint()).toEqual([]);
+    await paint();
+    expect(firstPaint()).toHaveLength(1);
+    await unmount(mounted?.root);
+  });
+
+  it("renders from scratch when sw_nav reopens another route", async () => {
+    trialInGerman();
     window.history.replaceState(null, "", "/?sw_nav=plan");
     const element = container("de/annual/1", "<p>Jetzt</p>");
     let mounted: ReturnType<typeof mountApp> | undefined;
@@ -151,10 +219,10 @@ describe("mountApp", () => {
     });
     expect(mounted?.hydrated).toBe(false);
     expect(element.innerHTML).toBe("<p>Plan</p>");
-    act(() => mounted?.root.unmount());
+    await unmount(mounted?.root);
   });
 
-  it("renders from scratch off a teleport page", () => {
+  it("renders from scratch off a teleport page and marks nothing", async () => {
     const element = container("en/__none__/1", "<p>stale</p>");
     let mounted: ReturnType<typeof mountApp> | undefined;
     act(() => {
@@ -162,6 +230,8 @@ describe("mountApp", () => {
     });
     expect(mounted?.hydrated).toBe(false);
     expect(element.innerHTML).toBe("<p>Hello</p>");
-    act(() => mounted?.root.unmount());
+    await paint();
+    expect(firstPaint()).toEqual([]);
+    await unmount(mounted?.root);
   });
 });

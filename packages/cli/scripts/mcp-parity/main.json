@@ -72,6 +72,25 @@
       },
       "dryRun": true,
       "ok": true
+    },
+    {
+      "input": {
+        "name": "Parity Check",
+        "platform": "ios",
+        "org": "29086"
+      },
+      "dryRun": true,
+      "ok": true
+    },
+    {
+      "input": {
+        "name": "Parity Check",
+        "platform": "ios",
+        "org": "29086",
+        "project": "282"
+      },
+      "dryRun": true,
+      "ok": false
     }
   ],
   "apps_update": [

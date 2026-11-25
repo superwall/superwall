@@ -106,6 +106,7 @@ const paywallOpen = z.object({
   event_name: z.literal("paywall_open"),
   paywall_id: z.string(),
   paywall_identifier: z.string(),
+  paywall_name: z.string().optional(),
   presentation_id: z.string().optional(),
   presented_by: z.string().optional(),
   presentation_source_type: z.string().optional(),

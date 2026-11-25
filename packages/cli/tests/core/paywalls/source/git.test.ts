@@ -890,3 +890,81 @@ test("a project push with no sync point records none, so a stale paywall pushed 
   );
   assert.equal(blob(repo.dir, "paywalls/b/app/index.tsx"), "new\n");
 });
+
+test("a check refuses a remote that differs with no sync point, and lands nothing", async () => {
+  const repo = bareRepo();
+  const theirs = await pushSourceTree({ access: access(repo.remote), files: [file("config.ts", "theirs\n")], message });
+
+  await assert.rejects(
+    pushSourceTree({ access: access(repo.remote), check: true, files: [file("config.ts", "mine\n")], message: messageFor("b") }),
+    (error: unknown) => error instanceof SourceDivergedError && error.files.join() === "config.ts",
+  );
+  assert.equal(headOf(repo.dir), theirs.commitSha);
+});
+
+test("a check refuses a conflict against the sync point, and lands nothing", async () => {
+  const repo = bareRepo();
+  const first = await pushSourceTree({ access: access(repo.remote), files: [file("package.json", "base\n")], message });
+  const alice = await pushSourceTree({
+    access: access(repo.remote),
+    base: first.syncedTo,
+    files: [file("package.json", "alice\n")],
+    message: { ...message, version: 8 },
+  });
+
+  await assert.rejects(
+    pushSourceTree({
+      access: access(repo.remote),
+      base: first.syncedTo,
+      check: true,
+      files: [file("package.json", "bob\n")],
+      message: messageFor("b"),
+    }),
+    (error: unknown) => error instanceof SourceConflictError && error.files.join() === "package.json",
+  );
+  assert.equal(headOf(repo.dir), alice.commitSha);
+});
+
+test("a check that passes merges a teammate's push locally and still lands nothing", async () => {
+  const repo = bareRepo();
+  const shared = file("package.json", "base\n");
+  const first = await pushSourceTree({ access: access(repo.remote), files: [shared], message });
+  const alice = await pushSourceTree({
+    access: access(repo.remote),
+    base: first.syncedTo,
+    files: [shared, file("paywalls/a/app/index.tsx", "alice\n")],
+    message: messageFor("a", 8),
+  });
+
+  const checked = await pushSourceTree({
+    access: access(repo.remote),
+    base: first.syncedTo,
+    check: true,
+    files: [shared, file("paywalls/b/app/index.tsx", "bob\n")],
+    message: messageFor("b"),
+  });
+
+  assert.equal(checked.syncedTo, undefined);
+  assert.equal(headOf(repo.dir), alice.commitSha);
+  assert.deepEqual(treeFiles(repo.dir), ["package.json", "paywalls/a/app/index.tsx"]);
+});
+
+test("a check with no sync point passes a new paywall beside a teammate's, and lands nothing", async () => {
+  const repo = bareRepo();
+  const shared = file("package.json", "same\n");
+  const theirs = await pushSourceTree({
+    access: access(repo.remote),
+    files: [shared, file("paywalls/a/app/index.tsx", "alice\n")],
+    message: messageFor("a"),
+  });
+
+  const checked = await pushSourceTree({
+    access: access(repo.remote),
+    check: true,
+    files: [shared, file("paywalls/b/app/index.tsx", "bob\n")],
+    message: messageFor("b"),
+  });
+
+  assert.equal(checked.status, "committed");
+  assert.equal(headOf(repo.dir), theirs.commitSha);
+});

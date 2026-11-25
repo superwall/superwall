@@ -1,5 +1,6 @@
 import type { AnyCommand, Channel } from "@/program/command";
 import { CHANNEL } from "@/environment";
+import { useCommandList } from "@/core/api/commands";
 import { command as login } from "./account/login";
 import { command as logout } from "./account/logout";
 import { command as whoami } from "./account/whoami";
@@ -24,6 +25,7 @@ import { command as ascKeysDelete } from "./app-store-connect/keys/delete";
 import { command as ascKeysImport } from "./app-store-connect/keys/import";
 import { command as ascKeysList } from "./app-store-connect/keys/list";
 import { command as ascKeysSources } from "./app-store-connect/keys/sources";
+import { command as ascKeysPromote } from "./app-store-connect/keys/promote";
 import { command as ascKeysUpdate } from "./app-store-connect/keys/update";
 import { command as ascNotificationUrlCheck } from "./app-store-connect/notification-url/check";
 import { command as ascNotificationUrlSet } from "./app-store-connect/notification-url/set";
@@ -236,6 +238,7 @@ proxy uses. No command prints a private key, and none revokes a key at Apple.`,
       ascKeysDelete,
       ascKeysImport,
       ascKeysSources,
+      ascKeysPromote,
       ascNotificationUrlCheck,
       ascNotificationUrlSet,
       ascApps,
@@ -289,3 +292,5 @@ export function listGroups(): Group[] {
     commands: group.commands.filter((command) => visible(command.channel)),
   }));
 }
+
+useCommandList(() => listGroups().flatMap((group) => group.commands));

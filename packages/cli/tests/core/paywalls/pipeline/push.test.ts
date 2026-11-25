@@ -96,7 +96,9 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
                           ? "versions"
                         : /^\/v2\/paywalls\/[^/]+$/.test(url) && req.method === "GET"
                           ? "live"
-                          : "other";
+                          : /^\/v2\/paywalls\/[^/]+$/.test(url) && req.method === "PATCH"
+                            ? "rename"
+                            : "other";
       fake.calls.push(kind);
       fake.paths.push(url);
       fake.bodies[kind] = raw;
@@ -115,6 +117,7 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
         link: { commit_sha: "linked" },
         promote: { version: 7, url: "u" },
         live: { id: "2080" },
+        rename: { id: "2080" },
         history: { object: "list", data: [] },
         paywalls: { data: [] },
         create: { id: 9 },
@@ -127,8 +130,13 @@ async function fakeApi(routes: Record<string, Route> = {}): Promise<Fake> {
         },
         other: {},
       };
+      const body = route.body ?? fallback[kind];
+      const named =
+        kind === "live" && (route.status ?? 200) < 300 && typeof body === "object" && body !== null
+          ? { name: "Pro", ...body }
+          : body;
       res.writeHead(route.status ?? 200, { "content-type": "application/json" });
-      res.end(JSON.stringify(route.body ?? fallback[kind]));
+      res.end(JSON.stringify(named));
     });
   });
   servers.push(server);
@@ -444,7 +452,9 @@ test("a failed live-version lookup never fails the push — the version is what 
     "access",
     "link",
     "promote",
+    "rename",
   ]);
+  assert.deepEqual(JSON.parse(fake.bodies.rename ?? "{}"), { name: "Pro" });
 });
 
 test("a source failure blocks promote — production keeps the old version", async () => {
@@ -2022,4 +2032,265 @@ test("push sends no teleport_pages for a build without them", async () => {
 
   const body: unknown = JSON.parse(fake.bodies.versions ?? "{}");
   assert.equal(Reflect.has(Object(body), "teleport_pages"), false);
+});
+
+test("a name changed in config.ts renames the paywall once the version is pushed", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ live: { body: { id: "2080", name: "Old label" } } });
+  const calls: RendererCall[] = [];
+
+  useRenderer(recordingRenderer(calls));
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: true,
+      load: async () => frameworkFor(project),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.deepEqual(fake.calls.slice(-3), ["link", "promote", "rename"]);
+  assert.equal(fake.paths.at(-1), "/v2/paywalls/2080");
+  assert.deepEqual(JSON.parse(fake.bodies.rename ?? "{}"), { name: "Pro" });
+  assert.match(JSON.stringify(calls), /Renamed `Old label` → `Pro`/);
+});
+
+test("a name that already matches sends no rename", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ live: { body: { id: "2080", name: "Pro" } } });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () => frameworkFor(project, { buildSnapshot: async () => built({ name: "  Pro " }) }),
+  });
+
+  assert.ok(!fake.calls.includes("rename"));
+});
+
+test("a name-only change renames the paywall even though the build is unchanged", async () => {
+  const project = scaffold();
+  const snapshot = "a".repeat(64);
+  const fake = await fakeApi({
+    live: {
+      body: {
+        id: "2080",
+        name: "Old label",
+        version: 7,
+        paywall_url: `https://r/x/headless/2080/${snapshot}.html`,
+      },
+    },
+  });
+  const calls: RendererCall[] = [];
+
+  useRenderer(recordingRenderer(calls));
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: true,
+      load: async () =>
+        frameworkFor(project, {
+          buildSnapshot: async () => built({ name: "New label", snapshotId: snapshot }),
+        }),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.deepEqual(fake.calls.slice(-3), ["live", "history", "rename"]);
+  assert.ok(!fake.calls.includes("versions"), "no new version for a name-only change");
+  assert.deepEqual(JSON.parse(fake.bodies.rename ?? "{}"), { name: "New label" });
+  const printed = JSON.stringify(calls);
+  assert.match(printed, /Renamed `Old label` → `New label`/);
+  assert.match(printed, /1 paywall renamed\./);
+});
+
+test("a blank name in the build leaves the paywall's name alone", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ live: { body: { id: "2080", name: "Old label" } } });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () => frameworkFor(project, { buildSnapshot: async () => built({ name: " " }) }),
+  });
+
+  assert.ok(!fake.calls.includes("rename"));
+});
+
+test("a paywall with no name on Superwall yet is named, not renamed", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({ live: { body: { id: "2080", name: null } } });
+  const calls: RendererCall[] = [];
+
+  useRenderer(recordingRenderer(calls));
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      load: async () => frameworkFor(project),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.match(JSON.stringify(calls), /Named `Pro`/);
+});
+
+test("the summary counts a paywall renamed without a new version apart from the ones pushed", async () => {
+  const project = scaffold(["plus-upgrade", "winback"]);
+  const snapshot = "a".repeat(64);
+  const fake = await fakeApi({
+    live: {
+      body: { id: "2080", name: "Old label", version: 7, paywall_url: `https://r/x/headless/2080/${snapshot}.html` },
+    },
+  });
+  const calls: RendererCall[] = [];
+
+  useRenderer(recordingRenderer(calls));
+  try {
+    await runPushPipeline(contextFor(fake.api), {
+      promote: false,
+      load: async () =>
+        frameworkFor(project, {
+          buildSnapshot: async (_project, surface) =>
+            built({ snapshotId: surface.id === "plus-upgrade" ? snapshot : "b".repeat(64) }),
+        }),
+    });
+  } finally {
+    selectRenderer({ mode: "json" });
+  }
+
+  assert.equal(fake.calls.filter((kind) => kind === "versions").length, 1);
+  assert.equal(fake.calls.filter((kind) => kind === "rename").length, 2);
+  assert.match(JSON.stringify(calls), /1 paywall pushed · 1 renamed · run/);
+});
+
+function unboundProject(ids: string[], bound: Record<string, string> = {}): FrameworkProject {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-pipeline-"));
+  dirs.push(dir);
+  writeApp(dir, "ios", "42");
+  for (const [id, paywallId] of Object.entries(bound)) {
+    writeBinding(dir, "paywall", id, "ios", { paywallId });
+  }
+  for (const id of ids) {
+    fs.mkdirSync(path.join(dir, "paywalls", id), { recursive: true });
+    fs.writeFileSync(path.join(dir, "paywalls", id, "config.ts"), `mine ${id}\n`);
+  }
+  return {
+    root: dir,
+    superwallDir: dir,
+    marker: "package.json",
+    packageName: "acme-paywalls",
+    surfaces: ids.map((id) => surfaceOf(id)),
+    diagnostics: [],
+  };
+}
+
+const headlessApp = { paywalls: { body: { data: [{ id: 555, identifier: "other", metadata: { headless: "true" } }] } } };
+const remoteHead = (bare: string): string =>
+  execFileSync("git", ["--git-dir", bare, "rev-parse", "main"], { encoding: "utf8" }).trim();
+
+test("a source repo that differs with no sync point refuses a new paywall before it is created", async () => {
+  const project = unboundProject(["b", "c"]);
+  const fake = await fakeApi(headlessApp);
+  teammateCommit(fake.bare, { "paywalls/b/config.ts": "theirs\n" });
+  const lockBefore = fs.readFileSync(path.join(project.superwallDir, "superwall.lock"), "utf8");
+  const head = remoteHead(fake.bare);
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) }),
+    /paywalls\/b\/config\.ts[\s\S]*records no sync point[\s\S]*--overwrite-source/,
+  );
+
+  assert.ok(!fake.calls.includes("create"), "no empty paywall is left on the dashboard");
+  assert.ok(!fake.calls.includes("versions"));
+  assert.ok(fake.paths.includes("/v2/paywalls/555/source-access"), "the check goes through the app's own paywall");
+  assert.equal(fs.readFileSync(path.join(project.superwallDir, "superwall.lock"), "utf8"), lockBefore);
+  assert.equal(remoteHead(fake.bare), head, "nothing lands in the source repo");
+});
+
+test("the check before creating goes through a paywall superwall.lock binds in the app", async () => {
+  const project = unboundProject(["a", "b"], { a: "2080" });
+  const fake = await fakeApi();
+  teammateCommit(fake.bare, { "paywalls/b/config.ts": "theirs\n" });
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: false, ids: ["b"], load: async () => frameworkFor(project) }),
+    /records no sync point/,
+  );
+
+  assert.ok(!fake.calls.includes("create"));
+  assert.ok(!fake.calls.includes("paywalls"), "a bound paywall needs no lookup");
+  assert.ok(fake.paths.includes("/v2/paywalls/2080/source-access"));
+  assert.equal(readLock(project.superwallDir).paywalls.b, undefined);
+});
+
+test("a source repo that agrees with the project lets a new paywall be created and pushed", async () => {
+  const project = unboundProject(["b"]);
+  const fake = await fakeApi(headlessApp);
+  teammateCommit(fake.bare, { "paywalls/other/config.ts": "other\n" });
+
+  await runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) });
+
+  const access = fake.paths.indexOf("/v2/paywalls/555/source-access");
+  assert.ok(access >= 0 && access < fake.calls.indexOf("create"), "the source is checked before the paywall exists");
+  assert.equal(readLock(project.superwallDir).paywalls.b?.ios?.paywallId, "9");
+  assert.equal(shownAt(fake.bare, "paywalls/b/config.ts"), "mine b\n");
+  assert.equal(shownAt(fake.bare, "paywalls/other/config.ts"), "other\n");
+});
+
+test("--overwrite-source skips the check and creates the new paywall", async () => {
+  const project = unboundProject(["b"]);
+  const fake = await fakeApi(headlessApp);
+  teammateCommit(fake.bare, { "paywalls/b/config.ts": "theirs\n" });
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    overwriteSource: true,
+    load: async () => frameworkFor(project),
+  });
+
+  assert.ok(fake.calls.includes("create"));
+  assert.ok(!fake.paths.includes("/v2/paywalls/555/source-access"), "no check runs through another paywall");
+  assert.equal(shownAt(fake.bare, "paywalls/b/config.ts"), "mine b\n");
+});
+
+test("a first push into an app with no headless paywall creates it with no check", async () => {
+  const project = unboundProject(["b"]);
+  const fake = await fakeApi();
+
+  await runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) });
+
+  assert.ok(fake.calls.indexOf("create") < fake.calls.indexOf("access"));
+  assert.equal(readLock(project.superwallDir).paywalls.b?.ios?.sourcePending, undefined);
+});
+
+test("without git a new paywall is never created", async () => {
+  const project = unboundProject(["b"]);
+  const fake = await fakeApi();
+  const savedPath = process.env.PATH;
+  process.env.PATH = fs.mkdtempSync(path.join(os.tmpdir(), "superwall-no-git-"));
+  dirs.push(process.env.PATH);
+
+  try {
+    await assert.rejects(
+      runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) }),
+      /requires git/,
+    );
+  } finally {
+    process.env.PATH = savedPath;
+  }
+  assert.ok(!fake.calls.includes("create"));
+});
+
+test("a source tree that cannot be sent stops a new paywall before it is created", async () => {
+  const project = unboundProject(["b"]);
+  const fd = fs.openSync(path.join(project.superwallDir, "dump.bin"), "w");
+  fs.ftruncateSync(fd, 300 * 1024 * 1024);
+  fs.closeSync(fd);
+  const fake = await fakeApi();
+
+  await assert.rejects(
+    runPushPipeline(contextFor(fake.api), { promote: false, load: async () => frameworkFor(project) }),
+    /over the 250 MB limit/,
+  );
+  assert.ok(!fake.calls.includes("create"));
+  assert.equal(readLock(project.superwallDir).paywalls.b, undefined);
 });

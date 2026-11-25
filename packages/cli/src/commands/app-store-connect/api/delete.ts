@@ -11,7 +11,7 @@ export const command = defineCommand({
   flags: {
     dryRun: { ...dryRun, describe: "Print the request it would send; send nothing" },
     team: { ...team, describe: "Apple team id, when your organization has several" },
-    app: { ...app, describe: "An app of the organization whose App Store Connect key signs it: id, name or dashboard link" },
+    app: { ...app, describe: "Picks the organization: id, name or dashboard link of one of its apps. The organization's key signs the request, not a key saved on the app" },
     project,
   },
   examples: [

@@ -501,3 +501,124 @@ test("an endpoint a resource command covers names it first and the raw verb afte
   assert.match(renderApiDocs(index(), "/v2/paywalls", "get", commandFor), /\n\nCall it: superwall get \/v2\/paywalls$/);
   assert.doesNotMatch(renderApiDocs(index(), "/v2/paywalls", "get", commandFor), /\nOr: /);
 });
+
+const ruleExample = {
+  operator: "and",
+  conditions: [
+    {
+      type: "condition",
+      lhs: { type: "property", value: "params.paywall_id" },
+      operator: "eq",
+      rhs: { type: "string", value: "42" },
+    },
+  ],
+};
+
+const refSpec = {
+  components: {
+    schemas: {
+      RuleConditions: {
+        type: "object",
+        required: ["operator", "conditions"],
+        description: "Structured audience targeting rule",
+        examples: [ruleExample, { operator: "or", conditions: [] }],
+        properties: {
+          operator: { type: "string", enum: ["and", "or"] },
+          conditions: { type: "array", items: { $ref: "#/components/schemas/RuleCondition" } },
+        },
+      },
+      RuleCondition: {
+        anyOf: [
+          {
+            type: "object",
+            required: ["type", "lhs"],
+            properties: {
+              type: { type: "string", enum: ["condition"] },
+              lhs: { type: "object", properties: { value: { type: "string" } } },
+            },
+          },
+          {
+            type: "object",
+            required: ["type", "conditions"],
+            properties: {
+              type: { type: "string", enum: ["group"] },
+              conditions: { type: "array", items: { $ref: "#/components/schemas/RuleCondition" } },
+            },
+          },
+        ],
+      },
+      Loop: { $ref: "#/components/schemas/Loop" },
+      Nested: { type: "array", items: { $ref: "#/components/schemas/Nested" } },
+      Price: { type: "integer", example: 999 },
+    },
+  },
+  paths: {
+    "/v2/campaigns/{id}/audiences/{audience_id}": {
+      patch: {
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  rule_conditions: {
+                    anyOf: [{ $ref: "#/components/schemas/RuleConditions" }],
+                    description: "Structured targeting rule.",
+                  },
+                  rule: { $ref: "#/components/schemas/RuleConditions" },
+                  loop: { $ref: "#/components/schemas/Loop" },
+                  nested: { $ref: "#/components/schemas/Nested" },
+                  price: { anyOf: [{ type: "null" }, { $ref: "#/components/schemas/Price" }] },
+                  missing: { $ref: "#/components/schemas/Missing" },
+                  plain: { anyOf: [{ type: "string" }, { type: "null" }] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { content: { "application/json": { schema: { $ref: "#/components/schemas/RuleConditions" } } } },
+        },
+      },
+    },
+  },
+};
+
+test("a body field that points at a component shows that component's fields and its first example", () => {
+  const [update] = deriveApiIndex(refSpec).operations;
+  const [ruleConditions, rule] = update?.body ?? [];
+  assert.deepEqual(ruleConditions, {
+    name: "rule_conditions",
+    type: "object",
+    required: false,
+    description: "Structured targeting rule.",
+    example: ruleExample,
+    fields: [
+      { name: "operator", type: '"and" | "or"', required: true },
+      {
+        name: "conditions",
+        type: "object[]",
+        required: true,
+        fields: [
+          { name: "type", type: '"condition" | "group"', required: true },
+          { name: "lhs", type: "object", required: false },
+          { name: "conditions", type: "object[]", required: false },
+        ],
+      },
+    ],
+  });
+  assert.equal(rule?.description, "Structured audience targeting rule");
+  assert.deepEqual(update?.returns, ["operator", "conditions"]);
+  const out = renderApiDocs(deriveApiIndex(refSpec), "/v2/campaigns/1/audiences/2", "patch");
+  assert.ok(out.includes(`  rule_conditions?: object  — Structured targeting rule.\n    Example: ${JSON.stringify(ruleExample)}\n    operator: "and" | "or"`));
+});
+
+test("a recursive or dangling component reference ends instead of looping", () => {
+  const body = deriveApiIndex(refSpec).operations[0]?.body ?? [];
+  const field = (name: string) => body.find((entry) => entry.name === name);
+  assert.deepEqual(field("loop"), { name: "loop", type: "Loop", required: false });
+  assert.deepEqual(field("nested"), { name: "nested", type: "Nested[]", required: false });
+  assert.deepEqual(field("price"), { name: "price", type: "null | integer", required: false, example: 999 });
+  assert.deepEqual(field("missing"), { name: "missing", type: "any", required: false });
+  assert.deepEqual(field("plain"), { name: "plain", type: "string | null", required: false });
+});

@@ -7,7 +7,7 @@ import { command as get } from "@/commands/app-store-connect/api/get";
 import { command as del } from "@/commands/app-store-connect/api/delete";
 import { command as patch } from "@/commands/app-store-connect/api/patch";
 import { command as post } from "@/commands/app-store-connect/api/post";
-import { ApiError } from "@/core/api/client";
+import { ApiError, type SuperwallApi } from "@/core/api/client";
 import { readCachedIndex, writeCachedIndex } from "@/core/app-store-connect/api/spec";
 import { buildZip, serveZip } from "../../../helpers/asc-spec";
 import { ascRoutes, fakeAscApi } from "../../../helpers/asc-proxy";
@@ -87,7 +87,7 @@ test("a team without a team_id is addressed by its id", async () => {
 test("no App Store Connect key, or several, stops before Apple is called", async () => {
   const none = fakeAscApi({}, []);
   const missing = await runCommand(get, { api: none.api, args: { path: "/v1/apps" } });
-  assert.equal(errorOf(missing), "App Store Connect isn't connected. Run `superwall asc keys create --help`.");
+  assert.equal(errorOf(missing), "App Store Connect isn't connected. Run `superwall asc keys promote --app <app>` to use an app's saved key, or `superwall asc keys create --help`.");
   assert.equal(process.exitCode, 1);
 
   process.exitCode = undefined;
@@ -95,6 +95,57 @@ test("no App Store Connect key, or several, stops before Apple is called", async
   const ambiguous = await runCommand(get, { api: several.api, args: { path: "/v1/apps" } });
   assert.equal(errorOf(ambiguous), "Multiple App Store Connect teams (T1, 9, ). Pass --team <id>.");
   assert.ok(!several.requests.some((request) => request.path.includes("/proxy/")));
+});
+
+const OVERVIEW = "GET /internal/v2/applications/20/integrations/overview";
+
+test("with --app and no organization key, the error names the key saved on that app and the promote command", async () => {
+  const saved = fakeAscApi(
+    { [OVERVIEW]: { app_store_connect_configuration: { key_id: "RQB94UUB77", issuer_id: "I1", has_private_key: true }, in_app_purchase_configuration: null } },
+    [],
+  );
+  const result = await runLine("asc get /v1/apps --app 20", { api: saved.api });
+  assert.equal(
+    errorOf(result),
+    "App Store Connect isn't connected for this organization. The asc commands sign with the organization's key, not the one saved on an app: run `superwall asc keys promote --app 20` to give the organization the API key RQB94UUB77 saved on `20`.",
+  );
+  assert.ok(!saved.requests.some((request) => request.path.includes("/proxy/")));
+});
+
+test("with --app and a key saved on that app without its private key, the error asks for the .p8 before promoting", async () => {
+  const partial = fakeAscApi(
+    { [OVERVIEW]: { app_store_connect_configuration: { key_id: "RQB94UUB77", issuer_id: "I1", has_private_key: false }, in_app_purchase_configuration: null } },
+    [],
+  );
+  const result = await runLine("asc get /v1/apps --app 20", { api: partial.api });
+  assert.equal(
+    errorOf(result),
+    "App Store Connect isn't connected for this organization, and the API key RQB94UUB77 saved on `20` has no private key, so it can't sign. Save its .p8 with `superwall asc keys update api_key --app 20 --key-id RQB94UUB77 --issuer I1 --key-file <path.p8>`, then run `superwall asc keys promote --app 20`.",
+  );
+  assert.doesNotMatch(errorOf(result) ?? "", /to give the organization the API key/);
+});
+
+test("with --app and no key saved on that app either, the error says so and points to creating one", async () => {
+  const none = fakeAscApi({ [OVERVIEW]: { app_store_connect_configuration: null, in_app_purchase_configuration: null } }, []);
+  const result = await runLine("asc get /v1/apps --app 20", { api: none.api });
+  assert.equal(errorOf(result), "App Store Connect isn't connected, and `20` has no API key saved. Run `superwall asc keys create api_key --app 20 --help`.");
+});
+
+test("a failed lookup of the app's saved key is reported, never read as no key", async () => {
+  const { api } = fakeAscApi({}, []);
+  const read = api.get;
+  assert.ok(read);
+  const failing: Partial<SuperwallApi> = {
+    ...api,
+    forOrg: (id: string) => ({ ...(failing as SuperwallApi), org: { id } }),
+    get: async (path) => {
+      if (path.endsWith("/integrations/overview")) throw new ApiError(`GET ${path}`, 500, "boom");
+      return read(path);
+    },
+  };
+  const result = await runLine("asc get /v1/apps --app 20", { api: failing });
+  assert.doesNotMatch(errorOf(result) ?? "", /isn't connected/);
+  assert.equal(process.exitCode, 1);
 });
 
 test("an answer with no content is ok, and an answer with a body passes through unchanged", async () => {

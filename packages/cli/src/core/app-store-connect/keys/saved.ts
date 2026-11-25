@@ -1,5 +1,11 @@
 import type { CommandContext } from "@/program/command";
-import { listAscConfigs, removeAscConfig } from "@/core/app-store-connect/api/client";
+import {
+  listAscConfigs,
+  promoteAppAscKey,
+  removeAscConfig,
+  type AscKeyPromotion,
+} from "@/core/app-store-connect/api/client";
+import { ApiError } from "@/core/api/client";
 import { resolveAscOrgApi } from "@/core/app-store-connect/api/request";
 import {
   listKeySources,
@@ -84,6 +90,7 @@ export async function listOrganizationKeys(ctx: CommandContext<"required">): Pro
       return;
     }
     ctx.ui.info("Add one: superwall asc keys create --key-id <id> --issuer <id> --key-file <path.p8>");
+    ctx.ui.info("Or use the key saved on an app: superwall asc keys promote --app <app>");
     return;
   }
 
@@ -218,4 +225,55 @@ export async function runAscKeysSources(ctx: CommandContext<"required">, { flags
       ctx.ui.info(`\`${source.key_id}\`  ${KEY_LABEL[kind]}  from ${source.name}${more} (app ${source.application_id})`);
     }
   }
+}
+
+function describePromotion(result: AscKeyPromotion, name: string): string {
+  const team = result.team_id ? ` for Apple team ${result.team_id}` : "";
+  switch (result.outcome) {
+    case "saved":
+      return `App Store Connect API key ${result.key_id} from \`${name}\` is now your organization's${team}. The signed proxy uses it.`;
+    case "exists":
+      return `Your organization already has a key${team}. It was left as it is, and the signed proxy uses it.`;
+    case "no_team_id":
+      return `Apple didn't say which team key ${result.key_id} belongs to, so it wasn't copied. Add an organization key with \`superwall asc keys create --help\`.`;
+    case "apple_unavailable":
+      return `Apple couldn't be reached to find the team of key ${result.key_id}, so nothing was copied. Run it again later.`;
+    case "failed":
+      return `Key ${result.key_id} couldn't be saved to your organization. Run it again, or add an organization key with \`superwall asc keys create --help\`.`;
+  }
+}
+
+function promotionRefusal(error: unknown, name: string): unknown {
+  if (!(error instanceof ApiError)) return error;
+  if (error.status === 404) {
+    return new Error(
+      `\`${name}\` has no saved App Store Connect API key to copy. Save one with \`superwall asc keys create --app <app>\`.`,
+    );
+  }
+  if (error.status === 403) {
+    return new Error(
+      "Copying a key to your organization needs access to every project in it. Ask an owner or admin, or use a key with that access.",
+    );
+  }
+  return error;
+}
+
+export async function promoteKey(ctx: CommandContext<"required">, flags: AppFlags): Promise<void> {
+  const { app, name, organizationId } = await chooseKeyApp(ctx, flags);
+  const api = organizationId ? ctx.api.forOrg(organizationId) : await resolveAscOrgApi(ctx);
+  if (ctx.dryRun) {
+    if (ctx.json) return ctx.output.data({ dryRun: true, action: "promote", application_id: app.applicationId });
+    ctx.ui.info(`[dry-run] would copy the App Store Connect API key of ${name} to your organization`);
+    return;
+  }
+  const result = await apiCall(ctx, "Copying the key to your organization", () =>
+    promoteAppAscKey(api, app.applicationId).catch((error: unknown) => {
+      throw promotionRefusal(error, name);
+    }),
+  );
+  const done = result.outcome === "saved" || result.outcome === "exists";
+  if (!done) ctx.fail();
+  if (ctx.json) return ctx.output.data(result);
+  if (done) ctx.ui.success(describePromotion(result, name));
+  else ctx.ui.error(describePromotion(result, name));
 }

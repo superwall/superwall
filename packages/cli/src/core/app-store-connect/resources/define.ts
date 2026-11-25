@@ -1,7 +1,7 @@
 import { app, dryRun, project, team, yes } from "@/program/flags";
 import { defineCatalog, UsageError, type Catalog, type CommandContext, type Example, type FlagSpec } from "@/program/command";
 import { renderAscResourceHelp } from "./help";
-import type { AscArg, AscFlag, AscOperation, AscOutput } from "./operation";
+import type { AscArg, AscFlag, AscOperation, AscOutput, AscScope } from "./operation";
 import { createAscSession, type AscSession } from "./session";
 import { printAscOutput, printAscPlan } from "./print";
 import { listAscResourceTools } from "./tools";
@@ -15,7 +15,7 @@ export interface AscResourceSpec {
 }
 
 const COMMON_FLAGS = {
-  app: { ...app, describe: "A Superwall app of the organization whose App Store Connect key to use: id, name or dashboard link" },
+  app: { ...app, describe: "Picks the organization: id, name or dashboard link of one of its apps. The organization's key signs the request, not a key saved on the app" },
   project,
   team: { ...team, describe: "Apple team id, when your organization has several" },
   yes,
@@ -88,7 +88,16 @@ function parseInput(command: string, operation: AscOperation, words: string[], r
   for (const arg of specArgs) {
     if (arg.required && args[arg.name] === undefined) throw new UsageError(`${command} needs <${arg.name}>.`);
   }
-  return { args, flags, yes: raw.yes === true };
+  return { args, flags, yes: raw.yes === true, scope: scopeOf(raw) };
+}
+
+function scopeOf(raw: Record<string, unknown>): AscScope {
+  const scope: AscScope = {};
+  for (const key of ["app", "project", "team"] as const) {
+    const value = raw[key];
+    if (typeof value === "string" && value.trim() !== "") scope[key] = value.trim();
+  }
+  return scope;
 }
 
 function resolveOperation(spec: AscResourceSpec, words: string[]): [AscOperation, string[]] {

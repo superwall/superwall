@@ -163,7 +163,14 @@ skill.
   with `sourcePending: <version>` until then, so a rerun finishes that
   version's source instead of skipping it, and neither `publish` nor
   `promote` ever promotes a source-less version. Git and a collectable tree
-  are checked before any version exists. The commit each app's source repo
+  are checked before any version exists, and before any paywall is created:
+  for each surface `superwall.lock` does not bind yet, `checkSource` runs the
+  source push in check mode (clone, divergence check, upstream merge, never
+  the final push) through a paywall the app already has (a lock-bound one,
+  else its first headless paywall), so a refused push never leaves an empty
+  paywall on the dashboard or a binding in the lock. An app with no headless
+  paywall has no source to differ from and skips it, as does
+  `--overwrite-source`. The commit each app's source repo
   was last synced to lives in the lock's `sources` (committed, so CI has it;
   the old `.superwall/source.json` is still read and moved there) and
   advances as soon as the git push lands, before the link call, which alone
@@ -568,7 +575,11 @@ from npm, pinned to one version.
   static import from `src/tools.ts` and fails on any `node:*` or package but
   picocolors, printing the chain. A CLI-only command imports its core with
   `await import()` inside `run`; a tool's core reads files and the machine only
-  through the host.
+  through the host. `build-tools.ts` turns every `await import()` in the bundle
+  into "This needs the Superwall CLI on your machine", so a tool's own path
+  never uses one; the build runs `api_docs` from the built `dist/tools.js`
+  (two matching queries, `mmp`, and a query that matches nothing, which must
+  answer an empty `operations` list) and fails if any errors.
 - **The MCP updates only when pwn's bump PR merges.** mcp.superwall.com serves
   the `@superwall/cli` version pinned in pwn's `apps/mcp/package.json`, and that
   pin moves only when a `bot/mcp-cli-<version>` PR merges. pwn's
@@ -695,7 +706,13 @@ Rationale that used to sit in comments. Keep it here, next to the rules.
   reads whose path it knows (they make the plan exact) and plans every write
   and every read that depends on one, with `${name}` placeholders for ids Apple
   would return; Apple's own inline ids use the same `${…}` form. A failed step
-  names what was already created, because Apple has no transaction. The
+  names what was already created, because Apple has no transaction.
+  `subscriptions create` checks `--price` on a subscription the app already
+  has (the group's, then the app's other groups) before its POST, because
+  Apple lists price points only under a subscription and every subscription
+  of an app shares one grid. Once the subscription exists, any failure names
+  it with the commands that finish it: deleting it would not free its product
+  ID, so a rerun would hit a 409. The
   screenshot upload reads a local file and PUTs to Apple's signed URLs, so it
   is `mcp: false` and loads its file reader with `await import()`.
 - **Detection is best-effort on purpose:** manifests miss Tuist and vendored

@@ -6,7 +6,6 @@ import react from "@vitejs/plugin-react-swc";
 import { createServer, searchForWorkspaceRoot, type Plugin, type ViteDevServer } from "vite";
 import type {
   AppScheme,
-  Samples,
   StudioActionName,
   StudioActionProgress,
   StudioActionResult,
@@ -28,14 +27,17 @@ import { buildStudioProjects } from "./project";
 import {
   findSurface,
   listScreenshots,
+  loadSamples,
   postcssSearchDir,
   projectDependencies,
   projectModule,
   readActionRequest,
   readProjects,
+  readSamplesPlatform,
   readScreenshotPage,
   resolvableFrom,
   type PreviewProject,
+  type SamplesSource,
   type ScreenshotSource,
 } from "./projects";
 import { aliasColonPaths, colonAliasPlugin } from "./alias";
@@ -97,6 +99,7 @@ const STUDIO_ROUTE = /^\/(?:[a-z0-9-]+\/)?(paywall|funnel)\/[a-z0-9-]+\/?$/;
 const STATUS_ROUTE = /^\/__studio\/status\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
 const SCREENSHOT_ROUTE =
   /^\/__studio\/screenshot\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
+const SAMPLES_ROUTE = /^\/__studio\/samples\/(?:([a-z0-9-]+)\/)?(paywall|funnel)\/([a-z0-9-]+)$/;
 const STUDIO_ASSET_PREFIX = "/__studio/";
 
 const STUDIO_MISSING = `superwall studio is not built.
@@ -104,18 +107,18 @@ const STUDIO_MISSING = `superwall studio is not built.
 Run: bun run --filter '@superwall/studio' build
 (or reinstall — the workspace postinstall builds it)`;
 
-export type StudioActions = ScreenshotSource & {
-  appScheme?(): Promise<AppScheme>;
-  samples?(): Promise<Samples>;
-  run(
-    action: StudioActionName,
-    surface: DiscoveredSurface,
-    onProgress?: StudioActionProgress,
-    options?: { version?: number },
-  ): Promise<StudioActionResult>;
-  status(surface: DiscoveredSurface): Promise<StudioStatus>;
-  update?(): StudioUpdate | undefined;
-};
+export type StudioActions = ScreenshotSource &
+  SamplesSource & {
+    appScheme?(): Promise<AppScheme>;
+    run(
+      action: StudioActionName,
+      surface: DiscoveredSurface,
+      onProgress?: StudioActionProgress,
+      options?: { version?: number },
+    ): Promise<StudioActionResult>;
+    status(surface: DiscoveredSurface): Promise<StudioStatus>;
+    update?(): StudioUpdate | undefined;
+  };
 
 const ACTION_NAMES: readonly StudioActionName[] = ["push", "promote", "publish"];
 
@@ -221,15 +224,17 @@ const previewPlugin = (
           return;
         }
 
-        if (url === "/__studio/samples.json") {
-          const sample = studio?.samples?.();
-          if (!sample) {
-            json(res, {});
-            return;
-          }
-          sample
-            .then((value) => json(res, value))
-            .catch((error: unknown) => json(res, { unreachable: messageOf(error) }));
+        const samplesRoute = SAMPLES_ROUTE.exec(url);
+        if (samplesRoute) {
+          const surface = findSurface(
+            readProjects(roots),
+            samplesRoute[1] || undefined,
+            samplesRoute[2] ?? "",
+            samplesRoute[3] ?? "",
+          )?.surface;
+          loadSamples(studio, surface, readSamplesPlatform(req.url ?? "")).then((value) =>
+            json(res, value),
+          );
           return;
         }
 
@@ -497,6 +502,8 @@ export const startPreviewServer = async (
         "react-dom",
         "react-dom/client",
         "superwall > @superwall/runtime > @superwall/protocol > zod",
+        "superwall > @stripe/react-stripe-js",
+        "superwall > @stripe/stripe-js/pure",
         ...projects
           .flatMap((one) => projectDependencies(one.project.superwallDir))
           .filter(resolvable),

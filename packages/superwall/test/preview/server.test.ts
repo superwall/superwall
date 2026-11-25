@@ -1,5 +1,6 @@
 // @vitest-environment node
 import * as fs from "node:fs";
+import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +35,17 @@ describe("the dev server's JSX runtime", () => {
       jsx: "automatic",
       jsxImportSource: "react",
     });
+  });
+
+  it("pre-bundles Stripe's React bindings with the React the page uses", () => {
+    expect(vi.mocked(createServer).mock.calls[0]?.[0]?.optimizeDeps?.include).toEqual(
+      expect.arrayContaining([
+        "react",
+        "react-dom",
+        "superwall > @stripe/react-stripe-js",
+        "superwall > @stripe/stripe-js/pure",
+      ]),
+    );
   });
 
   it("serves the framework's checkout without bare React.createElement", async () => {
@@ -127,6 +139,28 @@ describe("the dev server in a folder whose path contains a colon", () => {
   }, 60_000);
 });
 
+const studioJson = async (options: Parameters<typeof startPreviewServer>[1], route: string) => {
+  const server = await startPreviewServer(FIXTURE, options);
+  try {
+    const address = server.httpServer?.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const body = await new Promise<string>((resolve, reject) => {
+      http
+        .get({ host: "127.0.0.1", port, path: route, agent: false }, (res) => {
+          let text = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk: string) => (text += chunk));
+          res.on("end", () => resolve(text));
+          res.on("error", reject);
+        })
+        .on("error", reject);
+    });
+    return JSON.parse(body) as Record<string, unknown>;
+  } finally {
+    await server.close();
+  }
+};
+
 describe("the studio's project.json", () => {
   const UPDATE = {
     current: "2.5.2",
@@ -141,17 +175,8 @@ describe("the studio's project.json", () => {
     ...(update === undefined ? {} : { update }),
   });
 
-  const projectJson = async (options: Parameters<typeof startPreviewServer>[1]) => {
-    const server = await startPreviewServer(FIXTURE, options);
-    try {
-      const address = server.httpServer?.address();
-      const port = typeof address === "object" && address ? address.port : 0;
-      const response = await fetch(`http://127.0.0.1:${port}/__studio/project.json`);
-      return (await response.json()) as Record<string, unknown>;
-    } finally {
-      await server.close();
-    }
-  };
+  const projectJson = (options: Parameters<typeof startPreviewServer>[1]) =>
+    studioJson(options, "/__studio/project.json");
 
   it("carries the update the CLI resolved", async () => {
     const payload = await projectJson({ port: 0, host: "127.0.0.1", studio: studio(() => UPDATE) });
@@ -167,5 +192,44 @@ describe("the studio's project.json", () => {
     expect(none).not.toHaveProperty("update");
     expect(older).not.toHaveProperty("update");
     expect(bare).not.toHaveProperty("update");
+  }, 60_000);
+});
+
+describe("the studio's samples route", () => {
+  const studio = () => {
+    const calls: unknown[][] = [];
+    return {
+      calls,
+      run: async () => ({ ok: false as const, error: "unused" }),
+      status: async () => ({}),
+      samples: async (...args: unknown[]) => {
+        calls.push(args);
+        return { products: { pro_annual: { price: "$59.99" } } };
+      },
+    };
+  };
+
+  it("passes the open surface and the device platform to the CLI", async () => {
+    const cli = studio();
+    const payload = await studioJson(
+      { port: 0, host: "127.0.0.1", studio: cli },
+      "/__studio/samples/paywall/demo?platform=android",
+    );
+
+    expect(payload).toEqual({ products: { pro_annual: { price: "$59.99" } } });
+    expect(cli.calls).toHaveLength(1);
+    expect(cli.calls[0]?.[0]).toMatchObject({ kind: "paywall", id: "demo" });
+    expect(cli.calls[0]?.[1]).toBe("android");
+  }, 60_000);
+
+  it("answers nothing for a surface the project doesn't have", async () => {
+    const cli = studio();
+    const payload = await studioJson(
+      { port: 0, host: "127.0.0.1", studio: cli },
+      "/__studio/samples/paywall/missing",
+    );
+
+    expect(payload).toEqual({});
+    expect(cli.calls).toEqual([]);
   }, 60_000);
 });

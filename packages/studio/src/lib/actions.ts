@@ -72,12 +72,6 @@ export const fetchStatus = async (surface: StudioSurface): Promise<StudioStatus>
   }
 };
 
-export const devServerActions: StudioActions = {
-  offered: ["push", "promote", "publish"],
-  run: runAction,
-  status: fetchStatus,
-};
-
 export const fetchScreenshots = async (
   surface: StudioSurface,
 ): Promise<StudioScreenshot[] | undefined> => {
@@ -87,12 +81,23 @@ export const fetchScreenshots = async (
   return value.shots;
 };
 
-export const fetchSamples = async (): Promise<Samples> => {
+export const fetchSamples = async (
+  surface: StudioSurface,
+  platform: string | undefined,
+): Promise<Samples> => {
   try {
-    const response = await fetch("/__studio/samples.json");
+    const query = platform === undefined ? "" : `?platform=${encodeURIComponent(platform)}`;
+    const response = await fetch(`/__studio/samples${surfacePath(surface)}${query}`);
     const value: unknown = await response.json();
     return typeof value === "object" && value !== null ? (value as Samples) : {};
   } catch (error) {
     return { unreachable: error instanceof Error ? error.message : String(error) };
   }
+};
+
+export const devServerActions: StudioActions = {
+  offered: ["push", "promote", "publish"],
+  run: runAction,
+  status: fetchStatus,
+  samples: fetchSamples,
 };

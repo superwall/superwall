@@ -31,7 +31,7 @@ const stripe = vi.hoisted(() => {
 
 const host = vi.hoisted(() => ({ current: "web-paywall" as SuperwallHost }));
 
-vi.mock("@stripe/stripe-js", () => ({ loadStripe: stripe.loadStripe }));
+vi.mock("@stripe/stripe-js/pure", () => ({ loadStripe: stripe.loadStripe }));
 vi.mock("../../src/host", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/host")>()),
   hostOf: () => host.current,

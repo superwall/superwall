@@ -6,6 +6,7 @@ import { NAV_QUERY_KEY, TAPPED_PRODUCT_QUERY_KEY } from "./boot";
 import {
   createStatusStore,
   type AppTeleport,
+  type TeleportData,
   type TeleportOutcome,
   type TeleportSession,
 } from "./teleporter";
@@ -28,6 +29,7 @@ type WebHalf = {
   depth: number;
   productReference?: string;
   attempt?: PurchaseAttempt;
+  data?: TeleportData;
   settle: (outcome: TeleportOutcome) => void;
 };
 
@@ -52,6 +54,7 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
     web = undefined;
     store.setStatus({ status: "idle" });
     store.emit("return");
+    if (left.data !== undefined) store.emit("data", left.data);
     left.settle("abandoned");
   };
 
@@ -139,10 +142,11 @@ export const createStudioTeleporter = (paywall: TeleportSession): AppTeleport =>
       );
       return result;
     },
-    returnToApp: () => {
+    returnToApp: (data) => {
       const half = web;
       const router = inlineRouters.get(paywall);
       if (half === undefined || router === undefined) return;
+      if (data !== undefined) half.data = data;
       router.back(depth - half.depth + 1);
     },
     open: () => {},

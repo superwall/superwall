@@ -40,6 +40,8 @@ create its first app too. `BROWSER=none` stops the CLI from opening a browser
 itself.
 There are no organizations to pick: `superwall apps list` shows every app you
 can open, grouped by organization, and commands take `--app <id|dashboard link>`.
+`apps create` adds a new project: when you belong to several organizations, pass
+`--org <id>` to say which, or `--project <id>` to add the app to one you have.
 Upgrade any time with `superwall upgrade`. When a newer release is out, the CLI
 says so on stderr after each command (and when `superwall dev` starts), with
 the exact command to run: `superwall upgrade`, or the project's own bump such as
@@ -284,6 +286,7 @@ Stripe-style: `superwall <resource> <operation> [ids] [--field value]`.
 superwall apps get <app>                  # everything about one app: bundle ID, Apple team, keys
 superwall apps <app>                      # the same: an id where the operation goes means get
 superwall apps update <app> --team-id <team-id>
+superwall apps create --name "My App" --platform ios --org <org-id>   # a new project in that organization
 superwall entitlements create --identifier pro --app <app>
 superwall products create --identifier pro_monthly --price 9.99 --period month --entitlement pro
 superwall products storekit               # generate a local .storekit file
@@ -449,6 +452,7 @@ time:
 ```bash
 superwall asc keys list --app <id>                    # which of the two keys the app has
 superwall asc keys import --app <id>                  # reuse a key your organization already has
+superwall asc keys promote --app <id>                 # copy the app's saved key to your organization
 superwall asc keys create api_key --app <id>          # sign in to Apple and create just this key
 superwall asc keys create purchase_key --app <id>
 superwall asc notification-url check --app <id>       # what Apple has, and whose it is
@@ -457,7 +461,10 @@ superwall asc notification-url set --app <id>         # set it where Apple has n
 
 `asc keys import` saves a key only when Apple confirms it for the app's bundle
 ID. `asc keys create` does nothing when the app already has that key; pass
-`--replace` to create another. `asc keys sources` lists the keys on your other
+`--replace` to create another. A key Apple created but Superwall couldn't save
+is written to `./AuthKey_<id>.p8` (or `SubscriptionKey_<id>.p8`), and the
+warning prints the `asc keys create <kind> --app <id> --key-file <path>`
+command that saves it. `asc keys sources` lists the keys on your other
 apps, `asc keys import <kind> --from <app>` reuses one of them, and
 `asc keys delete <kind> --app <id>` removes one from an app. `superwall asc --help` says what
 each command changes, what it never does, and its exit codes.
@@ -489,10 +496,23 @@ signed proxy:
 ```bash
 superwall asc keys create api_key --app <id> --key-id <id> --issuer <id> --key-file AuthKey.p8
 superwall asc keys create --key-id <id> --issuer <id> --key-file AuthKey.p8
+superwall asc keys create --team <team id> --key-id <id> --issuer <id> --key-file AuthKey.p8
 ```
 
+With `--team` the key is saved as the organization's key for that Apple team,
+once Apple confirms the key belongs to it; a key from another team, or one
+Apple can't place on a team, is refused before anything is saved.
+The organization keeps one key per team: when it already has one, the command
+stops and names the `asc keys update --team` command that replaces it.
+
 Saving an API key on an app also gives the organization a key for that Apple
-team when it has none. `asc keys update --team <team id>` replaces the
+team when it has none. The `asc_*` commands always sign with the
+organization's key; `--app` only picks the organization, and a key saved on the
+app is never used for them. An app whose key was saved before that answers
+"isn't connected", and with `--app` the error names the app and its saved key.
+It gets the key with `superwall asc keys promote --app <id>`: it copies the app's saved API key to
+the organization for its Apple team, and changes nothing when the team already
+has one. `asc keys update --team <team id>` replaces the
 organization's key for a team, and is refused unless Apple confirms the new key
 belongs to the same team.
 
@@ -547,7 +567,14 @@ superwall asc iaps create --asc-app com.acme.app --product-id coins.100 --name "
 `asc subscriptions create` does everything Apple asks for before review, in
 order: the subscription, its localization, where it's sold, its price in one
 territory equalized to every other, and a free trial if you want one. It ends by
-reading the subscription back and saying what's still missing:
+reading the subscription back and saying what's still missing. It checks
+`--price` against a subscription the app already has before it creates anything,
+so a price Apple has no point for is refused with the closest ones. If a step
+still fails after the subscription exists, the error names it and prints the
+commands that finish it, with the same `--app` and `--team`: Apple keeps a
+product ID once used, so running create again would fail. When the price was the
+problem, those commands list the price points to pick a new one from.
+
 
 ```bash
 superwall asc subscriptions create --group Pro --asc-app com.acme.app \

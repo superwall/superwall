@@ -1,4 +1,5 @@
-import { loadStripe, type Stripe, type StripeEmbeddedCheckout } from "@stripe/stripe-js";
+import type { Stripe, StripeEmbeddedCheckout } from "@stripe/stripe-js";
+import { loadStripe } from "@stripe/stripe-js/pure";
 import type { EmbeddedCheckoutSession } from "../types";
 
 export type EmbeddedHandlers = {

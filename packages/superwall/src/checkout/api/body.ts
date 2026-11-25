@@ -15,6 +15,7 @@ export const allowedDirectivesFor = (mode: CheckoutMode): readonly string[] => {
     case "external":
       return ["redirect"];
     case "applePay":
+    case "elements":
       return ["elements", "embedded", "redirect"];
     case "sheet":
       return ["embedded", "redirect"];
@@ -78,7 +79,7 @@ export const attributionOf = (
     paywall: {
       paywallId: snapshot.paywall?.id ?? "0",
       paywallIdentifier: snapshot.paywall?.identifier ?? "",
-      paywallName: "",
+      paywallName: snapshot.paywall?.name ?? "",
       paywallUrl: window.location.href,
       paywallProductIds: snapshot.products
         .map((entry) => entry.productId ?? "")
@@ -184,7 +185,7 @@ export const sessionBody = ({
         : allowedDirectivesFor(mode).filter((directive) => directive !== "redirect"),
     shouldRespectIsFreeTrialAvailable: false,
     isPrefetch: silent,
-    deferElementsIntentCreation: mode === "applePay",
+    deferElementsIntentCreation: mode === "applePay" || mode === "elements",
     ...(teleportId === undefined ? {} : { teleportId }),
     context: {
       ...attributionOf(snapshot),

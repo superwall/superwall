@@ -96,6 +96,22 @@
         ]
       },
       "ok": true
+    },
+    {
+      "input": {
+        "query": [
+          "mmp"
+        ]
+      },
+      "ok": true
+    },
+    {
+      "input": {
+        "query": [
+          "zzzznomatch"
+        ]
+      },
+      "ok": true
     }
   ],
   "get": [
@@ -321,6 +337,22 @@
       },
       "dryRun": true,
       "ok": false
+    },
+    {
+      "input": {
+        "app": "999999999999"
+      },
+      "dryRun": true,
+      "ok": false
+    }
+  ],
+  "asc_keys_promote": [
+    {
+      "input": {
+        "app": "43674"
+      },
+      "dryRun": true,
+      "ok": true
     },
     {
       "input": {

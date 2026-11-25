@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { downloadAscIndex } from "@/core/app-store-connect/api/spec";
 import { API_CACHE_FILE, downloadApiIndex } from "@/core/api/reference";
+import { field } from "@/core/json";
 
 interface ResolveArgs {
   path: string;
@@ -91,6 +93,23 @@ const reached = [...bundle.matchAll(/^import\s.*?from\s*["']([^"']+)["']/gm)].ma
 if (reached.length > 0) {
   console.error(`dist/tools.js imports ${reached.join(", ")}; the MCP bundle must stand alone.`);
   process.exit(1);
+}
+const built: typeof import("@/tools") = await import(pathToFileURL(resolve("dist/tools.js")).href);
+const apiDocs = (await built.listTools()).find((tool) => tool.name === "api_docs");
+const offline = built.apiFor({ token: "build-check", host: "http://127.0.0.1:9" });
+const apiDocsCases: Array<[string[], (data: unknown) => boolean]> = [
+  [["/v2/paywalls/{id}", "patch"], (data) => JSON.stringify(data).includes("/v2/paywalls")],
+  [["paywall", "products"], (data) => JSON.stringify(data).includes("/v2/paywalls")],
+  [["mmp"], (data) => Array.isArray(field(data, "operations"))],
+  [["zzzznomatch"], (data) => JSON.stringify(field(data, "operations")) === "[]"],
+];
+for (const [query, expected] of apiDocsCases) {
+  const answer = await apiDocs?.run({ query }, offline);
+  const text = JSON.stringify(answer?.data ?? null);
+  if (!answer?.ok || !expected(answer.data)) {
+    console.error(`api_docs ${query.join(" ")} in dist/tools.js answered ${text}; the MCP bundle can't look up the API reference.`);
+    process.exit(1);
+  }
 }
 console.log(
   `dist/tools.js: ${(bundle.length / 1024).toFixed(0)} kB, self-contained, API reference ${api.version} and App Store Connect spec ${asc.specVersion} and ${Object.keys(skills).length} skill files built in`,

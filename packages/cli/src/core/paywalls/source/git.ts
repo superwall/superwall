@@ -244,6 +244,7 @@ export interface DirectPushInput {
   message: CommitMessageInput;
   base?: string;
   overwrite?: boolean;
+  check?: boolean;
   author?: { name: string; email: string };
   reviewed?: string;
   confirmIncoming?: (commits: readonly SourceCommit[]) => Promise<void>;
@@ -396,6 +397,9 @@ export async function pushSourceTree(input: DirectPushInput): Promise<DirectPush
           application,
         });
         await confirmIncoming(parent ?? own, upstream);
+      }
+      if (input.check) {
+        return finished({ commitSha: (await revParse("HEAD")) ?? own, status, syncedTo: undefined });
       }
       try {
         await run(["push", "origin", `HEAD:${access.branch}`]);

@@ -7,6 +7,7 @@ import {
   pushedProducts,
   promotePaywallVersion,
   pushPaywallVersion,
+  renamePaywall,
   versionProducts,
   type ProductStores,
 } from "@/core/api/resources";
@@ -44,8 +45,9 @@ import { describeBindings, readLock, writeSnapshot, type LockFile } from "@/core
 import { writeProjectScaffold } from "@/core/paywalls/project/scaffold";
 import { collectProjectDeclarations, writeProjectTypes } from "@/core/paywalls/project/types";
 import { warnNotPortable } from "@/core/paywalls/source/portability";
-import { collectSourceFiles } from "@/core/paywalls/source/source";
-import { assertGit, pushProjectSource, pushSource } from "@/core/paywalls/source/source-push";
+import { paywallFor } from "@/core/paywalls/pull";
+import { collectSourceFiles, type CollectedFiles } from "@/core/paywalls/source/source";
+import { assertGit, checkSource, pushProjectSource, pushSource } from "@/core/paywalls/source/source-push";
 import { formatTokenFinding, lintDesignTokens } from "@/core/paywalls/project/design-lint";
 import { VERSION } from "@/environment";
 import type { CommandContext } from "@/program/command";
@@ -57,6 +59,7 @@ import {
   kb,
   pendingPromoteWarning,
   pushedLine,
+  renamedLine,
   resolveNote,
   took,
   transition,
@@ -140,11 +143,18 @@ interface PushOutcome {
   live: boolean;
 }
 
-function summary(outcomes: PushOutcome[], skipped: number, promoted: boolean): void {
+function summary(outcomes: PushOutcome[], skipped: number, promoted: boolean, renamed: number): void {
   const count = outcomes.length;
   const noun = (n: number) => (n === 1 ? "paywall" : "paywalls");
-  const unchanged = skipped > 0 ? ` · ${pc.dim(`${skipped} unchanged`)}` : "";
+  const idle = skipped - renamed;
+  const unchanged =
+    (renamed > 0 && count > 0 ? ` · ${renamed} renamed` : "") +
+    (idle > 0 ? ` · ${pc.dim(`${idle} unchanged`)}` : "");
 
+  if (count === 0 && renamed > 0) {
+    ui.outro(`${renamed} ${noun(renamed)} renamed${unchanged}.`);
+    return;
+  }
   if (count === 0) {
     ui.outro(skipped > 0 ? `Nothing to do · ${skipped} unchanged.` : "Nothing to do.");
     return;
@@ -167,6 +177,18 @@ interface Prepared {
   pending: boolean;
   unsourced?: number;
   stores: ProductStores;
+  rename?: Rename;
+}
+
+interface Rename {
+  from?: string;
+  to: string;
+}
+
+function nameDrift(wanted: string | undefined, live: string | undefined): Rename | undefined {
+  const to = wanted?.trim();
+  if (!to || to === live) return undefined;
+  return { from: live, to };
 }
 
 const BUILD_CONCURRENCY = Math.max(2, Math.min(8, cpus().length - 1));
@@ -214,6 +236,52 @@ function boundScope(
   return { surfaces: scoped, declared: narrowed, apps, unbound };
 }
 
+async function checkBeforeCreate(
+  context: PushContext,
+  input: {
+    project: FrameworkProject;
+    lock: LockFile;
+    targets: readonly SurfaceTarget[];
+    source: CollectedFiles;
+    frameworkVersion: string;
+    overwriteSource: boolean;
+  },
+): Promise<void> {
+  if (input.targets.length === 0) return;
+  if (!input.source.ok) throw new Error(input.source.reason);
+  await assertGit();
+  if (input.overwriteSource) return;
+  const files = input.source.files;
+  const through = new Map<string, string | undefined>();
+  const checked = new Set<string>();
+  for (const target of input.targets) {
+    const key = `${target.applicationId}:${surfaceKey(target.surface)}`;
+    if (checked.has(key)) continue;
+    checked.add(key);
+    if (!through.has(target.applicationId)) {
+      const platforms = Object.entries(input.lock.apps)
+        .filter(([, applicationId]) => applicationId === target.applicationId)
+        .map(([platform]) => platform);
+      through.set(
+        target.applicationId,
+        await paywallFor(context.api, input.lock, { applicationId: target.applicationId, platforms }),
+      );
+    }
+    const paywallId = through.get(target.applicationId);
+    if (paywallId === undefined) continue;
+    await checkSource({
+      api: context.api,
+      superwallDir: input.project.superwallDir,
+      paywallId,
+      applicationId: target.applicationId,
+      files,
+      framework: input.frameworkVersion,
+      surface: target.surface.id,
+      kind: target.surface.kind,
+    });
+  }
+}
+
 async function prepare(
   context: PushContext,
   input: {
@@ -223,6 +291,9 @@ async function prepare(
     declared: DeclaredPlatforms;
     platforms: readonly string[];
     existing: boolean;
+    source: CollectedFiles;
+    frameworkVersion: string;
+    overwriteSource: boolean;
   },
 ): Promise<{ prepared: Prepared[]; multi: boolean; unbound: UnboundTarget[] }> {
   const { framework, project } = input;
@@ -298,6 +369,15 @@ async function prepare(
       );
     }
 
+    await checkBeforeCreate(context, {
+      project,
+      lock,
+      targets: targets.filter((target) => !isBound(lock, target)),
+      source: input.source,
+      frameworkVersion: input.frameworkVersion,
+      overwriteSource: input.overwriteSource,
+    });
+
     const bindings: ResolvedBinding[] = [];
     for (const [index, target] of targets.entries()) {
       bindings.push(
@@ -344,6 +424,7 @@ async function prepare(
         pending: !changed && live.snapshotId !== build.snapshotId,
         unsourced: storesChanged ? undefined : unsourced,
         stores,
+        rename: nameDrift(build.name, live.name),
       };
     });
     const modified = prepared.filter((entry) => entry.changed).length;
@@ -480,6 +561,9 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
     declared: declarations.platforms,
     platforms: options.platforms ?? [],
     existing: options.existing === true,
+    source,
+    frameworkVersion: installed,
+    overwriteSource: options.overwriteSource === true,
   });
   for (const target of unbound) {
     ui.step(
@@ -505,7 +589,7 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
   }
   const files = source.ok ? source.files : [];
 
-  for (const { target, bind, build, live: wasLive, unsourced, stores } of changed) {
+  for (const { target, bind, build, live: wasLive, unsourced, stores, rename } of changed) {
     const { surface } = target;
     let version = 0;
     let live = false;
@@ -564,10 +648,24 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
         live = true;
       }
 
+      if (rename) {
+        const renamed = await timed(() => renamePaywall(context.api, bind.paywallId, rename.to));
+        lines.push(`${renamedLine(rename)} ${renamed.took}`);
+      }
+
       return lines;
     });
 
     outcomes.push({ id: targetLabel(target, multi), version, live });
+  }
+
+  const renamedOnly = prepared.filter((entry) => !entry.changed && entry.rename !== undefined);
+  for (const { target, bind, rename } of renamedOnly) {
+    if (!rename) continue;
+    await group(context.outputMode, targetLabel(target, multi), async () => {
+      const renamed = await timed(() => renamePaywall(context.api, bind.paywallId, rename.to));
+      return [`${renamedLine(rename)} ${renamed.took}`];
+    });
   }
 
   if (options.source) {
@@ -584,7 +682,7 @@ export async function runPushPipeline(context: PushContext, options: PushOptions
   }
 
   warnNotPortable(external);
-  summary(outcomes, skipped, options.promote);
+  summary(outcomes, skipped, options.promote, renamedOnly.length);
 }
 
 async function pushSourceAlone(

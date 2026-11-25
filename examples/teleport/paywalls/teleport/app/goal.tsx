@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useHaptics, usePurchase, useTeleport, useTranslation } from "superwall/hooks";
 import { useQueryState, useRouter } from "superwall/navigation";
 import { GOALS, goalParser } from "../components/goals";
@@ -7,11 +8,18 @@ export default function Goal() {
   const { t } = useTranslation();
   const haptics = useHaptics();
   const [goal, setGoal] = useQueryState("goal", goalParser);
+  const [returned, setReturned] = React.useState<{ offer?: unknown }>();
   const teleport = useTeleport({
-    onReturnData: (data) => console.log("[teleport] data from the page", data),
+    onOpen: () => setReturned(undefined),
+    onReturnData: (data) => {
+      console.log("[teleport] data from the page", data);
+      setReturned(data);
+    },
   });
   const failure = teleport.status === "waiting" ? teleport.failure : undefined;
-  const offer = teleport.status === "waiting" ? teleport.data?.offer : undefined;
+  const offer =
+    (teleport.status === "waiting" ? teleport.data?.offer : undefined) ?? returned?.offer;
+  const failed = failure !== undefined || returned !== undefined;
   const { purchase } = usePurchase();
 
   return (
@@ -30,12 +38,12 @@ export default function Goal() {
       <div className="lede">
         <h1>{t("goal.title")}</h1>
         <p>{t("goal.subtitle")}</p>
-        {failure ? (
+        {failed ? (
           <p className="notice" role="status">
             {offer === "app_store" ? t("back.noFunds") : t("back.failed")}
           </p>
         ) : null}
-        {failure && offer === "app_store" ? (
+        {failed && offer === "app_store" ? (
           <button
             type="button"
             className="button button--primary"

@@ -37,7 +37,7 @@ state and what is still missing.`,
       summary: "Create a subscription with its localization, availability, prices and free trial",
       flags: {
         group: { type: "string", value: "id|name", describe: "Its subscription group; a name needs --asc-app", required: true },
-        ascApp: { type: "string", value: "id|bundle id", describe: "The App Store app, to find --group by name" },
+        ascApp: { type: "string", value: "id|bundle id", describe: "The App Store app, to find --group by name and check --price against its other groups" },
         productId: { type: "string", value: "id", describe: "The product ID the app buys", required: true },
         name: { type: "string", value: "name", describe: "Its name in App Store Connect", required: true },
         subscriptionPeriod: { type: "string", value: "period", describe: "How long one period lasts", required: true, choices: SUBSCRIPTION_PERIODS },

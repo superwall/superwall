@@ -5,8 +5,9 @@ import { createLocalization, listVersionLocalizations, type LocalizationView } f
 import { listIntroductoryOffers, type OfferView } from "./offers";
 import { argOf, booleanOf, numberOf, requireNumber, requireText, textOf, type AscInput, type AscOutput } from "./operation";
 import { listSubscriptionPrices, type PriceView } from "./prices";
-import { bulkSubscriptionPatch, findPricePoint, introductoryOfferEntries, resolveTerritoryPoints, subscriptionPriceEntries } from "./pricing";
+import { bulkSubscriptionPatch, findPricePoint, introductoryOfferEntries, NoPricePointError, resolveTerritoryPoints, subscriptionPriceEntries } from "./pricing";
 import { selectScreenshot, type ScreenshotView } from "./screenshots";
+import { AscRequestError, statusOf } from "../api/errors";
 import { assertConfirmed, type AscSession } from "./session";
 import { resolveDraftVersion, selectLatestVersion, resolveAscAppId, resolveGroupId, resolveTerritories, type VersionView } from "./targets";
 
@@ -131,11 +132,32 @@ function freeTrialEntries(subscription: string, territories: readonly string[], 
   return introductoryOfferEntries(subscription, territories, { duration: trial, offerMode: "FREE_TRIAL", numberOfPeriods: 1 });
 }
 
+async function firstSubscriptionOf(session: AscSession, group: string): Promise<string | undefined> {
+  const document = await session.get(`/v1/subscriptionGroups/${group}/subscriptions?limit=1&fields[subscriptions]=productId`);
+  return document?.data[0]?.id;
+}
+
+async function findReferenceSubscription(session: AscSession, groupId: string, ascApp: string | undefined): Promise<string | undefined> {
+  const inGroup = await firstSubscriptionOf(session, groupId);
+  if (inGroup || !ascApp) return inGroup;
+  const app = await resolveAscAppId(session, ascApp);
+  const groups = await session.list(`/v1/apps/${app}/subscriptionGroups?limit=200`);
+  for (const group of groups?.data ?? []) {
+    if (group.id === groupId) continue;
+    const found = await firstSubscriptionOf(session, group.id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 export async function runSubscriptionsCreate(session: AscSession, input: AscInput): Promise<AscOutput> {
-  const groupId = await resolveGroupId(session, requireText(input, "group"), textOf(input, "ascApp"));
+  const ascApp = textOf(input, "ascApp");
+  const groupId = await resolveGroupId(session, requireText(input, "group"), ascApp);
   const productId = requireText(input, "productId");
   const price = requireNumber(input, "price");
   const territory = textOf(input, "territory") ?? DEFAULT_TERRITORY;
+  const reference = await findReferenceSubscription(session, groupId, ascApp);
+  if (reference) await findPricePoint(session, "subscription", reference, territory, price);
   const subscription = await session.send(
     "post",
     "/v1/subscriptions",
@@ -149,7 +171,80 @@ export async function runSubscriptionsCreate(session: AscSession, input: AscInpu
     "subscription",
   );
   if (!subscription) throw new Error("Apple created no subscription.");
-  const id = subscription.id;
+  const made: CreatedSubscription = { id: subscription.id, productId, price, territory };
+  try {
+    return await finishSubscription(session, input, made);
+  } catch (error) {
+    throw unfinishedError(error, input, made);
+  }
+}
+
+interface CreatedSubscription {
+  id: string;
+  productId: string;
+  price: number;
+  territory: string;
+}
+
+function quoted(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function scopeFlags(input: AscInput): string {
+  const scope = input.scope ?? {};
+  return [
+    ...(scope.app ? [` --app ${quoted(scope.app)}`] : []),
+    ...(scope.project ? [` --project ${quoted(scope.project)}`] : []),
+    ...(scope.team ? [` --team ${quoted(scope.team)}`] : []),
+  ].join("");
+}
+
+function availabilityCommand(input: AscInput, target: string): string {
+  const newTerritories = booleanOf(input, "availableInNewTerritories");
+  const choice = newTerritories === undefined ? "" : ` --available-in-new-territories=${newTerritories}`;
+  const territories = textOf(input, "availableTerritories") ?? "all";
+  const listed = /^[A-Za-z0-9,]+$/.test(territories) ? territories : quoted(territories);
+  return `asc availability set ${target} --available-territories ${listed}${choice}`;
+}
+
+function priceCommands(made: CreatedSubscription, target: string, priceRefused: boolean): string[] {
+  if (!priceRefused) return [`asc prices set ${target} --price ${made.price} --territory ${made.territory}`];
+  return [`asc prices points ${target} --territory ${made.territory}`, `asc prices set ${target} --price <price> --territory ${made.territory}`];
+}
+
+function finishingCommands(input: AscInput, made: CreatedSubscription, priceRefused: boolean): string[] {
+  const target = `--subscription ${made.id}`;
+  const displayName = textOf(input, "displayName");
+  const description = textOf(input, "description");
+  const trial = textOf(input, "trial");
+  const scope = scopeFlags(input);
+  return [
+    ...(displayName
+      ? [`asc localizations add ${target} --locale ${textOf(input, "locale") ?? DEFAULT_LOCALE} --name ${quoted(displayName)}${description ? ` --description ${quoted(description)}` : ""}`]
+      : []),
+    availabilityCommand(input, target),
+    ...priceCommands(made, target, priceRefused),
+    ...(trial ? [`asc offers create ${target} --offer-mode FREE_TRIAL --duration ${trial}`] : []),
+  ].map((command) => `${command}${scope}`);
+}
+
+function unfinishedError(error: unknown, input: AscInput, made: CreatedSubscription): Error {
+  const priceRefused = error instanceof NoPricePointError;
+  const reason = (error instanceof Error ? error.message : String(error)).split("\n").filter((line) => !line.startsWith("Already created:"));
+  const message = [
+    ...reason,
+    `Already created: subscriptions ${made.id} (${made.productId}).`,
+    "Apple keeps a product ID once used, so running create again fails. Finish this subscription with what is still missing:",
+    ...finishingCommands(input, made, priceRefused).map((command) => `  superwall ${command}`),
+    ...(priceRefused ? [`${made.price} is not a ${made.territory} price, so pick one from asc prices points for <price>.`] : []),
+  ].join("\n");
+  const status = statusOf(error);
+  return status === undefined ? new Error(message) : new AscRequestError(message, status);
+}
+
+async function finishSubscription(session: AscSession, input: AscInput, made: CreatedSubscription): Promise<AscOutput> {
+  const { id, productId, territory } = made;
+  const point = await findPricePoint(session, "subscription", id, territory, made.price);
 
   const displayName = textOf(input, "displayName");
   if (displayName) {
@@ -166,7 +261,6 @@ export async function runSubscriptionsCreate(session: AscSession, input: AscInpu
   const territories = await resolveTerritories(session, available);
   const newTerritories = booleanOf(input, "availableInNewTerritories") ?? available.toLowerCase() === "all";
   await upsertAvailability(session, "subscription", id, territories, newTerritories, undefined);
-  const point = await findPricePoint(session, "subscription", id, territory, price);
   const { points, skipped } = await resolveTerritoryPoints(session, { territory, point }, territories);
   await session.send(
     "patch",

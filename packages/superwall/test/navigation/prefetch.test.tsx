@@ -1,6 +1,6 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PaywallRouter, type RouteMap } from "../../src/navigation/index";
+import { PaywallRouter, type Entry, type RouteMap } from "../../src/navigation/index";
 import { createWrapper } from "../helpers";
 
 const BASE = "https://user-content.test/user-content/hl/42";
@@ -17,11 +17,11 @@ const routes: RouteMap = {
   terms: { default: Blank },
 };
 
-const mount = () => {
+const mount = (entry?: Entry) => {
   const Wrapper = createWrapper();
   return render(
     <Wrapper>
-      <PaywallRouter routes={routes} />
+      <PaywallRouter routes={routes} entry={entry} />
     </Wrapper>,
   );
 };
@@ -60,14 +60,23 @@ const trackImages = () => {
   vi.stubGlobal("Image", TrackedImage);
 };
 
+const teleportTo = (route: string) => {
+  (window as typeof window & { __SW_TELEPORT__?: unknown }).__SW_TELEPORT__ = {
+    id: "tp_1",
+    route,
+  };
+};
+
 const idle = () => act(() => vi.advanceTimersByTime(500));
 
 beforeEach(() => {
+  window.history.replaceState({}, "", "/");
   vi.useFakeTimers();
   vi.stubGlobal("requestIdleCallback", undefined);
 });
 
 afterEach(() => {
+  delete (window as typeof window & { __SW_TELEPORT__?: unknown }).__SW_TELEPORT__;
   vi.useRealTimers();
   vi.unstubAllGlobals();
   document.head.querySelectorAll("#sw-route-assets, link[rel=preload]").forEach((n) => n.remove());
@@ -153,6 +162,79 @@ describe("screen asset prefetching", () => {
 
     expect(images).toEqual([hero]);
     expect(preloaded().map((link) => link.href)).toEqual([shared]);
+  });
+});
+
+describe("the stack the paywall opens on", () => {
+  it("warms the routes of a ?sw_nav= stack on mount instead of index", () => {
+    trackImages();
+    withMap(MAP);
+    window.history.replaceState({}, "", "/?sw_nav=terms");
+    mount();
+
+    expect(images).toEqual([terms]);
+    expect(preloaded().map((link) => link.href)).toEqual([shared]);
+
+    idle();
+
+    expect(images).toEqual([terms, hero]);
+    expect(preloaded().map((link) => link.href)).toEqual([shared, clip]);
+  });
+
+  it("warms every route of a deeper ?sw_nav= stack on mount", () => {
+    trackImages();
+    withMap(MAP);
+    window.history.replaceState({}, "", "/?sw_nav=index,offer");
+    mount();
+
+    expect(images).toEqual([hero]);
+    expect(preloaded().map((link) => link.href)).toEqual([shared, clip]);
+  });
+
+  it("warms the stack entry() chose on mount instead of index", async () => {
+    trackImages();
+    withMap(MAP);
+    mount(() => ["offer", "terms"]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(images).toEqual([terms]);
+    expect(preloaded().map((link) => link.href)).toEqual([shared, clip]);
+
+    idle();
+
+    expect(images).toEqual([terms, hero]);
+  });
+});
+
+describe("a teleported page", () => {
+  it("warms only the route it boots on, without the shared bucket or the idle pass", () => {
+    trackImages();
+    withMap(MAP);
+    teleportTo("terms");
+    mount();
+
+    expect(window.location.search).toContain("sw_nav=terms");
+    expect(images).toEqual([terms]);
+    expect(preloaded()).toEqual([]);
+
+    idle();
+
+    expect(images).toEqual([terms]);
+    expect(preloaded()).toEqual([]);
+  });
+
+  it("warms every route of the stack it boots on", () => {
+    trackImages();
+    withMap(MAP);
+    teleportTo("offer");
+    window.history.replaceState({}, "", "/?sw_nav=index,offer");
+    mount();
+    idle();
+
+    expect(images).toEqual([hero]);
+    expect(preloaded().map((link) => link.href)).toEqual([clip]);
   });
 });
 
