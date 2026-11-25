@@ -308,6 +308,41 @@ describe("refreshAttribution", () => {
     stop();
   });
 
+  it("drops sessions warmed for the old attribution when a prefetch runs before the refresh", async () => {
+    const { session, open } = mutableSession();
+    const prefetch = vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(null);
+    const invalidate = vi.spyOn(sessionsFor(session), "invalidate");
+
+    await prefetchSession(session, "primary", "sheet");
+    open("295780");
+    await prefetchSession(session, "primary", "sheet");
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate.mock.invocationCallOrder[0]).toBeLessThan(
+      prefetch.mock.invocationCallOrder[1] ?? 0,
+    );
+
+    const calls = prefetch.mock.calls.length;
+    refreshAttribution(session);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(prefetch).toHaveBeenCalledTimes(calls);
+  });
+
+  it("drops sessions warmed for the old attribution when a purchase is tapped before the refresh", async () => {
+    const { session, open } = mutableSession();
+    vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(null);
+    const invalidate = vi.spyOn(sessionsFor(session), "invalidate");
+    const begin = vi.spyOn(sessionsFor(session), "begin").mockRejectedValue(new Error("stop"));
+
+    await prefetchSession(session, "primary", "sheet");
+    open("295780");
+    await purchaseOnWeb(session, "primary", "sheet").catch(() => undefined);
+
+    expect(invalidate).toHaveBeenCalled();
+    expect(invalidate.mock.invocationCallOrder[0]).toBeLessThan(
+      begin.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
   it("leaves sessions alone while the attribution is unchanged", async () => {
     const { session, open, assign } = mutableSession();
     open("295780");
