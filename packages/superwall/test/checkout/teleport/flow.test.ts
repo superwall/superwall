@@ -198,6 +198,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   setVisibility("visible");
   window.history.replaceState(null, "", "/");
+  window.localStorage.clear();
   Reflect.deleteProperty(window, "__SW_TELEPORT__");
   Reflect.deleteProperty(window, "app");
   document.querySelectorAll(".sw-teleport, .sw-teleport-dim").forEach((node) => node.remove());
@@ -3079,6 +3080,44 @@ describe("every way the teleport page sends a buyer back to the app", () => {
       product_identifier: "pro_year",
       should_dismiss: "false",
     });
+  });
+
+  it.each([
+    ["dismiss", "stay", "false"],
+    ["stay", "dismiss", "true"],
+  ] as const)(
+    "reloaded after a paywall set to %s was bought with %s, still says should_dismiss=%s",
+    async (paywallSetting, purchaseSetting, expected) => {
+      boot();
+      api({ "checkout/session/complete": {} });
+      await teleportPage(fakeSession({ postPurchase: paywallSetting }).session).completePurchase(
+        "ctx_8",
+        { productIdentifier: "pro", postPurchase: purchaseSetting },
+      );
+      document.body.replaceChildren();
+      boot();
+      api({
+        "checkout/teleport/status": {
+          status: "completed",
+          checkoutContextId: "ctx_8",
+          checkoutProductIdentifier: "pro",
+        },
+      });
+      const reloaded = teleportPage(fakeSession({ postPurchase: paywallSetting }).session);
+      await expect(reloaded.checkSettled(true)).resolves.toBe(true);
+      expect(query(screenLink()).should_dismiss).toBe(expected);
+    },
+  );
+
+  it("reloaded where storage throws, falls back to the paywall's setting", async () => {
+    boot();
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    api({ "checkout/teleport/status": { status: "completed", checkoutContextId: "ctx_9" } });
+    const teleporter = teleportPage(fakeSession({ postPurchase: "stay" }).session);
+    await teleporter.checkSettled(true);
+    expect(query(screenLink()).should_dismiss).toBe("false");
   });
 
   it("paid in another tab, a tap on a direct page goes back with that checkout", async () => {

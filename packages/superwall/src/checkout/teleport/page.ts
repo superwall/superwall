@@ -185,6 +185,26 @@ const purchasedQuery = (
   should_dismiss: String(dismissesOnPurchase(postPurchase) ?? true),
 });
 
+const DISMISSAL_KEY_PREFIX = "sw_teleport_should_dismiss:";
+
+const saveDismissal = (checkoutContextId: string, query: ReturnQuery) => {
+  try {
+    window.localStorage.setItem(
+      DISMISSAL_KEY_PREFIX + checkoutContextId,
+      query.should_dismiss ?? "",
+    );
+  } catch {}
+};
+
+const savedDismissal = (checkoutContextId: string): string | undefined => {
+  try {
+    const saved = window.localStorage.getItem(DISMISSAL_KEY_PREFIX + checkoutContextId);
+    return saved === "true" || saved === "false" ? saved : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export const openApp = (
   boot: TeleportBoot,
   reason?: ReturnReason,
@@ -326,11 +346,13 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
           return false;
         }
         if (purchased === undefined && teleport.checkoutContextId) {
-          purchased = purchasedQuery(
+          const query = purchasedQuery(
             teleport.checkoutContextId,
             teleport.checkoutProductIdentifier,
             paywall.getSnapshot().config?.postPurchase,
           );
+          const dismissal = savedDismissal(teleport.checkoutContextId);
+          purchased = dismissal === undefined ? query : { ...query, should_dismiss: dismissal };
         }
         checkoutEvents.dispatch("SHEET_CLOSE", undefined);
         stopLoading();
@@ -417,6 +439,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
         purchase.productIdentifier,
         purchase.postPurchase ?? paywall.getSnapshot().config?.postPurchase,
       );
+      saveDismissal(checkoutContextId, purchased);
       startLoading();
       const key = publicApiKey();
       if (key !== "") {
