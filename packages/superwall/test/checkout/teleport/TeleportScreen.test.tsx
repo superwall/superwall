@@ -351,7 +351,9 @@ describe("the success screen on the web", () => {
     expect(screen.getByText("Your purchase is complete.")).toBeTruthy();
     expect(screen.getByText("Superwall")).toBeTruthy();
     const back = screen.getByRole("link", { name: "Return to App" });
-    expect(back.getAttribute("href")).toBe("myapp://superwall/return?reason=purchased");
+    expect(back.getAttribute("href")).toBe(
+      "myapp://superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
+    );
     expect(teleport()).toMatchObject({ status: "completed", paidElsewhere: false });
 
     teleport()?.returnToApp();
@@ -376,7 +378,7 @@ describe("the success screen on the web", () => {
 
     expect(screen.getByText("Your purchase is complete.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Return to App" }).getAttribute("href")).toBe(
-      "https://acme.superwall.link/app-link/superwall/return?reason=purchased",
+      "https://acme.superwall.link/app-link/superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
     );
     expect(go).not.toHaveBeenCalled();
   });

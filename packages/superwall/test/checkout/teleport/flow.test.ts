@@ -198,6 +198,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   setVisibility("visible");
   window.history.replaceState(null, "", "/");
+  window.localStorage.clear();
   Reflect.deleteProperty(window, "__SW_TELEPORT__");
   Reflect.deleteProperty(window, "app");
   document.querySelectorAll(".sw-teleport, .sw-teleport-dim").forEach((node) => node.remove());
@@ -330,7 +331,12 @@ describe("a teleport from the app", () => {
     const opened = new URL(String(posted[1]?.url));
     expect(opened.searchParams.get("sw_ref")).toBe("card");
     expect(new URLSearchParams(opened.hash.slice(1)).get("ref")).toBe("card");
-    expect(posted[1]).toMatchObject({ teleport: true, waiting_screen: true });
+    expect(posted[1]).toMatchObject({
+      teleport: true,
+      teleport_id: "v1:tp",
+      product_identifier: "live:price_1:14days-free",
+      waiting_screen: true,
+    });
     expect(teleporter.getStatus()).toEqual({ status: "idle" });
 
     setVisibility("hidden");
@@ -386,6 +392,8 @@ describe("a teleport from the app", () => {
     });
     expect(events()).toEqual(["open_url_external", "teleport_watch_start"]);
     expect(posted[0]).not.toHaveProperty("waiting_screen");
+    expect(posted[0]).toMatchObject({ teleport: true, teleport_id: "v1:tp" });
+    expect(posted[0]).not.toHaveProperty("product_identifier");
     expect(new URL(String(posted[0]?.url)).searchParams.has("sw_ref")).toBe(false);
     expect(teleporter.getStatus()).toEqual({ status: "waiting", returned: false });
     expect(document.querySelector(".sw-teleport")).toBeNull();
@@ -424,10 +432,12 @@ describe("a teleport from the app", () => {
 
   it("names no product to the SDK for a reference the store never delivered", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "pending" } });
-    const { session, events } = fakeSession();
+    const { session, events, posted } = fakeSession();
     void appTeleport(session).begin({ productReference: "missing", query: {} });
     await settle();
     expect(events()).toEqual(["open_url_external"]);
+    expect(posted[0]).toMatchObject({ teleport_id: "v1:tp" });
+    expect(posted[0]).not.toHaveProperty("product_identifier");
   });
 
   it("is a failed purchase when the teleport cannot be created, and nothing without a route", async () => {
@@ -854,6 +864,10 @@ describe("a teleport from the app", () => {
     await settle(1_500);
     teleporter.open();
     expect(posted.at(-1)).not.toHaveProperty("waiting_screen");
+    expect(posted.at(-1)).toMatchObject({
+      teleport_id: "v1:tp",
+      product_identifier: "live:price_1:14days-free",
+    });
     expect(opened).toHaveBeenCalledTimes(3);
 
     const second = teleporter.begin({ productReference: "annual", query: {} });
@@ -1509,7 +1523,10 @@ describe("the web half of a teleport", () => {
     const loading: boolean[] = [];
     const unsubscribe = subscribeLoading((value) => loading.push(value));
 
-    await teleporter.completePurchase("ctx_9");
+    await teleporter.completePurchase("ctx_9", {
+      productIdentifier: "com.acme.pro",
+      postPurchase: "stay",
+    });
 
     expect(loading).toEqual([true, false]);
     expect(calls[0]).toMatchObject({
@@ -1527,7 +1544,7 @@ describe("the web half of a teleport", () => {
     expect(screen?.querySelector(".sw-teleport-title")?.textContent).toBe("You're all set");
     const back = screen?.querySelector<HTMLAnchorElement>("a.sw-teleport-primary");
     expect(back?.href).toBe(
-      "https://acme.superwall.link/app-link/superwall/return?reason=purchased",
+      "https://acme.superwall.link/app-link/superwall/return?reason=purchased&checkout_context_id=ctx_9&product_identifier=com.acme.pro&should_dismiss=false",
     );
     const footer = screen?.querySelector<HTMLAnchorElement>(".sw-teleport-footer");
     expect(new URL(String(footer?.href)).searchParams.get("ref")).toBe("teleport");
@@ -1566,10 +1583,12 @@ describe("the web half of a teleport", () => {
     expect(teleporter.getStatus()).toEqual({ status: "completed", paidElsewhere: false });
     expect(document.querySelector(".sw-teleport")).toBeNull();
     expect(go).toHaveBeenLastCalledWith(
-      "https://acme.superwall.link/app-link/superwall/return?reason=purchased",
+      "https://acme.superwall.link/app-link/superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
     );
     await settle(APP_OPEN_WAIT_MS);
-    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
+    expect(go).toHaveBeenLastCalledWith(
+      "myapp://superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
+    );
   });
 
   it("logs a completion that never reaches the backend and still finishes", async () => {
@@ -1852,7 +1871,9 @@ describe("the web half of a teleport", () => {
     const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
     await teleportPage(fakeSession().session).completePurchase("ctx");
     const back = document.querySelector<HTMLAnchorElement>("a.sw-teleport-primary");
-    expect(back?.getAttribute("href")).toBe("myapp://superwall/return?reason=purchased");
+    expect(back?.getAttribute("href")).toBe(
+      "myapp://superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
+    );
     back?.addEventListener("click", (event) => event.preventDefault());
     back?.click();
     expect(go).not.toHaveBeenCalled();
@@ -1872,7 +1893,9 @@ describe("the web half of a teleport", () => {
     back?.click();
     expect(document.querySelector(".sw-teleport-dim")).toBeNull();
     await settle(APP_OPEN_WAIT_MS);
-    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
+    expect(go).toHaveBeenLastCalledWith(
+      "myapp://superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
+    );
     window.dispatchEvent(new Event("blur"));
     expect(document.querySelector(".sw-teleport-dim")).not.toBeNull();
   });
@@ -2281,7 +2304,7 @@ describe("a trial offer that changes while the browser is open", () => {
     });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const trial = { eligible: false };
-    const { session, events } = fakeSession({ trial });
+    const { session, events, posted } = fakeSession({ trial });
     const teleporter = appTeleport(session);
     const first = teleporter.begin({ productReference: "card", query: {} });
     await settle();
@@ -2292,6 +2315,11 @@ describe("a trial offer that changes while the browser is open", () => {
     await expect(first).resolves.toBe("abandoned");
     expect(calls.filter((call) => call.path === "checkout/teleport")).toHaveLength(2);
     expect(events().filter((name) => name === "open_url_external")).toHaveLength(2);
+    expect(
+      posted
+        .filter((message) => message.event_name === "open_url_external")
+        .map((message) => message.teleport_id),
+    ).toEqual(["v1:tp", "v1:tp2"]);
 
     trial.eligible = false;
     void teleporter.begin({ productReference: "card", query: {} });
@@ -2595,7 +2623,7 @@ describe("the teleport page's presentation", () => {
     go.mockClear();
     await expect(direct.whenUnsettled()).resolves.toBe(false);
     expect(go).toHaveBeenCalledWith(
-      "https://acme.superwall.link/app-link/superwall/return?reason=purchased",
+      "https://acme.superwall.link/app-link/superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
     );
   });
 
@@ -2823,7 +2851,9 @@ describe("teleport races, as paywall.js settles them", () => {
     link?.addEventListener("click", (event) => event.preventDefault());
     link?.click();
     await settle(APP_OPEN_WAIT_MS);
-    expect(go).toHaveBeenLastCalledWith("myapp://superwall/return?reason=purchased");
+    expect(go).toHaveBeenLastCalledWith(
+      "myapp://superwall/return?reason=purchased&checkout_context_id=ctx&should_dismiss=true",
+    );
   });
 });
 
@@ -2920,5 +2950,234 @@ describe("a parked teleport on the next tap", () => {
     expect(calls.at(-1)).toBe("checkout/teleport");
     teleporter.cancel();
     await expect(closing).resolves.toBe("abandoned");
+  });
+});
+
+const screenLink = () =>
+  document.querySelector<HTMLAnchorElement>("a.sw-teleport-primary")?.getAttribute("href");
+
+const query = (link: string | null | undefined) =>
+  Object.fromEntries(new URL(String(link)).searchParams);
+
+describe("every way the teleport page sends a buyer back to the app", () => {
+  const UNIVERSAL = "https://acme.superwall.link/app-link/superwall/return";
+  const SCHEME = "myapp://superwall/return";
+  const direct = { route: "checkout", completion: "direct" } as const;
+
+  it("pays with a direct completion: the universal link, then the scheme, carry the checkout", async () => {
+    boot();
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession({ teleport: direct }).session).completePurchase("ctx_1", {
+      productIdentifier: "live:price_1:14days-free",
+    });
+    const paid = {
+      reason: "purchased",
+      checkout_context_id: "ctx_1",
+      product_identifier: "live:price_1:14days-free",
+      should_dismiss: "true",
+    };
+    expect(go).toHaveBeenCalledTimes(1);
+    expect(go.mock.calls[0]?.[0].startsWith(`${UNIVERSAL}?`)).toBe(true);
+    expect(query(go.mock.calls[0]?.[0])).toEqual(paid);
+    await settle(APP_OPEN_WAIT_MS);
+    expect(go.mock.calls[1]?.[0].startsWith(`${SCHEME}?`)).toBe(true);
+    expect(query(go.mock.calls[1]?.[0])).toEqual(paid);
+  });
+
+  it.each([
+    ["stay", undefined, "false"],
+    ["dismiss", undefined, "true"],
+    [undefined, undefined, "true"],
+    ["stay", "dismiss", "true"],
+    ["dismiss", "stay", "false"],
+  ] as const)(
+    "with the paywall set to %s and the purchase to %s, says should_dismiss=%s",
+    async (paywallSetting, purchaseSetting, expected) => {
+      boot();
+      api({ "checkout/session/complete": {} });
+      const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+      await teleportPage(
+        fakeSession({ teleport: direct, postPurchase: paywallSetting }).session,
+      ).completePurchase("ctx_1", {
+        productIdentifier: "pro",
+        ...(purchaseSetting === undefined ? {} : { postPurchase: purchaseSetting }),
+      });
+      expect(query(go.mock.calls[0]?.[0]).should_dismiss).toBe(expected);
+    },
+  );
+
+  it("pays with the success screen: nothing opens by itself, and its button carries the checkout", async () => {
+    boot();
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession().session).completePurchase("ctx_2", {
+      productIdentifier: "pro_year",
+    });
+    expect(go).not.toHaveBeenCalled();
+    expect(query(screenLink())).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_2",
+      product_identifier: "pro_year",
+      should_dismiss: "true",
+    });
+  });
+
+  it("pays on a page that only knows the app's scheme", async () => {
+    boot({ appLinkUrl: undefined });
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession({ teleport: direct }).session).completePurchase("ctx_3", {
+      productIdentifier: "pro",
+    });
+    expect(go).toHaveBeenCalledExactlyOnceWith(
+      `${SCHEME}?reason=purchased&checkout_context_id=ctx_3&product_identifier=pro&should_dismiss=true`,
+    );
+  });
+
+  it("leaves the product off when the page doesn't know it", async () => {
+    boot();
+    api({ "checkout/session/complete": {} });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    await teleportPage(fakeSession({ teleport: direct }).session).completePurchase("ctx_4", {
+      productIdentifier: "",
+    });
+    expect(query(go.mock.calls[0]?.[0])).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_4",
+      should_dismiss: "true",
+    });
+  });
+
+  it("still names the checkout when the backend never hears the page complete it", async () => {
+    boot();
+    api({ "checkout/session/complete": new Error("offline") });
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const done = teleportPage(fakeSession({ teleport: direct }).session).completePurchase("ctx_5");
+    await settle(10_000);
+    await done;
+    expect(query(go.mock.calls[0]?.[0])).toMatchObject({
+      reason: "purchased",
+      checkout_context_id: "ctx_5",
+    });
+  });
+
+  it("reloaded after paying, names the checkout the teleport's status reports", async () => {
+    boot();
+    api({
+      "checkout/teleport/status": {
+        status: "completed",
+        checkoutContextId: "ctx_6",
+        checkoutProductIdentifier: "pro_year",
+      },
+    });
+    const teleporter = teleportPage(fakeSession({ postPurchase: "stay" }).session);
+    await expect(teleporter.checkSettled(true)).resolves.toBe(true);
+    expect(query(screenLink())).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_6",
+      product_identifier: "pro_year",
+      should_dismiss: "false",
+    });
+  });
+
+  it.each([
+    ["dismiss", "stay", "false"],
+    ["stay", "dismiss", "true"],
+  ] as const)(
+    "reloaded after a paywall set to %s was bought with %s, still says should_dismiss=%s",
+    async (paywallSetting, purchaseSetting, expected) => {
+      boot();
+      api({ "checkout/session/complete": {} });
+      await teleportPage(fakeSession({ postPurchase: paywallSetting }).session).completePurchase(
+        "ctx_8",
+        { productIdentifier: "pro", postPurchase: purchaseSetting },
+      );
+      document.body.replaceChildren();
+      boot();
+      api({
+        "checkout/teleport/status": {
+          status: "completed",
+          checkoutContextId: "ctx_8",
+          checkoutProductIdentifier: "pro",
+        },
+      });
+      const reloaded = teleportPage(fakeSession({ postPurchase: paywallSetting }).session);
+      await expect(reloaded.checkSettled(true)).resolves.toBe(true);
+      expect(query(screenLink()).should_dismiss).toBe(expected);
+    },
+  );
+
+  it("reloaded where storage throws, falls back to the paywall's setting", async () => {
+    boot();
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    api({ "checkout/teleport/status": { status: "completed", checkoutContextId: "ctx_9" } });
+    const teleporter = teleportPage(fakeSession({ postPurchase: "stay" }).session);
+    await teleporter.checkSettled(true);
+    expect(query(screenLink()).should_dismiss).toBe("false");
+  });
+
+  it("paying where storage refuses the save still goes back with the purchase's dismissal", async () => {
+    boot();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    api({ "checkout/session/complete": {} });
+    await teleportPage(fakeSession({ postPurchase: "dismiss" }).session).completePurchase(
+      "ctx_10",
+      {
+        productIdentifier: "pro",
+        postPurchase: "stay",
+      },
+    );
+    expect(query(screenLink())).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_10",
+      product_identifier: "pro",
+      should_dismiss: "false",
+    });
+  });
+
+  it("paid in another tab, a tap on a direct page goes back with that checkout", async () => {
+    boot({ shared: true });
+    api({ "checkout/teleport/status": { status: "completed", checkoutContextId: "ctx_7" } });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const teleporter = teleportPage(fakeSession({ teleport: direct }).session);
+    await expect(teleporter.checkSettled()).resolves.toBe(true);
+    go.mockClear();
+    await expect(teleporter.whenUnsettled()).resolves.toBe(false);
+    expect(query(go.mock.calls[0]?.[0])).toEqual({
+      reason: "purchased",
+      checkout_context_id: "ctx_7",
+      should_dismiss: "true",
+    });
+  });
+
+  it("paid, with a status that names no checkout, goes back with the reason alone", async () => {
+    boot();
+    api({ "checkout/teleport/status": { status: "completed" } });
+    const teleporter = teleportPage(fakeSession().session);
+    await teleporter.checkSettled(true);
+    expect(screenLink()).toBe(`${UNIVERSAL}?reason=purchased`);
+  });
+
+  it.each(["closed", "failed"] as const)("goes back %s without any checkout", async (reason) => {
+    boot();
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    void teleportPage(fakeSession().session).returnToApp(reason);
+    expect(go).toHaveBeenCalledExactlyOnceWith(`${UNIVERSAL}?reason=${reason}`);
+  });
+
+  it("never pays: a status that stays pending adds nothing to a later return", async () => {
+    boot();
+    api({ "checkout/teleport/status": { status: "pending" } });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const teleporter = teleportPage(fakeSession().session);
+    await expect(teleporter.checkSettled(true)).resolves.toBe(false);
+    void teleporter.returnToApp("closed");
+    expect(go).toHaveBeenCalledExactlyOnceWith(`${UNIVERSAL}?reason=closed`);
   });
 });
