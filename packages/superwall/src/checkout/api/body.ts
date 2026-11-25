@@ -79,7 +79,7 @@ export const attributionOf = (
     paywall: {
       paywallId: snapshot.paywall?.id ?? "0",
       paywallIdentifier: snapshot.paywall?.identifier ?? "",
-      paywallName: "",
+      paywallName: snapshot.paywall?.name ?? "",
       paywallUrl: window.location.href,
       paywallProductIds: snapshot.products
         .map((entry) => entry.productId ?? "")

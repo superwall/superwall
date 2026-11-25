@@ -243,6 +243,27 @@ export const refreshIdentity = (paywall: PaywallSession, identity: string) => {
   reprefetch(paywall);
 };
 
+const attributionKeyOf = (snapshot: ReturnType<PaywallSession["getSnapshot"]>) =>
+  [
+    snapshot.paywall?.id ?? "0",
+    snapshot.experiment?.experimentId ?? "0",
+    snapshot.experiment?.variantId ?? "0",
+  ].join(" ");
+
+const warmedAttributions = new WeakMap<object, string>();
+
+const dropStaleAttribution = (paywall: PaywallSession): boolean => {
+  const warmed = warmedAttributions.get(paywall);
+  if (warmed === undefined || warmed === attributionKeyOf(paywall.getSnapshot())) return false;
+  warmedAttributions.delete(paywall);
+  invalidateSessions(paywall, "paywall attribution changed");
+  return true;
+};
+
+export const refreshAttribution = (paywall: PaywallSession) => {
+  if (dropStaleAttribution(paywall)) reprefetch(paywall);
+};
+
 const warmedOpens = new WeakMap<object, object>();
 
 export const warmOnOpen = (paywall: PaywallSession, open: object) => {
@@ -262,6 +283,8 @@ export const prefetchSession = async (
   mode: CheckoutMode,
   prepaidCards?: SuperwallPrepaidCards,
 ): Promise<void> => {
+  dropStaleAttribution(paywall);
+  warmedAttributions.set(paywall, attributionKeyOf(paywall.getSnapshot()));
   const sessions = sessionsFor(paywall);
   const elements = mode === "elements" ? elementsFor(paywall) : null;
   if (elements && elements.quoteOf(referenceName).status !== "ready") {
@@ -651,6 +674,7 @@ const runWebPurchase = async (
   report: PurchaseReport,
 ): Promise<WebPurchaseOutcome> => {
   const tappedAt = Date.now();
+  dropStaleAttribution(paywall);
   const sessions = sessionsFor(paywall);
   const mode = checkoutModeFor(paywall.getSnapshot(), requested);
   rememberPurchaseOptions(paywall, referenceName, options);

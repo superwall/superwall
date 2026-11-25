@@ -43,16 +43,22 @@ export const snapshotPatchFor = (
   message: TIncomingMessage,
 ): Partial<SuperwallRuntimeSnapshot> | undefined => {
   switch (message.event_name) {
-    case "paywall_open":
+    case "paywall_open": {
+      const name = nonEmpty(message.paywall_name);
       return {
         paywall: withPresentation(
-          { id: message.paywall_id, identifier: message.paywall_identifier },
+          {
+            id: message.paywall_id,
+            identifier: message.paywall_identifier,
+            ...(name === undefined ? {} : { name }),
+          },
           presentationOf(message),
         ),
         pendingPurchase: undefined,
         lastTransaction: undefined,
         lastPurchaseFailure: undefined,
       };
+    }
     case "template_variables":
       return {
         variables: message.variables,

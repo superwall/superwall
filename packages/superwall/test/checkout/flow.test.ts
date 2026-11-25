@@ -18,6 +18,7 @@ import {
   prefetchSession,
   purchaseCustomStoreOnWeb,
   purchaseOnWeb,
+  refreshAttribution,
   reportCompletedCheckout,
   SHEET_FAILURE_LOOKUP_TIMEOUT,
   reprefetch,
@@ -249,6 +250,132 @@ describe("reprefetch", () => {
     const warm = vi.spyOn(sessionsFor(session), "prefetch");
     expect(reprefetch(session)).toBe(false);
     expect(warm).not.toHaveBeenCalled();
+  });
+});
+
+describe("refreshAttribution", () => {
+  const mutableSession = () => {
+    const base = fakeSession();
+    let paywall: { id: string; identifier: string } | undefined;
+    let experiment: { experimentId: string; variantId: string } | undefined;
+    const session: PaywallSession = {
+      getSnapshot: () => ({ ...base.session.getSnapshot(), paywall, experiment }) as never,
+      postMessage: base.postMessage,
+    };
+    return {
+      session,
+      open: (id: string) => {
+        paywall = { id, identifier: `paywall-${id}` };
+      },
+      assign: (experimentId: string, variantId: string) => {
+        experiment = { experimentId, variantId };
+      },
+    };
+  };
+
+  it("does nothing before a session was warmed", () => {
+    const { session, open, assign } = mutableSession();
+    const prefetch = vi.spyOn(sessionsFor(session), "prefetch");
+    const invalidated = vi.fn();
+    const stop = checkoutEvents.subscribe("SESSION_INVALIDATED", invalidated);
+
+    refreshAttribution(session);
+    open("295780");
+    assign("207076", "711240");
+    refreshAttribution(session);
+    stop();
+
+    expect(invalidated).not.toHaveBeenCalled();
+    expect(prefetch).not.toHaveBeenCalled();
+  });
+
+  it("drops and re-warms sessions warmed before the paywall or experiment was known", async () => {
+    const { session, open, assign } = mutableSession();
+    const prefetch = vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(null);
+    const invalidated = vi.fn();
+    const stop = checkoutEvents.subscribe("SESSION_INVALIDATED", invalidated);
+
+    await prefetchSession(session, "primary", "sheet");
+    open("295780");
+    refreshAttribution(session);
+    expect(invalidated).toHaveBeenCalledWith({ reason: "paywall attribution changed" });
+    expect(prefetch).toHaveBeenCalledTimes(2);
+
+    assign("207076", "711240");
+    refreshAttribution(session);
+    expect(invalidated).toHaveBeenCalledTimes(2);
+    expect(prefetch).toHaveBeenCalledTimes(3);
+    stop();
+  });
+
+  it("drops sessions warmed for the old attribution when a prefetch runs before the refresh", async () => {
+    const { session, open } = mutableSession();
+    const prefetch = vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(null);
+    const invalidate = vi.spyOn(sessionsFor(session), "invalidate");
+
+    await prefetchSession(session, "primary", "sheet");
+    open("295780");
+    await prefetchSession(session, "primary", "sheet");
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate.mock.invocationCallOrder[0]).toBeLessThan(
+      prefetch.mock.invocationCallOrder[1] ?? 0,
+    );
+
+    const calls = prefetch.mock.calls.length;
+    refreshAttribution(session);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(prefetch).toHaveBeenCalledTimes(calls);
+  });
+
+  it("drops sessions warmed for the old attribution when a purchase is tapped before the refresh", async () => {
+    const { session, open } = mutableSession();
+    vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(null);
+    const invalidate = vi.spyOn(sessionsFor(session), "invalidate");
+    const begin = vi.spyOn(sessionsFor(session), "begin").mockRejectedValue(new Error("stop"));
+
+    await prefetchSession(session, "primary", "sheet");
+    open("295780");
+    await purchaseOnWeb(session, "primary", "sheet").catch(() => undefined);
+
+    expect(invalidate).toHaveBeenCalled();
+    expect(invalidate.mock.invocationCallOrder[0]).toBeLessThan(
+      begin.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("leaves sessions alone while the attribution is unchanged", async () => {
+    const { session, open, assign } = mutableSession();
+    open("295780");
+    assign("207076", "711240");
+    const prefetch = vi.spyOn(sessionsFor(session), "prefetch").mockResolvedValue(null);
+    const invalidated = vi.fn();
+    const stop = checkoutEvents.subscribe("SESSION_INVALIDATED", invalidated);
+
+    await prefetchSession(session, "primary", "sheet");
+    refreshAttribution(session);
+    refreshAttribution(session);
+    stop();
+
+    expect(invalidated).not.toHaveBeenCalled();
+    expect(prefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("invalidates once when nothing can be warmed again", async () => {
+    const { session, open } = mutableSession();
+    const sessions = sessionsFor(session);
+    const prefetch = vi.spyOn(sessions, "prefetch").mockResolvedValue(null);
+    vi.spyOn(sessions, "isStripeProduct").mockReturnValue(false);
+    const invalidated = vi.fn();
+    const stop = checkoutEvents.subscribe("SESSION_INVALIDATED", invalidated);
+
+    await prefetchSession(session, "primary", "sheet");
+    open("295780");
+    refreshAttribution(session);
+    refreshAttribution(session);
+    stop();
+
+    expect(invalidated).toHaveBeenCalledTimes(1);
+    expect(prefetch).toHaveBeenCalledTimes(1);
   });
 });
 
