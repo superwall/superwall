@@ -1076,6 +1076,40 @@ describe("reporting a completed purchase", () => {
     }
   });
 
+  it("opens the app with the purchase's own dismissal when it overrides the paywall's", async () => {
+    Reflect.set(window, "__SW_TELEPORT__", {
+      id: "v1:tp",
+      route: "checkout",
+      appLinkUrl: "https://acme.superwall.link/app-link/superwall/return",
+    });
+    const go = vi.spyOn(pageNavigation, "assign").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const { session } = fakeSession({
+        sdkVersionPadded: "004.018.000",
+        teleport: { route: "checkout", completion: "direct" },
+        postPurchase: "stay",
+      });
+      vi.spyOn(sessionsFor(session), "begin").mockRejectedValue(new Error("offline"));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response("{}")),
+      );
+      await purchaseOnWeb(session, "primary", "sheet", { postPurchase: "dismiss" });
+
+      await reportCompletedCheckout(session, { ...paid, referenceName: "primary" });
+
+      expect(go).toHaveBeenLastCalledWith(
+        "https://acme.superwall.link/app-link/superwall/return?reason=purchased&checkout_context_id=ctx_1&product_identifier=test%3Aprice_1%3Ano-trial&should_dismiss=true",
+      );
+    } finally {
+      go.mockRestore();
+      error.mockRestore();
+      Reflect.deleteProperty(window, "__SW_TELEPORT__");
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("redeems the purchase itself on an SDK too old to do it", async () => {
     const { session, postMessage } = fakeSession({ sdkVersionPadded: "004.013.999" });
     const fetchMock = vi.fn(

@@ -187,12 +187,9 @@ const purchasedQuery = (
 
 const DISMISSAL_KEY_PREFIX = "sw_teleport_should_dismiss:";
 
-const saveDismissal = (checkoutContextId: string, query: ReturnQuery) => {
+const saveDismissal = (checkoutContextId: string, shouldDismiss: string) => {
   try {
-    window.localStorage.setItem(
-      DISMISSAL_KEY_PREFIX + checkoutContextId,
-      query.should_dismiss ?? "",
-    );
+    window.localStorage.setItem(DISMISSAL_KEY_PREFIX + checkoutContextId, shouldDismiss);
   } catch {}
 };
 
@@ -439,7 +436,7 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
         purchase.productIdentifier,
         purchase.postPurchase ?? paywall.getSnapshot().config?.postPurchase,
       );
-      saveDismissal(checkoutContextId, purchased);
+      saveDismissal(checkoutContextId, purchased.should_dismiss);
       startLoading();
       const key = publicApiKey();
       if (key !== "") {
