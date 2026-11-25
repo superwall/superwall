@@ -506,9 +506,11 @@ The organization keeps one key per team: when it already has one, the command
 stops and names the `asc keys update --team` command that replaces it.
 
 Saving an API key on an app also gives the organization a key for that Apple
-team when it has none. An app whose key was saved before that, which the
-`asc_*` commands answer with "isn't connected", gets it with
-`superwall asc keys promote --app <id>`: it copies the app's saved API key to
+team when it has none. The `asc_*` commands always sign with the
+organization's key; `--app` only picks the organization, and a key saved on the
+app is never used for them. An app whose key was saved before that answers
+"isn't connected", and with `--app` the error names the app and its saved key.
+It gets the key with `superwall asc keys promote --app <id>`: it copies the app's saved API key to
 the organization for its Apple team, and changes nothing when the team already
 has one. `asc keys update --team <team id>` replaces the
 organization's key for a team, and is refused unless Apple confirms the new key

@@ -14,6 +14,32 @@ describe("useVariables", () => {
     expect(result.current.user).toEqual({ firstName: "Ada" });
     expect(result.current.params).toEqual({ source: "onboarding" });
   });
+
+  it("types the App Store storefront the native SDK reports", async () => {
+    const { result } = renderWithProvider(() => useVariables(), {
+      host: {
+        device: { storeFrontCountryCode: "USA", storeFrontId: "143441", storeFrontCurrency: "USD" },
+      },
+    });
+    await flush();
+
+    await waitFor(() => expect(result.current.device.storeFrontCountryCode).toBe("USA"));
+    const { storeFrontCountryCode, storeFrontId, storeFrontCurrency } = result.current.device;
+    const storefront: (string | undefined)[] = [
+      storeFrontCountryCode,
+      storeFrontId,
+      storeFrontCurrency,
+    ];
+    expect(storefront).toEqual(["USA", "143441", "USD"]);
+  });
+
+  it("leaves the storefront undefined when the host reports none", async () => {
+    const { result } = renderWithProvider(() => useVariables());
+    await flush();
+
+    await waitFor(() => expect(result.current.device.platform).toBe("iOS"));
+    expect(result.current.device.storeFrontCountryCode).toBeUndefined();
+  });
 });
 
 describe("useDevice", () => {

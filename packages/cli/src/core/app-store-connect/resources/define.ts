@@ -15,7 +15,7 @@ export interface AscResourceSpec {
 }
 
 const COMMON_FLAGS = {
-  app: { ...app, describe: "A Superwall app of the organization whose App Store Connect key to use: id, name or dashboard link" },
+  app: { ...app, describe: "Picks the organization: id, name or dashboard link of one of its apps. The organization's key signs the request, not a key saved on the app" },
   project,
   team: { ...team, describe: "Apple team id, when your organization has several" },
   yes,

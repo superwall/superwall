@@ -21,6 +21,14 @@ describe("defaults", () => {
     expect(defaultDevice(FIXTURE_NOW)).toEqual(fixtureVariables().device);
   });
 
+  it("the default device sits in the US storefront, as StoreKit reports it", () => {
+    expect(defaultDevice(FIXTURE_NOW)).toMatchObject({
+      storeFrontCountryCode: "USA",
+      storeFrontId: "143441",
+      storeFrontCurrency: "USD",
+    });
+  });
+
   it("local clocks follow the device's timezone offset", () => {
     const derived = derivedDeviceProperties(FIXTURE_NOW, 3600);
     expect(derived.utcTime).toBe("12:00:00");
