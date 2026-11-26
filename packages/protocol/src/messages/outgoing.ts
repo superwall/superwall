@@ -155,6 +155,15 @@ const customCheckoutStart = z.object({
   custom_transaction_id: z.string(),
 });
 
+// A paid custom store purchase the app learned of from its teleport: the SDK finishes it like a
+// purchase (transaction_complete, the post-purchase actions, the dismissal).
+const customCheckoutComplete = z.object({
+  event_name: z.literal("custom_checkout_complete"),
+  product_identifier: z.string(),
+  custom_transaction_id: z.string(),
+  should_dismiss: z.boolean().optional(),
+});
+
 const customCheckoutFail = z.object({
   event_name: z.literal("custom_checkout_fail"),
   product_identifier: z.string(),
@@ -273,6 +282,7 @@ export const OutgoingMessageSchema = z.union([
   stripeCheckoutSubmit,
   stripeCheckoutDiagnostic,
   customCheckoutStart,
+  customCheckoutComplete,
   customCheckoutFail,
   postCheckoutComplete,
   discountRedemptionResult,

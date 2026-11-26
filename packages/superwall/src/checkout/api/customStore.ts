@@ -51,3 +51,33 @@ export const postCustomStoreSession = async (
     body: await readJson(response),
   };
 };
+
+export type CustomStoreCheckoutStatus = "pending" | "completed" | "abandoned";
+
+/**
+ * The checkout's status: `completed` only once the store's purchase event reached Superwall
+ * (the vendor's own "done" is only a hint). Undefined when it couldn't be read; ask again.
+ */
+export const readCustomStoreStatus = async (
+  publicApiKey: string,
+  checkoutContextId: string,
+): Promise<CustomStoreCheckoutStatus | undefined> => {
+  try {
+    const response = await fetch(subscriptionsApiUrl("checkout/custom-store/status"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${publicApiKey}`,
+      },
+      body: JSON.stringify({ checkoutContextId }),
+      signal: timeoutSignal(SESSION_TIMEOUT_MS),
+    });
+    if (!response.ok) return undefined;
+    const status = field(await readJson(response), "status");
+    return status === "pending" || status === "completed" || status === "abandoned"
+      ? status
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};

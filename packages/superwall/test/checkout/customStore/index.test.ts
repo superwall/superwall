@@ -61,6 +61,16 @@ describe("customStoreSessionBody", () => {
     expect(body.context.identity.appUserId).toMatch(/^\$SuperwallAlias:/);
   });
 
+  it("names the teleport on a teleport page, so the checkout is the app user's", () => {
+    expect(customStoreSessionBody(snapshotOf(), product)).not.toHaveProperty("teleportId");
+    Reflect.set(window, "__SW_TELEPORT__", { id: "s2.tp", route: "checkout" });
+    try {
+      expect(customStoreSessionBody(snapshotOf(), product).teleportId).toBe("s2.tp");
+    } finally {
+      Reflect.deleteProperty(window, "__SW_TELEPORT__");
+    }
+  });
+
   it("sends an empty identifier for a product without one", () => {
     const { productId: _, ...bare } = product;
     expect(customStoreSessionBody(snapshotOf(), bare).productIdentifier).toBe("");

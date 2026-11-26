@@ -484,6 +484,62 @@ describe("a teleport from the app", () => {
     });
   });
 
+  it("finishes a paid custom store checkout as one, with its transaction id, never asking Stripe", async () => {
+    const custom = { checkoutContextId: "ctx_c", checkoutProductIdentifier: "custom|acme_monthly" };
+    const calls = api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": [
+        { status: "claimed", ...custom },
+        { status: "completed", ...custom, customTransactionId: "txn_1" },
+      ],
+    });
+    const { session, posted } = fakeSession();
+    const outcome = appTeleport(session).begin({ productReference: "card", query: {} });
+    await settle();
+    await settle(2_000);
+    await settle(2_000);
+
+    await expect(outcome).resolves.toBe("completed");
+    expect(posted.at(-1)).toEqual({
+      event_name: "custom_checkout_complete",
+      product_identifier: "acme_monthly",
+      custom_transaction_id: "txn_1",
+      should_dismiss: true,
+    });
+    expect(calls.map((call) => call.path)).not.toContain("checkout/status");
+  });
+
+  it("names a paid custom store product by the paywall's own identifier for it", async () => {
+    const custom = { checkoutContextId: "ctx_c", checkoutProductIdentifier: "custom|acme_monthly" };
+    api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": [
+        { status: "claimed", ...custom },
+        { status: "completed", ...custom, customTransactionId: "txn_1" },
+      ],
+    });
+    const { session, posted } = fakeSession();
+    const snapshot = session.getSnapshot();
+    session.getSnapshot = () => ({
+      ...snapshot,
+      products: [
+        ...snapshot.products,
+        { reference: "nameless", variables: {}, source: "sdk" },
+        { reference: "monthly", productId: "custom|acme_monthly", variables: {}, source: "sdk" },
+      ],
+    });
+    const outcome = appTeleport(session).begin({ productReference: "card", query: {} });
+    await settle();
+    await settle(2_000);
+    await settle(2_000);
+
+    await expect(outcome).resolves.toBe("completed");
+    expect(posted.at(-1)).toMatchObject({
+      event_name: "custom_checkout_complete",
+      product_identifier: "custom|acme_monthly",
+    });
+  });
+
   it("abandons an expired teleport without calling it a cancel", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "expired" } });
     const { session, posted } = fakeSession();

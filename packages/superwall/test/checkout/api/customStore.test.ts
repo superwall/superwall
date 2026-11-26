@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { postCustomStoreSession } from "../../../src/checkout/api/customStore";
+import {
+  postCustomStoreSession,
+  readCustomStoreStatus,
+} from "../../../src/checkout/api/customStore";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -69,5 +72,47 @@ describe("postCustomStoreSession", () => {
       }),
     );
     expect(await postCustomStoreSession("pk_1", {})).toEqual({ kind: "unsent" });
+  });
+});
+
+describe("readCustomStoreStatus", () => {
+  it("posts the checkout context with the public key and reads a known status", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ status: "completed" }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await readCustomStoreStatus("pk_1", "ctx_1")).toBe("completed");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(/\/checkout\/custom-store\/status$/);
+    expect(init.headers).toMatchObject({ Authorization: "Bearer pk_1" });
+    expect(init.body).toBe(JSON.stringify({ checkoutContextId: "ctx_1" }));
+
+    for (const status of ["pending", "abandoned"]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Response.json({ status })),
+      );
+      expect(await readCustomStoreStatus("pk_1", "ctx_1")).toBe(status);
+    }
+  });
+
+  it("reads nothing from an error, an unknown status or a request that failed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ status: "completed" }, { status: 500 })),
+    );
+    expect(await readCustomStoreStatus("pk_1", "ctx_1")).toBeUndefined();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ status: "paid" })),
+    );
+    expect(await readCustomStoreStatus("pk_1", "ctx_1")).toBeUndefined();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    expect(await readCustomStoreStatus("pk_1", "ctx_1")).toBeUndefined();
   });
 });

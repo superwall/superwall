@@ -14,7 +14,11 @@ import { joinAttempt, leadOf, reportWebFailure, type PurchaseAttempt } from "../
 import { sameFailure, type CheckoutFailure } from "../failure";
 import { hostOf } from "../../host";
 import { startLoading, stopLoading } from "../loading";
-import { isStripeProductIdentifier } from "../products";
+import {
+  bareProductIdentifier,
+  isCustomStoreProductIdentifier,
+  isStripeProductIdentifier,
+} from "../products";
 import { uuid } from "../uuid";
 import {
   createTeleport,
@@ -378,26 +382,56 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
     timer = setTimeout(() => void checkParked(record, true), delay);
   };
 
-  const redeem = (record: OpenTeleport, checkoutContextId: string, productIdentifier?: string) => {
+  // The paywall's own identifier for a product the server names (`custom|<id>`), which is
+  // the one the SDK knows it by.
+  const paywallProductIdOf = (identifier: string): string => {
+    const bare = bareProductIdentifier(identifier);
+    return (
+      paywall
+        .getSnapshot()
+        .products.find(
+          (product) => product.productId && bareProductIdentifier(product.productId) === bare,
+        )?.productId ?? bare
+    );
+  };
+
+  const redeem = (
+    record: OpenTeleport,
+    checkoutContextId: string,
+    productIdentifier?: string,
+    customTransactionId?: string,
+  ) => {
     record.paid = true;
     const dismiss = dismissesOnPurchase(
       record.postPurchase ?? paywall.getSnapshot().config?.postPurchase,
     );
-    if (record.stripeMetadata !== undefined) {
-      attachCheckoutMetadata(publicApiKey(), checkoutContextId, record.stripeMetadata).catch(
-        (error: unknown) => console.error("Attaching checkout metadata failed:", error),
-      );
+    const paidProduct =
+      productIdentifier ??
+      (checkoutContextId === record.checkoutContextId && record.checkoutProductIdentifier
+        ? record.checkoutProductIdentifier
+        : record.productIdentifier);
+    if (customTransactionId !== undefined && isCustomStoreProductIdentifier(paidProduct)) {
+      // A custom store purchase: the SDK finishes it like one made in the app, and reports it
+      // (transaction_complete) with the transaction id the store's events carry.
+      post({
+        event_name: "custom_checkout_complete",
+        product_identifier: paywallProductIdOf(paidProduct),
+        custom_transaction_id: customTransactionId,
+        should_dismiss: dismiss ?? true,
+      });
+    } else {
+      if (record.stripeMetadata !== undefined) {
+        attachCheckoutMetadata(publicApiKey(), checkoutContextId, record.stripeMetadata).catch(
+          (error: unknown) => console.error("Attaching checkout metadata failed:", error),
+        );
+      }
+      post({
+        event_name: "stripe_checkout_complete",
+        checkout_context_id: checkoutContextId,
+        product_identifier: paidProduct,
+        should_dismiss: dismiss ?? true,
+      });
     }
-    post({
-      event_name: "stripe_checkout_complete",
-      checkout_context_id: checkoutContextId,
-      product_identifier:
-        productIdentifier ??
-        (checkoutContextId === record.checkoutContextId && record.checkoutProductIdentifier
-          ? record.checkoutProductIdentifier
-          : record.productIdentifier),
-      should_dismiss: dismiss ?? true,
-    });
     record.settle("completed");
     emit("complete");
   };
@@ -485,7 +519,12 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       }
       if (teleport.status === "completed" && teleport.checkoutContextId) {
         stop();
-        redeem(record, teleport.checkoutContextId, teleport.checkoutProductIdentifier);
+        redeem(
+          record,
+          teleport.checkoutContextId,
+          teleport.checkoutProductIdentifier,
+          teleport.customTransactionId,
+        );
         return;
       }
       const returnRead = await readPageReturn(key, record);
@@ -493,7 +532,11 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       const fromPage = record.pageReturn?.failure !== undefined;
       let failure = record.pageReturn?.failure ?? teleport.failure;
       if (failure !== undefined) reportFailure(record, failure, fromPage);
-      if (record.checkoutContextId) {
+      // Stripe's checkout status; a custom store checkout is settled by the teleport's status.
+      if (
+        record.checkoutContextId &&
+        !isCustomStoreProductIdentifier(record.checkoutProductIdentifier)
+      ) {
         const checkout = await readCheckoutOf(key, record.checkoutContextId);
         if (!isWaiting(record)) return;
         if (checkout.status === "completed") {
@@ -545,10 +588,21 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       const checkoutContextId = teleport.checkoutContextId ?? record.checkoutContextId;
       if (isParked(record) && teleport.status === "completed" && teleport.checkoutContextId) {
         stopParked();
-        redeem(record, teleport.checkoutContextId, teleport.checkoutProductIdentifier);
+        redeem(
+          record,
+          teleport.checkoutContextId,
+          teleport.checkoutProductIdentifier,
+          teleport.customTransactionId,
+        );
         return "paid";
       }
-      if (isParked(record) && checkoutContextId) {
+      if (
+        isParked(record) &&
+        checkoutContextId &&
+        !isCustomStoreProductIdentifier(
+          teleport.checkoutProductIdentifier ?? record.checkoutProductIdentifier,
+        )
+      ) {
         const checkout = await readCheckoutOf(key, checkoutContextId);
         if (isParked(record) && checkout.status === "completed") {
           stopParked();

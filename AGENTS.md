@@ -286,7 +286,19 @@ The stack, bottom to top — each layer depends only on the one below it:
       the backend publishes the purchase, so nothing here reports one. Every
       failure resolves `failed` with `custom_checkout_fail`, and the Web SDK
       refuses custom store products as paywall.js does. Inside an app a
-      custom store product still goes to the SDK's `purchase`.
+      custom store product still goes to the SDK's `purchase`. On a teleport
+      page the session body carries the teleport's id (`teleportId`), so the
+      purchase is the app user's. A teleport page knows a custom store product
+      only by the config's bare id, so it buys one with
+      `useCustomCheckout.ts`, the same request for a page that shows the
+      store's checkout itself: `startCheckout` returns the session (with the
+      store endpoint's `metadata`, string values only) instead of navigating,
+      `waitForPurchase` polls `checkout/custom-store/status`,
+      `openCheckoutUrl` is the redirect fallback and `abandon` reports the
+      give-up. A product the page has no record of (an unpriced one) falls
+      back to the config's store id. When the teleport's status reports a paid
+      custom store checkout with its `customTransactionId`, the app side posts
+      `custom_checkout_complete` and never asks Stripe's `checkout/status`.
     - `host/` is the native SDK side: `index.ts` builds what the SDK hears
       (`initiate_web_checkout`, `stripe_checkout_*`, `custom_checkout_*`, `discount_redemption_result`,
       the redemption `open_deep_link`) — that is how the SDK tracks, dismisses
@@ -493,7 +505,10 @@ next, answered)` (`navigation/replay.ts`) is the stack for a flow: it walks
     generates the entry a surface mounts, `assets.ts` collects and
     content-addresses hosted assets (and attributes them per route),
     `products.ts` resolves per-platform product ids and bakes them into the
-    snapshot's own config, `settings.ts` turns `config.ts` into the version's
+    snapshot's own config (and bakes in the prices only the dashboard sets:
+    Stripe products and custom store ones, those whose only store in the
+    `stores` the CLI passes is `custom`; App Store and Play Store prices come
+    from the device), `settings.ts` turns `config.ts` into the version's
     settings wire (`paywallSettingsOf`)
   - `src/preview/` — `superwall/preview`: serving surfaces locally the way
     the runtime serves published snapshots — `server.ts` (vite; studio dist,

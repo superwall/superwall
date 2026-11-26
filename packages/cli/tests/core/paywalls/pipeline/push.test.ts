@@ -1375,6 +1375,34 @@ test("a product the catalogue records as custom is pushed as custom, and the pus
   );
 });
 
+test("the build is handed each product's stores, so a custom store product can be priced on a web page", async () => {
+  const project = scaffold();
+  const fake = await fakeApi({
+    products: {
+      body: {
+        data: [
+          { identifier: "acme_monthly", platform: "ios", store: "custom", price: { amount: 999, currency: "USD" } },
+          { identifier: "pro_year", platform: "ios", store: "app_store" },
+        ],
+      },
+    },
+  });
+  const stores: unknown[] = [];
+
+  await runPushPipeline(contextFor(fake.api), {
+    promote: false,
+    load: async () =>
+      frameworkFor(project, {
+        buildSnapshot: async (_project, _surface, options) => {
+          stores.push(options?.stores);
+          return built({ products: { monthly: "acme_monthly", annual: "pro_year" } });
+        },
+      }),
+  });
+
+  assert.deepEqual(stores[0], { acme_monthly: ["custom"], pro_year: ["app-store"] });
+});
+
 test("the build is handed the project's catalogue, so a Stripe product can be priced on device", async () => {
   const project = scaffold();
   const fake = await fakeApi({

@@ -128,6 +128,31 @@ describe("inlineProductsOf", () => {
       ),
     ).toEqual({});
   });
+
+  it("bakes custom store products, which only the dashboard prices, but never a store's", () => {
+    const catalogue = {
+      acme_monthly: { price: "$9.99" },
+      both: { price: "$4.99" },
+      pro_year: { price: "$39.99" },
+      unlisted: { price: "$1.99" },
+    };
+    const products = {
+      monthly: "acme_monthly",
+      shared: "both",
+      store: "pro_year",
+      other: "unlisted",
+    };
+    expect(
+      inlineProductsOf(products, catalogue, {
+        acme_monthly: ["custom"],
+        both: ["custom", "app-store"],
+        pro_year: ["app-store"],
+        unlisted: [],
+      }),
+    ).toEqual({ monthly: { price: "$9.99" } });
+    // Without the stores (an older CLI), nothing but Stripe is baked.
+    expect(inlineProductsOf(products, catalogue)).toEqual({});
+  });
 });
 
 describe("rewriteConfigProducts", () => {

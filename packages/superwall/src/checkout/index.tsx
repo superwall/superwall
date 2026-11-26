@@ -50,4 +50,11 @@ export type {
 } from "./form/useCheckout";
 export type { CheckoutError } from "./elements";
 export { PurchaseButton } from "./form/PurchaseButton";
+export { useCustomCheckout } from "./customStore/useCustomCheckout";
+export type {
+  CustomCheckout,
+  CustomCheckoutResult,
+  WaitForPurchaseOptions,
+} from "./customStore/useCustomCheckout";
+export { CustomStoreCheckoutError } from "./customStore";
 export type { PurchaseButtonProps } from "./form/PurchaseButton";
