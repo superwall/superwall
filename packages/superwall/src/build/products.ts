@@ -22,7 +22,8 @@ export type ProductStores = Readonly<Record<string, readonly string[]>>;
  */
 const pricedByDashboard = (identifier: string, stores: ProductStores | undefined): boolean => {
   if (isStripeProductIdentifier(identifier)) return true;
-  const known = stores?.[identifier];
+  const known =
+    stores !== undefined && Object.hasOwn(stores, identifier) ? stores[identifier] : undefined;
   return known !== undefined && known.length > 0 && known.every((store) => store === "custom");
 };
 

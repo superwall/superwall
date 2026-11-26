@@ -390,7 +390,10 @@ export const createAppTeleporter = (paywall: TeleportSession): AppTeleport => {
       paywall
         .getSnapshot()
         .products.find(
-          (product) => product.productId && bareProductIdentifier(product.productId) === bare,
+          (product) =>
+            product.productId &&
+            !isStripeProductIdentifier(product.productId) &&
+            bareProductIdentifier(product.productId) === bare,
         )?.productId ?? bare
     );
   };

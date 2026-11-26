@@ -509,8 +509,11 @@ describe("a teleport from the app", () => {
     expect(calls.map((call) => call.path)).not.toContain("checkout/status");
   });
 
-  it("names a paid custom store product by the paywall's own identifier for it", async () => {
-    const custom = { checkoutContextId: "ctx_c", checkoutProductIdentifier: "custom|acme_monthly" };
+  it("names a paid custom store product by the paywall's own identifier for it, never a Stripe one", async () => {
+    const custom = {
+      checkoutContextId: "ctx_c",
+      checkoutProductIdentifier: "custom|live:price_plan",
+    };
     api({
       "checkout/teleport": created,
       "checkout/teleport/status": [
@@ -525,7 +528,8 @@ describe("a teleport from the app", () => {
       products: [
         ...snapshot.products,
         { reference: "nameless", variables: {}, source: "sdk" },
-        { reference: "monthly", productId: "custom|acme_monthly", variables: {}, source: "sdk" },
+        { reference: "web", productId: "stripe|live:price_plan", variables: {}, source: "inline" },
+        { reference: "plan", productId: "custom|live:price_plan", variables: {}, source: "sdk" },
       ],
     });
     const outcome = appTeleport(session).begin({ productReference: "card", query: {} });
@@ -536,7 +540,7 @@ describe("a teleport from the app", () => {
     await expect(outcome).resolves.toBe("completed");
     expect(posted.at(-1)).toMatchObject({
       event_name: "custom_checkout_complete",
-      product_identifier: "custom|acme_monthly",
+      product_identifier: "custom|live:price_plan",
     });
   });
 

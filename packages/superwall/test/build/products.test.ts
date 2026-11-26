@@ -150,6 +150,10 @@ describe("inlineProductsOf", () => {
         unlisted: [],
       }),
     ).toEqual({ monthly: { price: "$9.99" } });
+    // A store map from a plain object: an identifier like `constructor` is no store of its own.
+    expect(
+      inlineProductsOf({ odd: "constructor" }, { constructor: { price: "$2.99" } }, {}),
+    ).toEqual({});
     // Without the stores (an older CLI), nothing but Stripe is baked.
     expect(inlineProductsOf(products, catalogue)).toEqual({});
   });
