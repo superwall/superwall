@@ -662,11 +662,10 @@ describe("SurfaceEditor's smaller states", () => {
     expect(preview().getAttribute("height")).toBe(String(900 - 52));
     const host = hostOf(preview());
     host.ping();
-    const device = (host.sent().at(-1)?.[0] as { variables: { device: Record<string, unknown> } })
-      .variables.device;
-    expect(device.platform).toBe("web");
-    expect(device.interfaceType).not.toBe("mac");
-    expect(device.deviceModel).not.toBe("Mac");
+    const sent = host.sent().at(-1)?.[0];
+    expect(sent).toMatchObject({ variables: { device: { platform: "web" } } });
+    expect(sent).not.toMatchObject({ variables: { device: { interfaceType: "mac" } } });
+    expect(sent).not.toMatchObject({ variables: { device: { deviceModel: "Mac" } } });
   });
 
   it("moves the preview into Safari when the paywall teleports, and back when it returns", async () => {
