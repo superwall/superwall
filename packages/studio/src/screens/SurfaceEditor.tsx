@@ -421,6 +421,39 @@ export const SurfaceEditor = ({
       }),
     [surface, defaults, source.samples, samples, responsive, frameDevice, theme, locale, edited],
   );
+  const compareFrameDevice = React.useMemo(
+    () => deviceVariablesFor(device, compareWeb, landscape),
+    [device, compareWeb, landscape],
+  );
+  const compareHostState = React.useMemo(
+    () =>
+      compareWeb === web
+        ? hostState
+        : hostStateFor({
+            surface,
+            defaults,
+            sourceSamples: source.samples,
+            samples,
+            frame: responsive ? undefined : compareFrameDevice,
+            theme,
+            locale,
+            edited,
+          }),
+    [
+      compareWeb,
+      web,
+      hostState,
+      surface,
+      defaults,
+      source.samples,
+      samples,
+      responsive,
+      compareFrameDevice,
+      theme,
+      locale,
+      edited,
+    ],
+  );
   const chrome = responsive ? undefined : chromeFor(device, web && webBrowser === undefined);
   const versions = status.versions ?? [];
   const promotion = {
@@ -646,7 +679,7 @@ export const SurfaceEditor = ({
                         ? compareWith.surface.presentation
                         : presentation
                   }
-                  hostState={hostState}
+                  hostState={compareHostState}
                   delegate={compareDelegate}
                   reloadKey={reloadKey}
                   empty={"empty" in comparePane ? comparePane.empty : undefined}
