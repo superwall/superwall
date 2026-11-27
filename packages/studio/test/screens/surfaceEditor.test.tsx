@@ -639,6 +639,36 @@ describe("SurfaceEditor's smaller states", () => {
     expect(preview().getAttribute("height")).toBe(String(900 - 52));
   });
 
+  it("previews a paywall that also targets web as the web host on the desktop, and natively on a phone", async () => {
+    const everywhere: StudioSurface = { ...live, platforms: ["ios", "android", "web"] };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [everywhere], previewUrl: () => "/preview" }}
+        surface={everywhere}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    const phone = hostOf(preview());
+    phone.ping();
+    expect(phone.sent()[0]?.[0]).toMatchObject({
+      variables: { device: { platform: "iOS", deviceModel: "iPhone18,3" } },
+    });
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "desktop" } });
+    await act(async () => {});
+    expect(screen.getByTestId("browser-chrome-desktop")).toBeDefined();
+    expect(preview().getAttribute("height")).toBe(String(900 - 52));
+    const host = hostOf(preview());
+    host.ping();
+    const device = (host.sent().at(-1)?.[0] as { variables: { device: Record<string, unknown> } })
+      .variables.device;
+    expect(device.platform).toBe("web");
+    expect(device.interfaceType).not.toBe("mac");
+    expect(device.deviceModel).not.toBe("Mac");
+  });
+
   it("moves the preview into Safari when the paywall teleports, and back when it returns", async () => {
     renderEditor(
       <SurfaceEditor

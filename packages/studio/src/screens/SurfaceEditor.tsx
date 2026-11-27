@@ -43,7 +43,7 @@ import {
   DEFAULT_DEVICE_ID,
   deviceById,
   deviceVariablesFor,
-  isWebOnly,
+  previewsAsWeb,
   notificationScreenFor,
   webViewportFor,
   RESPONSIVE_DEFAULT,
@@ -329,7 +329,7 @@ export const SurfaceEditor = ({
 
   const responsive = deviceId === RESPONSIVE_ID;
   const device = deviceById(deviceId);
-  const web = isWebOnly(surface.platforms);
+  const web = previewsAsWeb(device, surface.platforms);
   const frameDevice = React.useMemo(
     () => deviceVariablesFor(device, web, landscape),
     [device, web, landscape],
@@ -375,7 +375,7 @@ export const SurfaceEditor = ({
   const comparing = usePreviewPlace(`${previewSrc}|${compareKeyOf(compareWith)}#${reloadKey}`);
   const compareDelegate = useStudioDelegate(reminder, comparing.tracker);
   const compareWeb =
-    compareWith?.type === "surface" ? isWebOnly(compareWith.surface.platforms) : web;
+    compareWith?.type === "surface" ? previewsAsWeb(device, compareWith.surface.platforms) : web;
   const browserFor = (place: PreviewPlace, paneWeb: boolean): BrowserLayout | undefined => {
     if (responsive) return undefined;
     if (paneWeb) return browserLayoutFor(device, { teleported: false, landscape });

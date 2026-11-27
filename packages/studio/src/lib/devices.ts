@@ -155,6 +155,14 @@ export const isWebOnly = (platforms: readonly string[] | undefined): boolean =>
   platforms.length > 0 &&
   platforms.every((platform) => platform.toLowerCase() === "web");
 
+export const previewsAsWeb = (
+  device: StudioDevice,
+  platforms: readonly string[] | undefined,
+): boolean =>
+  isWebOnly(platforms) ||
+  (device.device === undefined &&
+    (platforms ?? []).some((platform) => platform.toLowerCase() === "web"));
+
 export const chromeFor = (device: StudioDevice, web: boolean): DeviceChromeSpec | undefined =>
   web ? undefined : device.chrome;
 
