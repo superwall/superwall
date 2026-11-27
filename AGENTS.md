@@ -290,15 +290,29 @@ The stack, bottom to top — each layer depends only on the one below it:
       page the session body carries the teleport's id (`teleportId`), so the
       purchase is the app user's. A teleport page knows a custom store product
       only by the config's bare id, so it buys one with
-      `useCustomCheckout.ts`, the same request for a page that shows the
-      store's checkout itself: `startCheckout` returns the session (with the
-      store endpoint's `metadata`, string values only) instead of navigating,
-      `waitForPurchase` polls `checkout/custom-store/status`,
-      `openCheckoutUrl` is the redirect fallback and `abandon` reports the
-      give-up. A product the page has no record of (an unpriced one) falls
-      back to the config's store id. When the teleport's status reports a paid
-      custom store checkout with its `customTransactionId`, the app side posts
-      `custom_checkout_complete` and never asks Stripe's `checkout/status`.
+      `useCustomCheckout.ts`, for a page that shows the store's checkout
+      itself: `start` returns the session (with the store endpoint's
+      `metadata`, string values only) instead of navigating; `complete`, which
+      the page calls once the store's checkout is done (after its own
+      animation, so nothing cuts it off), polls `checkout/custom-store/status`
+      and, on a teleport page, finishes through the teleporter's
+      `completePurchase` by the paywall's `teleport.completion`, as a Stripe
+      purchase does. While the page's checkout is open
+      (`holdForCustomCheckout`), the page's own teleport checks leave a paid
+      `custom|` teleport to `complete`, so the "paid elsewhere" screen never
+      covers the store's checkout; `abandon` reports the give-up and
+      `openCheckoutUrl` is the redirect fallback. `status` names the step
+      (`preparing`, `ready`, `confirming`, `completed`, `abandoned`,
+      `failed`), in the words `useCheckout` and `usePurchase` use. A `custom|`
+      product skips the Stripe-only `checkout/session/complete` (Superwall
+      marked it paid when it confirmed it) and its return link names no
+      `checkout_context_id`: the iOS SDK redeems a link's checkout as a Stripe
+      one, and a custom store purchase reaches it as
+      `custom_checkout_complete` instead. A product the page has no record of
+      (an unpriced one) falls back to the config's store id. When the
+      teleport's status reports a paid custom store checkout with its
+      `customTransactionId`, the app side posts `custom_checkout_complete` and
+      never asks Stripe's `checkout/status`.
     - `host/` is the native SDK side: `index.ts` builds what the SDK hears
       (`initiate_web_checkout`, `stripe_checkout_*`, `custom_checkout_*`, `discount_redemption_result`,
       the redemption `open_deep_link`) — that is how the SDK tracks, dismisses

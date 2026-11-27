@@ -3142,6 +3142,47 @@ describe("every way the teleport page sends a buyer back to the app", () => {
     });
   });
 
+  it("reloaded after a custom store purchase, names no checkout for the SDK to redeem as Stripe's", async () => {
+    boot();
+    api({
+      "checkout/teleport/status": {
+        status: "completed",
+        checkoutContextId: "ctx_7",
+        checkoutProductIdentifier: "custom|acme_monthly",
+        customTransactionId: "txn_7",
+      },
+    });
+    const teleporter = teleportPage(fakeSession().session);
+    await expect(teleporter.checkSettled(true)).resolves.toBe(true);
+    expect(query(screenLink())).toEqual({
+      reason: "purchased",
+      product_identifier: "custom|acme_monthly",
+      should_dismiss: "true",
+    });
+  });
+
+  it("leaves a custom store purchase to the page's open checkout, until it lets go", async () => {
+    boot();
+    api({
+      "checkout/teleport/status": {
+        status: "completed",
+        checkoutContextId: "ctx_8",
+        checkoutProductIdentifier: "custom|acme_monthly",
+        customTransactionId: "txn_8",
+      },
+    });
+    const teleporter = teleportPage(fakeSession().session);
+
+    teleporter.holdForCustomCheckout(true);
+    await expect(teleporter.checkSettled()).resolves.toBe(false);
+    expect(teleporter.getStatus().status).not.toBe("completed");
+    expect(document.querySelector(".sw-teleport[role=status]")).toBeNull();
+
+    teleporter.holdForCustomCheckout(false);
+    await expect(teleporter.checkSettled()).resolves.toBe(true);
+    expect(teleporter.getStatus()).toMatchObject({ status: "completed", paidElsewhere: true });
+  });
+
   it.each([
     ["dismiss", "stay", "false"],
     ["stay", "dismiss", "true"],
