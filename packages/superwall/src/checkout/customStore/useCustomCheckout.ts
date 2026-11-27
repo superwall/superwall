@@ -206,16 +206,21 @@ export const useCustomCheckout = () => {
     [session, holdTeleport],
   );
 
-  const openCheckoutUrl = React.useCallback((checkout: CustomCheckout) => {
-    startLoading();
-    const restore = (event: PageTransitionEvent) => {
-      if (!event.persisted) return;
-      stopLoading();
-      window.removeEventListener("pageshow", restore);
-    };
-    window.addEventListener("pageshow", restore);
-    setTimeout(() => window.location.assign(checkout.checkoutUrl), NAVIGATION_DELAY_MS);
-  }, []);
+  const openCheckoutUrl = React.useCallback(
+    (checkout: CustomCheckout) => {
+      // The store's page takes the checkout over: a page back from it settles by its own checks.
+      holdTeleport(false);
+      startLoading();
+      const restore = (event: PageTransitionEvent) => {
+        if (!event.persisted) return;
+        stopLoading();
+        window.removeEventListener("pageshow", restore);
+      };
+      window.addEventListener("pageshow", restore);
+      setTimeout(() => window.location.assign(checkout.checkoutUrl), NAVIGATION_DELAY_MS);
+    },
+    [holdTeleport],
+  );
 
   const abandon = React.useCallback(
     (checkout: CustomCheckout) => {

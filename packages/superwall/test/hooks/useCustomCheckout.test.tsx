@@ -393,6 +393,32 @@ describe("useCustomCheckout", () => {
       expect(page.getStatus()).toMatchObject({ paidElsewhere: false });
     });
 
+    it("lets the page settle a purchase made on the store's page it was sent to", async () => {
+      vi.useFakeTimers();
+      bootPage();
+      routes({
+        "checkout/custom-store/session": [session],
+        "checkout/teleport/status": [
+          {
+            status: "completed",
+            checkoutContextId: "ctx_1",
+            checkoutProductIdentifier: "custom|acme_monthly",
+            customTransactionId: "txn_1",
+          },
+        ],
+      });
+      vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
+      const { hook, paywall } = await render([], undefined, { route: "checkout" });
+      const checkout = await hook().start("monthly");
+
+      hook().openCheckoutUrl(checkout);
+      // Back from the store's page with this page's state kept (back-forward cache).
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      const page = teleportFor(paywall);
+      if (page.kind !== "page") throw new Error("not a teleport page");
+      await expect(page.checkSettled()).resolves.toBe(true);
+    });
+
     it("names a product the paywall doesn't know by its reference", async () => {
       bootPage();
       routes({ "checkout/custom-store/status": [{ status: "completed" }] });
