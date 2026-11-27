@@ -249,6 +249,16 @@ export type CustomStoreSession = {
   checkoutContextId: string;
   checkoutUrl: string;
   customTransactionId: string;
+  /** What the store's checkout endpoint answered beside the URL, untouched (string values only). */
+  metadata?: Record<string, string>;
+};
+
+const readStringRecord = (value: unknown): Record<string, string> | undefined => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string",
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 };
 
 const isHttpsUrl = (value: string): boolean => {
@@ -273,7 +283,13 @@ export const readCustomStoreSession = (body: unknown): CustomStoreSession | unde
   ) {
     return undefined;
   }
-  return { checkoutContextId, checkoutUrl, customTransactionId };
+  const metadata = readStringRecord(field(body, "metadata"));
+  return {
+    checkoutContextId,
+    checkoutUrl,
+    customTransactionId,
+    ...(metadata === undefined ? {} : { metadata }),
+  };
 };
 
 export const errorTagOf = (body: unknown): string | undefined => {

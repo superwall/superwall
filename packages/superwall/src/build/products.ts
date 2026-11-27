@@ -11,15 +11,31 @@ import { isStripeProductIdentifier } from "../checkout/products";
 import type { DiscoveredSurface } from "../discover";
 
 export type ProductCatalogue = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+/** The stores the dashboard records for each product identifier (`custom`, `app-store`, …). */
+export type ProductStores = Readonly<Record<string, readonly string[]>>;
+
+/**
+ * Products whose price is the dashboard's, not a store's: Stripe prices and custom store
+ * products (which only the dashboard prices). App Store and Play Store prices come from the
+ * device's store, so they are never baked in. A page with no app around it, like a teleport
+ * page in a browser, shows only what is baked in.
+ */
+const pricedByDashboard = (identifier: string, stores: ProductStores | undefined): boolean => {
+  if (isStripeProductIdentifier(identifier)) return true;
+  const known =
+    stores !== undefined && Object.hasOwn(stores, identifier) ? stores[identifier] : undefined;
+  return known !== undefined && known.length > 0 && known.every((store) => store === "custom");
+};
 
 export const inlineProductsOf = (
   products: Record<string, string>,
   catalogue: ProductCatalogue | undefined,
+  stores?: ProductStores,
 ): Record<string, Readonly<Record<string, unknown>>> => {
   const inline: Record<string, Readonly<Record<string, unknown>>> = {};
   for (const [reference, identifier] of Object.entries(products)) {
     const variables = catalogue?.[identifier];
-    if (variables?.price !== undefined && isStripeProductIdentifier(identifier)) {
+    if (variables?.price !== undefined && pricedByDashboard(identifier, stores)) {
       inline[reference] = variables;
     }
   }

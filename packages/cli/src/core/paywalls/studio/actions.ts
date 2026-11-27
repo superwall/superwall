@@ -289,6 +289,7 @@ export function createStudioActions(
               assetBaseUrl: assetBaseUrl(target.applicationId),
               platform: target.platform,
               catalogue: catalogue.variables,
+              stores: catalogue.stores,
             }),
           );
           const binding = await resolveBinding({

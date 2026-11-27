@@ -92,6 +92,8 @@ export interface BuildOptions {
   assetBaseUrl?: string;
   platform?: string;
   catalogue?: Record<string, Record<string, unknown>>;
+  /** Each identifier's stores, so the build can price custom store products as it does Stripe. */
+  stores?: Record<string, readonly string[]>;
 }
 
 interface PreviewServerHandle {

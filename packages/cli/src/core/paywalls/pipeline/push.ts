@@ -355,6 +355,7 @@ async function prepare(
         assetBaseUrl: assetBaseUrl(target.applicationId),
         platform: target.platform,
         catalogue: catalogueOf(target)?.variables,
+        stores: catalogueOf(target)?.stores,
       }),
     );
 

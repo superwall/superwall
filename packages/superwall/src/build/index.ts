@@ -32,6 +32,7 @@ import {
   resolveConfigProducts,
   resolveProductIds,
   type ProductCatalogue,
+  type ProductStores,
 } from "./products";
 import { paywallSettingsOf, type PaywallSettings } from "./settings";
 import { loadSurfaceConfig } from "../config/load";
@@ -72,6 +73,7 @@ export type BuildOptions = {
   assetBaseUrl?: string;
   platform?: string;
   catalogue?: ProductCatalogue;
+  stores?: ProductStores;
 };
 
 export const titleCase = (id: string): string =>
@@ -119,7 +121,9 @@ export const buildSnapshot = async (
     config,
     products: platform === undefined ? undefined : products,
     inlineProducts:
-      platform === undefined ? undefined : inlineProductsOf(products, options.catalogue),
+      platform === undefined
+        ? undefined
+        : inlineProductsOf(products, options.catalogue, options.stores),
   };
   fs.writeFileSync(path.join(entryDir, "entry.jsx"), entrySource(entry));
   fs.writeFileSync(

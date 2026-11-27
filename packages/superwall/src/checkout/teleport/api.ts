@@ -12,6 +12,8 @@ export type ServerTeleport = {
   status: "pending" | "claimed" | "completed" | "expired";
   checkoutContextId?: string;
   checkoutProductIdentifier?: string;
+  /** A paid custom store checkout's transaction id: the app reports the purchase with it. */
+  customTransactionId?: string;
   failure?: CheckoutFailure;
 };
 
@@ -88,11 +90,13 @@ export const readTeleportStatus = async (
   const status = STATUSES.find((candidate) => candidate === field(body, "status")) ?? "pending";
   const checkoutContextId = text(body, "checkoutContextId");
   const checkoutProductIdentifier = text(body, "checkoutProductIdentifier");
+  const customTransactionId = text(body, "customTransactionId");
   const failure = readCheckoutFailure(field(body, "failure"));
   return {
     status,
     ...(checkoutContextId === undefined ? {} : { checkoutContextId }),
     ...(checkoutProductIdentifier === undefined ? {} : { checkoutProductIdentifier }),
+    ...(customTransactionId === undefined ? {} : { customTransactionId }),
     ...(failure === undefined ? {} : { failure }),
   };
 };

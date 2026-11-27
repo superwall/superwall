@@ -96,6 +96,7 @@ export type TeleportPage = TeleportBase & {
   kind: "page";
   whenUnsettled(): Promise<boolean>;
   checkSettled(atBoot?: boolean): Promise<boolean>;
+  holdForCustomCheckout(open: boolean): void;
   watchPresentation(): () => void;
   completePurchase(checkoutContextId: string, purchase?: CompletedPurchase): Promise<void>;
   followFragment(): void;

@@ -392,6 +392,22 @@ describe("readCheckoutStatus", () => {
 });
 
 describe("readCustomStoreSession", () => {
+  it("keeps the endpoint's string metadata and drops anything else", () => {
+    const base = {
+      checkoutContextId: "ctx",
+      checkoutUrl: "https://pay.vendor.test/c/1",
+      customTransactionId: "txn",
+    };
+    expect(readCustomStoreSession({ ...base, metadata: { checkout_id: "ch_1", n: 2 } })).toEqual({
+      ...base,
+      metadata: { checkout_id: "ch_1" },
+    });
+    expect(readCustomStoreSession({ ...base, metadata: ["ch_1"] })).toEqual(base);
+    expect(readCustomStoreSession({ ...base, metadata: null })).toEqual(base);
+    expect(readCustomStoreSession({ ...base, metadata: { n: 2 } })).toEqual(base);
+    expect(readCustomStoreSession(base)).toEqual(base);
+  });
+
   it("refuses a checkout URL that is not a URL at all", () => {
     expect(
       readCustomStoreSession({

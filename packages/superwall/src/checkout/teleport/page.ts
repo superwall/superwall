@@ -1,6 +1,7 @@
 import { dismissesOnPurchase, teleportOf, type SuperwallPostPurchase } from "@superwall/runtime";
 import { asString } from "../api/decode";
 import { checkoutEvents } from "../events";
+import { isCustomStoreProductIdentifier } from "../products";
 import { startLoading, stopLoading } from "../loading";
 import {
   completeTeleportCheckout,
@@ -180,7 +181,11 @@ const purchasedQuery = (
   productIdentifier: string | undefined,
   postPurchase: SuperwallPostPurchase | undefined,
 ): ReturnQuery => ({
-  checkout_context_id: checkoutContextId,
+  // The SDK redeems a link's checkout as a Stripe one. A custom store purchase reaches it as
+  // `custom_checkout_complete` from the app's teleport check instead, so its link names none.
+  ...(isCustomStoreProductIdentifier(productIdentifier)
+    ? {}
+    : { checkout_context_id: checkoutContextId }),
   ...(productIdentifier ? { product_identifier: productIdentifier } : {}),
   should_dismiss: String(dismissesOnPurchase(postPurchase) ?? true),
 });
@@ -229,6 +234,9 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
   let pageCheckedAt = 0;
   let returns = 0;
   let successShown = false;
+  // The page's own custom store checkout is open: its `complete()` finishes the purchase, once
+  // the store's checkout is done, so a check that finds it paid doesn't cover the checkout.
+  let customCheckoutOpen = false;
   let purchased: ReturnQuery | undefined;
 
   const queryFor = (reason: ReturnReason | undefined): ReturnQuery | undefined =>
@@ -338,7 +346,10 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
           pageNavigation.replace(url.toString());
           return true;
         }
-        if (teleport.status !== "completed") {
+        if (
+          teleport.status !== "completed" ||
+          (customCheckoutOpen && isCustomStoreProductIdentifier(teleport.checkoutProductIdentifier))
+        ) {
           pageCheckedAt = Date.now();
           return false;
         }
@@ -412,6 +423,9 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
       return true;
     },
     checkSettled,
+    holdForCustomCheckout: (open) => {
+      customCheckoutOpen = open;
+    },
     watchPresentation: () => {
       const visible = () => {
         if (document.visibilityState === "visible") void checkSettled();
@@ -439,7 +453,8 @@ export const createTeleportPage = (paywall: TeleportSession, boot: TeleportBoot)
       saveDismissal(checkoutContextId, purchased.should_dismiss);
       startLoading();
       const key = publicApiKey();
-      if (key !== "") {
+      // Superwall marked a custom store purchase paid when it confirmed it.
+      if (key !== "" && !isCustomStoreProductIdentifier(purchase.productIdentifier)) {
         await withTimeout(
           completeTeleportCheckout(key, checkoutContextId).catch((error: unknown) => {
             console.warn("Completing the teleport checkout failed:", error);

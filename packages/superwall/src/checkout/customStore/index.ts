@@ -8,6 +8,7 @@ import {
   type CustomStoreSession,
 } from "../api/decode";
 import { bareProductIdentifier } from "../products";
+import { readTeleportBoot } from "../teleport/boot";
 import type { PostCheckoutResolution } from "../types";
 
 export const CUSTOM_STORE_REQUIRES_APP_USER_ID =
@@ -69,7 +70,15 @@ export const customStoreSessionBody = (
 ) => {
   const productIdentifier = bareProductIdentifier(product.productId ?? "");
   const context = checkoutContextOf(snapshot, product, productIdentifier);
-  return { productIdentifier, context, surface: "web" as const };
+  // On a teleport page the buyer is the app's user, whom the page doesn't know: Superwall takes
+  // them from the teleport, and returns the buyer to the app.
+  const teleportId = readTeleportBoot()?.id;
+  return {
+    productIdentifier,
+    context,
+    surface: "web" as const,
+    ...(teleportId === undefined ? {} : { teleportId }),
+  };
 };
 
 export const requestCustomStoreSession = async (

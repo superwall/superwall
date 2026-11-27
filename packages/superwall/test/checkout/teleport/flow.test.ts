@@ -484,6 +484,66 @@ describe("a teleport from the app", () => {
     });
   });
 
+  it("finishes a paid custom store checkout as one, with its transaction id, never asking Stripe", async () => {
+    const custom = { checkoutContextId: "ctx_c", checkoutProductIdentifier: "custom|acme_monthly" };
+    const calls = api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": [
+        { status: "claimed", ...custom },
+        { status: "completed", ...custom, customTransactionId: "txn_1" },
+      ],
+    });
+    const { session, posted } = fakeSession();
+    const outcome = appTeleport(session).begin({ productReference: "card", query: {} });
+    await settle();
+    await settle(2_000);
+    await settle(2_000);
+
+    await expect(outcome).resolves.toBe("completed");
+    expect(posted.at(-1)).toEqual({
+      event_name: "custom_checkout_complete",
+      product_identifier: "acme_monthly",
+      custom_transaction_id: "txn_1",
+      should_dismiss: true,
+    });
+    expect(calls.map((call) => call.path)).not.toContain("checkout/status");
+  });
+
+  it("names a paid custom store product by the paywall's own identifier for it, never a Stripe one", async () => {
+    const custom = {
+      checkoutContextId: "ctx_c",
+      checkoutProductIdentifier: "custom|live:price_plan",
+    };
+    api({
+      "checkout/teleport": created,
+      "checkout/teleport/status": [
+        { status: "claimed", ...custom },
+        { status: "completed", ...custom, customTransactionId: "txn_1" },
+      ],
+    });
+    const { session, posted } = fakeSession();
+    const snapshot = session.getSnapshot();
+    session.getSnapshot = () => ({
+      ...snapshot,
+      products: [
+        ...snapshot.products,
+        { reference: "nameless", variables: {}, source: "sdk" },
+        { reference: "web", productId: "stripe|live:price_plan", variables: {}, source: "inline" },
+        { reference: "plan", productId: "custom|live:price_plan", variables: {}, source: "sdk" },
+      ],
+    });
+    const outcome = appTeleport(session).begin({ productReference: "card", query: {} });
+    await settle();
+    await settle(2_000);
+    await settle(2_000);
+
+    await expect(outcome).resolves.toBe("completed");
+    expect(posted.at(-1)).toMatchObject({
+      event_name: "custom_checkout_complete",
+      product_identifier: "custom|live:price_plan",
+    });
+  });
+
   it("abandons an expired teleport without calling it a cancel", async () => {
     api({ "checkout/teleport": created, "checkout/teleport/status": { status: "expired" } });
     const { session, posted } = fakeSession();
@@ -3080,6 +3140,47 @@ describe("every way the teleport page sends a buyer back to the app", () => {
       product_identifier: "pro_year",
       should_dismiss: "false",
     });
+  });
+
+  it("reloaded after a custom store purchase, names no checkout for the SDK to redeem as Stripe's", async () => {
+    boot();
+    api({
+      "checkout/teleport/status": {
+        status: "completed",
+        checkoutContextId: "ctx_7",
+        checkoutProductIdentifier: "custom|acme_monthly",
+        customTransactionId: "txn_7",
+      },
+    });
+    const teleporter = teleportPage(fakeSession().session);
+    await expect(teleporter.checkSettled(true)).resolves.toBe(true);
+    expect(query(screenLink())).toEqual({
+      reason: "purchased",
+      product_identifier: "custom|acme_monthly",
+      should_dismiss: "true",
+    });
+  });
+
+  it("leaves a custom store purchase to the page's open checkout, until it lets go", async () => {
+    boot();
+    api({
+      "checkout/teleport/status": {
+        status: "completed",
+        checkoutContextId: "ctx_8",
+        checkoutProductIdentifier: "custom|acme_monthly",
+        customTransactionId: "txn_8",
+      },
+    });
+    const teleporter = teleportPage(fakeSession().session);
+
+    teleporter.holdForCustomCheckout(true);
+    await expect(teleporter.checkSettled()).resolves.toBe(false);
+    expect(teleporter.getStatus().status).not.toBe("completed");
+    expect(document.querySelector(".sw-teleport[role=status]")).toBeNull();
+
+    teleporter.holdForCustomCheckout(false);
+    await expect(teleporter.checkSettled()).resolves.toBe(true);
+    expect(teleporter.getStatus()).toMatchObject({ status: "completed", paidElsewhere: true });
   });
 
   it.each([
