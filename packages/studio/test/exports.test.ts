@@ -34,6 +34,7 @@ describe("what a second host can reach", () => {
     expect(studio.chromeFor).toBe(devices.chromeFor);
     expect(studio.deviceVariablesFor).toBe(devices.deviceVariablesFor);
     expect(studio.isWebOnly(["web"])).toBe(true);
+    expect(studio.previewsAsWeb(studio.deviceById("desktop"), ["ios", "web"])).toBe(true);
     expect(studio.webViewportFor).toBe(devices.webViewportFor);
   });
 

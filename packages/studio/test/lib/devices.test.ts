@@ -7,6 +7,7 @@ import {
   deviceVariablesFor,
   isWebOnly,
   notificationScreenFor,
+  previewsAsWeb,
   safeAreaFor,
   STUDIO_DEVICES,
   webViewportFor,
@@ -46,6 +47,19 @@ describe("web paywalls", () => {
     expect(isWebOnly(["ios", "web"])).toBe(false);
     expect(isWebOnly([])).toBe(false);
     expect(isWebOnly(undefined)).toBe(false);
+  });
+
+  it("preview as web on every preset, and on the desktop for any paywall that targets web", () => {
+    const multi = ["ios", "android", "Web"];
+    expect(previewsAsWeb(deviceById("iphone-17"), ["web"])).toBe(true);
+    expect(previewsAsWeb(deviceById("desktop"), ["web"])).toBe(true);
+    expect(previewsAsWeb(deviceById("desktop"), multi)).toBe(true);
+    expect(previewsAsWeb(deviceById("iphone-17"), multi)).toBe(false);
+    expect(previewsAsWeb(deviceById("pixel-10"), multi)).toBe(false);
+    expect(previewsAsWeb(deviceById("ipad-pro-11"), multi)).toBe(false);
+    expect(previewsAsWeb(deviceById("desktop"), ["ios", "android"])).toBe(false);
+    expect(previewsAsWeb(deviceById("desktop"), [])).toBe(false);
+    expect(previewsAsWeb(deviceById("desktop"), undefined)).toBe(false);
   });
 
   it("show as a bare viewport on any picked device: a browser page has no status bar or island", () => {

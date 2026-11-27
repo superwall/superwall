@@ -27,6 +27,7 @@ export {
   deviceById,
   deviceVariablesFor,
   isWebOnly,
+  previewsAsWeb,
   STUDIO_DEVICES,
   webViewportFor,
 } from "./lib/devices";

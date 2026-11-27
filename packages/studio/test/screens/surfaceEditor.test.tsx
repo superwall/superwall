@@ -639,6 +639,35 @@ describe("SurfaceEditor's smaller states", () => {
     expect(preview().getAttribute("height")).toBe(String(900 - 52));
   });
 
+  it("previews a paywall that also targets web as the web host on the desktop, and natively on a phone", async () => {
+    const everywhere: StudioSurface = { ...live, platforms: ["ios", "android", "web"] };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [everywhere], previewUrl: () => "/preview" }}
+        surface={everywhere}
+        samples={{}}
+      />,
+    );
+    await act(async () => {});
+    const phone = hostOf(preview());
+    phone.ping();
+    expect(phone.sent()[0]?.[0]).toMatchObject({
+      variables: { device: { platform: "iOS", deviceModel: "iPhone18,3" } },
+    });
+    expect(screen.getByTestId("device-frame").getAttribute("data-browser")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "desktop" } });
+    await act(async () => {});
+    expect(screen.getByTestId("browser-chrome-desktop")).toBeDefined();
+    expect(preview().getAttribute("height")).toBe(String(900 - 52));
+    const host = hostOf(preview());
+    host.ping();
+    const sent = host.sent().at(-1)?.[0];
+    expect(sent).toMatchObject({ variables: { device: { platform: "web" } } });
+    expect(sent).not.toMatchObject({ variables: { device: { interfaceType: "mac" } } });
+    expect(sent).not.toMatchObject({ variables: { device: { deviceModel: "Mac" } } });
+  });
+
   it("moves the preview into Safari when the paywall teleports, and back when it returns", async () => {
     renderEditor(
       <SurfaceEditor
@@ -816,6 +845,42 @@ describe("SurfaceEditor's smaller states", () => {
 
     await send([view("index", 0, "back")]);
     expect(screen.getByTestId("presentation-backdrop")).toBeDefined();
+  });
+
+  it("hands a comparison that targets web the web host on the desktop, beside a native-only paywall", async () => {
+    const native: StudioSurface = { ...live, platforms: ["ios"] };
+    const everywhere: StudioSurface = { ...pushed, platforms: ["ios", "web"] };
+    renderEditor(
+      <SurfaceEditor
+        source={{ ...source, surfaces: [native, everywhere], previewUrl: () => "/preview" }}
+        surface={native}
+        samples={{}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Device"), { target: { value: "desktop" } });
+    fireEvent.click(screen.getByRole("button", { name: /compare/i }));
+    fireEvent.click(screen.getByText(everywhere.label ?? everywhere.id));
+    await act(async () => {});
+
+    const [compared, primary] = screen.getAllByTestId("device-frame");
+    expect(compared?.getAttribute("data-browser")).toBe("desktop");
+    expect(primary?.getAttribute("data-browser")).toBeNull();
+    const [comparedFrame, primaryFrame] = screen.getAllByTitle(/preview/);
+    if (
+      !(comparedFrame instanceof HTMLIFrameElement) ||
+      !(primaryFrame instanceof HTMLIFrameElement)
+    )
+      throw new Error("expected two preview iframes");
+    const comparedHost = hostOf(comparedFrame);
+    comparedHost.ping();
+    expect(comparedHost.sent().at(-1)?.[0]).toMatchObject({
+      variables: { device: { platform: "web" } },
+    });
+    const primaryHost = hostOf(primaryFrame);
+    primaryHost.ping();
+    expect(primaryHost.sent().at(-1)?.[0]).toMatchObject({
+      variables: { device: { platform: "iOS", interfaceType: "mac" } },
+    });
   });
 
   it("keeps a native comparison in the app beside a web-only paywall", async () => {
